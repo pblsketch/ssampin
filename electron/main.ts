@@ -232,6 +232,7 @@ function createWidgetWindow(options: {
     alwaysOnTop: options.alwaysOnTop,
     resizable: true,
     skipTaskbar: false,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -247,6 +248,10 @@ function createWidgetWindow(options: {
     });
   }
 
+  widgetWindow.once('ready-to-show', () => {
+    widgetWindow?.show();
+  });
+
   widgetWindow.on('move', scheduleWidgetBoundsSave);
   widgetWindow.on('resize', scheduleWidgetBoundsSave);
 
@@ -254,6 +259,8 @@ function createWidgetWindow(options: {
     if (!isQuitting) {
       e.preventDefault();
       widgetWindow?.hide();
+      // 위젯 닫힐 때 메인 창 복원 (숨김 상태면 보이게)
+      mainWindow?.show();
     }
   });
 

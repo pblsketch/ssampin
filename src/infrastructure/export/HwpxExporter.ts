@@ -268,8 +268,8 @@ export async function exportSeatingToHwpx(
     const endRow = actualRow + span - 1;
 
     if (v < seatGridRows) {
-      // 좌석 행 (앱과 동일한 순서, 앞줄이 위)
-      const seatDataR = v;
+      // 좌석 행 (뒷자리가 위)
+      const seatDataR = seatGridRows - 1 - v;
       for (let c = 0; c < seatCols; c++) {
         if (span > 1) {
           table.mergeCells(actualRow, c, endRow, c);
