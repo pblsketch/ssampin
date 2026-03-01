@@ -152,9 +152,9 @@ export async function exportSeatingToExcel(
 
   const gridStartRow = 3;
 
-  // 좌석 그리드 (뒷자리가 위, 앞자리가 아래)
+  // 좌석 그리드 (앱과 동일한 순서, 앞줄이 위)
   for (let displayR = 0; displayR < seating.rows; displayR++) {
-    const actualR = seating.rows - 1 - displayR;
+    const actualR = displayR;
     const rowData: string[] = [];
     for (let c = 0; c < seating.cols; c++) {
       const studentId = seating.seats[actualR]?.[c] ?? null;

@@ -4,7 +4,7 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { usePinStore } from '@adapters/stores/usePinStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import type { Settings, WidgetSettings, SystemSettings, NeisSettings, SchoolLevel } from '@domain/entities/Settings';
+import type { Settings, WidgetSettings, SystemSettings, NeisSettings, WeatherSettings, SchoolLevel } from '@domain/entities/Settings';
 import type { PinSettings, ProtectedFeatures, ProtectedFeatureKey } from '@domain/entities/PinSettings';
 import { PROTECTABLE_PAGES } from '@adapters/components/Layout/Sidebar';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
@@ -65,6 +65,40 @@ function NumberStepper({
     </div>
   );
 }
+
+/* ─── Korean Cities for Weather ─── */
+const KOREAN_CITIES: { name: string; lat: number; lon: number }[] = [
+  { name: '서울', lat: 37.5665, lon: 126.978 },
+  { name: '부산', lat: 35.1796, lon: 129.0756 },
+  { name: '대구', lat: 35.8714, lon: 128.6014 },
+  { name: '인천', lat: 37.4563, lon: 126.7052 },
+  { name: '광주', lat: 35.1595, lon: 126.8526 },
+  { name: '대전', lat: 36.3504, lon: 127.3845 },
+  { name: '울산', lat: 35.5384, lon: 129.3114 },
+  { name: '세종', lat: 36.48, lon: 127.2553 },
+  { name: '수원', lat: 37.2636, lon: 127.0286 },
+  { name: '성남', lat: 37.4201, lon: 127.1265 },
+  { name: '고양', lat: 37.6584, lon: 126.832 },
+  { name: '용인', lat: 37.2411, lon: 127.1776 },
+  { name: '창원', lat: 35.2281, lon: 128.6811 },
+  { name: '청주', lat: 36.6424, lon: 127.489 },
+  { name: '천안', lat: 36.8151, lon: 127.1139 },
+  { name: '전주', lat: 35.8242, lon: 127.148 },
+  { name: '포항', lat: 36.019, lon: 129.3435 },
+  { name: '제주', lat: 33.4996, lon: 126.5312 },
+  { name: '김해', lat: 35.2285, lon: 128.8894 },
+  { name: '춘천', lat: 37.8813, lon: 127.7298 },
+  { name: '원주', lat: 37.342, lon: 127.9201 },
+  { name: '강릉', lat: 37.7519, lon: 128.8761 },
+  { name: '목포', lat: 34.8118, lon: 126.3922 },
+  { name: '여수', lat: 34.7604, lon: 127.6622 },
+  { name: '순천', lat: 34.9506, lon: 127.4873 },
+  { name: '안동', lat: 36.5684, lon: 128.7295 },
+  { name: '경주', lat: 35.8562, lon: 129.2247 },
+  { name: '군산', lat: 35.9676, lon: 126.7369 },
+  { name: '익산', lat: 35.9483, lon: 126.9577 },
+  { name: '서귀포', lat: 33.2541, lon: 126.56 },
+];
 
 /* ─── Color Map ─── */
 const COLOR_MAP: Record<string, { bg: string; shadow: string; ring: string }> = {
@@ -156,6 +190,10 @@ export function SettingsPage() {
 
   const patchNeis = useCallback((p: Partial<NeisSettings>) => {
     setDraft((prev) => ({ ...prev, neis: { ...prev.neis, ...p } }));
+  }, []);
+
+  const patchWeather = useCallback((p: Partial<WeatherSettings>) => {
+    setDraft((prev) => ({ ...prev, weather: { ...prev.weather, ...p } }));
   }, []);
 
   const handleSchoolSearch = useCallback(() => {
@@ -611,6 +649,17 @@ export function SettingsPage() {
                   onChange={(v) => patchWidget({ alwaysOnTop: v })}
                 />
               </div>
+              {/* Close to widget */}
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-sp-text">닫기 시 위젯 전환</span>
+                  <span className="text-xs text-sp-muted">X 버튼을 누르면 위젯 모드로 전환합니다.</span>
+                </div>
+                <Toggle
+                  checked={draft.widget.closeToWidget}
+                  onChange={(v) => patchWidget({ closeToWidget: v })}
+                />
+              </div>
               {/* Start in widget mode */}
               <div className="flex items-center justify-between pt-4 border-t border-sp-border/30">
                 <div className="flex flex-col">
@@ -786,7 +835,82 @@ export function SettingsPage() {
               )}
             </div>
           </section>
-          {/* ── 섹션 7: 디스플레이 (테마 및 글꼴) ── */}
+          {/* ── 섹션 8: 날씨 설정 ── */}
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-lg bg-sky-500/10 text-sky-500">
+                <span className="material-symbols-outlined">cloud</span>
+              </div>
+              <h3 className="text-lg font-bold text-sp-text">날씨</h3>
+            </div>
+
+            <div className="space-y-5">
+              {/* 지역 선택 */}
+              <div>
+                <label className="block text-sm text-sp-muted mb-2">지역 선택</label>
+                <select
+                  value={draft.weather.location ? `${draft.weather.location.lat},${draft.weather.location.lon}` : ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      patchWeather({ location: null });
+                      return;
+                    }
+                    const parts = val.split(',').map(Number);
+                    const lat = parts[0] ?? 0;
+                    const lon = parts[1] ?? 0;
+                    const selected = KOREAN_CITIES.find((c) => c.lat === lat && c.lon === lon);
+                    patchWeather({ location: { lat, lon, name: selected?.name ?? '' } });
+                  }}
+                  className="w-full px-4 py-3 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:ring-2 focus:ring-sp-accent focus:border-transparent outline-none"
+                >
+                  <option value="">지역을 선택하세요</option>
+                  {KOREAN_CITIES.map((city) => (
+                    <option key={`${city.lat},${city.lon}`} value={`${city.lat},${city.lon}`}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 갱신 주기 */}
+              <div>
+                <label className="block text-sm text-sp-muted mb-2">갱신 주기</label>
+                <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border/50">
+                  {([
+                    { value: 15, label: '15분' },
+                    { value: 30, label: '30분' },
+                    { value: 60, label: '1시간' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => patchWeather({ refreshIntervalMin: opt.value })}
+                      className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+                        draft.weather.refreshIntervalMin === opt.value
+                          ? 'bg-sp-accent text-white shadow-md'
+                          : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 현재 상태 표시 */}
+              {draft.weather.location && (
+                <div className="p-3 bg-sp-surface/50 rounded-lg border border-sp-border/30">
+                  <p className="text-xs text-sp-muted">
+                    <span className="material-symbols-outlined text-sm align-middle mr-1">location_on</span>
+                    {draft.weather.location.name} · {draft.weather.refreshIntervalMin}분 간격 자동 갱신
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ── 섹션 9: 디스플레이 (테마 및 글꼴) ── */}
           <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6 xl:col-span-2">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-yellow-500/10 text-yellow-500">

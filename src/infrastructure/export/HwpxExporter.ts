@@ -239,15 +239,16 @@ export async function exportSeatingToHwpx(
   const ROSTER_H = 992;       // 3.5mm
   const GAP_W = 600;          // ~2mm 간격
 
-  // 좌석 1행 = 정확히 6개의 실제 행 (6 × 3.5mm = 21mm)
-  const rowsPerVisualRow = Math.round(SEAT_H / ROSTER_H); // 6
-  const totalRows = Math.max(rosterStudents.length + 1, seatVisualRows * rowsPerVisualRow);
+  // 테이블 행 수 = 명렬표 행 수 (헤더 + 학생 데이터)
+  // 좌석 셀은 세로 병합하여 크게 표시
+  const totalRows = Math.max(rosterStudents.length + 1, seatVisualRows);
   const gapCol = seatCols;
   const rosterCol = seatCols + 1;
   const totalCols = seatCols + 1 + 2; // 좌석 + 간격 + 번호 + 이름
 
   const tablePara = doc.addParagraph();
   const table = tablePara.addTable(totalRows, totalCols);
+  table.pageBreak = 'NONE';
 
   // 열 너비
   for (let c = 0; c < seatCols; c++) {
@@ -257,15 +258,18 @@ export async function exportSeatingToHwpx(
   table.setColumnWidth(rosterCol, ROSTER_NUM_W);
   table.setColumnWidth(rosterCol + 1, ROSTER_NAME_W);
 
-  // ── 좌석 그리드: 각 좌석 행을 정확히 rowsPerVisualRow 개의 실제 행에 걸쳐 세로 병합 ──
+  // ── 좌석 그리드: 각 좌석 행을 여러 실제 행에 걸쳐 세로 병합 ──
+  const rowsPerSeat = Math.floor(totalRows / seatVisualRows);
+  const remainder = totalRows % seatVisualRows;
+
   let actualRow = 0;
   for (let v = 0; v < seatVisualRows; v++) {
-    const span = rowsPerVisualRow;
+    const span = rowsPerSeat + (v < remainder ? 1 : 0);
     const endRow = actualRow + span - 1;
 
     if (v < seatGridRows) {
-      // 좌석 행 (뒷자리가 위)
-      const seatDataR = seatGridRows - 1 - v;
+      // 좌석 행 (앱과 동일한 순서, 앞줄이 위)
+      const seatDataR = v;
       for (let c = 0; c < seatCols; c++) {
         if (span > 1) {
           table.mergeCells(actualRow, c, endRow, c);
@@ -288,7 +292,7 @@ export async function exportSeatingToHwpx(
       }
       table.setCellText(actualRow, 0, '[ 교 탁 ]');
       const gyotakCell = table.cell(actualRow, 0);
-      gyotakCell.setSize(undefined, SEAT_H);
+      gyotakCell.setSize(SEAT_W * seatCols, SEAT_H);
       gyotakCell.vertAlign = 'CENTER';
       applyCellStyle(table, actualRow, 0, { charPrId: boardCharId, paraPrId: centerParaId });
     }

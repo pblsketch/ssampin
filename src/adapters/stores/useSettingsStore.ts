@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS: Settings = {
     transparent: false,
     opacity: 0.8,
     alwaysOnTop: true,
+    closeToWidget: true,
   },
   system: {
     autoLaunch: false,
@@ -72,6 +73,10 @@ const DEFAULT_SETTINGS: Settings = {
   workSymbols: {
     symbols: DEFAULT_WORK_SYMBOLS,
   },
+  weather: {
+    location: null,
+    refreshIntervalMin: 30,
+  },
 };
 
 interface SettingsState {
@@ -103,6 +108,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           pin: { ...DEFAULT_SETTINGS.pin, ...((saved as unknown as { pin?: Partial<Settings['pin']> }).pin ?? {}) },
           alarmSound: { ...DEFAULT_SETTINGS.alarmSound, ...((saved as unknown as { alarmSound?: Partial<Settings['alarmSound']> }).alarmSound ?? {}) },
           workSymbols: { ...DEFAULT_SETTINGS.workSymbols, ...((saved as unknown as { workSymbols?: Partial<Settings['workSymbols']> }).workSymbols ?? {}) },
+          weather: { ...DEFAULT_SETTINGS.weather, ...((saved as unknown as { weather?: Partial<Settings['weather']> }).weather ?? {}) },
         };
         set({ settings: merged, loaded: true, isFirstRun: false });
       } else {

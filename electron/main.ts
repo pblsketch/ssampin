@@ -94,7 +94,19 @@ function createWindow(): void {
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
-      mainWindow?.hide();
+      const opts = readSettingsWidgetOptions();
+      if (opts.closeToWidget) {
+        // X 버튼 → 위젯 모드로 전환
+        if (!widgetWindow || widgetWindow.isDestroyed()) {
+          createWidgetWindow(opts);
+        } else {
+          widgetWindow.show();
+        }
+        mainWindow?.hide();
+      } else {
+        // 위젯 전환 없이 트레이로만 숨김
+        mainWindow?.hide();
+      }
     }
   });
 
@@ -250,25 +262,26 @@ function createWidgetWindow(options: {
   });
 }
 
-function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnTop: boolean; startInWidgetMode: boolean } {
+function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnTop: boolean; startInWidgetMode: boolean; closeToWidget: boolean } {
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const settings = JSON.parse(raw) as {
-        widget?: { width?: number; height?: number; alwaysOnTop?: boolean; transparent?: boolean };
+        widget?: { width?: number; height?: number; alwaysOnTop?: boolean; transparent?: boolean; closeToWidget?: boolean };
       };
       return {
         width: settings.widget?.width ?? 920,
         height: settings.widget?.height ?? 700,
         alwaysOnTop: settings.widget?.alwaysOnTop ?? true,
         startInWidgetMode: settings.widget?.transparent ?? false,
+        closeToWidget: settings.widget?.closeToWidget ?? true,
       };
     }
   } catch {
     // fall through to defaults
   }
-  return { width: 920, height: 700, alwaysOnTop: true, startInWidgetMode: false };
+  return { width: 920, height: 700, alwaysOnTop: true, startInWidgetMode: false, closeToWidget: true };
 }
 
 function registerIpcHandlers(): void {

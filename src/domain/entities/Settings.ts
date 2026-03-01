@@ -29,6 +29,7 @@ export interface WidgetSettings {
   readonly transparent: boolean;
   readonly opacity: number;
   readonly alwaysOnTop: boolean;
+  readonly closeToWidget: boolean;
 }
 
 export interface SystemSettings {
@@ -42,6 +43,17 @@ export interface NeisSettings {
   readonly schoolCode: string;      // SD_SCHUL_CODE
   readonly atptCode: string;        // ATPT_OFCDC_SC_CODE
   readonly schoolName: string;      // 선택된 학교명
+}
+
+export interface WeatherLocation {
+  readonly lat: number;
+  readonly lon: number;
+  readonly name: string;            // 표시용 지역명 (예: "서울 강남구")
+}
+
+export interface WeatherSettings {
+  readonly location: WeatherLocation | null;
+  readonly refreshIntervalMin: number;  // 갱신 주기 (분)
 }
 
 export interface Settings {
@@ -62,5 +74,6 @@ export interface Settings {
   readonly pin: PinSettings;
   readonly alarmSound: AlarmSoundSettings;
   readonly workSymbols: WorkSymbolsSettings;
+  readonly weather: WeatherSettings;
   readonly menuOrder?: readonly string[];
 }
