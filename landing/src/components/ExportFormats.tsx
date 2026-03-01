@@ -5,13 +5,13 @@ const formats = [
     icon: '📄',
     name: 'HWP',
     label: '한글 파일',
-    uses: ['시간표', '좌석배치'],
+    uses: ['시간표', '학급 자리 배치'],
   },
   {
     icon: '📊',
     name: 'Excel',
     label: '엑셀 파일',
-    uses: ['시간표', '좌석배치'],
+    uses: ['시간표', '학급 자리 배치'],
   },
   {
     icon: '📑',

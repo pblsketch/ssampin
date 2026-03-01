@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useStudentRecordsStore, SUBCATEGORY_MAP, CATEGORY_LABELS } from '@adapters/stores/useStudentRecordsStore';
-import { useSeatingStore } from '@adapters/stores/useSeatingStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
 import type { RecordCategory } from '@domain/valueObjects/RecordCategory';
 import { RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import type { Student } from '@domain/entities/Student';
@@ -114,22 +114,22 @@ type ViewMode = 'input' | 'progress' | 'search';
 
 const MODE_TABS: { id: ViewMode; icon: string; label: string }[] = [
   { id: 'input', icon: '✏️', label: '입력' },
-  { id: 'progress', icon: '📊', label: '진도' },
+  { id: 'progress', icon: '📊', label: '통계' },
   { id: 'search', icon: '🔍', label: '조회' },
 ];
 
 export function StudentRecords() {
   const { records, loaded, load, viewMode, setViewMode } =
     useStudentRecordsStore();
-  const { students, load: loadSeating, loaded: seatingLoaded } =
-    useSeatingStore();
+  const { students, load: loadStudents, loaded: studentsLoaded } =
+    useStudentStore();
 
   useEffect(() => {
     void load();
-    void loadSeating();
-  }, [load, loadSeating]);
+    void loadStudents();
+  }, [load, loadStudents]);
 
-  if (!loaded || !seatingLoaded) {
+  if (!loaded || !studentsLoaded) {
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-sp-muted text-sm">로딩 중...</p>
@@ -389,60 +389,137 @@ function InputMode({ students }: ModeProps) {
   );
 }
 
-/* ──────────────────────── 진도 모드 (통계) ──────────────────────── */
+/* ──────────────────────── 통계 모드 ──────────────────────── */
+
+type StatsPeriod = 'week' | 'month' | 'custom' | 'all';
+
+function toDateInputString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function ProgressMode({ students, records }: ModeProps) {
+  const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>('all');
+  const monthRange = useMemo(() => getMonthRange(), []);
+  const [customStart, setCustomStart] = useState<string>(
+    toDateInputString(monthRange.start),
+  );
+  const [customEnd, setCustomEnd] = useState<string>(
+    toDateInputString(monthRange.end),
+  );
+
+  const filteredRecords = useMemo(() => {
+    if (statsPeriod === 'week') {
+      const { start, end } = getWeekRange();
+      return filterByDateRange(records, start, end) as StudentRecord[];
+    }
+    if (statsPeriod === 'month') {
+      const { start, end } = getMonthRange();
+      return filterByDateRange(records, start, end) as StudentRecord[];
+    }
+    if (statsPeriod === 'custom') {
+      const start = new Date(customStart + 'T00:00:00');
+      const end = new Date(customEnd + 'T23:59:59');
+      return filterByDateRange(records, start, end) as StudentRecord[];
+    }
+    return records as StudentRecord[];
+  }, [records, statsPeriod, customStart, customEnd]);
+
   const statsRows = useMemo(() => {
     return students.map((student) => {
-      const stats = getAttendanceStats(records, student.id);
-      const totalRecords = filterByStudent(records, student.id).length;
+      const stats = getAttendanceStats(filteredRecords, student.id);
+      const totalRecords = filterByStudent(filteredRecords, student.id).length;
       return { student, stats, totalRecords };
     });
-  }, [students, records]);
+  }, [students, filteredRecords]);
 
   return (
-    <div className="flex-1 overflow-auto rounded-xl bg-sp-card">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-sp-border text-sp-muted">
-            <th className="text-left p-3 font-medium">번호</th>
-            <th className="text-left p-3 font-medium">이름</th>
-            <th className="text-center p-3 font-medium">결석</th>
-            <th className="text-center p-3 font-medium">지각</th>
-            <th className="text-center p-3 font-medium">조퇴</th>
-            <th className="text-center p-3 font-medium">결과</th>
-            <th className="text-center p-3 font-medium">칭찬</th>
-            <th className="text-center p-3 font-medium">전체</th>
-          </tr>
-        </thead>
-        <tbody>
-          {statsRows.map(({ student, stats, totalRecords }, idx) => (
-            <tr
-              key={student.id}
-              className="border-b border-sp-border/50 hover:bg-sp-surface/30 transition-colors"
+    <div className="flex-1 flex flex-col gap-4 min-h-0">
+      {/* 기간 필터 바 */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1 bg-sp-surface rounded-lg p-1 ml-auto">
+          {([
+            { id: 'week', label: '이번 주' },
+            { id: 'month', label: '이번 달' },
+            { id: 'custom', label: '직접 설정' },
+            { id: 'all', label: '전체' },
+          ] as const).map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setStatsPeriod(f.id)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${statsPeriod === f.id
+                ? 'bg-sp-accent text-white'
+                : 'text-sp-muted hover:text-white'
+                }`}
             >
-              <td className="p-3 text-sp-muted">{idx + 1}</td>
-              <td className="p-3 text-sp-text font-medium">{student.name}</td>
-              <td className="text-center p-3">
-                <StatBadge value={stats.absent} color="red" />
-              </td>
-              <td className="text-center p-3">
-                <StatBadge value={stats.late} color="orange" />
-              </td>
-              <td className="text-center p-3">
-                <StatBadge value={stats.earlyLeave} color="yellow" />
-              </td>
-              <td className="text-center p-3">
-                <StatBadge value={stats.resultAbsent} color="purple" />
-              </td>
-              <td className="text-center p-3">
-                <StatBadge value={stats.praise} color="green" />
-              </td>
-              <td className="text-center p-3 text-sp-muted">{totalRecords}</td>
-            </tr>
+              {f.label}
+            </button>
           ))}
-        </tbody>
-      </table>
+        </div>
+        {statsPeriod === 'custom' && (
+          <div className="flex items-center gap-2 ml-2">
+            <label className="text-xs text-sp-muted">시작일</label>
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            />
+            <span className="text-xs text-sp-muted">~</span>
+            <label className="text-xs text-sp-muted">종료일</label>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 통계 테이블 */}
+      <div className="flex-1 overflow-auto rounded-xl bg-sp-card">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-sp-border text-sp-muted">
+              <th className="text-left p-3 font-medium">번호</th>
+              <th className="text-left p-3 font-medium">이름</th>
+              <th className="text-center p-3 font-medium">결석</th>
+              <th className="text-center p-3 font-medium">지각</th>
+              <th className="text-center p-3 font-medium">조퇴</th>
+              <th className="text-center p-3 font-medium">결과</th>
+              <th className="text-center p-3 font-medium">칭찬</th>
+              <th className="text-center p-3 font-medium">전체</th>
+            </tr>
+          </thead>
+          <tbody>
+            {statsRows.map(({ student, stats, totalRecords }, idx) => (
+              <tr
+                key={student.id}
+                className="border-b border-sp-border/50 hover:bg-sp-surface/30 transition-colors"
+              >
+                <td className="p-3 text-sp-muted">{idx + 1}</td>
+                <td className="p-3 text-sp-text font-medium">{student.name}</td>
+                <td className="text-center p-3">
+                  <StatBadge value={stats.absent} color="red" />
+                </td>
+                <td className="text-center p-3">
+                  <StatBadge value={stats.late} color="orange" />
+                </td>
+                <td className="text-center p-3">
+                  <StatBadge value={stats.earlyLeave} color="yellow" />
+                </td>
+                <td className="text-center p-3">
+                  <StatBadge value={stats.resultAbsent} color="purple" />
+                </td>
+                <td className="text-center p-3">
+                  <StatBadge value={stats.praise} color="green" />
+                </td>
+                <td className="text-center p-3 text-sp-muted">{totalRecords}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

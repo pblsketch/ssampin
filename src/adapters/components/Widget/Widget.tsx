@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useClock } from '@adapters/hooks/useClock';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -8,20 +8,9 @@ import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useMessageStore } from '@adapters/stores/useMessageStore';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import { calculateDDay } from '@domain/rules/ddayRules';
-import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
+import { getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import { WidgetContextMenu } from './WidgetContextMenu';
-import { useToastStore } from '@adapters/components/common/Toast';
-import type { MemoColor } from '@domain/valueObjects/MemoColor';
-
-/** 메모 색상 → Tailwind 클래스 맵 */
-const MEMO_COLOR_CLASS: Record<MemoColor, string> = {
-  yellow: 'bg-yellow-200/90 text-yellow-900',
-  pink: 'bg-pink-200/90 text-pink-900',
-  green: 'bg-green-200/90 text-green-900',
-  blue: 'bg-blue-200/90 text-blue-900',
-};
-
-/** 과목명 → 색상 클래스 */
+/** 과목명 → 텍스트 색상 클래스 */
 const SUBJECT_COLOR_CLASS: Record<string, string> = {
   국어: 'text-yellow-300',
   영어: 'text-green-300',
@@ -35,16 +24,47 @@ const SUBJECT_COLOR_CLASS: Record<string, string> = {
   자율: 'text-teal-300',
 };
 
+/** 과목명 → 배경 색상 클래스 */
+const SUBJECT_BG_CLASS: Record<string, string> = {
+  국어: 'bg-yellow-500/20',
+  영어: 'bg-green-500/20',
+  수학: 'bg-blue-500/20',
+  과학: 'bg-purple-500/20',
+  사회: 'bg-orange-500/20',
+  체육: 'bg-red-500/20',
+  음악: 'bg-pink-500/20',
+  미술: 'bg-indigo-500/20',
+  창체: 'bg-teal-500/20',
+  자율: 'bg-teal-500/20',
+};
+
+/** 요일 영어 키 → 한국어 */
+const DAYS_KR = ['월', '화', '수', '목', '금'] as const;
+type DayKr = (typeof DAYS_KR)[number];
+
+/** 날짜 문자열 "YYYY-MM-DD" → "M/D(요일)" 형식 */
+function formatEventDateWithDay(dateStr: string): string {
+  const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+  const date = new Date(dateStr + 'T00:00:00');
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const dow = dayLabels[date.getDay()] ?? '';
+  return `${month}/${day}(${dow})`;
+}
+
 function getSubjectColor(subject: string): string {
   return SUBJECT_COLOR_CLASS[subject] ?? 'text-slate-300';
 }
 
-/** 날짜 문자열 "YYYY-MM-DD" → "MM/DD" 형식 */
-function formatEventDate(dateStr: string): string {
-  const parts = dateStr.split('-');
-  const month = parts[1] ?? '';
-  const day = parts[2] ?? '';
-  return `${month}/${day}`;
+function getSubjectBg(subject: string): string {
+  return SUBJECT_BG_CLASS[subject] ?? '';
+}
+
+/** 오늘 날짜의 요일 인덱스(0=일) → 한국어 요일 */
+function todayDowKr(): DayKr | null {
+  const jsDay = new Date().getDay();
+  const map: Record<number, DayKr> = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금' };
+  return map[jsDay] ?? null;
 }
 
 interface ContextMenuState {
@@ -54,18 +74,14 @@ interface ContextMenuState {
 
 export function Widget() {
   const clock = useClock();
-  const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
+  const { classSchedule, load: loadSchedule } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
-  const { todos, load: loadTodos } = useTodoStore();
+  const { load: loadTodos } = useTodoStore();
   const { events, categories, load: loadEvents } = useEventsStore();
-  const { memos, load: loadMemos } = useMemoStore();
+  const { load: loadMemos } = useMemoStore();
   const { message, loadMessage } = useMessageStore();
-  const showToast = useToastStore((state) => state.show);
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerHeight, setContainerHeight] = useState<number>(650);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // 데이터 로드
   useEffect(() => {
@@ -76,45 +92,6 @@ export function Widget() {
     void loadMemos();
     void loadMessage();
   }, [loadSchedule, loadSettings, loadTodos, loadEvents, loadMemos, loadMessage]);
-
-  // ResizeObserver로 컨테이너 높이 감지 및 스낵바 제공
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        const height = entry.contentRect.height;
-        setContainerHeight(height);
-
-        // 이전 타이머 취소
-        if (resizeTimeoutRef.current) {
-          clearTimeout(resizeTimeoutRef.current);
-        }
-
-        // 크기 조절 멈춘 직후 Toast 알림
-        resizeTimeoutRef.current = setTimeout(() => {
-          let visibleSections = '위젯: 시계, 메시지, 시간표, 일정 표시';
-          if (height > 600) {
-            visibleSections = '위젯: 전체 정보 표시 (할 일, 메모 포함)';
-          } else if (height > 500) {
-            visibleSections = '위젯: 할 일 표시됨 (메모 숨김)';
-          } else if (height <= 500 && height > 400) {
-            visibleSections = '위젯: 기본 일정만 표시 (할 일, 메모 숨김)';
-          } else if (height <= 400) {
-            visibleSections = '위젯: 최소 화면 모드';
-          }
-
-          showToast(`위젯 세로 길이: ${Math.round(height)}px - ${visibleSections}`, 'info');
-        }, 800);
-      }
-    });
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      if (resizeTimeoutRef.current) clearTimeout(resizeTimeoutRef.current);
-    };
-  }, [showToast]);
 
   // 우클릭 컨텍스트 메뉴
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -133,307 +110,283 @@ export function Widget() {
 
   // 현재 교시 계산
   const now = new Date();
-  const todayDow = getDayOfWeek(now);
+  const todayDow = getDayOfWeek(now); // '월'|'화'|... or null
   const currentPeriod = getCurrentPeriod(settings.periodTimes, now);
+  const isWeekend = todayDow === null;
 
-  // 오늘 시간표 데이터 (classSchedule 우선, teacherSchedule 보조)
-  const todayClassPeriods: string[] = todayDow
-    ? ((classSchedule[todayDow] as string[] | undefined) ?? [])
-    : [];
-  const todayTeacherPeriods = todayDow
-    ? (teacherSchedule[todayDow] ?? [])
-    : [];
+  // 일주일 시간표: 최대 교시 수 계산
+  const maxPeriods = settings.periodTimes.length || 6;
 
-  // 높이별 표시 섹션 결정
-  const showTodo = containerHeight >= 500;
-  const showMemo = containerHeight > 600;
-  const showMessage = containerHeight > 400;
-
-  // 완료된 투두 카운트
-  const completedCount = todos.filter((t) => t.completed).length;
-  const totalCount = todos.length;
-
-  // 가까운 일정 (미래, max 4)
+  // 가까운 일정 (미래, max 8)
   const upcomingEvents = [...events]
     .map((ev) => ({ ev, dday: calculateDDay(ev.date, now) }))
     .filter(({ dday }) => dday >= 0)
     .sort((a, b) => a.dday - b.dday)
-    .slice(0, 4);
+    .slice(0, 8);
+
+  // 오늘 요일 (한국어)
+  const todayKr = todayDowKr();
 
   return (
     <>
       <div
-        ref={containerRef}
-        className="w-full h-screen bg-[#0f172a]/80 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/50 flex flex-col overflow-hidden text-slate-100 relative select-none"
+        className="w-full h-screen bg-[#0f172a]/85 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/50 flex flex-col overflow-hidden text-slate-100 relative select-none"
         onContextMenu={handleContextMenu}
         style={{ fontFamily: "'Noto Sans KR', sans-serif" }}
       >
-        {/* ── 헤더 ── */}
+        {/* ── 헤더 (드래그 영역) ── */}
         <div
-          className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50 flex-shrink-0"
+          className="flex-shrink-0 px-6 pt-5 pb-3 text-center border-b border-slate-700/40"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
           onDoubleClick={handleHeaderDoubleClick}
         >
-          <div className="flex items-center gap-2">
-            <span
-              className="material-symbols-outlined text-blue-400"
-              style={{ fontSize: 18 }}
-            >
-              push_pin
+          {/* 날짜 + 시간 */}
+          <div className="flex items-baseline justify-center gap-3 mb-2">
+            <span className="text-slate-400 text-lg font-medium">
+              {clock.date} ({clock.dayOfWeek})
             </span>
-            <span className="font-bold text-sm text-slate-100">쌤핀</span>
+            <span className="text-4xl font-bold tracking-tight text-slate-100 leading-none">
+              {clock.time}
+            </span>
           </div>
+
+          {/* 날씨 정보 필 */}
+          <div
+            className="flex justify-center flex-wrap gap-2"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-slate-800/60 rounded-full text-xs text-slate-300 border border-slate-700/40">
+              ☁ 2°C~10°C
+            </span>
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-slate-800/60 rounded-full text-xs text-slate-300 border border-slate-700/40">
+              💧 85%
+            </span>
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-slate-800/60 rounded-full text-xs text-slate-300 border border-slate-700/40">
+              🍃 미세먼지 좋음
+            </span>
+          </div>
+
+          {/* 전체 화면 전환 버튼 */}
           <button
-            className="p-1 rounded-md hover:bg-slate-700/60 transition-colors text-slate-400 hover:text-slate-200"
+            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-slate-700/60 transition-colors text-slate-500 hover:text-slate-300"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             onClick={() => window.electronAPI?.toggleWidget()}
             title="전체 화면으로 전환"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
               open_in_full
             </span>
           </button>
         </div>
 
-        {/* ── 스크롤 컨텐츠 ── */}
-        <div
-          className="flex-1 overflow-y-auto widget-scrollbar"
-          style={{
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#2a3548 transparent',
-          }}
-        >
-          {/* 섹션 1: 날짜 / 시간 / 날씨 */}
-          <div className="px-4 py-4 text-center">
-            <p className="text-xs text-slate-400 mb-1">
-              {clock.date} ({clock.dayOfWeek})
+        {/* ── 메시지 배너 ── */}
+        {message && (
+          <div className="flex-shrink-0 mx-4 mt-3">
+            <div className="bg-teal-900/50 border border-teal-500/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
+              <span className="material-symbols-outlined text-teal-400 flex-shrink-0" style={{ fontSize: 16 }}>
+                campaign
+              </span>
+              <p className="text-sm text-teal-200 leading-relaxed flex-1 truncate">{message}</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── 메인 콘텐츠 (두 컬럼) ── */}
+        <div className="flex-1 flex gap-3 px-4 pt-3 pb-2 min-h-0 overflow-hidden">
+          {/* ─ 왼쪽: 일주일 시간표 (~60%) ─ */}
+          <div className="flex flex-col" style={{ flex: '0 0 58%' }}>
+            <p className="text-xs font-bold text-slate-400 mb-2 tracking-wide">
+              일주일 시간표
             </p>
-            <p className="text-5xl font-bold tracking-tight text-slate-100 leading-none mb-3">
-              {clock.time}
-            </p>
-            {/* 날씨 필 */}
-            <div className="flex justify-center flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-slate-800/50 rounded-full text-xs text-slate-300">
-                🌤 2~10°C
-              </span>
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-slate-800/50 rounded-full text-xs text-slate-300">
-                💧 85%
-              </span>
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-slate-800/50 rounded-full text-xs text-slate-300">
-                🍃 좋음
-              </span>
+            <div className="flex-1 bg-slate-800/40 rounded-xl border border-slate-700/40 overflow-hidden">
+              {isWeekend ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-slate-500 text-sm">주말입니다</p>
+                </div>
+              ) : (
+                <table className="w-full h-full text-center" style={{ tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr className="border-b border-slate-700/50">
+                      {/* 교시 번호 헤더 */}
+                      <th className="py-2 text-xs text-slate-500 font-medium" style={{ width: '14%' }}>
+                        교시
+                      </th>
+                      {DAYS_KR.map((day) => (
+                        <th
+                          key={day}
+                          className={[
+                            'py-2 text-xs font-semibold',
+                            day === todayKr ? 'text-amber-400' : 'text-slate-400',
+                          ].join(' ')}
+                        >
+                          {day}
+                          {day === todayKr && (
+                            <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block align-middle" />
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: maxPeriods }, (_, idx) => {
+                      const periodNum = idx + 1;
+                      const isCurrent = currentPeriod === periodNum;
+                      return (
+                        <tr
+                          key={periodNum}
+                          className={[
+                            'border-b border-slate-700/30 last:border-0',
+                            isCurrent ? 'bg-amber-500/10' : '',
+                          ].join(' ')}
+                        >
+                          {/* 교시 번호 */}
+                          <td
+                            className={[
+                              'text-xs font-mono py-1.5',
+                              isCurrent ? 'text-amber-400 font-bold' : 'text-slate-500',
+                            ].join(' ')}
+                          >
+                            {periodNum}
+                          </td>
+                          {/* 각 요일 과목 */}
+                          {DAYS_KR.map((day) => {
+                            const daySubjects = (classSchedule[day] as readonly string[] | undefined) ?? [];
+                            const subject = daySubjects[idx] ?? '';
+                            const isToday = day === todayKr;
+                            const isTodayCurrent = isToday && isCurrent;
+                            return (
+                              <td key={day} className="py-1 px-0.5">
+                                {subject ? (
+                                  <span
+                                    className={[
+                                      'inline-block text-xs font-medium rounded px-1 py-0.5 leading-tight',
+                                      isTodayCurrent
+                                        ? 'bg-amber-500/30 text-amber-200 ring-1 ring-amber-400/50'
+                                        : `${getSubjectBg(subject)} ${getSubjectColor(subject)}`,
+                                    ].join(' ')}
+                                  >
+                                    {subject}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-700 text-xs">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 
-          {/* 섹션 2: 메시지 배너 */}
-          {showMessage && message && (
-            <>
-              <div className="mx-3 h-px bg-slate-700/50" />
-              <div className="px-4 py-3">
-                <div className="bg-teal-900/40 border border-teal-500/20 rounded-xl p-3">
-                  <p className="text-xs text-teal-300 leading-relaxed">{message}</p>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* 섹션 3: 시간표 */}
-          <div className="mx-3 h-px bg-slate-700/50" />
-          <div className="px-4 py-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-              시간표
+          {/* ─ 오른쪽: 학교 교육 활동 계획 (~40%) ─ */}
+          <div className="flex flex-col" style={{ flex: '1 1 0' }}>
+            <p className="text-xs font-bold text-slate-400 mb-2 tracking-wide">
+              학교 교육 활동 계획
             </p>
-            <div className="space-y-1">
+            <div
+              className="flex-1 bg-slate-800/40 rounded-xl border border-slate-700/40 overflow-y-auto"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#2a3548 transparent',
+              }}
+            >
+              {upcomingEvents.length === 0 ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-slate-500 text-xs italic">다가오는 일정이 없습니다</p>
+                </div>
+              ) : (
+                <div className="p-2 space-y-1">
+                  {upcomingEvents.map(({ ev, dday }) => {
+                    const colors = getColorsForCategory(ev.category, categories);
+                    const isToday = dday === 0;
+                    return (
+                      <div
+                        key={ev.id}
+                        className={[
+                          'flex items-start gap-2 px-2 py-2 rounded-lg transition-colors',
+                          isToday ? 'bg-blue-500/10 border border-blue-500/20' : 'hover:bg-slate-700/30',
+                        ].join(' ')}
+                      >
+                        <span
+                          className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${colors.dot}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-xs text-slate-400 font-mono flex-shrink-0">
+                              {formatEventDateWithDay(ev.date)}
+                            </span>
+                            {isToday && (
+                              <span className="text-xs text-blue-400 font-bold">D-Day</span>
+                            )}
+                            {!isToday && dday <= 7 && (
+                              <span className={`text-xs font-mono ${colors.text}`}>
+                                D-{dday}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-200 font-medium leading-tight truncate mt-0.5">
+                            {ev.title}
+                          </p>
+                          {ev.description && (
+                            <p className="text-xs text-slate-400 leading-snug mt-0.5 line-clamp-2 break-words">
+                              {ev.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 하단 교시 시간 정보 바 ── */}
+        <div className="flex-shrink-0 px-4 pb-3">
+          <div className="bg-slate-800/50 rounded-xl border border-slate-700/40 px-4 py-2.5">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
               {settings.periodTimes.map((pt, idx) => {
-                const subject = todayClassPeriods[idx] ?? '';
-                const teacherPeriod = todayTeacherPeriods[idx] ?? null;
                 const isCurrent = currentPeriod === pt.period;
-                const isEmpty = !subject;
+                // 점심시간 표시: 이전 교시와 현재 교시 사이에 10분 이상 차이가 있으면 점심
+                const prevPt = idx > 0 ? settings.periodTimes[idx - 1] : null;
+                const showLunch =
+                  prevPt &&
+                  (() => {
+                    const prevEndParts = prevPt.end.split(':').map(Number);
+                    const currStartParts = pt.start.split(':').map(Number);
+                    const prevEndMin = (prevEndParts[0] ?? 0) * 60 + (prevEndParts[1] ?? 0);
+                    const currStartMin = (currStartParts[0] ?? 0) * 60 + (currStartParts[1] ?? 0);
+                    return currStartMin - prevEndMin >= 20;
+                  })();
 
                 return (
-                  <div
-                    key={pt.period}
-                    className={[
-                      'flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors',
-                      isCurrent
-                        ? 'bg-amber-500/10 border border-amber-500/20'
-                        : 'hover:bg-slate-800/50',
-                    ].join(' ')}
-                  >
-                    <span
-                      className={[
-                        'font-mono text-xs w-4 text-right flex-shrink-0',
-                        isCurrent ? 'text-amber-400' : 'text-slate-500',
-                      ].join(' ')}
-                    >
-                      {pt.period}
-                    </span>
-                    <span
-                      className={[
-                        'flex-1 font-medium text-sm',
-                        isEmpty
-                          ? 'text-slate-600 italic'
-                          : isCurrent
-                            ? `text-amber-200 ${getSubjectColor(subject)}`
-                            : `text-slate-300 ${getSubjectColor(subject)}`,
-                      ].join(' ')}
-                    >
-                      {isEmpty ? '공강' : subject}
-                    </span>
-                    {teacherPeriod && (
-                      <span className="text-xs text-slate-500 font-mono flex-shrink-0">
-                        {teacherPeriod.classroom}
+                  <span key={pt.period} className="flex items-center gap-x-3">
+                    {showLunch && (
+                      <span className="text-xs text-slate-500 font-medium">
+                        점심 {prevPt?.end}~{pt.start}
                       </span>
                     )}
-                    {isCurrent && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0 animate-pulse" />
-                    )}
-                  </div>
+                    <span
+                      className={[
+                        'text-xs whitespace-nowrap',
+                        isCurrent
+                          ? 'text-amber-400 font-semibold'
+                          : 'text-slate-500',
+                      ].join(' ')}
+                    >
+                      {pt.period}교시 {pt.start}~{pt.end}
+                    </span>
+                  </span>
                 );
               })}
             </div>
           </div>
-
-          {/* 섹션 4: 일정 */}
-          <div className="mx-3 h-px bg-slate-700/50" />
-          <div className="px-4 py-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-              일정
-            </p>
-            {upcomingEvents.length === 0 ? (
-              <p className="text-xs text-slate-600 italic">다가오는 일정이 없습니다</p>
-            ) : (
-              <div className="space-y-1.5">
-                {upcomingEvents.map(({ ev, dday }) => {
-                  const colors = getColorsForCategory(ev.category, categories);
-                  const catInfo = getCategoryInfo(ev.category, categories);
-                  return (
-                    <div
-                      key={ev.id}
-                      className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-800/50 transition-colors"
-                    >
-                      <span
-                        className={`w-2 h-2 rounded-full flex-shrink-0 ${colors.dot}`}
-                      />
-                      <span className="font-mono text-xs text-slate-500 flex-shrink-0 w-10">
-                        {formatEventDate(ev.date)}
-                      </span>
-                      <span className="flex-1 text-sm text-slate-300 truncate">
-                        {ev.title}
-                      </span>
-                      {ev.isDDay && dday === 0 && (
-                        <span className="text-xs text-red-400 font-bold flex-shrink-0">
-                          D-Day
-                        </span>
-                      )}
-                      {dday > 0 && dday <= 7 && (
-                        <span className={`text-xs font-mono flex-shrink-0 ${colors.text}`}>
-                          D-{dday}
-                        </span>
-                      )}
-                      <span className="text-xs text-slate-600 flex-shrink-0 hidden">
-                        {catInfo.name}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 섹션 5: 할 일 */}
-          {showTodo && (
-            <>
-              <div className="mx-3 h-px bg-slate-700/50" />
-              <div className="px-4 py-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    할 일
-                  </p>
-                  {totalCount > 0 && (
-                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
-                      {completedCount}/{totalCount} 완료
-                    </span>
-                  )}
-                </div>
-                {todos.length === 0 ? (
-                  <p className="text-xs text-slate-600 italic">할 일이 없습니다</p>
-                ) : (
-                  <div className="space-y-1">
-                    {todos.slice(0, 5).map((todo) => (
-                      <div
-                        key={todo.id}
-                        className="flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800/50 transition-colors"
-                      >
-                        <div
-                          className={[
-                            'w-3.5 h-3.5 rounded flex-shrink-0 mt-0.5 border',
-                            todo.completed
-                              ? 'bg-blue-500 border-blue-500 flex items-center justify-center'
-                              : 'border-slate-600',
-                          ].join(' ')}
-                        >
-                          {todo.completed && (
-                            <span
-                              className="material-symbols-outlined text-white"
-                              style={{ fontSize: 10 }}
-                            >
-                              check
-                            </span>
-                          )}
-                        </div>
-                        <span
-                          className={[
-                            'text-sm leading-snug flex-1',
-                            todo.completed
-                              ? 'line-through text-slate-600'
-                              : 'text-slate-300',
-                          ].join(' ')}
-                        >
-                          {todo.text}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* 섹션 6: 메모 */}
-          {showMemo && (
-            <>
-              <div className="mx-3 h-px bg-slate-700/50" />
-              <div className="px-4 py-3 pb-10">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                  메모
-                </p>
-                {memos.length === 0 ? (
-                  <p className="text-xs text-slate-600 italic">메모가 없습니다</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {memos.slice(0, 2).map((memo) => (
-                      <div
-                        key={memo.id}
-                        className={[
-                          'min-h-[80px] rounded-lg shadow-sm p-2.5',
-                          MEMO_COLOR_CLASS[memo.color] ?? 'bg-yellow-200/90 text-yellow-900',
-                        ].join(' ')}
-                      >
-                        <p className="text-xs leading-relaxed line-clamp-4 break-words">
-                          {memo.content}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
         </div>
-
-        {/* 하단 페이드 그라디언트 */}
-        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#0f172a]/90 to-transparent pointer-events-none rounded-b-2xl" />
       </div>
 
       {/* 컨텍스트 메뉴 */}

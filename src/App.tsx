@@ -8,13 +8,27 @@ import { StudentRecords } from '@adapters/components/StudentRecords/StudentRecor
 import { Schedule } from '@adapters/components/Schedule/Schedule';
 import { Todo } from '@adapters/components/Todo/Todo';
 import { MemoPage } from '@adapters/components/Memo/MemoPage';
+import { MealPage } from '@adapters/components/Meal/MealPage';
 import { SettingsPage } from '@adapters/components/Settings/SettingsPage';
 import { Widget } from '@adapters/components/Widget/Widget';
 import { Export } from '@adapters/components/Export/Export';
+import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
+import { ToolTimer } from '@adapters/components/Tools/ToolTimer';
+import { ToolRandom } from '@adapters/components/Tools/ToolRandom';
+import { ToolTrafficLight } from '@adapters/components/Tools/ToolTrafficLight';
+import { ToolScoreboard } from '@adapters/components/Tools/ToolScoreboard';
+import { ToolRoulette } from '@adapters/components/Tools/ToolRoulette';
+import { ToolDice } from '@adapters/components/Tools/ToolDice';
+import { ToolCoin } from '@adapters/components/Tools/ToolCoin';
+import { ToolQRCode } from '@adapters/components/Tools/ToolQRCode';
+import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
+import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
+import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer } from '@adapters/components/common/Toast';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { PinGuard } from '@adapters/components/common/PinGuard';
 import { validateShareFile } from '@domain/rules/shareRules';
 
 function isWidgetMode(): boolean {
@@ -24,33 +38,72 @@ function isWidgetMode(): boolean {
   return false;
 }
 
-function renderPage(page: PageId) {
+function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscreen: boolean) {
   if (page === 'dashboard') {
     return <Dashboard />;
   }
   if (page === 'seating') {
-    return <Seating />;
+    return <PinGuard feature="seating"><Seating /></PinGuard>;
   }
   if (page === 'timetable') {
-    return <TimetablePage />;
+    return <PinGuard feature="timetable"><TimetablePage /></PinGuard>;
   }
   if (page === 'student-records') {
-    return <StudentRecords />;
+    return <PinGuard feature="studentRecords"><StudentRecords /></PinGuard>;
   }
   if (page === 'schedule') {
-    return <Schedule />;
+    return <PinGuard feature="schedule"><Schedule /></PinGuard>;
   }
   if (page === 'todo') {
-    return <Todo />;
+    return <PinGuard feature="todo"><Todo /></PinGuard>;
+  }
+  if (page === 'meal') {
+    return <PinGuard feature="meal"><MealPage /></PinGuard>;
   }
   if (page === 'memo') {
-    return <MemoPage />;
+    return <PinGuard feature="memo"><MemoPage /></PinGuard>;
   }
   if (page === 'settings') {
     return <SettingsPage />;
   }
   if (page === 'export') {
     return <Export />;
+  }
+  if (page === 'tools') {
+    return <ToolsGrid onNavigate={onNavigate} />;
+  }
+  if (page === 'tool-timer') {
+    return <ToolTimer onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-random') {
+    return <ToolRandom onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-traffic-light') {
+    return <ToolTrafficLight onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-scoreboard') {
+    return <ToolScoreboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-roulette') {
+    return <ToolRoulette onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-dice') {
+    return <ToolDice onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-coin') {
+    return <ToolCoin onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-qrcode') {
+    return <ToolQRCode onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-work-symbols') {
+    return <ToolWorkSymbols onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-poll') {
+    return <ToolPoll onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-seat-picker') {
+    return <ToolSeatPicker onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
   }
   return (
     <div className="flex h-full items-center justify-center">
@@ -61,8 +114,18 @@ function renderPage(page: PageId) {
 
 export function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const { setShareFile, setShowImportModal } = useEventsStore();
   const { settings } = useSettingsStore();
+
+  // 전체화면 상태 감지
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   // .ssampin 파일 열기 이벤트 리스너 (Electron에서 파일 더블클릭 시)
   useEffect(() => {
@@ -109,9 +172,11 @@ export function App() {
 
   return (
     <div className={`flex h-screen bg-sp-bg ${fontSizeClass} ${themeClass}`}>
-      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
-      <main className="flex-1 overflow-y-auto p-8">
-        {renderPage(currentPage)}
+      {!isFullscreen && (
+        <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+      )}
+      <main className={`flex-1 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
+        {renderPage(currentPage, setCurrentPage, isFullscreen)}
       </main>
       <EventPopup />
       <ToastContainer />

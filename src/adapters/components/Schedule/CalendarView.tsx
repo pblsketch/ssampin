@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import { getCategoriesOnDate } from '@domain/rules/eventRules';
 import { getCategoryColors, getCategoryInfo } from '@adapters/presenters/categoryPresenter';
+import { getHolidayMapForMonth } from '@domain/rules/holidayRules';
 
 const DAY_HEADERS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -23,12 +24,16 @@ interface CalendarDay {
   isToday: boolean;
   isSunday: boolean;
   isSaturday: boolean;
+  isHoliday: boolean;
+  holidayName: string | null;
   categoryColors: readonly string[]; // dot 색상 배열
 }
 
 function getCalendarDays(year: number, month: number, events: readonly SchoolEvent[], categories: readonly CategoryItem[]): CalendarDay[] {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+
+  const holidayMap = getHolidayMapForMonth(year, month);
 
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
@@ -50,6 +55,8 @@ function getCalendarDays(year: number, month: number, events: readonly SchoolEve
       isToday: false,
       isSunday: date.getDay() === 0,
       isSaturday: date.getDay() === 6,
+      isHoliday: false,
+      holidayName: null,
       categoryColors: [],
     });
   }
@@ -64,6 +71,9 @@ function getCalendarDays(year: number, month: number, events: readonly SchoolEve
       return getCategoryColors(info.color).dot;
     });
 
+    const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const holidayName = holidayMap.get(dateKey) ?? null;
+
     days.push({
       date,
       day: d,
@@ -71,6 +81,8 @@ function getCalendarDays(year: number, month: number, events: readonly SchoolEve
       isToday: dateStr === todayStr,
       isSunday: date.getDay() === 0,
       isSaturday: date.getDay() === 6,
+      isHoliday: holidayName !== null,
+      holidayName,
       categoryColors: colors.slice(0, 3), // 최대 3개 dot
     });
   }
@@ -87,6 +99,8 @@ function getCalendarDays(year: number, month: number, events: readonly SchoolEve
       isToday: false,
       isSunday: date.getDay() === 0,
       isSaturday: date.getDay() === 6,
+      isHoliday: false,
+      holidayName: null,
       categoryColors: [],
     });
     nextDay++;
@@ -169,7 +183,7 @@ export function CalendarView({
 
           if (!d.isCurrentMonth) {
             textClass += 'text-slate-600';
-          } else if (d.isSunday) {
+          } else if (d.isSunday || d.isHoliday) {
             textClass += 'text-red-400';
           } else if (d.isSaturday) {
             textClass += 'text-slate-300';
@@ -182,6 +196,7 @@ export function CalendarView({
               key={idx}
               className={cellClass}
               onClick={() => onSelectDate(d.date)}
+              title={d.holidayName ?? undefined}
             >
               {d.isToday ? (
                 <span className="flex items-center justify-center w-7 h-7 rounded-full bg-sp-accent text-white font-bold text-sm shadow-md">
@@ -189,6 +204,12 @@ export function CalendarView({
                 </span>
               ) : (
                 <span className={textClass}>{d.day}</span>
+              )}
+              {/* 공휴일 이름 */}
+              {d.isHoliday && d.isCurrentMonth && (
+                <span className="text-[9px] text-red-400/80 leading-tight truncate w-full text-center">
+                  {d.holidayName}
+                </span>
               )}
               {/* 이벤트 dot */}
               {d.categoryColors.length > 0 && (

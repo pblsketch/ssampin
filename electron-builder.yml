@@ -6,8 +6,13 @@ directories:
   buildResources: build
   output: release
 files:
-  - dist/**/*
-  - dist-electron/**/*
+  - from: "."
+    to: "."
+    filter:
+      - "package.json"
+      - "dist/**/*"
+      - "dist-electron/**/*"
+      - "node_modules/**/*"
 win:
   target:
     - target: nsis
@@ -24,4 +29,4 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
-  artifactName: ${productName}-${version}-setup.${ext}
+  artifactName: ssampin-Setup-${version}.${ext}

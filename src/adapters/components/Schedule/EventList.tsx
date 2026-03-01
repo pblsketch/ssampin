@@ -3,12 +3,14 @@ import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import { sortByDate } from '@domain/rules/eventRules';
 import { calculateDDay } from '@domain/rules/ddayRules';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
+import type { HolidayInfo } from '@domain/rules/holidayRules';
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 interface EventListProps {
   events: readonly SchoolEvent[];
   categories: readonly CategoryItem[];
+  holidays: readonly HolidayInfo[];
   onEdit: (event: SchoolEvent) => void;
   onDelete: (id: string) => void;
 }
@@ -51,7 +53,7 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
 
   return (
     <div
-      className={`rounded-2xl p-4 border-l-4 ${colors.border} transition-colors shadow-lg group relative overflow-hidden ${
+      className={`rounded-2xl px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-colors shadow-lg group relative shrink-0 ${
         isToday
           ? 'bg-slate-800/80 ring-2 ring-sp-accent/40 shadow-xl'
           : 'bg-sp-card hover:bg-slate-800'
@@ -136,8 +138,55 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
   );
 }
 
-export function EventList({ events, categories, onEdit, onDelete }: EventListProps) {
+function HolidayCard({ holiday }: { holiday: HolidayInfo }) {
+  const parts = holiday.date.split('-');
+  const m = parseInt(parts[1] ?? '1', 10);
+  const d = parseInt(parts[2] ?? '1', 10);
+  const y = parseInt(parts[0] ?? '0', 10);
+  const date = new Date(y, m - 1, d);
+  const dayName = DAY_NAMES[date.getDay()];
+
+  return (
+    <div className="rounded-2xl px-4 pt-3 pb-3 border-l-4 border-red-500/60 bg-red-950/20 shadow-sm shrink-0">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-red-400/80 mb-0.5">
+            {m}월 {d}일 ({dayName})
+          </span>
+          <h4 className="text-sm font-bold text-red-300">
+            {holiday.name}
+          </h4>
+        </div>
+        <span className="bg-red-900/40 text-red-300 text-[10px] px-2 py-1 rounded-md font-medium border border-red-800/30">
+          공휴일
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function EventList({ events, categories, holidays, onEdit, onDelete }: EventListProps) {
   const sortedEvents = useMemo(() => sortByDate(events), [events]);
+
+  // 이벤트와 공휴일을 날짜순으로 통합
+  const mergedItems = useMemo(() => {
+    const items: Array<{ type: 'event'; data: SchoolEvent } | { type: 'holiday'; data: HolidayInfo }> = [];
+
+    for (const e of sortedEvents) {
+      items.push({ type: 'event', data: e });
+    }
+    for (const h of holidays) {
+      items.push({ type: 'holiday', data: h });
+    }
+
+    items.sort((a, b) => {
+      const dateA = a.type === 'event' ? a.data.date : a.data.date;
+      const dateB = b.type === 'event' ? b.data.date : b.data.date;
+      return dateA.localeCompare(dateB);
+    });
+
+    return items;
+  }, [sortedEvents, holidays]);
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto pr-2 pb-10 h-full">
@@ -145,21 +194,25 @@ export function EventList({ events, categories, onEdit, onDelete }: EventListPro
         <h3 className="text-lg font-bold text-white">다가오는 일정</h3>
       </div>
 
-      {sortedEvents.length === 0 ? (
+      {mergedItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
           <span className="material-symbols-outlined text-[48px] mb-4">event_busy</span>
           <p className="text-sm">등록된 일정이 없습니다</p>
         </div>
       ) : (
-        sortedEvents.map((event) => (
-          <EventCard
-            key={event.id}
-            event={event}
-            categories={categories}
-            onEdit={onEdit}
-            onDelete={onDelete}
-          />
-        ))
+        mergedItems.map((item) =>
+          item.type === 'event' ? (
+            <EventCard
+              key={item.data.id}
+              event={item.data}
+              categories={categories}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          ) : (
+            <HolidayCard key={`holiday-${item.data.date}`} holiday={item.data} />
+          ),
+        )
       )}
     </div>
   );

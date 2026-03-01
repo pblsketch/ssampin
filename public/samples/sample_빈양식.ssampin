@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "version": "1.0",
+    "type": "events",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "createdBy": "담임교사 이름",
+    "schoolName": "학교 이름",
+    "description": "쌤핀 일정 가져오기용 빈 양식입니다. 이 파일을 복사하여 나만의 일정을 작성해 보세요. events 배열에 일정을 추가하고, category 값은 categories 배열의 id와 일치해야 합니다."
+  },
+  "categories": [
+    { "id": "school", "name": "학교", "color": "blue" },
+    { "id": "class", "name": "학급", "color": "green" },
+    { "id": "department", "name": "부서", "color": "yellow" },
+    { "id": "treeSchool", "name": "나무학교", "color": "purple" },
+    { "id": "etc", "name": "기타", "color": "gray" }
+  ],
+  "events": [
+    {
+      "id": "evt-001",
+      "title": "일정 제목을 입력하세요",
+      "date": "2026-03-02",
+      "category": "school"
+    }
+  ]
+}

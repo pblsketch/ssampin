@@ -9,7 +9,7 @@ const features = [
   },
   {
     icon: '🪑',
-    title: '좌석배치',
+    title: '학급 자리 배치',
     description:
       '드래그로 자리 교환, 버튼 하나로 랜덤 배치. 더 이상 한글 파일 안 만들어도 돼요.',
   },

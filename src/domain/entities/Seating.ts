@@ -1,4 +1,4 @@
-/** 좌석 배치 데이터 */
+/** 학급 자리 배치 데이터 */
 export interface SeatingData {
   readonly rows: number;
   readonly cols: number;

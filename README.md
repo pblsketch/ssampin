@@ -43,9 +43,11 @@ graph TD
 - **빌드 및 툴링**: Vite, ESLint
 - **데스크톱 앱**: Electron, Electron-builder
 
-## 🚀 설치 방법
+## 📥 다운로드
 
-1. Releases 페이지 (추가 예정) 에서 최신 `setup.exe`를 다운로드 받아 실행해 주세요.
+**다운로드 페이지**: https://ssampin.vercel.app
+
+1. 위 페이지에서 최신 설치 파일을 다운로드 받아 실행해 주세요.
 2. 설치된 `쌤핀` 앱을 실행합니다.
 
 > **Note**: `.ssampin` 일정을 더블클릭하면 쌤핀 앱이 자동으로 실행되며 가져오기 화면이 뜹니다.

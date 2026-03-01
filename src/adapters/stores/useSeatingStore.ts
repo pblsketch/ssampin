@@ -2,73 +2,67 @@ import { create } from 'zustand';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { countStudents, countEmptySeats } from '@domain/rules/seatRules';
-import { seatingRepository, studentRepository } from '@adapters/di/container';
+import { seatingRepository } from '@adapters/di/container';
 import { SwapSeats } from '@usecases/seating/SwapSeats';
 import { RandomizeSeats } from '@usecases/seating/RandomizeSeats';
 import { UpdateSeating } from '@usecases/seating/UpdateSeating';
+import { ClearSeating } from '@usecases/seating/ClearSeating';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
 
-/** 샘플 한국 학생 35명 (학번: 1학년 2반) */
-const SAMPLE_STUDENTS: readonly Student[] = [
-  { id: 's01', name: '김민지', studentNumber: 1 },
-  { id: 's02', name: '이서연', studentNumber: 2 },
-  { id: 's03', name: '박지민', studentNumber: 3 },
-  { id: 's04', name: '최예은', studentNumber: 4 },
-  { id: 's05', name: '정수빈', studentNumber: 5 },
-  { id: 's06', name: '강민수', studentNumber: 6 },
-  { id: 's07', name: '조현우', studentNumber: 7 },
-  { id: 's08', name: '윤서준', studentNumber: 8 },
-  { id: 's09', name: '장민혁', studentNumber: 9 },
-  { id: 's10', name: '임도윤', studentNumber: 10 },
-  { id: 's11', name: '한지우', studentNumber: 11 },
-  { id: 's12', name: '송예준', studentNumber: 12 },
-  { id: 's13', name: '오시우', studentNumber: 13 },
-  { id: 's14', name: '서준우', studentNumber: 14 },
-  { id: 's15', name: '신은우', studentNumber: 15 },
-  { id: 's16', name: '백승우', studentNumber: 16 },
-  { id: 's17', name: '권진우', studentNumber: 17 },
-  { id: 's18', name: '황지호', studentNumber: 18 },
-  { id: 's19', name: '안민재', studentNumber: 19 },
-  { id: 's20', name: '유건우', studentNumber: 20 },
-  { id: 's21', name: '홍성현', studentNumber: 21 },
-  { id: 's22', name: '전민성', studentNumber: 22 },
-  { id: 's23', name: '고우진', studentNumber: 23 },
-  { id: 's24', name: '문지훈', studentNumber: 24 },
-  { id: 's25', name: '양준영', studentNumber: 25 },
-  { id: 's26', name: '손민규', studentNumber: 26 },
-  { id: 's27', name: '배현준', studentNumber: 27 },
-  { id: 's28', name: '조민준', studentNumber: 28 },
-  { id: 's29', name: '류승민', studentNumber: 29 },
-  { id: 's30', name: '서동현', studentNumber: 30 },
-  { id: 's31', name: '남궁민', studentNumber: 31 },
-  { id: 's32', name: '나경훈', studentNumber: 32 },
-  { id: 's33', name: '박효준', studentNumber: 33 },
-  { id: 's34', name: '허지훈', studentNumber: 34 },
-  { id: 's35', name: '황민혁', studentNumber: 35 },
-];
+/** 활성 학생(결번 제외) 수에 맞춰 동적 그리드 생성 */
+function calcGridSize(activeCount: number): { rows: number; cols: number } {
+  if (activeCount <= 0) return { rows: 1, cols: 1 };
+  const cols = Math.ceil(Math.sqrt(activeCount));
+  const rows = Math.ceil(activeCount / cols);
+  return { rows, cols };
+}
 
-/** 6×6 기본 좌석: 학생 목록을 기반으로 생성 */
-function createDefaultSeating(students: readonly Student[]): SeatingData {
-  const ids = students.map((s) => s.id);
+/** 학생 목록 기반 좌석 자동 생성 (결번 제외, 동적 크기) */
+function createSeatingFromStudents(students: readonly Student[]): SeatingData {
+  const activeIds = students.filter((s) => !s.isVacant).map((s) => s.id);
+  const { rows, cols } = calcGridSize(activeIds.length);
   const seats: (string | null)[][] = [];
   let idx = 0;
-  for (let r = 0; r < 6; r++) {
+  for (let r = 0; r < rows; r++) {
     const row: (string | null)[] = [];
-    for (let c = 0; c < 6; c++) {
-      row.push(idx < ids.length ? (ids[idx] ?? null) : null);
+    for (let c = 0; c < cols; c++) {
+      row.push(idx < activeIds.length ? (activeIds[idx] ?? null) : null);
       idx++;
     }
     seats.push(row);
   }
-  return { rows: 6, cols: 6, seats };
+  return { rows, cols, seats };
+}
+
+/** 좌석에서 명렬표에 없거나 결번인 학생 ID를 제거 */
+function sanitizeSeating(
+  seating: SeatingData,
+  students: readonly Student[],
+): SeatingData {
+  const activeIds = new Set(
+    students.filter((s) => !s.isVacant).map((s) => s.id),
+  );
+  let changed = false;
+  const seats = seating.seats.map((row) =>
+    row.map((cell) => {
+      if (cell !== null && !activeIds.has(cell)) {
+        changed = true;
+        return null;
+      }
+      return cell;
+    }),
+  );
+  return changed ? { ...seating, seats } : seating;
 }
 
 interface SeatingState {
   seating: SeatingData;
-  students: readonly Student[];
   loaded: boolean;
   isEditing: boolean;
 
-  history: SeatingData[];
+  past: SeatingData[];
+  future: SeatingData[];
 
   load: () => Promise<void>;
   swapSeats: (r1: number, c1: number, r2: number, c2: number) => Promise<void>;
@@ -76,54 +70,67 @@ interface SeatingState {
   updateStudent: (row: number, col: number, studentId: string | null) => Promise<void>;
   setEditing: (editing: boolean) => void;
   undo: () => Promise<void>;
-  updateStudents: (students: readonly Student[]) => Promise<void>;
-  updateStudentName: (id: string, name: string) => Promise<void>;
+  redo: () => Promise<void>;
+  clearAllSeats: () => Promise<void>;
+  resizeGrid: (newRows: number, newCols: number) => Promise<void>;
+
+  /** 명렬표 변경 시 좌석 동기화 */
+  syncFromRoster: (students: readonly Student[]) => Promise<void>;
+  /** 명렬표 전체 교체 시 좌석 재생성 */
+  rebuildFromRoster: (students: readonly Student[]) => Promise<void>;
 
   /** 파생 값 */
   studentCount: () => number;
   emptyCount: () => number;
-  getStudent: (id: string | null) => Student | undefined;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
 }
+
+const EMPTY_SEATING: SeatingData = { rows: 1, cols: 1, seats: [[null]] };
 
 export const useSeatingStore = create<SeatingState>((set, get) => {
   const swapSeatsUC = new SwapSeats(seatingRepository);
   const randomizeUC = new RandomizeSeats(seatingRepository);
   const updateUC = new UpdateSeating(seatingRepository);
+  const clearUC = new ClearSeating(seatingRepository);
 
-  const saveHistory = () => {
-    const { seating, history } = get();
-    // Keep max 20 history states
-    const newHistory = [...history, seating].slice(-20);
-    set({ history: newHistory });
+  const pushToHistory = () => {
+    const { seating, past } = get();
+    const newPast = [...past, seating].slice(-20);
+    set({ past: newPast, future: [] });
   };
 
   return {
-    seating: createDefaultSeating(SAMPLE_STUDENTS),
-    history: [],
-    students: SAMPLE_STUDENTS,
+    seating: EMPTY_SEATING,
+    past: [],
+    future: [],
     loaded: false,
     isEditing: false,
 
     load: async () => {
       if (get().loaded) return;
       try {
-        const [data, studentData] = await Promise.all([
-          seatingRepository.getSeating(),
-          studentRepository.getStudents(),
-        ]);
-
-        const students = studentData ?? SAMPLE_STUDENTS;
-        if (!studentData) {
-          await studentRepository.saveStudents(SAMPLE_STUDENTS);
+        // 학생 스토어가 먼저 로드되어야 함
+        const studentState = useStudentStore.getState();
+        if (!studentState.loaded) {
+          await studentState.load();
         }
+        const students = useStudentStore.getState().students;
+
+        const data = await seatingRepository.getSeating();
 
         if (data !== null) {
-          set({ seating: data, students, loaded: true });
+          // 명렬표 기준으로 좌석 정합성 검증: 없는/결번 학생 ID 제거
+          const sanitized = sanitizeSeating(data, students);
+          if (sanitized !== data) {
+            await seatingRepository.saveSeating(sanitized);
+          }
+          set({ seating: sanitized, loaded: true });
         } else {
-          // 최초: 기본 좌석 저장
-          const defaultData = createDefaultSeating(students);
+          // 최초: 명렬표 기준 좌석 자동 생성
+          const defaultData = createSeatingFromStudents(students);
           await seatingRepository.saveSeating(defaultData);
-          set({ seating: defaultData, students, loaded: true });
+          set({ seating: defaultData, loaded: true });
         }
       } catch {
         set({ loaded: true });
@@ -131,14 +138,30 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     },
 
     undo: async () => {
-      const { history } = get();
-      if (history.length === 0) return;
-      const prevSeating = history[history.length - 1];
-      const newHistory = history.slice(0, -1);
+      const { past, future, seating } = get();
+      if (past.length === 0) return;
+      const prevSeating = past[past.length - 1]!;
+      const newPast = past.slice(0, -1);
+      const newFuture = [seating, ...future].slice(0, 20);
 
       try {
-        await seatingRepository.saveSeating(prevSeating!);
-        set({ seating: prevSeating, history: newHistory });
+        await seatingRepository.saveSeating(prevSeating);
+        set({ seating: prevSeating, past: newPast, future: newFuture });
+      } catch {
+        // 무시
+      }
+    },
+
+    redo: async () => {
+      const { past, future, seating } = get();
+      if (future.length === 0) return;
+      const nextSeating = future[0]!;
+      const newFuture = future.slice(1);
+      const newPast = [...past, seating].slice(-20);
+
+      try {
+        await seatingRepository.saveSeating(nextSeating);
+        set({ seating: nextSeating, past: newPast, future: newFuture });
       } catch {
         // 무시
       }
@@ -146,7 +169,7 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
 
     swapSeats: async (r1, c1, r2, c2) => {
       try {
-        saveHistory();
+        pushToHistory();
         const updated = await swapSeatsUC.execute(r1, c1, r2, c2);
         set({ seating: updated });
       } catch {
@@ -156,7 +179,7 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
 
     randomize: async () => {
       try {
-        saveHistory();
+        pushToHistory();
         const updated = await randomizeUC.execute();
         set({ seating: updated });
       } catch {
@@ -166,8 +189,18 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
 
     updateStudent: async (row, col, studentId) => {
       try {
-        saveHistory();
+        pushToHistory();
         const updated = await updateUC.execute(row, col, studentId);
+        set({ seating: updated });
+      } catch {
+        // 무시
+      }
+    },
+
+    clearAllSeats: async () => {
+      try {
+        pushToHistory();
+        const updated = await clearUC.execute();
         set({ seating: updated });
       } catch {
         // 무시
@@ -176,24 +209,74 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
 
     setEditing: (editing) => set({ isEditing: editing }),
 
-    updateStudents: async (newStudents) => {
-      const defaultData = createDefaultSeating(newStudents);
-      await Promise.all([
-        studentRepository.saveStudents(newStudents),
-        seatingRepository.saveSeating(defaultData),
-      ]);
-      set({ students: newStudents, seating: defaultData, history: [] });
+    resizeGrid: async (newRows, newCols) => {
+      const clampedRows = Math.max(1, Math.min(10, newRows));
+      const clampedCols = Math.max(1, Math.min(10, newCols));
+      const { seating } = get();
+
+      pushToHistory();
+
+      // Build new seats array preserving existing students
+      const newSeats: (string | null)[][] = [];
+      for (let r = 0; r < clampedRows; r++) {
+        const existingRow = r < seating.seats.length ? seating.seats[r] : [];
+        const newRow: (string | null)[] = [];
+        for (let c = 0; c < clampedCols; c++) {
+          const existingCell = existingRow && c < existingRow.length ? (existingRow[c] ?? null) : null;
+          newRow.push(existingCell);
+        }
+        newSeats.push(newRow);
+      }
+
+      const updated: SeatingData = { rows: clampedRows, cols: clampedCols, seats: newSeats };
+
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+        await useSettingsStore.getState().update({ seatingRows: clampedRows, seatingCols: clampedCols });
+      } catch {
+        // 무시
+      }
     },
 
-    updateStudentName: async (id, name) => {
-      const { students } = get();
-      const newStudents = students.map((s) => (s.id === id ? { ...s, name } : s));
-      await studentRepository.saveStudents(newStudents);
-      set({ students: newStudents });
+    syncFromRoster: async (students) => {
+      const { seating } = get();
+      const sanitized = sanitizeSeating(seating, students);
+
+      if (sanitized !== seating) {
+        try {
+          await seatingRepository.saveSeating(sanitized);
+          set({ seating: sanitized });
+        } catch {
+          // 무시
+        }
+      }
+    },
+
+    rebuildFromRoster: async (students) => {
+      const newSeating = createSeatingFromStudents(students);
+      try {
+        await seatingRepository.saveSeating(newSeating);
+        set({ seating: newSeating, past: [], future: [] });
+        await useSettingsStore.getState().update({
+          seatingRows: newSeating.rows,
+          seatingCols: newSeating.cols,
+        });
+      } catch {
+        // 무시
+      }
     },
 
     studentCount: () => countStudents(get().seating.seats),
     emptyCount: () => countEmptySeats(get().seating.seats),
-    getStudent: (id) => (id !== null ? get().students.find(s => s.id === id) : undefined),
+    canUndo: () => get().past.length > 0,
+    canRedo: () => get().future.length > 0,
   };
+});
+
+/** 명렬표 변경 구독: 학생 변경 시 좌석 자동 동기화 */
+useStudentStore.subscribe((state, prevState) => {
+  if (state.students !== prevState.students && useSeatingStore.getState().loaded) {
+    void useSeatingStore.getState().syncFromRoster(state.students);
+  }
 });

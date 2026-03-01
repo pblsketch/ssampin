@@ -1,0 +1,206 @@
+{
+  "meta": {
+    "version": "1.0",
+    "type": "events",
+    "createdAt": "2026-02-28T09:00:00.000Z",
+    "createdBy": "김민준",
+    "schoolName": "한빛중학교",
+    "description": "2026학년도 1학기 학사일정 (3월~7월). 학교 행사, 시험, 학급 및 부서 일정을 포함한 종합 샘플입니다."
+  },
+  "categories": [
+    { "id": "school", "name": "학교", "color": "blue" },
+    { "id": "class", "name": "학급", "color": "green" },
+    { "id": "department", "name": "부서", "color": "yellow" },
+    { "id": "treeSchool", "name": "나무학교", "color": "purple" },
+    { "id": "etc", "name": "기타", "color": "gray" },
+    { "id": "exam", "name": "시험", "color": "red" },
+    { "id": "trip", "name": "체험학습", "color": "teal" }
+  ],
+  "events": [
+    {
+      "id": "evt-001",
+      "title": "입학식",
+      "date": "2026-03-02",
+      "category": "school",
+      "description": "2026학년도 신입생 입학식. 체육관에서 진행되며 학부모 참석 가능.",
+      "time": "10:00 - 12:00",
+      "location": "체육관",
+      "isDDay": true,
+      "alerts": ["1day", "3day"]
+    },
+    {
+      "id": "evt-002",
+      "title": "3월 학급회의",
+      "date": "2026-03-06",
+      "category": "class",
+      "description": "3월 학급 목표 설정 및 학급 임원 선출 안건 논의",
+      "time": "15:30 - 16:30",
+      "location": "2학년 3반 교실"
+    },
+    {
+      "id": "evt-003",
+      "title": "학급 임원 선출",
+      "date": "2026-03-10",
+      "category": "class",
+      "description": "회장, 부회장 선출 및 1학기 학급 운영 계획 발표",
+      "time": "14:00 - 15:00",
+      "location": "2학년 3반 교실",
+      "alerts": ["1day"]
+    },
+    {
+      "id": "evt-004",
+      "title": "교과협의회 (국어과)",
+      "date": "2026-03-13",
+      "category": "department",
+      "description": "1학기 국어과 교육과정 편성 및 평가 계획 협의",
+      "time": "16:00 - 17:30",
+      "location": "교무실 소회의실",
+      "alerts": ["1day"]
+    },
+    {
+      "id": "evt-005",
+      "title": "학부모 총회",
+      "date": "2026-03-20",
+      "category": "school",
+      "description": "학교 운영 방침 안내 및 학부모 의견 수렴. 학년별로 나뉘어 진행.",
+      "time": "19:00 - 21:00",
+      "location": "강당",
+      "isDDay": true,
+      "alerts": ["3day", "1day"]
+    },
+    {
+      "id": "evt-006",
+      "title": "1학기 중간고사",
+      "date": "2026-04-21",
+      "endDate": "2026-04-24",
+      "category": "exam",
+      "description": "1학기 중간고사. 국어·영어·수학·사회·과학 5과목 시험.",
+      "isDDay": true,
+      "alerts": ["1week", "3day", "1day"]
+    },
+    {
+      "id": "evt-007",
+      "title": "과학의 날 행사",
+      "date": "2026-04-21",
+      "category": "school",
+      "description": "과학의 달 기념 학교 행사. 과학 탐구 올림피아드, 발명품 경진대회 등.",
+      "time": "09:00 - 15:00",
+      "location": "운동장 및 과학실",
+      "alerts": ["3day"]
+    },
+    {
+      "id": "evt-008",
+      "title": "현장학습 (2학년)",
+      "date": "2026-05-08",
+      "category": "trip",
+      "description": "2학년 현장체험학습. 국립과천과학관 방문. 도시락 지참.",
+      "time": "08:00 - 17:00",
+      "location": "국립과천과학관",
+      "isDDay": true,
+      "alerts": ["3day", "1day"]
+    },
+    {
+      "id": "evt-009",
+      "title": "스승의 날",
+      "date": "2026-05-15",
+      "category": "school",
+      "description": "스승의 날 기념 행사",
+      "time": "10:00 - 11:00",
+      "location": "강당"
+    },
+    {
+      "id": "evt-010",
+      "title": "교직원 연수",
+      "date": "2026-05-22",
+      "category": "department",
+      "description": "2026학년도 1학기 교직원 역량 강화 연수. AI 교육 활용 사례 공유.",
+      "time": "14:00 - 17:00",
+      "location": "시청각실",
+      "alerts": ["1day"]
+    },
+    {
+      "id": "evt-011",
+      "title": "학부모 상담주간",
+      "date": "2026-05-25",
+      "endDate": "2026-05-29",
+      "category": "class",
+      "description": "학부모 개별 상담주간. 사전 예약제로 운영. 담임교사와 15분 개별 상담.",
+      "alerts": ["3day", "1day"]
+    },
+    {
+      "id": "evt-012",
+      "title": "체육대회",
+      "date": "2026-06-05",
+      "category": "school",
+      "description": "2026학년도 학교 체육대회. 반별 대항 종목(이어달리기, 줄다리기, 농구 등). 날씨에 따라 변경 가능.",
+      "time": "09:00 - 16:00",
+      "location": "운동장",
+      "isDDay": true,
+      "alerts": ["3day", "1day"]
+    },
+    {
+      "id": "evt-013",
+      "title": "수학여행 (2학년)",
+      "date": "2026-06-10",
+      "endDate": "2026-06-12",
+      "category": "trip",
+      "description": "2학년 수학여행 (2박 3일). 경주·부산 지역. 버스 출발 시간 07:00. 사전 동의서 제출 필수.",
+      "time": "07:00",
+      "location": "경주, 부산",
+      "isDDay": true,
+      "alerts": ["1week", "3day", "1day"]
+    },
+    {
+      "id": "evt-014",
+      "title": "교과협의회 (2차)",
+      "date": "2026-06-19",
+      "category": "department",
+      "description": "2학기 교육과정 운영 계획 사전 협의 및 1학기 반성",
+      "time": "16:00 - 17:30",
+      "location": "교무실 소회의실",
+      "alerts": ["1day"]
+    },
+    {
+      "id": "evt-015",
+      "title": "1학기 기말고사",
+      "date": "2026-07-07",
+      "endDate": "2026-07-10",
+      "category": "exam",
+      "description": "1학기 기말고사. 전 과목 시험. 시험 후 방학 준비 일정 진행.",
+      "isDDay": true,
+      "alerts": ["1week", "3day", "1day"]
+    },
+    {
+      "id": "evt-016",
+      "title": "학교 축제 (한빛제)",
+      "date": "2026-07-03",
+      "endDate": "2026-07-04",
+      "category": "school",
+      "description": "연간 학교 축제 '한빛제'. 학급별 부스 운영, 동아리 공연, 장기자랑 등.",
+      "time": "10:00 - 17:00",
+      "location": "강당 및 교내 전체",
+      "isDDay": true,
+      "alerts": ["1week", "3day"]
+    },
+    {
+      "id": "evt-017",
+      "title": "나무학교 봉사활동",
+      "date": "2026-06-27",
+      "category": "treeSchool",
+      "description": "지역 환경 정화 봉사활동 및 나무 심기 프로젝트. 장갑·삽 개인 지참.",
+      "time": "09:00 - 13:00",
+      "location": "한빛 근린공원"
+    },
+    {
+      "id": "evt-018",
+      "title": "여름방학식",
+      "date": "2026-07-17",
+      "category": "school",
+      "description": "1학기 종업식 및 여름방학 시작. 생활기록부 확인 및 방학 과제 안내.",
+      "time": "10:00 - 11:00",
+      "location": "강당",
+      "isDDay": true,
+      "alerts": ["3day", "1day"]
+    }
+  ]
+}

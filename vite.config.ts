@@ -18,5 +18,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    proxy: {
+      '/neis-api': {
+        target: 'https://open.neis.go.kr',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/neis-api/, ''),
+      },
+    },
   },
 });

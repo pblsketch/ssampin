@@ -1,0 +1,120 @@
+{
+  "meta": {
+    "version": "1.0",
+    "type": "events",
+    "createdAt": "2026-03-03T08:30:00.000Z",
+    "createdBy": "이수연",
+    "schoolName": "한빛중학교",
+    "description": "2026학년도 3학년 2반 학급 일정 샘플. 담임교사가 관리하는 학급 단위 일정 모음."
+  },
+  "categories": [
+    { "id": "school", "name": "학교", "color": "blue" },
+    { "id": "class", "name": "학급", "color": "green" },
+    { "id": "department", "name": "부서", "color": "yellow" },
+    { "id": "treeSchool", "name": "나무학교", "color": "purple" },
+    { "id": "etc", "name": "기타", "color": "gray" }
+  ],
+  "events": [
+    {
+      "id": "cls-001",
+      "title": "학급회의",
+      "date": "2026-03-06",
+      "category": "class",
+      "description": "매주 금요일 학급회의. 한 주 돌아보기 및 다음 주 일정 공지.",
+      "time": "15:40 - 16:10",
+      "location": "3학년 2반 교실",
+      "recurrence": "weekly"
+    },
+    {
+      "id": "cls-002",
+      "title": "학급 임원 선출",
+      "date": "2026-03-11",
+      "category": "class",
+      "description": "회장·부회장·학습부장·환경부장·생활부장 선출. 입후보 신청 마감 3월 10일.",
+      "time": "09:00 - 10:00",
+      "location": "3학년 2반 교실",
+      "isDDay": true,
+      "alerts": ["1day"]
+    },
+    {
+      "id": "cls-003",
+      "title": "학부모 상담주간",
+      "date": "2026-05-25",
+      "endDate": "2026-05-29",
+      "category": "class",
+      "description": "담임교사-학부모 개별 상담. 예약제 운영 (15분씩). 학교 알리미로 예약 필수.",
+      "isDDay": true,
+      "alerts": ["3day", "1day"]
+    },
+    {
+      "id": "cls-004",
+      "title": "교실 대청소",
+      "date": "2026-03-28",
+      "category": "class",
+      "description": "1학기 첫 월말 대청소. 청소 구역 분담 및 교실 환경 정비. 학급 청소 도구 확인.",
+      "time": "15:30 - 16:30",
+      "location": "3학년 2반 교실 및 복도",
+      "recurrence": "monthly"
+    },
+    {
+      "id": "cls-005",
+      "title": "학급 사진 촬영",
+      "date": "2026-04-10",
+      "category": "class",
+      "description": "1학기 학급 단체 사진 및 개인 사진 촬영. 단정한 복장 착용 바람. 생활기록부 첨부용.",
+      "time": "10:30 - 11:00",
+      "location": "운동장 (날씨 불가 시 강당)",
+      "alerts": ["1day"]
+    },
+    {
+      "id": "cls-006",
+      "title": "수학여행 (3학년)",
+      "date": "2026-05-20",
+      "endDate": "2026-05-22",
+      "category": "school",
+      "description": "3학년 수학여행 (2박 3일). 제주도. 집결 장소: 학교 정문 (06:30). 동의서·보험료 납부 기한 5/13.",
+      "time": "06:30",
+      "location": "제주도",
+      "isDDay": true,
+      "alerts": ["1week", "3day", "1day"]
+    },
+    {
+      "id": "cls-007",
+      "title": "진로 탐색의 날",
+      "date": "2026-06-12",
+      "category": "school",
+      "description": "3학년 진로 체험 및 고교 입시 설명회. 외부 강사 초청 강연 포함.",
+      "time": "09:00 - 15:00",
+      "location": "시청각실",
+      "alerts": ["1day"]
+    },
+    {
+      "id": "cls-008",
+      "title": "학급 문집 원고 마감",
+      "date": "2026-07-03",
+      "category": "class",
+      "description": "1학기 학급 문집 제작을 위한 학생 원고 최종 제출 마감. 한글 파일로 담임 이메일 제출.",
+      "alerts": ["3day", "1day"]
+    },
+    {
+      "id": "cls-009",
+      "title": "학기말 성적 통지표 배부",
+      "date": "2026-07-16",
+      "category": "school",
+      "description": "1학기 최종 성적 통지표 및 생활통지표 배부. 방학 중 이의신청 기간 안내.",
+      "time": "10:00",
+      "location": "3학년 2반 교실",
+      "isDDay": true,
+      "alerts": ["1day"]
+    },
+    {
+      "id": "cls-010",
+      "title": "여름방학 과제 안내",
+      "date": "2026-07-17",
+      "category": "etc",
+      "description": "방학 중 독서록(2권), 진로 탐색 보고서(1편), 수학 문제집 제출 안내. 개학일 2026-08-18.",
+      "time": "10:30 - 11:00",
+      "location": "3학년 2반 교실"
+    }
+  ]
+}

@@ -76,6 +76,7 @@ interface EventsState {
   setShowExportModal: (show: boolean) => void;
   setShowImportModal: (show: boolean) => void;
   setShareFile: (file: EventsShareFile | null) => void;
+  downloadTemplate: () => Promise<void>;
 }
 
 const POPUP_DISMISSED_KEY = 'ssampin:event-popup-dismissed';
@@ -94,6 +95,73 @@ function isSnoozed(): boolean {
   const snoozedUntil = localStorage.getItem(POPUP_SNOOZED_KEY);
   if (!snoozedUntil) return false;
   return Date.now() < Number(snoozedUntil);
+}
+
+async function excelBufferToShareFile(buffer: ArrayBuffer): Promise<EventsShareFile | null> {
+  try {
+    const { parseEventsFromExcel } = await import(
+      '@infrastructure/export/ExcelExporter'
+    );
+    const { events: parsedEvents, categoryNames } = await parseEventsFromExcel(buffer);
+
+    if (parsedEvents.length === 0) return null;
+
+    const defaultCats: readonly { id: string; name: string; color: string }[] = [
+      { id: 'school', name: '학교', color: 'blue' },
+      { id: 'class', name: '학급', color: 'green' },
+      { id: 'department', name: '부서', color: 'yellow' },
+      { id: 'treeSchool', name: '나무학교', color: 'purple' },
+      { id: 'etc', name: '기타', color: 'gray' },
+    ];
+    const availableColors = [
+      'blue', 'green', 'yellow', 'purple', 'red', 'pink', 'indigo', 'teal',
+    ];
+    let colorIdx = 0;
+
+    const catMap = new Map<string, { id: string; name: string; color: string }>();
+    for (const name of categoryNames) {
+      const existing = defaultCats.find((c) => c.name === name);
+      if (existing) {
+        catMap.set(name, existing);
+      } else {
+        catMap.set(name, {
+          id: crypto.randomUUID(),
+          name,
+          color: availableColors[colorIdx % availableColors.length] ?? 'gray',
+        });
+        colorIdx++;
+      }
+    }
+
+    const categories = Array.from(catMap.values());
+    const events: SchoolEvent[] = parsedEvents.map((pe) => ({
+      id: crypto.randomUUID(),
+      title: pe.title,
+      date: pe.date,
+      category: catMap.get(pe.categoryName)?.id ?? 'etc',
+      ...(pe.endDate ? { endDate: pe.endDate } : {}),
+      ...(pe.time ? { time: pe.time } : {}),
+      ...(pe.location ? { location: pe.location } : {}),
+      ...(pe.description ? { description: pe.description } : {}),
+      ...(pe.isDDay ? { isDDay: pe.isDDay } : {}),
+      ...(pe.recurrence ? { recurrence: pe.recurrence } : {}),
+    }));
+
+    return {
+      meta: {
+        version: '1.0',
+        type: 'events',
+        createdAt: new Date().toISOString(),
+        createdBy: '',
+        schoolName: '',
+        description: 'Excel 파일에서 가져옴',
+      },
+      categories,
+      events,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export const useEventsStore = create<EventsState>((set) => {
@@ -220,32 +288,65 @@ export const useEventsStore = create<EventsState>((set) => {
 
     triggerImport: async () => {
       const api = window.electronAPI;
-      let raw: string | null = null;
 
+      // Electron path — .ssampin + .xlsx
       if (api?.importShareFile) {
-        raw = await api.importShareFile();
-      } else {
-        // Browser fallback: file input
-        raw = await new Promise<string | null>((resolve) => {
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = '.ssampin';
-          input.onchange = () => {
-            const file = input.files?.[0];
-            if (!file) { resolve(null); return; }
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => resolve(null);
-            reader.readAsText(file);
-          };
-          input.click();
-        });
+        const result = await api.importShareFile();
+        if (!result) return null;
+
+        if (result.fileType === 'xlsx') {
+          let buf: ArrayBuffer;
+          if (result.content instanceof ArrayBuffer) {
+            buf = result.content;
+          } else {
+            const u8 = new Uint8Array(result.content as unknown as ArrayBuffer);
+            buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+          }
+          return excelBufferToShareFile(buf);
+        }
+
+        try {
+          const parsed: unknown = JSON.parse(result.content as string);
+          return validateShareFile(parsed);
+        } catch {
+          return null;
+        }
       }
 
-      if (!raw) return null;
+      // Browser fallback — supports both .ssampin and .xlsx
+      const fileResult = await new Promise<
+        { content: string | ArrayBuffer; name: string } | null
+      >((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.ssampin,.xlsx';
+        input.onchange = () => {
+          const file = input.files?.[0];
+          if (!file) { resolve(null); return; }
+          const isExcel = file.name.endsWith('.xlsx');
+          const reader = new FileReader();
+          reader.onload = () =>
+            resolve({ content: reader.result as string | ArrayBuffer, name: file.name });
+          reader.onerror = () => resolve(null);
+          if (isExcel) {
+            reader.readAsArrayBuffer(file);
+          } else {
+            reader.readAsText(file);
+          }
+        };
+        input.click();
+      });
 
+      if (!fileResult) return null;
+
+      // .xlsx file → parse Excel and convert to EventsShareFile
+      if (fileResult.name.endsWith('.xlsx')) {
+        return excelBufferToShareFile(fileResult.content as ArrayBuffer);
+      }
+
+      // .ssampin file → parse JSON
       try {
-        const parsed: unknown = JSON.parse(raw);
+        const parsed: unknown = JSON.parse(fileResult.content as string);
         return validateShareFile(parsed);
       } catch {
         return null;
@@ -265,5 +366,34 @@ export const useEventsStore = create<EventsState>((set) => {
     setShowExportModal: (show) => set({ showExportModal: show }),
     setShowImportModal: (show) => set({ showImportModal: show }),
     setShareFile: (file) => set({ shareFile: file }),
+
+    downloadTemplate: async () => {
+      const { generateEventsTemplateExcel } = await import(
+        '@infrastructure/export/ExcelExporter'
+      );
+      const buffer = await generateEventsTemplateExcel();
+      const fileName = '일정_가져오기_양식.xlsx';
+      const api = window.electronAPI;
+      if (api?.showSaveDialog && api.writeFile) {
+        const filePath = await api.showSaveDialog({
+          title: '양식 다운로드',
+          defaultPath: fileName,
+          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+        });
+        if (!filePath) return;
+        await api.writeFile(filePath, buffer);
+        return;
+      }
+      // 브라우저 폴백
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
   };
 });

@@ -1,7 +1,15 @@
 import { create } from 'zustand';
-import type { Settings } from '@domain/entities/Settings';
+import type { Settings, WorkSymbolItem } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
+
+export const DEFAULT_WORK_SYMBOLS: readonly WorkSymbolItem[] = [
+  { id: 'silence', emoji: '🤫', name: '조용히', description: '소리 내지 않고 혼자 활동합니다', bgGradient: 'from-blue-950/30 to-transparent' },
+  { id: 'raise-hand', emoji: '🙋', name: '손들고 질문', description: '질문이 있으면 손을 들어주세요', bgGradient: 'from-green-950/30 to-transparent' },
+  { id: 'pair-talk', emoji: '💬', name: '짝과 상의', description: '짝꿍과 작은 소리로 이야기하세요', bgGradient: 'from-yellow-950/30 to-transparent' },
+  { id: 'group-work', emoji: '👥', name: '모둠 활동', description: '모둠원과 함께 활동합니다', bgGradient: 'from-purple-950/30 to-transparent' },
+  { id: 'individual', emoji: '📝', name: '개인 활동', description: '스스로 생각하고 작성합니다', bgGradient: 'from-slate-950/30 to-transparent' },
+];
 
 const DEFAULT_PERIOD_TIMES: readonly PeriodTime[] = [
   { period: 1, start: '08:50', end: '09:30' },
@@ -37,6 +45,33 @@ const DEFAULT_SETTINGS: Settings = {
   },
   theme: 'dark',
   fontSize: 'medium',
+  neis: {
+    schoolCode: '',
+    atptCode: '',
+    schoolName: '',
+  },
+  pin: {
+    enabled: false,
+    pinHash: null,
+    protectedFeatures: {
+      timetable: false,
+      seating: false,
+      schedule: false,
+      studentRecords: false,
+      meal: false,
+      memo: false,
+      todo: false,
+    },
+    autoLockMinutes: 5,
+  },
+  alarmSound: {
+    selectedSound: 'beep',
+    customAudioName: null,
+    volume: 0.8,
+  },
+  workSymbols: {
+    symbols: DEFAULT_WORK_SYMBOLS,
+  },
 };
 
 interface SettingsState {
@@ -64,6 +99,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           ...saved,
           widget: { ...DEFAULT_SETTINGS.widget, ...(saved.widget ?? {}) },
           system: { ...DEFAULT_SETTINGS.system, ...((saved as unknown as { system?: Partial<Settings['system']> }).system ?? {}) },
+          neis: { ...DEFAULT_SETTINGS.neis, ...((saved as unknown as { neis?: Partial<Settings['neis']> }).neis ?? {}) },
+          pin: { ...DEFAULT_SETTINGS.pin, ...((saved as unknown as { pin?: Partial<Settings['pin']> }).pin ?? {}) },
+          alarmSound: { ...DEFAULT_SETTINGS.alarmSound, ...((saved as unknown as { alarmSound?: Partial<Settings['alarmSound']> }).alarmSound ?? {}) },
+          workSymbols: { ...DEFAULT_SETTINGS.workSymbols, ...((saved as unknown as { workSymbols?: Partial<Settings['workSymbols']> }).workSymbols ?? {}) },
         };
         set({ settings: merged, loaded: true, isFirstRun: false });
       } else {

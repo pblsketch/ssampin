@@ -40,19 +40,29 @@ export function shuffleSeats(
   // 2D → 1D 평탄화
   const flat: (string | null)[] = seats.flatMap((row) => [...row]);
 
-  // Fisher-Yates 셔플
-  for (let i = flat.length - 1; i > 0; i--) {
+  // 학생 ID만 추출 (빈 자리 제외)
+  const studentIds = flat.filter((id): id is string => id !== null);
+  const emptyCount = flat.length - studentIds.length;
+
+  // Fisher-Yates: 학생만 셔플
+  for (let i = studentIds.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
-    const temp = flat[i];
-    flat[i] = flat[j]!;
-    flat[j] = temp!;
+    const temp = studentIds[i]!;
+    studentIds[i] = studentIds[j]!;
+    studentIds[j] = temp;
   }
+
+  // 학생을 앞에, 빈 자리(null)를 뒤에 배치
+  const arranged: (string | null)[] = [
+    ...studentIds,
+    ...Array.from<null>({ length: emptyCount }).fill(null),
+  ];
 
   // 1D → 2D 복원
   const cols = seats[0]?.length ?? 0;
   const result: (string | null)[][] = [];
-  for (let i = 0; i < flat.length; i += cols) {
-    result.push(flat.slice(i, i + cols));
+  for (let i = 0; i < arranged.length; i += cols) {
+    result.push(arranged.slice(i, i + cols));
   }
   return result;
 }
@@ -73,6 +83,19 @@ export function countEmptySeats(
   seats: readonly (readonly (string | null)[])[],
 ): number {
   return seats.flat().filter((id) => id === null).length;
+}
+
+/**
+ * 모든 좌석을 null로 초기화한 새 seats 배열 반환 (순수 함수)
+ * 행/열 차원은 유지, 학생 배정만 제거
+ */
+export function clearAllSeats(
+  rows: number,
+  cols: number,
+): (string | null)[][] {
+  return Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => null),
+  );
 }
 
 /**

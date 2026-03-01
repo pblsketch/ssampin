@@ -3,6 +3,7 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { getEventsForMonth, filterByCategory } from '@domain/rules/eventRules';
 import { getCategoryColors } from '@adapters/presenters/categoryPresenter';
+import { getKoreanHolidays } from '@domain/rules/holidayRules';
 import { CalendarView } from './CalendarView';
 import { EventList } from './EventList';
 import { EventFormModal } from './EventFormModal';
@@ -34,6 +35,7 @@ export function Schedule() {
     setShowImportModal,
     setShareFile,
     triggerImport,
+    downloadTemplate,
   } = useEventsStore();
 
   // 현재 표시 월
@@ -87,6 +89,16 @@ export function Schedule() {
 
     return result;
   }, [events, year, month, selectedCategory]);
+
+  // 해당 월의 공휴일
+  const monthHolidays = useMemo(() => {
+    const allHolidays = getKoreanHolidays(year);
+    const mm = month + 1;
+    return allHolidays.filter((h) => {
+      const hMonth = parseInt(h.date.split('-')[1]!, 10);
+      return hMonth === mm;
+    });
+  }, [year, month]);
 
   // 이벤트 추가/수정 핸들러
   function handleEventSubmit(event: SchoolEvent) {
@@ -154,6 +166,14 @@ export function Schedule() {
           <span className="text-3xl">📋</span> 일정 관리
         </h2>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void downloadTemplate()}
+            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">description</span>
+            <span>양식 다운로드</span>
+          </button>
           <button
             type="button"
             onClick={handleImportClick}
@@ -254,10 +274,11 @@ export function Schedule() {
             </div>
 
             {/* 이벤트 리스트 */}
-            <div className="lg:w-[40%]">
+            <div className="lg:w-[40%] min-h-0 overflow-hidden">
               <EventList
                 events={filteredEvents}
                 categories={categories}
+                holidays={monthHolidays}
                 onEdit={handleEditEvent}
                 onDelete={handleDeleteEvent}
               />

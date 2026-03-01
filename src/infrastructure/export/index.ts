@@ -3,12 +3,17 @@ export {
   exportTeacherScheduleToExcel,
   exportSeatingToExcel,
   exportEventsToExcel,
+  exportRosterToExcel,
+  parseRosterFromExcel,
+  generateEventsTemplateExcel,
+  parseEventsFromExcel,
 } from './ExcelExporter';
+export type { ParsedExcelEvent } from './ExcelExporter';
 
 export { exportToPdf } from './PdfExporter';
 
 export {
-  exportClassScheduleToHtml,
-  exportTeacherScheduleToHtml,
-  exportSeatingToHtml,
+  exportClassScheduleToHwpx,
+  exportTeacherScheduleToHwpx,
+  exportSeatingToHwpx,
 } from './HwpxExporter';

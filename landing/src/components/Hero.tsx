@@ -25,7 +25,7 @@ export default function Hero() {
             </span>
           </h1>
           <p className="mx-auto mt-6 max-w-lg text-lg text-sp-muted md:text-xl">
-            시간표, 좌석배치, 일정, 메모를
+            시간표, 학급 자리 배치, 일정, 메모를
             <br className="hidden md:block" />
             한 화면에서 관리하세요
           </p>

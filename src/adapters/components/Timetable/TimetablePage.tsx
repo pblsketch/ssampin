@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
@@ -12,14 +13,34 @@ import {
   formatLunchBreakTime,
 } from '@adapters/presenters/timetablePresenter';
 import { TimetableEditor } from './TimetableEditor';
+/* eslint-disable no-restricted-imports */
+import {
+  exportClassScheduleToExcel,
+  exportTeacherScheduleToExcel,
+} from '@infrastructure/export/ExcelExporter';
+import {
+  exportClassScheduleToHwpx,
+  exportTeacherScheduleToHwpx,
+} from '@infrastructure/export/HwpxExporter';
+/* eslint-enable no-restricted-imports */
 
 type TabType = 'class' | 'teacher';
 
 export function TimetablePage() {
-  const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
+  const {
+    classSchedule,
+    teacherSchedule,
+    load: loadSchedule,
+    undo,
+    redo,
+    clearAll,
+    canUndo,
+    canRedo,
+  } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
   const [tab, setTab] = useState<TabType>('class');
   const [isEditing, setIsEditing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -32,6 +53,30 @@ export function TimetablePage() {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 키보드 단축키
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditing) return; // 편집기 내 텍스트 입력 Undo와 충돌 방지
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        if (canUndo()) {
+          e.preventDefault();
+          void undo();
+        }
+      }
+      if (
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') ||
+        ((e.ctrlKey || e.metaKey) && e.key === 'y')
+      ) {
+        if (canRedo()) {
+          e.preventDefault();
+          void redo();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditing, undo, redo, canUndo, canRedo]);
 
   const dayOfWeek = useMemo(() => getDayOfWeek(now), [now]);
   const currentPeriod = useMemo(
@@ -47,6 +92,82 @@ export function TimetablePage() {
     () => (lunchIndex >= 0 ? formatLunchBreakTime(settings.periodTimes, lunchIndex) : ''),
     [settings.periodTimes, lunchIndex],
   );
+
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showExportMenu]);
+
+  const showToast = useToastStore((s) => s.show);
+
+  const handleExport = useCallback(async (format: 'excel' | 'hwpx') => {
+    setShowExportMenu(false);
+    try {
+      let data: ArrayBuffer | Uint8Array;
+      let defaultFileName: string;
+
+      if (format === 'excel') {
+        if (tab === 'class') {
+          data = await exportClassScheduleToExcel(classSchedule, settings.maxPeriods);
+          defaultFileName = '학급시간표.xlsx';
+        } else {
+          data = await exportTeacherScheduleToExcel(teacherSchedule, settings.maxPeriods);
+          defaultFileName = '교사시간표.xlsx';
+        }
+      } else {
+        if (tab === 'class') {
+          data = await exportClassScheduleToHwpx(classSchedule, settings.maxPeriods);
+          defaultFileName = '학급시간표.hwpx';
+        } else {
+          data = await exportTeacherScheduleToHwpx(teacherSchedule, settings.maxPeriods);
+          defaultFileName = '교사시간표.hwpx';
+        }
+      }
+
+      const normalized: ArrayBuffer | string =
+        data instanceof Uint8Array
+          ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+          : data;
+
+      if (window.electronAPI) {
+        const ext = format === 'excel' ? 'xlsx' : 'hwpx';
+        const filterName = format === 'excel' ? 'Excel 파일' : '한글 문서';
+        const filePath = await window.electronAPI.showSaveDialog({
+          title: '내보내기',
+          defaultPath: defaultFileName,
+          filters: [{ name: filterName, extensions: [ext] }],
+        });
+        if (filePath) {
+          await window.electronAPI.writeFile(filePath, normalized);
+          showToast('파일이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(filePath),
+          });
+        }
+      } else {
+        const blob = new Blob([normalized], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('파일이 다운로드되었습니다', 'success');
+      }
+    } catch {
+      showToast('내보내기 중 오류가 발생했습니다', 'error');
+    }
+  }, [tab, classSchedule, teacherSchedule, settings.maxPeriods, showToast]);
 
   const { className, teacherName } = settings;
   const yearStr = `${now.getFullYear()}학년도`;
@@ -84,6 +205,34 @@ export function TimetablePage() {
             <TabButton active={tab === 'class'} onClick={() => setTab('class')} label="학급 시간표" />
             <TabButton active={tab === 'teacher'} onClick={() => setTab('teacher')} label="교사 시간표" />
           </div>
+          {/* 실행 취소 */}
+          <button
+            onClick={() => void undo()}
+            title="실행 취소 (Ctrl+Z)"
+            disabled={!canUndo()}
+            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-[20px]">undo</span>
+            <span>실행 취소</span>
+          </button>
+          {/* 다시 실행 */}
+          <button
+            onClick={() => void redo()}
+            title="다시 실행 (Ctrl+Shift+Z)"
+            disabled={!canRedo()}
+            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-[20px]">redo</span>
+            <span>다시 실행</span>
+          </button>
+          {/* 모두 삭제 */}
+          <button
+            onClick={() => setShowClearConfirm(true)}
+            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-red-500/30 px-4 py-2.5 text-sm font-bold text-red-400 hover:bg-red-500/10 transition-all active:scale-95"
+          >
+            <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
+            <span>모두 삭제</span>
+          </button>
           {/* 편집 버튼 */}
           <button
             onClick={() => setIsEditing(true)}
@@ -93,10 +242,33 @@ export function TimetablePage() {
             <span>편집</span>
           </button>
           {/* 내보내기 */}
-          <button className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95">
-            <span className="material-symbols-outlined text-[20px]">download</span>
-            <span>내보내기</span>
-          </button>
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setShowExportMenu((v) => !v)}
+              className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[20px]">download</span>
+              <span>내보내기</span>
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+                <button
+                  onClick={() => void handleExport('excel')}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-green-400 text-lg">table_view</span>
+                  <span>Excel (.xlsx)</span>
+                </button>
+                <button
+                  onClick={() => void handleExport('hwpx')}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
+                >
+                  <span className="material-symbols-outlined text-blue-400 text-lg">description</span>
+                  <span>한글 (.hwpx)</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -141,6 +313,42 @@ export function TimetablePage() {
           </div>
         </div>
       </div>
+
+      {/* 모두 삭제 확인 모달 */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-sp-text mb-2">시간표 모두 삭제</h3>
+            <p className="text-sm text-sp-muted mb-6">
+              학급 시간표와 교사 시간표를 모두 초기화합니다.
+              <br />
+              <span className="text-sp-accent">실행 취소(Ctrl+Z)로 복원할 수 있습니다.</span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  void clearAll(settings.maxPeriods).then(() => {
+                    useToastStore.getState().show('시간표가 모두 삭제되었습니다.', 'info', {
+                      label: '실행 취소',
+                      onClick: () => void useScheduleStore.getState().undo(),
+                    });
+                  });
+                  setShowClearConfirm(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

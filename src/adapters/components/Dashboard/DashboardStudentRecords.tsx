@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
-import { useSeatingStore } from '@adapters/stores/useSeatingStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { sortByDateDesc } from '@domain/rules/studentRecordRules';
 import type { RecordCategory } from '@domain/valueObjects/RecordCategory';
 
@@ -23,13 +23,13 @@ const MAX_PREVIEW = 3;
 
 export function DashboardStudentRecords() {
   const { records, loaded, load } = useStudentRecordsStore();
-  const { students, load: loadSeating, loaded: seatingLoaded } =
-    useSeatingStore();
+  const { students, load: loadStudents, loaded: studentsLoaded } =
+    useStudentStore();
 
   useEffect(() => {
     void load();
-    void loadSeating();
-  }, [load, loadSeating]);
+    void loadStudents();
+  }, [load, loadStudents]);
 
   const studentMap = useMemo(
     () => new Map(students.map((s) => [s.id, s])),
@@ -42,7 +42,7 @@ export function DashboardStudentRecords() {
     [records, today],
   );
 
-  if (!loaded || !seatingLoaded) return null;
+  if (!loaded || !studentsLoaded) return null;
 
   return (
     <div className="rounded-xl bg-sp-card p-4">

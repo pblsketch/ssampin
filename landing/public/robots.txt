@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ssampin.vercel.app/sitemap.xml

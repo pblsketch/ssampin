@@ -1,5 +1,13 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useToastStore } from '@adapters/components/common/Toast';
+/* eslint-disable no-restricted-imports */
+import { exportSeatingToExcel, exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/export/ExcelExporter';
+import { exportSeatingToHwpx } from '@infrastructure/export/HwpxExporter';
+/* eslint-enable no-restricted-imports */
+import { ShuffleOverlay } from './ShuffleOverlay';
 
 /* ──────────────────────── 뷰 모드 타입 ──────────────────────── */
 
@@ -36,7 +44,7 @@ function SeatCard({
   onDragEnd,
   onEditSave,
 }: SeatCardProps) {
-  const getStudent = useSeatingStore((s) => s.getStudent);
+  const getStudent = useStudentStore((s) => s.getStudent);
   const student = getStudent(studentId);
   const isEmpty = studentId === null;
   const studentNumber = student?.studentNumber;
@@ -138,7 +146,7 @@ function SeatCard({
               onEditSave(row, col, null);
             } else if (name !== student?.name && studentId) {
               // Update using global store action directly, or through a passed prop
-              useSeatingStore.getState().updateStudentName(studentId, name);
+              useStudentStore.getState().updateStudentName(studentId, name);
             }
           }}
           onKeyDown={(e) => {
@@ -192,7 +200,8 @@ interface RosterViewProps {
 }
 
 function RosterView({ isRosterEditing }: RosterViewProps) {
-  const { students, seating, updateStudentName } = useSeatingStore();
+  const { students, updateStudentField, toggleVacant } = useStudentStore();
+  const seating = useSeatingStore((s) => s.seating);
 
   // 좌석에 배치된 학생 ID Set
   const assignedIds = useMemo(() => {
@@ -211,33 +220,46 @@ function RosterView({ isRosterEditing }: RosterViewProps) {
     [students],
   );
 
+  const activeCount = useMemo(() => students.filter((s) => !s.isVacant).length, [students]);
+  const vacantCount = useMemo(() => students.filter((s) => s.isVacant).length, [students]);
+
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="w-full max-w-5xl mx-auto">
       {/* 테이블 헤더 */}
-      <div className="grid grid-cols-[60px_60px_1fr_120px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
+      <div className="grid grid-cols-[50px_50px_1fr_160px_160px_80px_80px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
         <span>번호</span>
         <span>학번</span>
         <span>이름</span>
-        <span className="text-center">좌석 배정</span>
+        <span>학생 연락처</span>
+        <span>학부모 연락처</span>
+        <span className="text-center">좌석</span>
+        <span className="text-center">결번</span>
       </div>
 
       {/* 학생 목록 */}
       <div className="divide-y divide-sp-border/50">
         {sortedStudents.map((student, idx) => {
           const isAssigned = assignedIds.has(student.id);
+          const isVacant = !!student.isVacant;
           return (
             <div
               key={student.id}
-              className={`grid grid-cols-[60px_60px_1fr_120px] gap-2 px-4 py-3 items-center transition-colors ${isRosterEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'
-                }`}
+              className={`grid grid-cols-[50px_50px_1fr_160px_160px_80px_80px] gap-2 px-4 py-3 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isRosterEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
             >
+              {/* 번호 */}
               <span className="text-sm text-sp-muted font-mono">{idx + 1}</span>
-              <span className="text-sm font-mono font-bold text-sp-accent">
+
+              {/* 학번 */}
+              <span className={`text-sm font-mono font-bold ${isVacant ? 'text-red-400/60' : 'text-sp-accent'}`}>
                 {student.studentNumber !== undefined
                   ? String(student.studentNumber).padStart(2, '0')
                   : '--'}
               </span>
-              {isRosterEditing ? (
+
+              {/* 이름 */}
+              {isVacant ? (
+                <span className="text-sm text-sp-muted italic line-through">결번</span>
+              ) : isRosterEditing ? (
                 <input
                   type="text"
                   className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full max-w-xs"
@@ -245,21 +267,68 @@ function RosterView({ isRosterEditing }: RosterViewProps) {
                   onBlur={(e) => {
                     const newName = e.target.value.trim();
                     if (newName && newName !== student.name) {
-                      void updateStudentName(student.id, newName);
+                      void updateStudentField(student.id, 'name', newName);
                     }
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                    }
+                    if (e.key === 'Enter') e.currentTarget.blur();
                   }}
                   placeholder="학생 이름"
                 />
               ) : (
                 <span className="text-sm text-sp-text font-medium">{student.name}</span>
               )}
+
+              {/* 학생 연락처 */}
+              {isRosterEditing && !isVacant ? (
+                <input
+                  type="tel"
+                  className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                  defaultValue={student.phone ?? ''}
+                  placeholder="010-0000-0000"
+                  onBlur={(e) => {
+                    const val = e.target.value.trim();
+                    if (val !== (student.phone ?? '')) {
+                      void updateStudentField(student.id, 'phone', val);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                />
+              ) : (
+                <span className="text-sm text-sp-muted">{student.phone || '-'}</span>
+              )}
+
+              {/* 학부모 연락처 */}
+              {isRosterEditing && !isVacant ? (
+                <input
+                  type="tel"
+                  className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                  defaultValue={student.parentPhone ?? ''}
+                  placeholder="010-0000-0000"
+                  onBlur={(e) => {
+                    const val = e.target.value.trim();
+                    if (val !== (student.parentPhone ?? '')) {
+                      void updateStudentField(student.id, 'parentPhone', val);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                />
+              ) : (
+                <span className="text-sm text-sp-muted">{student.parentPhone || '-'}</span>
+              )}
+
+              {/* 좌석 */}
               <div className="flex justify-center">
-                {isAssigned ? (
+                {isVacant ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                    결번
+                  </span>
+                ) : isAssigned ? (
                   <span className="inline-flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                     배정됨
@@ -271,6 +340,26 @@ function RosterView({ isRosterEditing }: RosterViewProps) {
                   </span>
                 )}
               </div>
+
+              {/* 결번 토글 */}
+              <div className="flex justify-center">
+                {isRosterEditing ? (
+                  <button
+                    onClick={() => void toggleVacant(student.id)}
+                    className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${isVacant
+                      ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                      : 'bg-sp-border/20 text-sp-muted hover:bg-sp-border/40'
+                      }`}
+                    title={isVacant ? '결번 해제' : '결번 설정'}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      {isVacant ? 'block' : 'block'}
+                    </span>
+                  </button>
+                ) : isVacant ? (
+                  <span className="material-symbols-outlined text-red-400/60" style={{ fontSize: '16px' }}>block</span>
+                ) : null}
+              </div>
             </div>
           );
         })}
@@ -278,11 +367,11 @@ function RosterView({ isRosterEditing }: RosterViewProps) {
 
       {/* 하단 요약 */}
       <div className="flex items-center gap-4 px-4 py-3 border-t border-sp-border text-xs text-sp-muted">
-        <span>총 {students.length}명</span>
+        <span>총 {activeCount}명 (결번 {vacantCount}명)</span>
         <span className="text-sp-border">|</span>
         <span>배정: {assignedIds.size}명</span>
         <span className="text-sp-border">|</span>
-        <span>미배정: {students.length - assignedIds.size}명</span>
+        <span>미배정: {activeCount - assignedIds.size}명</span>
       </div>
     </div>
   );
@@ -293,44 +382,75 @@ function RosterView({ isRosterEditing }: RosterViewProps) {
 export function Seating() {
   const {
     seating,
-    history,
-    loaded,
+    loaded: seatingLoaded,
     isEditing,
-    load,
+    load: loadSeating,
     swapSeats,
     randomize,
     setEditing,
     studentCount,
     emptyCount,
     undo,
-    updateStudents,
+    redo,
+    clearAllSeats,
+    canUndo,
+    canRedo,
+    resizeGrid,
+    rebuildFromRoster,
   } = useSeatingStore();
+
+  const {
+    students,
+    loaded: studentsLoaded,
+    load: loadStudents,
+    updateStudents,
+    setStudentCount,
+  } = useStudentStore();
+
+  const className = useSettingsStore((s) => s.settings.className);
 
   const [viewMode, setViewMode] = useState<ViewMode>('seating');
   const [isRosterEditing, setIsRosterEditing] = useState(false);
   const [dragSource, setDragSource] = useState<{ row: number; col: number } | null>(null);
   const [dragTarget, setDragTarget] = useState<{ row: number; col: number } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [showShuffle, setShowShuffle] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const rosterFileRef = useRef<HTMLInputElement>(null);
+
+  const loaded = seatingLoaded && studentsLoaded;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadStudents();
+    void loadSeating();
+  }, [loadStudents, loadSeating]);
 
-  // Global Ctrl+Z shortcut handling
+  // Global Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y shortcut handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        if (history.length > 0) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        if (canUndo()) {
           e.preventDefault();
           void undo();
+        }
+      }
+      if (
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') ||
+        ((e.ctrlKey || e.metaKey) && e.key === 'y')
+      ) {
+        if (canRedo()) {
+          e.preventDefault();
+          void redo();
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [history.length, undo]);
+  }, [undo, redo, canUndo, canRedo]);
 
   const totalStudents = useMemo(() => studentCount(), [seating.seats, studentCount]);
   const emptySeats = useMemo(() => emptyCount(), [seating.seats, emptyCount]);
@@ -367,9 +487,10 @@ export function Seating() {
     setShowConfirm(true);
   }, []);
 
-  const confirmRandomize = useCallback(() => {
-    void randomize();
+  const confirmRandomize = useCallback(async () => {
     setShowConfirm(false);
+    setShowShuffle(true);
+    await randomize();
   }, [randomize]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -392,6 +513,70 @@ export function Seating() {
     [viewMode, setEditing],
   );
 
+  // 내보내기 드롭다운 외부 클릭 닫기
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showExportMenu]);
+
+  const showToast = useToastStore((s) => s.show);
+  const getStudent = useStudentStore((s) => s.getStudent);
+
+  const handleExport = useCallback(async (format: 'excel' | 'hwpx') => {
+    setShowExportMenu(false);
+    try {
+      let data: ArrayBuffer | Uint8Array;
+      let defaultFileName: string;
+
+      if (format === 'excel') {
+        data = await exportSeatingToExcel(seating, getStudent, students, className);
+        defaultFileName = '학급자리배치도.xlsx';
+      } else {
+        data = await exportSeatingToHwpx(seating, getStudent, students, className);
+        defaultFileName = '학급자리배치도.hwpx';
+      }
+
+      const normalized: ArrayBuffer | string =
+        data instanceof Uint8Array
+          ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+          : data;
+
+      if (window.electronAPI) {
+        const ext = format === 'excel' ? 'xlsx' : 'hwpx';
+        const filterName = format === 'excel' ? 'Excel 파일' : '한글 문서';
+        const filePath = await window.electronAPI.showSaveDialog({
+          title: '내보내기',
+          defaultPath: defaultFileName,
+          filters: [{ name: filterName, extensions: [ext] }],
+        });
+        if (filePath) {
+          await window.electronAPI.writeFile(filePath, normalized);
+          showToast('파일이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(filePath),
+          });
+        }
+      } else {
+        const blob = new Blob([normalized], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('파일이 다운로드되었습니다', 'success');
+      }
+    } catch {
+      showToast('내보내기 중 오류가 발생했습니다', 'error');
+    }
+  }, [seating, getStudent, students, className, showToast]);
+
   const handleBulkImport = useCallback(async () => {
     if (!bulkText.trim()) return;
 
@@ -408,12 +593,16 @@ export function Seating() {
       id: `s${Date.now()}_${idx}`,
       name,
       studentNumber: idx + 1,
+      phone: '',
+      parentPhone: '',
+      isVacant: false,
     }));
 
     await updateStudents(newStudents);
+    await rebuildFromRoster(newStudents);
     setBulkText('');
     setShowBulkImport(false);
-  }, [bulkText, updateStudents]);
+  }, [bulkText, updateStudents, rebuildFromRoster]);
 
   if (!loaded) {
     return (
@@ -432,7 +621,7 @@ export function Seating() {
             <span className="material-symbols-outlined">chair_alt</span>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-sp-text tracking-tight">좌석 배치도</h2>
+            <h2 className="text-xl font-bold text-sp-text tracking-tight">학급 자리 배치도</h2>
             <p className="text-xs text-sp-muted">
               1학년 2반 ({totalStudents}명)
             </p>
@@ -477,13 +666,29 @@ export function Seating() {
                 <span>자리 바꾸기</span>
               </button>
               <button
-                onClick={undo}
+                onClick={() => void undo()}
                 title="실행 취소 (Ctrl+Z)"
-                disabled={history.length === 0}
+                disabled={!canUndo()}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
               >
                 <span className="material-symbols-outlined text-lg">undo</span>
                 <span>실행 취소</span>
+              </button>
+              <button
+                onClick={() => void redo()}
+                title="다시 실행 (Ctrl+Shift+Z)"
+                disabled={!canRedo()}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-lg">redo</span>
+                <span>다시 실행</span>
+              </button>
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-sp-card hover:bg-red-500/10 text-sm font-medium text-red-400 transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-lg">delete_sweep</span>
+                <span>모두 삭제</span>
               </button>
               <button
                 onClick={() => setEditing(!isEditing)}
@@ -501,6 +706,26 @@ export function Seating() {
           {/* 명렬표 모드 전용 버튼 */}
           {viewMode === 'roster' && (
             <>
+              {/* 인원 수 조절 */}
+              <div className="flex items-center gap-1 px-3 py-2 rounded-lg border border-sp-border bg-sp-card text-sm text-sp-text">
+                <button
+                  onClick={() => void setStudentCount(students.length - 1)}
+                  disabled={students.length <= 1}
+                  className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>remove</span>
+                </button>
+                <span className="w-8 text-center font-mono font-bold">{students.length}</span>
+                <button
+                  onClick={() => void setStudentCount(students.length + 1)}
+                  disabled={students.length >= 50}
+                  className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>add</span>
+                </button>
+                <span className="ml-1 text-sp-muted">명</span>
+              </div>
+
               <button
                 onClick={() => setShowBulkImport(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
@@ -508,6 +733,49 @@ export function Seating() {
                 <span className="material-symbols-outlined text-lg">group_add</span>
                 <span>일괄 입력</span>
               </button>
+
+              {/* 엑셀 가져오기 */}
+              <button
+                onClick={() => rosterFileRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-lg">upload_file</span>
+                <span>엑셀 가져오기</span>
+              </button>
+              <input
+                ref={rosterFileRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const buffer = await file.arrayBuffer();
+                    const parsed = await parseRosterFromExcel(buffer);
+                    if (parsed.length === 0) {
+                      showToast('엑셀에서 학생 데이터를 찾을 수 없습니다', 'error');
+                      return;
+                    }
+                    const newStudents = parsed.map((p, idx) => ({
+                      id: `s${Date.now()}_${idx}`,
+                      name: p.name,
+                      studentNumber: p.studentNumber,
+                      phone: p.phone,
+                      parentPhone: p.parentPhone,
+                      isVacant: p.isVacant,
+                    }));
+                    await updateStudents(newStudents);
+                    await rebuildFromRoster(newStudents);
+                    showToast(`${parsed.length}명의 학생을 가져왔습니다`, 'success');
+                  } catch {
+                    showToast('엑셀 파일을 읽는 중 오류가 발생했습니다', 'error');
+                  }
+                  // Reset file input so same file can be selected again
+                  e.target.value = '';
+                }}
+              />
+
               <button
                 onClick={() => setIsRosterEditing(!isRosterEditing)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isRosterEditing
@@ -521,10 +789,75 @@ export function Seating() {
             </>
           )}
 
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors shadow-sm shadow-sp-accent/20">
-            <span className="material-symbols-outlined text-lg">download</span>
-            <span>내보내기</span>
-          </button>
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setShowExportMenu((v) => !v)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors shadow-sm shadow-sp-accent/20"
+            >
+              <span className="material-symbols-outlined text-lg">download</span>
+              <span>내보내기</span>
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
+                <button
+                  onClick={() => void handleExport('excel')}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-green-400 text-lg">table_view</span>
+                  <span>학급 자리 배치 Excel (.xlsx)</span>
+                </button>
+                <button
+                  onClick={() => void handleExport('hwpx')}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
+                >
+                  <span className="material-symbols-outlined text-blue-400 text-lg">description</span>
+                  <span>학급 자리 배치 한글 (.hwpx)</span>
+                </button>
+                {viewMode === 'roster' && (
+                  <button
+                    onClick={async () => {
+                      setShowExportMenu(false);
+                      try {
+                        const data = await exportRosterToExcel(students);
+                        const defaultFileName = '명렬표.xlsx';
+                        const normalized: ArrayBuffer = data;
+
+                        if (window.electronAPI) {
+                          const filePath = await window.electronAPI.showSaveDialog({
+                            title: '명렬표 내보내기',
+                            defaultPath: defaultFileName,
+                            filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+                          });
+                          if (filePath) {
+                            await window.electronAPI.writeFile(filePath, normalized);
+                            showToast('명렬표가 저장되었습니다', 'success', {
+                              label: '파일 열기',
+                              onClick: () => window.electronAPI?.openFile(filePath),
+                            });
+                          }
+                        } else {
+                          const blob = new Blob([normalized], { type: 'application/octet-stream' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = defaultFileName;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          showToast('명렬표가 다운로드되었습니다', 'success');
+                        }
+                      } catch {
+                        showToast('명렬표 내보내기 중 오류가 발생했습니다', 'error');
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
+                  >
+                    <span className="material-symbols-outlined text-amber-400 text-lg">badge</span>
+                    <span>명렬표 Excel (.xlsx)</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -595,7 +928,46 @@ export function Seating() {
               <div className="flex items-center gap-4">
                 <span>총 {totalStudents}명</span>
                 <span className="text-sp-border">|</span>
-                <span>{seating.cols}열 × {seating.rows}행</span>
+                {/* 열 × 행 크기 조절 컨트롤 */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => void resizeGrid(seating.rows, seating.cols - 1)}
+                    disabled={seating.cols <= 1}
+                    className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="열 줄이기"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
+                  </button>
+                  <span className="w-4 text-center">{seating.cols}</span>
+                  <button
+                    onClick={() => void resizeGrid(seating.rows, seating.cols + 1)}
+                    disabled={seating.cols >= 10}
+                    className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="열 늘리기"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
+                  </button>
+                  <span className="ml-0.5">열</span>
+                  <span className="mx-1 text-sp-border">×</span>
+                  <button
+                    onClick={() => void resizeGrid(seating.rows - 1, seating.cols)}
+                    disabled={seating.rows <= 1}
+                    className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="행 줄이기"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
+                  </button>
+                  <span className="w-4 text-center">{seating.rows}</span>
+                  <button
+                    onClick={() => void resizeGrid(seating.rows + 1, seating.cols)}
+                    disabled={seating.rows >= 10}
+                    className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="행 늘리기"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
+                  </button>
+                  <span className="ml-0.5">행</span>
+                </div>
                 <span className="text-sp-border">|</span>
                 <span>빈 자리: {emptySeats}개</span>
               </div>
@@ -638,6 +1010,53 @@ export function Seating() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 모두 삭제 확인 모달 */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-sp-text mb-2">좌석 모두 삭제</h3>
+            <p className="text-sm text-sp-muted mb-6">
+              모든 좌석 배정을 초기화합니다. 학생 목록과 좌석 크기는 유지됩니다.
+              <br />
+              <span className="text-sp-accent">실행 취소(Ctrl+Z)로 복원할 수 있습니다.</span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  void clearAllSeats().then(() => {
+                    useToastStore.getState().show('좌석 배정이 모두 삭제되었습니다.', 'info', {
+                      label: '실행 취소',
+                      onClick: () => void useSeatingStore.getState().undo(),
+                    });
+                  });
+                  setShowClearConfirm(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 셔플 애니메이션 오버레이 */}
+      {showShuffle && (
+        <ShuffleOverlay
+          rows={seating.rows}
+          cols={seating.cols}
+          students={students}
+          finalSeats={seating.seats}
+          onComplete={() => setShowShuffle(false)}
+        />
       )}
 
       {/* 일괄 입력 모달 */}

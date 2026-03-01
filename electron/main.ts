@@ -1,10 +1,8 @@
-import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+declare const __dirname: string;
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
@@ -106,17 +104,25 @@ function createWindow(): void {
 }
 
 function createTray(): void {
-  // Use public/favicon.ico or build/icon.ico; vite creates build out of process, better use an existing icon. Let's assume build/icon.ico will exist.
-  const iconPath = path.join(__dirname, '../build/icon.ico');
-  // Wait, in dev __dirname is inside out/, so ../build/icon.ico means project-root/build/icon.ico.
+  const iconCandidates = [
+    path.join(__dirname, '../build/icon.ico'),
+    path.join(__dirname, '../public/favicon.ico'),
+    path.join(process.resourcesPath || '', 'build/icon.ico'),
+  ];
   try {
-    tray = new Tray(fs.existsSync(iconPath) ? iconPath : path.join(__dirname, '../public/favicon.ico'));
+    const iconFile = iconCandidates.find((p) => fs.existsSync(p));
+    const trayIcon = iconFile
+      ? nativeImage.createFromPath(iconFile).resize({ width: 16, height: 16 })
+      : nativeImage.createEmpty();
+    tray = new Tray(trayIcon);
+
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '쌤핀 열기',
         click: () => {
           if (mainWindow) {
             mainWindow.show();
+            mainWindow.focus();
           } else {
             createWindow();
           }
@@ -136,30 +142,33 @@ function createTray(): void {
       },
       { type: 'separator' },
       {
-        label: '설정',
-        click: () => {
-          if (!mainWindow) createWindow();
-          mainWindow?.show();
+        label: '항상 위에 표시',
+        type: 'checkbox',
+        checked: false,
+        click: (menuItem) => {
+          mainWindow?.setAlwaysOnTop(menuItem.checked);
+          if (widgetWindow && !widgetWindow.isDestroyed()) {
+            widgetWindow.setAlwaysOnTop(menuItem.checked);
+          }
         },
       },
+      { type: 'separator' },
       {
-        label: '종료',
+        label: '완전히 종료',
         click: () => {
           isQuitting = true;
           app.quit();
         },
       },
     ]);
+
     tray.setToolTip('쌤핀');
     tray.setContextMenu(contextMenu);
 
     tray.on('double-click', () => {
       if (mainWindow) {
-        if (mainWindow.isVisible()) {
-          mainWindow.hide();
-        } else {
-          mainWindow.show();
-        }
+        mainWindow.show();
+        mainWindow.focus();
       } else {
         createWindow();
       }
@@ -204,8 +213,8 @@ function createWidgetWindow(options: {
     y,
     width,
     height,
-    minWidth: 280,
-    minHeight: 350,
+    minWidth: 640,
+    minHeight: 480,
     frame: false,
     transparent: true,
     alwaysOnTop: options.alwaysOnTop,
@@ -229,29 +238,37 @@ function createWidgetWindow(options: {
   widgetWindow.on('move', scheduleWidgetBoundsSave);
   widgetWindow.on('resize', scheduleWidgetBoundsSave);
 
+  widgetWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      widgetWindow?.hide();
+    }
+  });
+
   widgetWindow.on('closed', () => {
     widgetWindow = null;
   });
 }
 
-function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnTop: boolean } {
+function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnTop: boolean; startInWidgetMode: boolean } {
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const settings = JSON.parse(raw) as {
-        widget?: { width?: number; height?: number; alwaysOnTop?: boolean };
+        widget?: { width?: number; height?: number; alwaysOnTop?: boolean; transparent?: boolean };
       };
       return {
-        width: settings.widget?.width ?? 380,
-        height: settings.widget?.height ?? 650,
+        width: settings.widget?.width ?? 920,
+        height: settings.widget?.height ?? 700,
         alwaysOnTop: settings.widget?.alwaysOnTop ?? true,
+        startInWidgetMode: settings.widget?.transparent ?? false,
       };
     }
   } catch {
     // fall through to defaults
   }
-  return { width: 380, height: 650, alwaysOnTop: true };
+  return { width: 920, height: 700, alwaysOnTop: true, startInWidgetMode: false };
 }
 
 function registerIpcHandlers(): void {
@@ -394,18 +411,67 @@ function registerIpcHandlers(): void {
     },
   );
 
-  // share:import — 일정 가져오기 (열기 대화상자 + 파일 읽기)
-  ipcMain.handle('share:import', async (): Promise<string | null> => {
-    if (!mainWindow) return null;
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: '일정 가져오기',
-      filters: [{ name: '쌤핀 일정 파일', extensions: ['ssampin'] }],
-      properties: ['openFile'],
-    });
-    if (result.canceled || result.filePaths.length === 0) return null;
-    const filePath = result.filePaths[0]!;
-    return fs.readFileSync(filePath, 'utf-8');
-  });
+  // audio:importAlarm — 알람음 파일 가져오기
+  ipcMain.handle(
+    'audio:importAlarm',
+    async (): Promise<{ name: string; dataUrl: string } | null> => {
+      if (!mainWindow) return null;
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: '알람음 파일 선택',
+        filters: [
+          { name: '오디오 파일', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'webm'] },
+        ],
+        properties: ['openFile'],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      const filePath = result.filePaths[0]!;
+      const stat = fs.statSync(filePath);
+      if (stat.size > 5 * 1024 * 1024) {
+        return null; // 5MB 제한
+      }
+      const name = path.basename(filePath);
+      const buf = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase().slice(1);
+      const mimeMap: Record<string, string> = {
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
+        ogg: 'audio/ogg',
+        m4a: 'audio/mp4',
+        webm: 'audio/webm',
+      };
+      const mime = mimeMap[ext] || 'audio/mpeg';
+      const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+      return { name, dataUrl };
+    },
+  );
+
+  // share:import — 일정 가져오기 (열기 대화상자 + 파일 읽기, .ssampin / .xlsx)
+  ipcMain.handle(
+    'share:import',
+    async (): Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null> => {
+      if (!mainWindow) return null;
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: '일정 가져오기',
+        filters: [
+          { name: '지원 파일', extensions: ['ssampin', 'xlsx'] },
+          { name: '쌤핀 일정 파일', extensions: ['ssampin'] },
+          { name: 'Excel 파일', extensions: ['xlsx'] },
+        ],
+        properties: ['openFile'],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      const filePath = result.filePaths[0]!;
+
+      if (filePath.endsWith('.xlsx')) {
+        const buf = fs.readFileSync(filePath);
+        return {
+          content: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+          fileType: 'xlsx',
+        };
+      }
+      return { content: fs.readFileSync(filePath, 'utf-8'), fileType: 'ssampin' };
+    },
+  );
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -419,6 +485,7 @@ if (!gotTheLock) {
       mainWindow?.webContents.send('share:file-opened', content);
     }
     if (mainWindow) {
+      mainWindow.show();
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
@@ -429,6 +496,13 @@ if (!gotTheLock) {
     registerIpcHandlers();
     createWindow();
     createTray();
+
+    // Start in widget mode if the setting is enabled
+    const widgetOptions = readSettingsWidgetOptions();
+    if (widgetOptions.startInWidgetMode) {
+      createWidgetWindow(widgetOptions);
+      mainWindow?.hide();
+    }
 
     // Handle .ssampin file open from CLI args
     const fileArg = process.argv.find((arg) => arg.endsWith('.ssampin'));
@@ -441,10 +515,12 @@ if (!gotTheLock) {
   });
 }
 
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // Don't quit — app stays in system tray
 });
 
 app.on('activate', () => {

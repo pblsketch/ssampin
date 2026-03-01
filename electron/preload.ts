@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('export:printToPDF'),
   openFile: (filePath: string): Promise<void> =>
     ipcRenderer.invoke('export:openFile', filePath),
+  importAlarmAudio: (): Promise<{ name: string; dataUrl: string } | null> =>
+    ipcRenderer.invoke('audio:importAlarm'),
   importShareFile: (): Promise<string | null> =>
     ipcRenderer.invoke('share:import'),
   onFileOpened: (callback: (filePath: string) => void): (() => void) => {

@@ -29,7 +29,7 @@ export function ExportPreviewModal({
         switch (item) {
             case 'classSchedule': return '학급 시간표';
             case 'teacherSchedule': return '교사 시간표';
-            case 'seating': return '좌석 배치도';
+            case 'seating': return '학급 자리 배치도';
             case 'events': return '학교 일정';
             default: return item;
         }

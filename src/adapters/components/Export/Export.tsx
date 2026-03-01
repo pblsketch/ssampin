@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -12,9 +13,9 @@ import {
   exportEventsToExcel,
 } from '@infrastructure/export/ExcelExporter';
 import {
-  exportClassScheduleToHtml,
-  exportTeacherScheduleToHtml,
-  exportSeatingToHtml,
+  exportClassScheduleToHwpx,
+  exportTeacherScheduleToHwpx,
+  exportSeatingToHwpx,
 } from '@infrastructure/export/HwpxExporter';
 import { ExportPreviewModal } from './ExportPreviewModal';
 /* eslint-enable no-restricted-imports */
@@ -47,8 +48,8 @@ const EXPORT_ITEMS: ExportItemConfig[] = [
   },
   {
     id: 'seating',
-    label: '좌석 배치도',
-    description: '현재 좌석 배치 현황',
+    label: '학급 자리 배치도',
+    description: '현재 학급 자리 배치 현황',
     icon: 'airline_seat_recline_normal',
     formats: ['excel', 'hwpx', 'pdf'],
   },
@@ -74,8 +75,8 @@ const FORMAT_CONFIG: Record<
   hwpx: {
     label: 'HWPX',
     icon: 'description',
-    description: '한글 문서 (.html)',
-    ext: 'html',
+    description: '한글 문서 (.hwpx)',
+    ext: 'hwpx',
   },
   pdf: {
     label: 'PDF',
@@ -93,11 +94,26 @@ export function Export() {
 
   const classSchedule = useScheduleStore((s) => s.classSchedule);
   const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
+  const loadSchedule = useScheduleStore((s) => s.load);
   const seating = useSeatingStore((s) => s.seating);
-  const getStudent = useSeatingStore((s) => s.getStudent);
+  const loadSeating = useSeatingStore((s) => s.load);
+  const getStudent = useStudentStore((s) => s.getStudent);
+  const students = useStudentStore((s) => s.students);
+  const loadStudents = useStudentStore((s) => s.load);
   const events = useEventsStore((s) => s.events);
+  const loadEvents = useEventsStore((s) => s.load);
   const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
+  const className = useSettingsStore((s) => s.settings.className);
+  const loadSettings = useSettingsStore((s) => s.load);
   const showToast = useToastStore((s) => s.show);
+
+  useEffect(() => {
+    void loadSeating();
+    void loadStudents();
+    void loadSchedule();
+    void loadEvents();
+    void loadSettings();
+  }, [loadSeating, loadStudents, loadSchedule, loadEvents, loadSettings]);
 
   const toggleItem = useCallback((item: ExportItem) => {
     setSelectedItems((prev) => {
@@ -129,7 +145,7 @@ export function Export() {
 
     try {
       for (const item of selectedItems) {
-        let data: ArrayBuffer | string | null = null;
+        let data: ArrayBuffer | Uint8Array | string | null = null;
         let defaultFileName = '';
 
         if (selectedFormat === 'excel') {
@@ -140,29 +156,29 @@ export function Export() {
             data = await exportTeacherScheduleToExcel(teacherSchedule, maxPeriods);
             defaultFileName = '교사시간표.xlsx';
           } else if (item === 'seating') {
-            data = await exportSeatingToExcel(seating, getStudent);
-            defaultFileName = '좌석배치도.xlsx';
+            data = await exportSeatingToExcel(seating, getStudent, students, className);
+            defaultFileName = '학급자리배치도.xlsx';
           } else if (item === 'events') {
             data = await exportEventsToExcel(events);
             defaultFileName = '학교일정.xlsx';
           }
         } else if (selectedFormat === 'hwpx') {
           if (item === 'classSchedule') {
-            data = exportClassScheduleToHtml(classSchedule, maxPeriods);
-            defaultFileName = '학급시간표.html';
+            data = await exportClassScheduleToHwpx(classSchedule, maxPeriods);
+            defaultFileName = '학급시간표.hwpx';
           } else if (item === 'teacherSchedule') {
-            data = exportTeacherScheduleToHtml(teacherSchedule, maxPeriods);
-            defaultFileName = '교사시간표.html';
+            data = await exportTeacherScheduleToHwpx(teacherSchedule, maxPeriods);
+            defaultFileName = '교사시간표.hwpx';
           } else if (item === 'seating') {
-            data = exportSeatingToHtml(seating, getStudent);
-            defaultFileName = '좌석배치도.html';
+            data = await exportSeatingToHwpx(seating, getStudent, students, className);
+            defaultFileName = '학급자리배치도.hwpx';
           }
         } else if (selectedFormat === 'pdf') {
           if (window.electronAPI) {
             const pdfData = await window.electronAPI.printToPDF();
             if (pdfData) {
               data = pdfData;
-              defaultFileName = item === 'seating' ? '좌석배치도.pdf' : '학교일정.pdf';
+              defaultFileName = item === 'seating' ? '학급자리배치도.pdf' : '학교일정.pdf';
             }
           } else {
             window.print();
@@ -172,13 +188,19 @@ export function Export() {
 
         if (data === null) continue;
 
+        // Uint8Array → ArrayBuffer 변환 (writeFile/Blob 호환)
+        const normalized: ArrayBuffer | string =
+          data instanceof Uint8Array
+            ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+            : data;
+
         if (window.electronAPI) {
           const filters =
             selectedFormat === 'excel'
               ? [{ name: 'Excel 파일', extensions: ['xlsx'] }]
               : selectedFormat === 'pdf'
                 ? [{ name: 'PDF 파일', extensions: ['pdf'] }]
-                : [{ name: 'HTML 파일', extensions: ['html'] }];
+                : [{ name: '한글 문서', extensions: ['hwpx'] }];
 
           const filePath = await window.electronAPI.showSaveDialog({
             title: '내보내기',
@@ -187,7 +209,7 @@ export function Export() {
           });
 
           if (filePath) {
-            await window.electronAPI.writeFile(filePath, data);
+            await window.electronAPI.writeFile(filePath, normalized);
             showToast('파일이 저장되었습니다', 'success', {
               label: '파일 열기',
               onClick: () => window.electronAPI?.openFile(filePath),
@@ -195,9 +217,9 @@ export function Export() {
           }
         } else {
           const blob =
-            typeof data === 'string'
-              ? new Blob([data], { type: 'text/html;charset=utf-8' })
-              : new Blob([data], { type: 'application/octet-stream' });
+            typeof normalized === 'string'
+              ? new Blob([normalized], { type: 'text/plain;charset=utf-8' })
+              : new Blob([normalized], { type: 'application/octet-stream' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -219,8 +241,10 @@ export function Export() {
     teacherSchedule,
     seating,
     getStudent,
+    students,
     events,
     maxPeriods,
+    className,
     showToast,
   ]);
 

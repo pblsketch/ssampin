@@ -3,6 +3,7 @@
  * 유일하게 infrastructure 레이어를 import할 수 있는 곳
  */
 import type { IStoragePort } from '@domain/ports/IStoragePort';
+import type { INeisPort } from '@domain/ports/INeisPort';
 import type { IScheduleRepository } from '@domain/repositories/IScheduleRepository';
 import type { ISeatingRepository } from '@domain/repositories/ISeatingRepository';
 import type { IEventsRepository } from '@domain/repositories/IEventsRepository';
@@ -15,6 +16,7 @@ import type { IStudentRepository } from '@domain/repositories/IStudentRepository
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
+import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
 
 import { JsonScheduleRepository } from '@adapters/repositories/JsonScheduleRepository';
 import { JsonSeatingRepository } from '@adapters/repositories/JsonSeatingRepository';
@@ -58,3 +60,5 @@ export const messageRepository: IMessageRepository =
 
 export const studentRepository: IStudentRepository =
   new JsonStudentRepository(storage);
+
+export const neisPort: INeisPort = new NeisApiClient();

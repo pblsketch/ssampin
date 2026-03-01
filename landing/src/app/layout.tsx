@@ -12,11 +12,11 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://ssampin.vercel.app'),
   title: '쌤핀 (SsamPin) — 선생님의 대시보드',
   description:
-    '시간표, 좌석배치, 일정, 메모를 한 화면에서 관리하세요. 무료 Windows 앱.',
+    '시간표, 학급 자리 배치, 일정, 메모를 한 화면에서 관리하세요. 무료 Windows 앱.',
   openGraph: {
     title: '📌 쌤핀 — 선생님의 대시보드',
     description:
-      '바탕화면에 항상 띄워두는 교사용 대시보드. 시간표, 좌석배치, 일정 관리를 한 화면에.',
+      '바탕화면에 항상 띄워두는 교사용 대시보드. 시간표, 학급 자리 배치, 일정 관리를 한 화면에.',
     images: ['/images/og-image.png'],
     url: 'https://ssampin.vercel.app',
     type: 'website',
@@ -26,10 +26,10 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: '📌 쌤핀 — 선생님의 대시보드',
     description:
-      '바탕화면에 항상 띄워두는 교사용 대시보드. 시간표, 좌석배치, 일정 관리를 한 화면에.',
+      '바탕화면에 항상 띄워두는 교사용 대시보드. 시간표, 학급 자리 배치, 일정 관리를 한 화면에.',
     images: ['/images/og-image.png'],
   },
-  keywords: ['쌤핀', 'SsamPin', '교사', '시간표', '좌석배치', '대시보드', '선생님'],
+  keywords: ['쌤핀', 'SsamPin', '교사', '시간표', '학급 자리 배치', '대시보드', '선생님'],
   icons: {
     icon: '/favicon.ico',
   },
