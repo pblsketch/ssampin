@@ -17,24 +17,27 @@ const tools = [
 
 export default function ClassroomTools() {
   return (
-    <section className="bg-sp-bg py-20">
+    <section className="bg-sp-bg py-16">
       <div className="mx-auto max-w-6xl px-6">
-        <FadeIn className="text-center">
+        <FadeIn>
+          <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
+            쌤도구 12가지
+          </p>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            수업에 바로 쓰는 쌤도구 🛠️
+            수업에 바로 쓰는 쌤도구
           </h2>
-          <p className="mt-3 text-lg text-sp-muted">
+          <p className="mt-3 text-base text-sp-muted">
             타이머, 룰렛, 투표, QR코드까지 — 클릭 한 번이면 준비 끝
           </p>
         </FadeIn>
 
-        <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {tools.map((tool, i) => (
-            <FadeIn key={tool.name} delay={i * 0.05}>
-              <div className="rounded-xl border border-white/5 bg-sp-card/50 p-4 text-center">
-                <p className="text-2xl">{tool.emoji}</p>
-                <p className="mt-2 text-sm font-bold text-white">{tool.name}</p>
-                <p className="mt-1 text-xs text-sp-muted">{tool.desc}</p>
+            <FadeIn key={tool.name} delay={i * 0.04}>
+              <div className="rounded-lg bg-white/[0.03] p-4 text-center transition-transform hover:-translate-y-0.5">
+                <p className="text-3xl">{tool.emoji}</p>
+                <p className="mt-2 text-sm font-semibold text-sp-text">{tool.name}</p>
+                <p className="mt-0.5 text-xs text-sp-muted">{tool.desc}</p>
               </div>
             </FadeIn>
           ))}

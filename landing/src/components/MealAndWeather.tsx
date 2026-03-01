@@ -2,14 +2,17 @@ import FadeIn from './FadeIn';
 
 export default function MealAndWeather() {
   return (
-    <section className="bg-sp-surface py-20">
+    <section className="bg-sp-surface py-24">
       <div className="mx-auto max-w-6xl px-4">
         <FadeIn>
-          <div className="mb-12 text-center">
-            <h2 className="mb-4 text-3xl font-bold text-sp-text">
-              오늘의 급식과 날씨를 한눈에 🍚🌤️
+          <div className="mb-12">
+            <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
+              NEIS 연동
+            </p>
+            <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
+              급식과 날씨를 한눈에
             </h2>
-            <p className="text-lg text-sp-muted">
+            <p className="mt-3 text-base text-sp-muted">
               NEIS 연동 급식 정보 + 실시간 날씨·미세먼지
             </p>
           </div>

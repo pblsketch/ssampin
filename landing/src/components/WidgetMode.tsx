@@ -12,9 +12,9 @@ export default function WidgetMode() {
   return (
     <section className="bg-sp-bg py-20">
       <div className="mx-auto max-w-6xl px-6">
-        <FadeIn className="text-center md:text-left">
-          <h2 className="text-center text-3xl font-bold text-sp-text md:text-4xl">
-            바탕화면 위의 작은 비서 💡
+        <FadeIn>
+          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
+            바탕화면 위의 작은 비서
           </h2>
         </FadeIn>
 

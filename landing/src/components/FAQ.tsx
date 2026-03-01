@@ -48,24 +48,24 @@ const faqs = [
 export default function FAQ() {
   return (
     <section className="bg-sp-surface py-20">
-      <div className="mx-auto max-w-3xl px-6">
-        <FadeIn className="text-center">
+      <div className="mx-auto max-w-4xl px-6">
+        <FadeIn>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            자주 묻는 질문 ❓
+            자주 묻는 질문
           </h2>
         </FadeIn>
 
-        <div className="mt-12 space-y-4">
+        <div className="mt-10">
           {faqs.map((faq, i) => (
             <FadeIn key={faq.question} delay={i * 0.06}>
-              <details className="group rounded-xl border border-white/5 bg-sp-card">
-                <summary className="flex cursor-pointer items-center justify-between px-6 py-4 font-medium text-white">
+              <details className="group border-b border-sp-border/60 last:border-0">
+                <summary className="flex cursor-pointer items-center justify-between py-5 font-medium text-sp-text">
                   <span>{faq.question}</span>
-                  <span className="ml-4 shrink-0 text-sp-muted transition-transform group-open:rotate-45">
+                  <span className="ml-4 shrink-0 text-sp-muted transition-transform duration-200 group-open:rotate-45">
                     +
                   </span>
                 </summary>
-                <div className="px-6 pb-4 text-sm leading-relaxed text-sp-muted">
+                <div className="pb-5 text-sm leading-relaxed text-sp-muted">
                   {faq.answer}
                 </div>
               </details>

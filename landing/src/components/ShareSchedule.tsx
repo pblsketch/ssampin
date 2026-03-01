@@ -10,11 +10,11 @@ export default function ShareSchedule() {
   return (
     <section className="bg-sp-bg py-20">
       <div className="mx-auto max-w-6xl px-6">
-        <FadeIn className="text-center">
+        <FadeIn>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            선생님끼리 일정 공유도 간편하게 📤
+            선생님끼리 일정 공유
           </h2>
-          <p className="mt-3 text-lg text-sp-muted">
+          <p className="mt-3 text-base text-sp-muted">
             .ssampin 파일 하나로 학교 일정을 주고받으세요
           </p>
         </FadeIn>
@@ -29,10 +29,10 @@ export default function ShareSchedule() {
               </div>
 
               <div className="flex items-center gap-2 text-sp-muted">
-                <span className="hidden md:inline">──</span>
-                <span>📤</span>
-                <span className="hidden md:inline">──</span>
-                <span className="md:hidden">↓</span>
+                <span className="hidden text-xs md:inline">────</span>
+                <span className="text-xs">→</span>
+                <span className="hidden text-xs md:inline">────</span>
+                <span className="text-xs md:hidden">↓</span>
               </div>
 
               <div className="flex flex-col items-center gap-1">
@@ -44,10 +44,10 @@ export default function ShareSchedule() {
               </div>
 
               <div className="flex items-center gap-2 text-sp-muted">
-                <span className="hidden md:inline">──</span>
-                <span>📥</span>
-                <span className="hidden md:inline">──</span>
-                <span className="md:hidden">↓</span>
+                <span className="hidden text-xs md:inline">────</span>
+                <span className="text-xs">→</span>
+                <span className="hidden text-xs md:inline">────</span>
+                <span className="text-xs md:hidden">↓</span>
               </div>
 
               <div className="flex flex-col items-center gap-1">

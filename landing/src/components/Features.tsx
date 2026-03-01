@@ -65,24 +65,29 @@ const features = [
 
 export default function Features() {
   return (
-    <section className="bg-sp-surface py-20">
+    <section className="bg-sp-surface py-24">
       <div className="mx-auto max-w-6xl px-6">
-        <FadeIn className="text-center">
+        <FadeIn>
+          <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
+            핵심 기능
+          </p>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            바탕화면에 꽂아두세요 📌
+            바탕화면에 꽂아두세요
           </h2>
-          <p className="mt-3 text-lg text-sp-muted">교사의 하루를 한눈에</p>
+          <p className="mt-3 text-base text-sp-muted">교사의 하루를 한눈에</p>
         </FadeIn>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {features.map((feature, i) => (
-            <FadeIn key={feature.title} delay={i * 0.08}>
-              <div className="rounded-2xl border border-white/5 bg-sp-card p-6 transition-all hover:border-blue-500/30">
-                <span className="text-3xl">{feature.icon}</span>
-                <h3 className="mt-3 text-lg font-bold text-white">
+            <FadeIn key={feature.title} delay={i * 0.06}>
+              <div className="group rounded-xl bg-sp-card/60 p-5 transition-colors hover:bg-sp-card">
+                <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/5">
+                  <span className="text-lg">{feature.icon}</span>
+                </div>
+                <h3 className="text-sm font-bold text-white">
                   {feature.title}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-sp-muted">
+                <p className="mt-1.5 text-xs leading-relaxed text-sp-muted">
                   {feature.description}
                 </p>
               </div>

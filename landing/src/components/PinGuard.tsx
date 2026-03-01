@@ -19,13 +19,16 @@ const protectedFeatures = [
 
 export default function PinGuard() {
   return (
-    <section className="bg-sp-surface py-20">
+    <section className="bg-sp-surface py-16">
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn className="text-center">
+          <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
+            보안
+          </p>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            민감한 정보는 안전하게 🔒
+            민감한 정보는 안전하게
           </h2>
-          <p className="mt-3 text-sp-muted">
+          <p className="mt-3 text-base text-sp-muted">
             학생이 보는 앞에서도 안심 — PIN 잠금으로 기능별 보호
           </p>
         </FadeIn>
@@ -64,9 +67,9 @@ export default function PinGuard() {
                   {protectedFeatures.map((feature) => (
                     <span
                       key={feature}
-                      className="rounded-full bg-white/5 px-3 py-1 text-xs text-sp-muted"
+                      className="rounded-full border border-sp-border bg-sp-surface px-3 py-1 text-xs text-sp-muted"
                     >
-                      🔒 {feature}
+                      {feature}
                     </span>
                   ))}
                 </div>
