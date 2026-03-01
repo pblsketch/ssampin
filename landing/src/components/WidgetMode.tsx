@@ -14,7 +14,7 @@ export default function WidgetMode() {
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            화면 한켠의 작은 비서
+            화면 위에 항상 띄워두기
           </h2>
         </FadeIn>
 
@@ -33,9 +33,9 @@ export default function WidgetMode() {
 
           <FadeIn className="w-full md:w-1/2" delay={0.15}>
             <p className="mb-6 text-lg text-sp-muted">
-              위젯 모드로 화면 한켠에
+              미니 창으로 띄워두면
               <br />
-              항상 띄워두세요.
+              다른 작업 중에도 한눈에.
             </p>
             <ul className="space-y-4">
               {checklist.map((item) => (

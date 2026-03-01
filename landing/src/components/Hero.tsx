@@ -103,7 +103,7 @@ export default function Hero() {
               '날씨 · 미세먼지',
               '쌤도구',
               'PIN 잠금',
-              '위젯 모드',
+              '미니 창 모드',
             ].map((kw) => (
               <span key={kw} className="text-xs text-sp-muted">
                 {kw}
