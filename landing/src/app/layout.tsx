@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: '📌 쌤핀 — 선생님의 대시보드',
     description:
-      '바탕화면에 항상 띄워두는 교사용 대시보드. 시간표, 자리 배치, 일정, 급식, 날씨, 쌤도구까지 한 화면에.',
+      '항상 열어두는 교사용 대시보드. 시간표, 자리 배치, 일정, 급식, 날씨, 쌤도구까지 한 화면에.',
     images: ['/images/og-image.png'],
     url: 'https://ssampin.vercel.app',
     type: 'website',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: '📌 쌤핀 — 선생님의 대시보드',
     description:
-      '바탕화면에 항상 띄워두는 교사용 대시보드. 시간표, 자리 배치, 일정, 급식, 날씨, 쌤도구까지 한 화면에.',
+      '항상 열어두는 교사용 대시보드. 시간표, 자리 배치, 일정, 급식, 날씨, 쌤도구까지 한 화면에.',
     images: ['/images/og-image.png'],
   },
   keywords: ['쌤핀', 'SsamPin', '교사', '시간표', '학급 자리 배치', '대시보드', '선생님', '급식', '쌤도구', '교실도구', '날씨', 'PIN잠금', '미세먼지'],

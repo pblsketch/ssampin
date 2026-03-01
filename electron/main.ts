@@ -1,12 +1,14 @@
 import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { attachToDesktop, attachToDesktopAsync } from './workerw';
 
 declare const __dirname: string;
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let savePositionTimer: ReturnType<typeof setTimeout> | null = null;
+let widgetHeartbeat: ReturnType<typeof setInterval> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
@@ -98,11 +100,12 @@ function createWindow(): void {
       if (opts.closeToWidget) {
         // X 버튼 → 위젯 모드로 전환
         if (!widgetWindow || widgetWindow.isDestroyed()) {
-          createWidgetWindow(opts);
+          // 위젯이 실제로 표시된 뒤 메인 창을 숨겨 "아무것도 안 보이는" gap 방지
+          createWidgetWindow(opts, () => mainWindow?.hide());
         } else {
           widgetWindow.show();
+          mainWindow?.hide();
         }
-        mainWindow?.hide();
       } else {
         // 위젯 전환 없이 트레이로만 숨김
         mainWindow?.hide();
@@ -207,11 +210,31 @@ function applySystemSettings(): void {
   }
 }
 
-function createWidgetWindow(options: {
-  width: number;
-  height: number;
-  alwaysOnTop: boolean;
-}): void {
+function startWidgetHeartbeat(): void {
+  // 30초마다 WorkerW 연결 상태 재확인 (Explorer 재시작 등 대비)
+  if (widgetHeartbeat) clearInterval(widgetHeartbeat);
+  widgetHeartbeat = setInterval(() => {
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      const hwndBuf = widgetWindow.getNativeWindowHandle();
+      attachToDesktopAsync(hwndBuf).catch(() => {/* ignore heartbeat errors */});
+    } else {
+      if (widgetHeartbeat) clearInterval(widgetHeartbeat);
+      widgetHeartbeat = null;
+    }
+  }, 30_000);
+}
+
+function stopWidgetHeartbeat(): void {
+  if (widgetHeartbeat) {
+    clearInterval(widgetHeartbeat);
+    widgetHeartbeat = null;
+  }
+}
+
+function createWidgetWindow(
+  options: { width: number; height: number; alwaysOnTop: boolean },
+  onReady?: () => void,
+): void {
   const savedBounds = readWidgetBounds();
   const defaultPos = getDefaultWidgetBounds(options.width);
 
@@ -229,9 +252,10 @@ function createWidgetWindow(options: {
     minHeight: 480,
     frame: false,
     transparent: true,
-    alwaysOnTop: options.alwaysOnTop,
+    thickFrame: false,
+    alwaysOnTop: true,
     resizable: true,
-    skipTaskbar: false,
+    skipTaskbar: true,           // 작업표시줄에 나타나지 않음 (바탕화면 위젯)
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -248,8 +272,23 @@ function createWidgetWindow(options: {
     });
   }
 
-  widgetWindow.once('ready-to-show', () => {
-    widgetWindow?.show();
+  // 렌더러가 첫 프레임을 그린 뒤 표시
+  const attachAndShow = () => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    widgetWindow.show();
+    onReady?.();
+  };
+
+  // ready-to-show: 렌더러가 첫 프레임을 그린 직후 (투명 플래시 방지)
+  widgetWindow.once('ready-to-show', attachAndShow);
+
+  // 폴백: Electron 이슈 #25253 — transparent 창에서 ready-to-show 미발동 대비
+  widgetWindow.webContents.on('did-finish-load', () => {
+    setTimeout(() => {
+      if (widgetWindow && !widgetWindow.isDestroyed() && !widgetWindow.isVisible()) {
+        attachAndShow();
+      }
+    }, 300);
   });
 
   widgetWindow.on('move', scheduleWidgetBoundsSave);
@@ -258,13 +297,15 @@ function createWidgetWindow(options: {
   widgetWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
+      stopWidgetHeartbeat();
       widgetWindow?.hide();
-      // 위젯 닫힐 때 메인 창 복원 (숨김 상태면 보이게)
+      // 위젯 닫힐 때 메인 창 복원
       mainWindow?.show();
     }
   });
 
   widgetWindow.on('closed', () => {
+    stopWidgetHeartbeat();
     widgetWindow = null;
   });
 }
@@ -355,10 +396,9 @@ function registerIpcHandlers(): void {
       widgetWindow = null;
       mainWindow?.show();
     } else {
-      // 위젯이 없으면 생성하고 메인창 숨김
+      // 위젯이 없으면 생성하고, 표시된 뒤 메인창 숨김
       const widgetOptions = readSettingsWidgetOptions();
-      createWidgetWindow(widgetOptions);
-      mainWindow?.hide();
+      createWidgetWindow(widgetOptions, () => mainWindow?.hide());
     }
   });
 
@@ -520,8 +560,7 @@ if (!gotTheLock) {
     // Start in widget mode if the setting is enabled
     const widgetOptions = readSettingsWidgetOptions();
     if (widgetOptions.startInWidgetMode) {
-      createWidgetWindow(widgetOptions);
-      mainWindow?.hide();
+      createWidgetWindow(widgetOptions, () => mainWindow?.hide());
     }
 
     // Handle .ssampin file open from CLI args

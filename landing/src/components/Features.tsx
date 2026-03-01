@@ -72,7 +72,7 @@ export default function Features() {
             핵심 기능
           </p>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            바탕화면에 꽂아두세요
+            화면에 꽂아두세요
           </h2>
           <p className="mt-3 text-base text-sp-muted">교사의 하루를 한눈에</p>
         </FadeIn>

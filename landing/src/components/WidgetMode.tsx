@@ -14,7 +14,7 @@ export default function WidgetMode() {
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            바탕화면 위의 작은 비서
+            화면 한켠의 작은 비서
           </h2>
         </FadeIn>
 
@@ -33,7 +33,7 @@ export default function WidgetMode() {
 
           <FadeIn className="w-full md:w-1/2" delay={0.15}>
             <p className="mb-6 text-lg text-sp-muted">
-              위젯 모드로 바탕화면 구석에
+              위젯 모드로 화면 한켠에
               <br />
               항상 띄워두세요.
             </p>
