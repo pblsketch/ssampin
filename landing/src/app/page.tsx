@@ -9,6 +9,7 @@ import ShareSchedule from '@/components/ShareSchedule';
 import ExportFormats from '@/components/ExportFormats';
 import InstallGuide from '@/components/InstallGuide';
 import FAQ from '@/components/FAQ';
+import Feedback from '@/components/Feedback';
 import BottomCTA from '@/components/BottomCTA';
 import Footer from '@/components/Footer';
 
@@ -26,6 +27,7 @@ export default function Home() {
       <ExportFormats />
       <InstallGuide />
       <FAQ />
+      <Feedback />
       <BottomCTA />
       <Footer />
     </main>
