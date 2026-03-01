@@ -3,15 +3,15 @@ import FadeIn from './FadeIn';
 const formats = [
   {
     icon: '📄',
-    name: 'HWP',
+    name: 'HWPX',
     label: '한글 파일',
-    uses: ['시간표', '학급 자리 배치'],
+    uses: ['시간표', '자리 배치', '담임메모'],
   },
   {
     icon: '📊',
     name: 'Excel',
     label: '엑셀 파일',
-    uses: ['시간표', '학급 자리 배치'],
+    uses: ['시간표', '자리 배치', '일정'],
   },
   {
     icon: '📑',
@@ -23,7 +23,7 @@ const formats = [
 
 export default function ExportFormats() {
   return (
-    <section className="bg-sp-bg py-20">
+    <section className="bg-sp-surface py-20">
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn className="text-center">
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">

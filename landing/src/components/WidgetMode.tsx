@@ -1,7 +1,8 @@
+import Image from 'next/image';
 import FadeIn from './FadeIn';
 
 const checklist = [
-  '시간표 + 일정 한눈에',
+  '시간표 + 일정 + 급식 한눈에',
   '투명도 자유롭게 조절',
   '항상 위에 표시',
   '크기 자유롭게 조절',
@@ -19,11 +20,14 @@ export default function WidgetMode() {
 
         <div className="mt-12 flex flex-col items-center gap-10 md:flex-row md:gap-16">
           <FadeIn className="w-full md:w-1/2">
-            <div className="flex h-[250px] items-center justify-center rounded-2xl border border-white/10 bg-sp-card md:h-[300px]">
-              <div className="text-center">
-                <p className="text-4xl">🖼️</p>
-                <p className="mt-3 text-sp-muted">위젯 모드 스크린샷 준비 중</p>
-              </div>
+            <div className="overflow-hidden rounded-2xl border border-white/10">
+              <Image
+                src="/images/timetable.png"
+                alt="쌤핀 시간표 화면"
+                width={1440}
+                height={900}
+                className="h-auto w-full"
+              />
             </div>
           </FadeIn>
 

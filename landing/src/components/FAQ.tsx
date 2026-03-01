@@ -7,7 +7,7 @@ const faqs = [
   },
   {
     question: '인터넷 없이도 되나요?',
-    answer: '날씨를 제외한 모든 기능이 오프라인에서 동작해요.',
+    answer: '날씨와 급식을 제외한 모든 기능이 오프라인에서 동작해요.',
   },
   {
     question: 'Mac에서도 쓸 수 있나요?',
@@ -28,11 +28,26 @@ const faqs = [
     answer:
       '개인 개발 앱이라 Microsoft 인증서가 아직 없어요. "추가 정보 → 실행"을 눌러주시면 안전하게 설치돼요.',
   },
+  {
+    question: '급식 정보는 어떻게 나오나요?',
+    answer:
+      'NEIS(나이스) 공식 API에서 자동으로 가져와요. 설정에서 학교만 검색하면 매일 급식이 표시돼요.',
+  },
+  {
+    question: '쌤도구는 뭔가요?',
+    answer:
+      '타이머, 랜덤 뽑기, 점수판, 룰렛, 주사위, 투표, QR코드 등 수업에 바로 쓸 수 있는 12가지 교실 도구예요.',
+  },
+  {
+    question: 'PIN 잠금은 왜 필요한가요?',
+    answer:
+      '학생이 볼 수 있는 상황에서 담임메모나 성적 같은 민감한 정보를 보호할 수 있어요. 기능별로 잠금을 설정할 수 있어요.',
+  },
 ];
 
 export default function FAQ() {
   return (
-    <section className="bg-sp-bg py-20">
+    <section className="bg-sp-surface py-20">
       <div className="mx-auto max-w-3xl px-6">
         <FadeIn className="text-center">
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">

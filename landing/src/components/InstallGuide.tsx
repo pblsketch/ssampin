@@ -5,22 +5,25 @@ const steps = [
     number: '1',
     title: '다운로드',
     description: '위 버튼을 클릭하세요',
+    emoji: '📥',
   },
   {
     number: '2',
     title: '실행',
     description: '다운받은 파일을 실행하세요',
+    emoji: '▶️',
   },
   {
     number: '3',
     title: '완료!',
     description: '바탕화면의 쌤핀 아이콘을 클릭하세요',
+    emoji: '📌',
   },
 ];
 
 export default function InstallGuide() {
   return (
-    <section className="bg-sp-surface py-20">
+    <section className="bg-sp-bg py-20">
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn className="text-center">
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
@@ -38,7 +41,7 @@ export default function InstallGuide() {
                 <h3 className="mt-4 text-lg font-bold text-white">{step.title}</h3>
                 <p className="mt-2 text-sm text-sp-muted">{step.description}</p>
                 <div className="mt-4 flex h-[100px] items-center justify-center rounded-lg border border-white/5 bg-white/5">
-                  <span className="text-xs text-sp-muted">스크린샷 준비 중</span>
+                  <span className="text-4xl">{step.emoji}</span>
                 </div>
               </div>
             </FadeIn>

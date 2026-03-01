@@ -8,7 +8,7 @@ const benefits = [
 
 export default function ShareSchedule() {
   return (
-    <section className="bg-sp-surface py-20">
+    <section className="bg-sp-bg py-20">
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn className="text-center">
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">

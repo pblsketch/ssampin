@@ -5,13 +5,13 @@ const features = [
     icon: '📅',
     title: '시간표',
     description:
-      '학급·교사 시간표를 한눈에. 현재 교시가 자동으로 표시됩니다.',
+      'NEIS 연동으로 학급·교사 시간표를 자동 불러오기. 현재 교시 자동 표시.',
   },
   {
     icon: '🪑',
     title: '학급 자리 배치',
     description:
-      '드래그로 자리 교환, 버튼 하나로 랜덤 배치. 더 이상 한글 파일 안 만들어도 돼요.',
+      '드래그로 자리 교환, 셔플 애니메이션으로 랜덤 배치. 한글 파일 안 만들어도 돼요.',
   },
   {
     icon: '📋',
@@ -23,7 +23,31 @@ const features = [
     icon: '👩‍🏫',
     title: '담임메모',
     description:
-      '출결, 상담, 생활지도 기록을 학생별로 한 곳에서 관리하세요.',
+      '출결, 상담, 생활지도 기록을 학생별로 관리. 필터와 통계 기능까지.',
+  },
+  {
+    icon: '🍚',
+    title: '급식',
+    description:
+      'NEIS 연동으로 오늘의 급식을 자동 표시. 알레르기 정보와 칼로리까지.',
+  },
+  {
+    icon: '🌤️',
+    title: '날씨·미세먼지',
+    description:
+      '현재 기온, 습도, 미세먼지 등급을 대시보드에서 바로 확인하세요.',
+  },
+  {
+    icon: '🛠️',
+    title: '쌤도구',
+    description:
+      '타이머, 투표, 점수판, 룰렛 등 12가지 수업 도구를 바로 실행.',
+  },
+  {
+    icon: '🔒',
+    title: 'PIN 잠금',
+    description:
+      '민감한 기능을 PIN으로 보호. 자동 잠금 타이머도 설정 가능.',
   },
   {
     icon: '📝',
@@ -50,7 +74,7 @@ export default function Features() {
           <p className="mt-3 text-lg text-sp-muted">교사의 하루를 한눈에</p>
         </FadeIn>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {features.map((feature, i) => (
             <FadeIn key={feature.title} delay={i * 0.08}>
               <div className="rounded-2xl border border-white/5 bg-sp-card p-6 transition-all hover:border-blue-500/30">
