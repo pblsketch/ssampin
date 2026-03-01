@@ -5,3 +5,7 @@ release/
 *.log
 .DS_Store
 Thumbs.db
+
+# Landing page
+landing/node_modules
+landing/.next

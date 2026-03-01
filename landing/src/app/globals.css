@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-sp-bg: #0a0e17;
+  --color-sp-surface: #0f1729;
+  --color-sp-card: #1a2332;
+  --color-sp-border: #2a3548;
+  --color-sp-accent: #3b82f6;
+  --color-sp-accent-hover: #2563eb;
+  --color-sp-highlight: #f59e0b;
+  --color-sp-text: #f8fafc;
+  --color-sp-muted: #94a3b8;
+  --font-sans: var(--font-noto-sans-kr);
+}
+
+body {
+  background: #0a0e17;
+  color: #f8fafc;
+}
