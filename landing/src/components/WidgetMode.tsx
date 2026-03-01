@@ -14,7 +14,7 @@ export default function WidgetMode() {
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            화면 위에 항상 띄워두기
+            화면 위에 쉽게 띄워두기
           </h2>
         </FadeIn>
 
