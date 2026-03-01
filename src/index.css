@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sp-bg: #0a0e17;
+    --sp-surface: #131a2b;
+    --sp-card: #1a2332;
+    --sp-border: #2a3548;
+    --sp-accent: #3b82f6;
+    --sp-highlight: #f59e0b;
+    --sp-text: #e2e8f0;
+    --sp-muted: #94a3b8;
+  }
+
+  .theme-light {
+    --sp-bg: #f8fafc;
+    --sp-surface: #f1f5f9;
+    --sp-card: #ffffff;
+    --sp-border: #cbd5e1;
+    --sp-accent: #2563eb;
+    --sp-highlight: #f59e0b;
+    --sp-text: #0f172a;
+    --sp-muted: #475569;
+  }
+
+  .theme-dark {
+    --sp-bg: #0a0e17;
+    --sp-surface: #131a2b;
+    --sp-card: #1a2332;
+    --sp-border: #2a3548;
+    --sp-accent: #3b82f6;
+    --sp-highlight: #f59e0b;
+    --sp-text: #e2e8f0;
+    --sp-muted: #94a3b8;
+  }
+
+  body {
+    background-color: var(--sp-bg);
+    color: var(--sp-text);
+  }
+}
+
+:root {
+  font-family:
+    'Noto Sans KR',
+    -apple-system,
+    BlinkMacSystemFont,
+    system-ui,
+    Roboto,
+    'Helvetica Neue',
+    'Segoe UI',
+    'Apple SD Gothic Neo',
+    'Malgun Gothic',
+    sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+@layer base {
+  body {
+    @apply bg-sp-bg text-sp-text;
+  }
+}
+
+/* 
+ * Light Theme Overrides 
+ * By default Tailwind handles dark mode via 'dark:' classes,
+ * but since we are overriding global colors, we override CSS variables.
+ * For simplicity, we just invert some critical tokens.
+ */
+.theme-light {
+  --sp-bg: #f8fafc;
+  --sp-card: #ffffff;
+  --sp-border: #e2e8f0;
+  --sp-text: #0f172a;
+  --sp-muted: #64748b;
+}
+
+.theme-dark {
+  --sp-bg: #0a0e17;
+  --sp-card: #151b2b;
+  --sp-border: #2a3548;
+  --sp-text: #f8fafc;
+  --sp-muted: #94a3b8;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0e17;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a3548;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4558;
+}

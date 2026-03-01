@@ -1,0 +1,454 @@
+import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu } from 'electron';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let mainWindow: BrowserWindow | null = null;
+let widgetWindow: BrowserWindow | null = null;
+let savePositionTimer: ReturnType<typeof setTimeout> | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
+
+interface WidgetBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function getDataDir(): string {
+  const dir = path.join(app.getPath('userData'), 'data');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+function readWidgetBounds(): WidgetBounds | null {
+  const filePath = path.join(getDataDir(), 'widget-bounds.json');
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(raw) as WidgetBounds;
+  } catch {
+    return null;
+  }
+}
+
+function saveWidgetBounds(bounds: WidgetBounds): void {
+  const filePath = path.join(getDataDir(), 'widget-bounds.json');
+  fs.writeFileSync(filePath, JSON.stringify(bounds), 'utf-8');
+}
+
+function scheduleWidgetBoundsSave(): void {
+  if (savePositionTimer !== null) {
+    clearTimeout(savePositionTimer);
+  }
+  savePositionTimer = setTimeout(() => {
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      const bounds = widgetWindow.getBounds();
+      saveWidgetBounds(bounds);
+    }
+    savePositionTimer = null;
+  }, 500);
+}
+
+function getDefaultWidgetBounds(width: number): { x: number; y: number } {
+  const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
+  const margin = 16;
+  return {
+    x: screenWidth - width - margin,
+    y: margin,
+  };
+}
+
+function createWindow(): void {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 1024,
+    minHeight: 700,
+    title: '쌤핀',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    show: false,
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
+
+  if (process.env['VITE_DEV_SERVER_URL']) {
+    mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL']);
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
+
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+function createTray(): void {
+  // Use public/favicon.ico or build/icon.ico; vite creates build out of process, better use an existing icon. Let's assume build/icon.ico will exist.
+  const iconPath = path.join(__dirname, '../build/icon.ico');
+  // Wait, in dev __dirname is inside out/, so ../build/icon.ico means project-root/build/icon.ico.
+  try {
+    tray = new Tray(fs.existsSync(iconPath) ? iconPath : path.join(__dirname, '../public/favicon.ico'));
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: '쌤핀 열기',
+        click: () => {
+          if (mainWindow) {
+            mainWindow.show();
+          } else {
+            createWindow();
+          }
+        },
+      },
+      {
+        label: '위젯 모드',
+        click: () => {
+          if (!widgetWindow || widgetWindow.isDestroyed()) {
+            const widgetOptions = readSettingsWidgetOptions();
+            createWidgetWindow(widgetOptions);
+            mainWindow?.hide();
+          } else {
+            widgetWindow.show();
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: '설정',
+        click: () => {
+          if (!mainWindow) createWindow();
+          mainWindow?.show();
+        },
+      },
+      {
+        label: '종료',
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+    tray.setToolTip('쌤핀');
+    tray.setContextMenu(contextMenu);
+
+    tray.on('double-click', () => {
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+        } else {
+          mainWindow.show();
+        }
+      } else {
+        createWindow();
+      }
+    });
+  } catch {
+    // ignore tray error if icon not found
+  }
+}
+
+function applySystemSettings(): void {
+  try {
+    const filePath = path.join(getDataDir(), 'settings.json');
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const settings = JSON.parse(raw);
+      const autoLaunch = settings.system?.autoLaunch ?? false;
+      app.setLoginItemSettings({
+        openAtLogin: autoLaunch,
+        path: app.getPath('exe'),
+      });
+    }
+  } catch {
+    // fall through
+  }
+}
+
+function createWidgetWindow(options: {
+  width: number;
+  height: number;
+  alwaysOnTop: boolean;
+}): void {
+  const savedBounds = readWidgetBounds();
+  const defaultPos = getDefaultWidgetBounds(options.width);
+
+  const x = savedBounds?.x ?? defaultPos.x;
+  const y = savedBounds?.y ?? defaultPos.y;
+  const width = savedBounds?.width ?? options.width;
+  const height = savedBounds?.height ?? options.height;
+
+  widgetWindow = new BrowserWindow({
+    x,
+    y,
+    width,
+    height,
+    minWidth: 280,
+    minHeight: 350,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: options.alwaysOnTop,
+    resizable: true,
+    skipTaskbar: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  if (process.env['VITE_DEV_SERVER_URL']) {
+    widgetWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=widget`);
+  } else {
+    widgetWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
+      query: { mode: 'widget' },
+    });
+  }
+
+  widgetWindow.on('move', scheduleWidgetBoundsSave);
+  widgetWindow.on('resize', scheduleWidgetBoundsSave);
+
+  widgetWindow.on('closed', () => {
+    widgetWindow = null;
+  });
+}
+
+function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnTop: boolean } {
+  try {
+    const filePath = path.join(getDataDir(), 'settings.json');
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const settings = JSON.parse(raw) as {
+        widget?: { width?: number; height?: number; alwaysOnTop?: boolean };
+      };
+      return {
+        width: settings.widget?.width ?? 380,
+        height: settings.widget?.height ?? 650,
+        alwaysOnTop: settings.widget?.alwaysOnTop ?? true,
+      };
+    }
+  } catch {
+    // fall through to defaults
+  }
+  return { width: 380, height: 650, alwaysOnTop: true };
+}
+
+function registerIpcHandlers(): void {
+  // data:read — userData/data/{filename}.json 읽기
+  ipcMain.handle('data:read', (_event, filename: string): string | null => {
+    const filePath = path.join(getDataDir(), `${filename}.json`);
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    return fs.readFileSync(filePath, 'utf-8');
+  });
+
+  // data:write — JSON 파일 쓰기
+  ipcMain.handle(
+    'data:write',
+    (_event, filename: string, data: string): void => {
+      const filePath = path.join(getDataDir(), `${filename}.json`);
+      fs.writeFileSync(filePath, data, 'utf-8');
+
+      if (filename === 'settings') {
+        try {
+          const settings = JSON.parse(data);
+          app.setLoginItemSettings({
+            openAtLogin: settings.system?.autoLaunch ?? false,
+            path: app.getPath('exe'),
+          });
+        } catch {
+          // ignore parsing error
+        }
+      }
+    },
+  );
+
+  // window:setAlwaysOnTop
+  ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean): void => {
+    mainWindow?.setAlwaysOnTop(flag);
+  });
+
+  // window:setWidget (backward compat)
+  ipcMain.handle(
+    'window:setWidget',
+    (
+      _event,
+      options: {
+        width: number;
+        height: number;
+        transparent: boolean;
+        opacity: number;
+        alwaysOnTop: boolean;
+      },
+    ): void => {
+      if (!mainWindow) return;
+      mainWindow.setSize(options.width, options.height);
+      mainWindow.setOpacity(options.opacity);
+      mainWindow.setAlwaysOnTop(options.alwaysOnTop);
+    },
+  );
+
+  // window:toggleWidget — 위젯 토글
+  ipcMain.handle('window:toggleWidget', (): void => {
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      // 위젯이 열려있으면 닫고 메인창 복원
+      widgetWindow.destroy();
+      widgetWindow = null;
+      mainWindow?.show();
+    } else {
+      // 위젯이 없으면 생성하고 메인창 숨김
+      const widgetOptions = readSettingsWidgetOptions();
+      createWidgetWindow(widgetOptions);
+      mainWindow?.hide();
+    }
+  });
+
+  // window:setOpacity — 위젯 투명도 설정
+  ipcMain.handle('window:setOpacity', (_event, value: number): void => {
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.setOpacity(Math.max(0, Math.min(1, value)));
+    }
+  });
+
+  // window:closeApp — 앱 완전 종료
+  ipcMain.handle('window:closeApp', (): void => {
+    isQuitting = true;
+    app.quit();
+  });
+
+  // export:showSaveDialog — 파일 저장 대화상자
+  ipcMain.handle(
+    'export:showSaveDialog',
+    async (
+      _event,
+      options: {
+        title: string;
+        defaultPath: string;
+        filters: { name: string; extensions: string[] }[];
+      },
+    ): Promise<string | null> => {
+      if (!mainWindow) return null;
+      const result = await dialog.showSaveDialog(mainWindow, {
+        title: options.title,
+        defaultPath: options.defaultPath,
+        filters: options.filters,
+      });
+      if (result.canceled || !result.filePath) return null;
+      return result.filePath;
+    },
+  );
+
+  // export:writeFile — 바이너리/텍스트 파일 쓰기
+  ipcMain.handle(
+    'export:writeFile',
+    (_event, filePath: string, data: ArrayBuffer | string): void => {
+      if (typeof data === 'string') {
+        fs.writeFileSync(filePath, data, 'utf-8');
+      } else {
+        fs.writeFileSync(filePath, Buffer.from(data));
+      }
+    },
+  );
+
+  // export:printToPDF — 현재 윈도우 PDF 출력
+  ipcMain.handle(
+    'export:printToPDF',
+    async (): Promise<ArrayBuffer | null> => {
+      if (!mainWindow) return null;
+      const data = await mainWindow.webContents.printToPDF({
+        printBackground: true,
+        landscape: false,
+        pageSize: 'A4',
+      });
+      return data.buffer as ArrayBuffer;
+    },
+  );
+
+  // export:openFile — 생성된 파일 열기
+  ipcMain.handle(
+    'export:openFile',
+    (_event, filePath: string): void => {
+      shell.openPath(filePath);
+    },
+  );
+
+  // share:import — 일정 가져오기 (열기 대화상자 + 파일 읽기)
+  ipcMain.handle('share:import', async (): Promise<string | null> => {
+    if (!mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '일정 가져오기',
+      filters: [{ name: '쌤핀 일정 파일', extensions: ['ssampin'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const filePath = result.filePaths[0]!;
+    return fs.readFileSync(filePath, 'utf-8');
+  });
+}
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const fileArg = argv.find((arg) => arg.endsWith('.ssampin'));
+    if (fileArg && fs.existsSync(fileArg)) {
+      const content = fs.readFileSync(fileArg, 'utf-8');
+      mainWindow?.webContents.send('share:file-opened', content);
+    }
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(() => {
+    applySystemSettings();
+    registerIpcHandlers();
+    createWindow();
+    createTray();
+
+    // Handle .ssampin file open from CLI args
+    const fileArg = process.argv.find((arg) => arg.endsWith('.ssampin'));
+    if (fileArg && fs.existsSync(fileArg)) {
+      const content = fs.readFileSync(fileArg, 'utf-8');
+      mainWindow?.webContents.once('did-finish-load', () => {
+        mainWindow?.webContents.send('share:file-opened', content);
+      });
+    }
+  });
+}
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});

@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin Seating Chart</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&amp;family=Noto+Sans+KR:wght@300;400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "primary-dark": "#2563eb",
+                        "background-light": "#f8fafc",
+                        "background-dark": "#0f172a",
+                        "card-dark": "#1e293b",
+                        "border-dark": "#334155",
+                        "text-light": "#f1f5f9",
+                        "text-muted": "#94a3b8",
+                    },
+                    fontFamily: {
+                        "display": ["Lexend", "Noto Sans KR", "sans-serif"],
+                        "body": ["Noto Sans KR", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.75rem",
+                        "xl": "1rem",
+                        "2xl": "1.5rem",
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        /* Custom scrollbar for dark mode */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased overflow-hidden h-screen flex">
+<!-- Sidebar -->
+<aside class="w-64 bg-slate-900 dark:bg-[#101723] border-r border-border-dark flex flex-col h-full shrink-0 z-20">
+<div class="p-6 flex items-center gap-3">
+<div class="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-white text-xl">school</span>
+</div>
+<div>
+<h1 class="text-white text-lg font-bold leading-none tracking-tight">쌤핀 <span class="text-xs opacity-70 font-normal">v2.0</span></h1>
+<p class="text-text-muted text-xs mt-1">선생님을 위한 스마트 도우미</p>
+</div>
+</div>
+<nav class="flex-1 px-3 space-y-1 mt-4 overflow-y-auto">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted hover:bg-slate-800 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">home</span>
+<span class="font-medium text-sm">홈</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted hover:bg-slate-800 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">calendar_month</span>
+<span class="font-medium text-sm">시간표</span>
+</a>
+<!-- Active State -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/10 text-primary border border-primary/20 transition-all shadow-sm shadow-primary/5" href="#">
+<span class="material-symbols-outlined text-primary fill-current">chair</span>
+<span class="font-bold text-sm">좌석배치</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted hover:bg-slate-800 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">check_circle</span>
+<span class="font-medium text-sm">할일</span>
+<span class="ml-auto bg-slate-700 text-white text-[10px] px-1.5 py-0.5 rounded-full">3</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted hover:bg-slate-800 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">groups</span>
+<span class="font-medium text-sm">학생 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted hover:bg-slate-800 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">analytics</span>
+<span class="font-medium text-sm">성적 분석</span>
+</a>
+</nav>
+<div class="p-4 border-t border-border-dark">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted hover:bg-slate-800 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">settings</span>
+<span class="font-medium text-sm">설정</span>
+</a>
+<div class="mt-4 flex items-center gap-3 px-4 py-2">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden border border-slate-600">
+<img alt="User Avatar" class="h-full w-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDk6L1n07xXcucUJQsv0qg67WBnK-dFbWeNXx22gb-YjyZZnaGNTrWBUT6uVnYmtKr8pBprpQ0MkJaL3dWJn1RuEB-56j7A4HNFzYz0XCqhs5hrt2xXh4Pu7-QFukyzSGYp0XbsX8YLnRGBq6yMTJjYSPRJgWH0PB1oRLPE4ct87ElipuMTACVn11KVBABNIySH42oNOQWtfDdR0UAL6Jsub036wC8IksArzMQc6Dgl1lk67awZNyBM_wqDV3Gufzd_LTU_rahBsQRx"/>
+</div>
+<div class="flex flex-col">
+<span class="text-xs text-white font-medium">김선생님</span>
+<span class="text-[10px] text-text-muted">서울고등학교</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-full overflow-hidden bg-background-dark relative">
+<!-- Header -->
+<header class="h-16 px-8 py-4 bg-background-dark border-b border-border-dark flex items-center justify-between shrink-0">
+<div class="flex items-center gap-4">
+<div class="bg-primary/20 p-2 rounded-lg text-primary">
+<span class="material-symbols-outlined">chair_alt</span>
+</div>
+<div>
+<h2 class="text-xl font-bold text-white tracking-tight">좌석 배치도</h2>
+<p class="text-xs text-text-muted">1학년 2반 (35명)</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-border-dark bg-card-dark hover:bg-slate-700 text-sm font-medium text-text-light transition-colors shadow-sm">
+<span class="material-symbols-outlined text-lg">shuffle</span>
+<span>자리 바꾸기</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-border-dark bg-card-dark hover:bg-slate-700 text-sm font-medium text-text-light transition-colors shadow-sm">
+<span class="material-symbols-outlined text-lg">edit</span>
+<span>편집</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-medium transition-colors shadow-sm shadow-primary/20">
+<span class="material-symbols-outlined text-lg">download</span>
+<span>내보내기</span>
+</button>
+</div>
+</header>
+<!-- Workspace -->
+<div class="flex-1 overflow-y-auto p-8 relative flex flex-col items-center">
+<!-- Podium (Teacher's Desk) -->
+<div class="w-full max-w-2xl mb-12 flex flex-col items-center">
+<div class="w-64 h-12 bg-card-dark border border-border-dark rounded-b-xl flex items-center justify-center shadow-lg relative after:content-[''] after:absolute after:top-0 after:left-0 after:w-full after:h-1 after:bg-primary/50">
+<span class="text-text-muted text-sm font-bold tracking-widest">[ 교 탁 ]</span>
+</div>
+</div>
+<!-- Seat Grid -->
+<div class="grid grid-cols-6 gap-5 w-full max-w-6xl mx-auto pb-12">
+<!-- Student Card Template -->
+<!-- We will repeat this structure for 35 students + 1 empty -->
+<!-- Row 1 -->
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">01</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBepocNF8rM8qQlbQ5e7P8kDmq3CPCN4HFQXXrYGM9e-4crhHmr7eAR_1dmqhnpzarsitfA5dP3pJMl_9NQrsvdhfebuiRtXfRU6YzR6zNTM2tg5Sn5Pdl8ODfunOZOAhhO_EmUaBZn1ibneCCcPpZUZwCPXU-QHju8VMn-lfFSG3aFrFMvCn-NIHhLWTPGkx8eZ6xfeaOL5ek5HwLe-UbbmaQtcrD-p1ueSvGAQYBNVDj87GJ8j_CrQYBqkANQOHaXrZFWX9dMMChJ"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">김민지</span>
+<span class="text-[10px] text-text-muted">반장</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">02</span>
+<div class="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.4)]" title="지각"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuALFMjEuQ1lWtlcZBLp8KHPB87xCWyeCkN4DG_5QJDaIZXEtdQzZgzLeWWWhKorjjMs6gZ9OJaRMXta0vEbpwld4L_bMpoK8LBLj2JSf9fok2NFMqbDJwkOPM6mm0VWo5XjGlJ-z_9598NsUlnvAr_c_hLUDzvZoPKqMupUvI-pTvi4gYwYSX6b8dzr4jzcopfn6nYbLrrenhS8hb4v6bFsC54tiaqC65d28_rIyOsCJ81A50I04FxqaznAxTPLVEq6DEv5ca0ASIr2"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">이서연</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">03</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCp0CP1KGnh7fnb_YPKfb5g-sMvH7v3OexxRtZDwSQbEeQRdcZfbWN2qH-fWTFhnBLI-f-HhwWfQP4TooNY5vWF8SbiU64tIBn5XLrWldn1vK8PvRdS2BAXjE0sZEE0YQs04NW-24oYZiGyCtfWYRmaWQ7JcbiGF6zZsi0GhPP6qya6YdyovnKMYZHx_H48MaUVSwgEPXDkdraK92csKIvrKGe-LjwKxh-o7UboZrohBkKztahaxphZ9-mOsMCmG047rBqv0EyWZxLm"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">박지민</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">04</span>
+<div class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" title="결석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600 grayscale">
+<img class="w-full h-full object-cover opacity-50" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCu4mSrhDoFofkOHESiDSsF1EmZgUxgvdWpUHgCalCrtHBSCpOLAQDd7TNhuu-OhTLcGllpnpIfUf6ue484fqjgezs5VOTnr1L3T2Qj1CtCeajE_ZhASbEakKk2uGNsvX5WGQNVvKKS8UjCxnzEBLRu9ZV-uUza4Cbkogq5xgPW5kQHq0mHTZsLWwLm916fZt1YQQsizUKpM0slqGt43KQ5WzH6l3KFV0CqbxxZagTNI7NbcQNnDho2CD5O2gfnfbv9GR_fRy_KVKRk"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-text-muted leading-tight">최예은</span>
+<span class="text-[10px] text-red-400">병결</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">05</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWYctyGFyuE4PAqHLhQFjMt9Sdtjr7SoXIfbRSpXlOkFQdc5TOJ8aaq129fwzQbbvJKVbFfgj68THIX6q046n0Vc3-paDdIVfaz5vgTOEpb5M31Jh8aeeXqyASKbRdoLfpTcC_c4lsTqF9jPxnLMy0ZeZXjWcK-FCe1lijysfdnBF8-04OfRJbVujYbasVtzhrcUzB2SDwCAQ-DfqQ4dB8MYTJa1VJouobjL2EbQELQS21G1pKkQJ8qEdwnJxCCoYjU9wyF1jZpW6u"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">정수빈</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">06</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0fNWMTGegvqvRPZ9meb60nOtyLs1mLTpxsyoJfpkw6JckgcT2gsd_PM_F1wSC49Ns0qL6hoy99GduuSal_maXPymV1fqxaaGMFDo8JKoSYLLPtCmrRputMktxMeNN5xSziTBcuN_dWr536VsI2210f6pPusLUZsf_vwWPKYMGUGUcJf6T5B4xW2jwUdM0e34tJgqYyc1VJltoEFZ8Q8jvqP4PcCixASP_KIp4_HDloOLx17oD9McI4OSfs2IvacS6jrDxs6xZmedV"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">강민수</span>
+</div>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">07</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2lcoDlY9hv2JDTs2GrPSqNK4nEzx6nsIxHVzk09ZVnxysmIW9tcb8e7WjKFYJsj8tTc4_MDk5qUD3DozMyc2DNkx-u_Yk98iqWtb6GpbmWYe_nMkjrwkeR1z6d5Db2AHTttNS96QbVOPBYQ1FYLVdjC7Tr-jhANyHsV68N-_MI54dYucbIsr_eONBcIK5IObCkSqcvBahGtqJ_aqWgH6MCaJrEfBn-HRfyWJnMXxMuj4YdL-M5OSksIvT1EoE91vNaikXELyWJsOf"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">조현우</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">08</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRAK4zRxq7ojzVY7ALbH8bZ8LONQTqDm8omlU-Z1etc7pX1zPRZakTgbkYpv45VYNa4iIxijoqpXDsDwomtJpWTlHCCjslMZF1N9qj5aywKlH0YQn9siqxfV83iRf4m0AIeA1c9_rmGRMLaiJvrRkFNz93m8a4GqkfYnZf9Ep8ISMSVRmoNtOCuDDGBi0oqQnbkvK5hkje78tszOKgcPKkSl8il_329z2BIwS3NgAXf45SVSKLmx6oLnYcFYldBDfuOp7NCngphIFk"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">윤서준</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">09</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDmKyaz2VXdDIINNPAvzSdu3tVthyq1uUt4IRvF1Sq8JeUXTSBhmujLPKxOzZ7gc0TqZd1hO956_VVuJBDIlLyqvPH31gXtlMdxGOeVMeMXzuHj7CGBRR9Qmxemc5eBZsggauYQmjed__1sbFjIHctv4NM5Vhzw1bEpsu2f1eTgSQu0dGBAbPUjJGe5NQ665wpJmmYHZavcQ7PSORCyX8AbSwArVoAHFeKBX70Fh6_ZNTpPnz-YFjaMlU2eTfL0e0sFhyOzxCGfq-gW"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">장민혁</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">10</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB25wFq0iptKIi2jIZTEVIg5KekkltzLwkSofvJAjn4BxI0xjOVapHVfrE-lqtwak9kscSCm4rM_zFbVYqPOE4RpEIw8i68-qLED5auZmGzMDiyVwiOUoPwY2jF-bvZffKrZCKyRJYrCq_LnzFuYCWdUaRK86fWfPOO31WDDCehXOYa8M1hy8big1gw3FTL2dosEMkFGExTZjWFggkDYggHPX1ALPy9rbJ7QtIF47Ca_KQIhxXCsi3WEgWBDA-fj_SfJGmWpwqhKvhi"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">임도윤</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">11</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAajDVjvDHLBQTrR_-PhVYGszIH2SbxwYorp3mwwaddUmH_i9-4xyfz1BbthM-ASnjZwCTGgvLqJdWKz692f4vUb6mX89dqc8KYzPD3_ZEn7Wl7V1M-WFtZCmdqPYsF6U3WsooUkqLu-Lo4qC8TmVsVNXj3sFOelGEuHnW27a_0y8rhZXIxP7yxLse0phDtCHtB_oudXzNqcWmu_84G9pFprRidQsmlJOF7XQ0m0-hbznJi4I3jNZpC-357vPRS89gckh7zpxmIOg8"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">한지우</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">12</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXmbOLuccd9HHniw3k0_zY9DdrHPBeMNFL6K5HOlYf2KrG7ysOlYuQ2LE9_N_cDJUSBsfrjdgQP6DvJsohaP1U6wYc5lkezlzFeSn-gkBytet1FsB22OeN6e-0IpgqpdRMVeHnaVQviPKwOYRuahv9iMfA9fQvE25qI_mnTB8ivzceOLztdzdDY0b-3Y01yXGeP5vLLHCAOT7s_u92zkHVGygNweRxVJyjFqvHHWoPGzoFpTt6Y4tHI0JGRPKOvBiguBm8-ZktownW"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">송예준</span>
+</div>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">13</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHRIwC9n8ZD2sumNXL7PniZfpX6XpiSNg4Kr5VQmAXJVi5oetZMLjWUUD_f7QjMMajQPL-OVoZ4Z1qIks012upzpH1d5uL0Fg1viKSEb5GCH8UpLioDigOdL9sD3MvLt4JksVRPbJShkYrczpU22X39oqI5QYCUy1eaTCVqRqRUVqOxksXcX9KoXTbhQMrPhXRi-IBFXRE0Lhq1XdIqCNZFaL94K4pPmo9Z1Sp9wTdp5ivrXUU0yrIan3E8GV8iRpP72euQ2uQxzFN"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">오시우</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">14</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJlOCE8JkE1vkFbeOGmtjzutSctwcmn6Zl9oSp28Wk0kFphqdodHzIm4kIvVRJzywaVjooKUp3gXq8O9cJfZKZPXIPtXbGR4v_UeDDB_9SqvedXqJX8GzRgewIOiBrrZDTieexudDHmw30zc5zmjiRxyHlKmsNqsFA0ghFVyUJhw32Vcj1TbsCQrwe5XTTc6d41Mk--eQQJaTimL25egb29fgUMJaRyaCiqPzWpAQOh1eCELBZ1rGhPJDR3_F1bTzmkqLMJiBp7tv6"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">서준우</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">15</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGUjEq81TXQr8Q25bTVKDB6hYHqrK2LSlSUowJPid4Kk8v_X77G_prP7rdYdffJwUBqRCQaBFoI_5XCxkYBV5oM698GKRErGkKsZW_1Br6-qzBI1InmJGSJucb_JA9qDsegewB2Vk5PCWx8vgFRWn9UKCipskf-Q5YG-aD_k9SFL4i_TiL29R6oi-LawUjEmpUmUF0xuB5-wVNf6LMOFCH1-Jzfvo7XWVUe2ZVyO92LHwDVV6OWVJsa9QGYFGHff1zTZJeDPQm14AY"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">신은우</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">16</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBRD2ien0UGY6D20ArIcd32R6OjZA7qkcABN75mtT-X8ZqxEPuUZ7J_kNHVlBuFqW6n-DwqNFPPvKxpQNT9wF6iSMQywc1lu-ynNhOHuaAImSzrmLBocPVHffJQ8QeSTxgBMqeICS09ST24BCApmC_ltvEWRfTFdSfrvZhrEMGT3ZqgCqrtbhAOSE06sNrpND8mUFNPrfywT-veZPWrEk4S_mW-bZExXmkBzL6tHGpMz7q16Q6uowltCS-lZr3IZaOU_0TdQj6ylJX-"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">백승우</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">17</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCwgph2kEDMnPNqVGYY1nO5hh7e9unAPDQR19S7b6G_Y4Kf53wdZChVxlOmhtOo5MdOtoQ2ry70YIQ88lvaKHctsPCyzKtNHqLtzDlJGFQMK80qt7CMA3GFTpgy4PCznWD-vqGqt2ob2AroQIpMVm74bGBH1fY1sHgJgH2OrcE5NiiJvjEjT83_6gUKODZYVhY0sTkenxgsaV1DT99g2C4EoaPGslkL5Mc_wpiqvNZY0o1SsWWn9mEPNBQ-mqlfjH3I0hlhJZbrtPit"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">권진우</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">18</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDU6umb7Pk2bZGJvTJ4nOz_ioSZlpZ5i55adC7HcmIAvRfpv87lGEbTSwSsgg23f5hl2BLW44vQ9woRFIsZhc60ujKrd_6s8LP4BcdcbuwiSqv8m7uPs7HKtH9byVWvM4SVoWOp0eCG3fltUUX6btiiKdmPnOa1Nv_30hw2D67s-wG_lygtw-iKJyI92SjtOId11NFgVhrxXUE_W8kVtObeOX5m6UVpPRx4T_hoHsgH8NlwV-EkZxT0_LsyHg66v0MmI4fjsB4du2wT"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">황지호</span>
+</div>
+</div>
+</div>
+<!-- Row 4 (Skipping some repetitive code for brevity, but imagining filled grid) -->
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">19</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrV3TC2J__UtVsj7oeSTM590cn2keqqsN5t8nr-d_W1BK7AEcF0nOXdnEZxu22gqSBFb069JJ4nVp603cFfWztkS5FDzJlI7QaJwTbWB_vAqrHTvq62lDTuzc0gOpnTsczLNBEs6pRHvGjK2RrSrZNijeJvuT6Uk1IPKlaYhO3XxSD_1ifNCeqovmajCd0Bat11FtvODhOYLu5SrtfZTPflOcMLTVzFE_jZat2MxB8iTufkEjas9ZihzCwK6u-wgDax7b5Ts6CI16f"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">안민재</span>
+</div>
+</div>
+</div>
+<!-- Placeholder for other students 20-23 -->
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">20</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUvMyHnyPyLtY5p0bHbVfaIu4AXPCPbs9Q01uYwR3i1LfpiHI6HkV_OV9m4mJaJxlKSzZgFj8EeT1dv5NwXWCQY7edR4-esP4SPvY37P8ajTwcKmSbdtYwYG5pAE7MkzAWD3tD3vVMIx4MC-iE93PhPHATDuDOypd78pUizrOXTrGXVQMHMkkAd4GEpcDxJh8oB4ouMaxNz9fDhg5X87Pni9ZfMsDiCNlSmFoSc9fTp-NDc-RHmqW-oaunXufu1H0t-x4FpBwdX7wv"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">유건우</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">21</span>
+<div class="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.4)]" title="조퇴"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWhbLhbHb-I5LfHCdfYGyM2ZHo1Roy5emh2Ux1PO7ON_bnLH__01d70yV9kgi008WMgulcN9fPjqjsmpCpJFnTRtaZ7quZPwu1FPBY3Rp8KQwgkrRKgACRLyLDOns4qzkyb-bqngo37ABR8jR-oqd4jEPMlKUKnAxO0hnIi9nRfgA92Eo3S3TeTpAM59TtKjePCTGcES76BvwygzMpBDOEGN970bfg_bpe3IGdiT-LDKVYcntR7mfk4v2VWr3rC4hP-HNR5OvG_8SN"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">홍성현</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">22</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCoBMr968d_-p5D2zipa3hqGPQ67AYhhF-BpcApieAlGEmx46nIo1MRQFqOndl_DdD9L7YkHLoHPWXfX4jKuMvOR9fI--TUNCI8D8YZFe4vzr5snCuMseMyKm0y6k30iYclSyn2Kh38hU3hiylO_WfeX8C5vQ93FgqOdNdQGGyYECjrG6oduu5q_YCxUJtf74mQYsMhmrPzjGogylGzOn1_LfteCKUdmrszi6ZjBM1xhSrmnC5v6bp9PCDgyHLS2VaftZsT58PORit-"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">전민성</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">23</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlFYfO8b2PFWgtJo4P77lRxT4T1HChjD5moNQ_YOfDEY-YhubpWAfvOl13r_z5SVr0tl_Lz2ZAgT6poDkP-NpNjmYfj_X3NogDZOzsN3qnQUuiKHG6LAGGzGaMEl9vfuSdkruVkVT7g5_mQjkYyAmR6tX5SE6Cbon5cWnFIkSWAeXwYFW78IXFlMl5ka_CuZzZBFSwqVUYPT4wWT7X6WxF_WE8WtP03Od9NJjziewKwSNfNYyjCASUbalqFnqmzb1a8yp7eei880LX"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">고우진</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">24</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQVNWCGUX6VFI8zTg9pU2exbVevpetr3pKTIAxtH3lm8MwRrQZGG3PxZYiECfmHkJ-Sz3tSuNnE5Byb3ei-6dXEsvy2nCreVqeD0tIYVq3QMb_GhqlN6uoF5a14g75sm0XR4DIX28DlBomPkZag1jct6n4RifzkMw2cXrpsfYv8nBmdvztCh2U83RpLask1s1zUXeREcFFsgmNSVDVbHhod28AnuCc_TpD0OOChU4NxI5BbN_NRHrWhX7fDYyXFkcfjuTL5B44dClu"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">문지훈</span>
+</div>
+</div>
+</div>
+<!-- Row 5 -->
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">25</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHG-OZfXg1mQzeytUpa-pOWxSJCZhKNBsRL71tp7JP9yyj1PXcaVLlozN_DQlRyob3vzI7Q-c8Vihe78A10Mj96WAU7i3G9bU8GvaBx50odXqD7as9xdqmqLV2aIgh1zjpY3-65NzJL0v5VpiDro8afO6rLcmbqSp1c5PPy35AOx2MRb5h0RyDe-Eut4FaDLIfBUV4oBcXTVKd-_OTw9KFqTvu7S_h1ozj_nHOFezbWbZZIoU3gsfxDEYFdP24lrHmi92MCuwnTCKW"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">양준영</span>
+</div>
+</div>
+</div>
+<!-- ... Simulating more filled seats ... -->
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">26</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMUfhYvaXuGmly8wXM0YYWqlnZS1zhJlmKzPXjIJ5WZaIj7o72veA4Uwhi8hayFLxx5dDY4i897xMoh0utOHozMNZRKvZOr4lW3nVxOtpGwHb7YIYi2gGYeJxNEOxn88YzmYDn0OKgxq2-jUH1Ge09jOgepNad_BUNxCF9JhmJdAc5pYZrS3-thzSiBzoAWyU75avFlfpEH11_hCDUkD9tCGFDX9yaqUvDOXU-oHAcMvDU409zgIPHEp1mVldtw-NjyAiRYPTQQXT6"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">손민규</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">27</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCZUGD8pF9HkylfkWMwuN6xD9mHtd2VJhMCfYIycVtUjWftjkvAzk5tIqulBSXtC2bGdgOO_0SBpkm46V1-hgaF742IymojpdIyXyfiAi_oPNf1unB7yyGW9LD8NgB-3MKe_hzlbh6ztRDuhL6CtxqFtwqNkanL1ACEbbxgh7U5YjSJyZnnZk0yg_vxsW6NZs3I3crKKWpnZQOgEUPjt45ue-DOyU8mHtC3ymVQKqCuaSptcufeD95W54gW3vcRW18WR_mZJ16zfidA"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">배현준</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">28</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-6d1Fsr_scjghnB2zZW4SuDVEr4PA7RHPSZ4wPSlca-PMNaALnxxc9-frqxtQBCx3Ey59_OWQ1dpVpQTRBe_jdV2zkSTiaSLNZxj0Q0hV5oZaJZqtoQdXsBEDCrsL7uTmWbbnsDJvWz-0vUtBpYgMrU8NfgQlx5iimYaS6gt0Se6UP0dMZGaIb2VwoLlXh9hCdsO-AtIsZo0XGPswvJ4sSIVhErALv4FF_kSTvM7jA9uL2wfCvjoh2yc9-5ryf6U_0O05-Ai20IuC"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">조민준</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">29</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMLiplVf_YIIMrzYufaihbSEBbv9-xXTHYvunLsEdJHFYIPepnhaVXpF-1wnhZz3gjvV56oIsvwS3QG6nNPg-SGbMfZdBWlMNWOTcEe3fAOrRU4vb-B9h06NVt78-6nUlXqDDJyOlAN5crZ_y7FF68eqWU73rQq6tzrjzJ5l8SqfE9afBbiVJaqqp3q1rWIJStP6jDZjCVTJmMYOYA8QwNTUCP_k-h6XtqQA5lPyV7ERj0002wfTxFAIC1A4aAKjYV2nBmTmEo7xOf"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">류승민</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">30</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDImP9UOs-kmwD8SBSyH_dBeB18iGGJOZK7y1EBjxblIZrJahAIhp8aqfu8FYbm31UIqFb-3AicZYa81zavQfbLSt92B22PF0nFzxsZXQYhhCoMNy_QcvFQYjAWOlVvGPhkNxFUcak23ckiwFTYbbXwvWD73zGuYAXb3akFMxO-yrjniEvh9sSLN17-wWTJqCFjJoiQ4k2TVF2V2zdPss8ciy6rOYW6cQEGJdoGe4zhk6gnELGCtkzCJo_6FMkMdtPm9twzdHwg2_PS"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">서동현</span>
+</div>
+</div>
+</div>
+<!-- Row 6 -->
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">31</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuX_Dg0mZrdLRh2VG3slph2aOkp8iNhQU-mVqZVfMvunDwAWn3iW44G-Gffwb48BLBIjzwMF_ARIAfWUqoiJ7WyfNZTGAKjoNA-Lcw-pcnnU1WBX50JlUOR9C38HA-e7SRBQzilNRJz1nttZ7i3jjlVwkzXQCM2AkGZEWNXexOI3l5SyQ4NvVir6pOQMhOg9GH3577ymZHuflXAIYEeP7iJcKe7KuWK-2_Q6tLb1xEquoI3d1rGoTvH1LWzMa8aC1Tv2Ak6K0E8Cv-"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">남궁민</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">32</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4AJACy9dnkcu7VdNPddCYJDdTPcLW02vyHuhdWBGrHD4bxB7aAhQk5ha3I76u8XxaL4uavVYZ6nJQh1lKArop4-IGZx7luz7PO46QvpJ0UHkXfiW5q8G7ppakFxc1eft0WMyqgy8eW8GnKkJAXnUpu81mkV6fOvqWkZ1-wWHOyriHKytkcOGZg3xHlNevIYnbUOd-b0PDcA7s8NOxkaB8XrUecV9bGml_VSLJF4unh6qOaWbpF9FiG4iKTrcBWkNmy-n8rVvoqO70"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">탁재훈</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">33</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqZ_QTW7lUgJVqrNfSHmGrPF97WjU757jWZ7GOIHu7IQABkrMOyXJwLnEgukDqDtSUHbDxCU9VJkL3gqmWdtn3MriRed7bXUt6eyA6lTlpqEOEKizCiI6iCgiUMN7WvWfGbjkf02OWJtbuBLq-v-Dr490k1iiC7qWNrO3EeewpnT0sYIP2c2rbr6-0Zf8Ox1dx58BL8M_2Vr_psq2evO8ZZeBF6g98W1Zu3YkUmUeSVVjBDOuzlGuex_aduj_zykLwXLnnf9XPcKQy"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">표지훈</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">34</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVggWJGCSUSG-xrXA4Ugci2qVHBqC2bYPfjNQ5gRPWHq2rR6ePbgfYEjpcbtmPK7zEFszGq9wnCKlWsKc8F5e9TrAXQXmEE3ylbrKVaFOxpCSmJDibAjFiaj3fnb9sBR5SjdeWkJTbDoDoEJwJJKz3OOxlgAMozk0aS5bT93Hpq3-k7ikN248PuGEfPmJkEEWTNZoXKNPfj1u9KfBb7-6aXTlpatbFZG2qrifNcZ2UTaYtdCbxw7xMKNxG-cuPuTKN1nR6vk_Zm5k3"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">하성운</span>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-dark border border-border-dark hover:border-primary/50 hover:ring-1 hover:ring-primary/50 rounded-lg p-3 flex flex-col gap-2 shadow-sm transition-all cursor-grab active:cursor-grabbing min-h-[90px]">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-text-muted group-hover:text-primary transition-colors">35</span>
+<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="출석"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="student portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoTRyvLPlo_e9z8eocHefwkrCo4N54oe-njDmcPyJEJEYlk2SldQkjGvJtDO4j6YoBLf3nS6TTJhsdDV9AcMosjX92UE2s3qLNAeIr_mWUu_DL96vuSduvZk0g0i_HbNHnHBz_LJqRMZ4cNfaIIlLHEki3PkVMZjijL5fMqE6rCMctsdWm5BUiJpIqp2HjWQRSsE4LNoAm0wmX41EbiSt5-GP7B3xj0rmHfX8ZxPC90mxTIkOkc0pcH2bWTdM5gUKHnL2W0pzeMnf7"/>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white leading-tight">황민현</span>
+</div>
+</div>
+</div>
+<!-- Empty Seat -->
+<div class="group flex items-center justify-center bg-transparent border-2 border-dashed border-border-dark rounded-lg p-4 min-h-[90px] opacity-60 hover:opacity-100 transition-opacity cursor-pointer hover:bg-slate-800">
+<div class="flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-text-muted text-3xl">event_seat</span>
+<span class="text-xs text-text-muted">빈 자리</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Info Bar -->
+<footer class="h-12 bg-background-dark border-t border-border-dark flex items-center justify-between px-8 text-xs shrink-0 z-10">
+<div class="flex gap-6 text-text-muted">
+<span>총 <b class="text-white">35</b>명</span>
+<span><b class="text-white">6</b>열 × <b class="text-white">6</b>행</span>
+<span>빈 자리: <b class="text-white">1</b>개</span>
+</div>
+<div class="flex items-center gap-2 text-text-muted">
+<span class="material-symbols-outlined text-sm">info</span>
+<span>학생을 드래그하여 자리를 변경할 수 있습니다.</span>
+</div>
+</footer>
+</main>
+</body></html>

@@ -1,0 +1,166 @@
+import { useMemo } from 'react';
+import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
+import { sortByDate } from '@domain/rules/eventRules';
+import { calculateDDay } from '@domain/rules/ddayRules';
+import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
+
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+interface EventListProps {
+  events: readonly SchoolEvent[];
+  categories: readonly CategoryItem[];
+  onEdit: (event: SchoolEvent) => void;
+  onDelete: (id: string) => void;
+}
+
+function formatEventDate(dateStr: string): string {
+  const parts = dateStr.split('-');
+  const y = parseInt(parts[0] ?? '0', 10);
+  const m = parseInt(parts[1] ?? '1', 10);
+  const d = parseInt(parts[2] ?? '1', 10);
+  const date = new Date(y, m - 1, d);
+  const dayName = DAY_NAMES[date.getDay()];
+  return `${m}월 ${d}일 (${dayName})`;
+}
+
+interface EventCardProps {
+  event: SchoolEvent;
+  categories: readonly CategoryItem[];
+  onEdit: (event: SchoolEvent) => void;
+  onDelete: (id: string) => void;
+}
+
+function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
+  const today = useMemo(() => new Date(), []);
+  const dday = calculateDDay(event.date, today);
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const categoryInfo = getCategoryInfo(event.category, categories);
+  const colors = getColorsForCategory(event.category, categories);
+
+  // 오늘 이벤트인지 확인
+  const eventDate = new Date(
+    parseInt(event.date.split('-')[0] ?? '0', 10),
+    parseInt(event.date.split('-')[1] ?? '1', 10) - 1,
+    parseInt(event.date.split('-')[2] ?? '1', 10),
+  );
+  const isToday = eventDate.getTime() === todayStart.getTime();
+
+  // 멀티데이 이벤트 범위 표시
+  const isMultiDay = event.endDate !== undefined;
+
+  return (
+    <div
+      className={`rounded-2xl p-4 border-l-4 ${colors.border} transition-colors shadow-lg group relative overflow-hidden ${
+        isToday
+          ? 'bg-slate-800/80 ring-2 ring-sp-accent/40 shadow-xl'
+          : 'bg-sp-card hover:bg-slate-800'
+      }`}
+    >
+      {/* TODAY 배지 */}
+      {isToday && (
+        <div className="absolute right-0 top-0 p-1 bg-sp-accent text-white text-[9px] font-bold rounded-bl-lg">
+          TODAY
+        </div>
+      )}
+
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex flex-col">
+          <span className={`text-xs font-semibold ${colors.text} mb-0.5`}>
+            {formatEventDate(event.date)}
+          </span>
+          <h4 className={`text-base font-bold text-white group-hover:${colors.text} transition-colors`}>
+            {event.title}
+          </h4>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* D-Day 배지 */}
+          {event.isDDay && dday > 0 && (
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
+                dday <= 7
+                  ? 'bg-red-900/50 text-red-300 border border-red-700/50'
+                  : 'bg-blue-900/50 text-blue-300 border border-blue-700/50'
+              } ${dday <= 7 ? 'animate-pulse' : ''}`}
+            >
+              D-{dday}
+            </span>
+          )}
+          {/* 카테고리 배지 */}
+          <span className="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">
+            {categoryInfo.name}
+          </span>
+          {/* 편집/삭제 (호버 시) */}
+          <div className="hidden group-hover:flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onEdit(event)}
+              className="p-1 hover:bg-slate-600 rounded transition-colors text-slate-400 hover:text-white"
+            >
+              <span className="material-symbols-outlined text-[16px]">edit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(event.id)}
+              className="p-1 hover:bg-red-900/50 rounded transition-colors text-slate-400 hover:text-red-400"
+            >
+              <span className="material-symbols-outlined text-[16px]">delete</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 시간 / 장소 / 멀티데이 */}
+      <div className="flex items-center gap-4 text-xs text-sp-muted">
+        {event.time && (
+          <div className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">schedule</span>
+            {event.time}
+          </div>
+        )}
+        {event.location && (
+          <div className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">location_on</span>
+            {event.location}
+          </div>
+        )}
+        {isMultiDay && (
+          <div className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">date_range</span>
+            {event.date.split('-').slice(1).map(Number).join('/')} ~ {event.endDate!.split('-').slice(1).map(Number).join('/')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function EventList({ events, categories, onEdit, onDelete }: EventListProps) {
+  const sortedEvents = useMemo(() => sortByDate(events), [events]);
+
+  return (
+    <div className="flex flex-col gap-4 overflow-y-auto pr-2 pb-10 h-full">
+      <div className="flex items-center justify-between mb-2 px-2">
+        <h3 className="text-lg font-bold text-white">다가오는 일정</h3>
+      </div>
+
+      {sortedEvents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
+          <span className="material-symbols-outlined text-[48px] mb-4">event_busy</span>
+          <p className="text-sm">등록된 일정이 없습니다</p>
+        </div>
+      ) : (
+        sortedEvents.map((event) => (
+          <EventCard
+            key={event.id}
+            event={event}
+            categories={categories}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        ))
+      )}
+    </div>
+  );
+}

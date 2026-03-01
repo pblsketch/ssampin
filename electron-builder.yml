@@ -1,0 +1,27 @@
+publish:
+  provider: github
+appId: com.ssampin.app
+productName: 쌤핀
+directories:
+  buildResources: build
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/**/*
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  fileAssociations:
+    - ext: ssampin
+      name: SsamPin 일정 파일
+      description: 쌤핀 일정 공유 파일
+      role: Editor
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  artifactName: ${productName}-${version}-setup.${ext}

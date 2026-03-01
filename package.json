@@ -1,0 +1,43 @@
+{
+  "name": "ssampin",
+  "version": "0.1.0",
+  "description": "쌤핀 - 교사용 데스크톱 대시보드",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "electron:dev": "concurrently -k \"vite\" \"electron .\"",
+    "build": "tsc -b && vite build && tsc -p tsconfig.electron.json",
+    "electron:build": "npm run build && electron-builder",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.{ts,tsx}\""
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "exceljs": "^4.4.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "eslint": "^10.0.2",
+    "gh-pages": "^6.3.0",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.56.1",
+    "vite": "^6.1.0"
+  }
+}

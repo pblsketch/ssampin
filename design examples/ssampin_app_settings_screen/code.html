@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin - Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;family=Noto+Sans+KR:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f172a", // Darker slate for main bg
+                        "card-dark": "#1e293b", // Slate 800 for cards
+                        "input-dark": "#334155", // Slate 700 for inputs
+                        "border-dark": "#475569", // Slate 600 for borders
+                    },
+                    fontFamily: {
+                        display: ["Inter", "Noto Sans KR", "sans-serif"],
+                        body: ["Inter", "Noto Sans KR", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.75rem",
+                        "xl": "1rem",
+                        "2xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for webkit (Chrome, Safari, Edge) */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased selection:bg-primary selection:text-white h-screen overflow-hidden flex">
+<!-- Sidebar -->
+<div class="relative flex h-full w-64 flex-col border-r border-border-dark/30 bg-background-dark overflow-y-auto shrink-0 z-20">
+<div class="flex flex-col h-full p-4 justify-between">
+<div class="flex flex-col gap-6">
+<!-- User Profile -->
+<div class="flex items-center gap-3 px-2">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border border-border-dark" data-alt="User profile picture placeholder" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDgQHrvLCPcJkY0qFudeCvc8s41tTkXpSp3_foZ_EuXqEL5jC9Ywa9BqOHbizkXDuVR_N13pqkgXi0HK97v1qfq7GsLf8P6Y_grH7iI6JNHPflAlT87FsX1V6DQkEIM_LS1e-iuH1vllfB5YC9-cFhvEZmHc_4zBdHbbpVEC10xvgsCpWQMi2KT8vWNu57cuHwi41IOoklGiADG08GGfG_A92PVCjiBGcss6YjDwpe8cEbYRM181RtuxxpD6mO1hcupUZs00npek2DH");'></div>
+<div class="flex flex-col">
+<h1 class="text-white text-base font-bold leading-tight">쌤핀</h1>
+<p class="text-slate-400 text-xs font-medium">교사용 대시보드</p>
+</div>
+</div>
+<!-- Navigation -->
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">home</span>
+<span class="text-sm font-medium">홈</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">groups</span>
+<span class="text-sm font-medium">학생 관리</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">calendar_month</span>
+<span class="text-sm font-medium">시간표</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">grid_view</span>
+<span class="text-sm font-medium">자리 배치</span>
+</a>
+<div class="my-2 h-px bg-border-dark/30 mx-3"></div>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary text-white shadow-lg shadow-primary/20 transition-all" href="#">
+<span class="material-symbols-outlined text-[20px] font-variation-settings-'FILL'1">settings</span>
+<span class="text-sm font-bold">설정</span>
+</a>
+</nav>
+</div>
+<!-- Bottom Actions -->
+<div class="flex flex-col gap-2">
+<button class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors w-full text-left">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+<span class="text-sm font-medium">로그아웃</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-full overflow-hidden bg-background-dark relative">
+<!-- Header -->
+<header class="flex items-center justify-between px-8 py-6 sticky top-0 bg-background-dark/95 backdrop-blur-sm z-10 border-b border-border-dark/30">
+<div>
+<h2 class="text-3xl font-black text-white tracking-tight">⚙️ 설정</h2>
+<p class="text-slate-400 text-sm mt-1">앱의 환경설정을 관리하세요.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-5 py-2.5 rounded-lg border border-border-dark text-slate-300 hover:bg-white/5 hover:text-white font-medium text-sm transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">refresh</span>
+                    초기화
+                </button>
+<button class="px-5 py-2.5 rounded-lg bg-primary hover:bg-blue-600 text-white font-medium text-sm shadow-lg shadow-primary/25 transition-all flex items-center gap-2 transform active:scale-95">
+<span class="material-symbols-outlined text-[18px]">save</span>
+                    저장
+                </button>
+</div>
+</header>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto p-8 pb-32">
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-7xl mx-auto">
+<!-- Card 1: School/Class Info -->
+<section class="bg-card-dark rounded-xl border border-border-dark/50 p-6 shadow-sm">
+<div class="flex items-center gap-3 mb-6">
+<div class="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+<span class="material-symbols-outlined">school</span>
+</div>
+<h3 class="text-lg font-bold text-white">학교/학급 정보</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+<div class="space-y-2">
+<label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">학교명</label>
+<input class="w-full bg-input-dark border border-border-dark rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" type="text" value="온양여자고등학교"/>
+</div>
+<div class="space-y-2">
+<label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">학급명</label>
+<input class="w-full bg-input-dark border border-border-dark rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" type="text" value="1학년 2반"/>
+</div>
+<div class="space-y-2">
+<label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">교사명</label>
+<input class="w-full bg-input-dark border border-border-dark rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" type="text" value="김준일"/>
+</div>
+<div class="space-y-2">
+<label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">담당 과목</label>
+<input class="w-full bg-input-dark border border-border-dark rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" type="text" value="국어"/>
+</div>
+</div>
+</section>
+<!-- Card 2: Period Time Settings -->
+<section class="bg-card-dark rounded-xl border border-border-dark/50 p-6 shadow-sm xl:row-span-2">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-3">
+<div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+<span class="material-symbols-outlined">schedule</span>
+</div>
+<h3 class="text-lg font-bold text-white">교시 시간 설정</h3>
+</div>
+<button class="text-xs font-medium text-primary hover:text-blue-400 flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">add</span>
+                            교시 추가
+                        </button>
+</div>
+<div class="overflow-hidden rounded-lg border border-border-dark">
+<table class="w-full text-sm text-left">
+<thead class="bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold">
+<tr>
+<th class="px-4 py-3 w-20">교시</th>
+<th class="px-4 py-3">시작</th>
+<th class="px-4 py-3">종료</th>
+<th class="px-4 py-3 w-10"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-dark">
+<tr class="bg-card-dark hover:bg-white/5 transition-colors">
+<td class="px-4 py-2 font-medium text-white">1교시</td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="09:00"/></td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="09:50"/></td>
+<td class="px-4 py-2 text-center"><button class="text-slate-500 hover:text-red-400"><span class="material-symbols-outlined text-[18px]">close</span></button></td>
+</tr>
+<tr class="bg-card-dark hover:bg-white/5 transition-colors">
+<td class="px-4 py-2 font-medium text-white">2교시</td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="10:00"/></td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="10:50"/></td>
+<td class="px-4 py-2 text-center"><button class="text-slate-500 hover:text-red-400"><span class="material-symbols-outlined text-[18px]">close</span></button></td>
+</tr>
+<tr class="bg-card-dark hover:bg-white/5 transition-colors">
+<td class="px-4 py-2 font-medium text-white">3교시</td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="11:00"/></td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="11:50"/></td>
+<td class="px-4 py-2 text-center"><button class="text-slate-500 hover:text-red-400"><span class="material-symbols-outlined text-[18px]">close</span></button></td>
+</tr>
+<!-- Lunch Break -->
+<tr class="bg-slate-800/50 border-y-2 border-slate-700/50">
+<td class="px-4 py-3 font-medium text-slate-400 italic">점심</td>
+<td class="px-4 py-3 text-slate-400">12:00</td>
+<td class="px-4 py-3 text-slate-400">12:50</td>
+<td class="px-4 py-3"></td>
+</tr>
+<tr class="bg-card-dark hover:bg-white/5 transition-colors">
+<td class="px-4 py-2 font-medium text-white">4교시</td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="13:00"/></td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="13:50"/></td>
+<td class="px-4 py-2 text-center"><button class="text-slate-500 hover:text-red-400"><span class="material-symbols-outlined text-[18px]">close</span></button></td>
+</tr>
+<tr class="bg-card-dark hover:bg-white/5 transition-colors">
+<td class="px-4 py-2 font-medium text-white">5교시</td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="14:00"/></td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="14:50"/></td>
+<td class="px-4 py-2 text-center"><button class="text-slate-500 hover:text-red-400"><span class="material-symbols-outlined text-[18px]">close</span></button></td>
+</tr>
+<tr class="bg-card-dark hover:bg-white/5 transition-colors">
+<td class="px-4 py-2 font-medium text-white">6교시</td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="15:00"/></td>
+<td class="px-4 py-2"><input class="bg-transparent text-slate-300 focus:text-white focus:outline-none border-none p-0 w-full" type="time" value="15:50"/></td>
+<td class="px-4 py-2 text-center"><button class="text-slate-500 hover:text-red-400"><span class="material-symbols-outlined text-[18px]">close</span></button></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Card 3: Widget Settings -->
+<section class="bg-card-dark rounded-xl border border-border-dark/50 p-6 shadow-sm">
+<div class="flex items-center gap-3 mb-6">
+<div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+<span class="material-symbols-outlined">widgets</span>
+</div>
+<h3 class="text-lg font-bold text-white">위젯 설정</h3>
+</div>
+<div class="space-y-6">
+<div class="space-y-3">
+<div class="flex justify-between">
+<span class="text-sm font-medium text-slate-300">기본 투명도</span>
+<span class="text-sm font-bold text-primary">80%</span>
+</div>
+<div class="relative w-full h-2 bg-slate-700 rounded-full">
+<div class="absolute top-0 left-0 h-full bg-primary rounded-full" style="width: 80%"></div>
+<div class="absolute top-1/2 -translate-y-1/2 left-[80%] w-4 h-4 bg-white rounded-full shadow-md cursor-pointer hover:scale-110 transition-transform"></div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-sm font-medium text-slate-200">항상 위에 표시</span>
+<span class="text-xs text-slate-500">다른 창보다 항상 위에 고정합니다.</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-border-dark/30">
+<div class="flex flex-col">
+<span class="text-sm font-medium text-slate-200">시작 시 위젯 모드</span>
+<span class="text-xs text-slate-500">앱 실행 시 전체화면 대신 위젯으로 시작합니다.</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</section>
+<!-- Card 4: Seating Settings -->
+<section class="bg-card-dark rounded-xl border border-border-dark/50 p-6 shadow-sm">
+<div class="flex items-center gap-3 mb-6">
+<div class="p-2 rounded-lg bg-orange-500/10 text-orange-400">
+<span class="material-symbols-outlined">chair</span>
+</div>
+<h3 class="text-lg font-bold text-white">좌석 설정</h3>
+</div>
+<div class="flex items-center justify-between gap-8">
+<div class="flex-1 space-y-2">
+<label class="text-sm font-medium text-slate-400">행 수 (Rows)</label>
+<div class="flex items-center bg-input-dark rounded-lg border border-border-dark p-1">
+<button class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 rounded-md transition-colors"><span class="material-symbols-outlined">remove</span></button>
+<input class="flex-1 bg-transparent text-center text-white font-bold text-lg focus:outline-none border-none p-0" type="number" value="6"/>
+<button class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 rounded-md transition-colors"><span class="material-symbols-outlined">add</span></button>
+</div>
+</div>
+<div class="flex-1 space-y-2">
+<label class="text-sm font-medium text-slate-400">열 수 (Columns)</label>
+<div class="flex items-center bg-input-dark rounded-lg border border-border-dark p-1">
+<button class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 rounded-md transition-colors"><span class="material-symbols-outlined">remove</span></button>
+<input class="flex-1 bg-transparent text-center text-white font-bold text-lg focus:outline-none border-none p-0" type="number" value="6"/>
+<button class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 rounded-md transition-colors"><span class="material-symbols-outlined">add</span></button>
+</div>
+</div>
+</div>
+</section>
+<!-- Card 5: System Settings -->
+<section class="bg-card-dark rounded-xl border border-border-dark/50 p-6 shadow-sm">
+<div class="flex items-center gap-3 mb-6">
+<div class="p-2 rounded-lg bg-slate-500/10 text-slate-400">
+<span class="material-symbols-outlined">settings_applications</span>
+</div>
+<h3 class="text-lg font-bold text-white">시스템</h3>
+</div>
+<div class="space-y-4 divide-y divide-border-dark/30">
+<div class="flex items-center justify-between pb-2">
+<div class="flex flex-col">
+<span class="text-sm font-medium text-slate-200">시작 시 자동 실행</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between py-4">
+<div class="flex flex-col">
+<span class="text-sm font-medium text-slate-200">알림 소리</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between pt-4">
+<div class="flex flex-col">
+<span class="text-sm font-medium text-slate-200">방해 금지 시간</span>
+<span class="text-xs text-slate-500">지정된 시간에는 알림을 끄도록 설정합니다.</span>
+</div>
+<div class="flex items-center gap-2 bg-input-dark px-3 py-1.5 rounded-lg border border-border-dark">
+<input class="bg-transparent text-sm text-white focus:outline-none p-0 w-[60px]" type="time" value="22:00"/>
+<span class="text-slate-400 text-sm">~</span>
+<input class="bg-transparent text-sm text-white focus:outline-none p-0 w-[60px]" type="time" value="07:00"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Card 6: Schedule Categories -->
+<section class="bg-card-dark rounded-xl border border-border-dark/50 p-6 shadow-sm">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-3">
+<div class="p-2 rounded-lg bg-pink-500/10 text-pink-400">
+<span class="material-symbols-outlined">category</span>
+</div>
+<h3 class="text-lg font-bold text-white">일정 카테고리 관리</h3>
+</div>
+<button class="text-xs font-medium text-primary hover:text-blue-400 flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">add</span>
+                            카테고리 추가
+                        </button>
+</div>
+<div class="space-y-2">
+<div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors group border border-transparent hover:border-border-dark/50">
+<div class="flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+<span class="text-sm font-medium text-slate-200">학교 행사</span>
+</div>
+<button class="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors group border border-transparent hover:border-border-dark/50">
+<div class="flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+<span class="text-sm font-medium text-slate-200">학급 일정</span>
+</div>
+<button class="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors group border border-transparent hover:border-border-dark/50">
+<div class="flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></div>
+<span class="text-sm font-medium text-slate-200">부서 업무</span>
+</div>
+<button class="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors group border border-transparent hover:border-border-dark/50">
+<div class="flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div>
+<span class="text-sm font-medium text-slate-200">나무학교</span>
+</div>
+<button class="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors group border border-transparent hover:border-border-dark/50">
+<div class="flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.5)]"></div>
+<span class="text-sm font-medium text-slate-200">기타</span>
+</div>
+<button class="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors group border border-transparent hover:border-border-dark/50">
+<div class="flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div>
+<span class="text-sm font-medium text-slate-200">연수</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+<button class="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Bottom Footer Area -->
+<div class="mt-12 text-center">
+<p class="text-slate-600 text-xs">SsamPin App Version 1.2.0 (Build 20231024)</p>
+</div>
+</div>
+</main>
+</body></html>

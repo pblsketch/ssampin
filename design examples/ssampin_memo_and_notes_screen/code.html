@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin - Memo</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;family=Noto+Sans+KR:wght@300;400;500;700&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#101723", // Sidebar/Nav background
+                        "canvas-dark": "#0d1117",     // Main content background
+                    },
+                    fontFamily: {
+                        display: ["Inter", "Noto Sans KR", "sans-serif"],
+                        sans: ["Inter", "Noto Sans KR", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'paper': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for better aesthetics in dark mode */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #101723;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #223149;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3c83f6;
+        }
+        
+        .paper-texture {
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body class="bg-background-dark text-slate-100 font-display antialiased overflow-hidden h-screen flex">
+<!-- Side Navigation Bar -->
+<aside class="w-64 h-full flex flex-col bg-background-dark border-r border-[#223149] shrink-0 z-20">
+<div class="flex flex-col h-full p-4 justify-between">
+<div class="flex flex-col gap-8">
+<!-- User Profile -->
+<div class="flex gap-3 items-center">
+<div class="bg-center bg-no-repeat bg-cover rounded-full h-10 w-10 ring-2 ring-[#223149]" data-alt="Profile picture of a teacher" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBQ41S3_Ao_vRzN5MO3qvuN_w7KQcdhNHEUONaVUPIVk_euB-mtA0J40pLeD4nZe5aeju1G7ugSdj2CsjUMGfLqCLpVSKQiI0HrG0TFHA8-B1wsNIEDJKM6uIR6kvmyi9ZL4_LgHM0dajAs3I8lnZSEQUvj_8BeT7Ei4Bl-rhcrhhC8ABdfJ4HI-ZmbMwVxI-P_1ODW7NIFsI8uEtCgbR2MgQWOmHxs0Jv1fkWgzVixK-nCYjuJ1bBf0GrA3RIdUEEvPEEG2tx6EFf2");'></div>
+<div class="flex flex-col">
+<h1 class="text-white text-base font-bold leading-normal">쌤핀 (SsamPin)</h1>
+<p class="text-slate-400 text-xs font-normal leading-normal">선생님을 위한 대시보드</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav class="flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-[#1a2436] hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined text-[24px]">home</span>
+<span class="text-sm font-medium">홈</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-[#1a2436] hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined text-[24px]">calendar_month</span>
+<span class="text-sm font-medium">시간표</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-[#1a2436] hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined text-[24px]">group</span>
+<span class="text-sm font-medium">자리배치</span>
+</a>
+<!-- Active State -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary text-white shadow-lg shadow-primary/20" href="#">
+<span class="material-symbols-outlined text-[24px] fill-1">edit_note</span>
+<span class="text-sm font-bold">📝 메모</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-[#1a2436] hover:text-white transition-colors group" href="#">
+<span class="material-symbols-outlined text-[24px]">settings</span>
+<span class="text-sm font-medium">설정</span>
+</a>
+</nav>
+</div>
+<!-- Logout -->
+<button class="flex w-full items-center justify-center gap-2 rounded-lg py-2.5 bg-[#1a2436] text-slate-300 hover:bg-[#223149] hover:text-white transition-colors text-sm font-semibold">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+<span>로그아웃</span>
+</button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-full bg-canvas-dark relative overflow-hidden">
+<!-- Header -->
+<header class="h-16 flex items-center justify-between px-8 border-b border-[#223149] bg-background-dark/80 backdrop-blur-sm z-10">
+<div class="flex flex-col">
+<h2 class="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+<span>📝</span> 나의 메모장
+                </h2>
+</div>
+<div class="flex items-center gap-6">
+<!-- Color Picker -->
+<div class="flex items-center gap-3 bg-[#1a2436] px-4 py-2 rounded-full border border-[#223149]">
+<span class="text-xs font-medium text-slate-400 mr-1">색상 선택</span>
+<label class="cursor-pointer group relative">
+<input checked="" class="peer sr-only" name="note-color" type="radio"/>
+<div class="w-6 h-6 rounded-full bg-yellow-300 ring-2 ring-transparent peer-checked:ring-white transition-all hover:scale-110"></div>
+</label>
+<label class="cursor-pointer group relative">
+<input class="peer sr-only" name="note-color" type="radio"/>
+<div class="w-6 h-6 rounded-full bg-pink-300 ring-2 ring-transparent peer-checked:ring-white transition-all hover:scale-110"></div>
+</label>
+<label class="cursor-pointer group relative">
+<input class="peer sr-only" name="note-color" type="radio"/>
+<div class="w-6 h-6 rounded-full bg-green-300 ring-2 ring-transparent peer-checked:ring-white transition-all hover:scale-110"></div>
+</label>
+<label class="cursor-pointer group relative">
+<input class="peer sr-only" name="note-color" type="radio"/>
+<div class="w-6 h-6 rounded-full bg-blue-300 ring-2 ring-transparent peer-checked:ring-white transition-all hover:scale-110"></div>
+</label>
+</div>
+<!-- Add Button -->
+<button class="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition-all active:scale-95 font-bold text-sm">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                    새 메모
+                </button>
+</div>
+</header>
+<!-- Canvas Area -->
+<div class="flex-1 relative p-8 overflow-auto" style="background-image: radial-gradient(#223149 1px, transparent 1px); background-size: 24px 24px;">
+<p class="absolute bottom-6 right-6 text-slate-600 text-sm flex items-center gap-2 pointer-events-none select-none">
+<span class="material-symbols-outlined text-[18px]">touch_app</span>
+                더블 클릭하여 수정
+            </p>
+<!-- Yellow Memo (Top-left) -->
+<div class="absolute top-20 left-20 w-[280px] min-h-[240px] bg-yellow-200 text-slate-800 rounded-sm shadow-paper paper-texture -rotate-2 transform hover:rotate-0 hover:scale-105 transition-transform duration-300 cursor-move group">
+<div class="h-8 w-full flex justify-between items-center px-3 pt-2">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-yellow-500/40"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-yellow-500/40"></div>
+</div>
+<button class="text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<div class="p-5 pt-1 flex flex-col gap-2 h-full">
+<h3 class="font-bold text-lg border-b border-slate-800/10 pb-2 mb-1 leading-snug">3반 홍길동 상담</h3>
+<div class="font-handwriting text-slate-700 leading-relaxed text-sm">
+<p>학습 부진 원인 파악</p>
+<p class="mt-2 text-xs text-slate-500">2023. 10. 24 (화) 14:00</p>
+</div>
+</div>
+<!-- Fold effect -->
+<div class="absolute bottom-0 right-0 border-t-[20px] border-r-[20px] border-t-yellow-300 border-r-transparent opacity-50 shadow-sm"></div>
+</div>
+<!-- Pink Memo (Center) -->
+<div class="absolute top-32 left-[420px] w-[300px] min-h-[260px] bg-pink-200 text-slate-800 rounded-sm shadow-paper paper-texture rotate-1 transform hover:rotate-0 hover:scale-105 transition-transform duration-300 cursor-move group z-10">
+<div class="h-8 w-full flex justify-between items-center px-3 pt-2">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-pink-500/40"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-pink-500/40"></div>
+</div>
+<button class="text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<div class="p-5 pt-1 flex flex-col gap-2 h-full">
+<h3 class="font-bold text-lg border-b border-slate-800/10 pb-2 mb-1 leading-snug">교무회의 안건</h3>
+<div class="font-handwriting text-slate-700 leading-relaxed text-sm flex flex-col gap-1">
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-[16px] mt-0.5">check_box_outline_blank</span>
+<span>수행평가 기준 논의</span>
+</div>
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-[16px] mt-0.5">check_box_outline_blank</span>
+<span>체험학습 일정 확정</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Green Memo (Top-right) -->
+<div class="absolute top-16 right-32 w-[260px] min-h-[220px] bg-green-200 text-slate-800 rounded-sm shadow-paper paper-texture rotate-3 transform hover:rotate-0 hover:scale-105 transition-transform duration-300 cursor-move group">
+<div class="h-8 w-full flex justify-between items-center px-3 pt-2">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-green-500/40"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-green-500/40"></div>
+</div>
+<button class="text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<div class="p-5 pt-1 flex flex-col gap-2 h-full">
+<div class="flex items-center justify-between border-b border-slate-800/10 pb-2 mb-1">
+<h3 class="font-bold text-lg leading-snug">학습지 준비</h3>
+<span class="px-2 py-0.5 bg-green-300 text-green-900 text-[10px] font-bold rounded-full uppercase">Urgent</span>
+</div>
+<div class="font-handwriting text-slate-700 leading-relaxed text-sm">
+<p>3단원 프린트 30부</p>
+<p class="text-slate-500 mt-2 text-xs">급식실 앞 복사기 이용</p>
+</div>
+</div>
+</div>
+<!-- Blue Memo (Bottom-left) -->
+<div class="absolute bottom-24 left-32 w-[280px] min-h-[240px] bg-blue-200 text-slate-800 rounded-sm shadow-paper paper-texture -rotate-1 transform hover:rotate-0 hover:scale-105 transition-transform duration-300 cursor-move group">
+<div class="h-8 w-full flex justify-between items-center px-3 pt-2">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-blue-500/40"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-blue-500/40"></div>
+</div>
+<button class="text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<div class="p-5 pt-1 flex flex-col gap-2 h-full">
+<h3 class="font-bold text-lg border-b border-slate-800/10 pb-2 mb-1 leading-snug">나무학교 워크숍</h3>
+<div class="font-handwriting text-slate-700 leading-relaxed text-sm">
+<p class="font-semibold mb-1">준비물 리스트:</p>
+<ul class="list-disc pl-4 space-y-1">
+<li>노트북</li>
+<li>교재</li>
+<li>간식 (쿠키, 커피)</li>
+</ul>
+</div>
+</div>
+<!-- Tape effect -->
+<div class="absolute -top-3 left-1/2 -translate-x-1/2 w-24 h-8 bg-white/30 backdrop-blur-sm rotate-1 shadow-sm"></div>
+</div>
+</div>
+</main>
+</body></html>

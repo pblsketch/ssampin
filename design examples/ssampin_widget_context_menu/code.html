@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin Widget Context Menu</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Noto+Sans+KR:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#101722",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "Noto Sans KR", "Segoe UI", "sans-serif"],
+                        "sans": ["Inter", "Noto Sans KR", "Segoe UI", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                    backdropBlur: {
+                        'xs': '2px',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for better aesthetics if needed */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        
+        /* Acrylic Effect Simulation */
+        .acrylic-panel {
+            background-color: rgba(30, 41, 59, 0.75); /* Slate-800 with opacity */
+            backdrop-filter: blur(20px) saturate(125%);
+            -webkit-backdrop-filter: blur(20px) saturate(125%);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Mica Hover Effect */
+        .menu-item:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen flex items-center justify-center font-display overflow-hidden relative selection:bg-primary selection:text-white">
+<!-- Background Simulation (Blurred Widget Context) -->
+<!-- This div simulates the desktop background and the "SsamPin" widget behind the menu -->
+<div class="absolute inset-0 z-0">
+<!-- Abstract Desktop Wallpaper -->
+<div class="w-full h-full bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&amp;w=2564&amp;auto=format&amp;fit=crop')] bg-cover bg-center opacity-40" data-alt="Abstract blue fluid dark background"></div>
+<!-- Blurred SsamPin Widget Representation -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-[#1e293b]/90 rounded-2xl shadow-2xl p-8 flex flex-col gap-6 blur-sm border border-slate-700/50">
+<!-- Header of blurred widget -->
+<div class="flex justify-between items-center opacity-50">
+<div class="h-8 w-32 bg-slate-600/50 rounded"></div>
+<div class="flex gap-2">
+<div class="size-4 bg-slate-600/50 rounded-full"></div>
+<div class="size-4 bg-slate-600/50 rounded-full"></div>
+</div>
+</div>
+<!-- Body of blurred widget -->
+<div class="grid grid-cols-7 gap-4 flex-1 opacity-50">
+<div class="col-span-1 h-full bg-slate-700/30 rounded-lg"></div>
+<div class="col-span-1 h-full bg-slate-700/30 rounded-lg"></div>
+<div class="col-span-1 h-full bg-slate-700/30 rounded-lg bg-primary/20"></div>
+<div class="col-span-1 h-full bg-slate-700/30 rounded-lg"></div>
+<div class="col-span-1 h-full bg-slate-700/30 rounded-lg"></div>
+<div class="col-span-2 h-full bg-slate-700/30 rounded-lg"></div>
+</div>
+</div>
+</div>
+<!-- Right Click Context Menu -->
+<div class="relative z-10 w-[280px] acrylic-panel rounded-xl text-slate-200 shadow-[0_20px_40px_-5px_rgba(0,0,0,0.6)] animate-[fadeIn_0.2s_ease-out] ring-1 ring-white/10">
+<!-- Menu Header (Optional Context) -->
+<div class="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-white/5 mx-1 mb-1">
+            SsamPin Menu
+        </div>
+<div class="flex flex-col p-1.5 gap-1">
+<!-- Item 1: Always on Top -->
+<button class="menu-item group flex items-center justify-between w-full px-3 py-2 rounded-[6px] transition-colors duration-150 outline-none focus:bg-white/10 text-left">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-slate-200">push_pin</span>
+<span class="text-[14px] leading-none text-slate-200 font-normal pt-0.5">항상 위에 표시</span>
+</div>
+<!-- Checkmark (Active State) -->
+<span class="material-symbols-outlined text-[18px] text-primary">check</span>
+</button>
+<!-- Divider -->
+<div class="h-[1px] w-[calc(100%-24px)] mx-auto bg-white/10 my-1"></div>
+<!-- Item 2: Full Screen -->
+<button class="menu-item group flex items-center gap-3 w-full px-3 py-2 rounded-[6px] transition-colors duration-150 outline-none focus:bg-white/10 text-left">
+<span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-slate-200">fullscreen</span>
+<span class="text-[14px] leading-none text-slate-200 font-normal pt-0.5">전체 화면으로 전환</span>
+</button>
+<!-- Divider -->
+<div class="h-[1px] w-[calc(100%-24px)] mx-auto bg-white/10 my-1"></div>
+<!-- Item 3: Transparency Control -->
+<div class="flex flex-col px-3 py-2 rounded-[6px] hover:bg-transparent">
+<div class="flex items-center gap-3 mb-3">
+<span class="material-symbols-outlined text-[20px] text-slate-400">opacity</span>
+<span class="text-[14px] leading-none text-slate-200 font-normal pt-0.5">투명도 조절</span>
+</div>
+<!-- Slider Component -->
+<div class="flex items-center gap-3 pl-8 pr-1">
+<div class="relative w-full h-1 bg-slate-600/50 rounded-full">
+<!-- Track -->
+<div class="absolute left-0 top-0 h-full bg-primary rounded-full" style="width: 70%;"></div>
+<!-- Thumb -->
+<div class="absolute top-1/2 -translate-y-1/2 bg-white rounded-full shadow-md size-3.5 border border-slate-300 dark:border-slate-600 hover:scale-110 transition-transform cursor-pointer" style="left: 70%;"></div>
+</div>
+<span class="text-xs text-slate-400 font-mono w-6 text-right">70</span>
+</div>
+</div>
+<!-- Divider -->
+<div class="h-[1px] w-[calc(100%-24px)] mx-auto bg-white/10 my-1"></div>
+<!-- Item 4: Size Control -->
+<button class="menu-item group flex items-center justify-between w-full px-3 py-2 rounded-[6px] transition-colors duration-150 outline-none focus:bg-white/10 text-left">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-slate-200">aspect_ratio</span>
+<span class="text-[14px] leading-none text-slate-200 font-normal pt-0.5">크기 조절</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-slate-500 group-hover:text-slate-300">chevron_right</span>
+</button>
+<!-- Divider -->
+<div class="h-[1px] w-[calc(100%-24px)] mx-auto bg-white/10 my-1"></div>
+<!-- Item 5: Settings -->
+<button class="menu-item group flex items-center gap-3 w-full px-3 py-2 rounded-[6px] transition-colors duration-150 outline-none focus:bg-white/10 text-left">
+<span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-slate-200">settings</span>
+<span class="text-[14px] leading-none text-slate-200 font-normal pt-0.5">설정</span>
+</button>
+<!-- Item 6: Close -->
+<button class="menu-item group flex items-center gap-3 w-full px-3 py-2 rounded-[6px] transition-colors duration-150 outline-none focus:bg-white/10 text-left hover:bg-red-500/20">
+<span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-red-400">close</span>
+<span class="text-[14px] leading-none text-slate-200 group-hover:text-red-100 font-normal pt-0.5">닫기</span>
+</button>
+</div>
+</div>
+<!-- Mouse Cursor Simulation -->
+<div class="absolute z-50 pointer-events-none drop-shadow-md" style="top: calc(50% + 120px); left: calc(50% + 100px);">
+<svg fill="none" height="24" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M5.5 3.5L11.5 21.5L14.5 14L22 11.5L5.5 3.5Z" fill="white" stroke="black" stroke-linejoin="round" stroke-width="1.5"></path>
+</svg>
+</div>
+</body></html>

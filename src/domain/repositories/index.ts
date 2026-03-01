@@ -1,0 +1,9 @@
+export type { IScheduleRepository } from './IScheduleRepository';
+export type { ISeatingRepository } from './ISeatingRepository';
+export type { IEventsRepository } from './IEventsRepository';
+export type { IMemoRepository } from './IMemoRepository';
+export type { ITodoRepository } from './ITodoRepository';
+export type { ISettingsRepository } from './ISettingsRepository';
+export type { IStudentRecordsRepository } from './IStudentRecordsRepository';
+export type { IMessageRepository } from './IMessageRepository';
+export type { IStudentRepository } from './IStudentRepository';

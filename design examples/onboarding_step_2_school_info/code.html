@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin - Onboarding Step 2</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+KR:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#101722",
+                        "slate-850": "#1e293b",
+                        "slate-900": "#0f172a",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "Noto Sans KR", "sans-serif"],
+                        "body": ["Inter", "Noto Sans KR", "sans-serif"],
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', 'Noto Sans KR', sans-serif; }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-display">
+<!-- Main Layout -->
+<div class="relative flex h-full min-h-screen w-full flex-col overflow-x-hidden">
+<!-- Header -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-slate-200 dark:border-slate-800 px-10 py-4 bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+<div class="flex items-center gap-3">
+<div class="size-8 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-3xl">school</span>
+</div>
+<h2 class="text-slate-900 dark:text-white text-xl font-bold tracking-tight">SsamPin</h2>
+</div>
+<div class="flex flex-1 justify-end gap-6 items-center">
+<div class="flex items-center gap-6 hidden sm:flex">
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary text-sm font-medium transition-colors" href="#">도움말</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary text-sm font-medium transition-colors" href="#">문의하기</a>
+</div>
+<div class="bg-center bg-no-repeat bg-cover rounded-full size-10 border-2 border-slate-200 dark:border-slate-700" data-alt="User profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDdLFkxXCST6xmaukimjNmVcP0yzLoiGhCvbwuWxRQm5zUH4WT1i65QKIIXXG2TzsmJ5O0CSv_Cpboeo_h4UpkUAGfp29_tUWFlhiRzeRrPhRQEqWm0bPyeMqSHPcGduwKTC6D5P-GmGRdKegNQ_VEsB8r82EVguuheDftfx9RQeHfmSCZwADL4hhKFeQPyZTVG79b5lhYUMhYjuVtQyzOxyz16NhaK4-bVMj66RyTMxbheMMjpx83qL8zse1VHib1tSmPNoxx-RFdk");'></div>
+</div>
+</header>
+<!-- Content Container -->
+<main class="flex-1 flex flex-col items-center justify-start py-10 px-4 sm:px-6 lg:px-8">
+<div class="w-full max-w-[640px] flex flex-col gap-8">
+<!-- Stepper -->
+<div class="flex flex-col gap-4 items-center w-full">
+<div class="flex items-center gap-4">
+<!-- Step 1: Completed -->
+<div class="flex items-center justify-center w-8 h-8 rounded-full bg-primary/20 text-primary border border-primary/30">
+<span class="material-symbols-outlined text-sm font-bold">check</span>
+</div>
+<div class="w-12 h-[2px] bg-primary/30"></div>
+<!-- Step 2: Active -->
+<div class="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-white shadow-[0_0_15px_rgba(60,131,246,0.5)]">
+<span class="text-sm font-bold">2</span>
+</div>
+<div class="w-12 h-[2px] bg-slate-200 dark:bg-slate-700"></div>
+<!-- Step 3: Pending -->
+<div class="flex items-center justify-center w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 bg-transparent">
+<span class="text-sm font-medium">3</span>
+</div>
+<div class="w-12 h-[2px] bg-slate-200 dark:bg-slate-700"></div>
+<!-- Step 4: Pending -->
+<div class="flex items-center justify-center w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 bg-transparent">
+<span class="text-sm font-medium">4</span>
+</div>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium">학교 정보 입력</p>
+</div>
+<!-- Main Form Card -->
+<div class="bg-white dark:bg-slate-850 rounded-2xl p-8 shadow-xl border border-slate-100 dark:border-slate-800">
+<div class="mb-8 text-center">
+<h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-2">학교 정보</h1>
+<p class="text-slate-500 dark:text-slate-400 text-sm">재직 중인 학교와 담당 정보를 입력해주세요.</p>
+</div>
+<form class="flex flex-col gap-6" onsubmit="event.preventDefault();">
+<!-- School Name Input -->
+<div class="flex flex-col gap-2">
+<label class="text-slate-700 dark:text-slate-300 text-sm font-semibold ml-1">학교명</label>
+<div class="relative group">
+<input class="w-full h-12 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-4 pr-12 text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="학교 이름을 검색하세요 (예: 서울초등학교)" type="text"/>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors pointer-events-none">
+<span class="material-symbols-outlined">search</span>
+</div>
+</div>
+</div>
+<!-- Grade & Class (Side by Side) -->
+<div class="flex flex-row gap-4">
+<div class="flex flex-col gap-2 flex-1">
+<label class="text-slate-700 dark:text-slate-300 text-sm font-semibold ml-1">학년</label>
+<div class="relative">
+<select class="appearance-none w-full h-12 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-4 pr-10 text-slate-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer">
+<option disabled="" selected="" value="">선택</option>
+<option value="1">1학년</option>
+<option value="2">2학년</option>
+<option value="3">3학년</option>
+<option value="4">4학년</option>
+<option value="5">5학년</option>
+<option value="6">6학년</option>
+</select>
+<div class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-2 flex-1">
+<label class="text-slate-700 dark:text-slate-300 text-sm font-semibold ml-1">반</label>
+<div class="relative">
+<select class="appearance-none w-full h-12 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-4 pr-10 text-slate-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer">
+<option disabled="" selected="" value="">선택</option>
+<option value="1">1반</option>
+<option value="2">2반</option>
+<option value="3">3반</option>
+<option value="4">4반</option>
+<option value="5">5반</option>
+</select>
+<div class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Teacher Name -->
+<div class="flex flex-col gap-2">
+<label class="text-slate-700 dark:text-slate-300 text-sm font-semibold ml-1">교사명</label>
+<input class="w-full h-12 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="선생님 성함을 입력해주세요" type="text" value="김선생"/>
+</div>
+<!-- Subjects (Multi-select Chips) -->
+<div class="flex flex-col gap-3">
+<label class="text-slate-700 dark:text-slate-300 text-sm font-semibold ml-1">담당 과목</label>
+<div class="flex flex-wrap gap-2">
+<!-- Selected Chip -->
+<button class="group relative flex items-center gap-2 rounded-full border border-primary bg-primary/10 dark:bg-primary/20 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors" type="button">
+<span>국어</span>
+<span class="material-symbols-outlined text-[16px]">check</span>
+</button>
+<!-- Unselected Chips -->
+<button class="flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/30 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" type="button">
+<span>영어</span>
+</button>
+<button class="flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/30 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" type="button">
+<span>수학</span>
+</button>
+<button class="flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/30 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" type="button">
+<span>과학</span>
+</button>
+<button class="flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/30 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" type="button">
+<span>사회</span>
+</button>
+<button class="flex items-center gap-2 rounded-full border border-dashed border-slate-300 dark:border-slate-600 bg-transparent px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-500 hover:border-primary hover:text-primary transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span>직접 입력</span>
+</button>
+</div>
+</div>
+</form>
+</div>
+<!-- Navigation Buttons -->
+<div class="flex justify-between items-center w-full px-2">
+<button class="flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-transparent px-8 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                        이전
+                    </button>
+<button class="flex items-center gap-2 rounded-xl bg-primary px-10 py-3 text-sm font-bold text-white shadow-lg shadow-primary/25 hover:bg-blue-600 hover:shadow-primary/40 transition-all active:scale-[0.98]">
+                        다음
+                        <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Decorative Background Elements -->
+<div class="fixed top-20 left-10 w-64 h-64 bg-primary/5 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+<div class="fixed bottom-10 right-10 w-80 h-80 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+</div>
+</body></html>

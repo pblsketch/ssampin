@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin - Setup Complete</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#101722",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display antialiased selection:bg-primary/30">
+<div class="relative flex h-screen w-full flex-col overflow-hidden">
+<!-- Header -->
+<header class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-8 py-4 bg-white dark:bg-background-dark z-10">
+<div class="flex items-center gap-3">
+<div class="flex items-center justify-center size-8 rounded-lg bg-primary/20 text-primary">
+<span class="material-symbols-outlined text-xl">school</span>
+</div>
+<h1 class="text-lg font-bold tracking-tight">SsamPin (쌤핀)</h1>
+</div>
+<button class="flex items-center justify-center size-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-slate-500 dark:text-slate-400">close</span>
+</button>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col items-center justify-center relative w-full max-w-5xl mx-auto px-4 py-8">
+<!-- Progress Indicator -->
+<div class="w-full max-w-md flex flex-col gap-2 mb-12">
+<div class="flex justify-between items-center text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+<span>설정 완료</span>
+<span>Step 4 of 4</span>
+</div>
+<div class="flex gap-2 w-full h-1.5">
+<div class="flex-1 rounded-full bg-primary/40"></div>
+<div class="flex-1 rounded-full bg-primary/40"></div>
+<div class="flex-1 rounded-full bg-primary/40"></div>
+<div class="flex-1 rounded-full bg-primary"></div>
+</div>
+</div>
+<!-- Completion Content -->
+<div class="w-full max-w-2xl flex flex-col items-center gap-8 text-center animate-[fadeIn_0.5s_ease-out]">
+<!-- Success Icon -->
+<div class="size-20 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center mb-2 shadow-[0_0_20px_rgba(34,197,94,0.2)]">
+<span class="material-symbols-outlined text-5xl">check_circle</span>
+</div>
+<!-- Text Content -->
+<div class="space-y-3">
+<h2 class="text-3xl font-bold tracking-tight">완료!</h2>
+<p class="text-slate-500 dark:text-slate-400 text-lg">
+                        설정이 성공적으로 완료되었습니다.<br/>
+                        이제 선생님을 위한 맞춤형 대시보드를 만나보세요.
+                    </p>
+</div>
+<!-- Dashboard Preview Card -->
+<div class="relative group mt-4 w-full max-w-lg">
+<!-- Glow Effect -->
+<div class="absolute -inset-1 bg-gradient-to-r from-primary to-blue-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+<div class="relative bg-white dark:bg-[#182334] rounded-xl p-2 ring-1 ring-slate-900/5 dark:ring-white/10 shadow-xl overflow-hidden">
+<!-- Preview Header Mockup -->
+<div class="h-6 bg-slate-100 dark:bg-[#223149] rounded-t-lg mb-2 flex items-center px-3 gap-1.5">
+<div class="size-2 rounded-full bg-red-400/80"></div>
+<div class="size-2 rounded-full bg-yellow-400/80"></div>
+<div class="size-2 rounded-full bg-green-400/80"></div>
+</div>
+<!-- Preview Image -->
+<div class="aspect-video w-full rounded-lg bg-slate-800 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-500 ease-out">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Modern dashboard interface with charts and student data overview" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuANXe-NS1GOrMN6VtlCiVMP-nxyWtKx1gSGTsdQUD1jkbSoNWUiCQR8i7AXVxq2jluqzFiLOvU2pLPsFXrEPLj2gV3Tqmhs7MEcwn9Hbh__3qnzyF9Jz_TIdsSLKBsrV3b8B9mJAa_CtOg45Hrcr0oLkTtATW3mMl8WhMnps5buHt_3Tgd1wWtDrObI6thcS2na_kD3UGvYJixZ8kkdsVYNMX3ZDBA9601bfMrBKrV2nFpdW3Fugyw0Njfp_V6VzyF-Zh5zPoSaPo_Y'); opacity: 0.8;">
+</div>
+<!-- Overlay content to simulate UI -->
+<div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/60 flex flex-col justify-end p-4">
+<div class="flex gap-3 items-end">
+<div class="h-16 w-1/4 bg-primary/40 rounded-md backdrop-blur-sm border border-white/10"></div>
+<div class="h-24 w-1/4 bg-primary/60 rounded-md backdrop-blur-sm border border-white/10"></div>
+<div class="h-12 w-1/4 bg-primary/30 rounded-md backdrop-blur-sm border border-white/10"></div>
+<div class="h-20 w-1/4 bg-primary/50 rounded-md backdrop-blur-sm border border-white/10"></div>
+</div>
+</div>
+</div>
+<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/20 pointer-events-none">
+<span class="bg-black/50 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium border border-white/20">
+                                미리보기
+                            </span>
+</div>
+</div>
+</div>
+<!-- Action Button -->
+<div class="w-full max-w-xs mt-4">
+<button class="w-full flex items-center justify-center gap-2 rounded-xl h-14 bg-primary hover:bg-blue-600 active:bg-blue-700 text-white text-base font-bold shadow-lg shadow-blue-500/25 transition-all hover:scale-[1.02] hover:shadow-blue-500/40">
+<span>대시보드로 이동</span>
+<span class="material-symbols-outlined text-xl">arrow_forward</span>
+</button>
+<p class="mt-4 text-xs text-slate-500 dark:text-slate-500 text-center">
+                        언제든지 설정 메뉴에서 변경할 수 있습니다.
+                    </p>
+</div>
+</div>
+</main>
+</div>
+</body></html>

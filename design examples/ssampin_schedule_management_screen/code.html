@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin Schedule</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&amp;family=Noto+Sans+KR:wght@300;400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f172a", // Dark mode background from prompt
+                        "card-dark": "#1e293b", // Dark mode card background from prompt
+                        "text-light": "#f8fafc", // Dark mode text from prompt
+                    },
+                    fontFamily: {
+                        "display": ["Lexend", "Noto Sans KR", "sans-serif"],
+                        "sans": ["Noto Sans KR", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "2xl": "2rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen text-slate-900 dark:text-text-light flex overflow-hidden">
+<!-- Sidebar -->
+<aside class="w-64 bg-slate-900 dark:bg-[#101723] border-r border-slate-800 flex flex-col justify-between shrink-0 h-screen sticky top-0">
+<div class="flex flex-col gap-6 p-4">
+<!-- User Profile -->
+<div class="flex items-center gap-3 px-2">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-slate-700" data-alt="Teacher profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCqqELYYsMCH5hBmMTjH5f-TyqfFnXu8bOHQ51XVULkIduEfLwfY0Md-4tTRM9sks-MWy-QH65yjX3nSl2jltWnNY47yIC3JUZ7JAEVGRhvCDTCFDwZ_cdq3LTz6f-I4Mpo0x7klHePWMkPIbADedtUjvGJKN9K4rGXYSx1wE0O5fSvYqao8x4q0Fn5659_Ts4FWu-3SvMvwErn9DXuNhnyJ8DR4Yptq1QFE7rW5nILPj_-UGu7PTA4RtvsNDy_2oQ1jeJmY7VNUTb-");'></div>
+<div class="flex flex-col">
+<h1 class="text-white text-base font-bold leading-normal">SsamPin</h1>
+<p class="text-slate-400 text-xs font-normal leading-normal">선생님을 위한 스마트 비서</p>
+</div>
+</div>
+<!-- Navigation -->
+<nav class="flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition-colors text-slate-400 hover:text-white group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">home</span>
+<p class="text-sm font-medium leading-normal">홈</p>
+</a>
+<!-- Active Item -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-white shadow-lg shadow-primary/30" href="#">
+<span class="material-symbols-outlined fill-1">calendar_month</span>
+<p class="text-sm font-bold leading-normal">일정</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition-colors text-slate-400 hover:text-white group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">school</span>
+<p class="text-sm font-medium leading-normal">학생 관리</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition-colors text-slate-400 hover:text-white group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">menu_book</span>
+<p class="text-sm font-medium leading-normal">수업</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition-colors text-slate-400 hover:text-white group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">chat_bubble</span>
+<p class="text-sm font-medium leading-normal">상담</p>
+</a>
+</nav>
+</div>
+<div class="p-4 border-t border-slate-800">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition-colors text-slate-400 hover:text-white group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">settings</span>
+<p class="text-sm font-medium leading-normal">설정</p>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col h-screen overflow-hidden">
+<!-- Header -->
+<header class="h-20 shrink-0 px-8 flex items-center justify-between border-b border-slate-800 bg-background-dark z-10">
+<h2 class="text-white text-2xl font-bold flex items-center gap-3">
+<span class="text-3xl">📋</span> 일정 관리
+            </h2>
+<button class="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-[20px]">add</span>
+<span class="text-sm font-bold">일정 추가</span>
+</button>
+</header>
+<!-- Content Area -->
+<div class="flex-1 overflow-y-auto p-8">
+<div class="max-w-7xl mx-auto flex flex-col gap-6 h-full">
+<!-- Category Tabs -->
+<div class="flex items-center justify-between overflow-x-auto pb-2 scrollbar-hide">
+<div class="flex gap-3">
+<button class="px-5 py-2 rounded-full bg-slate-700 text-white text-sm font-bold shadow-sm ring-1 ring-slate-600">전체</button>
+<button class="px-5 py-2 rounded-full bg-card-dark hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors ring-1 ring-slate-700/50 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-blue-500"></span> 학교
+                        </button>
+<button class="px-5 py-2 rounded-full bg-card-dark hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors ring-1 ring-slate-700/50 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-green-500"></span> 학급
+                        </button>
+<button class="px-5 py-2 rounded-full bg-card-dark hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors ring-1 ring-slate-700/50 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-yellow-500"></span> 부서
+                        </button>
+<button class="px-5 py-2 rounded-full bg-card-dark hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors ring-1 ring-slate-700/50 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-purple-500"></span> 나무학교
+                        </button>
+<button class="px-5 py-2 rounded-full bg-card-dark hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors ring-1 ring-slate-700/50 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-slate-400"></span> 기타
+                        </button>
+</div>
+<button class="text-slate-400 text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">add</span> 카테고리 추가
+                    </button>
+</div>
+<!-- Split View: Calendar & List -->
+<div class="flex flex-col lg:flex-row gap-6 h-full min-h-0">
+<!-- Calendar Section (60%) -->
+<div class="lg:w-[60%] flex flex-col bg-card-dark rounded-3xl p-6 border border-slate-800 shadow-xl">
+<!-- Calendar Header -->
+<div class="flex items-center justify-between mb-8 px-2">
+<button class="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-white">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                2026년 3월
+                            </h3>
+<button class="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-white">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<!-- Days Header -->
+<div class="grid grid-cols-7 mb-4">
+<div class="text-center text-red-400 font-bold text-sm py-2">일</div>
+<div class="text-center text-slate-400 font-medium text-sm py-2">월</div>
+<div class="text-center text-slate-400 font-medium text-sm py-2">화</div>
+<div class="text-center text-slate-400 font-medium text-sm py-2">수</div>
+<div class="text-center text-slate-400 font-medium text-sm py-2">목</div>
+<div class="text-center text-slate-400 font-medium text-sm py-2">금</div>
+<div class="text-center text-slate-300 font-bold text-sm py-2">토</div>
+</div>
+<!-- Calendar Grid -->
+<div class="grid grid-cols-7 gap-y-4 gap-x-2 flex-1 auto-rows-fr">
+<!-- Previous month dates (faded) -->
+<div class="text-center py-2 text-slate-600">22</div>
+<div class="text-center py-2 text-slate-600">23</div>
+<div class="text-center py-2 text-slate-600">24</div>
+<div class="text-center py-2 text-slate-600">25</div>
+<div class="text-center py-2 text-slate-600">26</div>
+<div class="text-center py-2 text-slate-600">27</div>
+<div class="text-center py-2 text-slate-600">28</div>
+<!-- Current Month -->
+<!-- 3/1 (Mon) Event: Blue -->
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-red-400 font-medium text-sm">1</span>
+<div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">2</span>
+</div>
+<!-- 3/3 (Wed) Event: Blue -->
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">3</span>
+<div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+</div>
+<!-- 3/4 (Thu) Event: Yellow -->
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">4</span>
+<div class="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
+</div>
+<!-- 3/5 (Fri) Event: Green & Today -->
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl bg-primary/20 border border-primary cursor-pointer transition-colors shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+<span class="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-white font-bold text-sm shadow-md">5</span>
+<div class="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-slate-300 font-medium text-sm">6</span>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-red-400 font-medium text-sm">7</span>
+</div>
+<!-- 3/8 (Mon) Event: Purple -->
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">8</span>
+<div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">9</span>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">10</span>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">11</span>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">12</span>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-slate-300 font-medium text-sm">13</span>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-red-400 font-medium text-sm">14</span>
+</div>
+<!-- 3/15 (Mon) Event: Blue -->
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">15</span>
+<div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+</div>
+<!-- Filler dates for rest of month -->
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">16</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">17</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">18</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">19</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-slate-300 font-medium text-sm">20</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-red-400 font-medium text-sm">21</span></div>
+<!-- 3/22 (Mon) Event: Green -->
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600">
+<span class="text-white font-medium text-sm">22</span>
+<div class="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+</div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">23</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">24</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">25</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">26</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-slate-300 font-medium text-sm">27</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-red-400 font-medium text-sm">28</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">29</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">30</span></div>
+<div class="group relative flex flex-col items-center gap-1 h-20 p-1 rounded-xl hover:bg-slate-700/50 cursor-pointer transition-colors border border-transparent hover:border-slate-600"><span class="text-white font-medium text-sm">31</span></div>
+</div>
+</div>
+<!-- Event List Section (40%) -->
+<div class="lg:w-[40%] flex flex-col gap-4 overflow-y-auto pr-2 pb-10">
+<div class="flex items-center justify-between mb-2 px-2">
+<h3 class="text-lg font-bold text-white">다가오는 일정</h3>
+<button class="text-xs text-slate-400 hover:text-white flex items-center gap-1 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+<span class="material-symbols-outlined text-[16px]">tune</span> 필터
+                            </button>
+</div>
+<!-- Card 1 -->
+<div class="bg-card-dark rounded-2xl p-4 border-l-4 border-blue-500 hover:bg-slate-800 transition-colors shadow-lg group">
+<div class="flex items-start justify-between mb-2">
+<div class="flex flex-col">
+<span class="text-xs font-semibold text-blue-400 mb-0.5">3월 1일 (월)</span>
+<h4 class="text-base font-bold text-white group-hover:text-blue-400 transition-colors">교내방역</h4>
+</div>
+<span class="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">학교</span>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-400">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 09:00 - 18:00
+                                </div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-card-dark rounded-2xl p-4 border-l-4 border-blue-500 hover:bg-slate-800 transition-colors shadow-lg group">
+<div class="flex items-start justify-between mb-2">
+<div class="flex flex-col">
+<span class="text-xs font-semibold text-blue-400 mb-0.5">3월 3일 (수)</span>
+<h4 class="text-base font-bold text-white group-hover:text-blue-400 transition-colors">시업식</h4>
+</div>
+<div class="flex items-center gap-2">
+<span class="bg-blue-900/50 text-blue-300 border border-blue-700/50 text-[10px] px-2 py-0.5 rounded-md font-bold">D-3</span>
+<span class="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">학교</span>
+</div>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-400">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 09:00
+                                </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">location_on</span> 강당
+                                </div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-card-dark rounded-2xl p-4 border-l-4 border-yellow-500 hover:bg-slate-800 transition-colors shadow-lg group">
+<div class="flex items-start justify-between mb-2">
+<div class="flex flex-col">
+<span class="text-xs font-semibold text-yellow-500 mb-0.5">3월 4일 (목)</span>
+<h4 class="text-base font-bold text-white group-hover:text-yellow-500 transition-colors">안전점검의 날</h4>
+</div>
+<span class="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">부서</span>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-400">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 14:30
+                                </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">location_on</span> 체육관
+                                </div>
+</div>
+</div>
+<!-- Card 4 (Today) -->
+<div class="bg-slate-800/80 rounded-2xl p-4 border-l-4 border-green-500 ring-2 ring-primary/40 shadow-xl group relative overflow-hidden">
+<div class="absolute right-0 top-0 p-1 bg-primary text-white text-[9px] font-bold rounded-bl-lg">TODAY</div>
+<div class="flex items-start justify-between mb-2">
+<div class="flex flex-col">
+<span class="text-xs font-semibold text-green-400 mb-0.5">3월 5일 (금)</span>
+<h4 class="text-base font-bold text-white group-hover:text-green-400 transition-colors">학급 회의</h4>
+</div>
+<span class="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium mt-1">학급</span>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-300">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 08:40
+                                </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">location_on</span> 2-3반 교실
+                                </div>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="bg-card-dark rounded-2xl p-4 border-l-4 border-purple-500 hover:bg-slate-800 transition-colors shadow-lg group">
+<div class="flex items-start justify-between mb-2">
+<div class="flex flex-col">
+<span class="text-xs font-semibold text-purple-400 mb-0.5">3월 8일 (월)</span>
+<h4 class="text-base font-bold text-white group-hover:text-purple-400 transition-colors">나무학교 워크숍</h4>
+</div>
+<span class="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">나무학교</span>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-400">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 종일
+                                </div>
+</div>
+</div>
+<!-- Card 6 -->
+<div class="bg-card-dark rounded-2xl p-4 border-l-4 border-blue-500 hover:bg-slate-800 transition-colors shadow-lg group">
+<div class="flex items-start justify-between mb-2">
+<div class="flex flex-col">
+<span class="text-xs font-semibold text-blue-400 mb-0.5">3월 15일 (월)</span>
+<h4 class="text-base font-bold text-white group-hover:text-blue-400 transition-colors">중간고사</h4>
+</div>
+<div class="flex items-center gap-2">
+<span class="bg-red-900/50 text-red-300 border border-red-700/50 text-[10px] px-2 py-0.5 rounded-md font-bold animate-pulse">D-18</span>
+<span class="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">학교</span>
+</div>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-400">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 09:00 - 15:00
+                                </div>
+</div>
+</div>
+<!-- Card 7 -->
+<div class="bg-card-dark rounded-2xl p-4 border-l-4 border-green-500 hover:bg-slate-800 transition-colors shadow-lg group">
+<div class="flex items-start justify-between mb-2">
+<div class="flex flex-col">
+<span class="text-xs font-semibold text-green-400 mb-0.5">3월 22일 (월)</span>
+<h4 class="text-base font-bold text-white group-hover:text-green-400 transition-colors">학부모 상담주간</h4>
+</div>
+<span class="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">학급</span>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-400">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">date_range</span> 3/22 ~ 3/26
+                                </div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Alert Bar -->
+<div class="bg-slate-800 border-t border-slate-700 h-12 flex items-center justify-between px-8 text-sm text-slate-300 shrink-0">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-yellow-400 text-[20px]">notifications_active</span>
+<p>알림 설정: <span class="font-bold text-white">30분 전, 1일 전</span></p>
+</div>
+<button class="p-1.5 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</button>
+</div>
+</main>
+</body></html>

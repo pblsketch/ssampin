@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin Homeroom Memo Page</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f172a", 
+                        "card-dark": "#1e293b",
+                        "text-secondary": "#94a3b8",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "Noto Sans KR", "sans-serif"]
+                    },
+                },
+            },
+        }
+    </script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+KR:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom Scrollbar for dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased overflow-hidden">
+<div class="flex h-screen w-full overflow-hidden">
+<!-- Sidebar -->
+<div class="w-64 flex-shrink-0 flex flex-col bg-card-dark border-r border-slate-700/50">
+<div class="flex flex-col gap-4 p-4 h-full">
+<!-- User Profile -->
+<div class="flex gap-3 items-center mb-2">
+<div class="bg-center bg-no-repeat bg-cover rounded-full size-12 shadow-md border-2 border-slate-600" data-alt="Teacher profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCBrHTYH6diAKLBLhaNE2JHADSD6oSV22wcNzEwhrK5l_GqLwMXYH4A6fjwbjm__yE0WSbl-c0XfTFpJUPPQoHtXW7mXrkjlGILFER0aBLDV7YkAHUY17iR-hXCG0qyrkWVHq0WXxqf43-Hic5yliLcNZ73nj3eeaHll0jEHTpvBetXkvaLN2RhaYRL2Bjb0IrtZku-IQkERCCLvCCfgAY3uLzBna0ssiQp0etQd680-Tvd4MjyEbACnxR98PtuKweCLtYZO3oUjYo_");'>
+</div>
+<div class="flex flex-col">
+<h1 class="text-white text-lg font-bold leading-tight">SsamPin</h1>
+<p class="text-text-secondary text-xs font-normal">Teacher Dashboard</p>
+</div>
+</div>
+<!-- Navigation -->
+<nav class="flex flex-col gap-2 flex-1">
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl text-text-secondary hover:bg-slate-700/50 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl">home</span>
+<span class="text-sm font-medium">홈</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl text-text-secondary hover:bg-slate-700/50 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl">groups</span>
+<span class="text-sm font-medium">학생 관리</span>
+</a>
+<!-- Active State -->
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl bg-primary text-white shadow-lg shadow-primary/20" href="#">
+<span class="material-symbols-outlined text-2xl">edit_note</span>
+<span class="text-sm font-bold">담임메모</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl text-text-secondary hover:bg-slate-700/50 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl">bar_chart</span>
+<span class="text-sm font-medium">성적 관리</span>
+</a>
+<div class="mt-auto">
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl text-text-secondary hover:bg-slate-700/50 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl">settings</span>
+<span class="text-sm font-medium">설정</span>
+</a>
+</div>
+</nav>
+</div>
+</div>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-full overflow-hidden bg-background-dark">
+<!-- Header Section -->
+<header class="bg-card-dark/50 backdrop-blur-sm border-b border-slate-700/50 px-8 pt-8 pb-0 shrink-0 z-10">
+<div class="flex justify-between items-start mb-6">
+<h1 class="text-white text-3xl font-bold tracking-tight flex items-center gap-3">
+<span>👩‍🏫</span> 담임 메모장
+                    </h1>
+<!-- Mode Toggle (Input/Progress/Query) -->
+<div class="bg-slate-800/80 p-1 rounded-xl flex gap-1 border border-slate-700">
+<button class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold shadow-sm transition-all flex items-center gap-2">
+<span>✏️</span> 입력
+                        </button>
+<button class="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-slate-700 text-sm font-medium transition-all flex items-center gap-2">
+<span>📊</span> 진도
+                        </button>
+<button class="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-slate-700 text-sm font-medium transition-all flex items-center gap-2">
+<span>🔍</span> 조회
+                        </button>
+</div>
+</div>
+<!-- Class Tabs -->
+<div class="flex gap-8 overflow-x-auto">
+<a class="pb-4 px-2 border-b-[3px] border-primary text-white font-bold text-sm flex flex-col items-center gap-1 transition-colors" href="#">
+<span>담임</span>
+</a>
+<a class="pb-4 px-2 border-b-[3px] border-transparent text-text-secondary hover:text-white font-medium text-sm flex flex-col items-center gap-1 transition-colors" href="#">
+<span>1-1</span>
+</a>
+<a class="pb-4 px-2 border-b-[3px] border-transparent text-text-secondary hover:text-white font-medium text-sm flex flex-col items-center gap-1 transition-colors" href="#">
+<span>1-2</span>
+</a>
+<a class="pb-4 px-2 border-b-[3px] border-transparent text-text-secondary hover:text-white font-medium text-sm flex flex-col items-center gap-1 transition-colors" href="#">
+<span>1-3</span>
+</a>
+<a class="pb-4 px-2 border-b-[3px] border-transparent text-text-secondary hover:text-white font-medium text-sm flex flex-col items-center gap-1 transition-colors" href="#">
+<span>1-4</span>
+</a>
+<a class="pb-4 px-2 border-b-[3px] border-transparent text-text-secondary hover:text-white font-medium text-sm flex flex-col items-center gap-1 transition-colors" href="#">
+<span>1-5</span>
+</a>
+</div>
+</header>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto p-8 pb-32">
+<div class="max-w-6xl mx-auto flex flex-col gap-8 h-full">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+<!-- Left Column: Student Selection -->
+<div class="lg:col-span-5 flex flex-col gap-4">
+<div class="flex justify-between items-center mb-2">
+<h2 class="text-white text-lg font-semibold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">person_search</span> 
+                                    학생 선택
+                                    <span class="text-sm font-normal text-text-secondary ml-2">(2명 선택됨)</span>
+</h2>
+<button class="text-xs text-primary hover:text-blue-400 underline decoration-dotted">모두 해제</button>
+</div>
+<!-- Student Grid -->
+<div class="grid grid-cols-4 sm:grid-cols-5 gap-2 content-start">
+<!-- Student Items -->
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">1구자욱</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">2원태인</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">3오승환</button>
+<!-- Selected Item -->
+<button class="aspect-[4/3] rounded-lg bg-primary text-white shadow-lg shadow-primary/30 border border-primary text-sm font-bold ring-2 ring-primary ring-offset-2 ring-offset-background-dark transition-all">4강민호</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">5김지찬</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">6김헌곤</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">7류지혁</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">8박병호</button>
+<!-- Selected Item -->
+<button class="aspect-[4/3] rounded-lg bg-primary text-white shadow-lg shadow-primary/30 border border-primary text-sm font-bold ring-2 ring-primary ring-offset-2 ring-offset-background-dark transition-all">9이성규</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">10이재현</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">11김영웅</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">12전병우</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">13강한울</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">14안주형</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">15김재윤</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">16오재일</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">17맥키넌</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">18레예스</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">19코너</button>
+<button class="aspect-[4/3] rounded-lg bg-card-dark hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-all">20임창민</button>
+</div>
+</div>
+<!-- Right Column: Input & Categories -->
+<div class="lg:col-span-7 flex flex-col gap-6">
+<!-- Category Selection -->
+<div class="bg-card-dark rounded-2xl p-6 border border-slate-700/50 shadow-sm">
+<h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-emerald-400">category</span> 
+                                    카테고리 선택
+                                </h2>
+<div class="flex flex-col gap-5">
+<!-- Group: Attendance -->
+<div>
+<p class="text-xs font-bold text-rose-400 uppercase tracking-wider mb-2">출결 (Attendance)</p>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 text-sm font-medium transition-colors">생리결석</button>
+<button class="px-4 py-2 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 text-sm font-medium transition-colors">병결</button>
+<button class="px-4 py-2 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 text-sm font-medium transition-colors">무단결석</button>
+<button class="px-4 py-2 rounded-full border border-rose-500 bg-rose-600 text-white shadow-md shadow-rose-900/50 text-sm font-bold transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check</span> 지각
+                                            </button>
+<button class="px-4 py-2 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 text-sm font-medium transition-colors">조퇴</button>
+<button class="px-4 py-2 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 text-sm font-medium transition-colors">결과</button>
+</div>
+</div>
+<!-- Group: Counseling -->
+<div>
+<p class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">상담 / 관계 (Counseling)</p>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 text-sm font-medium transition-colors">학부모상담</button>
+<button class="px-4 py-2 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 text-sm font-medium transition-colors">학생상담</button>
+<button class="px-4 py-2 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 text-sm font-medium transition-colors">교우관계</button>
+</div>
+</div>
+<!-- Group: Life & Learning -->
+<div>
+<p class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">생활 / 학습 (Life &amp; Learning)</p>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 text-sm font-medium transition-colors">보건</button>
+<button class="px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 text-sm font-medium transition-colors">생활지도</button>
+<button class="px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 text-sm font-medium transition-colors">학습</button>
+<button class="px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 text-sm font-medium transition-colors">칭찬</button>
+</div>
+</div>
+<!-- Group: Other -->
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">기타 (Other)</p>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 rounded-full border border-slate-600 bg-slate-700/30 text-slate-300 hover:bg-slate-700/50 text-sm font-medium transition-colors">진로</button>
+<button class="px-4 py-2 rounded-full border border-slate-600 bg-slate-700/30 text-slate-300 hover:bg-slate-700/50 text-sm font-medium transition-colors">가정연락</button>
+<button class="px-4 py-2 rounded-full border border-slate-600 bg-slate-700/30 text-slate-300 hover:bg-slate-700/50 text-sm font-medium transition-colors">기타</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Memo Input -->
+<div class="bg-card-dark rounded-2xl p-6 border border-slate-700/50 shadow-sm flex-1 flex flex-col">
+<h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-amber-400">edit</span> 
+                                    메모 내용
+                                </h2>
+<textarea class="w-full flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none text-base leading-relaxed" placeholder="추가 메모가 있으면 입력하세요... (선택사항)"></textarea>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Action Area -->
+<div class="absolute bottom-0 left-0 right-0 bg-card-dark border-t border-slate-700 p-6 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+<div class="max-w-6xl mx-auto flex flex-col items-center gap-3">
+<button class="w-full bg-primary hover:bg-blue-600 text-white text-xl font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-[0.99] flex justify-center items-center gap-2">
+<span class="material-symbols-outlined">save</span>
+                        저장하기
+                    </button>
+<p class="text-text-secondary text-sm flex items-center gap-1.5">
+<span class="material-symbols-outlined text-amber-400 text-base">lightbulb</span> 
+                        카테고리만 선택해도 바로 저장할 수 있어요
+                    </p>
+</div>
+</div>
+</main>
+</div>
+</body></html>

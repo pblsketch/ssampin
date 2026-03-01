@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin Main Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&amp;family=Noto+Sans+KR:wght@300;400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f172a", // Matches user request
+                        "card-dark": "#1e293b", // Matches user request
+                        "text-light": "#f8fafc", // Matches user request
+                    },
+                    fontFamily: {
+                        "display": ["Lexend", "Noto Sans KR", "sans-serif"],
+                        "body": ["Noto Sans KR", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        /* Custom Scrollbar for a desktop app feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-text-light overflow-hidden h-screen flex">
+<!-- Sidebar -->
+<aside class="w-64 h-full bg-card-dark flex flex-col border-r border-slate-700/50 shrink-0">
+<div class="p-6 flex items-center gap-3">
+<div class="bg-primary/20 p-2 rounded-lg">
+<span class="material-symbols-outlined text-primary text-3xl">school</span>
+</div>
+<div>
+<h1 class="text-xl font-bold font-display text-white tracking-tight">쌤핀</h1>
+<p class="text-xs text-slate-400">Teacher's Dashboard</p>
+</div>
+</div>
+<nav class="flex-1 px-4 py-4 gap-2 flex flex-col overflow-y-auto">
+<a class="flex items-center gap-3 px-4 py-3 bg-primary text-white rounded-xl shadow-lg shadow-primary/20 transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-medium text-sm">대시보드</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">calendar_view_day</span>
+<span class="font-medium text-sm">시간표</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">airline_seat_recline_normal</span>
+<span class="font-medium text-sm">좌석 배치</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">event_note</span>
+<span class="font-medium text-sm">일정</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">sticky_note_2</span>
+<span class="font-medium text-sm">메모</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">check_circle</span>
+<span class="font-medium text-sm">할 일</span>
+</a>
+</nav>
+<div class="p-4 border-t border-slate-700/50">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-all mb-2" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-medium text-sm">설정</span>
+</a>
+<div class="flex items-center gap-3 px-4 py-2 mt-2">
+<div class="size-8 rounded-full bg-slate-600 bg-center bg-cover" data-alt="User profile picture" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAojINuiOiqPbZNKESub6m_bUOUjQ_snePSHqqXnI-aFmbaGQtdNRfgckpv5T9ZveaIjPEtbhLKFVe2IjPjDM9lLRtiPKDN7ah3ILucqGHK4V7Geg7PPFc-I5doCKQ98T0RuEJE5gN7z_ulBzUafYOerVrd8Vr3QAD1oJjfVqLkLdKQGiAifVGqhKxEJTc8NCieqgwv5L-8b-IYghwfWABdHb6ER6ueK46ojFUfLbNK-TEN6pALm17REbhOjk93IiOaPnBD8qQryxt2');"></div>
+<div>
+<p class="text-sm font-medium text-white">김선생님</p>
+<p class="text-xs text-slate-400">2학년 3반 담임</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto bg-background-light dark:bg-background-dark p-8">
+<!-- Header Section -->
+<header class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<h2 class="text-4xl font-bold text-white font-display mb-2">2월 27일 (금) 16:35</h2>
+<div class="flex items-center gap-4 text-slate-400 text-sm">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-base">thermostat</span> 2°C ~ 10°C</span>
+<span class="w-1 h-1 rounded-full bg-slate-600"></span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-base">water_drop</span> 습도 85%</span>
+<span class="w-1 h-1 rounded-full bg-slate-600"></span>
+<span class="flex items-center gap-1 text-green-400"><span class="material-symbols-outlined text-base">air</span> 미세먼지 좋음</span>
+</div>
+</div>
+<!-- Success Banner -->
+<div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-4 max-w-lg w-full">
+<div class="bg-emerald-500 rounded-full p-2 text-white flex shrink-0">
+<span class="material-symbols-outlined">verified</span>
+</div>
+<div>
+<h3 class="text-emerald-400 font-bold text-lg">오늘의 일정이 모두 끝났습니다!</h3>
+<p class="text-emerald-200/80 text-sm">수고하셨습니다 👏</p>
+</div>
+</div>
+</header>
+<!-- Grid Layout -->
+<div class="grid grid-cols-12 gap-6 mb-6">
+<!-- Column 1: Time Table (Span 4) -->
+<div class="col-span-12 lg:col-span-4 bg-card-dark rounded-2xl border border-slate-700/50 p-6 flex flex-col h-full">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">schedule</span>
+                        오늘의 시간표
+                    </h3>
+<div class="flex bg-slate-800 rounded-lg p-1">
+<button class="px-3 py-1 bg-slate-600 text-white rounded text-xs font-medium shadow">학급</button>
+<button class="px-3 py-1 text-slate-400 hover:text-white rounded text-xs font-medium">교사</button>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-2">
+<!-- Table Header -->
+<div class="grid grid-cols-4 text-xs text-slate-400 pb-2 border-b border-slate-700/50 px-2">
+<div class="col-span-1">교시</div>
+<div class="col-span-2">과목</div>
+<div class="col-span-1 text-right">장소</div>
+</div>
+<!-- Rows -->
+<div class="grid grid-cols-4 items-center p-3 rounded-lg hover:bg-slate-800/50 transition-colors">
+<span class="text-slate-400 font-display font-medium text-sm">1</span>
+<span class="col-span-2 text-white font-medium">국어</span>
+<span class="col-span-1 text-right text-slate-500 text-sm">2-3</span>
+</div>
+<div class="grid grid-cols-4 items-center p-3 rounded-lg bg-amber-500/10 border-l-4 border-amber-500">
+<span class="text-amber-400 font-display font-medium text-sm">2</span>
+<span class="col-span-2 text-white font-bold">수학</span>
+<span class="col-span-1 text-right text-amber-200/70 text-sm">2-3</span>
+</div>
+<div class="grid grid-cols-4 items-center p-3 rounded-lg hover:bg-slate-800/50 transition-colors">
+<span class="text-slate-400 font-display font-medium text-sm">3</span>
+<span class="col-span-2 text-white font-medium">체육</span>
+<span class="col-span-1 text-right text-slate-500 text-sm">운동장</span>
+</div>
+<div class="grid grid-cols-4 items-center p-3 rounded-lg hover:bg-slate-800/50 transition-colors">
+<span class="text-slate-400 font-display font-medium text-sm">4</span>
+<span class="col-span-2 text-white font-medium">영어</span>
+<span class="col-span-1 text-right text-slate-500 text-sm">영어실</span>
+</div>
+<div class="grid grid-cols-4 items-center p-3 rounded-lg hover:bg-slate-800/50 transition-colors">
+<span class="text-slate-400 font-display font-medium text-sm">5</span>
+<span class="col-span-2 text-white font-medium">사회</span>
+<span class="col-span-1 text-right text-slate-500 text-sm">2-3</span>
+</div>
+<div class="grid grid-cols-4 items-center p-3 rounded-lg hover:bg-slate-800/50 transition-colors">
+<span class="text-slate-400 font-display font-medium text-sm">6</span>
+<span class="col-span-2 text-white font-medium">자율</span>
+<span class="col-span-1 text-right text-slate-500 text-sm">2-3</span>
+</div>
+</div>
+</div>
+<!-- Column 2: Seating (Span 4) -->
+<div class="col-span-12 lg:col-span-4 bg-card-dark rounded-2xl border border-slate-700/50 p-6 flex flex-col h-full">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">chair_alt</span>
+                        좌석 배치
+                    </h3>
+<button class="text-slate-400 hover:text-white"><span class="material-symbols-outlined">open_in_full</span></button>
+</div>
+<div class="bg-slate-800/50 rounded-xl p-4 flex-1 flex flex-col items-center justify-center gap-4">
+<div class="w-full bg-slate-700 text-slate-300 py-1 text-center rounded text-xs font-bold mb-2">교탁</div>
+<div class="grid grid-cols-6 gap-2 w-full h-full">
+<!-- Generating Desk Grid 6x6 -->
+<!-- Row 1 -->
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">1</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">2</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">3</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">4</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">5</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">6</div>
+<!-- Row 2 -->
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">7</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">8</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">9</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">10</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">11</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">12</div>
+<!-- Row 3 -->
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">13</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">14</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">15</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">16</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">17</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">18</div>
+<!-- Row 4 -->
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">19</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">20</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">21</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">22</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">23</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">24</div>
+<!-- Row 5 (Partial) -->
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">25</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">26</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">27</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">28</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">29</div>
+<div class="aspect-square bg-slate-600/50 rounded flex items-center justify-center text-[10px] text-slate-400 hover:bg-primary hover:text-white cursor-pointer transition-colors">30</div>
+</div>
+</div>
+</div>
+<!-- Column 3: Schedule (Span 4) -->
+<div class="col-span-12 lg:col-span-4 bg-card-dark rounded-2xl border border-slate-700/50 p-6 flex flex-col h-full">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">calendar_month</span>
+                        이번 주 일정
+                    </h3>
+<div class="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-bold border border-red-500/30">
+                        D-18 중간고사
+                    </div>
+</div>
+<div class="flex-1 flex flex-col gap-4">
+<div class="flex gap-4 group cursor-pointer">
+<div class="flex flex-col items-center">
+<span class="text-slate-400 text-xs mb-1">MON</span>
+<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium text-slate-300 group-hover:bg-primary group-hover:text-white transition-colors">24</div>
+<div class="h-full w-px bg-slate-700 my-1"></div>
+</div>
+<div class="flex-1 pb-4">
+<div class="bg-slate-800/50 p-3 rounded-lg border-l-4 border-blue-500">
+<h4 class="text-white text-sm font-medium">교직원 회의</h4>
+<p class="text-slate-500 text-xs mt-1">16:30 - 대회의실</p>
+</div>
+</div>
+</div>
+<div class="flex gap-4 group cursor-pointer">
+<div class="flex flex-col items-center">
+<span class="text-slate-400 text-xs mb-1">TUE</span>
+<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium text-slate-300 group-hover:bg-primary group-hover:text-white transition-colors">25</div>
+<div class="h-full w-px bg-slate-700 my-1"></div>
+</div>
+<div class="flex-1 pb-4">
+<div class="bg-slate-800/50 p-3 rounded-lg border-l-4 border-green-500">
+<h4 class="text-white text-sm font-medium">학부모 상담</h4>
+<p class="text-slate-500 text-xs mt-1">14:00 - 상담실</p>
+</div>
+</div>
+</div>
+<div class="flex gap-4 group cursor-pointer">
+<div class="flex flex-col items-center">
+<span class="text-slate-400 text-xs mb-1">FRI</span>
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-sm font-medium text-white shadow-lg shadow-primary/30">27</div>
+</div>
+<div class="flex-1">
+<div class="bg-slate-800/50 p-3 rounded-lg border-l-4 border-purple-500">
+<h4 class="text-white text-sm font-medium">동아리 활동 지도</h4>
+<p class="text-slate-500 text-xs mt-1">15:30 - 과학실</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Section Grid -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Bottom Col 1: Memo (Span 6) -->
+<div class="col-span-12 lg:col-span-6 bg-card-dark rounded-2xl border border-slate-700/50 p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">edit_note</span>
+                        메모
+                    </h3>
+<button class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+<!-- Post-it 1 (Yellow) -->
+<div class="bg-[#fef9c3] p-4 rounded-lg shadow-sm rotate-1 hover:rotate-0 transition-transform duration-200 cursor-pointer h-40 flex flex-col justify-between group">
+<p class="text-slate-800 font-handwriting text-sm font-medium leading-relaxed">
+                            다음 주 수행평가 안내장 배부하기 (화요일까지)
+                        </p>
+<div class="flex justify-between items-center">
+<span class="text-[10px] text-slate-500 font-bold">Today</span>
+<span class="material-symbols-outlined text-slate-400 text-base opacity-0 group-hover:opacity-100">delete</span>
+</div>
+</div>
+<!-- Post-it 2 (Pink) -->
+<div class="bg-[#fce7f3] p-4 rounded-lg shadow-sm -rotate-1 hover:rotate-0 transition-transform duration-200 cursor-pointer h-40 flex flex-col justify-between group">
+<p class="text-slate-800 font-handwriting text-sm font-medium leading-relaxed">
+                            김민수 학생 상담 일지 작성 필요
+                        </p>
+<div class="flex justify-between items-center">
+<span class="text-[10px] text-slate-500 font-bold">Yesterday</span>
+<span class="material-symbols-outlined text-slate-400 text-base opacity-0 group-hover:opacity-100">delete</span>
+</div>
+</div>
+<!-- Post-it 3 (Green) -->
+<div class="bg-[#dcfce7] p-4 rounded-lg shadow-sm rotate-2 hover:rotate-0 transition-transform duration-200 cursor-pointer h-40 flex flex-col justify-between group">
+<p class="text-slate-800 font-handwriting text-sm font-medium leading-relaxed">
+                            급식 당번표 업데이트<br/>
+                            - 3월 2주차
+                        </p>
+<div class="flex justify-between items-center">
+<span class="text-[10px] text-slate-500 font-bold">Feb 20</span>
+<span class="material-symbols-outlined text-slate-400 text-base opacity-0 group-hover:opacity-100">delete</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Col 2: To-Do (Span 6) -->
+<div class="col-span-12 lg:col-span-6 bg-card-dark rounded-2xl border border-slate-700/50 p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">checklist</span>
+                        오늘 할 일
+                    </h3>
+<div class="flex items-center gap-2 text-sm">
+<span class="text-primary font-bold">1</span>
+<span class="text-slate-500">/</span>
+<span class="text-slate-400">3 완료</span>
+</div>
+</div>
+<!-- Progress Bar -->
+<div class="w-full bg-slate-800 rounded-full h-2 mb-6">
+<div class="bg-primary h-2 rounded-full transition-all duration-500" style="width: 33%"></div>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Task 1 (Done) -->
+<div class="flex items-center gap-3 p-3 bg-slate-800/30 rounded-xl group hover:bg-slate-800/50 transition-colors">
+<button class="text-primary hover:text-primary/80 transition-colors">
+<span class="material-symbols-outlined">check_circle</span>
+</button>
+<span class="text-slate-500 line-through text-sm flex-1">가정통신문 취합 및 제출</span>
+<span class="text-xs text-slate-600 bg-slate-800 px-2 py-1 rounded">행정</span>
+</div>
+<!-- Task 2 (Active) -->
+<div class="flex items-center gap-3 p-3 bg-slate-800/30 rounded-xl group hover:bg-slate-800/50 transition-colors">
+<button class="text-slate-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">radio_button_unchecked</span>
+</button>
+<span class="text-white text-sm flex-1 font-medium">수업 자료 준비 (3단원 PPT)</span>
+<span class="text-xs text-blue-300 bg-blue-500/10 px-2 py-1 rounded">수업</span>
+</div>
+<!-- Task 3 (Active) -->
+<div class="flex items-center gap-3 p-3 bg-slate-800/30 rounded-xl group hover:bg-slate-800/50 transition-colors">
+<button class="text-slate-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">radio_button_unchecked</span>
+</button>
+<span class="text-white text-sm flex-1 font-medium">청소 지도 확인</span>
+<span class="text-xs text-orange-300 bg-orange-500/10 px-2 py-1 rounded">생활</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

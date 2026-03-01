@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin Event Alert Popup</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#101722",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex items-center justify-center p-4">
+<!-- Background blurred content simulation -->
+<div aria-hidden="true" class="fixed inset-0 z-0 opacity-20 dark:opacity-40 overflow-hidden pointer-events-none">
+<div class="grid grid-cols-12 gap-4 p-8 h-full">
+<div class="col-span-2 bg-slate-200 dark:bg-slate-800 rounded-xl h-full"></div>
+<div class="col-span-10 grid grid-rows-6 gap-4 h-full">
+<div class="row-span-1 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+<div class="row-span-5 grid grid-cols-3 gap-4">
+<div class="bg-slate-200 dark:bg-slate-800 rounded-xl h-full"></div>
+<div class="bg-slate-200 dark:bg-slate-800 rounded-xl h-full"></div>
+<div class="bg-slate-200 dark:bg-slate-800 rounded-xl h-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Dark Overlay -->
+<div class="fixed inset-0 z-10 bg-slate-900/60 backdrop-blur-sm"></div>
+<!-- Modal Container -->
+<div class="relative z-20 w-full max-w-[480px]">
+<div class="bg-white dark:bg-[#1e293b] rounded-xl border border-slate-200 dark:border-[#475569] shadow-2xl overflow-hidden flex flex-col">
+<!-- Header -->
+<div class="p-6 pb-2">
+<div class="flex items-center gap-3 mb-2">
+<span class="text-3xl">🔔</span>
+<h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">오늘 행사 알림!</h2>
+</div>
+</div>
+<!-- Scrollable Content -->
+<div class="px-6 py-2 overflow-y-auto max-h-[70vh]">
+<!-- Date Header -->
+<div class="flex items-center gap-2 mb-4">
+<span class="text-lg">📅</span>
+<h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200">3월 4일 (화)</h3>
+</div>
+<!-- Divider -->
+<div class="h-px bg-slate-200 dark:bg-slate-700 mb-4 w-full"></div>
+<!-- Event List -->
+<div class="space-y-3 mb-6">
+<!-- Event Item 1 -->
+<div class="flex items-start gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<div class="flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-blue-500 text-[24px]">verified_user</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-base font-medium text-slate-900 dark:text-slate-100 truncate">
+                                안전점검의 날 <span class="text-slate-500 dark:text-slate-400 text-sm font-normal">[학교]</span>
+</p>
+</div>
+</div>
+<!-- Event Item 2 -->
+<div class="flex items-start gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<div class="flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-yellow-500 text-[24px]">diversity_3</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-base font-medium text-slate-900 dark:text-slate-100 truncate">
+                                교직원 동아리활동 <span class="text-slate-500 dark:text-slate-400 text-sm font-normal">[부서]</span>
+</p>
+<div class="flex items-center gap-1.5 mt-1 text-sm text-slate-500 dark:text-slate-400">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+<span>14:30</span>
+<span class="w-1 h-1 rounded-full bg-slate-400"></span>
+<span>체육관</span>
+</div>
+</div>
+</div>
+<!-- Event Item 3 -->
+<div class="flex items-start gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<div class="flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-purple-500 text-[24px]">forest</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-base font-medium text-slate-900 dark:text-slate-100 truncate">
+                                나무학교 월례 모임 <span class="text-slate-500 dark:text-slate-400 text-sm font-normal">[나무학교]</span>
+</p>
+<div class="flex items-center gap-1.5 mt-1 text-sm text-slate-500 dark:text-slate-400">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+<span>19:00</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Divider -->
+<div class="h-px bg-slate-200 dark:bg-slate-700 mb-4 w-full"></div>
+<!-- D-Day Reminders -->
+<div class="mb-2">
+<h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 ml-1">Upcoming</h4>
+<div class="space-y-2">
+<div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/20">
+<div class="flex items-center gap-2">
+<span class="flex h-2 w-2 rounded-full bg-red-500"></span>
+<span class="text-sm font-medium text-slate-700 dark:text-slate-200">중간고사</span>
+<span class="text-xs text-slate-400">(3/15)</span>
+</div>
+<span class="inline-flex items-center rounded-md bg-red-50 dark:bg-red-900/30 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-300 ring-1 ring-inset ring-red-600/10 dark:ring-red-400/20">D-3</span>
+</div>
+<div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/20">
+<div class="flex items-center gap-2">
+<span class="flex h-2 w-2 rounded-full bg-orange-500"></span>
+<span class="text-sm font-medium text-slate-700 dark:text-slate-200">학부모 상담주간</span>
+<span class="text-xs text-slate-400">(3/22)</span>
+</div>
+<span class="inline-flex items-center rounded-md bg-orange-50 dark:bg-orange-900/30 px-2 py-1 text-xs font-medium text-orange-700 dark:text-orange-300 ring-1 ring-inset ring-orange-600/10 dark:ring-orange-400/20">D-7</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Buttons -->
+<div class="p-6 pt-4 mt-auto flex gap-3">
+<button class="flex-1 flex items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-all">
+<span class="material-symbols-outlined text-[18px]">snooze</span>
+                    다시 알림 (1시간 후)
+                </button>
+<button class="flex-1 flex items-center justify-center gap-2 rounded-lg bg-primary hover:bg-blue-600 text-white px-4 py-2.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-all">
+                    확인
+                </button>
+</div>
+</div>
+</div>
+</body></html>

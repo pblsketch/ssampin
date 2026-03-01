@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin Onboarding - Welcome</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+KR:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "primary": "#3c83f6",
+                "background-light": "#f5f7f8",
+                "background-dark": "#101722",
+              },
+              fontFamily: {
+                "display": ["Inter", "Noto Sans KR", "sans-serif"]
+              },
+              borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col overflow-hidden">
+<!-- Top Navigation Bar -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-10 py-4 bg-white dark:bg-[#151e2d]">
+<div class="flex items-center gap-4">
+<div class="size-8 text-primary">
+<span class="material-symbols-outlined !text-[32px]">push_pin</span>
+</div>
+<h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-[-0.015em]">SsamPin</h2>
+</div>
+<div class="flex flex-1 justify-end gap-8">
+<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-9 px-4 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white text-sm font-medium transition-colors">
+<span class="truncate">건너뛰기</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex flex-1 items-center justify-center p-6 relative">
+<!-- Background decorative elements for depth -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[800px] h-[600px] bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+<div class="relative w-full max-w-[640px] flex flex-col items-center">
+<!-- Step Indicator -->
+<div class="flex items-center justify-center gap-3 mb-12">
+<!-- Step 1 (Active) -->
+<div class="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(60,131,246,0.6)]"></div>
+<!-- Step 2 -->
+<div class="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700"></div>
+<!-- Step 3 -->
+<div class="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700"></div>
+<!-- Step 4 -->
+<div class="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700"></div>
+</div>
+<!-- Content Card -->
+<div class="w-full bg-white dark:bg-[#1a2433] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-10 md:p-14 text-center">
+<!-- Icon Visual -->
+<div class="flex justify-center mb-8">
+<div class="relative flex items-center justify-center size-24 rounded-full bg-primary/10 dark:bg-primary/20">
+<span class="material-symbols-outlined !text-[56px] text-primary -rotate-45">push_pin</span>
+<!-- Decorative animated rings -->
+<div class="absolute inset-0 rounded-full border border-primary/20 animate-pulse"></div>
+</div>
+</div>
+<!-- Text Content -->
+<h1 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4 tracking-tight">
+                    환영합니다! 👋
+                </h1>
+<h2 class="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4 tracking-tight">
+                    쌤핀에 오신 것을 환영합니다!
+                </h2>
+<p class="text-slate-500 dark:text-slate-400 text-lg font-normal mb-10 max-w-sm mx-auto leading-relaxed">
+                    교실의 모든 정보를 한 화면에.<br/>
+                    선생님의 업무를 더 쉽고 간편하게 도와드릴게요.
+                </p>
+<!-- Action Button -->
+<button class="w-full max-w-xs h-12 bg-primary hover:bg-blue-600 text-white text-base font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all duration-200 transform hover:scale-[1.02] flex items-center justify-center gap-2">
+<span>시작하기</span>
+<span class="material-symbols-outlined !text-lg">arrow_forward</span>
+</button>
+</div>
+<!-- Footer Text -->
+<p class="mt-8 text-xs text-slate-400 dark:text-slate-600">
+                © 2024 SsamPin. All rights reserved.
+            </p>
+</div>
+</main>
+</body></html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SsamPin Weekly Timetable</title>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&amp;family=Noto+Sans+KR:wght@300;400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#3c83f6", // Blue
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f172a", // Slate 900
+                        "surface-dark": "#1e293b", // Slate 800
+                        "surface-header": "#334155", // Slate 700
+                        "border-dark": "#475569", // Slate 600
+                        
+                        // Subject Colors
+                        "subject-blue": "#3b82f6", // Korean
+                        "subject-green": "#10b981", // Math
+                        "subject-purple": "#8b5cf6", // English
+                        "subject-indigo": "#6366f1", // Science
+                        "subject-orange": "#f97316", // Social Studies
+                        "subject-red": "#ef4444", // PE
+                        "subject-pink": "#ec4899", // Music
+                        "subject-teal": "#14b8a6", // Art
+                        "subject-cyan": "#06b6d4", // Creative Activity
+                    },
+                    fontFamily: {
+                        display: ["Lexend", "Noto Sans KR", "sans-serif"],
+                        sans: ["Noto Sans KR", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for better look in dark mode */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display overflow-hidden">
+<div class="flex h-screen w-full overflow-hidden">
+<!-- Sidebar -->
+<div class="flex h-full w-[280px] flex-col bg-background-dark border-r border-border-dark flex-shrink-0">
+<div class="flex flex-col h-full justify-between p-4">
+<div class="flex flex-col gap-6">
+<!-- Brand -->
+<div class="flex items-center gap-3 px-2">
+<div class="bg-center bg-no-repeat bg-cover rounded-full h-10 w-10 bg-gradient-to-br from-primary to-blue-600 shadow-lg shadow-primary/30" data-alt="User avatar gradient"></div>
+<div class="flex flex-col">
+<h1 class="text-white text-lg font-bold leading-tight">SsamPin</h1>
+<p class="text-slate-400 text-xs font-normal">Teacher Dashboard</p>
+</div>
+</div>
+<!-- Navigation -->
+<div class="flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-surface-dark transition-colors group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">home</span>
+<p class="text-slate-300 group-hover:text-white text-sm font-medium">홈</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl bg-primary shadow-lg shadow-primary/20" href="#">
+<span class="material-symbols-outlined text-white font-variation-settings-FILL-1">calendar_month</span>
+<p class="text-white text-sm font-bold">시간표</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-surface-dark transition-colors group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">group</span>
+<p class="text-slate-300 group-hover:text-white text-sm font-medium">학생 관리</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-surface-dark transition-colors group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">bar_chart</span>
+<p class="text-slate-300 group-hover:text-white text-sm font-medium">성적 관리</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-surface-dark transition-colors group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">settings</span>
+<p class="text-slate-300 group-hover:text-white text-sm font-medium">설정</p>
+</a>
+</div>
+</div>
+<!-- Bottom User Info -->
+<div class="mt-auto pt-4 border-t border-border-dark px-2">
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-white">KJ</div>
+<div class="flex flex-col">
+<p class="text-sm font-medium text-white">김준일 선생님</p>
+<p class="text-xs text-slate-400">1학년 2반 담임</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Main Content -->
+<div class="flex-1 flex flex-col h-full overflow-hidden bg-background-dark relative">
+<!-- Header Section -->
+<header class="flex flex-shrink-0 items-center justify-between px-8 py-6 border-b border-border-dark bg-background-dark z-10">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-3">
+<span class="text-3xl">📅</span>
+<h2 class="text-3xl font-black text-white tracking-tight">시간표</h2>
+</div>
+<p class="text-slate-400 text-sm font-medium pl-1">2026학년도 1학기 | 주간 시간표</p>
+</div>
+<div class="flex items-center gap-4">
+<!-- Toggle Switch -->
+<div class="flex bg-surface-dark p-1 rounded-xl border border-border-dark">
+<button class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold shadow-md transition-all">
+                            학급 시간표
+                        </button>
+<button class="px-4 py-2 rounded-lg text-slate-400 hover:text-white text-sm font-medium transition-all">
+                            교사 시간표
+                        </button>
+</div>
+<!-- Export Button -->
+<button class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-dark border border-border-dark hover:bg-slate-700 text-white text-sm font-bold transition-all active:scale-95">
+<span class="material-symbols-outlined text-[20px]">download</span>
+<span>내보내기</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Content Area -->
+<main class="flex-1 overflow-auto p-8 custom-scrollbar">
+<div class="mx-auto max-w-7xl flex flex-col gap-6">
+<!-- Timetable Grid -->
+<div class="rounded-2xl border border-border-dark bg-surface-dark overflow-hidden shadow-2xl shadow-black/20">
+<div class="w-full overflow-x-auto">
+<table class="w-full min-w-[800px] border-collapse">
+<thead>
+<tr class="bg-surface-header border-b border-border-dark">
+<th class="px-4 py-4 text-center text-slate-200 font-bold text-sm w-20 sticky left-0 bg-surface-header z-10 border-r border-border-dark">교시</th>
+<th class="px-4 py-4 text-center text-slate-200 font-bold text-sm w-24 border-r border-border-dark">시간</th>
+<th class="px-4 py-4 text-center text-slate-200 font-bold text-sm w-1/5 border-r border-border-dark">월</th>
+<th class="px-4 py-4 text-center text-slate-200 font-bold text-sm w-1/5 border-r border-border-dark">화</th>
+<th class="px-4 py-4 text-center text-slate-200 font-bold text-sm w-1/5 border-r border-border-dark">수</th>
+<th class="px-4 py-4 text-center text-slate-200 font-bold text-sm w-1/5 border-r border-border-dark">목</th>
+<!-- Friday Header Highlight -->
+<th class="px-4 py-4 text-center text-primary font-bold text-sm w-1/5 bg-primary/10 relative">
+<div class="absolute top-0 left-0 w-full h-1 bg-primary"></div>
+                                            금 (Today)
+                                        </th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-dark">
+<!-- 1st Period -->
+<tr class="group hover:bg-slate-800/50 transition-colors">
+<td class="px-4 py-4 text-center text-slate-400 font-medium text-sm bg-surface-dark sticky left-0 border-r border-border-dark">1교시</td>
+<td class="px-4 py-4 text-center text-slate-400 text-sm border-r border-border-dark font-mono">09:00</td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-blue/20 border border-subject-blue/30 flex items-center justify-center text-subject-blue font-bold text-sm">국어</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-green/20 border border-subject-green/30 flex items-center justify-center text-subject-green font-bold text-sm">수학</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-purple/20 border border-subject-purple/30 flex items-center justify-center text-subject-purple font-bold text-sm">영어</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-indigo/20 border border-subject-indigo/30 flex items-center justify-center text-subject-indigo font-bold text-sm">과학</div></td>
+<td class="p-2 bg-primary/5"><div class="h-14 w-full rounded-lg bg-subject-orange/20 border border-subject-orange/30 flex items-center justify-center text-subject-orange font-bold text-sm">사회</div></td>
+</tr>
+<!-- 2nd Period -->
+<tr class="group hover:bg-slate-800/50 transition-colors">
+<td class="px-4 py-4 text-center text-slate-400 font-medium text-sm bg-surface-dark sticky left-0 border-r border-border-dark">2교시</td>
+<td class="px-4 py-4 text-center text-slate-400 text-sm border-r border-border-dark font-mono">09:50</td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-indigo/20 border border-subject-indigo/30 flex items-center justify-center text-subject-indigo font-bold text-sm">과학</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-purple/20 border border-subject-purple/30 flex items-center justify-center text-subject-purple font-bold text-sm">영어</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-blue/20 border border-subject-blue/30 flex items-center justify-center text-subject-blue font-bold text-sm">국어</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-orange/20 border border-subject-orange/30 flex items-center justify-center text-subject-orange font-bold text-sm">사회</div></td>
+<td class="p-2 bg-primary/5"><div class="h-14 w-full rounded-lg bg-subject-teal/20 border border-subject-teal/30 flex items-center justify-center text-subject-teal font-bold text-sm">미술</div></td>
+</tr>
+<!-- 3rd Period (Current Active) -->
+<tr class="relative z-10">
+<!-- Active Row Indicator/Glow optional, but user asked for cell highlight mostly -->
+<td class="px-4 py-4 text-center text-amber-400 font-bold text-sm bg-surface-dark sticky left-0 border-r border-border-dark border-l-4 border-l-amber-400">3교시</td>
+<td class="px-4 py-4 text-center text-amber-400 text-sm border-r border-border-dark font-mono font-bold">10:40</td>
+<td class="p-2 border-r border-border-dark relative">
+<!-- Current Period Highlight -->
+<div class="absolute inset-0 bg-amber-500/10 pointer-events-none animate-pulse"></div>
+<div class="h-14 w-full rounded-lg bg-subject-green/20 border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center text-subject-green font-bold text-sm relative z-20">
+<span class="mr-1">수학</span>
+<span class="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1"></span>
+</div>
+</td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-indigo/20 border border-subject-indigo/30 flex items-center justify-center text-subject-indigo font-bold text-sm">과학</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-orange/20 border border-subject-orange/30 flex items-center justify-center text-subject-orange font-bold text-sm">사회</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-blue/20 border border-subject-blue/30 flex items-center justify-center text-subject-blue font-bold text-sm">국어</div></td>
+<td class="p-2 bg-primary/5"><div class="h-14 w-full rounded-lg bg-subject-red/20 border border-subject-red/30 flex items-center justify-center text-subject-red font-bold text-sm">체육</div></td>
+</tr>
+<!-- 4th Period -->
+<tr class="group hover:bg-slate-800/50 transition-colors">
+<td class="px-4 py-4 text-center text-slate-400 font-medium text-sm bg-surface-dark sticky left-0 border-r border-border-dark">4교시</td>
+<td class="px-4 py-4 text-center text-slate-400 text-sm border-r border-border-dark font-mono">11:30</td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-red/20 border border-subject-red/30 flex items-center justify-center text-subject-red font-bold text-sm">체육</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-teal/20 border border-subject-teal/30 flex items-center justify-center text-subject-teal font-bold text-sm">미술</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-green/20 border border-subject-green/30 flex items-center justify-center text-subject-green font-bold text-sm">수학</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-pink/20 border border-subject-pink/30 flex items-center justify-center text-subject-pink font-bold text-sm">음악</div></td>
+<td class="p-2 bg-primary/5"><div class="h-14 w-full rounded-lg bg-subject-blue/20 border border-subject-blue/30 flex items-center justify-center text-subject-blue font-bold text-sm">국어</div></td>
+</tr>
+<!-- Lunch Break -->
+<tr class="bg-slate-800/80">
+<td class="px-4 py-3 text-center text-slate-400 font-medium text-sm bg-slate-800 sticky left-0 border-r border-border-dark">점심</td>
+<td class="px-4 py-3 text-center text-slate-400 text-sm border-r border-border-dark font-mono">12:20</td>
+<td class="px-4 py-3 text-center text-slate-500 text-sm font-medium tracking-wide" colspan="5">
+                                            🍽️ 점심시간 (12:20 ~ 13:10)
+                                        </td>
+</tr>
+<!-- 5th Period -->
+<tr class="group hover:bg-slate-800/50 transition-colors">
+<td class="px-4 py-4 text-center text-slate-400 font-medium text-sm bg-surface-dark sticky left-0 border-r border-border-dark">5교시</td>
+<td class="px-4 py-4 text-center text-slate-400 text-sm border-r border-border-dark font-mono">13:10</td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-orange/20 border border-subject-orange/30 flex items-center justify-center text-subject-orange font-bold text-sm">사회</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-blue/20 border border-subject-blue/30 flex items-center justify-center text-subject-blue font-bold text-sm">국어</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-cyan/20 border border-subject-cyan/30 flex items-center justify-center text-subject-cyan font-bold text-sm">창체</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-purple/20 border border-subject-purple/30 flex items-center justify-center text-subject-purple font-bold text-sm">영어</div></td>
+<td class="p-2 bg-primary/5"><div class="h-14 w-full rounded-lg bg-subject-pink/20 border border-subject-pink/30 flex items-center justify-center text-subject-pink font-bold text-sm">음악</div></td>
+</tr>
+<!-- 6th Period -->
+<tr class="group hover:bg-slate-800/50 transition-colors">
+<td class="px-4 py-4 text-center text-slate-400 font-medium text-sm bg-surface-dark sticky left-0 border-r border-border-dark">6교시</td>
+<td class="px-4 py-4 text-center text-slate-400 text-sm border-r border-border-dark font-mono">14:00</td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-teal/20 border border-subject-teal/30 flex items-center justify-center text-subject-teal font-bold text-sm">미술</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-red/20 border border-subject-red/30 flex items-center justify-center text-subject-red font-bold text-sm">체육</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-pink/20 border border-subject-pink/30 flex items-center justify-center text-subject-pink font-bold text-sm">음악</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-cyan/20 border border-subject-cyan/30 flex items-center justify-center text-subject-cyan font-bold text-sm">창체</div></td>
+<td class="p-2 bg-primary/5"><div class="h-14 w-full rounded-lg bg-subject-cyan/20 border border-subject-cyan/30 flex items-center justify-center text-subject-cyan font-bold text-sm">자율</div></td>
+</tr>
+<!-- 7th Period -->
+<tr class="group hover:bg-slate-800/50 transition-colors">
+<td class="px-4 py-4 text-center text-slate-400 font-medium text-sm bg-surface-dark sticky left-0 border-r border-border-dark">7교시</td>
+<td class="px-4 py-4 text-center text-slate-400 text-sm border-r border-border-dark font-mono">14:50</td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-cyan/20 border border-subject-cyan/30 flex items-center justify-center text-subject-cyan font-bold text-sm">자율</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-cyan/20 border border-subject-cyan/30 flex items-center justify-center text-subject-cyan font-bold text-sm">동아리</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-cyan/20 border border-subject-cyan/30 flex items-center justify-center text-subject-cyan font-bold text-sm">진로</div></td>
+<td class="p-2 border-r border-border-dark"><div class="h-14 w-full rounded-lg bg-subject-cyan/20 border border-subject-cyan/30 flex items-center justify-center text-subject-cyan font-bold text-sm">봉사</div></td>
+<td class="p-2 bg-primary/5 border-l-0">
+<!-- Empty cell for Friday 7th period as requested -->
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Bottom Info Card -->
+<div class="flex items-center justify-center py-4 bg-surface-dark/50 rounded-xl border border-border-dark border-dashed">
+<span class="text-slate-400 font-medium text-sm">1학년 2반  |  담임: 김준일  |  2026학년도 1학기</span>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>
