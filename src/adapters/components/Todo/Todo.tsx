@@ -32,7 +32,7 @@ export function Todo() {
 
   const [filter, setFilter] = useState<DateFilter>('all');
   const [newText, setNewText] = useState('');
-  const [newDueDate, setNewDueDate] = useState('');
+  const [newDueDate, setNewDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -60,7 +60,6 @@ export function Todo() {
     if (!text) return;
     void addTodo(text, newDueDate || undefined);
     setNewText('');
-    setNewDueDate('');
   }, [newText, newDueDate, addTodo]);
 
   const handleKeyDown = useCallback(
