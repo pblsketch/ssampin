@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "쌤핀 - 교사용 데스크톱 대시보드",
   "private": true,
+  "license": "MIT",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
