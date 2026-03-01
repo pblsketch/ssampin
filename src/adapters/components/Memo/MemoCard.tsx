@@ -75,11 +75,13 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, canvasRef }: M
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (content !== memo.content) {
+          void updateMemo(memo.id, content);
+        }
         setEditing(false);
-        setContent(memo.content);
       }
     },
-    [memo.content],
+    [content, memo.content, memo.id, updateMemo],
   );
 
   const handleMouseDown = useCallback(

@@ -627,14 +627,14 @@ export function SettingsPage() {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium text-sp-text">기본 투명도</span>
-                  <span className="text-sm font-bold text-sp-accent">{draft.widget.opacity}%</span>
+                  <span className="text-sm font-bold text-sp-accent">{Math.round(draft.widget.opacity * 100)}%</span>
                 </div>
                 <input
                   type="range"
                   min={0}
                   max={100}
-                  value={draft.widget.opacity}
-                  onChange={(e) => patchWidget({ opacity: Number(e.target.value) })}
+                  value={Math.round(draft.widget.opacity * 100)}
+                  onChange={(e) => patchWidget({ opacity: Number(e.target.value) / 100 })}
                   className="w-full h-2 bg-sp-surface rounded-full appearance-none cursor-pointer accent-sp-accent"
                 />
               </div>
