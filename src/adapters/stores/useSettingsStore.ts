@@ -60,7 +60,7 @@ const DEFAULT_SETTINGS: Settings = {
     doNotDisturbStart: '22:00',
     doNotDisturbEnd: '07:00',
   },
-  theme: 'dark',
+  theme: 'system',
   fontSize: 'medium',
   neis: {
     schoolCode: '',
