@@ -12,6 +12,7 @@
     --sp-highlight: #f59e0b;
     --sp-text: #e2e8f0;
     --sp-muted: #94a3b8;
+    --memo-dot-color: #223149;
   }
 
   body {
@@ -63,6 +64,7 @@ body {
   --sp-highlight: #d97706;
   --sp-text: #0f172a;
   --sp-muted: #64748b;
+  --memo-dot-color: rgba(0, 0, 0, 0.12);
 }
 
 .theme-dark {
@@ -106,10 +108,36 @@ body {
 /* ─── Light Theme: Fix static text colors ─── */
 
 /* text-white on light bg → sp-text (dark) */
-/* Exception: keep white text inside explicit colored containers (handled naturally by specificity) */
 .theme-light .text-white {
   color: var(--sp-text) !important;
 }
+
+/* ─── Restore white text on colored/accent backgrounds ─── */
+/* Same element: e.g. <button class="bg-sp-accent text-white"> */
+.theme-light .bg-sp-accent.text-white { color: white !important; }
+/* Child element: e.g. <div class="bg-sp-accent"><span class="text-white"> */
+.theme-light .bg-sp-accent .text-white { color: white !important; }
+/* Subject/category color backgrounds */
+.theme-light [class*="bg-blue-"].text-white,
+.theme-light [class*="bg-blue-"] .text-white { color: white !important; }
+.theme-light [class*="bg-red-"].text-white,
+.theme-light [class*="bg-red-"] .text-white { color: white !important; }
+.theme-light [class*="bg-green-"].text-white,
+.theme-light [class*="bg-green-"] .text-white { color: white !important; }
+.theme-light [class*="bg-purple-"].text-white,
+.theme-light [class*="bg-purple-"] .text-white { color: white !important; }
+.theme-light [class*="bg-orange-"].text-white,
+.theme-light [class*="bg-orange-"] .text-white { color: white !important; }
+.theme-light [class*="bg-pink-"].text-white,
+.theme-light [class*="bg-pink-"] .text-white { color: white !important; }
+.theme-light [class*="bg-indigo-"].text-white,
+.theme-light [class*="bg-indigo-"] .text-white { color: white !important; }
+.theme-light [class*="bg-teal-"].text-white,
+.theme-light [class*="bg-teal-"] .text-white { color: white !important; }
+.theme-light [class*="bg-emerald-"].text-white,
+.theme-light [class*="bg-emerald-"] .text-white { color: white !important; }
+.theme-light [class*="bg-rose-"].text-white,
+.theme-light [class*="bg-rose-"] .text-white { color: white !important; }
 
 /* text-slate-300 → muted in light mode */
 .theme-light .text-slate-300 { color: var(--sp-muted) !important; }

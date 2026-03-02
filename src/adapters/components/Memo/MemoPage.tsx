@@ -85,7 +85,7 @@ export function MemoPage() {
         ref={canvasRef}
         className="relative flex-1 overflow-auto"
         style={{
-          backgroundImage: 'radial-gradient(#223149 1px, transparent 1px)',
+          backgroundImage: 'radial-gradient(var(--memo-dot-color, #223149) 1px, transparent 1px)',
           backgroundSize: '24px 24px',
         }}
       >
