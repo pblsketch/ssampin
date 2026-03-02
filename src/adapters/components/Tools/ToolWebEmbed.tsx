@@ -53,14 +53,26 @@ export function ToolWebEmbed({ url, title, onBack, isFullscreen }: ToolWebEmbedP
     const webview = webviewRef.current;
     if (!webview) return;
 
+    // 타임아웃 폴백: 12초 후에도 로딩 중이면 강제로 표시
+    const timeoutId = setTimeout(() => setIsLoading(false), 12000);
+
+    const stopLoading = () => {
+      clearTimeout(timeoutId);
+      setIsLoading(false);
+    };
+
     const onStartLoading = () => {
       setIsLoading(true);
       setHasError(false);
     };
-    const onStopLoading = () => setIsLoading(false);
+    // dom-ready: DOM이 준비되면 표시 (SPA 포함 가장 신뢰성 높음)
+    const onDomReady = () => stopLoading();
+    // did-finish-load: 네비게이션 완료 시 폴백
+    const onFinishLoad = () => stopLoading();
     const onFailLoad = (e: Event) => {
       const errorCode = (e as Event & { errorCode: number }).errorCode;
       if (errorCode !== 0 && errorCode !== -3) {
+        clearTimeout(timeoutId);
         setIsLoading(false);
         setHasError(true);
       }
@@ -71,14 +83,17 @@ export function ToolWebEmbed({ url, title, onBack, isFullscreen }: ToolWebEmbedP
     };
 
     webview.addEventListener('did-start-loading', onStartLoading);
-    webview.addEventListener('did-stop-loading', onStopLoading);
+    webview.addEventListener('dom-ready', onDomReady);
+    webview.addEventListener('did-finish-load', onFinishLoad);
     webview.addEventListener('did-fail-load', onFailLoad);
     webview.addEventListener('did-navigate', onNavigate);
     webview.addEventListener('did-navigate-in-page', onNavigate);
 
     return () => {
+      clearTimeout(timeoutId);
       webview.removeEventListener('did-start-loading', onStartLoading);
-      webview.removeEventListener('did-stop-loading', onStopLoading);
+      webview.removeEventListener('dom-ready', onDomReady);
+      webview.removeEventListener('did-finish-load', onFinishLoad);
       webview.removeEventListener('did-fail-load', onFailLoad);
       webview.removeEventListener('did-navigate', onNavigate);
       webview.removeEventListener('did-navigate-in-page', onNavigate);
