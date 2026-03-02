@@ -48,8 +48,7 @@ export const metadata: Metadata = {
     icon: '/favicon.ico',
   },
   verification: {
-    // TODO: Google Search Console 등록 후 인증 코드 입력
-    google: 'GOOGLE_VERIFICATION_CODE',
+    google: 'googlea16810e6f264caeb',
     // TODO: Naver Search Advisor 등록 후 인증 코드 입력
     other: {
       'naver-site-verification': ['NAVER_VERIFICATION_CODE'],
