@@ -1,4 +1,4 @@
-import { GITHUB_URL } from '@/config';
+import { GITHUB_URL, VERSION } from '@/config';
 
 export default function Footer() {
   return (
@@ -18,7 +18,7 @@ export default function Footer() {
           </a>
         </div>
         <p className="mt-4 text-xs text-sp-muted/40">
-          © 2026 SsamPin. All rights reserved.
+          © 2026 SsamPin v{VERSION} · All rights reserved.
         </p>
       </div>
     </footer>

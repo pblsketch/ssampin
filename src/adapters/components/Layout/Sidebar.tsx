@@ -240,7 +240,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           <span className="text-xs font-medium">건의사항 보내기</span>
         </button>
 
-        <p className="text-[10px] text-sp-muted/50 text-center mt-2">v0.1.0</p>
+        <p className="text-[10px] text-sp-muted/50 text-center mt-2">v0.1.5</p>
       </div>
     </aside>
   );
