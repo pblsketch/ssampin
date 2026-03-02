@@ -10,10 +10,10 @@ const MEMO_BG: Record<MemoColor, string> = {
 };
 
 const MEMO_TEXT: Record<MemoColor, string> = {
-  yellow: 'text-yellow-200',
-  pink: 'text-pink-200',
-  green: 'text-green-200',
-  blue: 'text-blue-200',
+  yellow: 'text-sp-text',
+  pink: 'text-sp-text',
+  green: 'text-sp-text',
+  blue: 'text-sp-text',
 };
 
 export function DashboardMemo() {

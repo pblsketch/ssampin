@@ -158,6 +158,55 @@ body {
 .theme-light .ring-slate-600 { --tw-ring-color: var(--sp-border) !important; }
 .theme-light .ring-slate-700\/50 { --tw-ring-color: rgba(148, 163, 184, 0.4) !important; }
 
+/* ─── Light Theme: Darken colored text for readability on pastel/colored backgrounds ─── */
+/* text-*-200 → very dark (800/900) for WCAG AA on light backgrounds */
+.theme-light .text-yellow-200 { color: #92400e !important; }
+.theme-light .text-green-200  { color: #14532d !important; }
+.theme-light .text-blue-200   { color: #1e3a8a !important; }
+.theme-light .text-purple-200 { color: #4c1d95 !important; }
+.theme-light .text-pink-200   { color: #831843 !important; }
+.theme-light .text-red-200    { color: #7f1d1d !important; }
+.theme-light .text-orange-200 { color: #7c2d12 !important; }
+.theme-light .text-indigo-200 { color: #312e81 !important; }
+.theme-light .text-teal-200   { color: #134e4a !important; }
+.theme-light .text-emerald-200 { color: #064e3b !important; }
+.theme-light .text-cyan-200   { color: #164e63 !important; }
+.theme-light .text-violet-200 { color: #4c1d95 !important; }
+.theme-light .text-rose-200   { color: #881337 !important; }
+
+/* text-*-300 → dark (700) for WCAG AA on light backgrounds */
+.theme-light .text-yellow-300 { color: #a16207 !important; }
+.theme-light .text-green-300  { color: #15803d !important; }
+.theme-light .text-blue-300   { color: #1d4ed8 !important; }
+.theme-light .text-purple-300 { color: #7e22ce !important; }
+.theme-light .text-pink-300   { color: #be185d !important; }
+.theme-light .text-red-300    { color: #b91c1c !important; }
+.theme-light .text-orange-300 { color: #c2410c !important; }
+.theme-light .text-indigo-300 { color: #4338ca !important; }
+.theme-light .text-teal-300   { color: #0f766e !important; }
+.theme-light .text-emerald-300 { color: #047857 !important; }
+.theme-light .text-cyan-300   { color: #0e7490 !important; }
+.theme-light .text-violet-300 { color: #6d28d9 !important; }
+.theme-light .text-rose-300   { color: #be123c !important; }
+
+/* text-*-400 → dark (700) for WCAG AA on light/pastel backgrounds */
+.theme-light .text-yellow-400 { color: #a16207 !important; }
+.theme-light .text-green-400  { color: #15803d !important; }
+.theme-light .text-blue-400   { color: #1d4ed8 !important; }
+.theme-light .text-purple-400 { color: #7e22ce !important; }
+.theme-light .text-pink-400   { color: #be185d !important; }
+.theme-light .text-red-400    { color: #b91c1c !important; }
+.theme-light .text-orange-400 { color: #c2410c !important; }
+.theme-light .text-indigo-400 { color: #4338ca !important; }
+.theme-light .text-teal-400   { color: #0f766e !important; }
+.theme-light .text-emerald-400 { color: #047857 !important; }
+.theme-light .text-cyan-400   { color: #0e7490 !important; }
+.theme-light .text-violet-400 { color: #6d28d9 !important; }
+.theme-light .text-rose-400   { color: #be123c !important; }
+
+/* text-yellow-500 is #eab308, too light on any light background */
+.theme-light .text-yellow-500 { color: #92400e !important; }
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
