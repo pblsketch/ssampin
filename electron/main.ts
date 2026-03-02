@@ -421,7 +421,11 @@ function setupAutoUpdater(): void {
 
   autoUpdater.on('error', (err: Error) => {
     console.error('[autoUpdater] error:', err);
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    // 404 (latest.yml 미존재), 네트워크 오류 등은 사용자에게 표시하지 않음
+    // 업데이트 확인은 백그라운드 작업이므로 조용히 실패해도 무방
+    const silentErrors = ['404', 'net::ERR_', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNREFUSED', 'HttpError'];
+    const isSilent = silentErrors.some(keyword => err.message.includes(keyword));
+    if (!isSilent && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update:error', err.message);
     }
   });
