@@ -161,7 +161,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           <img src="/icon_new.svg" alt="쌤핀" className="w-8 h-8" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">쌤핀</h1>
+          <h1 className="text-xl font-bold text-sp-text tracking-tight">쌤핀</h1>
           <p className="text-xs text-sp-muted">Teacher&apos;s Dashboard</p>
         </div>
       </div>
@@ -216,13 +216,13 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
         </button>
 
         <div className="flex items-center gap-3 px-4 py-2 mt-3">
-          <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center">
-            <span className="material-symbols-outlined text-slate-300 text-base">
+          <div className="w-8 h-8 rounded-full bg-sp-border flex items-center justify-center">
+            <span className="material-symbols-outlined text-sp-muted text-base">
               person
             </span>
           </div>
           <div>
-            <p className="text-sm font-medium text-white">
+            <p className="text-sm font-medium text-sp-text">
               {settings.teacherName ? `${settings.teacherName} 선생님` : '선생님'}
             </p>
             <p className="text-xs text-sp-muted">

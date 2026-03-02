@@ -141,7 +141,7 @@ export function StudentRecords() {
     <div className="h-full flex flex-col">
       {/* 헤더 */}
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+        <h2 className="text-2xl font-bold text-sp-text flex items-center gap-2">
           <span>👩‍🏫</span>
           <span>담임 메모장</span>
         </h2>

@@ -71,7 +71,7 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
           <span className={`text-xs font-semibold ${colors.text} mb-0.5`}>
             {formatEventDate(event.date)}
           </span>
-          <h4 className={`text-base font-bold text-white group-hover:${colors.text} transition-colors`}>
+          <h4 className={`text-base font-bold text-sp-text group-hover:${colors.text} transition-colors`}>
             {event.title}
           </h4>
         </div>
@@ -191,7 +191,7 @@ export function EventList({ events, categories, holidays, onEdit, onDelete }: Ev
   return (
     <div className="flex flex-col gap-4 overflow-y-auto pr-2 pb-10 h-full">
       <div className="flex items-center justify-between mb-2 px-2">
-        <h3 className="text-lg font-bold text-white">다가오는 일정</h3>
+        <h3 className="text-lg font-bold text-sp-text">다가오는 일정</h3>
       </div>
 
       {mergedItems.length === 0 ? (

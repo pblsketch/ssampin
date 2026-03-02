@@ -88,7 +88,7 @@ export function Todo() {
     <div className="flex flex-col h-full -m-8">
       {/* 헤더 */}
       <header className="h-20 shrink-0 px-8 flex items-center justify-between border-b border-sp-border bg-sp-bg">
-        <h2 className="text-white text-2xl font-bold flex items-center gap-3">
+        <h2 className="text-sp-text text-2xl font-bold flex items-center gap-3">
           <span className="text-3xl">✅</span> 할 일
         </h2>
 
@@ -118,8 +118,8 @@ export function Todo() {
                 onClick={() => setFilter(key)}
                 className={`px-5 py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${
                   filter === key
-                    ? 'bg-slate-700 text-white ring-slate-600'
-                    : 'bg-sp-card hover:bg-slate-700 text-slate-300 ring-slate-700/50'
+                    ? 'bg-sp-accent text-white ring-sp-accent/30'
+                    : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
                 }`}
               >
                 {FILTER_LABELS[key]}

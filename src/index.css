@@ -103,6 +103,33 @@ body {
 .theme-light .hover\:border-slate-500:hover { border-color: var(--sp-accent) !important; }
 .theme-light .hover\:border-slate-600:hover { border-color: var(--sp-border) !important; }
 
+/* ─── Light Theme: Fix static text colors ─── */
+
+/* text-white on light bg → sp-text (dark) */
+/* Exception: keep white text inside explicit colored containers (handled naturally by specificity) */
+.theme-light .text-white {
+  color: var(--sp-text) !important;
+}
+
+/* text-slate-300 → muted in light mode */
+.theme-light .text-slate-300 { color: var(--sp-muted) !important; }
+/* text-slate-400 already muted-ish but ensure */
+.theme-light .text-slate-500 { color: var(--sp-muted) !important; }
+
+/* ─── Light Theme: Fix static background colors ─── */
+
+/* bg-slate-600/700 avatars and containers → light surface */
+.theme-light .bg-slate-600 { background-color: var(--sp-surface) !important; }
+.theme-light .bg-slate-700 { background-color: var(--sp-surface) !important; }
+
+/* bg-slate-600/700 borders → sp-border */
+.theme-light .border-slate-600 { border-color: var(--sp-border) !important; }
+.theme-light .border-slate-700 { border-color: var(--sp-border) !important; }
+
+/* ring-slate overrides */
+.theme-light .ring-slate-600 { --tw-ring-color: var(--sp-border) !important; }
+.theme-light .ring-slate-700\/50 { --tw-ring-color: rgba(148, 163, 184, 0.4) !important; }
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

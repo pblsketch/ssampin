@@ -162,7 +162,7 @@ export function Schedule() {
     <div className="flex flex-col h-full -m-8">
       {/* 헤더 */}
       <header className="h-20 shrink-0 px-8 flex items-center justify-between border-b border-sp-border bg-sp-bg">
-        <h2 className="text-white text-2xl font-bold flex items-center gap-3">
+        <h2 className="text-sp-text text-2xl font-bold flex items-center gap-3">
           <span className="text-3xl">📋</span> 일정 관리
         </h2>
         <div className="flex items-center gap-2">
@@ -215,8 +215,8 @@ export function Schedule() {
                 type="button"
                 onClick={() => setSelectedCategory(null)}
                 className={`px-5 py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${selectedCategory === null
-                  ? 'bg-slate-700 text-white ring-slate-600'
-                  : 'bg-sp-card hover:bg-slate-700 text-slate-300 ring-slate-700/50'
+                  ? 'bg-sp-accent text-white ring-sp-accent/30'
+                  : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
                   }`}
               >
                 전체
@@ -235,8 +235,8 @@ export function Schedule() {
                       setSelectedCategory(isActive ? null : cat.id)
                     }
                     className={`px-5 py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 ${isActive
-                      ? 'bg-slate-700 text-white ring-slate-600 font-bold'
-                      : 'bg-sp-card hover:bg-slate-700 text-slate-300 ring-slate-700/50'
+                      ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
+                      : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
                       }`}
                   >
                     <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
