@@ -78,8 +78,9 @@ export function ClassTimetable() {
             <tr key={period}>
               <td className="py-1 text-center text-sp-muted text-[11px]">{period}</td>
               {DAYS.map(({ key }) => {
-                const dayData = classSchedule[key] as readonly string[] | undefined;
-                const subject = dayData?.[period - 1] ?? '';
+                const dayData = classSchedule[key];
+                const cp = dayData?.[period - 1];
+                const subject = cp?.subject ?? '';
                 const colorClass = SUBJECT_BG[subject] ?? 'bg-sp-surface/50 text-sp-muted';
 
                 return (

@@ -61,13 +61,18 @@ export async function exportClassScheduleToExcel(
   for (let p = 0; p < maxPeriods; p++) {
     const row = ws.addRow([
       `${p + 1}교시`,
-      ...DAYS.map((day) => schedule[day]?.[p] ?? ''),
+      ...DAYS.map((day) => {
+        const cp = schedule[day]?.[p];
+        if (!cp) return '';
+        return cp.teacher ? `${cp.subject} (${cp.teacher})` : cp.subject;
+      }),
     ]);
     row.eachCell((cell, colNum) => {
       if (colNum === 1) {
         applyHeaderStyle(cell);
       } else {
-        const subject = cell.value as string;
+        const val = cell.value as string;
+        const subject = val.split(' (')[0] ?? '';
         applyCellStyle(cell, SUBJECT_COLORS[subject]);
       }
     });

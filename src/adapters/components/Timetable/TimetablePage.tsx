@@ -6,7 +6,7 @@ import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import type { TeacherPeriod } from '@domain/entities/Timetable';
+import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import {
   getSubjectStyle,
   getLunchBreakIndex,
@@ -31,16 +31,10 @@ export function TimetablePage() {
     classSchedule,
     teacherSchedule,
     load: loadSchedule,
-    undo,
-    redo,
-    clearAll,
-    canUndo,
-    canRedo,
   } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
-  const [tab, setTab] = useState<TabType>('class');
+  const [tab, setTab] = useState<TabType>('teacher');
   const [isEditing, setIsEditing] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -53,30 +47,6 @@ export function TimetablePage() {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
-
-  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 키보드 단축키
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isEditing) return; // 편집기 내 텍스트 입력 Undo와 충돌 방지
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        if (canUndo()) {
-          e.preventDefault();
-          void undo();
-        }
-      }
-      if (
-        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') ||
-        ((e.ctrlKey || e.metaKey) && e.key === 'y')
-      ) {
-        if (canRedo()) {
-          e.preventDefault();
-          void redo();
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing, undo, redo, canUndo, canRedo]);
 
   const dayOfWeek = useMemo(() => getDayOfWeek(now), [now]);
   const currentPeriod = useMemo(
@@ -202,37 +172,9 @@ export function TimetablePage() {
         <div className="flex items-center gap-4">
           {/* 탭 토글 */}
           <div className="flex rounded-xl bg-sp-surface p-1 border border-sp-border">
-            <TabButton active={tab === 'class'} onClick={() => setTab('class')} label="학급 시간표" />
             <TabButton active={tab === 'teacher'} onClick={() => setTab('teacher')} label="교사 시간표" />
+            <TabButton active={tab === 'class'} onClick={() => setTab('class')} label="학급 시간표" />
           </div>
-          {/* 실행 취소 */}
-          <button
-            onClick={() => void undo()}
-            title="실행 취소 (Ctrl+Z)"
-            disabled={!canUndo()}
-            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-[20px]">undo</span>
-            <span>실행 취소</span>
-          </button>
-          {/* 다시 실행 */}
-          <button
-            onClick={() => void redo()}
-            title="다시 실행 (Ctrl+Shift+Z)"
-            disabled={!canRedo()}
-            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-[20px]">redo</span>
-            <span>다시 실행</span>
-          </button>
-          {/* 모두 삭제 */}
-          <button
-            onClick={() => setShowClearConfirm(true)}
-            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-red-500/30 px-4 py-2.5 text-sm font-bold text-red-400 hover:bg-red-500/10 transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
-            <span>모두 삭제</span>
-          </button>
           {/* 편집 버튼 */}
           <button
             onClick={() => setIsEditing(true)}
@@ -291,8 +233,8 @@ export function TimetablePage() {
                         isCurrent={isCurrent}
                         dayOfWeek={dayOfWeek}
                         tab={tab}
-                        classSubjects={DAYS_OF_WEEK.map(
-                          (d) => (classSchedule[d] ?? [])[idx] ?? '',
+                        classPeriods={DAYS_OF_WEEK.map(
+                          (d) => (classSchedule[d] ?? [])[idx] ?? null,
                         )}
                         teacherPeriods={DAYS_OF_WEEK.map(
                           (d) => (teacherSchedule[d] ?? [])[idx] ?? null,
@@ -314,41 +256,6 @@ export function TimetablePage() {
         </div>
       </div>
 
-      {/* 모두 삭제 확인 모달 */}
-      {showClearConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-sp-text mb-2">시간표 모두 삭제</h3>
-            <p className="text-sm text-sp-muted mb-6">
-              학급 시간표와 교사 시간표를 모두 초기화합니다.
-              <br />
-              <span className="text-sp-accent">실행 취소(Ctrl+Z)로 복원할 수 있습니다.</span>
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
-              >
-                취소
-              </button>
-              <button
-                onClick={() => {
-                  void clearAll(settings.maxPeriods).then(() => {
-                    useToastStore.getState().show('시간표가 모두 삭제되었습니다.', 'info', {
-                      label: '실행 취소',
-                      onClick: () => void useScheduleStore.getState().undo(),
-                    });
-                  });
-                  setShowClearConfirm(false);
-                }}
-                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
-              >
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -419,7 +326,7 @@ interface PeriodRowProps {
   isCurrent: boolean;
   dayOfWeek: DayOfWeek | null;
   tab: TabType;
-  classSubjects: string[];
+  classPeriods: (ClassPeriod | null)[];
   teacherPeriods: (TeacherPeriod | null)[];
   lunchBefore: boolean;
   lunchTimeStr: string;
@@ -430,7 +337,7 @@ function PeriodRow({
   isCurrent,
   dayOfWeek,
   tab,
-  classSubjects,
+  classPeriods,
   teacherPeriods,
   lunchBefore,
   lunchTimeStr,
@@ -488,11 +395,12 @@ function PeriodRow({
           const isToday = day === dayOfWeek;
 
           if (tab === 'class') {
-            const subject = classSubjects[dayIdx] ?? '';
+            const cp = classPeriods[dayIdx] ?? null;
             return (
               <SubjectCell
                 key={day}
-                subject={subject}
+                subject={cp?.subject ?? ''}
+                teacher={cp?.teacher ?? ''}
                 isToday={isToday}
                 isCurrent={isCurrent && isToday}
                 isLastCol={dayIdx === DAYS_OF_WEEK.length - 1}
@@ -518,12 +426,13 @@ function PeriodRow({
 
 interface SubjectCellProps {
   subject: string;
+  teacher: string;
   isToday: boolean;
   isCurrent: boolean;
   isLastCol: boolean;
 }
 
-function SubjectCell({ subject, isToday, isCurrent, isLastCol }: SubjectCellProps) {
+function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol }: SubjectCellProps) {
   if (!subject) {
     return (
       <td
@@ -540,6 +449,13 @@ function SubjectCell({ subject, isToday, isCurrent, isLastCol }: SubjectCellProp
 
   const style = getSubjectStyle(subject);
 
+  const cellContent = (
+    <div className="flex flex-col items-center justify-center gap-0.5">
+      <span className={`${style.text} font-bold text-sm`}>{subject}</span>
+      {teacher && <span className="text-sp-muted text-xs">{teacher}</span>}
+    </div>
+  );
+
   if (isCurrent) {
     return (
       <td
@@ -549,9 +465,9 @@ function SubjectCell({ subject, isToday, isCurrent, isLastCol }: SubjectCellProp
       >
         <div className="absolute inset-0 bg-amber-500/10 pointer-events-none animate-pulse" />
         <div
-          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center ${style.text} font-bold text-sm relative z-20`}
+          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20`}
         >
-          <span>{subject}</span>
+          {cellContent}
           <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
         </div>
       </td>
@@ -565,9 +481,9 @@ function SubjectCell({ subject, isToday, isCurrent, isLastCol }: SubjectCellProp
       }`}
     >
       <div
-        className={`h-14 w-full rounded-lg ${style.bg} border ${style.border} flex items-center justify-center ${style.text} font-bold text-sm`}
+        className={`h-14 w-full rounded-lg ${style.bg} border ${style.border} flex items-center justify-center`}
       >
-        {subject}
+        {cellContent}
       </div>
     </td>
   );

@@ -1,9 +1,11 @@
 export type { Student } from './Student';
 
 export type {
+  ClassPeriod,
   TeacherPeriod,
   ClassScheduleData,
   TeacherScheduleData,
+  LegacyClassScheduleData,
 } from './Timetable';
 
 export type { SeatingData } from './Seating';

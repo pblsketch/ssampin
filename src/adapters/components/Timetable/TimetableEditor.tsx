@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod } from '@domain/entities/Timetable';
+import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import { parseMinutes } from '@domain/rules/periodRules';
 import {
   getLunchBreakIndex,
@@ -34,15 +35,19 @@ function formatTimeFromMinutes(totalMinutes: number): string {
 }
 
 export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps) {
-  const { classSchedule, teacherSchedule, updateClassSchedule, updateTeacherSchedule } =
-    useScheduleStore();
+  const {
+    classSchedule, teacherSchedule, updateClassSchedule, updateTeacherSchedule,
+    undo, redo, clearAll, canUndo, canRedo,
+  } = useScheduleStore();
   const { settings, update: updateSettings } = useSettingsStore();
 
   // 편집용 로컬 상태 — 문자열 2D 배열 [periodIdx][dayIdx]
-  const [classGrid, setClassGrid] = useState<string[][]>([]);
+  const [classGrid, setClassGrid] = useState<string[][]>([]);          // 학급: 과목
+  const [classTeacherGrid, setClassTeacherGrid] = useState<string[][]>([]); // 학급: 담당 교사
   const [teacherSubjectGrid, setTeacherSubjectGrid] = useState<string[][]>([]);
   const [teacherClassroomGrid, setTeacherClassroomGrid] = useState<string[][]>([]);
   const [saving, setSaving] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const maxPeriods = settings.maxPeriods;
 
@@ -55,30 +60,55 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   // 초기 데이터 → 편집 그리드로 복사
   useEffect(() => {
     const cGrid: string[][] = [];
+    const cTchGrid: string[][] = [];
     const tSubGrid: string[][] = [];
     const tClsGrid: string[][] = [];
 
     for (let p = 0; p < maxPeriods; p++) {
       const cRow: string[] = [];
+      const cTchRow: string[] = [];
       const tSubRow: string[] = [];
       const tClsRow: string[] = [];
 
       for (const day of DAYS_OF_WEEK) {
-        cRow.push((classSchedule[day] ?? [])[p] ?? '');
+        const cp = (classSchedule[day] ?? [])[p];
+        cRow.push(cp?.subject ?? '');
+        cTchRow.push(cp?.teacher ?? '');
         const tp = (teacherSchedule[day] ?? [])[p] ?? null;
         tSubRow.push(tp?.subject ?? '');
         tClsRow.push(tp?.classroom ?? '');
       }
 
       cGrid.push(cRow);
+      cTchGrid.push(cTchRow);
       tSubGrid.push(tSubRow);
       tClsGrid.push(tClsRow);
     }
 
     setClassGrid(cGrid);
+    setClassTeacherGrid(cTchGrid);
     setTeacherSubjectGrid(tSubGrid);
     setTeacherClassroomGrid(tClsGrid);
   }, [classSchedule, teacherSchedule, maxPeriods]);
+
+  // Ctrl+Z / Ctrl+Shift+Z 키보드 단축키 (input 포커스 시 제외)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        if (canUndo()) { e.preventDefault(); void undo(); }
+      }
+      if (
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') ||
+        ((e.ctrlKey || e.metaKey) && e.key === 'y')
+      ) {
+        if (canRedo()) { e.preventDefault(); void redo(); }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo, canUndo, canRedo]);
 
   const visiblePeriodTimes = useMemo(
     () => localPeriodTimes.slice(0, localMaxPeriods),
@@ -97,6 +127,19 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   const updateClassCell = useCallback(
     (periodIdx: number, dayIdx: number, value: string) => {
       setClassGrid((prev) => {
+        const next = prev.map((row) => [...row]);
+        if (next[periodIdx]) {
+          next[periodIdx]![dayIdx] = value;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const updateClassTeacherCell = useCallback(
+    (periodIdx: number, dayIdx: number, value: string) => {
+      setClassTeacherGrid((prev) => {
         const next = prev.map((row) => [...row]);
         if (next[periodIdx]) {
           next[periodIdx]![dayIdx] = value;
@@ -155,6 +198,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     // 그리드 행이 부족하면 추가
     if (classGrid.length < newCount) {
       setClassGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
+      setClassTeacherGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
       setTeacherSubjectGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
       setTeacherClassroomGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
     }
@@ -172,10 +216,13 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     setSaving(true);
     try {
       if (tab === 'class') {
-        const data: Record<string, string[]> = {};
+        const data: Record<string, ClassPeriod[]> = {};
         for (let d = 0; d < DAYS_OF_WEEK.length; d++) {
           const day = DAYS_OF_WEEK[d]!;
-          data[day] = classGrid.slice(0, localMaxPeriods).map((row) => row[d] ?? '');
+          data[day] = classGrid.slice(0, localMaxPeriods).map((row, p) => ({
+            subject: row[d] ?? '',
+            teacher: (classTeacherGrid[p] ?? [])[d] ?? '',
+          }));
         }
         await updateClassSchedule(data as ClassScheduleData);
       } else {
@@ -225,6 +272,32 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={() => void undo()}
+            title="실행 취소 (Ctrl+Z)"
+            disabled={!canUndo()}
+            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-[20px]">undo</span>
+            <span>실행 취소</span>
+          </button>
+          <button
+            onClick={() => void redo()}
+            title="다시 실행 (Ctrl+Shift+Z)"
+            disabled={!canRedo()}
+            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-[20px]">redo</span>
+            <span>다시 실행</span>
+          </button>
+          <button
+            onClick={() => setShowClearConfirm(true)}
+            className="flex items-center gap-2 rounded-xl bg-sp-surface border border-red-500/30 px-4 py-2.5 text-sm font-bold text-red-400 hover:bg-red-500/10 transition-all active:scale-95"
+          >
+            <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
+            <span>모두 삭제</span>
+          </button>
+          <div className="w-px h-8 bg-sp-border" />
+          <button
             onClick={onCancel}
             className="rounded-xl bg-sp-surface border border-sp-border px-5 py-2.5 text-sm font-bold text-sp-muted hover:text-sp-text transition-all"
           >
@@ -272,9 +345,11 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                       periodIdx={periodIdx}
                       tab={tab}
                       classRow={classGrid[periodIdx] ?? []}
+                      classTeacherRow={classTeacherGrid[periodIdx] ?? []}
                       teacherSubjectRow={teacherSubjectGrid[periodIdx] ?? []}
                       teacherClassroomRow={teacherClassroomGrid[periodIdx] ?? []}
                       onClassChange={updateClassCell}
+                      onClassTeacherChange={updateClassTeacherCell}
                       onTeacherSubjectChange={updateTeacherSubjectCell}
                       onTeacherClassroomChange={updateTeacherClassroomCell}
                       lunchBefore={lunchIndex === periodIdx}
@@ -310,6 +385,42 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
           </div>
         </div>
       </div>
+
+      {/* 모두 삭제 확인 모달 */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-sp-text mb-2">시간표 모두 삭제</h3>
+            <p className="text-sm text-sp-muted mb-6">
+              학급 시간표와 교사 시간표를 모두 초기화합니다.
+              <br />
+              <span className="text-sp-accent">실행 취소(Ctrl+Z)로 복원할 수 있습니다.</span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  void clearAll(settings.maxPeriods).then(() => {
+                    useToastStore.getState().show('시간표가 모두 삭제되었습니다.', 'info', {
+                      label: '실행 취소',
+                      onClick: () => void useScheduleStore.getState().undo(),
+                    });
+                  });
+                  setShowClearConfirm(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -321,9 +432,11 @@ interface EditorPeriodRowProps {
   periodIdx: number;
   tab: TabType;
   classRow: string[];
+  classTeacherRow: string[];
   teacherSubjectRow: string[];
   teacherClassroomRow: string[];
   onClassChange: (periodIdx: number, dayIdx: number, value: string) => void;
+  onClassTeacherChange: (periodIdx: number, dayIdx: number, value: string) => void;
   onTeacherSubjectChange: (periodIdx: number, dayIdx: number, value: string) => void;
   onTeacherClassroomChange: (periodIdx: number, dayIdx: number, value: string) => void;
   lunchBefore: boolean;
@@ -335,9 +448,11 @@ function EditorPeriodRow({
   periodIdx,
   tab,
   classRow,
+  classTeacherRow,
   teacherSubjectRow,
   teacherClassroomRow,
   onClassChange,
+  onClassTeacherChange,
   onTeacherSubjectChange,
   onTeacherClassroomChange,
   lunchBefore,
@@ -375,13 +490,22 @@ function EditorPeriodRow({
             className={`p-1.5 ${dayIdx < DAYS_OF_WEEK.length - 1 ? 'border-r border-sp-border' : ''}`}
           >
             {tab === 'class' ? (
-              <input
-                type="text"
-                value={classRow[dayIdx] ?? ''}
-                onChange={(e) => onClassChange(periodIdx, dayIdx, e.target.value)}
-                placeholder="과목"
-                className="h-14 w-full rounded-lg bg-sp-surface border border-sp-border px-3 text-center text-sm font-medium text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
-              />
+              <div className="flex flex-col gap-1">
+                <input
+                  type="text"
+                  value={classRow[dayIdx] ?? ''}
+                  onChange={(e) => onClassChange(periodIdx, dayIdx, e.target.value)}
+                  placeholder="과목"
+                  className="h-8 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs font-medium text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
+                />
+                <input
+                  type="text"
+                  value={classTeacherRow[dayIdx] ?? ''}
+                  onChange={(e) => onClassTeacherChange(periodIdx, dayIdx, e.target.value)}
+                  placeholder="교사"
+                  className="h-6 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs text-sp-muted placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
+                />
+              </div>
             ) : (
               <div className="flex flex-col gap-1">
                 <input

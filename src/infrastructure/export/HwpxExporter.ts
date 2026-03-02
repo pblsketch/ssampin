@@ -107,8 +107,9 @@ export async function exportClassScheduleToHwpx(
   for (let p = 0; p < maxPeriods; p++) {
     table.setCellText(p + 1, 0, `${p + 1}교시`);
     for (const [d, day] of DAYS.entries()) {
-      const subject = schedule[day]?.[p] ?? '';
-      table.setCellText(p + 1, d + 1, subject);
+      const cp = schedule[day]?.[p];
+      const text = cp ? (cp.teacher ? `${cp.subject} (${cp.teacher})` : cp.subject) : '';
+      table.setCellText(p + 1, d + 1, text);
     }
   }
 

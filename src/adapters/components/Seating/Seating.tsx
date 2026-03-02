@@ -666,31 +666,6 @@ export function Seating() {
                 <span>자리 바꾸기</span>
               </button>
               <button
-                onClick={() => void undo()}
-                title="실행 취소 (Ctrl+Z)"
-                disabled={!canUndo()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
-              >
-                <span className="material-symbols-outlined text-lg">undo</span>
-                <span>실행 취소</span>
-              </button>
-              <button
-                onClick={() => void redo()}
-                title="다시 실행 (Ctrl+Shift+Z)"
-                disabled={!canRedo()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
-              >
-                <span className="material-symbols-outlined text-lg">redo</span>
-                <span>다시 실행</span>
-              </button>
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-sp-card hover:bg-red-500/10 text-sm font-medium text-red-400 transition-colors shadow-sm"
-              >
-                <span className="material-symbols-outlined text-lg">delete_sweep</span>
-                <span>모두 삭제</span>
-              </button>
-              <button
                 onClick={() => setEditing(!isEditing)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
                   ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
@@ -700,6 +675,36 @@ export function Seating() {
                 <span className="material-symbols-outlined text-lg">edit</span>
                 <span>{isEditing ? '편집 완료' : '편집'}</span>
               </button>
+              {isEditing && (
+                <>
+                  <div className="w-px h-8 bg-sp-border" />
+                  <button
+                    onClick={() => void undo()}
+                    title="실행 취소 (Ctrl+Z)"
+                    disabled={!canUndo()}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-lg">undo</span>
+                    <span>실행 취소</span>
+                  </button>
+                  <button
+                    onClick={() => void redo()}
+                    title="다시 실행 (Ctrl+Shift+Z)"
+                    disabled={!canRedo()}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-lg">redo</span>
+                    <span>다시 실행</span>
+                  </button>
+                  <button
+                    onClick={() => setShowClearConfirm(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-sp-card hover:bg-red-500/10 text-sm font-medium text-red-400 transition-colors shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-lg">delete_sweep</span>
+                    <span>모두 삭제</span>
+                  </button>
+                </>
+              )}
             </>
           )}
 

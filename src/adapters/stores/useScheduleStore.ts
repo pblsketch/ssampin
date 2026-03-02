@@ -1,15 +1,20 @@
 import { create } from 'zustand';
-import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
-import { createEmptyClassSchedule, createEmptyTeacherSchedule } from '@domain/rules/timetableRules';
+import type { ClassScheduleData, TeacherScheduleData, ClassPeriod } from '@domain/entities/Timetable';
+import { createEmptyClassSchedule, createEmptyTeacherSchedule, migrateClassScheduleData } from '@domain/rules/timetableRules';
 import { scheduleRepository } from '@adapters/di/container';
+
+/** 과목+교사 헬퍼 */
+function cp(subject: string, teacher: string = ''): ClassPeriod {
+  return { subject, teacher };
+}
 
 /** 샘플 학급 시간표 (월~금, 6교시) */
 const SAMPLE_CLASS_SCHEDULE: ClassScheduleData = {
-  '월': ['국어', '수학', '영어', '과학', '사회', '창체'],
-  '화': ['수학', '영어', '국어', '체육', '음악', '미술'],
-  '수': ['영어', '과학', '수학', '사회', '국어', '체육'],
-  '목': ['과학', '국어', '사회', '수학', '영어', '음악'],
-  '금': ['사회', '체육', '미술', '영어', '국어', '자율'],
+  '월': [cp('국어'), cp('수학'), cp('영어'), cp('과학'), cp('사회'), cp('창체')],
+  '화': [cp('수학'), cp('영어'), cp('국어'), cp('체육'), cp('음악'), cp('미술')],
+  '수': [cp('영어'), cp('과학'), cp('수학'), cp('사회'), cp('국어'), cp('체육')],
+  '목': [cp('과학'), cp('국어'), cp('사회'), cp('수학'), cp('영어'), cp('음악')],
+  '금': [cp('사회'), cp('체육'), cp('미술'), cp('영어'), cp('국어'), cp('자율')],
 };
 
 /** 샘플 교사 시간표 (월~금, 6교시) */
@@ -98,10 +103,14 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     load: async () => {
       if (get().loaded) return;
       try {
-        const [classSch, teacherSch] = await Promise.all([
+        const [classRaw, teacherSch] = await Promise.all([
           scheduleRepository.getClassSchedule(),
           scheduleRepository.getTeacherSchedule(),
         ]);
+        // 기존 string[] 포맷 → ClassPeriod[] 포맷 마이그레이션
+        const classSch = classRaw
+          ? migrateClassScheduleData(classRaw as Record<string, readonly (string | ClassPeriod)[]>)
+          : null;
         set({
           classSchedule: classSch ?? SAMPLE_CLASS_SCHEDULE,
           teacherSchedule: teacherSch ?? SAMPLE_TEACHER_SCHEDULE,

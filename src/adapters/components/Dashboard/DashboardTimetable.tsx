@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
-import type { TeacherPeriod } from '@domain/entities/Timetable';
+import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
 /** 과목별 컬러 맵 */
@@ -69,7 +69,7 @@ export function DashboardTimetable() {
   }, [settings.periodTimes]);
 
   // 오늘의 학급 시간표
-  const todayClassSubjects: readonly string[] = useMemo(() => {
+  const todayClassPeriods: readonly ClassPeriod[] = useMemo(() => {
     if (!dayOfWeek) return [];
     return classSchedule[dayOfWeek] ?? [];
   }, [dayOfWeek, classSchedule]);
@@ -106,7 +106,7 @@ export function DashboardTimetable() {
         <WeekendMessage />
       ) : tab === 'class' ? (
         <ClassTimetableList
-          subjects={todayClassSubjects}
+          periods={todayClassPeriods}
           periodTimeMap={periodTimeMap}
           currentPeriod={currentPeriod}
           maxPeriods={settings.maxPeriods}
@@ -156,19 +156,19 @@ function WeekendMessage() {
 }
 
 interface ClassTimetableListProps {
-  subjects: readonly string[];
+  periods: readonly ClassPeriod[];
   periodTimeMap: Map<number, PeriodTime>;
   currentPeriod: number | null;
   maxPeriods: number;
 }
 
 function ClassTimetableList({
-  subjects,
+  periods,
   periodTimeMap,
   currentPeriod,
   maxPeriods,
 }: ClassTimetableListProps) {
-  if (subjects.length === 0) {
+  if (periods.length === 0) {
     return (
       <p className="py-4 text-center text-sm text-sp-muted">
         시간표가 등록되지 않았습니다
@@ -178,10 +178,11 @@ function ClassTimetableList({
 
   return (
     <div className="space-y-1">
-      {subjects.slice(0, maxPeriods).map((subject, idx) => {
+      {periods.slice(0, maxPeriods).map((cp, idx) => {
         const period = idx + 1;
         const pt = periodTimeMap.get(period);
         const isCurrent = currentPeriod === period;
+        const subject = cp.subject;
         const colorClass = SUBJECT_COLORS[subject] ?? 'text-sp-text';
         const dotClass = SUBJECT_DOT_COLORS[subject] ?? 'bg-sp-muted';
 
@@ -201,6 +202,11 @@ function ClassTimetableList({
             <span className={`flex-1 text-sm font-medium ${colorClass}`}>
               {subject}
             </span>
+            {cp.teacher && (
+              <span className="text-xs text-sp-muted mr-1">
+                {cp.teacher}
+              </span>
+            )}
             {pt && (
               <span className="text-xs text-sp-muted">
                 {pt.start}~{pt.end}
