@@ -234,7 +234,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
         <button
           type="button"
           onClick={onFeedback}
-          className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-muted/70 hover:text-sp-muted hover:bg-white/5 mt-1"
+          className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-muted hover:text-sp-text hover:bg-white/5 mt-1"
         >
           <span className="material-symbols-outlined text-[18px]">rate_review</span>
           <span className="text-xs font-medium">건의사항 보내기</span>

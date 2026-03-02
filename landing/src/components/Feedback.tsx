@@ -1,19 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import FadeIn from './FadeIn';
 
+const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
+
 export default function Feedback() {
-  const [message, setMessage] = useState('');
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!message.trim()) return;
-    const subject = encodeURIComponent('[쌤핀 피드백]');
-    const body = encodeURIComponent(message.trim());
-    window.open(`mailto:pblsketch@gmail.com?subject=${subject}&body=${body}`);
-  }
-
   return (
     <section className="border-t border-sp-border py-20">
       <div className="mx-auto max-w-2xl px-6">
@@ -29,22 +20,36 @@ export default function Feedback() {
           </p>
         </FadeIn>
         <FadeIn delay={0.15}>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="내용을 입력하세요..."
-              rows={5}
-              className="w-full rounded-xl border border-sp-border bg-sp-card px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors resize-none"
-              required
-            />
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-sp-accent py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 active:bg-blue-700"
+          <div className="flex flex-col items-center gap-4">
+            <p className="text-sm text-sp-muted text-center leading-relaxed max-w-md">
+              구글 폼을 통해 간단하게 의견을 남길 수 있습니다.
+              <br />
+              소요 시간은 약 2분이며, 모든 의견은 꼼꼼히 검토합니다.
+            </p>
+            <a
+              href={FEEDBACK_FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl bg-sp-accent px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 active:bg-blue-700"
             >
-              이메일로 보내기
-            </button>
-          </form>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+              건의사항 보내기
+            </a>
+          </div>
         </FadeIn>
       </div>
     </section>
