@@ -130,9 +130,12 @@ export function Widget() {
   return (
     <>
       <div
-        className="w-full h-screen bg-[#0f172a]/85 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/50 flex flex-col overflow-hidden text-slate-100 relative select-none"
+        className="w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/50 flex flex-col overflow-hidden text-slate-100 relative select-none"
         onContextMenu={handleContextMenu}
-        style={{ fontFamily: "'Noto Sans KR', sans-serif" }}
+        style={{
+          fontFamily: "'Noto Sans KR', sans-serif",
+          backgroundColor: `rgba(15, 23, 42, ${settings.widget.opacity})`,
+        }}
       >
         {/* ── 헤더 (드래그 영역) ── */}
         <div
