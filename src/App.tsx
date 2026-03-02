@@ -162,7 +162,23 @@ export function App() {
     }
   })();
 
-  const themeClass = settings.theme === 'light' ? 'theme-light' : 'theme-dark';
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const themeClass = (() => {
+    if (settings.theme === 'light') return 'theme-light';
+    if (settings.theme === 'dark') return 'theme-dark';
+    // 'system': follow OS preference
+    return systemDark ? 'theme-dark' : 'theme-light';
+  })();
 
   // 위젯 모드: URL에 ?mode=widget 또는 #widget 이 있으면 위젯 전용 렌더링
   if (isWidgetMode()) {

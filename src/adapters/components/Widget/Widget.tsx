@@ -72,32 +72,32 @@ export function Widget() {
   return (
     <>
       <div
-        className="w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/50 flex flex-col overflow-hidden text-slate-100 relative select-none"
+        className="w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl border border-sp-border/50 flex flex-col overflow-hidden text-sp-text relative select-none"
         onContextMenu={handleContextMenu}
         style={{
           fontFamily: "'Noto Sans KR', sans-serif",
-          backgroundColor: `rgba(15, 23, 42, ${settings.widget.opacity})`,
+          backgroundColor: `rgba(var(--sp-widget-rgb), ${settings.widget.opacity})`,
         }}
       >
         {/* ── 헤더 (드래그 영역) ── */}
         <div
-          className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-700/40 text-center"
+          className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
           onDoubleClick={handleHeaderDoubleClick}
         >
           {/* 날짜 + 시간 */}
           <div className="flex items-baseline justify-center gap-3 mb-1">
-            <span className="text-slate-400 text-lg font-medium">
+            <span className="text-sp-muted text-lg font-medium">
               {clock.date} ({clock.dayOfWeek})
             </span>
-            <span className="text-4xl font-bold tracking-tight text-slate-100 leading-none">
+            <span className="text-4xl font-bold tracking-tight text-sp-text leading-none">
               {clock.time}
             </span>
           </div>
 
           {/* 전체 화면 전환 버튼 */}
           <button
-            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-slate-700/60 transition-colors text-slate-500 hover:text-slate-300"
+            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             onClick={() => window.electronAPI?.toggleWidget()}
             title="전체 화면으로 전환"
@@ -111,11 +111,11 @@ export function Widget() {
         {/* ── 메시지 배너 ── */}
         {message && (
           <div className="flex-shrink-0 mx-4 mt-3">
-            <div className="bg-teal-900/50 border border-teal-500/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
-              <span className="material-symbols-outlined text-teal-400 flex-shrink-0" style={{ fontSize: 16 }}>
+            <div className="bg-sp-accent/10 border border-sp-accent/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
+              <span className="material-symbols-outlined text-sp-accent flex-shrink-0" style={{ fontSize: 16 }}>
                 campaign
               </span>
-              <p className="text-sm text-teal-200 leading-relaxed flex-1 truncate">{message}</p>
+              <p className="text-sm text-sp-text leading-relaxed flex-1 truncate">{message}</p>
             </div>
           </div>
         )}
@@ -125,11 +125,10 @@ export function Widget() {
           className="flex-1 overflow-y-auto px-4 py-3"
           style={{
             scrollbarWidth: 'thin',
-            scrollbarColor: '#2a3548 transparent',
           }}
         >
           {visibleWidgets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500">
+            <div className="flex flex-col items-center justify-center h-full text-sp-muted">
               <span className="mb-3 text-4xl">📌</span>
               <p className="text-sm">표시할 위젯이 없습니다</p>
               <p className="mt-1 text-xs">대시보드에서 위젯을 추가하세요</p>
