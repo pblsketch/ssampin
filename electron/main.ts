@@ -13,6 +13,10 @@ let widgetHeartbeat: ReturnType<typeof setInterval> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
+// 위젯 alwaysOnTop 상태 추적 (WorkerW 연결 시 Win32 상태와 동기화 문제 방지)
+let widgetDesiredAlwaysOnTop = true;
+let widgetAttachedToDesktop = false;
+
 interface WidgetBounds {
   x: number;
   y: number;
@@ -165,7 +169,10 @@ function createTray(): void {
         click: (menuItem) => {
           mainWindow?.setAlwaysOnTop(menuItem.checked);
           if (widgetWindow && !widgetWindow.isDestroyed()) {
-            widgetWindow.setAlwaysOnTop(menuItem.checked);
+            widgetDesiredAlwaysOnTop = menuItem.checked;
+            if (!widgetAttachedToDesktop) {
+              widgetWindow.setAlwaysOnTop(menuItem.checked);
+            }
           }
         },
       },
@@ -218,7 +225,21 @@ function startWidgetHeartbeat(): void {
   widgetHeartbeat = setInterval(() => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       const hwndBuf = widgetWindow.getNativeWindowHandle();
-      attachToDesktopAsync(hwndBuf).catch(() => {/* ignore heartbeat errors */});
+      attachToDesktopAsync(hwndBuf).then((attached) => {
+        if (!widgetWindow || widgetWindow.isDestroyed()) return;
+        if (attached) {
+          // WorkerW 재연결 성공 → desktop 모드 유지 (alwaysOnTop 불필요)
+          widgetAttachedToDesktop = true;
+        } else {
+          // WorkerW 연결 끊김 → 플로팅 모드로 전환, 사용자 설정 적용
+          if (widgetAttachedToDesktop) {
+            // desktop → floating 전환 시 alwaysOnTop 재적용
+            widgetAttachedToDesktop = false;
+            widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
+            console.log('[widget] WorkerW 연결 해제, alwaysOnTop =', widgetDesiredAlwaysOnTop);
+          }
+        }
+      }).catch(() => {/* ignore heartbeat errors */});
     } else {
       if (widgetHeartbeat) clearInterval(widgetHeartbeat);
       widgetHeartbeat = null;
@@ -245,6 +266,14 @@ function createWidgetWindow(
   const width = savedBounds?.width ?? options.width;
   const height = savedBounds?.height ?? options.height;
 
+  // 사용자 설정 추적 (WorkerW child window에서 setAlwaysOnTop이 무시되는 문제 방지)
+  widgetDesiredAlwaysOnTop = options.alwaysOnTop;
+  widgetAttachedToDesktop = false;
+
+  // BrowserWindow는 항상 alwaysOnTop: false로 생성
+  // → WorkerW 연결 실패 시에만 사용자 설정에 따라 true로 변경
+  // (이유: SetParent로 child window가 된 상태에서 HWND_NOTOPMOST가 무시되어
+  //  나중에 WorkerW에서 분리되면 topmost 플래그가 남는 버그 방지)
   widgetWindow = new BrowserWindow({
     x,
     y,
@@ -255,7 +284,7 @@ function createWidgetWindow(
     frame: false,
     transparent: true,
     thickFrame: false,
-    alwaysOnTop: options.alwaysOnTop,
+    alwaysOnTop: false,
     resizable: true,
     skipTaskbar: true,           // 작업표시줄에 나타나지 않음 (바탕화면 위젯)
     show: false,
@@ -288,15 +317,16 @@ function createWidgetWindow(
         attachToDesktopAsync(hwndBuf).then((attached) => {
           if (!widgetWindow || widgetWindow.isDestroyed()) return;
           if (attached) {
-            // WorkerW에 붙으면 alwaysOnTop 해제 (충돌 방지)
-            widgetWindow.setAlwaysOnTop(false);
+            // WorkerW에 붙으면 desktop 모드 (child window이므로 setAlwaysOnTop 불필요)
+            widgetAttachedToDesktop = true;
             // 하트비트 시작: Explorer 재시작 등에 대비해 30초마다 재연결
             startWidgetHeartbeat();
             console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
           } else {
-            // 연결 실패 시 사용자 설정 유지
-            widgetWindow.setAlwaysOnTop(options.alwaysOnTop);
-            console.warn('[widget] WorkerW 연결 실패, alwaysOnTop =', options.alwaysOnTop);
+            // 연결 실패 → 플로팅 모드: 이제 사용자 설정에 따라 alwaysOnTop 적용
+            widgetAttachedToDesktop = false;
+            widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
+            console.warn('[widget] WorkerW 연결 실패, alwaysOnTop =', widgetDesiredAlwaysOnTop);
           }
         });
       }, 200);
@@ -333,6 +363,7 @@ function createWidgetWindow(
   widgetWindow.on('closed', () => {
     stopWidgetHeartbeat();
     widgetWindow = null;
+    widgetAttachedToDesktop = false;
   });
 }
 
@@ -429,11 +460,21 @@ function registerIpcHandlers(): void {
 
   // window:setAlwaysOnTop — 요청을 보낸 창(메인 또는 위젯)에 적용
   ipcMain.handle('window:setAlwaysOnTop', (event, flag: boolean): void => {
-    const senderWindow =
-      widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.webContents === event.sender
-        ? widgetWindow
-        : mainWindow;
-    senderWindow?.setAlwaysOnTop(flag);
+    const isWidget =
+      widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.webContents === event.sender;
+
+    if (isWidget) {
+      // 사용자 설정 추적 (WorkerW 연결/해제 시 올바른 값 복원용)
+      widgetDesiredAlwaysOnTop = flag;
+
+      // WorkerW에 붙어있으면 child window이므로 setAlwaysOnTop가 무의미 → 스킵
+      // (desktop 모드에서는 z-order가 WorkerW 부모에 의해 제어됨)
+      if (!widgetAttachedToDesktop) {
+        widgetWindow.setAlwaysOnTop(flag);
+      }
+    } else {
+      mainWindow?.setAlwaysOnTop(flag);
+    }
   });
 
   // window:setWidget (backward compat)
@@ -460,8 +501,10 @@ function registerIpcHandlers(): void {
   ipcMain.handle('window:toggleWidget', (): void => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       // 위젯이 열려있으면 닫고 메인창 복원
+      stopWidgetHeartbeat();
       widgetWindow.destroy();
       widgetWindow = null;
+      widgetAttachedToDesktop = false;
       mainWindow?.show();
     } else {
       // 위젯이 없으면 생성하고, 표시된 뒤 메인창 숨김
