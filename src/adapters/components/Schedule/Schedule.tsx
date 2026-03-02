@@ -288,19 +288,19 @@ export function Schedule() {
       </div>
 
       {/* 하단 알림 바 */}
-      <div className="bg-slate-800 border-t border-slate-700 h-12 flex items-center justify-between px-8 text-sm text-slate-300 shrink-0">
+      <div className="bg-sp-surface border-t border-sp-border h-12 flex items-center justify-between px-8 text-sm text-sp-muted shrink-0">
         <div className="flex items-center gap-3">
           <span className="material-symbols-outlined text-yellow-400 text-[20px]">
             notifications_active
           </span>
           <p>
             알림 설정:{' '}
-            <span className="font-bold text-white">30분 전, 1일 전</span>
+            <span className="font-bold text-sp-text">30분 전, 1일 전</span>
           </p>
         </div>
         <button
           type="button"
-          className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
+          className="p-1.5 hover:bg-sp-card rounded-lg transition-colors text-sp-muted hover:text-sp-text"
         >
           <span className="material-symbols-outlined text-[20px]">settings</span>
         </button>

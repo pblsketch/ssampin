@@ -66,15 +66,42 @@ body {
 }
 
 .theme-dark {
-  --sp-bg: #0a0e17;
-  --sp-surface: #131a2b;
-  --sp-card: #1a2332;
-  --sp-border: #2a3548;
+  --sp-bg: #0f172a;
+  --sp-surface: #1e2d42;
+  --sp-card: #1e2d42;
+  --sp-border: #2a3f5c;
   --sp-accent: #3b82f6;
   --sp-highlight: #f59e0b;
   --sp-text: #e2e8f0;
   --sp-muted: #94a3b8;
 }
+
+/* ─── Light Theme: Fix hover text & background visibility ─── */
+
+/* hover:text-white → sp-text (dark) in light mode */
+.theme-light .hover\:text-white:hover {
+  color: var(--sp-text) !important;
+}
+/* group-hover:text-white → sp-text in light mode */
+.theme-light .group:hover .group-hover\:text-white {
+  color: var(--sp-text) !important;
+}
+
+/* Translucent white hover backgrounds → dark equivalents in light mode */
+.theme-light .hover\:bg-white\/5:hover  { background-color: rgba(0, 0, 0, 0.05) !important; }
+.theme-light .hover\:bg-white\/10:hover { background-color: rgba(0, 0, 0, 0.07) !important; }
+.theme-light .hover\:bg-white\/20:hover { background-color: rgba(0, 0, 0, 0.10) !important; }
+
+/* Dark slate hover backgrounds → lighter in light mode */
+.theme-light .hover\:bg-slate-600:hover       { background-color: rgba(0, 0, 0, 0.06) !important; }
+.theme-light .hover\:bg-slate-700:hover       { background-color: rgba(0, 0, 0, 0.08) !important; }
+.theme-light .hover\:bg-slate-700\/50:hover   { background-color: rgba(0, 0, 0, 0.05) !important; }
+.theme-light .hover\:bg-slate-800:hover       { background-color: rgba(0, 0, 0, 0.08) !important; }
+.theme-light .hover\:bg-slate-800\/50:hover   { background-color: rgba(0, 0, 0, 0.04) !important; }
+
+/* Dark border hovers → sp-border in light mode */
+.theme-light .hover\:border-slate-500:hover { border-color: var(--sp-accent) !important; }
+.theme-light .hover\:border-slate-600:hover { border-color: var(--sp-border) !important; }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {

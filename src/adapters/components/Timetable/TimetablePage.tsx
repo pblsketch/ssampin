@@ -383,11 +383,11 @@ interface TimetableHeaderProps {
 function TimetableHeader({ dayOfWeek }: TimetableHeaderProps) {
   return (
     <thead>
-      <tr className="bg-slate-700/50 border-b border-sp-border">
-        <th className="px-4 py-4 text-center text-slate-200 font-bold text-sm w-20 border-r border-sp-border">
+      <tr className="bg-sp-surface border-b border-sp-border">
+        <th className="px-4 py-4 text-center text-sp-text font-bold text-sm w-20 border-r border-sp-border">
           교시
         </th>
-        <th className="px-4 py-4 text-center text-slate-200 font-bold text-sm w-24 border-r border-sp-border">
+        <th className="px-4 py-4 text-center text-sp-text font-bold text-sm w-24 border-r border-sp-border">
           시간
         </th>
         {DAYS_OF_WEEK.map((day) => {
@@ -396,7 +396,7 @@ function TimetableHeader({ dayOfWeek }: TimetableHeaderProps) {
             <th
               key={day}
               className={`px-4 py-4 text-center font-bold text-sm w-1/5 border-r border-sp-border relative ${
-                isToday ? 'text-sp-accent bg-sp-accent/10' : 'text-slate-200'
+                isToday ? 'text-sp-accent bg-sp-accent/10' : 'text-sp-text'
               }`}
             >
               {isToday && (
@@ -439,8 +439,8 @@ function PeriodRow({
     <>
       {/* 점심시간 행 */}
       {lunchBefore && (
-        <tr className="bg-slate-800/80">
-          <td className="px-4 py-3 text-center text-sp-muted font-medium text-sm bg-slate-800 border-r border-sp-border">
+        <tr className="bg-sp-surface/60">
+          <td className="px-4 py-3 text-center text-sp-muted font-medium text-sm bg-sp-surface border-r border-sp-border">
             점심
           </td>
           <td className="px-4 py-3 text-center text-sp-muted text-sm border-r border-sp-border font-mono">

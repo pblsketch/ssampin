@@ -141,7 +141,7 @@ export function CalendarView({
         >
           <span className="material-symbols-outlined">chevron_left</span>
         </button>
-        <h3 className="text-xl font-bold text-white">{monthLabel}</h3>
+        <h3 className="text-xl font-bold text-sp-text">{monthLabel}</h3>
         <button
           type="button"
           onClick={onNextMonth}
@@ -157,7 +157,7 @@ export function CalendarView({
           <div
             key={day}
             className={`text-center text-sm py-2 font-medium ${
-              i === 0 ? 'text-red-400 font-bold' : i === 6 ? 'text-slate-300 font-bold' : 'text-sp-muted'
+              i === 0 ? 'text-red-400 font-bold' : i === 6 ? 'text-blue-400 font-bold' : 'text-sp-muted'
             }`}
           >
             {day}
@@ -176,19 +176,19 @@ export function CalendarView({
           if (d.isToday) {
             cellClass += 'bg-sp-accent/20 border border-sp-accent shadow-[0_0_15px_rgba(59,130,246,0.2)] ';
           } else if (isSelected) {
-            cellClass += 'bg-slate-700/60 border border-slate-600 ';
+            cellClass += 'bg-sp-accent/15 border border-sp-accent/40 ';
           } else {
-            cellClass += 'hover:bg-slate-700/50 border border-transparent hover:border-slate-600 ';
+            cellClass += 'hover:bg-sp-surface border border-transparent hover:border-sp-border ';
           }
 
           if (!d.isCurrentMonth) {
-            textClass += 'text-slate-600';
+            textClass += 'text-sp-muted opacity-40';
           } else if (d.isSunday || d.isHoliday) {
             textClass += 'text-red-400';
           } else if (d.isSaturday) {
-            textClass += 'text-slate-300';
+            textClass += 'text-blue-400';
           } else {
-            textClass += 'text-white';
+            textClass += 'text-sp-text';
           }
 
           return (
