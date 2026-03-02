@@ -9,23 +9,40 @@ interface ToolCard {
   emoji: string;
   name: string;
   description: string;
+  externalUrl?: string;
 }
 
 const TOOLS: ToolCard[] = [
-  { id: 'tool-timer', emoji: '\u23f1\ufe0f', name: '\ud0c0\uc774\uba38', description: '\uc2dc\uac04 \uc81c\ud55c \ud65c\ub3d9\uc5d0 \ub531!' },
-  { id: 'tool-random', emoji: '\ud83c\udfb2', name: '\ub79c\ub364 \ubf51\uae30', description: '\uacf5\uc815\ud55c \ubc1c\ud45c\uc790 \uc120\uc815' },
-  { id: 'tool-traffic-light', emoji: '\ud83d\udea6', name: '\uc2e0\ud638\ub4f1', description: '\ud65c\ub3d9 \uc2dc\uc791\uacfc \uba48\ucda4' },
-  { id: 'tool-scoreboard', emoji: '\ud83d\udcca', name: '\uc810\uc218\ud310', description: '\ud300\ubcc4 \uc810\uc218 \uad00\ub9ac' },
-  { id: 'tool-roulette', emoji: '\ud83c\udfaf', name: '\ub8f0\ub81b', description: '\ub3cc\ub824\uc11c \uc815\ud558\uae30' },
-  { id: 'tool-dice', emoji: '\ud83c\udfb2', name: '\uc8fc\uc0ac\uc704', description: '\uc6b4\uc5d0 \ub9e1\uaca8\ubcfc\uae4c?' },
-  { id: 'tool-coin', emoji: '\ud83e\ude99', name: '\ub3d9\uc804', description: '\uc55e? \ub4a4?' },
+  { id: 'tool-timer', emoji: '⏱️', name: '타이머', description: '시간 제한 활동에 딱!' },
+  { id: 'tool-random', emoji: '🎲', name: '랜덤 뽑기', description: '공정한 발표자 선정' },
+  { id: 'tool-traffic-light', emoji: '🚦', name: '신호등', description: '활동 시작과 멈춤' },
+  { id: 'tool-scoreboard', emoji: '📊', name: '점수판', description: '팀별 점수 관리' },
+  { id: 'tool-roulette', emoji: '🎯', name: '룰렛', description: '돌려서 정하기' },
+  { id: 'tool-dice', emoji: '🎲', name: '주사위', description: '운에 맡겨볼까?' },
+  { id: 'tool-coin', emoji: '🪙', name: '동전', description: '앞? 뒤?' },
   { id: 'tool-qrcode', emoji: '🔗', name: 'QR코드', description: '링크를 순식간에 공유' },
   { id: 'tool-work-symbols', emoji: '🤫', name: '활동 기호', description: '수업 모드를 한눈에' },
   { id: 'tool-poll', emoji: '📊', name: '투표', description: '의견을 모아봐요' },
   { id: 'tool-seat-picker', emoji: '🪑', name: '자리 뽑기', description: '내 손으로 뽑는 내 자리' },
-  { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진' },
-  { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구' },
+  { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진', externalUrl: 'https://supsori.com' },
+  { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구', externalUrl: 'https://pblsketch.xyz' },
 ];
+
+function openExternal(url: string) {
+  if (window.electronAPI?.openExternal) {
+    void window.electronAPI.openExternal(url);
+  } else {
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      // Fallback: link click (e.g. popup blocked in browser dev mode)
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.click();
+    }
+  }
+}
 
 export function ToolsGrid({ onNavigate }: ToolsGridProps) {
   return (
@@ -44,12 +61,15 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
         {TOOLS.map((tool) => (
           <button
             key={tool.id}
-            onClick={() => onNavigate(tool.id)}
+            onClick={() => tool.externalUrl ? openExternal(tool.externalUrl) : onNavigate(tool.id)}
             className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
           >
             <div className="text-4xl mb-3">{tool.emoji}</div>
-            <h3 className="text-lg font-bold text-white group-hover:text-sp-accent transition-colors">
+            <h3 className="text-lg font-bold text-white group-hover:text-sp-accent transition-colors flex items-center gap-1">
               {tool.name}
+              {tool.externalUrl && (
+                <span className="material-symbols-outlined text-[14px] text-sp-muted">open_in_new</span>
+              )}
             </h3>
             <p className="text-sm text-sp-muted mt-1">{tool.description}</p>
           </button>
