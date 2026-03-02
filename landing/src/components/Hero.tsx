@@ -29,7 +29,9 @@ export default function Hero() {
 
               {/* 헤드라인 */}
               <h1 className="text-[2.6rem] font-extrabold leading-[1.18] tracking-tight text-sp-text md:text-[3.75rem]">
-                중요한 걸 핀으로 꽂아두는
+                중요한 걸{' '}
+                <br className="md:hidden" />
+                핀으로 꽂아두는
                 <br />
                 <span className="text-white">선생님의 대시보드</span>
               </h1>
