@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useDashboardConfig } from '@widgets/useDashboardConfig';
 
 function isWeekend(): boolean {
   const day = new Date().getDay();
@@ -11,6 +12,11 @@ export function DashboardMeal() {
   const { settings } = useSettingsStore();
   const { todayMeals, todayLoading, todayError, loadTodayMeals } = useMealStore();
   const { atptCode, schoolCode } = settings.neis;
+
+  // 자신의 colSpan 읽기 (가로 배열 판정용)
+  const config = useDashboardConfig((s) => s.config);
+  const myColSpan = config?.widgets.find((w) => w.widgetId === 'meal')?.colSpan ?? 1;
+  const isWide = myColSpan >= 3;
 
   useEffect(() => {
     if (atptCode && schoolCode) {
@@ -42,7 +48,7 @@ export function DashboardMeal() {
         오늘의 급식
       </h3>
 
-      <div className="flex-1 overflow-y-auto space-y-3">
+      <div className="flex-1 overflow-y-auto">
         {todayLoading && (
           <div className="flex items-center justify-center py-8">
             <div className="w-5 h-5 border-2 border-sp-accent border-t-transparent rounded-full animate-spin" />
@@ -61,31 +67,39 @@ export function DashboardMeal() {
           </div>
         )}
 
-        {!todayLoading && todayMeals.map((meal, idx) => (
-          <div key={idx} className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-sp-accent uppercase tracking-wider">
-                {meal.mealType}
-              </span>
-              {meal.calorie && (
-                <span className="text-[11px] text-sp-muted">{meal.calorie}</span>
-              )}
-            </div>
-            <ul className="space-y-1">
-              {meal.dishes.map((dish, di) => (
-                <li key={di} className="text-sm text-slate-300 flex items-baseline gap-1.5">
-                  <span className="text-sp-muted text-[10px] mt-0.5">•</span>
-                  <span>{dish.name}</span>
-                  {dish.allergens.length > 0 && (
-                    <span className="text-[10px] text-slate-500 shrink-0">
-                      {dish.allergens.join('.')}
-                    </span>
+        {/* 넓은 카드(3~4칸): 가로 배열 / 좁은 카드(1~2칸): 세로 배열 */}
+        {!todayLoading && todayMeals.length > 0 && (
+          <div className={isWide
+            ? `grid gap-4 ${todayMeals.length >= 3 ? 'grid-cols-3' : todayMeals.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`
+            : 'space-y-3'
+          }>
+            {todayMeals.map((meal, idx) => (
+              <div key={idx} className={isWide ? 'border-r border-sp-border/30 last:border-r-0 pr-4 last:pr-0 space-y-2' : 'space-y-2'}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-sp-accent uppercase tracking-wider">
+                    {meal.mealType}
+                  </span>
+                  {meal.calorie && (
+                    <span className="text-[11px] text-sp-muted">{meal.calorie}</span>
                   )}
-                </li>
-              ))}
-            </ul>
+                </div>
+                <ul className="space-y-1">
+                  {meal.dishes.map((dish, di) => (
+                    <li key={di} className="text-sm text-slate-300 flex items-baseline gap-1.5">
+                      <span className="text-sp-muted text-[10px] mt-0.5">•</span>
+                      <span>{dish.name}</span>
+                      {dish.allergens.length > 0 && (
+                        <span className="text-[10px] text-slate-500 shrink-0">
+                          {dish.allergens.join('.')}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

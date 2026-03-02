@@ -3,7 +3,6 @@ import { WeatherBar } from '@adapters/components/Dashboard/WeatherBar';
 import { MessageBanner } from '@adapters/components/Dashboard/MessageBanner';
 
 interface DashboardHeaderProps {
-  onOpenSettings: () => void;
   isEditMode?: boolean;
   onToggleEditMode?: () => void;
 }
@@ -11,9 +10,9 @@ interface DashboardHeaderProps {
 /**
  * 대시보드 헤더
  * - 시계/날씨/메시지 배너 (기존 그대로)
- * - 우측 상단 편집/설정 버튼
+ * - 우측 상단 편집 버튼 (편집 모드 + 설정 드로어 통합)
  */
-export function DashboardHeader({ onOpenSettings, isEditMode, onToggleEditMode }: DashboardHeaderProps) {
+export function DashboardHeader({ isEditMode, onToggleEditMode }: DashboardHeaderProps) {
   return (
     <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
       <div>
@@ -24,7 +23,7 @@ export function DashboardHeader({ onOpenSettings, isEditMode, onToggleEditMode }
       <div className="flex items-end gap-3">
         <MessageBanner />
 
-        {/* 편집 모드 토글 버튼 */}
+        {/* 편집 모드 토글 버튼 (설정 드로어도 함께 열림) */}
         {onToggleEditMode && (
           <button
             onClick={onToggleEditMode}
@@ -41,18 +40,6 @@ export function DashboardHeader({ onOpenSettings, isEditMode, onToggleEditMode }
             </svg>
           </button>
         )}
-
-        {/* 대시보드 설정 버튼 */}
-        <button
-          onClick={onOpenSettings}
-          className="shrink-0 rounded-lg p-2 text-sp-muted hover:text-sp-text hover:bg-sp-card transition-colors"
-          title="대시보드 설정"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </button>
       </div>
     </header>
   );

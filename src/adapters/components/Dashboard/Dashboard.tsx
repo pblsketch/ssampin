@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useMessageStore } from '@adapters/stores/useMessageStore';
 import { useDashboardConfig } from '@widgets/useDashboardConfig';
 import { DashboardHeader } from '@widgets/components/DashboardHeader';
 import { WidgetGrid } from '@widgets/components/WidgetGrid';
-import { WidgetSettings } from '@widgets/components/WidgetSettings';
+import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
 
 export function Dashboard() {
   const loadMessage = useMessageStore((s) => s.loadMessage);
   const loadConfig = useDashboardConfig((s) => s.load);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
@@ -16,28 +15,29 @@ export function Dashboard() {
     loadConfig();
   }, [loadMessage, loadConfig]);
 
+  const handleToggleEditMode = useCallback(() => {
+    setIsEditMode((prev) => !prev);
+  }, []);
+
   return (
     <div className="h-full flex flex-col">
-      {/* 헤더: 날짜/날씨 + 메시지 배너 + 설정/편집 버튼 */}
+      {/* 헤더 */}
       <DashboardHeader
-        onOpenSettings={() => setSettingsOpen(true)}
         isEditMode={isEditMode}
-        onToggleEditMode={() => setIsEditMode((prev) => !prev)}
+        onToggleEditMode={handleToggleEditMode}
       />
 
-      {/* 위젯 그리드 */}
-      <section className="flex-1">
-        <WidgetGrid
-          isEditMode={isEditMode}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-      </section>
+      {/* 본문: 그리드 + 사이드 패널 (편집 모드) */}
+      <div className="flex-1 flex min-h-0">
+        <section className="flex-1 overflow-y-auto">
+          <WidgetGrid isEditMode={isEditMode} />
+        </section>
 
-      {/* 위젯 설정 드로어 */}
-      <WidgetSettings
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
+        {/* 편집 모드 시 인라인 사이드 패널 */}
+        {isEditMode && (
+          <WidgetSettingsPanel onClose={handleToggleEditMode} />
+        )}
+      </div>
     </div>
   );
 }

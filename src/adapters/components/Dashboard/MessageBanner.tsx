@@ -40,7 +40,7 @@ export function MessageBanner() {
 
   return (
     <div
-      className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-4 max-w-lg w-full cursor-pointer"
+      className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-4 max-w-2xl w-full cursor-pointer"
       onClick={!isEditing ? startEdit : undefined}
       role={!isEditing ? 'button' : undefined}
       tabIndex={!isEditing ? 0 : undefined}
