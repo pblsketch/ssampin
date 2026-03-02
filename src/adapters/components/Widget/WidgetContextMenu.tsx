@@ -1,23 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import type { WidgetVisibleSections } from '@domain/entities/Settings';
-
-const SECTION_ITEMS: { key: keyof WidgetVisibleSections; label: string; icon: string }[] = [
-  { key: 'dateTime', label: '날짜 / 시간', icon: 'schedule' },
-  { key: 'weather', label: '날씨 정보', icon: 'cloud' },
-  { key: 'message', label: '메시지 배너', icon: 'campaign' },
-  { key: 'teacherTimetable', label: '교사 시간표', icon: 'calendar_view_week' },
-  { key: 'classTimetable', label: '학급 시간표', icon: 'table' },
-  { key: 'events', label: '학교 교육 활동', icon: 'event' },
-  { key: 'periodBar', label: '교시 시간 바', icon: 'timer' },
-  { key: 'todayClass', label: '오늘 수업', icon: 'today' },
-  { key: 'meal', label: '급식 메뉴', icon: 'restaurant' },
-  { key: 'todo', label: '할 일', icon: 'checklist' },
-  { key: 'memo', label: '메모', icon: 'sticky_note_2' },
-  { key: 'studentRecords', label: '담임 메모장', icon: 'person_book' },
-  { key: 'seating', label: '자리배치', icon: 'grid_view' },
-];
 
 interface WidgetContextMenuProps {
   x: number;
@@ -31,7 +14,6 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
 
   const alwaysOnTop = settings.widget.alwaysOnTop;
   const opacity = settings.widget.opacity;
-  const vis = settings.widget.visibleSections;
 
   // 뷰포트 클램핑을 위한 위치 계산
   const [position, setPosition] = useState({ left: x, top: y });
@@ -67,11 +49,6 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
-
-  const handleToggleSection = (key: keyof WidgetVisibleSections) => {
-    const next = { ...vis, [key]: !vis[key] };
-    void update({ widget: { ...settings.widget, visibleSections: next } });
-  };
 
   const handleAlwaysOnTop = () => {
     const next = !alwaysOnTop;
@@ -216,56 +193,6 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
               {size === 'small' ? '가' : size === 'medium' ? '가' : size === 'large' ? '가' : '가'}
             </button>
           ))}
-        </div>
-      </div>
-
-      {/* 구분선 */}
-      <div className="h-px bg-white/10 mx-3 my-1" />
-
-      {/* 표시 항목 토글 */}
-      <div className="px-3 py-2">
-        <div className="flex items-center gap-3 mb-2">
-          <span
-            className="material-symbols-outlined text-slate-400 flex-shrink-0"
-            style={{ fontSize: 20 }}
-          >
-            visibility
-          </span>
-          <span className="flex-1 text-sm text-slate-200">표시 항목</span>
-        </div>
-        <div className="space-y-0.5">
-          {SECTION_ITEMS.map(({ key, label, icon }) => {
-            const checked = vis[key];
-            return (
-              <button
-                key={key}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors text-left"
-                onClick={() => handleToggleSection(key)}
-              >
-                <span
-                  className={[
-                    'material-symbols-outlined flex-shrink-0',
-                    checked ? 'text-blue-400' : 'text-slate-500',
-                  ].join(' ')}
-                  style={{ fontSize: 16 }}
-                >
-                  {icon}
-                </span>
-                <span className={`flex-1 text-xs ${checked ? 'text-slate-200' : 'text-slate-500'}`}>
-                  {label}
-                </span>
-                <span
-                  className={[
-                    'material-symbols-outlined flex-shrink-0 transition-colors',
-                    checked ? 'text-blue-400' : 'text-slate-600',
-                  ].join(' ')}
-                  style={{ fontSize: 16 }}
-                >
-                  {checked ? 'check_box' : 'check_box_outline_blank'}
-                </span>
-              </button>
-            );
-          })}
         </div>
       </div>
 
