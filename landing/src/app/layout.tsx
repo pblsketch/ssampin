@@ -49,9 +49,8 @@ export const metadata: Metadata = {
   },
   verification: {
     google: 'googlea16810e6f264caeb',
-    // TODO: Naver Search Advisor 등록 후 인증 코드 입력
     other: {
-      'naver-site-verification': ['NAVER_VERIFICATION_CODE'],
+      'naver-site-verification': ['f6f9923c2fb93efcc9807242b88b28a8b029c867'],
     },
   },
 };
