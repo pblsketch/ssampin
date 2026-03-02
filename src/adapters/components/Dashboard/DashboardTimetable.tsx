@@ -36,7 +36,7 @@ type TabType = 'class' | 'teacher';
 export function DashboardTimetable() {
   const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
-  const [tab, setTab] = useState<TabType>('class');
+  const [tab, setTab] = useState<TabType>('teacher');
   const [now, setNow] = useState(new Date());
 
   // 초기 데이터 로드
@@ -89,14 +89,14 @@ export function DashboardTimetable() {
         </h3>
         <div className="flex rounded-lg bg-sp-surface p-0.5">
           <TabButton
-            active={tab === 'class'}
-            onClick={() => setTab('class')}
-            label="학급"
-          />
-          <TabButton
             active={tab === 'teacher'}
             onClick={() => setTab('teacher')}
             label="교사"
+          />
+          <TabButton
+            active={tab === 'class'}
+            onClick={() => setTab('class')}
+            label="학급"
           />
         </div>
       </div>

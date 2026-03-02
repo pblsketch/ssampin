@@ -23,6 +23,22 @@ export interface AlarmSoundSettings {
   readonly volume: number; // 0.0 ~ 1.0
 }
 
+export interface WidgetVisibleSections {
+  readonly dateTime: boolean;
+  readonly weather: boolean;
+  readonly message: boolean;
+  readonly teacherTimetable: boolean;
+  readonly classTimetable: boolean;
+  readonly events: boolean;
+  readonly periodBar: boolean;
+  readonly todayClass: boolean;
+  readonly seating: boolean;
+  readonly studentRecords: boolean;
+  readonly meal: boolean;
+  readonly memo: boolean;
+  readonly todo: boolean;
+}
+
 export interface WidgetSettings {
   readonly width: number;
   readonly height: number;
@@ -30,6 +46,7 @@ export interface WidgetSettings {
   readonly opacity: number;
   readonly alwaysOnTop: boolean;
   readonly closeToWidget: boolean;
+  readonly visibleSections: WidgetVisibleSections;
 }
 
 export interface SystemSettings {

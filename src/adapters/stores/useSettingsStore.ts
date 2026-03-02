@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Settings, WorkSymbolItem, FeedbackConfig } from '@domain/entities/Settings';
+import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
 
@@ -18,6 +18,7 @@ const DEFAULT_PERIOD_TIMES: readonly PeriodTime[] = [
   { period: 4, start: '11:20', end: '12:00' },
   { period: 5, start: '13:00', end: '13:40' },
   { period: 6, start: '13:50', end: '14:30' },
+  { period: 7, start: '14:40', end: '15:20' },
 ];
 
 const DEFAULT_SETTINGS: Settings = {
@@ -26,7 +27,7 @@ const DEFAULT_SETTINGS: Settings = {
   teacherName: '',
   subject: '',
   schoolLevel: 'middle',
-  maxPeriods: 6,
+  maxPeriods: 7,
   periodTimes: DEFAULT_PERIOD_TIMES,
   seatingRows: 6,
   seatingCols: 6,
@@ -37,6 +38,21 @@ const DEFAULT_SETTINGS: Settings = {
     opacity: 0.8,
     alwaysOnTop: true,
     closeToWidget: true,
+    visibleSections: {
+      dateTime: true,
+      weather: true,
+      message: true,
+      teacherTimetable: true,
+      classTimetable: false,
+      events: true,
+      periodBar: true,
+      todayClass: false,
+      seating: false,
+      studentRecords: false,
+      meal: false,
+      memo: false,
+      todo: false,
+    },
   },
   system: {
     autoLaunch: false,
@@ -107,7 +123,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         const merged: Settings = {
           ...DEFAULT_SETTINGS,
           ...saved,
-          widget: { ...DEFAULT_SETTINGS.widget, ...(saved.widget ?? {}) },
+          widget: {
+            ...DEFAULT_SETTINGS.widget,
+            ...(saved.widget ?? {}),
+            visibleSections: (() => {
+              const savedVis = (saved.widget as unknown as { visibleSections?: Record<string, unknown> })?.visibleSections ?? {};
+              // 기존 timetable 키 → teacherTimetable/classTimetable 마이그레이션
+              const migrated: Record<string, unknown> = { ...savedVis };
+              if ('timetable' in savedVis && !('teacherTimetable' in savedVis)) {
+                migrated.teacherTimetable = savedVis.timetable;
+                migrated.classTimetable = savedVis.timetable;
+                delete migrated.timetable;
+              }
+              return { ...DEFAULT_SETTINGS.widget.visibleSections, ...migrated } as WidgetVisibleSections;
+            })(),
+          },
           system: { ...DEFAULT_SETTINGS.system, ...((saved as unknown as { system?: Partial<Settings['system']> }).system ?? {}) },
           neis: { ...DEFAULT_SETTINGS.neis, ...((saved as unknown as { neis?: Partial<Settings['neis']> }).neis ?? {}) },
           pin: { ...DEFAULT_SETTINGS.pin, ...((saved as unknown as { pin?: Partial<Settings['pin']> }).pin ?? {}) },

@@ -22,7 +22,8 @@
       "@domain/*": ["src/domain/*"],
       "@usecases/*": ["src/usecases/*"],
       "@adapters/*": ["src/adapters/*"],
-      "@infrastructure/*": ["src/infrastructure/*"]
+      "@infrastructure/*": ["src/infrastructure/*"],
+      "@widgets/*": ["src/widgets/*"]
     }
   },
   "include": ["src"],

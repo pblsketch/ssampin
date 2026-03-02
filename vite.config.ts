@@ -10,6 +10,7 @@ export default defineConfig({
       '@usecases': path.resolve(__dirname, 'src/usecases'),
       '@adapters': path.resolve(__dirname, 'src/adapters'),
       '@infrastructure': path.resolve(__dirname, 'src/infrastructure'),
+      '@widgets': path.resolve(__dirname, 'src/widgets'),
     },
   },
   base: './',

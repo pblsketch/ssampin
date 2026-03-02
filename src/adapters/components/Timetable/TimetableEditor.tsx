@@ -4,6 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod } from '@domain/entities/Timetable';
+import { parseMinutes } from '@domain/rules/periodRules';
 import {
   getLunchBreakIndex,
   formatLunchBreakTime,
@@ -17,10 +18,25 @@ interface TimetableEditorProps {
   onSaved: () => void;
 }
 
+const MAX_PERIODS_LIMIT = 10;
+const MIN_PERIODS_LIMIT = 1;
+
+const PERIOD_DURATION_MAP: Record<string, number> = {
+  elementary: 40,
+  middle: 45,
+  high: 50,
+};
+
+function formatTimeFromMinutes(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps) {
   const { classSchedule, teacherSchedule, updateClassSchedule, updateTeacherSchedule } =
     useScheduleStore();
-  const { settings } = useSettingsStore();
+  const { settings, update: updateSettings } = useSettingsStore();
 
   // 편집용 로컬 상태 — 문자열 2D 배열 [periodIdx][dayIdx]
   const [classGrid, setClassGrid] = useState<string[][]>([]);
@@ -29,6 +45,12 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   const [saving, setSaving] = useState(false);
 
   const maxPeriods = settings.maxPeriods;
+
+  // 로컬 교시 관리 상태
+  const [localMaxPeriods, setLocalMaxPeriods] = useState(maxPeriods);
+  const [localPeriodTimes, setLocalPeriodTimes] = useState<PeriodTime[]>(
+    () => [...settings.periodTimes],
+  );
 
   // 초기 데이터 → 편집 그리드로 복사
   useEffect(() => {
@@ -58,13 +80,18 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     setTeacherClassroomGrid(tClsGrid);
   }, [classSchedule, teacherSchedule, maxPeriods]);
 
+  const visiblePeriodTimes = useMemo(
+    () => localPeriodTimes.slice(0, localMaxPeriods),
+    [localPeriodTimes, localMaxPeriods],
+  );
+
   const lunchIndex = useMemo(
-    () => getLunchBreakIndex(settings.periodTimes),
-    [settings.periodTimes],
+    () => getLunchBreakIndex(visiblePeriodTimes),
+    [visiblePeriodTimes],
   );
   const lunchTimeStr = useMemo(
-    () => (lunchIndex >= 0 ? formatLunchBreakTime(settings.periodTimes, lunchIndex) : ''),
-    [settings.periodTimes, lunchIndex],
+    () => (lunchIndex >= 0 ? formatLunchBreakTime(visiblePeriodTimes, lunchIndex) : ''),
+    [visiblePeriodTimes, lunchIndex],
   );
 
   const updateClassCell = useCallback(
@@ -106,6 +133,41 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     [],
   );
 
+  // 교시 추가
+  const addPeriod = useCallback(() => {
+    if (localMaxPeriods >= MAX_PERIODS_LIMIT) return;
+    const newCount = localMaxPeriods + 1;
+
+    // 새 교시의 PeriodTime이 없으면 생성
+    if (localPeriodTimes.length < newCount) {
+      const dur = PERIOD_DURATION_MAP[settings.schoolLevel] ?? 45;
+      const breakMin = 10;
+      const lastPt = localPeriodTimes[localPeriodTimes.length - 1];
+      const startMin = lastPt ? parseMinutes(lastPt.end) + breakMin : parseMinutes('08:50');
+      const endMin = startMin + dur;
+
+      setLocalPeriodTimes((prev) => [
+        ...prev,
+        { period: newCount, start: formatTimeFromMinutes(startMin), end: formatTimeFromMinutes(endMin) },
+      ]);
+    }
+
+    // 그리드 행이 부족하면 추가
+    if (classGrid.length < newCount) {
+      setClassGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
+      setTeacherSubjectGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
+      setTeacherClassroomGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
+    }
+
+    setLocalMaxPeriods(newCount);
+  }, [localMaxPeriods, localPeriodTimes, classGrid.length, settings.schoolLevel]);
+
+  // 교시 삭제
+  const removePeriod = useCallback(() => {
+    if (localMaxPeriods <= MIN_PERIODS_LIMIT) return;
+    setLocalMaxPeriods((prev) => prev - 1);
+  }, [localMaxPeriods]);
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -113,14 +175,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
         const data: Record<string, string[]> = {};
         for (let d = 0; d < DAYS_OF_WEEK.length; d++) {
           const day = DAYS_OF_WEEK[d]!;
-          data[day] = classGrid.map((row) => row[d] ?? '');
+          data[day] = classGrid.slice(0, localMaxPeriods).map((row) => row[d] ?? '');
         }
         await updateClassSchedule(data as ClassScheduleData);
       } else {
         const data: Record<string, (TeacherPeriod | null)[]> = {};
         for (let d = 0; d < DAYS_OF_WEEK.length; d++) {
           const day = DAYS_OF_WEEK[d]!;
-          data[day] = teacherSubjectGrid.map((row, p) => {
+          data[day] = teacherSubjectGrid.slice(0, localMaxPeriods).map((row, p) => {
             const subject = row[d] ?? '';
             const classroom = (teacherClassroomGrid[p] ?? [])[d] ?? '';
             if (!subject) return null;
@@ -129,6 +191,15 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
         }
         await updateTeacherSchedule(data as TeacherScheduleData);
       }
+
+      // 교시 수가 변경된 경우 설정도 업데이트
+      if (localMaxPeriods !== maxPeriods) {
+        await updateSettings({
+          maxPeriods: localMaxPeriods,
+          periodTimes: localPeriodTimes.slice(0, localMaxPeriods),
+        });
+      }
+
       onSaved();
     } catch {
       // 에러 처리 (향후 Toast 등)
@@ -194,7 +265,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sp-border">
-                  {settings.periodTimes.slice(0, maxPeriods).map((pt, periodIdx) => (
+                  {visiblePeriodTimes.map((pt, periodIdx) => (
                     <EditorPeriodRow
                       key={pt.period}
                       periodTime={pt}
@@ -213,6 +284,29 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* 교시 추가/삭제 */}
+          <div className="flex items-center justify-center gap-3 py-4">
+            <button
+              onClick={removePeriod}
+              disabled={localMaxPeriods <= MIN_PERIODS_LIMIT}
+              className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-4 py-2 text-sm font-medium text-sp-muted hover:text-red-400 hover:border-red-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[18px]">remove</span>
+              교시 삭제
+            </button>
+            <span className="text-sp-muted text-sm font-bold min-w-[4rem] text-center">
+              {localMaxPeriods}교시
+            </span>
+            <button
+              onClick={addPeriod}
+              disabled={localMaxPeriods >= MAX_PERIODS_LIMIT}
+              className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-4 py-2 text-sm font-medium text-sp-muted hover:text-sp-accent hover:border-sp-accent/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              교시 추가
+            </button>
           </div>
         </div>
       </div>
@@ -316,4 +410,3 @@ function EditorPeriodRow({
     </>
   );
 }
-

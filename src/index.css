@@ -294,3 +294,33 @@ body {
 .shuffle-check-pop {
   animation: shuffle-check 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
+
+/* ── Widget Settings Drawer Slide-in ── */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out;
+}
+
+/* ── Widget Fade-out on Hide ── */
+@keyframes widget-fade-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+
+.animate-widget-fade-out {
+  animation: widget-fade-out 0.2s ease-out forwards;
+}
+
+/* ── Widget Drop Animation ── */
+@keyframes widget-drop {
+  from { transform: scale(1.02); box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+  to { transform: scale(1); box-shadow: none; }
+}
+
+.animate-widget-drop {
+  animation: widget-drop 0.2s ease-out;
+}

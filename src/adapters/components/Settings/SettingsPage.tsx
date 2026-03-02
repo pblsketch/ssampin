@@ -4,7 +4,7 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { usePinStore } from '@adapters/stores/usePinStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import type { Settings, WidgetSettings, SystemSettings, NeisSettings, WeatherSettings, SchoolLevel } from '@domain/entities/Settings';
+import type { Settings, WidgetSettings, WidgetVisibleSections, SystemSettings, NeisSettings, WeatherSettings, SchoolLevel } from '@domain/entities/Settings';
 import type { PinSettings, ProtectedFeatures, ProtectedFeatureKey } from '@domain/entities/PinSettings';
 import { PROTECTABLE_PAGES } from '@adapters/components/Layout/Sidebar';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
@@ -670,6 +670,40 @@ export function SettingsPage() {
                   checked={draft.widget.transparent}
                   onChange={(v) => patchWidget({ transparent: v })}
                 />
+              </div>
+
+              {/* 위젯 표시 항목 */}
+              <div className="pt-4 border-t border-sp-border/30">
+                <p className="text-sm font-medium text-sp-text mb-1">위젯 표시 항목</p>
+                <p className="text-xs text-sp-muted mb-3">위젯 모드에서 보일 섹션을 선택합니다.</p>
+                <div className="space-y-3">
+                  {([
+                    { key: 'dateTime' as const, label: '날짜 / 시간', icon: 'schedule' },
+                    { key: 'weather' as const, label: '날씨 정보', icon: 'cloud' },
+                    { key: 'message' as const, label: '메시지 배너', icon: 'campaign' },
+                    { key: 'teacherTimetable' as const, label: '교사 시간표', icon: 'calendar_view_week' },
+                    { key: 'classTimetable' as const, label: '학급 시간표', icon: 'table' },
+                    { key: 'events' as const, label: '학교 교육 활동 계획', icon: 'event' },
+                    { key: 'periodBar' as const, label: '교시 시간 바', icon: 'timer' },
+                    { key: 'todayClass' as const, label: '오늘 수업', icon: 'today' },
+                    { key: 'meal' as const, label: '급식 메뉴', icon: 'restaurant' },
+                    { key: 'todo' as const, label: '할 일', icon: 'checklist' },
+                    { key: 'memo' as const, label: '메모', icon: 'sticky_note_2' },
+                    { key: 'studentRecords' as const, label: '담임 메모장', icon: 'person_book' },
+                    { key: 'seating' as const, label: '자리배치', icon: 'grid_view' },
+                  ] satisfies { key: keyof WidgetVisibleSections; label: string; icon: string }[]).map(({ key, label, icon }) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sp-muted" style={{ fontSize: 18 }}>{icon}</span>
+                        <span className="text-sm text-sp-text">{label}</span>
+                      </div>
+                      <Toggle
+                        checked={draft.widget.visibleSections[key]}
+                        onChange={(v) => patchWidget({ visibleSections: { ...draft.widget.visibleSections, [key]: v } })}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </section>

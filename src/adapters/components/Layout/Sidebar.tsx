@@ -158,7 +158,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
       {/* 로고 */}
       <div className="p-6 flex items-center gap-3">
         <div className="bg-sp-accent/20 p-2 rounded-lg">
-          <img src="/icon_new.svg" alt="쌤핀" className="w-8 h-8" />
+          <img src={`${import.meta.env.BASE_URL}icon_new.svg`} alt="쌤핀" className="w-8 h-8" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-sp-text tracking-tight">쌤핀</h1>
