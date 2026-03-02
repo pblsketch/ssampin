@@ -5,9 +5,10 @@ import { DOWNLOAD_URL, VERSION, FILE_SIZE, FALLBACK_DOWNLOAD_URL } from '@/confi
 
 interface DownloadButtonProps {
   variant?: 'primary' | 'white';
+  showSmartScreenFaq?: boolean;
 }
 
-export default function DownloadButton({ variant = 'primary' }: DownloadButtonProps) {
+export default function DownloadButton({ variant = 'primary', showSmartScreenFaq = false }: DownloadButtonProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -60,6 +61,68 @@ export default function DownloadButton({ variant = 'primary' }: DownloadButtonPr
           여기서 받으세요 →
         </a>
       </p>
+
+      {showSmartScreenFaq && (
+        <details className="group mt-3 w-full max-w-md rounded-xl border border-amber-500/20 bg-amber-500/5 text-left">
+          <summary className="flex min-h-[44px] cursor-pointer items-center gap-2 px-4 py-3 text-[0.85rem] font-medium text-amber-200/90 select-none">
+            <span>⚠️</span>
+            <span className="flex-1">다운로드 시 보안 경고가 뜨나요?</span>
+            <span className="shrink-0 text-amber-200/50 transition-transform duration-200 group-open:rotate-45">
+              +
+            </span>
+          </summary>
+
+          <div className="border-t border-amber-500/10 px-4 pb-4 pt-3 text-[0.8rem] leading-relaxed text-amber-200/70">
+            <p>
+              걱정 마세요! 쌤핀은 안전한 프로그램입니다.
+              <br />
+              개인 개발 앱이라 아직 Microsoft 인증서가 없어서 경고가 표시돼요.
+            </p>
+
+            <div className="mt-3 space-y-2">
+              <div className="rounded-lg bg-amber-500/5 p-3">
+                <p className="text-xs font-semibold text-amber-300">
+                  A. &quot;Windows의 PC 보호&quot; 화면이 뜰 때
+                </p>
+                <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
+                    <span><strong className="text-amber-200/80">&quot;추가 정보&quot;</strong>를 클릭합니다</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
+                    <span><strong className="text-amber-200/80">&quot;실행&quot;</strong> 버튼을 클릭합니다</span>
+                  </li>
+                </ol>
+              </div>
+
+              <div className="rounded-lg bg-amber-500/5 p-3">
+                <p className="text-xs font-semibold text-amber-300">
+                  B. &quot;스마트 앱 컨트롤이 차단&quot; 화면이 뜰 때 (Win 11)
+                </p>
+                <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
+                    <span>설치 파일 우클릭 → <strong className="text-amber-200/80">&quot;속성&quot;</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
+                    <span>하단 <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크 → 확인</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">3</span>
+                    <span>설치 파일 다시 실행</span>
+                  </li>
+                </ol>
+              </div>
+            </div>
+
+            <p className="mt-3 text-[0.7rem] text-amber-200/40">
+              사용자가 늘어나면 이 경고는 자연스럽게 사라집니다.
+            </p>
+          </div>
+        </details>
+      )}
     </div>
   );
 }

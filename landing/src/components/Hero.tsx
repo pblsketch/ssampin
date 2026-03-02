@@ -51,7 +51,7 @@ export default function Hero() {
               transition={{ duration: 0.65, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
               className="mt-10"
             >
-              <DownloadButton />
+              <DownloadButton showSmartScreenFaq />
             </motion.div>
           </div>
 
