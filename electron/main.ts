@@ -78,6 +78,7 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: true,
     },
     show: false,
   });
@@ -253,7 +254,7 @@ function createWidgetWindow(
     frame: false,
     transparent: true,
     thickFrame: false,
-    alwaysOnTop: true,
+    alwaysOnTop: false,  // WorkerW 연결 시 불필요. 실패하면 폴백으로 켬
     resizable: true,
     skipTaskbar: true,           // 작업표시줄에 나타나지 않음 (바탕화면 위젯)
     show: false,
@@ -276,6 +277,30 @@ function createWidgetWindow(
   const attachAndShow = () => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
     widgetWindow.show();
+
+    // WorkerW 바탕화면 레이어에 붙이기 (Windows 전용)
+    if (process.platform === 'win32') {
+      // 렌더러가 안정화된 후 WorkerW에 붙이기 (200ms 딜레이)
+      setTimeout(() => {
+        if (!widgetWindow || widgetWindow.isDestroyed()) return;
+        const hwndBuf = widgetWindow.getNativeWindowHandle();
+        attachToDesktopAsync(hwndBuf).then((attached) => {
+          if (!widgetWindow || widgetWindow.isDestroyed()) return;
+          if (attached) {
+            // WorkerW에 붙으면 alwaysOnTop 해제 (충돌 방지)
+            widgetWindow.setAlwaysOnTop(false);
+            // 하트비트 시작: Explorer 재시작 등에 대비해 30초마다 재연결
+            startWidgetHeartbeat();
+            console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
+          } else {
+            // 연결 실패 시 alwaysOnTop 폴백
+            widgetWindow.setAlwaysOnTop(true);
+            console.warn('[widget] WorkerW 연결 실패, alwaysOnTop 폴백');
+          }
+        });
+      }, 200);
+    }
+
     onReady?.();
   };
 
@@ -470,6 +495,11 @@ function registerIpcHandlers(): void {
       shell.openPath(filePath);
     },
   );
+
+  // shell:openExternal — 기본 브라우저에서 URL 열기
+  ipcMain.handle('shell:openExternal', (_event, url: string): void => {
+    shell.openExternal(url);
+  });
 
   // audio:importAlarm — 알람음 파일 가져오기
   ipcMain.handle(
