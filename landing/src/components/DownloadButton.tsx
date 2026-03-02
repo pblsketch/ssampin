@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DOWNLOAD_URL, VERSION, FILE_SIZE } from '@/config';
+import { DOWNLOAD_URL, VERSION, FILE_SIZE, FALLBACK_DOWNLOAD_URL } from '@/config';
 
 interface DownloadButtonProps {
   variant?: 'primary' | 'white';
@@ -46,6 +46,19 @@ export default function DownloadButton({ variant = 'primary' }: DownloadButtonPr
       </a>
       <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
         무료 · Windows 10/11 · 설치 파일 {FILE_SIZE}
+      </p>
+      <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
+        다운로드가 안 되시나요?{' '}
+        <a
+          href={FALLBACK_DOWNLOAD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
+            isPrimary ? 'text-sp-muted/80 hover:text-sp-muted' : 'text-blue-100/70 hover:text-blue-100'
+          }`}
+        >
+          여기서 받으세요 →
+        </a>
       </p>
     </div>
   );
