@@ -23,6 +23,8 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-work-symbols', emoji: '🤫', name: '활동 기호', description: '수업 모드를 한눈에' },
   { id: 'tool-poll', emoji: '📊', name: '투표', description: '의견을 모아봐요' },
   { id: 'tool-seat-picker', emoji: '🪑', name: '자리 뽑기', description: '내 손으로 뽑는 내 자리' },
+  { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진' },
+  { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구' },
 ];
 
 export function ToolsGrid({ onNavigate }: ToolsGridProps) {

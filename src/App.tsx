@@ -24,6 +24,7 @@ import { ToolQRCode } from '@adapters/components/Tools/ToolQRCode';
 import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
 import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
+import { ToolWebEmbed } from '@adapters/components/Tools/ToolWebEmbed';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer } from '@adapters/components/common/Toast';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -104,6 +105,12 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   }
   if (page === 'tool-seat-picker') {
     return <ToolSeatPicker onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-supsori') {
+    return <ToolWebEmbed url="https://supsori.com" title="🌳 숲소리" onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-pblsketch') {
+    return <ToolWebEmbed url="https://pblsketch.xyz" title="🎯 PBL스케치" onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
   }
   return (
     <div className="flex h-full items-center justify-center">

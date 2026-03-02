@@ -22,6 +22,8 @@ export type PageId =
   | 'tool-work-symbols'
   | 'tool-poll'
   | 'tool-seat-picker'
+  | 'tool-supsori'
+  | 'tool-pblsketch'
   | 'settings';
 
 import { useState, useMemo, useCallback } from 'react';

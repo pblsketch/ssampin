@@ -23,6 +23,7 @@ interface ElectronAPI {
   importAlarmAudio: () => Promise<{ name: string; dataUrl: string } | null>;
   importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
   onFileOpened: (callback: (filePath: string) => void) => () => void;
+  openExternal: (url: string) => Promise<void>;
 }
 
 interface Window {

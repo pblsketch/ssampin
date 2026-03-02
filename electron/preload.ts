@@ -38,4 +38,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('share:file-opened', handler);
     return () => { ipcRenderer.removeListener('share:file-opened', handler); };
   },
+  openExternal: (url: string): Promise<void> =>
+    ipcRenderer.invoke('shell:openExternal', url),
 });
