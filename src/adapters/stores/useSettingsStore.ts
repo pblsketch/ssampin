@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Settings, WorkSymbolItem } from '@domain/entities/Settings';
+import type { Settings, WorkSymbolItem, FeedbackConfig } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
 
@@ -77,6 +77,11 @@ const DEFAULT_SETTINGS: Settings = {
     location: null,
     refreshIntervalMin: 30,
   },
+  feedback: {
+    // TODO: Google Forms 연동 시 formUrl에 입력 (비어있으면 클립보드 폴백 방식 사용)
+    formUrl: '',
+    email: 'pblsketch@gmail.com',
+  },
 };
 
 interface SettingsState {
@@ -109,6 +114,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           alarmSound: { ...DEFAULT_SETTINGS.alarmSound, ...((saved as unknown as { alarmSound?: Partial<Settings['alarmSound']> }).alarmSound ?? {}) },
           workSymbols: { ...DEFAULT_SETTINGS.workSymbols, ...((saved as unknown as { workSymbols?: Partial<Settings['workSymbols']> }).workSymbols ?? {}) },
           weather: { ...DEFAULT_SETTINGS.weather, ...((saved as unknown as { weather?: Partial<Settings['weather']> }).weather ?? {}) },
+          feedback: { ...DEFAULT_SETTINGS.feedback, ...((saved as unknown as { feedback?: Partial<FeedbackConfig> }).feedback ?? {}) } as FeedbackConfig,
         };
         set({ settings: merged, loaded: true, isFirstRun: false });
       } else {

@@ -27,6 +27,7 @@ import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
 import { ToolWebEmbed } from '@adapters/components/Tools/ToolWebEmbed';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer } from '@adapters/components/common/Toast';
+import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
@@ -122,6 +123,7 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
 export function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const { setShareFile, setShowImportModal } = useEventsStore();
   const { settings } = useSettingsStore();
 
@@ -180,7 +182,7 @@ export function App() {
   return (
     <div className={`flex h-screen bg-sp-bg ${fontSizeClass} ${themeClass}`}>
       {!isFullscreen && (
-        <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+        <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} onFeedback={() => setShowFeedback(true)} />
       )}
       <main className={`flex-1 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
         {renderPage(currentPage, setCurrentPage, isFullscreen)}
@@ -188,6 +190,7 @@ export function App() {
       <EventPopup />
       <ToastContainer />
       <Onboarding />
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
     </div>
   );
 }

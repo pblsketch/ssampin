@@ -56,6 +56,11 @@ export interface WeatherSettings {
   readonly refreshIntervalMin: number;  // 갱신 주기 (분)
 }
 
+export interface FeedbackConfig {
+  readonly formUrl: string;  // Google Forms URL (비어있으면 클립보드 폴백)
+  readonly email: string;
+}
+
 export interface Settings {
   readonly schoolName: string;
   readonly className: string;
@@ -76,4 +81,5 @@ export interface Settings {
   readonly workSymbols: WorkSymbolsSettings;
   readonly weather: WeatherSettings;
   readonly menuOrder?: readonly string[];
+  readonly feedback?: FeedbackConfig;
 }

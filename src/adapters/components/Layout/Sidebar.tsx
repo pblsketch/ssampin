@@ -32,6 +32,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 interface SidebarProps {
   currentPage: PageId;
   onNavigate: (page: PageId) => void;
+  onFeedback: () => void;
 }
 
 interface NavItem {
@@ -93,7 +94,7 @@ export const PROTECTABLE_PAGES: readonly ProtectablePage[] = NAV_ITEMS
     icon: item.icon,
   }));
 
-export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
   const { settings } = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.update);
 
@@ -230,7 +231,16 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
           </div>
         </div>
 
-        <p className="text-[10px] text-sp-muted/50 text-center mt-3">v0.1.0</p>
+        <button
+          type="button"
+          onClick={onFeedback}
+          className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-muted/70 hover:text-sp-muted hover:bg-white/5 mt-1"
+        >
+          <span className="material-symbols-outlined text-[18px]">rate_review</span>
+          <span className="text-xs font-medium">건의사항 보내기</span>
+        </button>
+
+        <p className="text-[10px] text-sp-muted/50 text-center mt-2">v0.1.0</p>
       </div>
     </aside>
   );
