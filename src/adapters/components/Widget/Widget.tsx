@@ -83,6 +83,16 @@ export function Widget() {
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
+  // 위젯 모드: body/html 배경을 투명하게 (Electron transparent 창이 바탕화면을 비춰보이도록)
+  useEffect(() => {
+    document.documentElement.style.backgroundColor = 'transparent';
+    document.body.style.backgroundColor = 'transparent';
+    return () => {
+      document.documentElement.style.backgroundColor = '';
+      document.body.style.backgroundColor = '';
+    };
+  }, []);
+
   // 데이터 로드
   useEffect(() => {
     void loadSchedule();
