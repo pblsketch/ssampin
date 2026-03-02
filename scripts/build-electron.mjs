@@ -13,7 +13,7 @@ await build({
   target: 'node20',
   outdir: 'dist-electron',
   format: 'cjs',
-  external: ['electron'],
+  external: ['electron', 'electron-updater'],
   sourcemap: false,
 });
 

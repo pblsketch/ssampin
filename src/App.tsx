@@ -26,6 +26,7 @@ import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer } from '@adapters/components/common/Toast';
+import { UpdateNotification } from '@adapters/components/common/UpdateNotification';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -180,6 +181,7 @@ export function App() {
       <main className={`flex-1 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
         {renderPage(currentPage, setCurrentPage, isFullscreen)}
       </main>
+      <UpdateNotification />
       <EventPopup />
       <ToastContainer />
       <Onboarding />

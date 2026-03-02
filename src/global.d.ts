@@ -24,6 +24,14 @@ interface ElectronAPI {
   importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
   onFileOpened: (callback: (filePath: string) => void) => () => void;
   openExternal: (url: string) => Promise<void>;
+  // Auto-update
+  checkForUpdate: () => Promise<void>;
+  downloadUpdate: () => Promise<void>;
+  installUpdate: () => Promise<void>;
+  onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => () => void;
+  onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => () => void;
+  onUpdateDownloaded: (callback: (info: { version: string }) => void) => () => void;
+  onUpdateError: (callback: (error: string) => void) => () => void;
 }
 
 interface Window {

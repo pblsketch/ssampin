@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { autoUpdater } from 'electron-updater';
 import { attachToDesktop, attachToDesktopAsync } from './workerw';
 
 declare const __dirname: string;
@@ -357,6 +358,44 @@ function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnT
   return { width: 920, height: 700, alwaysOnTop: true, startInWidgetMode: false, closeToWidget: true };
 }
 
+function setupAutoUpdater(): void {
+  autoUpdater.autoDownload = false;
+
+  autoUpdater.on('update-available', (info: { version: string; releaseNotes?: string | null }) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:available', {
+        version: info.version,
+        releaseNotes: info.releaseNotes ?? undefined,
+      });
+    }
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:not-available');
+    }
+  });
+
+  autoUpdater.on('download-progress', (progress: { percent: number }) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:download-progress', { percent: progress.percent });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info: { version: string }) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:update-downloaded', { version: info.version });
+    }
+  });
+
+  autoUpdater.on('error', (err: Error) => {
+    console.error('[autoUpdater] error:', err);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:error', err.message);
+    }
+  });
+}
+
 function registerIpcHandlers(): void {
   // data:read — userData/data/{filename}.json 읽기
   ipcMain.handle('data:read', (_event, filename: string): string | null => {
@@ -566,6 +605,25 @@ function registerIpcHandlers(): void {
       return { content: fs.readFileSync(filePath, 'utf-8'), fileType: 'ssampin' };
     },
   );
+
+  // update:check — 업데이트 확인
+  ipcMain.handle('update:check', (): void => {
+    autoUpdater.checkForUpdates().catch((err: Error) => {
+      console.error('[autoUpdater] checkForUpdates error:', err);
+    });
+  });
+
+  // update:download — 업데이트 다운로드
+  ipcMain.handle('update:download', (): void => {
+    autoUpdater.downloadUpdate().catch((err: Error) => {
+      console.error('[autoUpdater] downloadUpdate error:', err);
+    });
+  });
+
+  // update:install — 업데이트 설치 및 재시작
+  ipcMain.handle('update:install', (): void => {
+    autoUpdater.quitAndInstall();
+  });
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -590,6 +648,14 @@ if (!gotTheLock) {
     registerIpcHandlers();
     createWindow();
     createTray();
+    setupAutoUpdater();
+
+    // Auto-check for updates 5 seconds after app start (only in production)
+    if (!process.env['VITE_DEV_SERVER_URL']) {
+      setTimeout(() => {
+        autoUpdater.checkForUpdates().catch(() => {});
+      }, 5000);
+    }
 
     // Start in widget mode if the setting is enabled
     const widgetOptions = readSettingsWidgetOptions();

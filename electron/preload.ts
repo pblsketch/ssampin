@@ -40,4 +40,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
+  // Auto-update
+  checkForUpdate: (): Promise<void> => ipcRenderer.invoke('update:check'),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('update:download'),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('update:install'),
+  onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void): (() => void) => {
+    const handler = (_event: unknown, info: { version: string; releaseNotes?: string }) => callback(info);
+    ipcRenderer.on('update:available', handler);
+    return () => { ipcRenderer.removeListener('update:available', handler); };
+  },
+  onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void): (() => void) => {
+    const handler = (_event: unknown, progress: { percent: number }) => callback(progress);
+    ipcRenderer.on('update:download-progress', handler);
+    return () => { ipcRenderer.removeListener('update:download-progress', handler); };
+  },
+  onUpdateDownloaded: (callback: (info: { version: string }) => void): (() => void) => {
+    const handler = (_event: unknown, info: { version: string }) => callback(info);
+    ipcRenderer.on('update:update-downloaded', handler);
+    return () => { ipcRenderer.removeListener('update:update-downloaded', handler); };
+  },
+  onUpdateError: (callback: (error: string) => void): (() => void) => {
+    const handler = (_event: unknown, error: string) => callback(error);
+    ipcRenderer.on('update:error', handler);
+    return () => { ipcRenderer.removeListener('update:error', handler); };
+  },
 });
