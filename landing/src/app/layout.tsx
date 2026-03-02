@@ -1,9 +1,6 @@
 import type { Metadata } from 'next';
 import { Noto_Sans_KR } from 'next/font/google';
-import {
-  GoogleTagManagerHead,
-  GoogleTagManagerBody,
-} from '../components/GoogleAnalytics';
+import GoogleAnalytics from '../components/GoogleAnalytics';
 import './globals.css';
 
 const notoSansKR = Noto_Sans_KR({
@@ -164,7 +161,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        <GoogleTagManagerHead />
+        <GoogleAnalytics />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -179,7 +176,6 @@ export default function RootLayout({
         />
       </head>
       <body className={`${notoSansKR.variable} font-sans antialiased`}>
-        <GoogleTagManagerBody />
         {children}
       </body>
     </html>
