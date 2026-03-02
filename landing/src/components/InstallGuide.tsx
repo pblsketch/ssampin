@@ -43,29 +43,36 @@ export default function InstallGuide() {
           ))}
         </div>
 
-        {/* SmartScreen 경고 안내 */}
+        {/* 보안 경고 안내 */}
         <FadeIn className="mt-10" delay={0.3}>
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-6">
-            <div>
-              <p className="font-medium text-amber-200">
-                Windows 보안 경고가 나타나면
+            <p className="font-medium text-amber-200">
+              Windows 보안 경고가 나타나면
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-amber-200/70">
+              개인 개발 앱이라 아직 Microsoft 인증서가 없어요. 아래 방법 중 하나를 사용하세요.
+            </p>
+
+            {/* 케이스 A: 일반 SmartScreen */}
+            <div className="mt-4 rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
+              <p className="text-xs font-semibold text-amber-300">
+                A. &quot;Microsoft Windows의 PC 보호&quot; 화면이 뜰 때
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-amber-200/70">
-                개인 개발 앱이라 아직 Microsoft 인증서가 없어요.
-                &quot;추가 정보&quot; → &quot;실행&quot; 순서로 클릭하면 안전하게 설치됩니다.
+              <p className="mt-1 text-xs text-amber-200/60">
+                &quot;추가 정보&quot; 클릭 → &quot;실행&quot; 클릭
               </p>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                {['① 경고 화면', '② "추가 정보" 클릭', '③ "실행" 클릭'].map(
-                  (label) => (
-                    <div
-                      key={label}
-                      className="flex h-16 flex-1 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/5"
-                    >
-                      <span className="text-xs text-amber-300/60">{label}</span>
-                    </div>
-                  ),
-                )}
-              </div>
+            </div>
+
+            {/* 케이스 B: 스마트 앱 컨트롤 */}
+            <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
+              <p className="text-xs font-semibold text-amber-300">
+                B. &quot;스마트 앱 컨트롤이 차단했습니다&quot; 화면이 뜰 때 (Windows 11)
+              </p>
+              <ol className="mt-1 space-y-0.5 text-xs text-amber-200/60">
+                <li>① 설치 파일을 우클릭 → &quot;속성&quot; 선택</li>
+                <li>② 하단 &quot;차단 해제&quot; 체크박스 체크 → 확인</li>
+                <li>③ 설치 파일 다시 실행</li>
+              </ol>
             </div>
           </div>
         </FadeIn>
