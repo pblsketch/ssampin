@@ -254,7 +254,7 @@ function createWidgetWindow(
     frame: false,
     transparent: true,
     thickFrame: false,
-    alwaysOnTop: false,  // WorkerW 연결 시 불필요. 실패하면 폴백으로 켬
+    alwaysOnTop: options.alwaysOnTop,
     resizable: true,
     skipTaskbar: true,           // 작업표시줄에 나타나지 않음 (바탕화면 위젯)
     show: false,
@@ -293,9 +293,9 @@ function createWidgetWindow(
             startWidgetHeartbeat();
             console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
           } else {
-            // 연결 실패 시 alwaysOnTop 폴백
-            widgetWindow.setAlwaysOnTop(true);
-            console.warn('[widget] WorkerW 연결 실패, alwaysOnTop 폴백');
+            // 연결 실패 시 사용자 설정 유지
+            widgetWindow.setAlwaysOnTop(options.alwaysOnTop);
+            console.warn('[widget] WorkerW 연결 실패, alwaysOnTop =', options.alwaysOnTop);
           }
         });
       }, 200);
@@ -388,9 +388,13 @@ function registerIpcHandlers(): void {
     },
   );
 
-  // window:setAlwaysOnTop
-  ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean): void => {
-    mainWindow?.setAlwaysOnTop(flag);
+  // window:setAlwaysOnTop — 요청을 보낸 창(메인 또는 위젯)에 적용
+  ipcMain.handle('window:setAlwaysOnTop', (event, flag: boolean): void => {
+    const senderWindow =
+      widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.webContents === event.sender
+        ? widgetWindow
+        : mainWindow;
+    senderWindow?.setAlwaysOnTop(flag);
   });
 
   // window:setWidget (backward compat)
