@@ -98,7 +98,7 @@ export function WidgetGrid({ isEditMode }: WidgetGridProps) {
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-start">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 grid-flow-row-dense items-start">
           {visibleWidgets.map((instance) => {
             const definition = getWidgetById(instance.widgetId);
             if (!definition) return null;

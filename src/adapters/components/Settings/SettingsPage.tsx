@@ -635,7 +635,7 @@ export function SettingsPage() {
                   max={100}
                   value={Math.round(draft.widget.opacity * 100)}
                   onChange={(e) => patchWidget({ opacity: Number(e.target.value) / 100 })}
-                  className="w-full h-2 bg-sp-surface rounded-full appearance-none cursor-pointer accent-sp-accent"
+                  className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
                 />
               </div>
               {/* Card Opacity slider */}
@@ -650,7 +650,7 @@ export function SettingsPage() {
                   max={100}
                   value={Math.round((draft.widget.cardOpacity ?? 1) * 100)}
                   onChange={(e) => patchWidget({ cardOpacity: Number(e.target.value) / 100 })}
-                  className="w-full h-2 bg-sp-surface rounded-full appearance-none cursor-pointer accent-sp-accent"
+                  className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
                 />
               </div>
               {/* Always on top */}

@@ -8,9 +8,9 @@ interface WidgetResizeHandleProps {
 
 const SPAN_LABELS: Record<number, string> = {
   1: '좁게',
-  2: '넓게',
-  3: '최대',
-  4: '최대',
+  2: '보통',
+  3: '넓게',
+  4: '넓게',
 };
 
 /**
