@@ -135,13 +135,15 @@ export function Widget() {
               <p className="mt-1 text-xs">대시보드에서 위젯을 추가하세요</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 items-start">
+            <div className="grid grid-cols-3 gap-3 grid-flow-row-dense items-start">
               {visibleWidgets.map((instance) => {
                 const definition = getWidgetById(instance.widgetId);
                 if (!definition) return null;
 
-                // colSpan 매핑: 위젯 창은 2열 그리드이므로 2 이상은 full-width
-                const spanClass = instance.colSpan >= 2 ? 'col-span-2' : 'col-span-1';
+                // colSpan 매핑: 위젯 창은 3열 그리드
+                const spanClass =
+                  instance.colSpan >= 3 ? 'col-span-3' :
+                  instance.colSpan === 2 ? 'col-span-2' : 'col-span-1';
 
                 return (
                   <div key={instance.widgetId} className={spanClass}>
