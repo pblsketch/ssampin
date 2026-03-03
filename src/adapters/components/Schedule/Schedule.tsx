@@ -296,7 +296,6 @@ export function Schedule() {
             setShowEventModal(false);
             setEditingEvent(null);
           }}
-          isSideBySide={selectedDate !== null}
         />
       )}
 
@@ -338,7 +337,6 @@ export function Schedule() {
           }}
           onEditEvent={handleEditEvent}
           onDeleteEvent={handleDeleteEvent}
-          isSideBySide={showEventModal}
         />
       )}
     </div>
