@@ -11,6 +11,7 @@ interface EventListProps {
   events: readonly SchoolEvent[];
   categories: readonly CategoryItem[];
   holidays: readonly HolidayInfo[];
+  hideTitle?: boolean;
   onEdit: (event: SchoolEvent) => void;
   onDelete: (id: string) => void;
 }
@@ -53,11 +54,10 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
 
   return (
     <div
-      className={`rounded-2xl px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-colors shadow-lg group relative shrink-0 ${
-        isToday
+      className={`rounded-2xl px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-colors shadow-lg group relative shrink-0 ${isToday
           ? 'bg-slate-800/80 ring-2 ring-sp-accent/40 shadow-xl'
           : 'bg-sp-card hover:bg-slate-800'
-      }`}
+        }`}
     >
       {/* TODAY 배지 */}
       {isToday && (
@@ -80,11 +80,10 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
           {/* D-Day 배지 */}
           {event.isDDay && dday > 0 && (
             <span
-              className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
-                dday <= 7
+              className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${dday <= 7
                   ? 'bg-red-900/50 text-red-300 border border-red-700/50'
                   : 'bg-blue-900/50 text-blue-300 border border-blue-700/50'
-              } ${dday <= 7 ? 'animate-pulse' : ''}`}
+                } ${dday <= 7 ? 'animate-pulse' : ''}`}
             >
               D-{dday}
             </span>
@@ -165,7 +164,7 @@ function HolidayCard({ holiday }: { holiday: HolidayInfo }) {
   );
 }
 
-export function EventList({ events, categories, holidays, onEdit, onDelete }: EventListProps) {
+export function EventList({ events, categories, holidays, hideTitle, onEdit, onDelete }: EventListProps) {
   const sortedEvents = useMemo(() => sortByDate(events), [events]);
 
   // 이벤트와 공휴일을 날짜순으로 통합
@@ -190,9 +189,11 @@ export function EventList({ events, categories, holidays, onEdit, onDelete }: Ev
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto pr-2 pb-10 h-full">
-      <div className="flex items-center justify-between mb-2 px-2">
-        <h3 className="text-lg font-bold text-sp-text">다가오는 일정</h3>
-      </div>
+      {!hideTitle && (
+        <div className="flex items-center justify-between mb-2 px-2">
+          <h3 className="text-lg font-bold text-sp-text">다가오는 일정</h3>
+        </div>
+      )}
 
       {mergedItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-sp-muted">

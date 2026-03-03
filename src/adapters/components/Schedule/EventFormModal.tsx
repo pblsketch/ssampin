@@ -95,10 +95,10 @@ export function EventFormModal({
   return (
     <>
       {/* 오버레이 */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* 모달 */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <div
           className="w-full max-w-[520px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
@@ -222,11 +222,10 @@ export function EventFormModal({
                     key={key}
                     type="button"
                     onClick={() => toggleAlert(key)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      alerts.includes(key)
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${alerts.includes(key)
                         ? 'bg-sp-accent text-white'
                         : 'bg-sp-bg border border-sp-border text-sp-muted hover:bg-slate-700'
-                    }`}
+                      }`}
                   >
                     {label}
                   </button>

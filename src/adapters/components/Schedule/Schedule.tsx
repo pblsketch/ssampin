@@ -10,6 +10,7 @@ import { EventFormModal } from './EventFormModal';
 import { CategoryManagementModal } from './CategoryManagementModal';
 import { ExportModal } from './ExportModal';
 import { ImportModal } from './ImportModal';
+import { DayScheduleModal } from './DayScheduleModal';
 
 function formatDateStr(date: Date): string {
   const y = date.getFullYear();
@@ -283,24 +284,6 @@ export function Schedule() {
         </div>
       </div>
 
-      {/* 하단 알림 바 */}
-      <div className="bg-sp-surface border-t border-sp-border h-12 flex items-center justify-between px-8 text-sm text-sp-muted shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-yellow-400 text-[20px]">
-            notifications_active
-          </span>
-          <p>
-            알림 설정:{' '}
-            <span className="font-bold text-sp-text">30분 전, 1일 전</span>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="p-1.5 hover:bg-sp-card rounded-lg transition-colors text-sp-muted hover:text-sp-text"
-        >
-          <span className="material-symbols-outlined text-[20px]">settings</span>
-        </button>
-      </div>
 
       {/* 모달들 */}
       {showEventModal && (
@@ -313,6 +296,7 @@ export function Schedule() {
             setShowEventModal(false);
             setEditingEvent(null);
           }}
+          isSideBySide={selectedDate !== null}
         />
       )}
 
@@ -339,6 +323,22 @@ export function Schedule() {
             setShowImportModal(false);
             setShareFile(null);
           }}
+        />
+      )}
+
+      {selectedDate && (
+        <DayScheduleModal
+          date={selectedDate}
+          events={events}
+          categories={categories}
+          onClose={() => setSelectedDate(null)}
+          onAddEvent={() => {
+            setEditingEvent(null);
+            setShowEventModal(true);
+          }}
+          onEditEvent={handleEditEvent}
+          onDeleteEvent={handleDeleteEvent}
+          isSideBySide={showEventModal}
         />
       )}
     </div>
