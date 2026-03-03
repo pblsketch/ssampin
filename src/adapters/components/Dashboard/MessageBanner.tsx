@@ -67,7 +67,7 @@ export function MessageBanner() {
             onKeyDown={handleKeyDown}
             onBlur={() => void confirmEdit()}
             placeholder="오늘의 메시지를 입력하세요..."
-            className="w-full bg-transparent text-emerald-200 font-bold text-lg outline-none placeholder:text-emerald-200/40"
+            className="w-full bg-transparent text-emerald-200 font-bold text-lg outline-none placeholder:text-emerald-400/50"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
@@ -76,7 +76,7 @@ export function MessageBanner() {
               {message !== '' ? message : '클릭하여 메시지를 입력하세요...'}
             </h3>
             {message === '' && (
-              <p className="text-emerald-200/60 text-sm">오늘의 한마디를 남겨보세요</p>
+              <p className="text-emerald-400/80 text-sm">오늘의 한마디를 남겨보세요</p>
             )}
           </>
         )}

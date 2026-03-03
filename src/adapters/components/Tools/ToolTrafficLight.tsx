@@ -233,7 +233,7 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
         style={{ backgroundColor: bgTint }}
       >
         {/* Mode Tabs */}
-        <div className="flex gap-2 bg-sp-card border border-sp-border rounded-xl p-1">
+        <div className={`flex gap-2 bg-sp-card border border-sp-border rounded-xl p-1 ${isFullscreen ? 'mb-4' : ''}`}>
           <button
             onClick={() => switchMode('manual')}
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${

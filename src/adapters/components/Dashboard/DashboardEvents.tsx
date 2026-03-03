@@ -110,7 +110,7 @@ export function DashboardEvents() {
     <div className="rounded-xl bg-sp-card p-4">
       {/* 헤더 */}
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-sp-text">이번 주 일정</h3>
+        <h3 className="text-sm font-bold text-sp-text">다가오는 일정</h3>
       </div>
 
       {/* 콘텐츠 */}

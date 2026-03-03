@@ -6,14 +6,51 @@ export type EventCategory =
   | 'holiday'
   | 'etc';
 
-/** 알림 타이밍 */
-export type AlertTiming =
+/** 알림 타이밍 프리셋 */
+export type AlertTimingPreset =
   | 'onTime'
   | '5min'
   | '30min'
   | '1hour'
   | '1day'
   | '3day';
+
+/** 알림 타이밍 (프리셋 또는 커스텀 분 단위: "custom:{totalMinutes}") */
+export type AlertTiming = AlertTimingPreset | `custom:${number}`;
+
+/** 커스텀 알림인지 확인 */
+export function isCustomAlert(timing: AlertTiming): timing is `custom:${number}` {
+  return typeof timing === 'string' && timing.startsWith('custom:');
+}
+
+/** 커스텀 알림의 분 값 추출 */
+export function getCustomAlertMinutes(timing: AlertTiming): number | null {
+  if (!isCustomAlert(timing)) return null;
+  return parseInt(timing.replace('custom:', ''), 10);
+}
+
+/** AlertTiming을 표시 문자열로 변환 */
+export function alertTimingToLabel(timing: AlertTiming): string {
+  switch (timing) {
+    case 'onTime': return '정시';
+    case '5min': return '5분 전';
+    case '30min': return '30분 전';
+    case '1hour': return '1시간 전';
+    case '1day': return '1일 전';
+    case '3day': return '3일 전';
+    default: {
+      const minutes = getCustomAlertMinutes(timing);
+      if (minutes == null) return timing;
+      if (minutes < 60) return `${minutes}분 전`;
+      if (minutes < 1440) {
+        const hours = minutes / 60;
+        return Number.isInteger(hours) ? `${hours}시간 전` : `${minutes}분 전`;
+      }
+      const days = minutes / 1440;
+      return Number.isInteger(days) ? `${days}일 전` : `${minutes}분 전`;
+    }
+  }
+}
 
 /** 반복 주기 */
 export type Recurrence = 'weekly' | 'monthly' | 'yearly';

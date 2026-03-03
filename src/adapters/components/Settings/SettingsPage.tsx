@@ -309,7 +309,7 @@ export function SettingsPage() {
   return (
     <div className="-m-8 flex flex-col h-[calc(100%+4rem)]">
       {/* Header */}
-      <header className="flex items-center justify-between px-8 py-6 sticky top-0 bg-sp-bg/95 backdrop-blur-sm z-10 border-b border-sp-border/30">
+      <header className="flex items-center justify-between px-8 py-6 sticky top-0 bg-sp-bg/95 backdrop-blur-sm z-10 border-b border-sp-border">
         <div>
           <h2 className="text-3xl font-black text-sp-text tracking-tight flex items-center gap-2">
             <span className="material-symbols-outlined text-sp-muted">settings</span>
@@ -342,7 +342,7 @@ export function SettingsPage() {
       <div className="flex-1 overflow-y-auto p-8 pb-32">
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-7xl mx-auto">
           {/* ── 섹션 1: 학교/학급 정보 ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6">
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
                 <span className="material-symbols-outlined">school</span>
@@ -409,7 +409,7 @@ export function SettingsPage() {
                               handleSelectSchool(school);
                               patch({ schoolName: school.schoolName });
                             }}
-                            className="w-full text-left px-4 py-3 hover:bg-sp-text/5 transition-colors border-b border-sp-border/30 last:border-0"
+                            className="w-full text-left px-4 py-3 hover:bg-sp-text/5 transition-colors border-b border-sp-border last:border-0"
                           >
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-sp-text">{school.schoolName}</span>
@@ -459,7 +459,7 @@ export function SettingsPage() {
           </section>
 
           {/* ── 섹션 2: 교시 시간 설정 ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6 xl:row-span-2">
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 xl:row-span-2">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
@@ -567,7 +567,7 @@ export function SettingsPage() {
                 </div>
 
                 {/* Preview + Apply */}
-                <div className="flex items-center justify-between pt-3 border-t border-sp-border/30">
+                <div className="flex items-center justify-between pt-3 border-t border-sp-border">
                   <div className="text-xs text-sp-muted">
                     {preset.totalPeriods}교시 · {preset.firstPeriodStart} 시작 · {preset.lunchAfterPeriod}교시 후 점심 {preset.lunchDuration}분
                   </div>
@@ -615,7 +615,7 @@ export function SettingsPage() {
           </section>
 
           {/* ── 섹션 3: 위젯 설정 ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6">
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
                 <span className="material-symbols-outlined">widgets</span>
@@ -676,7 +676,7 @@ export function SettingsPage() {
                 />
               </div>
               {/* Start in widget mode */}
-              <div className="flex items-center justify-between pt-4 border-t border-sp-border/30">
+              <div className="flex items-center justify-between pt-4 border-t border-sp-border">
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-sp-text">시작 시 위젯 모드</span>
                   <span className="text-xs text-sp-muted">앱 실행 시 전체화면 대신 위젯으로 시작합니다.</span>
@@ -688,7 +688,7 @@ export function SettingsPage() {
               </div>
 
               {/* 위젯 표시 안내 */}
-              <div className="pt-4 border-t border-sp-border/30">
+              <div className="pt-4 border-t border-sp-border">
                 <p className="text-sm font-medium text-sp-text mb-1">위젯 표시 항목</p>
                 <p className="text-xs text-sp-muted">위젯 모드는 대시보드 화면의 카드 설정을 그대로 따릅니다. 대시보드 편집 모드에서 카드를 추가/제거하세요.</p>
               </div>
@@ -696,7 +696,7 @@ export function SettingsPage() {
           </section>
 
           {/* ── 섹션 4: 좌석 설정 ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6">
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-orange-500/10 text-orange-400">
                 <span className="material-symbols-outlined">chair</span>
@@ -722,7 +722,7 @@ export function SettingsPage() {
           </section>
 
           {/* ── 섹션 5: 시스템 ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6">
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-slate-500/10 text-slate-400">
                 <span className="material-symbols-outlined">settings_applications</span>
@@ -788,7 +788,7 @@ export function SettingsPage() {
           />
 
           {/* ── 섹션 7: 일정 카테고리 관리 ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6">
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-pink-500/10 text-pink-400">
@@ -817,7 +817,7 @@ export function SettingsPage() {
 
               {/* Add form */}
               {showCatForm && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-sp-surface border border-sp-border/50">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-sp-surface border border-sp-border">
                   <div className="flex gap-1.5">
                     {CATEGORY_COLOR_PRESETS.map((c) => (
                       <button
@@ -857,7 +857,7 @@ export function SettingsPage() {
             </div>
           </section>
           {/* ── 섹션 8: 날씨 설정 ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6">
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-sky-500/10 text-sky-500">
                 <span className="material-symbols-outlined">cloud</span>
@@ -897,7 +897,7 @@ export function SettingsPage() {
               {/* 갱신 주기 */}
               <div>
                 <label className="block text-sm text-sp-muted mb-2">갱신 주기</label>
-                <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border/50">
+                <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
                   {([
                     { value: 15, label: '15분' },
                     { value: 30, label: '30분' },
@@ -920,7 +920,7 @@ export function SettingsPage() {
 
               {/* 현재 상태 표시 */}
               {draft.weather.location && (
-                <div className="p-3 bg-sp-surface/50 rounded-lg border border-sp-border/30">
+                <div className="p-3 bg-sp-surface/50 rounded-lg border border-sp-border">
                   <p className="text-xs text-sp-muted">
                     <span className="material-symbols-outlined text-sm align-middle mr-1">location_on</span>
                     {draft.weather.location.name} · {draft.weather.refreshIntervalMin}분 간격 자동 갱신
@@ -931,7 +931,7 @@ export function SettingsPage() {
           </section>
 
           {/* ── 섹션 9: 디스플레이 (테마 및 글꼴) ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6 xl:col-span-2">
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 xl:col-span-2">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-yellow-500/10 text-yellow-500">
                 <span className="material-symbols-outlined">palette</span>
@@ -943,7 +943,7 @@ export function SettingsPage() {
               {/* 테마 설정 */}
               <div>
                 <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">테마 (Theme)</h4>
-                <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border/50">
+                <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
                   {([
                     { value: 'system', label: '시스템 설정', icon: 'brightness_auto' },
                     { value: 'light', label: '라이트 테마', icon: 'light_mode' },
@@ -968,7 +968,7 @@ export function SettingsPage() {
               {/* 글꼴 크기 설정 */}
               <div>
                 <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">글꼴 크기 (Font Size)</h4>
-                <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border/50">
+                <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
                   {([
                     { value: 'small', label: '작게', iconSize: 'text-[14px]' },
                     { value: 'medium', label: '보통', iconSize: 'text-[16px]' },
@@ -1052,7 +1052,7 @@ function PeriodRows({
   return (
     <>
       {showLunchBefore && (
-        <tr className="bg-sp-surface/80 border-y-2 border-sp-border/50">
+        <tr className="bg-sp-surface/80 border-y-2 border-sp-border">
           <td className="px-4 py-3 font-medium text-sp-muted italic">점심</td>
           <td className="px-4 py-3 text-sp-muted">12:00</td>
           <td className="px-4 py-3 text-sp-muted">13:00</td>
@@ -1104,7 +1104,7 @@ function CategoryRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg bg-sp-surface/80 hover:bg-sp-surface transition-colors group border border-transparent hover:border-sp-border/50">
+    <div className="flex items-center justify-between p-3 rounded-lg bg-sp-surface/80 hover:bg-sp-surface transition-colors group border border-transparent hover:border-sp-border">
       <div className="flex items-center gap-3">
         <div className={colorDot(category.color)} />
         <span className="text-sm font-medium text-sp-text">{category.name}</span>
@@ -1291,7 +1291,7 @@ function PinLockSection({
   };
 
   return (
-    <section className="bg-sp-card rounded-xl ring-1 ring-sp-border/50 p-6">
+    <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 rounded-lg bg-red-500/10 text-red-400">
           <span className="material-symbols-outlined">lock</span>
@@ -1341,7 +1341,7 @@ function PinLockSection({
 
         {/* PIN 입력 폼 */}
         {pinMode !== 'idle' && (
-          <div className="p-4 rounded-lg bg-sp-surface/80 border border-sp-border/50 space-y-4">
+          <div className="p-4 rounded-lg bg-sp-surface/80 border border-sp-border space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-sp-text">
                 {pinMode === 'remove' ? '현재 PIN 입력' :
@@ -1418,7 +1418,7 @@ function PinLockSection({
         {/* 기능별 보호 설정 */}
         {pinEnabled && (
           <>
-            <div className="pt-4 border-t border-sp-border/30">
+            <div className="pt-4 border-t border-sp-border">
               <h4 className="text-xs font-semibold text-sp-muted uppercase tracking-wider mb-3">
                 기능별 PIN 보호
               </h4>
@@ -1439,7 +1439,7 @@ function PinLockSection({
             </div>
 
             {/* 자동 잠금 시간 */}
-            <div className="pt-4 border-t border-sp-border/30">
+            <div className="pt-4 border-t border-sp-border">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-sm font-medium text-sp-text">자동 잠금 시간</span>
@@ -1466,7 +1466,7 @@ function PinLockSection({
             </div>
 
             {/* 수동 잠금 버튼 */}
-            <div className="pt-4 border-t border-sp-border/30">
+            <div className="pt-4 border-t border-sp-border">
               <button
                 type="button"
                 onClick={() => pinStore.lock()}

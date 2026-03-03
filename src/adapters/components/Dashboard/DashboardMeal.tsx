@@ -74,7 +74,7 @@ export function DashboardMeal() {
             : 'space-y-3'
           }>
             {todayMeals.map((meal, idx) => (
-              <div key={idx} className={isWide ? 'border-r border-sp-border/30 last:border-r-0 pr-4 last:pr-0 space-y-2' : 'space-y-2'}>
+              <div key={idx} className={isWide ? 'border-r border-sp-border last:border-r-0 pr-4 last:pr-0 space-y-2' : 'border-b border-sp-border last:border-b-0 pb-3 last:pb-0 space-y-2'}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-sp-accent uppercase tracking-wider">
                     {meal.mealType}

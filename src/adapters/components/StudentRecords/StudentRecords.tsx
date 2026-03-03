@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useStudentRecordsStore, SUBCATEGORY_MAP, CATEGORY_LABELS } from '@adapters/stores/useStudentRecordsStore';
+import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
-import type { RecordCategory } from '@domain/valueObjects/RecordCategory';
-import { RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
+import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
+import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import {
@@ -12,6 +12,7 @@ import {
   getAttendanceStats,
   sortByDateDesc,
 } from '@domain/rules/studentRecordRules';
+import { RecordCategoryManagementModal } from './RecordCategoryManagementModal';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -58,54 +59,25 @@ function formatTimeKR(isoStr: string): string {
   }
 }
 
-/** 서브카테고리 칩 색상 */
-function getSubcategoryChipClass(
-  category: RecordCategory,
-  isSelected: boolean,
-): string {
+const GRAY_COLOR = RECORD_COLOR_MAP['gray']!;
+
+/** 서브카테고리 칩 색상 (동적) */
+function getSubcategoryChipClass(color: string, isSelected: boolean): string {
   const base = 'px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer select-none';
-  const colorMap: Record<RecordCategory, { active: string; inactive: string }> = {
-    attendance: {
-      active: 'bg-red-500/80 text-white',
-      inactive: 'bg-red-500/10 text-red-400 hover:bg-red-500/20',
-    },
-    counseling: {
-      active: 'bg-blue-500/80 text-white',
-      inactive: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20',
-    },
-    life: {
-      active: 'bg-green-500/80 text-white',
-      inactive: 'bg-green-500/10 text-green-400 hover:bg-green-500/20',
-    },
-    etc: {
-      active: 'bg-gray-500/80 text-white',
-      inactive: 'bg-gray-500/10 text-gray-400 hover:bg-gray-500/20',
-    },
-  };
-  const { active, inactive } = colorMap[category];
-  return `${base} ${isSelected ? active : inactive}`;
+  const c = RECORD_COLOR_MAP[color] ?? GRAY_COLOR;
+  return `${base} ${isSelected ? c.activeBg : c.inactiveBg}`;
 }
 
-/** 카테고리 라벨 색상 */
-function getCategoryLabelColor(category: RecordCategory): string {
-  const map: Record<RecordCategory, string> = {
-    attendance: 'text-red-400',
-    counseling: 'text-blue-400',
-    life: 'text-green-400',
-    etc: 'text-gray-400',
-  };
-  return map[category];
+/** 카테고리 라벨 색상 (동적) */
+function getCategoryLabelColor(color: string): string {
+  return RECORD_COLOR_MAP[color]?.text ?? GRAY_COLOR.text;
 }
 
-/** 조회모드에서 사용할 기록 태그 칩 */
-function getRecordTagClass(category: RecordCategory): string {
-  const map: Record<RecordCategory, string> = {
-    attendance: 'bg-red-500/15 text-red-400',
-    counseling: 'bg-blue-500/15 text-blue-400',
-    life: 'bg-green-500/15 text-green-400',
-    etc: 'bg-gray-500/15 text-gray-400',
-  };
-  return `px-2 py-0.5 rounded text-xs font-medium ${map[category]}`;
+/** 조회모드 기록 태그 칩 (동적) */
+function getRecordTagClass(categoryId: string, categories: readonly RecordCategoryItem[]): string {
+  const cat = categories.find((c) => c.id === categoryId);
+  const c = RECORD_COLOR_MAP[cat?.color ?? 'gray'] ?? GRAY_COLOR;
+  return `px-2 py-0.5 rounded text-xs font-medium ${c.tagBg}`;
 }
 
 /* ──────────────────────── 메인 컴포넌트 ──────────────────────── */
@@ -119,10 +91,11 @@ const MODE_TABS: { id: ViewMode; icon: string; label: string }[] = [
 ];
 
 export function StudentRecords() {
-  const { records, loaded, load, viewMode, setViewMode } =
+  const { records, loaded, load, viewMode, setViewMode, categories } =
     useStudentRecordsStore();
   const { students, load: loadStudents, loaded: studentsLoaded } =
     useStudentStore();
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
 
   useEffect(() => {
     void load();
@@ -145,21 +118,32 @@ export function StudentRecords() {
           <span>👩‍🏫</span>
           <span>담임 메모장</span>
         </h2>
-        {/* 모드 탭 */}
-        <div className="flex gap-1 bg-sp-surface rounded-lg p-1">
-          {MODE_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setViewMode(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === tab.id
-                ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-white'
-                }`}
-            >
-              <span>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          {/* 카테고리 관리 버튼 */}
+          <button
+            onClick={() => setShowCategoryModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-sp-surface transition-all"
+            title="카테고리 관리"
+          >
+            <span className="material-symbols-outlined text-base">tune</span>
+            <span className="text-xs">카테고리 관리</span>
+          </button>
+          {/* 모드 탭 */}
+          <div className="flex gap-1 bg-sp-surface rounded-lg p-1">
+            {MODE_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setViewMode(tab.id)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === tab.id
+                  ? 'bg-sp-accent text-white'
+                  : 'text-sp-muted hover:text-white'
+                  }`}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -170,13 +154,18 @@ export function StudentRecords() {
 
       {/* 모드별 콘텐츠 */}
       {viewMode === 'input' && (
-        <InputMode students={students} records={records} />
+        <InputMode students={students} records={records} categories={categories} />
       )}
       {viewMode === 'progress' && (
-        <ProgressMode students={students} records={records} />
+        <ProgressMode students={students} records={records} categories={categories} />
       )}
       {viewMode === 'search' && (
-        <SearchMode students={students} records={records} />
+        <SearchMode students={students} records={records} categories={categories} />
+      )}
+
+      {/* 카테고리 관리 모달 */}
+      {showCategoryModal && (
+        <RecordCategoryManagementModal onClose={() => setShowCategoryModal(false)} />
       )}
     </div>
   );
@@ -207,17 +196,19 @@ function ClassTab({ label, isActive }: ClassTabProps) {
 interface ModeProps {
   students: readonly Student[];
   records: readonly StudentRecord[];
+  categories: readonly RecordCategoryItem[];
 }
 
-function InputMode({ students }: ModeProps) {
+function InputMode({ students, categories }: ModeProps) {
   const { addRecord } = useStudentRecordsStore();
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(
     new Set(),
   );
   const [selectedSub, setSelectedSub] = useState<{
-    category: RecordCategory;
+    categoryId: string;
     subcategory: string;
   } | null>(null);
+  const [attendanceType, setAttendanceType] = useState<string | null>(null);
   const [memo, setMemo] = useState('');
 
   const toggleStudent = useCallback((id: string) => {
@@ -236,13 +227,35 @@ function InputMode({ students }: ModeProps) {
     setSelectedStudents(new Set());
   }, []);
 
+  const handleAttendanceTypeClick = useCallback((type: string) => {
+    setAttendanceType((prev) => {
+      if (prev === type) {
+        setSelectedSub((s) => s?.categoryId === 'attendance' ? null : s);
+        return null;
+      }
+      setSelectedSub((s) => s?.categoryId === 'attendance' ? null : s);
+      return type;
+    });
+  }, []);
+
+  const handleAttendanceReasonClick = useCallback((reason: string) => {
+    if (!attendanceType) return;
+    const subcategory = `${attendanceType} (${reason})`;
+    setSelectedSub((prev) =>
+      prev?.categoryId === 'attendance' && prev.subcategory === subcategory
+        ? null
+        : { categoryId: 'attendance', subcategory },
+    );
+  }, [attendanceType]);
+
   const handleSubcategoryClick = useCallback(
-    (category: RecordCategory, sub: string) => {
+    (categoryId: string, sub: string) => {
       setSelectedSub((prev) =>
-        prev?.category === category && prev.subcategory === sub
+        prev?.categoryId === categoryId && prev.subcategory === sub
           ? null
-          : { category, subcategory: sub },
+          : { categoryId, subcategory: sub },
       );
+      setAttendanceType(null);
     },
     [],
   );
@@ -254,7 +267,7 @@ function InputMode({ students }: ModeProps) {
     const promises = Array.from(selectedStudents).map((studentId) =>
       addRecord(
         studentId,
-        selectedSub.category,
+        selectedSub.categoryId,
         selectedSub.subcategory,
         memo,
         today,
@@ -265,6 +278,7 @@ function InputMode({ students }: ModeProps) {
     // 초기화
     setSelectedStudents(new Set());
     setSelectedSub(null);
+    setAttendanceType(null);
     setMemo('');
   }, [selectedStudents, selectedSub, memo, addRecord]);
 
@@ -323,32 +337,80 @@ function InputMode({ students }: ModeProps) {
           </h3>
 
           <div className="space-y-4">
-            {RECORD_CATEGORIES.map((cat) => (
-              <div key={cat}>
+            {categories.map((cat) => (
+              <div key={cat.id}>
                 <p
-                  className={`text-xs font-semibold mb-2 ${getCategoryLabelColor(cat)}`}
+                  className={`text-xs font-semibold mb-2 ${getCategoryLabelColor(cat.color)}`}
                 >
-                  {CATEGORY_LABELS[cat]}
+                  {cat.name}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {SUBCATEGORY_MAP[cat].map((sub) => {
-                    const isSelected =
-                      selectedSub?.category === cat &&
-                      selectedSub.subcategory === sub;
-                    return (
-                      <button
-                        key={sub}
-                        onClick={() => handleSubcategoryClick(cat, sub)}
-                        className={getSubcategoryChipClass(cat, isSelected)}
-                      >
-                        {isSelected && (
-                          <span className="mr-1">✓</span>
-                        )}
-                        {sub}
-                      </button>
-                    );
-                  })}
-                </div>
+
+                {cat.id === 'attendance' ? (
+                  /* 출결: 2단계 선택 (유형 → 사유) */
+                  <div className="space-y-2">
+                    {/* 1단계: 유형 */}
+                    <div className="flex flex-wrap gap-2">
+                      {ATTENDANCE_TYPES.map((type) => {
+                        const isTypeSelected = attendanceType === type;
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => handleAttendanceTypeClick(type)}
+                            className={getSubcategoryChipClass(cat.color, isTypeSelected)}
+                          >
+                            {isTypeSelected && <span className="mr-1">✓</span>}
+                            {type}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* 2단계: 사유 (유형 선택 후 표시) */}
+                    {attendanceType && (
+                      <div className="ml-2 pl-3 border-l-2 border-red-500/30">
+                        <p className="text-[11px] text-sp-muted mb-1.5">사유 선택</p>
+                        <div className="flex flex-wrap gap-2">
+                          {ATTENDANCE_REASONS.map((reason) => {
+                            const combined = `${attendanceType} (${reason})`;
+                            const isReasonSelected =
+                              selectedSub?.categoryId === 'attendance' &&
+                              selectedSub.subcategory === combined;
+                            return (
+                              <button
+                                key={reason}
+                                onClick={() => handleAttendanceReasonClick(reason)}
+                                className={getSubcategoryChipClass(cat.color, isReasonSelected)}
+                              >
+                                {isReasonSelected && <span className="mr-1">✓</span>}
+                                {reason}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* 비출결: 기존 1단계 선택 */
+                  <div className="flex flex-wrap gap-2">
+                    {cat.subcategories.map((sub) => {
+                      const isSelected =
+                        selectedSub?.categoryId === cat.id &&
+                        selectedSub.subcategory === sub;
+                      return (
+                        <button
+                          key={sub}
+                          onClick={() => handleSubcategoryClick(cat.id, sub)}
+                          className={getSubcategoryChipClass(cat.color, isSelected)}
+                        >
+                          {isSelected && (
+                            <span className="mr-1">✓</span>
+                          )}
+                          {sub}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -478,43 +540,43 @@ function ProgressMode({ students, records }: ModeProps) {
 
       {/* 통계 테이블 */}
       <div className="flex-1 overflow-auto rounded-xl bg-sp-card">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm border-collapse timetable-grid">
           <thead>
-            <tr className="border-b border-sp-border text-sp-muted">
-              <th className="text-left p-3 font-medium">번호</th>
-              <th className="text-left p-3 font-medium">이름</th>
-              <th className="text-center p-3 font-medium">결석</th>
-              <th className="text-center p-3 font-medium">지각</th>
-              <th className="text-center p-3 font-medium">조퇴</th>
-              <th className="text-center p-3 font-medium">결과</th>
-              <th className="text-center p-3 font-medium">칭찬</th>
-              <th className="text-center p-3 font-medium">전체</th>
+            <tr className="text-sp-muted">
+              <th className="text-left p-3 font-medium border-b">번호</th>
+              <th className="text-left p-3 font-medium border-b">이름</th>
+              <th className="text-center p-3 font-medium border-b border-l">결석</th>
+              <th className="text-center p-3 font-medium border-b border-l">지각</th>
+              <th className="text-center p-3 font-medium border-b border-l">조퇴</th>
+              <th className="text-center p-3 font-medium border-b border-l">결과</th>
+              <th className="text-center p-3 font-medium border-b border-l">칭찬</th>
+              <th className="text-center p-3 font-medium border-b border-l">전체</th>
             </tr>
           </thead>
           <tbody>
             {statsRows.map(({ student, stats, totalRecords }, idx) => (
               <tr
                 key={student.id}
-                className="border-b border-sp-border/50 hover:bg-sp-surface/30 transition-colors"
+                className="hover:bg-sp-surface/30 transition-colors"
               >
-                <td className="p-3 text-sp-muted">{idx + 1}</td>
-                <td className="p-3 text-sp-text font-medium">{student.name}</td>
-                <td className="text-center p-3">
+                <td className="p-3 text-sp-muted border-b">{idx + 1}</td>
+                <td className="p-3 text-sp-text font-medium border-b">{student.name}</td>
+                <td className="text-center p-3 border-b border-l">
                   <StatBadge value={stats.absent} color="red" />
                 </td>
-                <td className="text-center p-3">
+                <td className="text-center p-3 border-b border-l">
                   <StatBadge value={stats.late} color="orange" />
                 </td>
-                <td className="text-center p-3">
+                <td className="text-center p-3 border-b border-l">
                   <StatBadge value={stats.earlyLeave} color="yellow" />
                 </td>
-                <td className="text-center p-3">
+                <td className="text-center p-3 border-b border-l">
                   <StatBadge value={stats.resultAbsent} color="purple" />
                 </td>
-                <td className="text-center p-3">
+                <td className="text-center p-3 border-b border-l">
                   <StatBadge value={stats.praise} color="green" />
                 </td>
-                <td className="text-center p-3 text-sp-muted">{totalRecords}</td>
+                <td className="text-center p-3 text-sp-muted border-b border-l">{totalRecords}</td>
               </tr>
             ))}
           </tbody>
@@ -551,13 +613,11 @@ function StatBadge({ value, color }: StatBadgeProps) {
 
 /* ──────────────────────── 조회 모드 ──────────────────────── */
 
-function SearchMode({ students, records }: ModeProps) {
+function SearchMode({ students, records, categories }: ModeProps) {
   const { periodFilter, setPeriodFilter, deleteRecord } =
     useStudentRecordsStore();
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<
-    RecordCategory | ''
-  >('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const { updateRecord } = useStudentRecordsStore();
@@ -647,15 +707,13 @@ function SearchMode({ students, records }: ModeProps) {
         {/* 카테고리 필터 */}
         <select
           value={selectedCategory}
-          onChange={(e) =>
-            setSelectedCategory(e.target.value as RecordCategory | '')
-          }
+          onChange={(e) => setSelectedCategory(e.target.value)}
           className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
         >
           <option value="">전체 카테고리</option>
-          {RECORD_CATEGORIES.map((cat) => (
-            <option key={cat} value={cat}>
-              {CATEGORY_LABELS[cat]}
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
             </option>
           ))}
         </select>
@@ -708,7 +766,7 @@ function SearchMode({ students, records }: ModeProps) {
                       >
                         {formatTimeKR(record.createdAt)}
                       </span>
-                      <span className={getRecordTagClass(record.category)}>
+                      <span className={getRecordTagClass(record.category, categories)}>
                         {record.subcategory}
                       </span>
                       <span className="text-sm text-sp-text font-medium min-w-[60px]">

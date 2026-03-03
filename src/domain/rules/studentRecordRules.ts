@@ -1,5 +1,4 @@
 import type { StudentRecord, AttendanceStats } from '../entities/StudentRecord';
-import type { RecordCategory } from '../valueObjects/RecordCategory';
 
 /**
  * 학생별 기록 필터
@@ -16,7 +15,7 @@ export function filterByStudent(
  */
 export function filterByCategory(
   records: readonly StudentRecord[],
-  category: RecordCategory,
+  category: string,
 ): readonly StudentRecord[] {
   return records.filter((r) => r.category === category);
 }
@@ -45,6 +44,20 @@ export function filterByDateRange(
 }
 
 /**
+ * 출결 서브카테고리에서 유형을 추출한다.
+ * 새 형식: "결석 (질병)" → "결석"
+ * 구 형식: "생리결석", "병결", "무단결석" → "결석" / "지각" → "지각" 등
+ */
+function extractAttendanceType(subcategory: string): string {
+  // 새 형식: "유형 (사유)"
+  const parenIdx = subcategory.indexOf(' (');
+  if (parenIdx !== -1) return subcategory.slice(0, parenIdx);
+  // 구 형식 하위호환
+  if (['생리결석', '병결', '무단결석'].includes(subcategory)) return '결석';
+  return subcategory;
+}
+
+/**
  * 학생별 출결 통계 계산
  */
 export function getAttendanceStats(
@@ -52,22 +65,22 @@ export function getAttendanceStats(
   studentId: string,
 ): AttendanceStats {
   const studentRecords = records.filter((r) => r.studentId === studentId);
+  const attendance = studentRecords.filter((r) => r.category === 'attendance');
 
-  const absentSubs = ['생리결석', '병결', '무단결석'];
-  const absent = studentRecords.filter(
-    (r) => r.category === 'attendance' && absentSubs.includes(r.subcategory),
+  const absent = attendance.filter(
+    (r) => extractAttendanceType(r.subcategory) === '결석',
   ).length;
 
-  const late = studentRecords.filter(
-    (r) => r.category === 'attendance' && r.subcategory === '지각',
+  const late = attendance.filter(
+    (r) => extractAttendanceType(r.subcategory) === '지각',
   ).length;
 
-  const earlyLeave = studentRecords.filter(
-    (r) => r.category === 'attendance' && r.subcategory === '조퇴',
+  const earlyLeave = attendance.filter(
+    (r) => extractAttendanceType(r.subcategory) === '조퇴',
   ).length;
 
-  const resultAbsent = studentRecords.filter(
-    (r) => r.category === 'attendance' && r.subcategory === '결과',
+  const resultAbsent = attendance.filter(
+    (r) => extractAttendanceType(r.subcategory) === '결과',
   ).length;
 
   const praise = studentRecords.filter(

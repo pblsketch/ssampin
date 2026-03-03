@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import type { SchoolEvent, CategoryItem, AlertTiming, Recurrence } from '@domain/entities/SchoolEvent';
+import type { SchoolEvent, CategoryItem, AlertTiming, AlertTimingPreset, Recurrence } from '@domain/entities/SchoolEvent';
+import { isCustomAlert, alertTimingToLabel } from '@domain/entities/SchoolEvent';
 
 interface EventFormModalProps {
   categories: readonly CategoryItem[];
@@ -9,13 +10,20 @@ interface EventFormModalProps {
   onClose: () => void;
 }
 
-const ALERT_OPTIONS: { key: AlertTiming; label: string }[] = [
+const ALERT_PRESETS: { key: AlertTimingPreset; label: string }[] = [
   { key: 'onTime', label: '정시' },
   { key: '5min', label: '5분 전' },
   { key: '30min', label: '30분 전' },
   { key: '1hour', label: '1시간 전' },
   { key: '1day', label: '1일 전' },
   { key: '3day', label: '3일 전' },
+];
+
+type CustomUnit = 'min' | 'hour' | 'day';
+const CUSTOM_UNITS: { key: CustomUnit; label: string; minutes: number }[] = [
+  { key: 'min', label: '분', minutes: 1 },
+  { key: 'hour', label: '시간', minutes: 60 },
+  { key: 'day', label: '일', minutes: 1440 },
 ];
 
 const RECURRENCE_OPTIONS: { key: Recurrence | ''; label: string }[] = [
@@ -49,6 +57,9 @@ export function EventFormModal({
   const [alerts, setAlerts] = useState<AlertTiming[]>([]);
   const [recurrence, setRecurrence] = useState<Recurrence | ''>('');
   const [description, setDescription] = useState('');
+  const [customValue, setCustomValue] = useState('');
+  const [customUnit, setCustomUnit] = useState<CustomUnit>('min');
+  const [showCustomInput, setShowCustomInput] = useState(false);
 
   useEffect(() => {
     if (editEvent) {
@@ -65,10 +76,41 @@ export function EventFormModal({
     }
   }, [editEvent]);
 
-  function toggleAlert(key: AlertTiming) {
+  function togglePreset(key: AlertTimingPreset) {
     setAlerts((prev) =>
       prev.includes(key) ? prev.filter((a) => a !== key) : [...prev, key],
     );
+  }
+
+  function addCustomAlert() {
+    const num = parseInt(customValue, 10);
+    if (!num || num <= 0) return;
+
+    const unitInfo = CUSTOM_UNITS.find((u) => u.key === customUnit);
+    if (!unitInfo) return;
+
+    const totalMinutes = num * unitInfo.minutes;
+    const timing: AlertTiming = `custom:${totalMinutes}`;
+
+    // 중복 체크 (프리셋과도 비교)
+    const presetEquivalent = getPresetForMinutes(totalMinutes);
+    if (presetEquivalent && alerts.includes(presetEquivalent)) return;
+    if (alerts.includes(timing)) return;
+
+    setAlerts((prev) => [...prev, timing]);
+    setCustomValue('');
+    setShowCustomInput(false);
+  }
+
+  function removeAlert(timing: AlertTiming) {
+    setAlerts((prev) => prev.filter((a) => a !== timing));
+  }
+
+  function getPresetForMinutes(minutes: number): AlertTimingPreset | null {
+    const map: Record<number, AlertTimingPreset> = {
+      0: 'onTime', 5: '5min', 30: '30min', 60: '1hour', 1440: '1day', 4320: '3day',
+    };
+    return map[minutes] ?? null;
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -216,12 +258,13 @@ export function EventFormModal({
             {/* 알림 설정 */}
             <div>
               <label className="block text-sm font-medium text-sp-muted mb-2">알림 설정</label>
+              {/* 프리셋 버튼 */}
               <div className="flex flex-wrap gap-2">
-                {ALERT_OPTIONS.map(({ key, label }) => (
+                {ALERT_PRESETS.map(({ key, label }) => (
                   <button
                     key={key}
                     type="button"
-                    onClick={() => toggleAlert(key)}
+                    onClick={() => togglePreset(key)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${alerts.includes(key)
                         ? 'bg-sp-accent text-white'
                         : 'bg-sp-bg border border-sp-border text-sp-muted hover:bg-slate-700'
@@ -230,7 +273,77 @@ export function EventFormModal({
                     {label}
                   </button>
                 ))}
+                {/* 직접 입력 토글 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => setShowCustomInput((v) => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showCustomInput
+                      ? 'bg-sp-accent/20 text-sp-accent border border-sp-accent/40'
+                      : 'bg-sp-bg border border-dashed border-sp-border text-sp-muted hover:bg-slate-700 hover:text-sp-text'
+                    }`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">add</span>
+                    직접 입력
+                  </span>
+                </button>
               </div>
+
+              {/* 커스텀 알림 입력 영역 */}
+              {showCustomInput && (
+                <div className="mt-3 flex items-center gap-2 bg-sp-bg/50 border border-sp-border rounded-xl p-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={customValue}
+                    onChange={(e) => setCustomValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomAlert(); } }}
+                    placeholder="숫자"
+                    className="w-20 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text text-center placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    autoFocus
+                  />
+                  <select
+                    value={customUnit}
+                    onChange={(e) => setCustomUnit(e.target.value as CustomUnit)}
+                    className="bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                  >
+                    {CUSTOM_UNITS.map(({ key, label }) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                  <span className="text-sm text-sp-muted">전</span>
+                  <button
+                    type="button"
+                    onClick={addCustomAlert}
+                    disabled={!customValue || parseInt(customValue, 10) <= 0}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-accent text-white hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    추가
+                  </button>
+                </div>
+              )}
+
+              {/* 커스텀 알림 칩 목록 */}
+              {alerts.filter(isCustomAlert).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {alerts.filter(isCustomAlert).map((timing) => (
+                    <span
+                      key={timing}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-sp-accent/15 text-sp-accent border border-sp-accent/30"
+                    >
+                      {alertTimingToLabel(timing)}
+                      <button
+                        type="button"
+                        onClick={() => removeAlert(timing)}
+                        className="hover:text-white transition-colors ml-0.5"
+                      >
+                        <span className="material-symbols-outlined text-sm leading-none" style={{ fontSize: '14px' }}>close</span>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 반복 설정 */}

@@ -6,5 +6,5 @@ export type { PeriodTime } from './PeriodTime';
 export type { MemoColor } from './MemoColor';
 export { MEMO_COLORS } from './MemoColor';
 
-export type { RecordCategory } from './RecordCategory';
-export { RECORD_CATEGORIES } from './RecordCategory';
+export type { RecordCategory, RecordCategoryItem } from './RecordCategory';
+export { RECORD_CATEGORIES, DEFAULT_RECORD_CATEGORIES } from './RecordCategory';

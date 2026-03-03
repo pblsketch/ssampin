@@ -97,7 +97,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     icon: '🍱',
     description: '오늘의 급식 메뉴를 확인합니다',
     category: 'info',
-    defaultSize: { w: 1, h: 1 },
+    defaultSize: { w: 3, h: 1 },
     minSize: { w: 1, h: 1 },
     availableFor: {
       schoolLevel: ['elementary', 'middle', 'high'],

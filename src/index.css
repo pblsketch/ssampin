@@ -59,17 +59,17 @@ body {
  * For simplicity, we just invert some critical tokens.
  */
 .theme-light {
-  --sp-bg: #f8fafc;
-  --sp-surface: #f1f5f9;
-  --sp-card-base: #ffffff;
+  --sp-bg: #e0e2e6;
+  --sp-surface: #d7d9de;
+  --sp-card-base: #e6e7eb;
   --sp-card: var(--sp-card-base);
-  --sp-border: #e2e8f0;
+  --sp-border: #b0b5bf;
   --sp-accent: #2563eb;
   --sp-highlight: #d97706;
   --sp-text: #0f172a;
   --sp-muted: #64748b;
   --memo-dot-color: rgba(0, 0, 0, 0.12);
-  --sp-widget-rgb: 248, 250, 252;
+  --sp-widget-rgb: 224, 226, 230;
   --sp-today-bg: #dbeafe;
 }
 
@@ -230,6 +230,23 @@ body {
 
 .theme-light .bg-slate-700 {
   background-color: var(--sp-surface) !important;
+}
+
+/* Timetable grid borders — per-theme */
+.theme-light .timetable-grid td,
+.theme-light .timetable-grid th {
+  border-color: #a0a8b4 !important;
+}
+
+.theme-dark .timetable-grid td,
+.theme-dark .timetable-grid th {
+  border-color: #2a3f5c !important;
+}
+
+/* Default (no theme class) — same as dark */
+.timetable-grid td,
+.timetable-grid th {
+  border-color: #2a3f5c;
 }
 
 /* bg-slate-600/700 borders → sp-border */

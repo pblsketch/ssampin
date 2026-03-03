@@ -142,7 +142,7 @@ export function TimetablePage() {
   const { className, teacherName } = settings;
   const yearStr = `${now.getFullYear()}학년도`;
   const semester = now.getMonth() < 8 ? '1학기' : '2학기';
-  const infoLabel = className || teacherName
+  const infoLabel = tab === 'class' && (className || teacherName)
     ? `${className}  |  담임: ${teacherName}  |  ${yearStr} ${semester}`
     : `${yearStr} ${semester}`;
 
@@ -221,7 +221,7 @@ export function TimetablePage() {
             <div className="w-full overflow-x-auto">
               <table className="w-full min-w-[800px] border-collapse">
                 <TimetableHeader dayOfWeek={dayOfWeek} />
-                <tbody className="divide-y divide-sp-border">
+                <tbody>
                   {settings.periodTimes.slice(0, settings.maxPeriods).map((pt, idx) => {
                     const periodNum = pt.period;
                     const isCurrent = currentPeriod === periodNum;
@@ -346,7 +346,7 @@ function PeriodRow({
     <>
       {/* 점심시간 행 */}
       {lunchBefore && (
-        <tr className="bg-sp-surface/60">
+        <tr className="bg-sp-surface/60 border-b border-sp-border">
           <td className="px-4 py-3 text-center text-sp-muted font-medium text-sm bg-sp-surface border-r border-sp-border">
             점심
           </td>
@@ -366,8 +366,8 @@ function PeriodRow({
       <tr
         className={
           isCurrent
-            ? 'relative z-10'
-            : 'group hover:bg-slate-800/50 transition-colors'
+            ? 'relative z-10 border-b border-sp-border'
+            : 'group border-b border-sp-border hover:bg-sp-surface/50 transition-colors'
         }
       >
         {/* 교시 셀 */}
@@ -504,7 +504,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol }: TeacherCellProps
           isToday ? 'bg-sp-accent/5' : ''
         }`}
       >
-        <div className="h-14 w-full flex items-center justify-center text-sp-muted/50 text-xs">
+        <div className="h-14 w-full flex items-center justify-center text-sp-muted text-xs">
           공강
         </div>
       </td>

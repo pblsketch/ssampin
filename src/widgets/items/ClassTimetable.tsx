@@ -62,12 +62,12 @@ export function ClassTimetable() {
 
   return (
     <div className="rounded-xl bg-sp-card p-4 overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-full text-xs border-collapse timetable-grid">
         <thead>
           <tr>
-            <th className="w-10 py-1 text-sp-muted font-medium"></th>
+            <th className="w-10 py-1 text-sp-muted font-medium border-b"></th>
             {DAYS.map(({ key, label }) => (
-              <th key={key} className="py-1 text-center text-sp-muted font-medium">
+              <th key={key} className="py-1 text-center text-sp-muted font-medium border-b border-l">
                 {label}
               </th>
             ))}
@@ -76,7 +76,7 @@ export function ClassTimetable() {
         <tbody>
           {periods.map((period) => (
             <tr key={period}>
-              <td className="py-1 text-center text-sp-muted text-[11px]">{period}</td>
+              <td className="py-1 text-center text-sp-muted text-[11px] border-b">{period}</td>
               {DAYS.map(({ key }) => {
                 const dayData = classSchedule[key];
                 const cp = dayData?.[period - 1];
@@ -84,7 +84,7 @@ export function ClassTimetable() {
                 const colorClass = SUBJECT_BG[subject] ?? 'bg-sp-surface/50 text-sp-muted';
 
                 return (
-                  <td key={key} className="p-0.5">
+                  <td key={key} className="p-0.5 border-b border-l">
                     {subject ? (
                       <div className={`rounded px-1 py-1.5 text-center text-[11px] font-medium ${colorClass}`}>
                         {subject}
