@@ -522,7 +522,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('window:setWidgetLayout', (_event, mode: string): void => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
-    const workArea = screen.getPrimaryDisplay().workArea;
+    // 위젯이 현재 위치한 모니터의 작업 영역을 사용 (다중 모니터 지원)
+    const currentBounds = widgetWindow.getBounds();
+    const workArea = screen.getDisplayMatching(currentBounds).workArea;
 
     // 최초 레이아웃 변경 시 원래 위치/크기 저장 (복원용)
     if (!widgetBoundsBeforeLayout) {

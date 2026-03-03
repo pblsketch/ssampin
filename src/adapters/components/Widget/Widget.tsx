@@ -267,11 +267,25 @@ export function Widget() {
                 })}
               </div>
             ) : (
-              /* 분할 모드: WidgetSplitContainer 사용 (스크롤 없이 fit) */
-              <WidgetSplitContainer
-                layoutMode={effectiveMode}
-                widgets={visibleWidgets}
-              />
+              /* 분할 모드: WidgetSplitContainer + 콘텐츠 축소 (스크롤 없이 fit) */
+              (() => {
+                const zoomFactor = effectiveMode === 'quad' ? 0.7 : 0.85;
+                return (
+                  <div
+                    className="origin-top-left"
+                    style={{
+                      zoom: zoomFactor,
+                      width: `${100 / zoomFactor}%`,
+                      height: `${100 / zoomFactor}%`,
+                    }}
+                  >
+                    <WidgetSplitContainer
+                      layoutMode={effectiveMode}
+                      widgets={visibleWidgets}
+                    />
+                  </div>
+                );
+              })()
             )}
           </div>
 
