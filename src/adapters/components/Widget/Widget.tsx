@@ -77,7 +77,8 @@ export function Widget() {
         style={{
           fontFamily: "'Noto Sans KR', sans-serif",
           backgroundColor: `rgba(var(--sp-widget-rgb), ${settings.widget.opacity})`,
-        }}
+          '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
+        } as React.CSSProperties}
       >
         {/* ── 헤더 (드래그 영역) ── */}
         <div
@@ -134,7 +135,7 @@ export function Widget() {
               <p className="mt-1 text-xs">대시보드에서 위젯을 추가하세요</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 items-start">
               {visibleWidgets.map((instance) => {
                 const definition = getWidgetById(instance.widgetId);
                 if (!definition) return null;

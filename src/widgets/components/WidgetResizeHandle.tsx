@@ -8,8 +8,8 @@ interface WidgetResizeHandleProps {
 
 const SPAN_LABELS: Record<number, string> = {
   1: '좁게',
-  2: '보통',
-  3: '넓게',
+  2: '넓게',
+  3: '최대',
   4: '최대',
 };
 
@@ -89,9 +89,8 @@ export function WidgetResizeHandle({ currentSpan, minSpan, onResize }: WidgetRes
           ${isDragging ? '!opacity-100' : ''}`}
       >
         {/* 시각적 그립 바 */}
-        <div className={`w-1 h-10 rounded-full transition-colors ${
-          isDragging ? 'bg-sp-accent' : 'bg-sp-muted/40 hover:bg-sp-accent/70'
-        }`} />
+        <div className={`w-1 h-10 rounded-full transition-colors ${isDragging ? 'bg-sp-accent' : 'bg-sp-muted/40 hover:bg-sp-accent/70'
+          }`} />
       </div>
 
       {/* 드래그 중 프리뷰 오버레이 */}

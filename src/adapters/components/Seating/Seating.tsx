@@ -493,7 +493,7 @@ export function Seating() {
     await randomize();
   }, [randomize]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const handleEditSave = useCallback(
     (_row: number, _col: number, _studentId: string | null) => {
       // 편집 모드에서 학생 이름 변경 시 처리 (추후 확장)

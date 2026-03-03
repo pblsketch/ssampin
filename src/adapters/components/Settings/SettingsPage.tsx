@@ -472,8 +472,8 @@ export function SettingsPage() {
                   type="button"
                   onClick={() => setShowPreset((v) => !v)}
                   className={`text-xs font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-colors ${showPreset
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                      : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
                     }`}
                 >
                   <span className="material-symbols-outlined text-[16px]">auto_fix_high</span>
@@ -507,8 +507,8 @@ export function SettingsPage() {
                       type="button"
                       onClick={() => handleSchoolLevelChange(opt.value)}
                       className={`p-3 rounded-lg border text-left transition-all ${preset.schoolLevel === opt.value
-                          ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/30'
-                          : 'border-sp-border hover:border-sp-muted/50 hover:bg-sp-text/5'
+                        ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/30'
+                        : 'border-sp-border hover:border-sp-muted/50 hover:bg-sp-text/5'
                         }`}
                     >
                       <div className={`text-sm font-bold ${preset.schoolLevel === opt.value ? 'text-emerald-400' : 'text-sp-text'}`}>
@@ -635,6 +635,21 @@ export function SettingsPage() {
                   max={100}
                   value={Math.round(draft.widget.opacity * 100)}
                   onChange={(e) => patchWidget({ opacity: Number(e.target.value) / 100 })}
+                  className="w-full h-2 bg-sp-surface rounded-full appearance-none cursor-pointer accent-sp-accent"
+                />
+              </div>
+              {/* Card Opacity slider */}
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-sp-text">카드 배경 투명도</span>
+                  <span className="text-sm font-bold text-sp-accent">{Math.round((draft.widget.cardOpacity ?? 1) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round((draft.widget.cardOpacity ?? 1) * 100)}
+                  onChange={(e) => patchWidget({ cardOpacity: Number(e.target.value) / 100 })}
                   className="w-full h-2 bg-sp-surface rounded-full appearance-none cursor-pointer accent-sp-accent"
                 />
               </div>
@@ -892,11 +907,10 @@ export function SettingsPage() {
                       key={opt.value}
                       type="button"
                       onClick={() => patchWeather({ refreshIntervalMin: opt.value })}
-                      className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-                        draft.weather.refreshIntervalMin === opt.value
+                      className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${draft.weather.refreshIntervalMin === opt.value
                           ? 'bg-sp-accent text-white shadow-md'
                           : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
-                      }`}
+                        }`}
                     >
                       {opt.label}
                     </button>
@@ -940,8 +954,8 @@ export function SettingsPage() {
                       type="button"
                       onClick={() => patch({ theme: opt.value })}
                       className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${draft.theme === opt.value
-                          ? 'bg-sp-accent text-white shadow-md'
-                          : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+                        ? 'bg-sp-accent text-white shadow-md'
+                        : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
                         }`}
                     >
                       <span className="material-symbols-outlined text-[18px]">{opt.icon}</span>
@@ -966,8 +980,8 @@ export function SettingsPage() {
                       type="button"
                       onClick={() => patch({ fontSize: opt.value })}
                       className={`flex-1 flex items-center justify-center gap-1 py-2.5 rounded-md text-sm font-medium transition-all ${draft.fontSize === opt.value
-                          ? 'bg-sp-accent text-white shadow-md'
-                          : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+                        ? 'bg-sp-accent text-white shadow-md'
+                        : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
                         }`}
                     >
                       <span className={`material-symbols-outlined ${opt.iconSize}`}>format_size</span>
@@ -1332,8 +1346,8 @@ function PinLockSection({
               <span className="text-sm font-medium text-sp-text">
                 {pinMode === 'remove' ? '현재 PIN 입력' :
                   pinStep === 'old' ? '현재 PIN 입력' :
-                  pinStep === 'input' ? '새 PIN 입력 (4자리)' :
-                  'PIN 확인 (한 번 더)'}
+                    pinStep === 'input' ? '새 PIN 입력 (4자리)' :
+                      'PIN 확인 (한 번 더)'}
               </span>
               <button
                 type="button"
@@ -1351,8 +1365,8 @@ function PinLockSection({
                 maxLength={4}
                 value={
                   pinStep === 'old' || pinMode === 'remove' ? pinOld :
-                  pinStep === 'confirm' ? pinConfirm :
-                  pinDigits
+                    pinStep === 'confirm' ? pinConfirm :
+                      pinDigits
                 }
                 onChange={(e) => {
                   const v = e.target.value.replace(/\D/g, '').slice(0, 4);
@@ -1386,11 +1400,10 @@ function PinLockSection({
                 return (
                   <div
                     key={i}
-                    className={`w-2.5 h-2.5 rounded-full transition-all ${
-                      i < currentValue.length
+                    className={`w-2.5 h-2.5 rounded-full transition-all ${i < currentValue.length
                         ? 'bg-sp-accent'
                         : 'bg-sp-border/50'
-                    }`}
+                      }`}
                   />
                 );
               })}

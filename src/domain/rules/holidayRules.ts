@@ -92,7 +92,7 @@ function getSubstituteFor3DayHoliday(
   if (!hasSunday) return null;
 
   // 연휴 다음 날부터 평일을 찾음
-  let offset = 2; // centerDay + 2 = 연휴 마지막 다음날
+  const offset = 2; // centerDay + 2 = 연휴 마지막 다음날
   for (let i = 0; i < 7; i++) {
     const candidate = addDays(year, centerMonth, centerDay, offset + i);
     const dow = dayOfWeek(candidate.y, candidate.m, candidate.d);
@@ -129,7 +129,7 @@ function getSubstituteForSingleHoliday(
   if (dow !== 0 && dow !== 6) return null;
 
   // 다음 평일을 찾되, 이미 다른 공휴일이면 그 다음 평일
-  let offset = dow === 6 ? 2 : 1; // 토→월(+2), 일→월(+1)
+  const offset = dow === 6 ? 2 : 1; // 토→월(+2), 일→월(+1)
   for (let i = 0; i < 7; i++) {
     const candidate = addDays(year, month, day, offset + i);
     const candidateStr = toDateStr(candidate.y, candidate.m, candidate.d);

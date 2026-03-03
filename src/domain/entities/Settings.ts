@@ -44,6 +44,7 @@ export interface WidgetSettings {
   readonly height: number;
   readonly transparent: boolean;
   readonly opacity: number;
+  readonly cardOpacity: number;
   readonly alwaysOnTop: boolean;
   readonly closeToWidget: boolean;
   readonly visibleSections: WidgetVisibleSections;

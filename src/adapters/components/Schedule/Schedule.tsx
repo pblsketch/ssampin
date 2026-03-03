@@ -7,7 +7,7 @@ import { getKoreanHolidays } from '@domain/rules/holidayRules';
 import { CalendarView } from './CalendarView';
 import { EventList } from './EventList';
 import { EventFormModal } from './EventFormModal';
-import { CategoryFormModal } from './CategoryFormModal';
+import { CategoryManagementModal } from './CategoryManagementModal';
 import { ExportModal } from './ExportModal';
 import { ImportModal } from './ImportModal';
 
@@ -27,7 +27,6 @@ export function Schedule() {
     addEvent,
     updateEvent,
     deleteEvent,
-    addCategory,
     showExportModal,
     showImportModal,
     shareFile,
@@ -131,10 +130,7 @@ export function Schedule() {
     void deleteEvent(id);
   }
 
-  function handleAddCategory(name: string, color: string) {
-    void addCategory(name, color);
-    setShowCategoryModal(false);
-  }
+
 
   function handleDateSelect(date: Date) {
     setSelectedDate(date);
@@ -246,14 +242,14 @@ export function Schedule() {
               })}
             </div>
 
-            {/* 카테고리 추가 */}
+            {/* 카테고리 관리 */}
             <button
               type="button"
               onClick={() => setShowCategoryModal(true)}
               className="text-sp-muted text-sm font-medium hover:text-sp-accent transition-colors flex items-center gap-1 shrink-0"
             >
-              <span className="material-symbols-outlined text-[18px]">add</span>
-              카테고리 추가
+              <span className="material-symbols-outlined text-[18px]">settings</span>
+              카테고리 관리
             </button>
           </div>
 
@@ -321,8 +317,7 @@ export function Schedule() {
       )}
 
       {showCategoryModal && (
-        <CategoryFormModal
-          onSubmit={handleAddCategory}
+        <CategoryManagementModal
           onClose={() => setShowCategoryModal(false)}
         />
       )}

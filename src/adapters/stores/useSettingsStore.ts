@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS: Settings = {
     height: 650,
     transparent: false,
     opacity: 0.8,
+    cardOpacity: 1.0,
     alwaysOnTop: true,
     closeToWidget: true,
     visibleSections: {
