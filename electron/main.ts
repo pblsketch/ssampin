@@ -16,6 +16,7 @@ let isQuitting = false;
 // 위젯 alwaysOnTop 상태 추적 (WorkerW 연결 시 Win32 상태와 동기화 문제 방지)
 let widgetDesiredAlwaysOnTop = true;
 let widgetAttachedToDesktop = false;
+let widgetBoundsBeforeLayout: WidgetBounds | null = null;
 
 interface WidgetBounds {
   x: number;
@@ -515,6 +516,68 @@ function registerIpcHandlers(): void {
       const widgetOptions = readSettingsWidgetOptions();
       createWidgetWindow(widgetOptions, () => mainWindow?.hide());
     }
+  });
+
+  // window:setWidgetLayout — 레이아웃 모드에 따라 위젯 창 크기 변경
+  ipcMain.handle('window:setWidgetLayout', (_event, mode: string): void => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+
+    const workArea = screen.getPrimaryDisplay().workArea;
+
+    // 최초 레이아웃 변경 시 원래 위치/크기 저장 (복원용)
+    if (!widgetBoundsBeforeLayout) {
+      widgetBoundsBeforeLayout = widgetWindow.getBounds();
+    }
+
+    let bounds: { x: number; y: number; width: number; height: number };
+
+    switch (mode) {
+      case 'full':
+        // 전체화면: 작업 영역 전체
+        bounds = {
+          x: workArea.x,
+          y: workArea.y,
+          width: workArea.width,
+          height: workArea.height,
+        };
+        break;
+      case 'split-h':
+        // 좌우 분할: 화면 우측 절반
+        bounds = {
+          x: workArea.x + Math.floor(workArea.width / 2),
+          y: workArea.y,
+          width: Math.floor(workArea.width / 2),
+          height: workArea.height,
+        };
+        break;
+      case 'split-v':
+        // 상하 분할: 화면 하단 절반
+        bounds = {
+          x: workArea.x,
+          y: workArea.y + Math.floor(workArea.height / 2),
+          width: workArea.width,
+          height: Math.floor(workArea.height / 2),
+        };
+        break;
+      case 'quad':
+        // 4분할: 화면 우하단 1/4
+        bounds = {
+          x: workArea.x + Math.floor(workArea.width / 2),
+          y: workArea.y + Math.floor(workArea.height / 2),
+          width: Math.floor(workArea.width / 2),
+          height: Math.floor(workArea.height / 2),
+        };
+        break;
+      default:
+        // 알 수 없는 모드: 원래 크기로 복원
+        if (widgetBoundsBeforeLayout) {
+          widgetWindow.setBounds(widgetBoundsBeforeLayout);
+          widgetBoundsBeforeLayout = null;
+        }
+        return;
+    }
+
+    widgetWindow.setBounds(bounds);
   });
 
   // window:setOpacity — 위젯 투명도 설정

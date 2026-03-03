@@ -9,6 +9,8 @@ import { useMessageStore } from '@adapters/stores/useMessageStore';
 import { useDashboardConfig } from '@widgets/useDashboardConfig';
 import { getWidgetById } from '@widgets/registry';
 import { WidgetCard } from '@widgets/components/WidgetCard';
+import { WidgetGrid } from '@widgets/components/WidgetGrid';
+import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
 import { WidgetSplitContainer } from '@widgets/components/WidgetSplitContainer';
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
@@ -35,6 +37,7 @@ export function Widget() {
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showLayoutSelector, setShowLayoutSelector] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const layoutBtnRef = useRef<HTMLButtonElement>(null);
 
   const layoutMode = settings.widget.layoutMode ?? 'full';
@@ -80,9 +83,10 @@ export function Widget() {
     loadConfig();
   }, [loadSchedule, loadTodos, loadEvents, loadMemos, loadMessage, loadConfig]);
 
-  // 레이아웃 모드 변경
+  // 레이아웃 모드 변경 (설정 저장 + 창 크기 조절)
   const setLayoutMode = useCallback((mode: WidgetLayoutMode) => {
     void update({ widget: { ...settings.widget, layoutMode: mode } });
+    window.electronAPI?.setWidgetLayout(mode);
   }, [settings.widget, update]);
 
   // 키보드 단축키: Ctrl+1~4, Ctrl+0 순환
@@ -169,6 +173,22 @@ export function Widget() {
             className="absolute top-3 right-3 flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            {/* 위젯 편집 버튼 */}
+            <button
+              className={[
+                'p-1.5 rounded-lg transition-colors',
+                isEditMode
+                  ? 'bg-sp-accent/20 text-sp-accent'
+                  : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
+              ].join(' ')}
+              onClick={() => setIsEditMode((prev) => !prev)}
+              title="위젯 편집"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                {isEditMode ? 'check' : 'edit'}
+              </span>
+            </button>
+
             {/* 레이아웃 선택 버튼 */}
             <button
               ref={layoutBtnRef}
@@ -212,40 +232,52 @@ export function Widget() {
         )}
 
         {/* ── 대시보드 카드 ── */}
-        <div className="flex-1 overflow-hidden px-4 py-3 min-h-0">
-          {visibleWidgets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-sp-muted">
-              <span className="mb-3 text-4xl">📌</span>
-              <p className="text-sm">표시할 위젯이 없습니다</p>
-              <p className="mt-1 text-xs">대시보드에서 위젯을 추가하세요</p>
-            </div>
-          ) : effectiveMode === 'full' ? (
-            /* full 모드: 기존 3열 그리드 (colSpan 적용, 스크롤 허용) */
-            <div
-              className="grid grid-cols-3 gap-3 grid-flow-row-dense items-start h-full overflow-y-auto"
-              style={{ scrollbarWidth: 'thin' }}
-            >
-              {visibleWidgets.map((instance) => {
-                const definition = getWidgetById(instance.widgetId);
-                if (!definition) return null;
+        <div className="flex-1 flex min-h-0">
+          <div className="flex-1 overflow-hidden px-4 py-3 min-h-0">
+            {visibleWidgets.length === 0 && !isEditMode ? (
+              <div className="flex flex-col items-center justify-center h-full text-sp-muted">
+                <span className="mb-3 text-4xl">📌</span>
+                <p className="text-sm">표시할 위젯이 없습니다</p>
+                <p className="mt-1 text-xs">편집 버튼을 눌러 위젯을 추가하세요</p>
+              </div>
+            ) : isEditMode ? (
+              /* 편집 모드: WidgetGrid (DnD 지원) */
+              <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+                <WidgetGrid isEditMode />
+              </div>
+            ) : effectiveMode === 'full' ? (
+              /* full 모드: 기존 3열 그리드 (colSpan 적용, 스크롤 허용) */
+              <div
+                className="grid grid-cols-3 gap-3 grid-flow-row-dense items-start h-full overflow-y-auto"
+                style={{ scrollbarWidth: 'thin' }}
+              >
+                {visibleWidgets.map((instance) => {
+                  const definition = getWidgetById(instance.widgetId);
+                  if (!definition) return null;
 
-                const spanClass =
-                  instance.colSpan >= 3 ? 'col-span-3' :
-                  instance.colSpan === 2 ? 'col-span-2' : 'col-span-1';
+                  const spanClass =
+                    instance.colSpan >= 3 ? 'col-span-3' :
+                    instance.colSpan === 2 ? 'col-span-2' : 'col-span-1';
 
-                return (
-                  <div key={instance.widgetId} className={spanClass}>
-                    <WidgetCard definition={definition} />
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            /* 분할 모드: WidgetSplitContainer 사용 (스크롤 없이 fit) */
-            <WidgetSplitContainer
-              layoutMode={effectiveMode}
-              widgets={visibleWidgets}
-            />
+                  return (
+                    <div key={instance.widgetId} className={spanClass}>
+                      <WidgetCard definition={definition} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* 분할 모드: WidgetSplitContainer 사용 (스크롤 없이 fit) */
+              <WidgetSplitContainer
+                layoutMode={effectiveMode}
+                widgets={visibleWidgets}
+              />
+            )}
+          </div>
+
+          {/* 편집 모드: 위젯 설정 사이드 패널 */}
+          {isEditMode && (
+            <WidgetSettingsPanel onClose={() => setIsEditMode(false)} />
           )}
         </div>
       </div>

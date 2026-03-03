@@ -150,6 +150,7 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
                 ].join(' ')}
                 onClick={() => {
                   void update({ widget: { ...settings.widget, layoutMode: opt.mode } });
+                  window.electronAPI?.setWidgetLayout(opt.mode);
                 }}
               >
                 <span className={[

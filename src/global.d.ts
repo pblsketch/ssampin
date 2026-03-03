@@ -11,6 +11,7 @@ interface ElectronAPI {
   }) => Promise<void>;
   toggleWidget: () => Promise<void>;
   setOpacity: (value: number) => Promise<void>;
+  setWidgetLayout: (mode: string) => Promise<void>;
   closeWindow: () => Promise<void>;
   showSaveDialog: (options: {
     title: string;
