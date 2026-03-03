@@ -19,6 +19,7 @@ interface WidgetCardProps {
   definition: WidgetDefinition;
   isEditMode?: boolean;
   onHide?: () => void;
+  maxHeight?: number;
 }
 
 /**
@@ -27,12 +28,15 @@ interface WidgetCardProps {
  * - PIN 보호 자동 적용
  * - 카드 배경은 각 위젯 컴포넌트가 자체 관리 (기존 대시보드 위젯 재사용)
  */
-export function WidgetCard({ definition, isEditMode, onHide }: WidgetCardProps) {
+export function WidgetCard({ definition, isEditMode, onHide, maxHeight }: WidgetCardProps) {
   const Component = definition.component;
   const pinFeature = PIN_FEATURE_MAP[definition.id];
 
   const content = (
-    <div className="transition-all duration-200 relative">
+    <div
+      className="transition-all duration-200 relative overflow-hidden"
+      style={maxHeight ? { maxHeight, overflow: 'hidden' } : undefined}
+    >
       {/* 편집 모드 오버레이 */}
       {isEditMode && (
         <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover/widget:opacity-100 transition-opacity">

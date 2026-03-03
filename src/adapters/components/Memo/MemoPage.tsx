@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
+import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import { MemoCard } from './MemoCard';
+import { MemoDetailPopup } from './MemoDetailPopup';
 
 const COLOR_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-300',
@@ -12,9 +14,10 @@ const COLOR_BG: Record<MemoColor, string> = {
 };
 
 export function MemoPage() {
-  const { memos, loaded, load, addMemo, deleteMemo, arrangeInGrid } = useMemoStore();
+  const { memos, loaded, load, addMemo, deleteMemo, updateMemo, updateColor, arrangeInGrid } = useMemoStore();
   const [selectedColor, setSelectedColor] = useState<MemoColor>('yellow');
   const [topMemoId, setTopMemoId] = useState<string | null>(null);
+  const [detailMemo, setDetailMemo] = useState<Memo | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,9 +28,52 @@ export function MemoPage() {
     void addMemo('', selectedColor);
   }, [addMemo, selectedColor]);
 
+  // Sync detailMemo with store changes
+  useEffect(() => {
+    if (detailMemo) {
+      const updated = memos.find((m) => m.id === detailMemo.id);
+      if (updated) {
+        setDetailMemo(updated);
+      } else {
+        setDetailMemo(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memos, detailMemo?.id]);
+
   const handleBringToFront = useCallback((id: string) => {
     setTopMemoId(id);
   }, []);
+
+  const handleOpenDetail = useCallback((memo: Memo) => {
+    setDetailMemo(memo);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setDetailMemo(null);
+  }, []);
+
+  const handleDetailUpdate = useCallback(
+    async (id: string, content: string) => {
+      await updateMemo(id, content);
+    },
+    [updateMemo],
+  );
+
+  const handleDetailDelete = useCallback(
+    async (id: string) => {
+      await deleteMemo(id);
+      setDetailMemo(null);
+    },
+    [deleteMemo],
+  );
+
+  const handleDetailColorChange = useCallback(
+    async (id: string, color: MemoColor) => {
+      await updateColor(id, color);
+    },
+    [updateColor],
+  );
 
   if (!loaded) {
     return (
@@ -103,6 +149,7 @@ export function MemoPage() {
             isTop={memo.id === topMemoId}
             onBringToFront={handleBringToFront}
             onDelete={deleteMemo}
+            onOpenDetail={handleOpenDetail}
             canvasRef={canvasRef}
           />
         ))}
@@ -110,9 +157,19 @@ export function MemoPage() {
         {/* Hint */}
         <p className="pointer-events-none absolute bottom-6 right-6 flex select-none items-center gap-2 text-sm text-slate-600">
           <span className="material-symbols-outlined text-[18px]">touch_app</span>
-          더블 클릭하여 수정
+          클릭하여 상세보기 · 더블 클릭하여 수정
         </p>
       </div>
+
+      {detailMemo && (
+        <MemoDetailPopup
+          memo={detailMemo}
+          onClose={handleCloseDetail}
+          onUpdate={handleDetailUpdate}
+          onDelete={handleDetailDelete}
+          onColorChange={handleDetailColorChange}
+        />
+      )}
     </div>
   );
 }

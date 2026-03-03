@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import type { WidgetLayoutMode } from '@domain/entities/Settings';
 
 interface WidgetContextMenuProps {
   x: number;
@@ -115,6 +116,55 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
           </span>
         )}
       </button>
+
+      {/* 구분선 */}
+      <div className="h-px bg-white/10 mx-3 my-1" />
+
+      {/* 레이아웃 선택 */}
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-3 mb-2">
+          <span
+            className="material-symbols-outlined text-slate-400 flex-shrink-0"
+            style={{ fontSize: 20 }}
+          >
+            grid_view
+          </span>
+          <span className="flex-1 text-sm text-slate-200">레이아웃</span>
+        </div>
+        <div className="flex flex-col gap-0.5 pl-1">
+          {([
+            { mode: 'full' as WidgetLayoutMode, label: '전체화면', shortcut: 'Ctrl+1' },
+            { mode: 'split-h' as WidgetLayoutMode, label: '좌우 분할', shortcut: 'Ctrl+2' },
+            { mode: 'split-v' as WidgetLayoutMode, label: '상하 분할', shortcut: 'Ctrl+3' },
+            { mode: 'quad' as WidgetLayoutMode, label: '4분할', shortcut: 'Ctrl+4' },
+          ]).map((opt) => {
+            const isActive = (settings.widget.layoutMode ?? 'full') === opt.mode;
+            return (
+              <button
+                key={opt.mode}
+                className={[
+                  'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors text-sm',
+                  isActive
+                    ? 'bg-blue-500/15 text-blue-400'
+                    : 'hover:bg-white/[0.06] text-slate-300',
+                ].join(' ')}
+                onClick={() => {
+                  void update({ widget: { ...settings.widget, layoutMode: opt.mode } });
+                }}
+              >
+                <span className={[
+                  'w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
+                  isActive ? 'border-blue-400' : 'border-slate-500',
+                ].join(' ')}>
+                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                </span>
+                <span className="flex-1">{opt.label}</span>
+                <span className="text-xs text-slate-500">{opt.shortcut}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 구분선 */}
       <div className="h-px bg-white/10 mx-3 my-1" />

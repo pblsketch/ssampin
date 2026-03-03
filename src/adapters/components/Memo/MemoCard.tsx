@@ -37,16 +37,19 @@ interface MemoCardProps {
   isTop: boolean;
   onBringToFront: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenDetail?: (memo: Memo) => void;
   canvasRef: RefObject<HTMLDivElement | null>;
 }
 
-export function MemoCard({ memo, isTop, onBringToFront, onDelete, canvasRef }: MemoCardProps) {
+export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, canvasRef }: MemoCardProps) {
   const { updateMemo, updatePosition, updateColor } = useMemoStore();
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(memo.content);
   const [dragging, setDragging] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const mouseDownPos = useRef({ x: 0, y: 0 });
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -61,6 +64,11 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, canvasRef }: M
   }, [editing]);
 
   const handleDoubleClick = useCallback(() => {
+    // Cancel pending single-click timer (prevents popup from opening)
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
     setEditing(true);
     onBringToFront(memo.id);
   }, [memo.id, onBringToFront]);
@@ -96,6 +104,7 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, canvasRef }: M
       const scrollTop = canvas.scrollTop;
       const canvasRect = canvas.getBoundingClientRect();
 
+      mouseDownPos.current = { x: e.clientX, y: e.clientY };
       dragOffset.current = {
         x: e.clientX - canvasRect.left + scrollLeft - memo.x,
         y: e.clientY - canvasRect.top + scrollTop - memo.y,
@@ -127,6 +136,30 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, canvasRef }: M
 
     const handleMouseUp = (e: MouseEvent) => {
       setDragging(false);
+
+      const dx = e.clientX - mouseDownPos.current.x;
+      const dy = e.clientY - mouseDownPos.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // If moved less than 8px, treat as click (not drag)
+      if (distance < 8) {
+        // Use a timer to distinguish single click from double click
+        if (onOpenDetail) {
+          if (clickTimer.current) {
+            // Double click — clear timer, let onDoubleClick handle it
+            clearTimeout(clickTimer.current);
+            clickTimer.current = null;
+          } else {
+            // Single click — set timer, open detail if not cancelled by double click
+            clickTimer.current = setTimeout(() => {
+              clickTimer.current = null;
+              onOpenDetail(memo);
+            }, 300);
+          }
+        }
+        return;
+      }
+
       const scrollLeft = canvas.scrollLeft;
       const scrollTop = canvas.scrollTop;
       const canvasRect = canvas.getBoundingClientRect();

@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS: Settings = {
     cardOpacity: 1.0,
     alwaysOnTop: true,
     closeToWidget: true,
+    layoutMode: 'full',
     visibleSections: {
       dateTime: true,
       weather: true,

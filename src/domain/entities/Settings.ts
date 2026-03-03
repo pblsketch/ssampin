@@ -23,6 +23,8 @@ export interface AlarmSoundSettings {
   readonly volume: number; // 0.0 ~ 1.0
 }
 
+export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';
+
 export interface WidgetVisibleSections {
   readonly dateTime: boolean;
   readonly weather: boolean;
@@ -48,6 +50,7 @@ export interface WidgetSettings {
   readonly alwaysOnTop: boolean;
   readonly closeToWidget: boolean;
   readonly visibleSections: WidgetVisibleSections;
+  readonly layoutMode: WidgetLayoutMode;
 }
 
 export interface SystemSettings {
