@@ -15,6 +15,7 @@
     --sp-muted: #94a3b8;
     --memo-dot-color: #223149;
     --sp-widget-rgb: 15, 23, 42;
+    --sp-today-bg: rgba(30, 41, 59, 0.8);
   }
 
   body {
@@ -69,6 +70,7 @@ body {
   --sp-muted: #64748b;
   --memo-dot-color: rgba(0, 0, 0, 0.12);
   --sp-widget-rgb: 248, 250, 252;
+  --sp-today-bg: #dbeafe;
 }
 
 .theme-dark {
@@ -82,6 +84,7 @@ body {
   --sp-text: #e2e8f0;
   --sp-muted: #94a3b8;
   --sp-widget-rgb: 15, 23, 42;
+  --sp-today-bg: rgba(30, 41, 59, 0.8);
 }
 
 /* ─── Light Theme: Fix hover text & background visibility ─── */

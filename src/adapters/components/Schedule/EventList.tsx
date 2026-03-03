@@ -55,8 +55,8 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
   return (
     <div
       className={`rounded-2xl px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-colors shadow-lg group relative shrink-0 ${isToday
-          ? 'bg-slate-800/80 ring-2 ring-sp-accent/40 shadow-xl'
-          : 'bg-sp-card hover:bg-slate-800'
+        ? 'bg-[var(--sp-today-bg)] ring-2 ring-sp-accent/40 shadow-xl'
+        : 'bg-sp-card hover:bg-sp-surface'
         }`}
     >
       {/* TODAY 배지 */}
@@ -81,8 +81,8 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
           {event.isDDay && dday > 0 && (
             <span
               className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${dday <= 7
-                  ? 'bg-red-900/50 text-red-300 border border-red-700/50'
-                  : 'bg-blue-900/50 text-blue-300 border border-blue-700/50'
+                ? 'bg-red-900/50 text-red-300 border border-red-700/50'
+                : 'bg-blue-900/50 text-blue-300 border border-blue-700/50'
                 } ${dday <= 7 ? 'animate-pulse' : ''}`}
             >
               D-{dday}
