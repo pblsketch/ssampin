@@ -1,13 +1,14 @@
-import { useRef } from 'react';
 import type { WidgetLayoutMode } from '@domain/entities/Settings';
 import type { WidgetInstance } from '../types';
 import { WidgetPanel } from './WidgetPanel';
-import { useAutoFitLayout } from '../hooks/useAutoFitLayout';
 
 interface WidgetSplitContainerProps {
   layoutMode: WidgetLayoutMode;
   widgets: WidgetInstance[];
 }
+
+/** 전체화면 기준 열 수 (항상 3열) */
+const FULL_MODE_COLS = 3;
 
 /** 위젯 목록을 N개 패널로 균등 분배 */
 function splitWidgets(widgets: WidgetInstance[], panelCount: number): WidgetInstance[][] {
@@ -31,13 +32,12 @@ function getPanelCount(mode: WidgetLayoutMode): number {
 
 /**
  * 분할 컨테이너: 4가지 레이아웃 모드에 따라 패널을 배치한다.
+ * 카드 배열은 항상 전체화면 기준(3열)을 유지하고, scale로 축소하여 표시.
  * CSS transition으로 300ms ease-in-out 전환 애니메이션 적용.
  */
 export function WidgetSplitContainer({ layoutMode, widgets }: WidgetSplitContainerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const panelCount = getPanelCount(layoutMode);
   const panels = splitWidgets(widgets, panelCount);
-  const { cols, cardMaxHeight } = useAutoFitLayout(containerRef, widgets.length, layoutMode);
 
   // 컨테이너 CSS Grid 레이아웃 결정
   const gridStyle = (() => {
@@ -67,7 +67,6 @@ export function WidgetSplitContainer({ layoutMode, widgets }: WidgetSplitContain
 
   return (
     <div
-      ref={containerRef}
       className="grid gap-3 h-full w-full transition-all duration-300 ease-in-out"
       style={gridStyle}
     >
@@ -78,8 +77,8 @@ export function WidgetSplitContainer({ layoutMode, widgets }: WidgetSplitContain
         >
           <WidgetPanel
             widgets={panelWidgets}
-            cols={cols}
-            cardMaxHeight={cardMaxHeight}
+            cols={FULL_MODE_COLS}
+            layoutMode={layoutMode}
           />
         </div>
       ))}

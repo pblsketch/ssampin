@@ -27,8 +27,8 @@ export function DashboardMeal() {
   // 학교 미설정
   if (!schoolCode) {
     return (
-      <div className="rounded-xl bg-sp-card p-6 min-h-[260px] flex flex-col">
-        <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4">
+      <div className="rounded-xl bg-sp-card p-4 flex flex-col">
+        <h3 className="text-base font-bold text-white flex items-center gap-2 mb-2">
           <span className="text-lg">🍚</span>
           오늘의 급식
         </h3>
@@ -42,8 +42,8 @@ export function DashboardMeal() {
   }
 
   return (
-    <div className="rounded-xl bg-sp-card p-6 min-h-[260px] flex flex-col">
-      <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4">
+    <div className="rounded-xl bg-sp-card p-4 flex flex-col">
+      <h3 className="text-base font-bold text-white flex items-center gap-2 mb-2">
         <span className="text-lg">🍚</span>
         오늘의 급식
       </h3>

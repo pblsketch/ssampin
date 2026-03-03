@@ -11,7 +11,7 @@ import { getWidgetById } from '@widgets/registry';
 import { WidgetCard } from '@widgets/components/WidgetCard';
 import { WidgetGrid } from '@widgets/components/WidgetGrid';
 import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
-import { WidgetSplitContainer } from '@widgets/components/WidgetSplitContainer';
+
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
 import type { WidgetLayoutMode } from '@domain/entities/Settings';
@@ -245,33 +245,34 @@ export function Widget() {
               <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
                 <WidgetGrid isEditMode />
               </div>
-            ) : effectiveMode === 'full' ? (
-              /* full 모드: 기존 3열 그리드 (colSpan 적용, 스크롤 허용) */
-              <div
-                className="grid grid-cols-3 gap-3 grid-flow-row-dense items-start h-full overflow-y-auto"
-                style={{ scrollbarWidth: 'thin' }}
-              >
-                {visibleWidgets.map((instance) => {
-                  const definition = getWidgetById(instance.widgetId);
-                  if (!definition) return null;
-
-                  const spanClass =
-                    instance.colSpan >= 3 ? 'col-span-3' :
-                    instance.colSpan === 2 ? 'col-span-2' : 'col-span-1';
-
-                  return (
-                    <div key={instance.widgetId} className={spanClass}>
-                      <WidgetCard definition={definition} />
-                    </div>
-                  );
-                })}
-              </div>
             ) : (
-              /* 분할 모드: WidgetSplitContainer (패널별 스크롤) */
-              <WidgetSplitContainer
-                layoutMode={effectiveMode}
-                widgets={visibleWidgets}
-              />
+              /* 전체/분할 공통: 3열 그리드 + 단일 스크롤 + scale 축소 */
+              <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+                <div
+                  style={effectiveMode !== 'full' ? {
+                    transform: `scale(${effectiveMode === 'quad' ? 0.7 : 0.85})`,
+                    transformOrigin: 'top left',
+                    width: `${100 / (effectiveMode === 'quad' ? 0.7 : 0.85)}%`,
+                  } : undefined}
+                >
+                  <div className="grid grid-cols-3 gap-3 grid-flow-row-dense items-start">
+                    {visibleWidgets.map((instance) => {
+                      const definition = getWidgetById(instance.widgetId);
+                      if (!definition) return null;
+
+                      const spanClass =
+                        instance.colSpan >= 3 ? 'col-span-3' :
+                        instance.colSpan === 2 ? 'col-span-2' : 'col-span-1';
+
+                      return (
+                        <div key={instance.widgetId} className={spanClass}>
+                          <WidgetCard definition={definition} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
