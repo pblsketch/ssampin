@@ -7,7 +7,7 @@ export default function Footer() {
         <p className="text-sm font-medium text-sp-muted">
           쌤핀 (SsamPin) · 선생님의 대시보드
         </p>
-        <div className="mt-3 flex items-center justify-center gap-4 text-sm text-sp-muted/60">
+        <nav aria-label="푸터 링크" className="mt-3 flex items-center justify-center gap-4 text-sm text-sp-muted/60">
           <a
             href={GITHUB_URL}
             target="_blank"
@@ -16,9 +16,27 @@ export default function Footer() {
           >
             GitHub
           </a>
-        </div>
+          <span aria-hidden="true">·</span>
+          <a
+            href={`${GITHUB_URL}#readme`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-sp-text"
+          >
+            이용 안내
+          </a>
+          <span aria-hidden="true">·</span>
+          <a
+            href={`${GITHUB_URL}/issues`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-sp-text"
+          >
+            문의 · 피드백
+          </a>
+        </nav>
         <p className="mt-4 text-xs text-sp-muted/40">
-          © 2026 SsamPin v{VERSION} · All rights reserved.
+          © 2025 SsamPin v{VERSION} · 모든 데이터는 사용자 PC에만 저장됩니다.
         </p>
       </div>
     </footer>

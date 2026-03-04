@@ -11,6 +11,18 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: 'Yeti',
         allow: '/',
       },
+      {
+        userAgent: 'GPTBot',
+        disallow: '/',
+      },
+      {
+        userAgent: 'CCBot',
+        disallow: '/',
+      },
+      {
+        userAgent: 'Google-Extended',
+        disallow: '/',
+      },
     ],
     sitemap: 'https://ssampin.vercel.app/sitemap.xml',
   };
