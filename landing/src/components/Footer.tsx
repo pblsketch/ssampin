@@ -27,7 +27,7 @@ export default function Footer() {
           </a>
           <span aria-hidden="true">·</span>
           <a
-            href={`${GITHUB_URL}/issues`}
+            href="https://forms.gle/o1X4zLYocUpFKCzy7"
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors hover:text-sp-text"
