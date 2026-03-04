@@ -73,6 +73,16 @@ function getDefaultWidgetBounds(width: number): { x: number; y: number } {
   };
 }
 
+function getAppIcon(): Electron.NativeImage {
+  const candidates = [
+    path.join(__dirname, '../build/icon.ico'),
+    path.join(__dirname, '../public/favicon.ico'),
+    path.join(process.resourcesPath || '', 'build/icon.ico'),
+  ];
+  const found = candidates.find((p) => fs.existsSync(p));
+  return found ? nativeImage.createFromPath(found) : nativeImage.createEmpty();
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -80,6 +90,7 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 700,
     title: '쌤핀',
+    icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -126,16 +137,8 @@ function createWindow(): void {
 }
 
 function createTray(): void {
-  const iconCandidates = [
-    path.join(__dirname, '../build/icon.ico'),
-    path.join(__dirname, '../public/favicon.ico'),
-    path.join(process.resourcesPath || '', 'build/icon.ico'),
-  ];
   try {
-    const iconFile = iconCandidates.find((p) => fs.existsSync(p));
-    const trayIcon = iconFile
-      ? nativeImage.createFromPath(iconFile).resize({ width: 16, height: 16 })
-      : nativeImage.createEmpty();
+    const trayIcon = getAppIcon().resize({ width: 16, height: 16 });
     tray = new Tray(trayIcon);
 
     const contextMenu = Menu.buildFromTemplate([
