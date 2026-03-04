@@ -290,7 +290,7 @@ export function Widget() {
                     width: `${100 / (effectiveMode === 'quad' ? 0.7 : 0.85)}%`,
                   } : undefined}
                 >
-                  <div className="grid grid-cols-3 gap-3 grid-flow-row-dense items-start">
+                  <div className="grid grid-cols-4 gap-3 grid-flow-row-dense items-start">
                     {filteredWidgets.map((instance) => {
                       const definition = getWidgetById(instance.widgetId);
                       if (!definition) return null;

@@ -10,7 +10,7 @@ const SPAN_LABELS: Record<number, string> = {
   1: '좁게',
   2: '보통',
   3: '넓게',
-  4: '넓게',
+  4: '최대',
 };
 
 /**

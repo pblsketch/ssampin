@@ -1151,7 +1151,7 @@ export function SettingsPage() {
 
         {/* Footer */}
         <div className="mt-12 text-center">
-          <p className="text-sp-muted text-xs">SsamPin v0.1.6</p>
+          <p className="text-sp-muted text-xs">SsamPin v0.1.8</p>
         </div>
       </div>
 
