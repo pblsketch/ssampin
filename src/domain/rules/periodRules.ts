@@ -49,7 +49,7 @@ export function getCurrentPeriod(
 /* ─── 학교급별 프리셋 ─── */
 
 /** 학교급별 기본 수업 시간(분) */
-const PERIOD_DURATION: Record<SchoolLevel, number> = {
+export const PERIOD_DURATION: Record<SchoolLevel, number> = {
   elementary: 40,
   middle: 45,
   high: 50,

@@ -11,7 +11,7 @@ import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { CategoryItem } from '@domain/entities/SchoolEvent';
 import { CATEGORY_COLOR_PRESETS } from '@domain/entities/SchoolEvent';
 import type { PeriodPreset } from '@domain/rules/periodRules';
-import { getDefaultPreset, generatePeriodTimes } from '@domain/rules/periodRules';
+import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
 import type { SchoolSearchResult } from '@domain/entities/Meal';
 
 /* ─── Toggle Switch ─── */
@@ -230,7 +230,18 @@ export function SettingsPage() {
         const arr = [...prev.periodTimes] as PeriodTime[];
         const existing = arr[index];
         if (!existing) return prev;
-        arr[index] = { period: existing.period, start: existing.start, end: existing.end, [field]: value };
+
+        if (field === 'start' && prev.schoolLevel) {
+          const duration = PERIOD_DURATION[prev.schoolLevel];
+          const startMin = parseMinutes(value);
+          const endH = Math.floor((startMin + duration) / 60);
+          const endM = (startMin + duration) % 60;
+          const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+          arr[index] = { period: existing.period, start: value, end: endStr };
+        } else {
+          arr[index] = { period: existing.period, start: existing.start, end: existing.end, [field]: value };
+        }
+
         return { ...prev, periodTimes: arr };
       });
     },
@@ -539,7 +550,7 @@ export function SettingsPage() {
                       type="time"
                       value={preset.firstPeriodStart}
                       onChange={(e) => setPreset((p) => ({ ...p, firstPeriodStart: e.target.value }))}
-                      className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-emerald-500/50 [&::-webkit-calendar-picker-indicator]:invert"
+                      className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-emerald-500/50 [color-scheme:dark]"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -766,14 +777,14 @@ export function SettingsPage() {
                     type="time"
                     value={draft.system.doNotDisturbStart}
                     onChange={(e) => patchSystem({ doNotDisturbStart: e.target.value })}
-                    className="bg-transparent text-sm text-sp-text focus:outline-none p-0 w-[60px] [&::-webkit-calendar-picker-indicator]:invert"
+                    className="bg-transparent text-sm text-sp-text focus:outline-none p-0 w-[60px] [color-scheme:dark]"
                   />
                   <span className="text-sp-muted text-sm">~</span>
                   <input
                     type="time"
                     value={draft.system.doNotDisturbEnd}
                     onChange={(e) => patchSystem({ doNotDisturbEnd: e.target.value })}
-                    className="bg-transparent text-sm text-sp-text focus:outline-none p-0 w-[60px] [&::-webkit-calendar-picker-indicator]:invert"
+                    className="bg-transparent text-sm text-sp-text focus:outline-none p-0 w-[60px] [color-scheme:dark]"
                   />
                 </div>
               </div>
@@ -1151,7 +1162,7 @@ export function SettingsPage() {
 
         {/* Footer */}
         <div className="mt-12 text-center">
-          <p className="text-sp-muted text-xs">SsamPin v0.1.8</p>
+          <p className="text-sp-muted text-xs">SsamPin v0.1.9</p>
         </div>
       </div>
 
@@ -1221,7 +1232,7 @@ function PeriodRows({
             type="time"
             value={period.start}
             onChange={(e) => onChangeStart(e.target.value)}
-            className="bg-transparent text-sp-text focus:text-sp-text focus:outline-none border-none p-0 w-full [&::-webkit-calendar-picker-indicator]:invert"
+            className="bg-transparent text-sp-text focus:text-sp-text focus:outline-none border-none p-0 w-full [color-scheme:dark]"
           />
         </td>
         <td className="px-4 py-2">
@@ -1229,7 +1240,7 @@ function PeriodRows({
             type="time"
             value={period.end}
             onChange={(e) => onChangeEnd(e.target.value)}
-            className="bg-transparent text-sp-text focus:text-sp-text focus:outline-none border-none p-0 w-full [&::-webkit-calendar-picker-indicator]:invert"
+            className="bg-transparent text-sp-text focus:text-sp-text focus:outline-none border-none p-0 w-full [color-scheme:dark]"
           />
         </td>
         <td className="px-4 py-2 text-center">

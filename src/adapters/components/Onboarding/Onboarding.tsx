@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { Settings, SchoolLevel } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import { getDefaultPreset, generatePeriodTimes } from '@domain/rules/periodRules';
+import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
 
 export function Onboarding() {
     const { isFirstRun, completeOnboarding } = useSettingsStore();
@@ -41,7 +41,18 @@ export function Onboarding() {
             const arr = [...(prev.periodTimes ?? [])] as PeriodTime[];
             const existing = arr[index];
             if (!existing) return prev;
-            arr[index] = { period: existing.period, start: existing.start, end: existing.end, [field]: value };
+
+            if (field === 'start' && prev.schoolLevel) {
+                const duration = PERIOD_DURATION[prev.schoolLevel];
+                const startMin = parseMinutes(value);
+                const endH = Math.floor((startMin + duration) / 60);
+                const endM = (startMin + duration) % 60;
+                const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+                arr[index] = { period: existing.period, start: value, end: endStr };
+            } else {
+                arr[index] = { period: existing.period, start: existing.start, end: existing.end, [field]: value };
+            }
+
             return { ...prev, periodTimes: arr };
         });
     };
@@ -178,7 +189,7 @@ export function Onboarding() {
                                                             type="time"
                                                             value={pt.start}
                                                             onChange={(e) => updatePeriod(i, 'start', e.target.value)}
-                                                            className="bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sp-accent [&::-webkit-calendar-picker-indicator]:invert"
+                                                            className="bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
                                                         />
                                                     </td>
                                                     <td className="py-2">
@@ -186,7 +197,7 @@ export function Onboarding() {
                                                             type="time"
                                                             value={pt.end}
                                                             onChange={(e) => updatePeriod(i, 'end', e.target.value)}
-                                                            className="bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sp-accent [&::-webkit-calendar-picker-indicator]:invert"
+                                                            className="bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
                                                         />
                                                     </td>
                                                 </tr>
