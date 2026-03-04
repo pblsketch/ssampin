@@ -33,12 +33,25 @@ interface ElectronAPI {
   onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => () => void;
   onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => () => void;
   onUpdateDownloaded: (callback: (info: { version: string }) => void) => () => void;
+  onUpdateNotAvailable: (callback: () => void) => () => void;
   onUpdateError: (callback: (error: string) => void) => () => void;
   // Cross-window navigation
   navigateToPage: (page: string) => Promise<void>;
   onNavigateToPage: (callback: (page: string) => void) => () => void;
+  // Google OAuth
+  startOAuth: (authUrl: string) => Promise<string>;
+  cancelOAuth: () => Promise<void>;
+  onOAuthRedirectUri: (callback: (uri: string) => void) => () => void;
+  // Secure Storage
+  secureWrite: (key: string, value: string) => Promise<void>;
+  secureRead: (key: string) => Promise<string | null>;
+  secureDelete: (key: string) => Promise<void>;
+  // Network status
+  onNetworkChange: (callback: (online: boolean) => void) => () => void;
 }
 
 interface Window {
   electronAPI?: ElectronAPI;
 }
+
+declare const __APP_VERSION__: string;

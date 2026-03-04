@@ -52,6 +52,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update:available', handler);
     return () => { ipcRenderer.removeListener('update:available', handler); };
   },
+  onUpdateNotAvailable: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('update:not-available', handler);
+    return () => { ipcRenderer.removeListener('update:not-available', handler); };
+  },
   onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void): (() => void) => {
     const handler = (_event: unknown, progress: { percent: number }) => callback(progress);
     ipcRenderer.on('update:download-progress', handler);
@@ -74,5 +79,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event: unknown, page: string) => callback(page);
     ipcRenderer.on('navigate:to-page', handler);
     return () => { ipcRenderer.removeListener('navigate:to-page', handler); };
+  },
+  // Google OAuth
+  startOAuth: (authUrl: string): Promise<string> =>
+    ipcRenderer.invoke('oauth:start', authUrl),
+  cancelOAuth: (): Promise<void> =>
+    ipcRenderer.invoke('oauth:cancel'),
+  onOAuthRedirectUri: (callback: (uri: string) => void): (() => void) => {
+    const handler = (_event: unknown, uri: string) => callback(uri);
+    ipcRenderer.on('oauth:redirect-uri', handler);
+    return () => { ipcRenderer.removeListener('oauth:redirect-uri', handler); };
+  },
+  // Secure Storage
+  secureWrite: (key: string, value: string): Promise<void> =>
+    ipcRenderer.invoke('secure:write', key, value),
+  secureRead: (key: string): Promise<string | null> =>
+    ipcRenderer.invoke('secure:read', key),
+  secureDelete: (key: string): Promise<void> =>
+    ipcRenderer.invoke('secure:delete', key),
+  // Network status
+  onNetworkChange: (callback: (online: boolean) => void): (() => void) => {
+    const onlineHandler = () => callback(true);
+    const offlineHandler = () => callback(false);
+    window.addEventListener('online', onlineHandler);
+    window.addEventListener('offline', offlineHandler);
+    return () => {
+      window.removeEventListener('online', onlineHandler);
+      window.removeEventListener('offline', offlineHandler);
+    };
   },
 });
