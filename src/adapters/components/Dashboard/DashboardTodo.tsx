@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import type { Todo } from '@domain/entities/Todo';
+import { filterActive, sortTodos } from '@domain/rules/todoRules';
+import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 
 const MAX_VISIBLE = 5;
 
@@ -11,15 +13,16 @@ export function DashboardTodo() {
     void load();
   }, [load]);
 
+  // 아카이브 제외 + 정렬 (우선순위 반영)
   const sorted = useMemo<readonly Todo[]>(() => {
-    const incomplete = todos.filter((t) => !t.completed);
-    const complete = todos.filter((t) => t.completed);
-    return [...incomplete, ...complete];
+    const active = filterActive(todos);
+    return sortTodos(active);
   }, [todos]);
 
   const visible = sorted.slice(0, MAX_VISIBLE);
-  const completedCount = todos.filter((t) => t.completed).length;
-  const totalCount = todos.length;
+  const activeTodos = useMemo(() => filterActive(todos), [todos]);
+  const completedCount = activeTodos.filter((t) => t.completed).length;
+  const totalCount = activeTodos.length;
 
   return (
     <div className="rounded-xl bg-sp-card p-4">
@@ -63,12 +66,23 @@ interface TodoItemProps {
 }
 
 function TodoItem({ todo, onToggle }: TodoItemProps) {
+  const priorityConfig = PRIORITY_CONFIG[todo.priority ?? 'none'];
+  const showPriority = todo.priority && todo.priority !== 'none';
+
   return (
     <li
       className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-sp-surface/50"
       onClick={() => onToggle(todo.id)}
     >
       <Checkbox checked={todo.completed} />
+
+      {/* 우선순위 dot */}
+      {showPriority && (
+        <span className={`text-[9px] ${priorityConfig.color}`}>
+          {priorityConfig.icon}
+        </span>
+      )}
+
       <span
         className={`flex-1 text-sm leading-tight transition-all ${
           todo.completed

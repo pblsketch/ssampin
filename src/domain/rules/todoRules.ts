@@ -1,12 +1,23 @@
-import type { Todo } from '@domain/entities/Todo';
+import type { Todo, TodoRecurrence } from '@domain/entities/Todo';
+import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 
 /**
- * 투두 정렬: 미완료 위, 완료 아래. 각 그룹 내에서는 생성순 유지.
+ * 투두 정렬: 미완료(우선순위 높은 순 → 마감일 빠른 순) → 완료
  */
 export function sortTodos(todos: readonly Todo[]): readonly Todo[] {
-  const incomplete = todos.filter((t) => !t.completed);
-  const complete = todos.filter((t) => t.completed);
-  return [...incomplete, ...complete];
+  return [...todos].sort((a, b) => {
+    // 1차: 완료 여부
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    // 2차: 우선순위 (높은 순)
+    const pa = PRIORITY_CONFIG[a.priority ?? 'none'].sortOrder;
+    const pb = PRIORITY_CONFIG[b.priority ?? 'none'].sortOrder;
+    if (pa !== pb) return pa - pb;
+    // 3차: 마감일 (빠른 순)
+    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    if (a.dueDate) return -1;
+    if (b.dueDate) return 1;
+    return 0;
+  });
 }
 
 /**
@@ -96,8 +107,61 @@ export function isOverdue(todo: Todo, today: Date = new Date()): boolean {
   return todo.dueDate < formatDate(today);
 }
 
+/** 카테고리 필터링 */
+export function filterByCategory(
+  todos: readonly Todo[],
+  categoryId: string | null,
+): readonly Todo[] {
+  if (!categoryId) return todos;
+  return todos.filter((t) => t.category === categoryId);
+}
+
+/** 아카이브되지 않은 (활성) 할 일만 필터 */
+export function filterActive(todos: readonly Todo[]): readonly Todo[] {
+  return todos.filter((t) => !t.archivedAt);
+}
+
+/** 아카이브된 할 일만 필터 */
+export function filterArchived(todos: readonly Todo[]): readonly Todo[] {
+  return todos.filter((t) => !!t.archivedAt);
+}
+
+/** 반복 할 일의 다음 마감일 계산 */
+export function calculateNextDueDate(
+  currentDate: string,
+  recurrence: TodoRecurrence,
+): string {
+  const date = new Date(currentDate + 'T00:00:00');
+
+  switch (recurrence.type) {
+    case 'daily':
+      date.setDate(date.getDate() + recurrence.interval);
+      break;
+    case 'weekdays': {
+      let daysToAdd = recurrence.interval;
+      while (daysToAdd > 0) {
+        date.setDate(date.getDate() + 1);
+        const day = date.getDay();
+        if (day !== 0 && day !== 6) daysToAdd--;
+      }
+      break;
+    }
+    case 'weekly':
+      date.setDate(date.getDate() + 7 * recurrence.interval);
+      break;
+    case 'monthly':
+      date.setMonth(date.getMonth() + recurrence.interval);
+      break;
+    case 'yearly':
+      date.setFullYear(date.getFullYear() + recurrence.interval);
+      break;
+  }
+
+  return formatDate(date);
+}
+
 /** Date → "YYYY-MM-DD" */
-function formatDate(date: Date): string {
+export function formatDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
