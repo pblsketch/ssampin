@@ -45,7 +45,11 @@ export const metadata: Metadata = {
     '학급 관리', '담임 업무', '일정 관리',
   ],
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.png', type: 'image/png', sizes: '256x256' },
+    ],
+    apple: '/apple-icon.png',
   },
   verification: {
     google: 'googlea16810e6f264caeb',
