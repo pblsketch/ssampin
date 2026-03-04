@@ -1,4 +1,4 @@
-import { GITHUB_URL, VERSION } from '@/config';
+import { VERSION } from '@/config';
 
 export default function Footer() {
   return (
@@ -8,24 +8,6 @@ export default function Footer() {
           쌤핀 (SsamPin) · 선생님의 대시보드
         </p>
         <nav aria-label="푸터 링크" className="mt-3 flex items-center justify-center gap-4 text-sm text-sp-muted/60">
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-sp-text"
-          >
-            GitHub
-          </a>
-          <span aria-hidden="true">·</span>
-          <a
-            href={`${GITHUB_URL}#readme`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-sp-text"
-          >
-            이용 안내
-          </a>
-          <span aria-hidden="true">·</span>
           <a
             href="https://forms.gle/o1X4zLYocUpFKCzy7"
             target="_blank"
