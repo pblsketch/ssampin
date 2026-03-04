@@ -72,7 +72,7 @@ function TodoItem({ todo, onToggle }: TodoItemProps) {
   return (
     <li
       className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-sp-surface/50"
-      onClick={() => onToggle(todo.id)}
+      onClick={(e) => { e.stopPropagation(); onToggle(todo.id); }}
     >
       <Checkbox checked={todo.completed} />
 
