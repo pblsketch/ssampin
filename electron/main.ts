@@ -3,6 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
 import { attachToDesktop, attachToDesktopAsync } from './workerw';
+import { registerOAuthHandlers } from './ipc/oauth';
+import { registerSecureStorageHandlers } from './ipc/secureStorage';
 
 declare const __dirname: string;
 
@@ -807,7 +809,9 @@ if (!gotTheLock) {
   app.whenReady().then(() => {
     applySystemSettings();
     registerIpcHandlers();
+    registerSecureStorageHandlers();
     createWindow();
+    registerOAuthHandlers(mainWindow!);
     createTray();
     setupAutoUpdater();
 

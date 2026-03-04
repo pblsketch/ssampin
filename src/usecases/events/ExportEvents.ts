@@ -12,7 +12,7 @@ export class ExportEvents {
   async execute(options: ExportOptions): Promise<EventsShareFile> {
     const data = await this.eventsRepository.getEvents();
     const events = data?.events ?? [];
-    const allCategories = data?.categories ?? [];
+    const allCategories = data?.categories?.length ? [...data.categories] : [];
     const settings = await this.settingsRepository.getSettings();
 
     // 1. Filter by selected categories

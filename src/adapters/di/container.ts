@@ -14,10 +14,15 @@ import type { IStudentRecordsRepository } from '@domain/repositories/IStudentRec
 import type { IMessageRepository } from '@domain/repositories/IMessageRepository';
 import type { IStudentRepository } from '@domain/repositories/IStudentRepository';
 import type { IExternalCalendarRepository } from '@domain/repositories/IExternalCalendarRepository';
+import type { IGoogleAuthPort } from '@domain/ports/IGoogleAuthPort';
+import type { IGoogleCalendarPort } from '@domain/ports/IGoogleCalendarPort';
+import type { ICalendarSyncRepository } from '@domain/repositories/ICalendarSyncRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
 import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
+import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
+import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarApiClient';
 
 import { JsonScheduleRepository } from '@adapters/repositories/JsonScheduleRepository';
 import { JsonSeatingRepository } from '@adapters/repositories/JsonSeatingRepository';
@@ -29,6 +34,12 @@ import { JsonStudentRecordsRepository } from '@adapters/repositories/JsonStudent
 import { JsonMessageRepository } from '@adapters/repositories/JsonMessageRepository';
 import { JsonStudentRepository } from '@adapters/repositories/JsonStudentRepository';
 import { JsonExternalCalendarRepository } from '@adapters/repositories/JsonExternalCalendarRepository';
+import { GoogleCalendarSyncRepository } from '@adapters/repositories/GoogleCalendarSyncRepository';
+
+import { AuthenticateGoogle } from '@usecases/calendar/AuthenticateGoogle';
+import { SyncToGoogle } from '@usecases/calendar/SyncToGoogle';
+import { SyncFromGoogle } from '@usecases/calendar/SyncFromGoogle';
+import { ManageCalendarMapping } from '@usecases/calendar/ManageCalendarMapping';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI != null;
 
@@ -67,3 +78,36 @@ export const externalCalendarRepository: IExternalCalendarRepository =
   new JsonExternalCalendarRepository(storage);
 
 export const neisPort: INeisPort = new NeisApiClient();
+
+// === Google Calendar 관련 ===
+
+export const googleAuthPort: IGoogleAuthPort = new GoogleOAuthClient();
+
+export const googleCalendarPort: IGoogleCalendarPort = new GoogleCalendarApiClient();
+
+export const calendarSyncRepo: ICalendarSyncRepository =
+  new GoogleCalendarSyncRepository(storage);
+
+export const authenticateGoogle = new AuthenticateGoogle(
+  googleAuthPort,
+  calendarSyncRepo,
+);
+
+export const syncToGoogle = new SyncToGoogle(
+  googleCalendarPort,
+  calendarSyncRepo,
+  () => authenticateGoogle.getValidAccessToken(),
+);
+
+export const manageCalendarMapping = new ManageCalendarMapping(
+  googleCalendarPort,
+  calendarSyncRepo,
+  () => authenticateGoogle.getValidAccessToken(),
+);
+
+export const syncFromGoogle = new SyncFromGoogle(
+  googleCalendarPort,
+  calendarSyncRepo,
+  eventsRepository,
+  () => authenticateGoogle.getValidAccessToken(),
+);

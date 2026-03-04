@@ -4,6 +4,7 @@ import { useWidgetRefresh } from '@widgets/hooks/useWidgetRefresh';
 import { calculateDDay } from '@domain/rules/ddayRules';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
+import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 
 const MAX_VISIBLE = 6;
 
@@ -63,7 +64,10 @@ function EventItem({ event, today, categories }: EventItemProps) {
       <span className="w-10 shrink-0 text-xs text-sp-muted">{dateStr}</span>
 
       {/* 제목 */}
-      <span className="flex-1 truncate text-sm text-sp-text">{event.title}</span>
+      <span className="flex-1 truncate text-sm text-sp-text">
+        {event.title}
+        {event.source === 'google' && <GoogleBadge className="ml-1" />}
+      </span>
 
       {/* D-Day 배지 */}
       {ddayBadge !== null && (

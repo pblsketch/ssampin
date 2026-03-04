@@ -13,8 +13,12 @@ import { ImportModal } from './ImportModal';
 import { DayScheduleModal } from './DayScheduleModal';
 import { YearView } from './YearView';
 import { SemesterView } from './SemesterView';
+import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
+import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
+import { useToastStore } from '@adapters/components/common/Toast';
 
 type ScheduleView = 'month' | 'semester' | 'year';
+type SourceFilter = 'all' | 'ssampin' | 'google';
 
 const VIEW_LABELS: Record<ScheduleView, string> = {
   month: '월간',
@@ -60,9 +64,21 @@ export function Schedule() {
     return m >= 2 && m <= 7 ? 'first' : 'second';
   });
 
-  // 선택된 날짜, 카테고리 필터
+  // 선택된 날짜, 카테고리 필터, 소스 필터
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+
+  // 구글 캘린더 연결 상태
+  const { isConnected: googleConnected, syncState, syncNow: googleSyncNow, startAuth, isLoading: googleLoading, error: googleError } = useCalendarSyncStore();
+  const showToast = useToastStore((s) => s.show);
+
+  // 구글 캘린더 에러 토스트
+  useEffect(() => {
+    if (googleError) {
+      showToast(googleError, 'error');
+    }
+  }, [googleError, showToast]);
 
   // 모달 상태
   const [showEventModal, setShowEventModal] = useState(false);
@@ -111,8 +127,14 @@ export function Schedule() {
       result = filterByCategory(result, selectedCategory);
     }
 
+    if (sourceFilter === 'google') {
+      result = result.filter((e) => e.source === 'google');
+    } else if (sourceFilter === 'ssampin') {
+      result = result.filter((e) => e.source !== 'google');
+    }
+
     return result;
-  }, [events, year, month, selectedCategory]);
+  }, [events, year, month, selectedCategory, sourceFilter]);
 
   // 해당 월의 공휴일
   const monthHolidays = useMemo(() => {
@@ -180,10 +202,10 @@ export function Schedule() {
   return (
     <div className="flex flex-col h-full -m-8">
       {/* 헤더 */}
-      <header className="h-20 shrink-0 px-8 flex items-center justify-between border-b border-sp-border bg-sp-bg">
-        <div className="flex items-center gap-6">
-          <h2 className="text-sp-text text-2xl font-bold flex items-center gap-3">
-            <span className="text-3xl">📋</span> 일정 관리
+      <header className="shrink-0 px-8 py-4 flex flex-wrap items-center gap-3 border-b border-sp-border bg-sp-bg">
+        <div className="flex items-center gap-4 mr-auto">
+          <h2 className="text-sp-text text-xl xl:text-2xl font-bold flex items-center gap-2">
+            <span className="text-2xl xl:text-3xl">📋</span> 일정 관리
           </h2>
 
           {/* 뷰 전환 탭 */}
@@ -193,7 +215,7 @@ export function Schedule() {
                 key={v}
                 type="button"
                 onClick={() => setView(v)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs xl:text-sm font-medium transition-colors ${
                   view === v
                     ? 'bg-sp-accent text-white'
                     : 'text-sp-muted hover:text-sp-text'
@@ -205,30 +227,63 @@ export function Schedule() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 xl:gap-2 flex-wrap">
+          {/* 구글 캘린더 버튼 */}
+          {googleConnected ? (
+            <button
+              type="button"
+              onClick={() => void googleSyncNow()}
+              disabled={syncState.status === 'syncing'}
+              className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all disabled:opacity-50"
+              title="구글 캘린더 동기화"
+            >
+              <span className={`material-symbols-outlined text-[18px] ${syncState.status === 'syncing' ? 'animate-spin' : ''}`}>
+                sync
+              </span>
+              <span className="hidden sm:inline">{syncState.status === 'syncing' ? '동기화 중...' : '구글 동기화'}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void startAuth()}
+              disabled={googleLoading}
+              className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all disabled:opacity-50"
+              title="구글 캘린더 연결"
+            >
+              {googleLoading ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
+              ) : (
+                <span className="material-symbols-outlined text-[18px]">add_link</span>
+              )}
+              <span className="hidden sm:inline">{googleLoading ? '연결 중...' : '구글 캘린더 연결'}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void downloadTemplate()}
-            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
+            title="양식 다운로드"
           >
             <span className="material-symbols-outlined text-[18px]">description</span>
-            <span>양식 다운로드</span>
+            <span className="hidden lg:inline">양식 다운로드</span>
           </button>
           <button
             type="button"
             onClick={handleImportClick}
-            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
+            title="가져오기"
           >
             <span className="material-symbols-outlined text-[18px]">download</span>
-            <span>가져오기</span>
+            <span className="hidden lg:inline">가져오기</span>
           </button>
           <button
             type="button"
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
+            title="내보내기"
           >
             <span className="material-symbols-outlined text-[18px]">upload</span>
-            <span>내보내기</span>
+            <span className="hidden lg:inline">내보내기</span>
           </button>
           <button
             type="button"
@@ -236,10 +291,11 @@ export function Schedule() {
               setEditingEvent(null);
               setShowEventModal(true);
             }}
-            className="flex items-center gap-2 bg-sp-accent hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-sp-accent/20"
+            className="flex items-center gap-1.5 bg-sp-accent hover:bg-blue-600 text-white px-4 xl:px-5 py-2 xl:py-2.5 rounded-xl transition-all shadow-lg shadow-sp-accent/20"
+            title="일정 추가"
           >
             <span className="material-symbols-outlined text-[20px]">add</span>
-            <span className="text-sm font-bold">일정 추가</span>
+            <span className="text-xs xl:text-sm font-bold">일정 추가</span>
           </button>
         </div>
       </header>
@@ -287,6 +343,29 @@ export function Schedule() {
                     );
                   })}
                 </div>
+
+                {/* 소스 필터 (구글 연결 시) */}
+                {googleConnected && (
+                  <div className="flex items-center gap-1 ml-4 border-l border-sp-border pl-4">
+                    {(['all', 'ssampin', 'google'] as const).map((src) => (
+                      <button
+                        key={src}
+                        type="button"
+                        onClick={() => setSourceFilter(src)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === src
+                          ? 'bg-sp-accent text-white'
+                          : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                          }`}
+                      >
+                        {src === 'all' ? '전체' : src === 'ssampin' ? '쌤핀' : (
+                          <span className="flex items-center gap-1">
+                            <GoogleBadge /> 구글
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <button
                   type="button"

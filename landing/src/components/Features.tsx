@@ -20,6 +20,12 @@ const features = [
       'D-Day 자동 계산, 카테고리별 관리, 행사 알림까지. 학교 일정 놓치지 마세요.',
   },
   {
+    icon: '🔄',
+    title: '구글 캘린더 연동',
+    description:
+      '구글 캘린더와 양방향 자동 동기화. 내 캘린더를 골라서 가져오세요.',
+  },
+  {
     icon: '👩‍🏫',
     title: '담임메모',
     description:

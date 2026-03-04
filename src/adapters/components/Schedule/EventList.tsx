@@ -4,6 +4,7 @@ import { sortByDate } from '@domain/rules/eventRules';
 import { calculateDDay } from '@domain/rules/ddayRules';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import type { HolidayInfo } from '@domain/rules/holidayRules';
+import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -93,8 +94,10 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
           <span className="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">
             {categoryInfo.name}
           </span>
-          {/* 편집/삭제 (호버 시) 또는 외부 배지 */}
-          {isExternal ? (
+          {/* 편집/삭제 (호버 시) 또는 외부/구글 배지 */}
+          {event.source === 'google' ? (
+            <GoogleBadge />
+          ) : isExternal ? (
             <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
               외부
             </span>

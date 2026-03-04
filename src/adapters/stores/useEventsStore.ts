@@ -175,6 +175,31 @@ async function excelBufferToShareFile(buffer: ArrayBuffer): Promise<EventsShareF
   }
 }
 
+// 구글 캘린더 동기화 헬퍼 (비동기, 실패해도 UI 블로킹 안 함)
+async function syncEventToGoogle(event: SchoolEvent): Promise<SchoolEvent> {
+  try {
+    const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
+    if (!useCalendarSyncStore.getState().isConnected) return event;
+    const { syncToGoogle } = await import('@adapters/di/container');
+    return await syncToGoogle.syncEvent(event);
+  } catch (err) {
+    console.error('[GoogleSync] Failed to sync event:', err);
+    return { ...event, syncStatus: 'pending' as const };
+  }
+}
+
+async function deleteEventFromGoogle(event: SchoolEvent): Promise<void> {
+  try {
+    const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
+    if (!useCalendarSyncStore.getState().isConnected) return;
+    if (!event.googleEventId) return;
+    const { syncToGoogle } = await import('@adapters/di/container');
+    await syncToGoogle.deleteEvent(event);
+  } catch (err) {
+    console.error('[GoogleSync] Failed to delete event from Google:', err);
+  }
+}
+
 export const useEventsStore = create<EventsState>((set) => {
   const checkEventAlerts = new CheckEventAlerts(eventsRepository);
   const manageEvents = new ManageEvents(eventsRepository);
@@ -218,6 +243,16 @@ export const useEventsStore = create<EventsState>((set) => {
       };
       await manageEvents.add(event);
       set((state) => ({ events: [...state.events, event] }));
+
+      // 구글 동기화 (비동기, 논블로킹)
+      syncEventToGoogle(event).then(async (synced) => {
+        if (synced.googleEventId) {
+          set((state) => ({
+            events: state.events.map((e) => (e.id === synced.id ? synced : e)),
+          }));
+          await manageEvents.update(synced);
+        }
+      });
     },
 
     updateEvent: async (event) => {
@@ -225,13 +260,31 @@ export const useEventsStore = create<EventsState>((set) => {
       set((state) => ({
         events: state.events.map((e) => (e.id === event.id ? event : e)),
       }));
+
+      // 구글 동기화 (비동기, 논블로킹)
+      syncEventToGoogle(event).then(async (synced) => {
+        if (synced.googleEventId && synced.lastSyncedAt !== event.lastSyncedAt) {
+          set((state) => ({
+            events: state.events.map((e) => (e.id === synced.id ? synced : e)),
+          }));
+          await manageEvents.update(synced);
+        }
+      });
     },
 
     deleteEvent: async (id) => {
+      // 삭제 전 이벤트 참조 저장 (구글 동기화용)
+      const eventToDelete = useEventsStore.getState().events.find((e) => e.id === id);
+
       await manageEvents.delete(id);
       set((state) => ({
         events: state.events.filter((e) => e.id !== id),
       }));
+
+      // 구글 동기화 (비동기, 논블로킹)
+      if (eventToDelete) {
+        deleteEventFromGoogle(eventToDelete);
+      }
     },
 
     checkAlerts: async () => {
@@ -372,7 +425,7 @@ export const useEventsStore = create<EventsState>((set) => {
       // Reload from repository to sync state
       const data = await eventsRepository.getEvents();
       const events = data?.events ?? [];
-      const categories = data?.categories ?? [];
+      const categories = data?.categories?.length ? [...data.categories] : [...DEFAULT_CATEGORIES];
       set({ events, categories, shareFile: null, showImportModal: false });
       return result;
     },

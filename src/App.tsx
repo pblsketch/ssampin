@@ -30,7 +30,9 @@ import { UpdateNotification } from '@adapters/components/common/UpdateNotificati
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
+import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { validateShareFile } from '@domain/rules/shareRules';
 
 function isWidgetMode(): boolean {
@@ -163,6 +165,14 @@ export function App() {
 
     return unsubscribe;
   }, []);
+
+  // 구글 캘린더 연결 상태 초기화
+  useEffect(() => {
+    useCalendarSyncStore.getState().initialize();
+  }, []);
+
+  // 구글 캘린더 자동 동기화
+  useAutoSync();
 
   const fontSizeClass = (() => {
     switch (settings.fontSize) {

@@ -18,7 +18,7 @@ export class ImportEvents {
   ): Promise<ImportResult> {
     const data = await this.eventsRepository.getEvents();
     const existingEvents: SchoolEvent[] = [...(data?.events ?? [])];
-    const existingCategories: CategoryItem[] = [...(data?.categories ?? [])];
+    const existingCategories: CategoryItem[] = data?.categories?.length ? [...data.categories] : [];
 
     // 1. Create new categories for unmapped, build ID mapping
     let newCategoriesCount = 0;

@@ -14,6 +14,7 @@ import type { PeriodPreset } from '@domain/rules/periodRules';
 import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
 import type { SchoolSearchResult } from '@domain/entities/Meal';
 import { AppInfoSection } from './AppInfoSection';
+import { CalendarSettings } from './CalendarSettings';
 /* ─── Toggle Switch ─── */
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -1002,6 +1003,11 @@ export function SettingsPage() {
                 </div>
               </div>
             </div>
+          </section>
+
+          {/* ── 섹션 10: 구글 캘린더 연동 ── */}
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
+            <CalendarSettings />
           </section>
 
           {/* ── 섹션 11: 앱 정보 ── */}

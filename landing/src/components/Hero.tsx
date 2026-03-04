@@ -63,7 +63,7 @@ export default function Hero() {
             className="hidden flex-col gap-px overflow-hidden rounded-2xl border border-sp-border md:flex"
           >
             {[
-              { label: '핵심 기능', value: '9가지', sub: '올인원' },
+              { label: '핵심 기능', value: '10가지+', sub: '올인원' },
               { label: '완전 무료', value: '₩0', sub: '광고 없음' },
               { label: '오프라인', value: '100%', sub: '로컬 저장' },
             ].map((stat, i) => (
@@ -101,6 +101,7 @@ export default function Hero() {
               '시간표',
               '자리 배치',
               '일정 관리',
+              '구글 캘린더',
               '급식 정보',
               '날씨 · 미세먼지',
               '쌤도구',

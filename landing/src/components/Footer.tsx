@@ -16,6 +16,13 @@ export default function Footer() {
           >
             문의 · 피드백
           </a>
+          <span className="text-sp-muted/30">·</span>
+          <a
+            href="/privacy"
+            className="transition-colors hover:text-sp-text"
+          >
+            개인정보처리방침
+          </a>
         </nav>
         <p className="mt-4 text-xs text-sp-muted/40">
           © 2025 SsamPin v{VERSION} · 모든 데이터는 사용자 PC에만 저장됩니다.

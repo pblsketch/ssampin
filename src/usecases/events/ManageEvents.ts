@@ -63,7 +63,8 @@ export class ManageEvents {
 
   async getCategories(): Promise<readonly CategoryItem[]> {
     const data = await this.eventsRepository.getEvents();
-    return data?.categories ?? [...DEFAULT_CATEGORIES];
+    const categories = data?.categories;
+    return categories && categories.length > 0 ? categories : [...DEFAULT_CATEGORIES];
   }
 
   async addCategory(category: CategoryItem): Promise<void> {

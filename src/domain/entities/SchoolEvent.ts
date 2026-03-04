@@ -88,6 +88,17 @@ export interface SchoolEvent {
   readonly isDDay?: boolean;
   readonly alerts?: readonly AlertTiming[];
   readonly recurrence?: Recurrence;
+
+  // 구글 캘린더 동기화 필드 (모두 optional, 하위 호환성 유지)
+  readonly googleEventId?: string;
+  readonly googleCalendarId?: string;
+  readonly syncStatus?: 'synced' | 'pending' | 'error';
+  readonly lastSyncedAt?: string;       // ISO 8601
+  readonly googleUpdatedAt?: string;    // ISO 8601
+  readonly etag?: string;
+  readonly source?: 'ssampin' | 'google';
+  readonly startTime?: string;          // "HH:mm"
+  readonly endTime?: string;            // "HH:mm"
 }
 
 export interface SchoolEventsData {

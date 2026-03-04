@@ -28,6 +28,7 @@ export type PageId =
 
 import { useState, useMemo, useCallback } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { SyncStatusBar } from '@adapters/components/Calendar/SyncStatusBar';
 
 interface SidebarProps {
   currentPage: PageId;
@@ -204,6 +205,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
 
       {/* 하단: 설정 + 프로필 + 버전 */}
       <div className="p-4 border-t border-sp-border">
+        <SyncStatusBar />
         <button
           onClick={() => onNavigate('settings')}
           className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all w-full text-left ${currentPage === 'settings'
