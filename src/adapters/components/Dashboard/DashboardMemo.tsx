@@ -95,7 +95,7 @@ export function DashboardMemo() {
           {recentMemos.map((memo) => (
             <div
               key={memo.id}
-              onClick={() => setSelectedMemo(memo)}
+              onClick={(e) => { e.stopPropagation(); setSelectedMemo(memo); }}
               className={`rounded-lg border p-3 flex-1 min-w-0 cursor-pointer transition-colors ${MEMO_BG[memo.color]} ${MEMO_HOVER[memo.color]}`}
             >
               <p
