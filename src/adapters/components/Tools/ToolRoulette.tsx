@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from 'react';
 import { ToolLayout } from './ToolLayout';
+import type { KeyboardShortcut } from './types';
+import { PresetSelector } from './PresetSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 
 interface ToolRouletteProps {
@@ -152,6 +154,19 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     }, 2000);
   }, [isSpinning, rotation, items]);
 
+  const handleLoadPreset = useCallback((presetItems: readonly string[]) => {
+    setItems([...presetItems].slice(0, 20));
+    setInputMode('custom');
+    setWinner(null);
+    setWinnerIndex(null);
+    setHistory([]);
+  }, []);
+
+  const rouletteShortcuts = useMemo<KeyboardShortcut[]>(() => [
+    { key: ' ', label: '돌리기', description: '룰렛 돌리기', handler: spin },
+    { key: 'Enter', label: '돌리기', description: '룰렛 돌리기', handler: spin },
+  ], [spin]);
+
   const radius = isFullscreen ? 220 : 160;
   const cx = radius + 10;
   const cy = radius + 10;
@@ -159,13 +174,16 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const sectionAngle = items.length > 0 ? 360 / items.length : 360;
 
   return (
-    <ToolLayout title="룰렛" emoji="🎯" onBack={onBack} isFullscreen={isFullscreen}>
+    <ToolLayout title="룰렛" emoji="🎯" onBack={onBack} isFullscreen={isFullscreen} shortcuts={rouletteShortcuts}>
       <div className="w-full h-full flex flex-col items-center gap-4 overflow-auto py-2">
         {/* Main area: input + wheel */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6 w-full max-w-5xl px-4">
 
           {/* Data Input Panel */}
           <div className="w-full lg:w-72 flex-shrink-0 bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col gap-3">
+            {/* Preset selector */}
+            <PresetSelector type="roulette" currentItems={items} onLoad={handleLoadPreset} />
+
             {/* Mode buttons */}
             <div className="flex gap-2">
               <button

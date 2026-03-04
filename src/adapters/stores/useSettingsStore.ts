@@ -87,6 +87,7 @@ const DEFAULT_SETTINGS: Settings = {
     selectedSound: 'beep',
     customAudioName: null,
     volume: 0.8,
+    boost: 1,
   },
   workSymbols: {
     symbols: DEFAULT_WORK_SYMBOLS,

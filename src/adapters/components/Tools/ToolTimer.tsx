@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
+import type { KeyboardShortcut } from './types';
 import { formatTime, formatTimeMs } from '@domain/rules/timerRules';
 import type { AlarmSoundId } from '@domain/entities/Settings';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -50,13 +51,35 @@ function createCtx(): AudioContext {
   return new AudioContext();
 }
 
+/**
+ * 볼륨 부스트를 적용한 GainNode 체인을 만든다.
+ * boost > 1 이면 DynamicsCompressorNode를 추가하여 클리핑을 방지한다.
+ */
+function createBoostedGain(ctx: AudioContext, volume: number, boost: number): GainNode {
+  const gain = ctx.createGain();
+  gain.gain.value = volume * boost;
+
+  if (boost > 1) {
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -6;
+    compressor.ratio.value = 4;
+    compressor.knee.value = 10;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.25;
+    gain.connect(compressor);
+    compressor.connect(ctx.destination);
+  } else {
+    gain.connect(ctx.destination);
+  }
+
+  return gain;
+}
+
 /** 기본 알림 — 880Hz 사각파 3연발 */
-function playBeep(volume: number): void {
+function playBeep(volume: number, boost: number): void {
   try {
     const ctx = createCtx();
-    const gain = ctx.createGain();
-    gain.gain.value = volume;
-    gain.connect(ctx.destination);
+    const gain = createBoostedGain(ctx, volume, boost);
 
     const playOne = (delay: number) => {
       const osc = ctx.createOscillator();
@@ -75,12 +98,10 @@ function playBeep(volume: number): void {
 }
 
 /** 학교 종 — 댕동 2음 반복 (C5 523Hz, E5 659Hz sine) */
-function playSchoolBell(volume: number): void {
+function playSchoolBell(volume: number, boost: number): void {
   try {
     const ctx = createCtx();
-    const gain = ctx.createGain();
-    gain.gain.value = volume * 0.7;
-    gain.connect(ctx.destination);
+    const gain = createBoostedGain(ctx, volume * 0.7, boost);
 
     const notes = [523, 659, 523, 659];
     notes.forEach((freq, i) => {
@@ -104,12 +125,10 @@ function playSchoolBell(volume: number): void {
 }
 
 /** 알람 시계 — 빠른 교차 비프 (1000Hz / 800Hz) */
-function playAlarmClock(volume: number): void {
+function playAlarmClock(volume: number, boost: number): void {
   try {
     const ctx = createCtx();
-    const gain = ctx.createGain();
-    gain.gain.value = volume * 0.6;
-    gain.connect(ctx.destination);
+    const gain = createBoostedGain(ctx, volume * 0.6, boost);
 
     for (let round = 0; round < 2; round++) {
       for (let i = 0; i < 4; i++) {
@@ -128,12 +147,10 @@ function playAlarmClock(volume: number): void {
 }
 
 /** 부드러운 차임 — 도미솔도 어센딩 스케일 (sine) */
-function playGentleChime(volume: number): void {
+function playGentleChime(volume: number, boost: number): void {
   try {
     const ctx = createCtx();
-    const gain = ctx.createGain();
-    gain.gain.value = volume * 0.5;
-    gain.connect(ctx.destination);
+    const gain = createBoostedGain(ctx, volume * 0.5, boost);
 
     const notes = [523, 659, 784, 1047]; // C5-E5-G5-C6
     notes.forEach((freq, i) => {
@@ -157,12 +174,10 @@ function playGentleChime(volume: number): void {
 }
 
 /** 버저 — 220Hz 톱니파 지속음 */
-function playBuzzer(volume: number): void {
+function playBuzzer(volume: number, boost: number): void {
   try {
     const ctx = createCtx();
-    const gain = ctx.createGain();
-    gain.gain.value = volume * 0.4;
-    gain.connect(ctx.destination);
+    const gain = createBoostedGain(ctx, volume * 0.4, boost);
 
     const osc = ctx.createOscillator();
     osc.type = 'sawtooth';
@@ -184,11 +199,21 @@ function playBuzzer(volume: number): void {
 }
 
 /** 커스텀 오디오 재생 */
-function playCustomAudio(dataUrl: string, volume: number): void {
+function playCustomAudio(dataUrl: string, volume: number, boost: number): void {
   try {
     const audio = new Audio(dataUrl);
-    audio.volume = volume;
-    audio.play();
+    if (boost > 1) {
+      // AudioContext 경유로 시스템 볼륨 한도(1.0)를 초과하여 증폭
+      const ctx = new AudioContext();
+      const source = ctx.createMediaElementSource(audio);
+      const gain = createBoostedGain(ctx, volume, boost);
+      source.connect(gain);
+      audio.play();
+      audio.addEventListener('ended', () => ctx.close());
+    } else {
+      audio.volume = volume;
+      audio.play();
+    }
   } catch { /* Audio not supported */ }
 }
 
@@ -196,17 +221,18 @@ function playCustomAudio(dataUrl: string, volume: number): void {
 function playAlarmSound(
   soundId: AlarmSoundId,
   volume: number,
+  boost: number,
   customDataUrl: string | null,
 ): void {
   switch (soundId) {
-    case 'beep': playBeep(volume); break;
-    case 'school-bell': playSchoolBell(volume); break;
-    case 'alarm-clock': playAlarmClock(volume); break;
-    case 'gentle-chime': playGentleChime(volume); break;
-    case 'buzzer': playBuzzer(volume); break;
+    case 'beep': playBeep(volume, boost); break;
+    case 'school-bell': playSchoolBell(volume, boost); break;
+    case 'alarm-clock': playAlarmClock(volume, boost); break;
+    case 'gentle-chime': playGentleChime(volume, boost); break;
+    case 'buzzer': playBuzzer(volume, boost); break;
     case 'custom':
-      if (customDataUrl) playCustomAudio(customDataUrl, volume);
-      else playBeep(volume);
+      if (customDataUrl) playCustomAudio(customDataUrl, volume, boost);
+      else playBeep(volume, boost);
       break;
   }
 }
@@ -355,30 +381,36 @@ function CustomTimeModal({
 
 // ─── 알람음 설정 패널 ───────────────────────────────────────
 
+const BOOST_OPTIONS = [1, 2, 3, 4] as const;
+
 function AlarmSoundSelector({
   selectedSound,
   customAudioName,
   customDataUrl,
   volume,
+  boost,
   onSelectSound,
   onImportCustom,
   onDeleteCustom,
   onVolumeChange,
+  onBoostChange,
 }: {
   selectedSound: AlarmSoundId;
   customAudioName: string | null;
   customDataUrl: string | null;
   volume: number;
+  boost: number;
   onSelectSound: (id: AlarmSoundId) => void;
   onImportCustom: () => void;
   onDeleteCustom: () => void;
   onVolumeChange: (v: number) => void;
+  onBoostChange: (b: number) => void;
 }) {
   const [previewPlaying, setPreviewPlaying] = useState<string | null>(null);
 
   const handlePreview = (id: AlarmSoundId) => {
     setPreviewPlaying(id);
-    playAlarmSound(id, volume, customDataUrl);
+    playAlarmSound(id, volume, boost, customDataUrl);
     setTimeout(() => setPreviewPlaying(null), 2000);
   };
 
@@ -497,6 +529,32 @@ function AlarmSoundSelector({
           {Math.round(volume * 100)}%
         </span>
       </div>
+
+      {/* 볼륨 부스트 */}
+      <div className="flex items-center gap-3 px-1">
+        <span className="material-symbols-outlined text-sp-muted text-[18px]">graphic_eq</span>
+        <div className="flex gap-1.5">
+          {BOOST_OPTIONS.map((b) => (
+            <button
+              key={b}
+              onClick={() => onBoostChange(b)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all border ${
+                boost === b
+                  ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/40'
+              }`}
+            >
+              {b}x
+            </button>
+          ))}
+        </div>
+        {boost > 1 && (
+          <span className="text-xs text-amber-400 flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">volume_up</span>
+            {boost}배 증폭
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -516,7 +574,7 @@ function TimerMode() {
   // 알람음 설정 (from store)
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.update);
-  const { selectedSound, customAudioName, volume } = settings.alarmSound;
+  const { selectedSound, customAudioName, volume, boost } = settings.alarmSound;
 
   // 커스텀 오디오 dataUrl (메모리)
   const [customDataUrl, setCustomDataUrl] = useState<string | null>(null);
@@ -549,13 +607,13 @@ function TimerMode() {
         setRemaining(0);
         setState('finished');
         clearTimer();
-        playAlarmSound(selectedSound, volume, customDataUrl);
+        playAlarmSound(selectedSound, volume, boost, customDataUrl);
         setFlashCount(6);
       } else {
         setRemaining(next);
       }
     }, 100);
-  }, [remaining, clearTimer, selectedSound, volume, customDataUrl]);
+  }, [remaining, clearTimer, selectedSound, volume, boost, customDataUrl]);
 
   const pause = useCallback(() => {
     setState('paused');
@@ -601,6 +659,12 @@ function TimerMode() {
   const handleVolumeChange = useCallback(async (v: number) => {
     await updateSettings({
       alarmSound: { ...settings.alarmSound, volume: v },
+    });
+  }, [updateSettings, settings.alarmSound]);
+
+  const handleBoostChange = useCallback(async (b: number) => {
+    await updateSettings({
+      alarmSound: { ...settings.alarmSound, boost: b },
     });
   }, [updateSettings, settings.alarmSound]);
 
@@ -674,6 +738,29 @@ function TimerMode() {
       return () => clearTimeout(t);
     }
   }, [flashCount]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (state === 'finished') return;
+        if (state === 'running') pause();
+        else start();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        reset();
+      } else if (e.key === 'Enter' && state === 'finished') {
+        e.preventDefault();
+        dismiss();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [state, start, pause, reset, dismiss]);
 
   const ratio = totalSeconds > 0 ? remaining / totalSeconds : 0;
   const isFlashing = flashCount > 0 && flashCount % 2 === 0;
@@ -808,10 +895,12 @@ function TimerMode() {
             customAudioName={customAudioName}
             customDataUrl={customDataUrl}
             volume={volume}
+            boost={boost}
             onSelectSound={handleSelectSound}
             onImportCustom={handleImportCustom}
             onDeleteCustom={handleDeleteCustom}
             onVolumeChange={handleVolumeChange}
+            onBoostChange={handleBoostChange}
           />
         </div>
       )}
@@ -879,6 +968,28 @@ function StopwatchMode() {
   useEffect(() => {
     return clearSW;
   }, [clearSW]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (state === 'running') pause();
+        else start();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        reset();
+      } else if ((e.key === 'l' || e.key === 'L') && state === 'running') {
+        e.preventDefault();
+        lap();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [state, start, pause, reset, lap]);
 
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto">
@@ -965,8 +1076,23 @@ function StopwatchMode() {
 export function ToolTimer({ onBack, isFullscreen }: ToolTimerProps) {
   const [tab, setTab] = useState<Tab>('timer');
 
+  const displayShortcuts = useMemo<KeyboardShortcut[]>(() => {
+    if (tab === 'timer') {
+      return [
+        { key: ' ', label: '시작/일시정지', description: '타이머 토글', handler: () => {} },
+        { key: 'r', label: '리셋', description: '타이머 리셋', handler: () => {} },
+        { key: 'Enter', label: '확인', description: '종료 확인', handler: () => {} },
+      ];
+    }
+    return [
+      { key: ' ', label: '시작/일시정지', description: '스톱워치 토글', handler: () => {} },
+      { key: 'r', label: '리셋', description: '스톱워치 리셋', handler: () => {} },
+      { key: 'l', label: '랩', description: '랩 기록', handler: () => {} },
+    ];
+  }, [tab]);
+
   return (
-    <ToolLayout title="타이머" emoji="⏱️" onBack={onBack} isFullscreen={isFullscreen}>
+    <ToolLayout title="타이머" emoji="⏱️" onBack={onBack} isFullscreen={isFullscreen} shortcuts={displayShortcuts}>
       <div className="flex flex-col items-center w-full max-w-xl mx-auto gap-8">
         {/* 탭 */}
         <div className="flex bg-sp-card rounded-xl p-1 border border-sp-border">

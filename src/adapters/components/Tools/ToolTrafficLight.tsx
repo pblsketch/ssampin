@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
+import type { KeyboardShortcut } from './types';
 
 type LightColor = 'red' | 'yellow' | 'green' | null;
 type Mode = 'manual' | 'auto';
@@ -103,30 +104,24 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    if (mode !== 'manual') return;
+  // Keyboard shortcuts — delegated to ToolLayout via shortcuts prop
+  const cycleLight = useCallback(() => {
+    setActiveLight((prev) => {
+      if (prev === null || prev === 'red') return 'yellow';
+      if (prev === 'yellow') return 'green';
+      return 'red';
+    });
+  }, []);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
-      if (e.key === '1') setActiveLight('red');
-      else if (e.key === '2') setActiveLight('yellow');
-      else if (e.key === '3') setActiveLight('green');
-      else if (e.key === ' ') {
-        e.preventDefault();
-        setActiveLight((prev) => {
-          if (prev === null || prev === 'red') return 'yellow';
-          if (prev === 'yellow') return 'green';
-          return 'red';
-        });
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mode]);
+  const shortcuts = useMemo<KeyboardShortcut[]>(() => {
+    if (mode !== 'manual') return [];
+    return [
+      { key: '1', label: '멈춤', description: '빨간불', handler: () => setActiveLight('red') },
+      { key: '2', label: '준비', description: '노란불', handler: () => setActiveLight('yellow') },
+      { key: '3', label: '시작', description: '초록불', handler: () => setActiveLight('green') },
+      { key: ' ', label: '순환', description: '신호 순환', handler: cycleLight },
+    ];
+  }, [mode, cycleLight]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -227,7 +222,7 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
   const frameScale = isFullscreen ? 'scale-110' : 'scale-100';
 
   return (
-    <ToolLayout title="신호등" emoji="🚦" onBack={onBack} isFullscreen={isFullscreen}>
+    <ToolLayout title="신호등" emoji="🚦" onBack={onBack} isFullscreen={isFullscreen} shortcuts={shortcuts}>
       <div
         className={`w-full h-full flex flex-col items-center justify-center transition-colors duration-500 ${isFullscreen ? 'gap-6' : 'gap-3'}`}
         style={{ backgroundColor: bgTint }}
@@ -338,10 +333,7 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
               </button>
             </div>
             <p className="text-xs text-sp-muted">
-              단축키: <kbd className="px-1.5 py-0.5 rounded bg-sp-card border border-sp-border font-mono">1</kbd> 멈춤 &nbsp;
-              <kbd className="px-1.5 py-0.5 rounded bg-sp-card border border-sp-border font-mono">2</kbd> 준비 &nbsp;
-              <kbd className="px-1.5 py-0.5 rounded bg-sp-card border border-sp-border font-mono">3</kbd> 시작 &nbsp;
-              <kbd className="px-1.5 py-0.5 rounded bg-sp-card border border-sp-border font-mono">Space</kbd> 순환
+              키보드 단축키는 우측 상단 <kbd className="px-1 py-0.5 rounded bg-sp-card border border-sp-border font-mono text-[10px]">⌨</kbd> 버튼을 참고하세요
             </p>
           </div>
         )}

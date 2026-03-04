@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
+import type { KeyboardShortcut } from './types';
+import { PresetSelector } from './PresetSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { shuffleArray, pickRandom } from '@domain/rules/randomRules';
 
@@ -299,8 +301,30 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const resultTextSize = isFullscreen ? 'text-7xl' : 'text-6xl';
   const subTextSize = isFullscreen ? 'text-2xl' : 'text-lg';
 
+  // Custom items for PresetSelector
+  const customItems = useMemo(() =>
+    customText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0),
+    [customText],
+  );
+
+  const handleLoadPreset = useCallback((items: readonly string[]) => {
+    setCustomText(items.join('\n'));
+    setDataSource('custom');
+    setPickedItems([]);
+    setResult([]);
+    setShowResult(false);
+    setSlotDisplay('');
+    setRevealedCount(0);
+  }, []);
+
+  const randomShortcuts = useMemo<KeyboardShortcut[]>(() => [
+    { key: ' ', label: '뽑기', description: '랜덤 뽑기 실행', handler: handlePick },
+    { key: 'Enter', label: '뽑기', description: '랜덤 뽑기 실행', handler: handlePick },
+    { key: 'r', label: '초기화', description: '전체 초기화', handler: handleReset },
+  ], [handlePick, handleReset]);
+
   return (
-    <ToolLayout title="랜덤 뽑기" emoji="🎲" onBack={onBack} isFullscreen={isFullscreen}>
+    <ToolLayout title="랜덤 뽑기" emoji="🎲" onBack={onBack} isFullscreen={isFullscreen} shortcuts={randomShortcuts}>
       <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
         {/* Mode Tabs */}
         <div className="flex gap-2 justify-center">
@@ -415,6 +439,9 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
 
           {dataSource === 'custom' && (
             <div>
+              <div className="mb-3">
+                <PresetSelector type="random" currentItems={customItems} onLoad={handleLoadPreset} />
+              </div>
               <textarea
                 value={customText}
                 onChange={(e) => setCustomText(e.target.value)}

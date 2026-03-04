@@ -21,6 +21,7 @@ export interface AlarmSoundSettings {
   readonly selectedSound: AlarmSoundId;
   readonly customAudioName: string | null;
   readonly volume: number; // 0.0 ~ 1.0
+  readonly boost: number;  // 1 | 2 | 3 | 4 — 볼륨 증폭 배수
 }
 
 export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';

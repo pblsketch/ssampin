@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
+import type { KeyboardShortcut } from './types';
 import type { Team } from '@domain/entities/Team';
 import { getRanking } from '@domain/rules/scoreRules';
 
@@ -445,8 +446,31 @@ export function ToolScoreboard({ onBack, isFullscreen }: ToolScoreboardProps) {
     setViewMode('setup');
   }, []);
 
+  const scoreShortcuts = useMemo<KeyboardShortcut[]>(() => {
+    if (viewMode !== 'scoreboard') return [];
+    const sc: KeyboardShortcut[] = [];
+    teams.forEach((team, idx) => {
+      if (idx >= 9) return;
+      const keyNum = `${idx + 1}`;
+      sc.push({
+        key: keyNum,
+        label: `${team.name} +1`,
+        description: `${team.name}에 1점 추가`,
+        handler: () => handleScoreChange(team.id, 1),
+      });
+      sc.push({
+        key: keyNum,
+        label: `${team.name} -1`,
+        description: `${team.name}에서 1점 감소`,
+        modifiers: { shift: true },
+        handler: () => handleScoreChange(team.id, -1),
+      });
+    });
+    return sc;
+  }, [viewMode, teams, handleScoreChange]);
+
   return (
-    <ToolLayout title="점수판" emoji="📊" onBack={onBack} isFullscreen={isFullscreen}>
+    <ToolLayout title="점수판" emoji="📊" onBack={onBack} isFullscreen={isFullscreen} shortcuts={scoreShortcuts}>
       {viewMode === 'setup' ? (
         <SetupView
           teams={teams}

@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardShortcut } from './types';
 
 interface ToolLayoutProps {
   title: string;
@@ -6,24 +7,34 @@ interface ToolLayoutProps {
   onBack: () => void;
   isFullscreen: boolean;
   children: React.ReactNode;
+  shortcuts?: KeyboardShortcut[];
 }
 
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 200;
 const ZOOM_STEP = 10;
 
-export function ToolLayout({ title, emoji, onBack, isFullscreen, children }: ToolLayoutProps) {
+function formatKeyLabel(key: string, modifiers?: { shift?: boolean; ctrl?: boolean }): string {
+  const parts: string[] = [];
+  if (modifiers?.ctrl) parts.push('Ctrl');
+  if (modifiers?.shift) parts.push('Shift');
+  if (key === ' ') parts.push('Space');
+  else if (key === 'Escape') parts.push('Esc');
+  else parts.push(key.length === 1 ? key.toUpperCase() : key);
+  return parts.join('+');
+}
+
+export function ToolLayout({ title, emoji, onBack, isFullscreen, children, shortcuts }: ToolLayoutProps) {
   const [zoom, setZoom] = useState(100);
+  const [showHelp, setShowHelp] = useState(false);
+  const shortcutsRef = useRef<KeyboardShortcut[]>([]);
+  shortcutsRef.current = shortcuts ?? [];
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {
-        // Fullscreen not supported or denied
-      });
+      document.documentElement.requestFullscreen().catch(() => {});
     } else {
-      document.exitFullscreen().catch(() => {
-        // Already not in fullscreen
-      });
+      document.exitFullscreen().catch(() => {});
     }
   }, []);
 
@@ -38,6 +49,53 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children }: Too
   const resetZoom = useCallback(() => {
     setZoom(100);
   }, []);
+
+  // Keyboard shortcut handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // ESC always works, even in inputs
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onBack();
+        return;
+      }
+
+      // F11 always works
+      if (e.key === 'F11') {
+        e.preventDefault();
+        toggleFullscreen();
+        return;
+      }
+
+      // Skip remaining shortcuts when focused on form elements
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      for (const sc of shortcutsRef.current) {
+        const keyMatch = e.key === sc.key;
+        const needShift = sc.modifiers?.shift ?? false;
+        const needCtrl = sc.modifiers?.ctrl ?? false;
+
+        if (keyMatch && needShift === e.shiftKey && needCtrl === (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          sc.handler();
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack, toggleFullscreen]);
+
+  const allShortcuts = [
+    { key: 'Esc', label: '뒤로가기' },
+    { key: 'F11', label: '전체화면' },
+    ...(shortcuts ?? []).map((s) => ({
+      key: formatKeyLabel(s.key, s.modifiers),
+      label: s.label,
+    })),
+  ];
 
   return (
     <div className="h-full flex flex-col">
@@ -87,6 +145,38 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children }: Too
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
             </button>
+          </div>
+
+          {/* Keyboard shortcuts help */}
+          <div className="relative">
+            <button
+              onClick={() => setShowHelp((v) => !v)}
+              className="p-2 rounded-lg text-sp-muted hover:text-white hover:bg-white/5 transition-all"
+              title="단축키 안내"
+            >
+              <span className="material-symbols-outlined text-[20px]">keyboard</span>
+            </button>
+            {showHelp && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowHelp(false)} />
+                <div className="absolute right-0 top-full mt-2 w-52 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 p-3">
+                  <h3 className="text-xs font-bold text-white mb-2 flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[14px]">keyboard</span>
+                    단축키
+                  </h3>
+                  <div className="space-y-1">
+                    {allShortcuts.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-sp-text font-mono text-[10px]">
+                          {s.key}
+                        </kbd>
+                        <span className="text-sp-muted">{s.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Fullscreen button */}
