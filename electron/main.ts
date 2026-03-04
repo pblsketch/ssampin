@@ -518,6 +518,20 @@ function registerIpcHandlers(): void {
     }
   });
 
+  // window:navigateToPage — 메인 창으로 포커스 이동 + 페이지 이동 + 위젯 닫기
+  ipcMain.handle('window:navigateToPage', (_event, page: string) => {
+    // Send navigation event to main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send('navigate:to-page', page);
+    }
+    // Close widget window
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.close();
+    }
+  });
+
   // window:setWidgetLayout — 레이아웃 모드에 따라 위젯 창 크기 변경
   ipcMain.handle('window:setWidgetLayout', (_event, mode: string): void => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
@@ -715,6 +729,38 @@ function registerIpcHandlers(): void {
         };
       }
       return { content: fs.readFileSync(filePath, 'utf-8'), fileType: 'ssampin' };
+    },
+  );
+
+  // calendar:fetch-url — 외부 캘린더 URL 페치 (CORS 우회)
+  ipcMain.handle(
+    'calendar:fetch-url',
+    async (_event: unknown, url: string): Promise<string | null> => {
+      try {
+        const mod = await import(url.startsWith('https') ? 'https' : 'http');
+        return new Promise<string | null>((resolve) => {
+          const req = mod.get(url, { timeout: 30000 }, (res: { statusCode?: number; headers: Record<string, string | undefined>; on: (event: string, cb: (chunk: string) => void) => void }) => {
+            // 리다이렉트 처리
+            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+              const redirectMod = res.headers.location.startsWith('https')
+                ? mod : (url.startsWith('https') ? mod : mod);
+              const redirectReq = redirectMod.get(res.headers.location, { timeout: 30000 }, (res2: { on: (event: string, cb: (chunk: string) => void) => void }) => {
+                let data = '';
+                res2.on('data', (chunk: string) => { data += chunk; });
+                res2.on('end', () => resolve(data));
+              });
+              redirectReq.on('error', () => resolve(null));
+              return;
+            }
+            let data = '';
+            res.on('data', (chunk: string) => { data += chunk; });
+            res.on('end', () => resolve(data));
+          });
+          req.on('error', () => resolve(null));
+        });
+      } catch {
+        return null;
+      }
     },
   );
 

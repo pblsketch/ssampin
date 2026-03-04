@@ -3,14 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { WidgetDefinition, WidgetInstance } from '../types';
 import { WidgetCard } from './WidgetCard';
 import { WidgetResizeHandle } from './WidgetResizeHandle';
-
-/** colSpan → responsive CSS class 매핑 */
-const COL_SPAN_CLASS: Record<number, string> = {
-  1: 'col-span-1',
-  2: 'col-span-1 md:col-span-2',
-  3: 'col-span-1 md:col-span-3',
-  4: 'col-span-1 md:col-span-3',
-};
+import { getSpanClass } from '../utils/getSpanClass';
 
 interface SortableWidgetProps {
   instance: WidgetInstance;
@@ -18,6 +11,7 @@ interface SortableWidgetProps {
   isEditMode?: boolean;
   onHide: () => void;
   onResize: (colSpan: 1 | 2 | 3 | 4) => void;
+  onNavigate?: (page: string) => void;
 }
 
 export function SortableWidget({
@@ -26,6 +20,7 @@ export function SortableWidget({
   isEditMode,
   onHide,
   onResize,
+  onNavigate,
 }: SortableWidgetProps) {
   const {
     attributes,
@@ -41,7 +36,7 @@ export function SortableWidget({
     transition,
   };
 
-  const spanClass = COL_SPAN_CLASS[instance.colSpan] ?? 'col-span-1';
+  const spanClass = getSpanClass(instance.colSpan);
 
   return (
     <div
@@ -73,6 +68,7 @@ export function SortableWidget({
           definition={definition}
           isEditMode={isEditMode}
           onHide={onHide}
+          onNavigate={onNavigate}
         />
 
         {/* 크기 조절 핸들 (편집 모드) */}

@@ -19,7 +19,9 @@ import type {
   ImportResult,
   DuplicateStrategy,
 } from '@domain/entities/EventsShareFile';
-import { eventsRepository, settingsRepository } from '@adapters/di/container';
+import type { ExternalCalendarSource } from '@domain/entities/ExternalCalendar';
+import { SyncExternalCalendar } from '@usecases/events/SyncExternalCalendar';
+import { eventsRepository, settingsRepository, externalCalendarRepository } from '@adapters/di/container';
 
 interface AddEventParams {
   title: string;
@@ -77,6 +79,15 @@ interface EventsState {
   setShowImportModal: (show: boolean) => void;
   setShareFile: (file: EventsShareFile | null) => void;
   downloadTemplate: () => Promise<void>;
+
+  // 외부 캘린더
+  externalSources: readonly ExternalCalendarSource[];
+  syncingIds: ReadonlySet<string>;
+  loadExternalSources: () => Promise<void>;
+  addExternalSource: (name: string, url: string, categoryId: string) => Promise<void>;
+  removeExternalSource: (id: string) => Promise<void>;
+  syncExternalSource: (id: string) => Promise<{ added: number; updated: number; removed: number } | null>;
+  toggleExternalSource: (id: string) => Promise<void>;
 }
 
 const POPUP_DISMISSED_KEY = 'ssampin:event-popup-dismissed';
@@ -169,6 +180,7 @@ export const useEventsStore = create<EventsState>((set) => {
   const manageEvents = new ManageEvents(eventsRepository);
   const exportEventsUC = new ExportEvents(eventsRepository, settingsRepository);
   const importEventsUC = new ImportEvents(eventsRepository);
+  const syncExternalCalendarUC = new SyncExternalCalendar(eventsRepository);
 
   return {
     events: [],
@@ -179,6 +191,8 @@ export const useEventsStore = create<EventsState>((set) => {
     shareFile: null,
     showExportModal: false,
     showImportModal: false,
+    externalSources: [],
+    syncingIds: new Set<string>(),
 
     load: async () => {
       const state = useEventsStore.getState();
@@ -394,6 +408,118 @@ export const useEventsStore = create<EventsState>((set) => {
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
+    },
+
+    // 외부 캘린더 액션
+    loadExternalSources: async () => {
+      const data = await externalCalendarRepository.getData();
+      set({ externalSources: data?.sources ?? [] });
+    },
+
+    addExternalSource: async (name, url, categoryId) => {
+      const source: ExternalCalendarSource = {
+        id: crypto.randomUUID(),
+        name,
+        url,
+        type: 'google-ical',
+        categoryId,
+        enabled: true,
+      };
+      const data = await externalCalendarRepository.getData();
+      const sources = [...(data?.sources ?? []), source];
+      await externalCalendarRepository.saveData({ sources });
+      set({ externalSources: sources });
+
+      // 즉시 동기화
+      void useEventsStore.getState().syncExternalSource(source.id);
+    },
+
+    removeExternalSource: async (id) => {
+      // 소스 삭제
+      const data = await externalCalendarRepository.getData();
+      const sources = (data?.sources ?? []).filter((s) => s.id !== id);
+      await externalCalendarRepository.saveData({ sources });
+
+      // 해당 소스의 외부 이벤트 삭제
+      const prefix = `ext:${id}:`;
+      const evData = await eventsRepository.getEvents();
+      const events = (evData?.events ?? []).filter((e) => !e.id.startsWith(prefix));
+      await eventsRepository.saveEvents({ events, categories: evData?.categories });
+
+      set({ externalSources: sources, events });
+    },
+
+    syncExternalSource: async (id) => {
+      const state = useEventsStore.getState();
+      const source = state.externalSources.find((s) => s.id === id);
+      if (!source || !source.enabled) return null;
+
+      set((s) => ({ syncingIds: new Set([...s.syncingIds, id]) }));
+
+      try {
+        // URL 페치
+        let icalText: string | null = null;
+        const api = window.electronAPI;
+        if (api?.fetchCalendarUrl) {
+          icalText = await api.fetchCalendarUrl(source.url);
+        } else {
+          try {
+            const response = await fetch(source.url);
+            icalText = await response.text();
+          } catch {
+            icalText = null;
+          }
+        }
+
+        if (!icalText) {
+          set((s) => {
+            const ids = new Set(s.syncingIds);
+            ids.delete(id);
+            return { syncingIds: ids };
+          });
+          return null;
+        }
+
+        // 동기화
+        const result = await syncExternalCalendarUC.syncFromICal(source, icalText);
+
+        // 소스 lastSyncAt 업데이트
+        const calData = await externalCalendarRepository.getData();
+        const updatedSources = (calData?.sources ?? []).map((s) =>
+          s.id === id ? { ...s, lastSyncAt: new Date().toISOString() } : s,
+        );
+        await externalCalendarRepository.saveData({ sources: updatedSources });
+
+        // 상태 갱신
+        const evData = await eventsRepository.getEvents();
+        set((s) => {
+          const ids = new Set(s.syncingIds);
+          ids.delete(id);
+          return {
+            events: evData?.events ?? [],
+            externalSources: updatedSources,
+            syncingIds: ids,
+          };
+        });
+
+        return result;
+      } catch {
+        set((s) => {
+          const ids = new Set(s.syncingIds);
+          ids.delete(id);
+          return { syncingIds: ids };
+        });
+        return null;
+      }
+    },
+
+    toggleExternalSource: async (id) => {
+      const data = await externalCalendarRepository.getData();
+      const sources = (data?.sources ?? []).map((s) =>
+        s.id === id ? { ...s, enabled: !s.enabled } : s,
+      );
+      await externalCalendarRepository.saveData({ sources });
+      set({ externalSources: sources });
     },
   };
 });

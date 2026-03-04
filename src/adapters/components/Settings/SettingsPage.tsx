@@ -136,6 +136,12 @@ export function SettingsPage() {
     load: loadEvents,
     addCategory,
     deleteCategory,
+    externalSources,
+    syncingIds,
+    loadExternalSources,
+    addExternalSource,
+    removeExternalSource,
+    syncExternalSource,
   } = useEventsStore();
 
   /* local draft state — only persisted on "저장" click */
@@ -157,6 +163,11 @@ export function SettingsPage() {
   const [preset, setPreset] = useState<PeriodPreset>(() => getDefaultPreset(settings.schoolLevel));
   const [showPreset, setShowPreset] = useState(false);
 
+  /* external calendar add form */
+  const [extCalName, setExtCalName] = useState('');
+  const [extCalUrl, setExtCalUrl] = useState('');
+  const [extCalCategoryId, setExtCalCategoryId] = useState('');
+
   /* PIN lock */
   const pinStore = usePinStore();
   const [pinMode, setPinMode] = useState<'idle' | 'setup' | 'change' | 'remove'>('idle');
@@ -169,7 +180,8 @@ export function SettingsPage() {
   useEffect(() => {
     load();
     loadEvents();
-  }, [load, loadEvents]);
+    void loadExternalSources();
+  }, [load, loadEvents, loadExternalSources]);
 
   useEffect(() => {
     if (loaded) setDraft(settings);
@@ -989,6 +1001,149 @@ export function SettingsPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── 섹션 10: 외부 캘린더 연동 ── */}
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 xl:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-lg bg-violet-500/10 text-violet-400">
+                <span className="material-symbols-outlined">calendar_month</span>
+              </div>
+              <h3 className="text-lg font-bold text-sp-text">외부 캘린더 연동</h3>
+            </div>
+
+            {/* 등록된 소스 목록 */}
+            <div className="space-y-3 mb-6">
+              {externalSources.length === 0 ? (
+                <p className="text-sm text-sp-muted text-center py-4">
+                  등록된 외부 캘린더가 없습니다.
+                </p>
+              ) : (
+                externalSources.map((src) => {
+                  const isSyncing = syncingIds.has(src.id);
+                  const categoryName = categories.find((c) => c.id === src.categoryId)?.name ?? src.categoryId;
+                  const truncatedUrl = src.url.length > 48 ? `${src.url.slice(0, 48)}…` : src.url;
+                  const lastSync = src.lastSyncAt
+                    ? new Date(src.lastSyncAt).toLocaleString('ko-KR', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '동기화 전';
+                  return (
+                    <div
+                      key={src.id}
+                      className="flex items-center gap-3 p-4 rounded-lg bg-sp-surface border border-sp-border"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-sp-text truncate">{src.name}</span>
+                          <span className="text-[10px] text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded shrink-0">
+                            {categoryName}
+                          </span>
+                        </div>
+                        <p className="text-xs text-sp-muted font-mono truncate" title={src.url}>
+                          {truncatedUrl}
+                        </p>
+                        <p className="text-xs text-sp-muted mt-0.5">
+                          마지막 동기화: {lastSync}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => void syncExternalSource(src.id)}
+                          disabled={isSyncing}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-accent/10 hover:bg-sp-accent/20 text-sp-accent border border-sp-accent/20 text-xs font-medium transition-colors disabled:opacity-50"
+                          title="동기화"
+                        >
+                          {isSyncing ? (
+                            <div className="w-3.5 h-3.5 border-2 border-sp-accent border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <span className="material-symbols-outlined text-[14px]">sync</span>
+                          )}
+                          동기화
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void removeExternalSource(src.id)}
+                          disabled={isSyncing}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium transition-colors disabled:opacity-50"
+                          title="삭제"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">delete</span>
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* 캘린더 추가 폼 */}
+            <div className="rounded-lg border border-sp-border bg-sp-surface/50 p-4 space-y-3">
+              <h4 className="text-xs font-semibold text-sp-muted uppercase tracking-wider">캘린더 추가</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-sp-muted">이름</label>
+                  <input
+                    type="text"
+                    value={extCalName}
+                    onChange={(e) => setExtCalName(e.target.value)}
+                    placeholder="내 구글 캘린더"
+                    className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-sp-muted">카테고리</label>
+                  <select
+                    value={extCalCategoryId}
+                    onChange={(e) => setExtCalCategoryId(e.target.value)}
+                    className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                  >
+                    <option value="">카테고리 선택</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-sp-muted">iCal URL</label>
+                <input
+                  type="url"
+                  value={extCalUrl}
+                  onChange={(e) => setExtCalUrl(e.target.value)}
+                  placeholder="https://calendar.google.com/calendar/ical/..."
+                  className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all font-mono"
+                />
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-xs text-sp-muted">
+                  <span className="material-symbols-outlined text-[13px] align-middle mr-0.5">info</span>
+                  Google Calendar {'>'} 설정 {'>'} 캘린더 선택 {'>'} &apos;비밀 주소(iCal 형식)&apos;을 복사하세요
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!extCalName.trim() || !extCalUrl.trim() || !extCalCategoryId) return;
+                    await addExternalSource(extCalName.trim(), extCalUrl.trim(), extCalCategoryId);
+                    setExtCalName('');
+                    setExtCalUrl('');
+                    setExtCalCategoryId('');
+                  }}
+                  disabled={!extCalName.trim() || !extCalUrl.trim() || !extCalCategoryId}
+                  className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-all flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add</span>
+                  추가
+                </button>
               </div>
             </div>
           </section>

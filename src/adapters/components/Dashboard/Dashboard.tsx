@@ -5,7 +5,11 @@ import { DashboardHeader } from '@widgets/components/DashboardHeader';
 import { WidgetGrid } from '@widgets/components/WidgetGrid';
 import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
 
-export function Dashboard() {
+interface DashboardProps {
+  onNavigate?: (page: string) => void;
+}
+
+export function Dashboard({ onNavigate }: DashboardProps) {
   const loadMessage = useMessageStore((s) => s.loadMessage);
   const loadConfig = useDashboardConfig((s) => s.load);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -30,7 +34,7 @@ export function Dashboard() {
       {/* 본문: 그리드 + 사이드 패널 (편집 모드) */}
       <div className="flex-1 flex min-h-0">
         <section className="flex-1 overflow-y-auto">
-          <WidgetGrid isEditMode={isEditMode} />
+          <WidgetGrid isEditMode={isEditMode} onNavigate={onNavigate} />
         </section>
 
         {/* 편집 모드 시 인라인 사이드 패널 */}

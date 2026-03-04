@@ -1,9 +1,23 @@
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 
 /**
+ * 다일 일정 캘린더 바 (CalendarView 주 단위 렌더링용)
+ */
+export interface CalendarBar {
+  readonly eventId: string;
+  readonly title: string;
+  readonly category: string;
+  readonly startCol: number;    // 0-6: 해당 주에서의 시작 열
+  readonly span: number;        // 1-7: 바가 차지하는 열 수
+  readonly isContinuation: boolean; // 이전 주에서 이어지는 바인지
+  readonly isContinued: boolean;    // 다음 주로 이어지는 바인지
+  readonly row: number;         // 0-2: 겹침 처리 행
+}
+
+/**
  * "YYYY-MM-DD" → Date (로컬 자정 기준)
  */
-function parseLocalDate(dateStr: string): Date {
+export function parseLocalDate(dateStr: string): Date {
   const parts = dateStr.split('-');
   const y = parseInt(parts[0] ?? '0', 10);
   const m = parseInt(parts[1] ?? '1', 10);
@@ -125,4 +139,110 @@ export function getCategoriesOnDate(
 ): readonly string[] {
   const dateEvents = getEventsForDate(events, date);
   return [...new Set(dateEvents.map((e) => e.category))];
+}
+
+/**
+ * 다일 이벤트 판별
+ */
+export function isMultiDayEvent(event: SchoolEvent): boolean {
+  return !!event.endDate && event.endDate !== event.date;
+}
+
+const DAY_MS = 86400000;
+
+/**
+ * 특정 주(week)의 다일 이벤트 바 목록을 계산
+ * @param events 전체 이벤트
+ * @param weekStart 해당 주의 첫 날 (일요일)
+ * @param weekEnd 해당 주의 마지막 날 (토요일)
+ * @returns 해당 주에 표시할 바 목록 (최대 3행)
+ */
+export function getMultiDayBarsForWeek(
+  events: readonly SchoolEvent[],
+  weekStart: Date,
+  weekEnd: Date,
+): CalendarBar[] {
+  const weekStartMs = weekStart.getTime();
+  const weekEndMs = weekEnd.getTime();
+
+  // 다일 이벤트 중 이 주와 겹치는 것만 필터
+  const multiDayEvents = events.filter((e) => {
+    if (!isMultiDayEvent(e)) return false;
+    const eStart = parseLocalDate(e.date).getTime();
+    const eEnd = parseLocalDate(e.endDate!).getTime();
+    return eStart <= weekEndMs && eEnd >= weekStartMs;
+  });
+
+  // 시작일 오름차순, 같으면 기간 긴 것 우선
+  const sorted = [...multiDayEvents].sort((a, b) => {
+    const diff = parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime();
+    if (diff !== 0) return diff;
+    const aDur = parseLocalDate(a.endDate!).getTime() - parseLocalDate(a.date).getTime();
+    const bDur = parseLocalDate(b.endDate!).getTime() - parseLocalDate(b.date).getTime();
+    return bDur - aDur;
+  });
+
+  // 각 행의 열 점유 상태
+  const rows: boolean[][] = [];
+  const bars: CalendarBar[] = [];
+  const MAX_ROWS = 3;
+
+  for (const event of sorted) {
+    const eStartMs = Math.max(parseLocalDate(event.date).getTime(), weekStartMs);
+    const eEndMs = Math.min(parseLocalDate(event.endDate!).getTime(), weekEndMs);
+    const startCol = Math.round((eStartMs - weekStartMs) / DAY_MS);
+    const endCol = Math.round((eEndMs - weekStartMs) / DAY_MS);
+    const span = endCol - startCol + 1;
+
+    const isContinuation = parseLocalDate(event.date).getTime() < weekStartMs;
+    const isContinued = parseLocalDate(event.endDate!).getTime() > weekEndMs;
+
+    // 겹치지 않는 행 찾기
+    let assignedRow = -1;
+    for (let r = 0; r < MAX_ROWS; r++) {
+      if (!rows[r]) rows[r] = Array(7).fill(false) as boolean[];
+      const occupied = rows[r]!.slice(startCol, startCol + span).some(Boolean);
+      if (!occupied) {
+        assignedRow = r;
+        for (let c = startCol; c < startCol + span; c++) {
+          rows[r]![c] = true;
+        }
+        break;
+      }
+    }
+
+    if (assignedRow === -1) continue; // 최대 행 초과
+
+    bars.push({
+      eventId: event.id,
+      title: event.title,
+      category: event.category,
+      startCol,
+      span,
+      isContinuation,
+      isContinued,
+      row: assignedRow,
+    });
+  }
+
+  return bars;
+}
+
+/**
+ * 특정 날짜에 다일 이벤트(바로 표시되는)가 있는지 확인
+ * (dot 표시를 제외하기 위함)
+ */
+export function getMultiDayEventIdsOnDate(
+  events: readonly SchoolEvent[],
+  date: Date,
+): readonly string[] {
+  const targetMs = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return events
+    .filter((e) => {
+      if (!isMultiDayEvent(e)) return false;
+      const eStart = parseLocalDate(e.date).getTime();
+      const eEnd = parseLocalDate(e.endDate!).getTime();
+      return eStart <= targetMs && eEnd >= targetMs;
+    })
+    .map((e) => e.id);
 }

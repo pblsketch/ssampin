@@ -1,6 +1,7 @@
 import { Clock } from '@adapters/components/Dashboard/Clock';
 import { WeatherBar } from '@adapters/components/Dashboard/WeatherBar';
 import { MessageBanner } from '@adapters/components/Dashboard/MessageBanner';
+import { triggerRefreshAll } from '../hooks/useWidgetRefresh';
 
 interface DashboardHeaderProps {
   isEditMode?: boolean;
@@ -22,6 +23,20 @@ export function DashboardHeader({ isEditMode, onToggleEditMode }: DashboardHeade
 
       <div className="flex items-end gap-3">
         <MessageBanner />
+
+        {/* 새로고침 버튼 */}
+        <button
+          onClick={triggerRefreshAll}
+          className="shrink-0 rounded-lg p-2 text-sp-muted hover:text-sp-text hover:bg-sp-card transition-colors"
+          title="모든 위젯 새로고침"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 2v6h-6" />
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+            <path d="M3 22v-6h6" />
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+          </svg>
+        </button>
 
         {/* 편집 모드 토글 버튼 (설정 드로어도 함께 열림) */}
         {onToggleEditMode && (

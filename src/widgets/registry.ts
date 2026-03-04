@@ -30,6 +30,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: WeeklyTimetable,
+    navigateTo: 'timetable',
+    navigateLabel: '시간표 전체 보기',
   },
   {
     id: 'today-class',
@@ -44,6 +46,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: TodayClass,
+    navigateTo: 'timetable',
+    navigateLabel: '시간표 전체 보기',
   },
   {
     id: 'class-timetable',
@@ -58,6 +62,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom'],
     },
     component: ClassTimetable,
+    navigateTo: 'timetable',
+    navigateLabel: '시간표 전체 보기',
   },
 
   // ─── 학급 카테고리 ───
@@ -74,6 +80,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom'],
     },
     component: Seating,
+    navigateTo: 'seating',
+    navigateLabel: '자리배치 보기',
   },
   {
     id: 'student-records',
@@ -88,6 +96,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom'],
     },
     component: StudentRecords,
+    navigateTo: 'student-records',
+    navigateLabel: '담임 메모장 보기',
   },
 
   // ─── 정보 카테고리 ───
@@ -104,6 +114,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: Meal,
+    navigateTo: 'meal',
+    navigateLabel: '급식 전체 보기',
   },
   {
     id: 'events',
@@ -118,6 +130,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: Events,
+    navigateTo: 'schedule',
+    navigateLabel: '일정 전체 보기',
   },
   {
     id: 'memo',
@@ -132,6 +146,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: Memo,
+    navigateTo: 'memo',
+    navigateLabel: '메모 전체 보기',
   },
 
   // ─── 관리 카테고리 ───
@@ -148,6 +164,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: TodoWidget,
+    navigateTo: 'todo',
+    navigateLabel: '할 일 전체 보기',
   },
 ];
 

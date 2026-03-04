@@ -42,7 +42,7 @@ function isWidgetMode(): boolean {
 
 function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscreen: boolean) {
   if (page === 'dashboard') {
-    return <Dashboard />;
+    return <Dashboard onNavigate={(page) => onNavigate(page as PageId)} />;
   }
   if (page === 'seating') {
     return <PinGuard feature="seating"><Seating /></PinGuard>;
@@ -151,6 +151,18 @@ export function App() {
 
     return unsubscribe;
   }, [setShareFile, setShowImportModal]);
+
+  // 위젯 → 메인 윈도우 크로스 윈도우 네비게이션 수신
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onNavigateToPage) return;
+
+    const unsubscribe = api.onNavigateToPage((page: string) => {
+      setCurrentPage(page as PageId);
+    });
+
+    return unsubscribe;
+  }, []);
 
   const fontSizeClass = (() => {
     switch (settings.fontSize) {

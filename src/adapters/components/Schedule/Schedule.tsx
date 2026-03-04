@@ -11,6 +11,16 @@ import { CategoryManagementModal } from './CategoryManagementModal';
 import { ExportModal } from './ExportModal';
 import { ImportModal } from './ImportModal';
 import { DayScheduleModal } from './DayScheduleModal';
+import { YearView } from './YearView';
+import { SemesterView } from './SemesterView';
+
+type ScheduleView = 'month' | 'semester' | 'year';
+
+const VIEW_LABELS: Record<ScheduleView, string> = {
+  month: '월간',
+  semester: '학기',
+  year: '연간',
+};
 
 function formatDateStr(date: Date): string {
   const y = date.getFullYear();
@@ -42,6 +52,13 @@ export function Schedule() {
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
+
+  // 뷰 모드
+  const [view, setView] = useState<ScheduleView>('month');
+  const [semester, setSemester] = useState<'first' | 'second'>(() => {
+    const m = new Date().getMonth();
+    return m >= 2 && m <= 7 ? 'first' : 'second';
+  });
 
   // 선택된 날짜, 카테고리 필터
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -76,6 +93,13 @@ export function Schedule() {
       }
       return prev + 1;
     });
+    setSelectedDate(null);
+  }, []);
+
+  // 월 드릴다운 (연간/학기 뷰에서 월 클릭)
+  const handleNavigateToMonth = useCallback((m: number) => {
+    setMonth(m);
+    setView('month');
     setSelectedDate(null);
   }, []);
 
@@ -131,8 +155,6 @@ export function Schedule() {
     void deleteEvent(id);
   }
 
-
-
   function handleDateSelect(date: Date) {
     setSelectedDate(date);
   }
@@ -159,9 +181,30 @@ export function Schedule() {
     <div className="flex flex-col h-full -m-8">
       {/* 헤더 */}
       <header className="h-20 shrink-0 px-8 flex items-center justify-between border-b border-sp-border bg-sp-bg">
-        <h2 className="text-sp-text text-2xl font-bold flex items-center gap-3">
-          <span className="text-3xl">📋</span> 일정 관리
-        </h2>
+        <div className="flex items-center gap-6">
+          <h2 className="text-sp-text text-2xl font-bold flex items-center gap-3">
+            <span className="text-3xl">📋</span> 일정 관리
+          </h2>
+
+          {/* 뷰 전환 탭 */}
+          <div className="flex bg-sp-surface rounded-xl p-1 gap-1">
+            {(['month', 'semester', 'year'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  view === v
+                    ? 'bg-sp-accent text-white'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -204,86 +247,112 @@ export function Schedule() {
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-7xl mx-auto flex flex-col gap-6 h-full">
-          {/* 카테고리 탭 */}
-          <div className="flex items-center justify-between overflow-x-auto pb-2">
-            <div className="flex gap-3">
-              {/* 전체 버튼 */}
-              <button
-                type="button"
-                onClick={() => setSelectedCategory(null)}
-                className={`px-5 py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${selectedCategory === null
-                  ? 'bg-sp-accent text-white ring-sp-accent/30'
-                  : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
-                  }`}
-              >
-                전체
-              </button>
 
-              {/* 카테고리 버튼들 */}
-              {categories.map((cat) => {
-                const colors = getCategoryColors(cat.color);
-                const isActive = selectedCategory === cat.id;
-
-                return (
+          {/* 월간 뷰 */}
+          {view === 'month' && (
+            <>
+              {/* 카테고리 탭 */}
+              <div className="flex items-center justify-between overflow-x-auto pb-2">
+                <div className="flex gap-3">
                   <button
-                    key={cat.id}
                     type="button"
-                    onClick={() =>
-                      setSelectedCategory(isActive ? null : cat.id)
-                    }
-                    className={`px-5 py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 ${isActive
-                      ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
+                    onClick={() => setSelectedCategory(null)}
+                    className={`px-5 py-2 rounded-full text-sm font-bold shadow-sm ring-1 transition-colors ${selectedCategory === null
+                      ? 'bg-sp-accent text-white ring-sp-accent/30'
                       : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
                       }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
-                    {cat.name}
+                    전체
                   </button>
-                );
-              })}
-            </div>
 
-            {/* 카테고리 관리 */}
-            <button
-              type="button"
-              onClick={() => setShowCategoryModal(true)}
-              className="text-sp-muted text-sm font-medium hover:text-sp-accent transition-colors flex items-center gap-1 shrink-0"
-            >
-              <span className="material-symbols-outlined text-[18px]">settings</span>
-              카테고리 관리
-            </button>
-          </div>
+                  {categories.map((cat) => {
+                    const colors = getCategoryColors(cat.color);
+                    const isActive = selectedCategory === cat.id;
 
-          {/* 분할 레이아웃: 캘린더(60%) + 이벤트리스트(40%) */}
-          <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
-            {/* 캘린더 */}
-            <div className="lg:w-[60%]">
-              <CalendarView
-                year={year}
-                month={month}
-                events={events}
-                categories={categories}
-                selectedDate={selectedDate}
-                onSelectDate={handleDateSelect}
-                onPrevMonth={goPrevMonth}
-                onNextMonth={goNextMonth}
-              />
-            </div>
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedCategory(isActive ? null : cat.id)
+                        }
+                        className={`px-5 py-2 rounded-full text-sm font-medium transition-colors ring-1 flex items-center gap-2 ${isActive
+                          ? 'bg-sp-accent text-white ring-sp-accent/30 font-bold'
+                          : 'bg-sp-card hover:bg-sp-surface text-sp-muted ring-sp-border/50'
+                          }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
+                        {cat.name}
+                      </button>
+                    );
+                  })}
+                </div>
 
-            {/* 이벤트 리스트 */}
-            <div className="lg:w-[40%] min-h-0 overflow-hidden">
-              <EventList
-                events={filteredEvents}
-                categories={categories}
-                holidays={monthHolidays}
-                onEdit={handleEditEvent}
-                onDelete={handleDeleteEvent}
-              />
-            </div>
-          </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCategoryModal(true)}
+                  className="text-sp-muted text-sm font-medium hover:text-sp-accent transition-colors flex items-center gap-1 shrink-0"
+                >
+                  <span className="material-symbols-outlined text-[18px]">settings</span>
+                  카테고리 관리
+                </button>
+              </div>
+
+              {/* 분할 레이아웃: 캘린더(60%) + 이벤트리스트(40%) */}
+              <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
+                <div className="lg:w-[60%]">
+                  <CalendarView
+                    year={year}
+                    month={month}
+                    events={events}
+                    categories={categories}
+                    selectedDate={selectedDate}
+                    onSelectDate={handleDateSelect}
+                    onPrevMonth={goPrevMonth}
+                    onNextMonth={goNextMonth}
+                  />
+                </div>
+
+                <div className="lg:w-[40%] min-h-0 overflow-hidden">
+                  <EventList
+                    events={filteredEvents}
+                    categories={categories}
+                    holidays={monthHolidays}
+                    onEdit={handleEditEvent}
+                    onDelete={handleDeleteEvent}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* 학기 뷰 */}
+          {view === 'semester' && (
+            <SemesterView
+              year={year}
+              semester={semester}
+              events={events}
+              categories={categories}
+              onNavigateToMonth={handleNavigateToMonth}
+              onToggleSemester={() =>
+                setSemester((s) => (s === 'first' ? 'second' : 'first'))
+              }
+            />
+          )}
+
+          {/* 연간 뷰 */}
+          {view === 'year' && (
+            <YearView
+              year={year}
+              events={events}
+              categories={categories}
+              onNavigateToMonth={handleNavigateToMonth}
+              onPrevYear={() => setYear((y) => y - 1)}
+              onNextYear={() => setYear((y) => y + 1)}
+            />
+          )}
         </div>
       </div>
-
 
       {/* 모달들 */}
       {showEventModal && (

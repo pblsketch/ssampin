@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { useWidgetRefresh } from '@widgets/hooks/useWidgetRefresh';
 import { calculateDDay } from '@domain/rules/ddayRules';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
@@ -85,6 +86,8 @@ export function DashboardEvents() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useWidgetRefresh(load, { intervalMs: 5 * 60 * 1000 });
 
   const today = useMemo(() => todayStart(), []);
 

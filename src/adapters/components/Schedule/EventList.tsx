@@ -34,6 +34,7 @@ interface EventCardProps {
 }
 
 function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
+  const isExternal = event.id.startsWith('ext:');
   const today = useMemo(() => new Date(), []);
   const dday = calculateDDay(event.date, today);
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -92,23 +93,29 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
           <span className="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium">
             {categoryInfo.name}
           </span>
-          {/* 편집/삭제 (호버 시) */}
-          <div className="hidden group-hover:flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onEdit(event)}
-              className="p-1 hover:bg-slate-600 rounded transition-colors text-slate-400 hover:text-white"
-            >
-              <span className="material-symbols-outlined text-[16px]">edit</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(event.id)}
-              className="p-1 hover:bg-red-900/50 rounded transition-colors text-slate-400 hover:text-red-400"
-            >
-              <span className="material-symbols-outlined text-[16px]">delete</span>
-            </button>
-          </div>
+          {/* 편집/삭제 (호버 시) 또는 외부 배지 */}
+          {isExternal ? (
+            <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
+              외부
+            </span>
+          ) : (
+            <div className="hidden group-hover:flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onEdit(event)}
+                className="p-1 hover:bg-slate-600 rounded transition-colors text-slate-400 hover:text-white"
+              >
+                <span className="material-symbols-outlined text-[16px]">edit</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(event.id)}
+                className="p-1 hover:bg-red-900/50 rounded transition-colors text-slate-400 hover:text-red-400"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

@@ -25,6 +25,7 @@ interface ElectronAPI {
   importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
   onFileOpened: (callback: (filePath: string) => void) => () => void;
   openExternal: (url: string) => Promise<void>;
+  fetchCalendarUrl: (url: string) => Promise<string | null>;
   // Auto-update
   checkForUpdate: () => Promise<void>;
   downloadUpdate: () => Promise<void>;
@@ -33,6 +34,9 @@ interface ElectronAPI {
   onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => () => void;
   onUpdateDownloaded: (callback: (info: { version: string }) => void) => () => void;
   onUpdateError: (callback: (error: string) => void) => () => void;
+  // Cross-window navigation
+  navigateToPage: (page: string) => Promise<void>;
+  onNavigateToPage: (callback: (page: string) => void) => () => void;
 }
 
 interface Window {

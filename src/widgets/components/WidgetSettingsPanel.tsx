@@ -2,15 +2,7 @@ import { useMemo, Fragment } from 'react';
 import { WIDGET_DEFINITIONS } from '../registry';
 import { useDashboardConfig } from '../useDashboardConfig';
 import type { WidgetCategory } from '../types';
-
-const CATEGORY_LABELS: Record<WidgetCategory, string> = {
-  timetable: '시간표',
-  class: '학급',
-  info: '정보',
-  admin: '관리',
-};
-
-const CATEGORY_ORDER: WidgetCategory[] = ['timetable', 'class', 'info', 'admin'];
+import { CATEGORY_LABELS, CATEGORY_ORDER } from '../constants';
 
 interface WidgetSettingsPanelProps {
   onClose: () => void;

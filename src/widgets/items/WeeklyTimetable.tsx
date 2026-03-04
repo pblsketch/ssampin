@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useWidgetRefresh } from '../hooks/useWidgetRefresh';
 import type { TeacherPeriod } from '@domain/entities/Timetable';
 
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
@@ -37,6 +38,8 @@ export function WeeklyTimetable() {
     void loadSchedule();
     void loadSettings();
   }, [loadSchedule, loadSettings]);
+
+  useWidgetRefresh(loadSchedule, { intervalMs: 60 * 60 * 1000 });
 
   const maxPeriods = settings.maxPeriods;
 

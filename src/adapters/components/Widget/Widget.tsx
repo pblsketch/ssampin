@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useClock } from '@adapters/hooks/useClock';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -11,6 +11,10 @@ import { getWidgetById } from '@widgets/registry';
 import { WidgetCard } from '@widgets/components/WidgetCard';
 import { WidgetGrid } from '@widgets/components/WidgetGrid';
 import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
+import { WidgetTabBar } from '@widgets/components/WidgetTabBar';
+import type { TabFilter } from '@widgets/components/WidgetTabBar';
+import { getSpanClass } from '@widgets/utils/getSpanClass';
+import { triggerRefreshAll } from '@widgets/hooks/useWidgetRefresh';
 
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
@@ -141,6 +145,22 @@ export function Widget() {
   // 대시보드 설정에서 보이는 위젯 목록 가져오기
   const visibleWidgets = getVisibleWidgets();
 
+  // 탭 필터링
+  const [activeTab, setActiveTab] = useState<TabFilter>('all');
+
+  const filteredWidgets = useMemo(() => {
+    if (activeTab === 'all') return visibleWidgets;
+    return visibleWidgets.filter((w) => {
+      const def = getWidgetById(w.widgetId);
+      return def?.category === activeTab;
+    });
+  }, [visibleWidgets, activeTab]);
+
+  // 위젯 → 메인 윈도우 네비게이션 (IPC)
+  const handleWidgetNavigate = useCallback((page: string) => {
+    void window.electronAPI?.navigateToPage(page);
+  }, []);
+
   return (
     <>
       <div
@@ -173,6 +193,17 @@ export function Widget() {
             className="absolute top-3 right-3 flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            {/* 새로고침 버튼 */}
+            <button
+              className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
+              onClick={triggerRefreshAll}
+              title="모든 위젯 새로고침"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                refresh
+              </span>
+            </button>
+
             {/* 위젯 편집 버튼 */}
             <button
               className={[
@@ -243,11 +274,15 @@ export function Widget() {
             ) : isEditMode ? (
               /* 편집 모드: WidgetGrid (DnD 지원) */
               <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-                <WidgetGrid isEditMode />
+                <WidgetGrid isEditMode onNavigate={handleWidgetNavigate} />
               </div>
             ) : (
               /* 전체/분할 공통: 3열 그리드 + 단일 스크롤 + scale 축소 */
               <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+                {/* 탭 바 */}
+                {visibleWidgets.length > 4 && (
+                  <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+                )}
                 <div
                   style={effectiveMode !== 'full' ? {
                     transform: `scale(${effectiveMode === 'quad' ? 0.7 : 0.85})`,
@@ -256,17 +291,13 @@ export function Widget() {
                   } : undefined}
                 >
                   <div className="grid grid-cols-3 gap-3 grid-flow-row-dense items-start">
-                    {visibleWidgets.map((instance) => {
+                    {filteredWidgets.map((instance) => {
                       const definition = getWidgetById(instance.widgetId);
                       if (!definition) return null;
 
-                      const spanClass =
-                        instance.colSpan >= 3 ? 'col-span-3' :
-                        instance.colSpan === 2 ? 'col-span-2' : 'col-span-1';
-
                       return (
-                        <div key={instance.widgetId} className={spanClass}>
-                          <WidgetCard definition={definition} />
+                        <div key={instance.widgetId} className={getSpanClass(instance.colSpan)}>
+                          <WidgetCard definition={definition} onNavigate={handleWidgetNavigate} />
                         </div>
                       );
                     })}

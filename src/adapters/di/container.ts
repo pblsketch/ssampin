@@ -13,6 +13,7 @@ import type { ISettingsRepository } from '@domain/repositories/ISettingsReposito
 import type { IStudentRecordsRepository } from '@domain/repositories/IStudentRecordsRepository';
 import type { IMessageRepository } from '@domain/repositories/IMessageRepository';
 import type { IStudentRepository } from '@domain/repositories/IStudentRepository';
+import type { IExternalCalendarRepository } from '@domain/repositories/IExternalCalendarRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -27,6 +28,7 @@ import { JsonSettingsRepository } from '@adapters/repositories/JsonSettingsRepos
 import { JsonStudentRecordsRepository } from '@adapters/repositories/JsonStudentRecordsRepository';
 import { JsonMessageRepository } from '@adapters/repositories/JsonMessageRepository';
 import { JsonStudentRepository } from '@adapters/repositories/JsonStudentRepository';
+import { JsonExternalCalendarRepository } from '@adapters/repositories/JsonExternalCalendarRepository';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI != null;
 
@@ -60,5 +62,8 @@ export const messageRepository: IMessageRepository =
 
 export const studentRepository: IStudentRepository =
   new JsonStudentRepository(storage);
+
+export const externalCalendarRepository: IExternalCalendarRepository =
+  new JsonExternalCalendarRepository(storage);
 
 export const neisPort: INeisPort = new NeisApiClient();

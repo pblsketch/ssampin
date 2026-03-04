@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
+  fetchCalendarUrl: (url: string): Promise<string | null> =>
+    ipcRenderer.invoke('calendar:fetch-url', url),
   // Auto-update
   checkForUpdate: (): Promise<void> => ipcRenderer.invoke('update:check'),
   downloadUpdate: (): Promise<void> => ipcRenderer.invoke('update:download'),
@@ -64,5 +66,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event: unknown, error: string) => callback(error);
     ipcRenderer.on('update:error', handler);
     return () => { ipcRenderer.removeListener('update:error', handler); };
+  },
+  // Cross-window navigation
+  navigateToPage: (page: string): Promise<void> =>
+    ipcRenderer.invoke('window:navigateToPage', page),
+  onNavigateToPage: (callback: (page: string) => void): (() => void) => {
+    const handler = (_event: unknown, page: string) => callback(page);
+    ipcRenderer.on('navigate:to-page', handler);
+    return () => { ipcRenderer.removeListener('navigate:to-page', handler); };
   },
 });

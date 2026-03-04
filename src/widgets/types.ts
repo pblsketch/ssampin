@@ -21,6 +21,10 @@ export interface WidgetDefinition {
     role: readonly TeacherRole[];
   };
   readonly component: ComponentType;
+  /** 클릭 시 이동할 페이지 ID */
+  readonly navigateTo?: string;
+  /** "더 보기" 링크 텍스트 */
+  readonly navigateLabel?: string;
 }
 
 /** 사용자 위젯 인스턴스 설정 */

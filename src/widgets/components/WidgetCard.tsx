@@ -19,6 +19,7 @@ interface WidgetCardProps {
   definition: WidgetDefinition;
   isEditMode?: boolean;
   onHide?: () => void;
+  onNavigate?: (page: string) => void;
   maxHeight?: number;
   scaleFactor?: number;
 }
@@ -29,16 +30,24 @@ interface WidgetCardProps {
  * - PIN 보호 자동 적용
  * - 카드 배경은 각 위젯 컴포넌트가 자체 관리 (기존 대시보드 위젯 재사용)
  */
-export function WidgetCard({ definition, isEditMode, onHide, maxHeight, scaleFactor }: WidgetCardProps) {
+export function WidgetCard({ definition, isEditMode, onHide, onNavigate, maxHeight, scaleFactor }: WidgetCardProps) {
   const Component = definition.component;
   const pinFeature = PIN_FEATURE_MAP[definition.id];
+
+  const isClickable = !isEditMode && !!definition.navigateTo && !!onNavigate;
+
+  const handleClick = () => {
+    if (!isClickable || !definition.navigateTo) return;
+    onNavigate!(definition.navigateTo);
+  };
 
   const scale = scaleFactor && scaleFactor < 1 ? scaleFactor : undefined;
   const adjustedMaxHeight = maxHeight && scale ? maxHeight / scale : maxHeight;
 
   const content = (
     <div
-      className="transition-all duration-200 relative overflow-hidden"
+      className={`transition-all duration-200 relative overflow-hidden ${isClickable ? 'cursor-pointer group/clickable' : ''}`}
+      onClick={handleClick}
       style={{
         ...(adjustedMaxHeight ? { maxHeight: adjustedMaxHeight, overflow: 'hidden' } : {}),
         ...(scale ? {
@@ -69,6 +78,18 @@ export function WidgetCard({ definition, isEditMode, onHide, maxHeight, scaleFac
 
       {/* 위젯 컴포넌트 렌더링 */}
       <Component />
+
+      {/* "더 보기" 오버레이 (hover 시 표시) */}
+      {isClickable && (
+        <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-sp-card/90 to-transparent flex items-end justify-center pb-2 opacity-0 group-hover/clickable:opacity-100 transition-opacity pointer-events-none">
+          <span className="text-xs text-sp-accent font-medium flex items-center gap-1">
+            {definition.navigateLabel ?? '더 보기'}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </span>
+        </div>
+      )}
     </div>
   );
 

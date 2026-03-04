@@ -18,9 +18,12 @@ import { useDashboardConfig } from '../useDashboardConfig';
 import { getWidgetById } from '../registry';
 import { SortableWidget } from './SortableWidget';
 import { WidgetCard } from './WidgetCard';
+import { WidgetTabBar } from './WidgetTabBar';
+import type { TabFilter } from './WidgetTabBar';
 
 interface WidgetGridProps {
   isEditMode?: boolean;
+  onNavigate?: (page: string) => void;
 }
 
 /**
@@ -28,7 +31,7 @@ interface WidgetGridProps {
  * - DnD 지원: 편집 모드에서 드래그앤드롭으로 순서 변경
  * - 반응형 그리드: colSpan에 따라 위젯 가로 크기 조절
  */
-export function WidgetGrid({ isEditMode }: WidgetGridProps) {
+export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
   const config = useDashboardConfig((s) => s.config);
   const toggleWidget = useDashboardConfig((s) => s.toggleWidget);
   const reorderWidgets = useDashboardConfig((s) => s.reorderWidgets);
@@ -51,6 +54,21 @@ export function WidgetGrid({ isEditMode }: WidgetGridProps) {
   const widgetIds = useMemo(
     () => visibleWidgets.map((w) => w.widgetId),
     [visibleWidgets],
+  );
+
+  const [activeTab, setActiveTab] = useState<TabFilter>('all');
+
+  const filteredWidgets = useMemo(() => {
+    if (activeTab === 'all') return visibleWidgets;
+    return visibleWidgets.filter((w) => {
+      const def = getWidgetById(w.widgetId);
+      return def?.category === activeTab;
+    });
+  }, [visibleWidgets, activeTab]);
+
+  const filteredIds = useMemo(
+    () => filteredWidgets.map((w) => w.widgetId),
+    [filteredWidgets],
   );
 
   const activeWidget = useMemo(() => {
@@ -91,44 +109,51 @@ export function WidgetGrid({ isEditMode }: WidgetGridProps) {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 grid-flow-row-dense items-start">
-          {visibleWidgets.map((instance) => {
-            const definition = getWidgetById(instance.widgetId);
-            if (!definition) return null;
+    <>
+      {/* 탭 바 — 편집 모드가 아닐 때만 표시 */}
+      {!isEditMode && visibleWidgets.length > 4 && (
+        <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      )}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={isEditMode ? widgetIds : filteredIds} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 grid-flow-row-dense items-start">
+            {(isEditMode ? visibleWidgets : filteredWidgets).map((instance) => {
+              const definition = getWidgetById(instance.widgetId);
+              if (!definition) return null;
 
-            return (
-              <SortableWidget
-                key={instance.widgetId}
-                instance={instance}
-                definition={definition}
-                isEditMode={isEditMode}
-                onHide={() => toggleWidget(instance.widgetId)}
-                onResize={(colSpan) => resizeWidget(instance.widgetId, colSpan)}
-              />
-            );
-          })}
+              return (
+                <SortableWidget
+                  key={instance.widgetId}
+                  instance={instance}
+                  definition={definition}
+                  isEditMode={isEditMode}
+                  onHide={() => toggleWidget(instance.widgetId)}
+                  onResize={(colSpan) => resizeWidget(instance.widgetId, colSpan)}
+                  onNavigate={onNavigate}
+                />
+              );
+            })}
 
-        </div>
-      </SortableContext>
-
-      {/* 드래그 오버레이 */}
-      <DragOverlay dropAnimation={{
-        duration: 200,
-        easing: 'ease',
-      }}>
-        {activeWidget && (
-          <div className="rounded-xl ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20">
-            <WidgetCard definition={activeWidget.definition} />
           </div>
-        )}
-      </DragOverlay>
-    </DndContext>
+        </SortableContext>
+
+        {/* 드래그 오버레이 */}
+        <DragOverlay dropAnimation={{
+          duration: 200,
+          easing: 'ease',
+        }}>
+          {activeWidget && (
+            <div className="rounded-xl ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20">
+              <WidgetCard definition={activeWidget.definition} />
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
+    </>
   );
 }

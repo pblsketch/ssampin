@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useMealStore } from '@adapters/stores/useMealStore';
+import { useWidgetRefresh } from '@widgets/hooks/useWidgetRefresh';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useDashboardConfig } from '@widgets/useDashboardConfig';
 
@@ -23,6 +24,12 @@ export function DashboardMeal() {
       void loadTodayMeals(atptCode, schoolCode);
     }
   }, [atptCode, schoolCode, loadTodayMeals]);
+
+  const reloadMeal = useCallback(() => {
+    if (atptCode && schoolCode) void loadTodayMeals(atptCode, schoolCode);
+  }, [atptCode, schoolCode, loadTodayMeals]);
+
+  useWidgetRefresh(reloadMeal, { intervalMs: 30 * 60 * 1000 });
 
   // 학교 미설정
   if (!schoolCode) {
