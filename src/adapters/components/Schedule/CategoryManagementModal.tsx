@@ -249,22 +249,22 @@ function CategoryRow({
   }
 
   return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
-      onDrop={onDrop}
-      className={`flex items-center justify-between p-3 rounded-lg bg-sp-surface hover:bg-sp-text/5 transition-all group border cursor-grab active:cursor-grabbing ${
-        isDragOver
-          ? 'border-sp-accent/50 bg-sp-accent/5 shadow-[0_0_0_1px_rgba(59,130,246,0.3)]'
-          : 'border-transparent hover:border-sp-border/50'
-      }`}
-    >
-      {/* 좌측: 드래그 핸들 + 색상 + 이름 */}
-      <div className="flex items-center gap-2 flex-1 min-w-0">
+    <div className="flex items-center gap-3 group">
+      {/* 카테고리 박스 */}
+      <div
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
+        onDrop={onDrop}
+        className={`flex items-center flex-1 min-w-0 px-5 py-3 rounded-lg bg-sp-surface hover:bg-sp-text/5 transition-all border cursor-grab active:cursor-grabbing ${
+          isDragOver
+            ? 'border-sp-accent/50 bg-sp-accent/5 shadow-[0_0_0_1px_rgba(59,130,246,0.3)]'
+            : 'border-transparent hover:border-sp-border/50'
+        }`}
+      >
         {/* 드래그 핸들 */}
-        <span className="material-symbols-outlined text-[18px] text-sp-muted/40 group-hover:text-sp-muted transition-colors shrink-0 select-none">
+        <span className="material-symbols-outlined text-[18px] text-sp-muted/40 group-hover:text-sp-muted transition-colors shrink-0 select-none mr-3">
           drag_indicator
         </span>
 
@@ -272,7 +272,7 @@ function CategoryRow({
         <ColorPicker value={category.color} onChange={(color) => onUpdate({ color })} />
 
         {/* 이름 편집 */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 ml-3">
           <InlineNameEditor
             value={category.name}
             onSave={(name) => onUpdate({ name })}
@@ -280,22 +280,24 @@ function CategoryRow({
         </div>
 
         {isDefault && (
-          <span className="text-[10px] text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded shrink-0">
+          <span className="text-[10px] text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded shrink-0 ml-2">
             기본
           </span>
         )}
       </div>
 
-      {/* 우측: 삭제 버튼 */}
-      {!isDefault && (
+      {/* 삭제 버튼 (박스 바깥) */}
+      {!isDefault ? (
         <button
           type="button"
           onClick={() => setConfirmDelete(true)}
-          className="text-sp-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0"
+          className="text-sp-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           title="카테고리 삭제"
         >
           <span className="material-symbols-outlined text-[18px]">delete</span>
         </button>
+      ) : (
+        <div className="w-[18px] shrink-0" />
       )}
     </div>
   );
@@ -430,44 +432,48 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
 
               {/* 새 카테고리 추가 폼 */}
               {showCatForm && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-sp-surface border border-sp-accent/30">
-                  <div className="flex gap-1.5 flex-wrap w-[40%]">
-                    {[...CATEGORY_COLOR_PRESETS, 'gray' as const].map((c) => (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1 min-w-0 px-5 py-3 rounded-lg bg-sp-surface border border-sp-accent/30">
+                    <div className="flex gap-1.5 flex-wrap w-[40%]">
+                      {[...CATEGORY_COLOR_PRESETS, 'gray' as const].map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setNewCatColor(c)}
+                          className={`w-5 h-5 rounded-full ${SETTINGS_COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${
+                            newCatColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card' : ''
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && void handleAddCategory()}
+                      placeholder="카테고리 이름"
+                      className="flex-1 bg-transparent text-sm text-sp-text placeholder-sp-muted focus:outline-none border-none p-0 min-w-0"
+                      autoFocus
+                    />
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
-                        key={c}
                         type="button"
-                        onClick={() => setNewCatColor(c)}
-                        className={`w-5 h-5 rounded-full ${SETTINGS_COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${
-                          newCatColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card' : ''
-                        }`}
-                      />
-                    ))}
+                        onClick={() => void handleAddCategory()}
+                        className="text-sp-accent hover:text-blue-400 text-xs font-medium"
+                      >
+                        추가
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowCatForm(false); setNewCatName(''); }}
+                        className="text-sp-muted hover:text-sp-text text-xs"
+                      >
+                        취소
+                      </button>
+                    </div>
                   </div>
-                  <input
-                    type="text"
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && void handleAddCategory()}
-                    placeholder="카테고리 이름"
-                    className="flex-1 bg-transparent text-sm text-sp-text placeholder-sp-muted focus:outline-none border-none p-0 min-w-0"
-                    autoFocus
-                  />
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => void handleAddCategory()}
-                      className="text-sp-accent hover:text-blue-400 text-xs font-medium"
-                    >
-                      추가
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowCatForm(false); setNewCatName(''); }}
-                      className="text-sp-muted hover:text-sp-text text-xs"
-                    >
-                      취소
-                    </button>
-                  </div>
+                  {/* 삭제 아이콘 자리 맞춤용 */}
+                  <div className="w-[18px] shrink-0" />
                 </div>
               )}
             </div>
