@@ -25,35 +25,37 @@ export function DashboardTodo() {
   const totalCount = activeTodos.length;
 
   return (
-    <div className="rounded-xl bg-sp-card p-4">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text">오늘 할 일</h3>
       </div>
 
       {/* 콘텐츠 */}
-      {totalCount === 0 ? (
-        <div className="flex items-center justify-center py-6">
-          <p className="text-sm text-sp-muted">할 일이 없습니다</p>
-        </div>
-      ) : (
-        <>
-          <ul className="space-y-2">
-            {visible.map((todo) => (
-              <TodoItem
-                key={todo.id}
-                todo={todo}
-                onToggle={toggleTodo}
-              />
-            ))}
-          </ul>
+      <div className="flex-1 min-h-0 overflow-auto">
+        {totalCount === 0 ? (
+          <div className="flex items-center justify-center py-6">
+            <p className="text-sm text-sp-muted">할 일이 없습니다</p>
+          </div>
+        ) : (
+          <>
+            <ul className="space-y-2">
+              {visible.map((todo) => (
+                <TodoItem
+                  key={todo.id}
+                  todo={todo}
+                  onToggle={toggleTodo}
+                />
+              ))}
+            </ul>
 
-          {/* 진행 현황 */}
-          <p className="mt-3 text-right text-xs text-sp-muted">
-            {completedCount}/{totalCount} 완료
-          </p>
-        </>
-      )}
+            {/* 진행 현황 */}
+            <p className="mt-3 text-right text-xs text-sp-muted">
+              {completedCount}/{totalCount} 완료
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

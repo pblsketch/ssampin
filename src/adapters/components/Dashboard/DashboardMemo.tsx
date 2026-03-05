@@ -83,36 +83,38 @@ export function DashboardMemo() {
   );
 
   return (
-    <div className="rounded-xl bg-sp-card p-4">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text">메모</h3>
       </div>
 
-      {recentMemos.length === 0 ? (
-        <p className="py-4 text-center text-sm text-sp-muted">메모가 없습니다</p>
-      ) : (
-        <div className="flex gap-2">
-          {recentMemos.map((memo) => (
-            <div
-              key={memo.id}
-              onClick={(e) => { e.stopPropagation(); setSelectedMemo(memo); }}
-              className={`rounded-lg border p-3 flex-1 min-w-0 cursor-pointer transition-colors ${MEMO_BG[memo.color]} ${MEMO_HOVER[memo.color]}`}
-            >
-              <p
-                className={`text-xs overflow-hidden ${MEMO_TEXT[memo.color]}`}
-                style={{
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {recentMemos.length === 0 ? (
+          <p className="py-4 text-center text-sm text-sp-muted">메모가 없습니다</p>
+        ) : (
+          <div className="flex gap-2">
+            {recentMemos.map((memo) => (
+              <div
+                key={memo.id}
+                onClick={(e) => { e.stopPropagation(); setSelectedMemo(memo); }}
+                className={`rounded-lg border p-3 flex-1 min-w-0 cursor-pointer transition-colors ${MEMO_BG[memo.color]} ${MEMO_HOVER[memo.color]}`}
               >
-                {memo.content}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+                <p
+                  className={`text-xs overflow-hidden ${MEMO_TEXT[memo.color]}`}
+                  style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {memo.content}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {selectedMemo && (
         <MemoDetailPopup

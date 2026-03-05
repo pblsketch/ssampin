@@ -36,6 +36,11 @@ export function WidgetSettingsPanel({ onClose }: WidgetSettingsPanelProps) {
     return new Map(config.widgets.map((w) => [w.widgetId, w.visible]));
   }, [config]);
 
+  const sizeMap = useMemo(() => {
+    if (!config) return new Map<string, { colSpan: number; rowSpan: number }>();
+    return new Map(config.widgets.map((w) => [w.widgetId, { colSpan: w.colSpan, rowSpan: w.rowSpan }]));
+  }, [config]);
+
   return (
     <aside className="w-64 shrink-0 border-l-2 border-sp-accent/30 bg-sp-bg flex flex-col animate-slide-in-right shadow-[-4px_0_16px_rgba(0,0,0,0.3)]">
       {/* 헤더 */}
@@ -84,6 +89,11 @@ export function WidgetSettingsPanel({ onClose }: WidgetSettingsPanelProps) {
                         <span className="flex-1 text-xs font-medium text-sp-text truncate">
                           {def.name}
                         </span>
+                        {isVisible && (
+                          <span className="text-[10px] text-sp-muted tabular-nums">
+                            {sizeMap.get(def.id)?.colSpan ?? 1}×{sizeMap.get(def.id)?.rowSpan ?? 3}
+                          </span>
+                        )}
                         {/* 토글 스위치 */}
                         <button
                           role="switch"

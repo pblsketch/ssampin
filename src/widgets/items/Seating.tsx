@@ -28,7 +28,7 @@ export function Seating() {
 
   if (!hasSeating) {
     return (
-      <div className="rounded-xl bg-sp-card p-4">
+      <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
         <div className="py-6 text-center text-sm text-sp-muted">
           자리배치가 설정되지 않았습니다
         </div>
@@ -37,7 +37,7 @@ export function Seating() {
   }
 
   return (
-    <div className="rounded-xl bg-sp-card p-4 flex flex-col items-center gap-2">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col items-center gap-2">
       {/* 교탁 */}
       <div className="w-16 rounded bg-sp-border/30 py-0.5 text-center text-[10px] text-sp-muted">
         교탁

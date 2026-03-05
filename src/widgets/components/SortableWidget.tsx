@@ -3,6 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { WidgetDefinition, WidgetInstance } from '../types';
 import { WidgetCard } from './WidgetCard';
 import { WidgetResizeHandle } from './WidgetResizeHandle';
+import { WidgetVerticalResizeHandle } from './WidgetVerticalResizeHandle';
 import { getSpanClass } from '../utils/getSpanClass';
 
 interface SortableWidgetProps {
@@ -11,6 +12,7 @@ interface SortableWidgetProps {
   isEditMode?: boolean;
   onHide: () => void;
   onResize: (colSpan: 1 | 2 | 3 | 4) => void;
+  onResizeHeight: (rowSpan: number) => void;
   onNavigate?: (page: string) => void;
 }
 
@@ -20,6 +22,7 @@ export function SortableWidget({
   isEditMode,
   onHide,
   onResize,
+  onResizeHeight,
   onNavigate,
 }: SortableWidgetProps) {
   const {
@@ -34,6 +37,7 @@ export function SortableWidget({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}`,
   };
 
   const spanClass = getSpanClass(instance.colSpan);
@@ -44,7 +48,7 @@ export function SortableWidget({
       style={style}
       className={`${spanClass} ${isDragging ? 'opacity-50 z-50' : ''} ${isEditMode ? 'ring-1 ring-dashed ring-sp-border/50 rounded-xl' : ''}`}
     >
-      <div className="relative group/widget">
+      <div className="relative group/widget h-full">
         {/* 드래그 핸들 (편집 모드) */}
         {isEditMode && (
           <button
@@ -73,11 +77,18 @@ export function SortableWidget({
 
         {/* 크기 조절 핸들 (편집 모드) */}
         {isEditMode && (
-          <WidgetResizeHandle
-            currentSpan={instance.colSpan}
-            minSpan={definition.minSize.w as 1 | 2 | 3 | 4}
-            onResize={onResize}
-          />
+          <>
+            <WidgetResizeHandle
+              currentSpan={instance.colSpan}
+              minSpan={definition.minSize.w as 1 | 2 | 3 | 4}
+              onResize={onResize}
+            />
+            <WidgetVerticalResizeHandle
+              currentRowSpan={instance.rowSpan}
+              minRowSpan={definition.minSize.h}
+              onResize={onResizeHeight}
+            />
+          </>
         )}
       </div>
     </div>

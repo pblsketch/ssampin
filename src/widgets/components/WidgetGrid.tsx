@@ -36,6 +36,7 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
   const toggleWidget = useDashboardConfig((s) => s.toggleWidget);
   const reorderWidgets = useDashboardConfig((s) => s.reorderWidgets);
   const resizeWidget = useDashboardConfig((s) => s.resizeWidget);
+  const resizeWidgetHeight = useDashboardConfig((s) => s.resizeWidgetHeight);
 
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -121,7 +122,10 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={isEditMode ? widgetIds : filteredIds} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4 grid-flow-row-dense items-start">
+          <div
+            className="widget-grid grid grid-cols-1 gap-4 md:grid-cols-4 grid-flow-row-dense"
+            style={{ gridAutoRows: '80px' }}
+          >
             {(isEditMode ? visibleWidgets : filteredWidgets).map((instance) => {
               const definition = getWidgetById(instance.widgetId);
               if (!definition) return null;
@@ -134,6 +138,7 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
                   isEditMode={isEditMode}
                   onHide={() => toggleWidget(instance.widgetId)}
                   onResize={(colSpan) => resizeWidget(instance.widgetId, colSpan)}
+                  onResizeHeight={(rowSpan) => resizeWidgetHeight(instance.widgetId, rowSpan)}
                   onNavigate={onNavigate}
                 />
               );
@@ -148,7 +153,10 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
           easing: 'ease',
         }}>
           {activeWidget && (
-            <div className="rounded-xl ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20">
+            <div
+              className="rounded-xl ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20 overflow-hidden"
+              style={{ maxHeight: activeWidget.instance.rowSpan * 80 + (activeWidget.instance.rowSpan - 1) * 16 }}
+            >
               <WidgetCard definition={activeWidget.definition} />
             </div>
           )}

@@ -114,29 +114,31 @@ export function DashboardEvents() {
   const remaining = filtered.length - visible.length;
 
   return (
-    <div className="rounded-xl bg-sp-card p-4">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text">다가오는 일정</h3>
       </div>
 
       {/* 콘텐츠 */}
-      {filtered.length === 0 ? (
-        <p className="py-6 text-center text-sm text-sp-muted">
-          등록된 일정이 없습니다
-        </p>
-      ) : (
-        <div className="space-y-0.5">
-          {visible.map((event) => (
-            <EventItem key={event.id} event={event} today={today} categories={categories} />
-          ))}
-          {remaining > 0 && (
-            <p className="mt-2 text-center text-xs text-sp-muted">
-              +{remaining}개 더보기
-            </p>
-          )}
-        </div>
-      )}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {filtered.length === 0 ? (
+          <p className="py-6 text-center text-sm text-sp-muted">
+            등록된 일정이 없습니다
+          </p>
+        ) : (
+          <div className="space-y-0.5">
+            {visible.map((event) => (
+              <EventItem key={event.id} event={event} today={today} categories={categories} />
+            ))}
+            {remaining > 0 && (
+              <p className="mt-2 text-center text-xs text-sp-muted">
+                +{remaining}개 더보기
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

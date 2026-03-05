@@ -52,7 +52,7 @@ export function ClassTimetable() {
 
   if (isEmpty) {
     return (
-      <div className="rounded-xl bg-sp-card p-4">
+      <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
         <div className="py-6 text-center text-sm text-sp-muted">
           학급 시간표가 등록되지 않았습니다
         </div>
@@ -61,7 +61,8 @@ export function ClassTimetable() {
   }
 
   return (
-    <div className="rounded-xl bg-sp-card p-4 overflow-x-auto">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto">
       <table className="w-full text-xs border-collapse timetable-grid">
         <thead>
           <tr>
@@ -101,6 +102,7 @@ export function ClassTimetable() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

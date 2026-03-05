@@ -636,3 +636,13 @@ body {
 .animate-widget-drop {
   animation: widget-drop 0.2s ease-out;
 }
+
+/* ── Widget Grid: 모바일에서 rowSpan 비활성화 ── */
+@media (max-width: 767px) {
+  .widget-grid {
+    grid-auto-rows: auto !important;
+  }
+  .widget-grid > * {
+    grid-row: auto !important;
+  }
+}

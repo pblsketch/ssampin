@@ -45,9 +45,9 @@ export function WidgetCard({ definition, isEditMode, onHide, onNavigate, maxHeig
   const adjustedMaxHeight = maxHeight && scale ? maxHeight / scale : maxHeight;
 
   const content = (
-    <div className={`transition-all duration-200 ${isClickable ? 'group/clickable' : ''}`}>
+    <div className={`h-full flex flex-col transition-all duration-200 ${isClickable ? 'group/clickable' : ''}`}>
       <div
-        className="relative overflow-hidden"
+        className="relative overflow-hidden flex-1 min-h-0"
         style={{
           ...(adjustedMaxHeight ? { maxHeight: adjustedMaxHeight, overflow: 'hidden' } : {}),
           ...(scale ? {

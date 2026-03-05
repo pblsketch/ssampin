@@ -81,7 +81,7 @@ export function DashboardTimetable() {
   }, [dayOfWeek, teacherSchedule]);
 
   return (
-    <div className="rounded-xl bg-sp-card p-4">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text">
@@ -102,23 +102,25 @@ export function DashboardTimetable() {
       </div>
 
       {/* 콘텐츠 */}
-      {isWeekend ? (
-        <WeekendMessage />
-      ) : tab === 'class' ? (
-        <ClassTimetableList
-          periods={todayClassPeriods}
-          periodTimeMap={periodTimeMap}
-          currentPeriod={currentPeriod}
-          maxPeriods={settings.maxPeriods}
-        />
-      ) : (
-        <TeacherTimetableList
-          periods={todayTeacherPeriods}
-          periodTimeMap={periodTimeMap}
-          currentPeriod={currentPeriod}
-          maxPeriods={settings.maxPeriods}
-        />
-      )}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {isWeekend ? (
+          <WeekendMessage />
+        ) : tab === 'class' ? (
+          <ClassTimetableList
+            periods={todayClassPeriods}
+            periodTimeMap={periodTimeMap}
+            currentPeriod={currentPeriod}
+            maxPeriods={settings.maxPeriods}
+          />
+        ) : (
+          <TeacherTimetableList
+            periods={todayTeacherPeriods}
+            periodTimeMap={periodTimeMap}
+            currentPeriod={currentPeriod}
+            maxPeriods={settings.maxPeriods}
+          />
+        )}
+      </div>
     </div>
   );
 }

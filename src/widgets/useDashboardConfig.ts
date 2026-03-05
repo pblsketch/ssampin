@@ -35,6 +35,7 @@ function createConfigFromPreset(widgetIds: readonly string[]): DashboardConfig {
       ? widgetIds.indexOf(def.id)
       : 100 + idx,
     colSpan: Math.min(def.defaultSize.w, 4) as 1 | 2 | 3 | 4,
+    rowSpan: def.defaultSize.h,
   }));
 
   return {
@@ -58,6 +59,9 @@ interface DashboardConfigState {
 
   /** 위젯 가로 크기 변경 */
   resizeWidget: (widgetId: string, colSpan: 1 | 2 | 3 | 4) => void;
+
+  /** 위젯 세로 크기 변경 */
+  resizeWidgetHeight: (widgetId: string, rowSpan: number) => void;
 
   /** 프리셋으로 초기화 */
   resetToPreset: () => void;
@@ -88,15 +92,19 @@ export const useDashboardConfig = create<DashboardConfigState>((set, get) => ({
             visible: false,
             order: nextOrder++,
             colSpan: Math.min(def.defaultSize.w, 4) as 1 | 2 | 3 | 4,
+            rowSpan: def.defaultSize.h,
           });
         }
       }
 
-      // 마이그레이션: colSpan 없는 기존 위젯에 defaultSize.w 적용
+      // 마이그레이션: colSpan/rowSpan 없는 기존 위젯에 defaultSize 적용
       const migratedWidgets = [...saved.widgets, ...newWidgets].map((w) => {
-        if (w.colSpan) return w;
         const def = WIDGET_DEFINITIONS.find((d) => d.id === w.widgetId);
-        return { ...w, colSpan: (def ? Math.min(def.defaultSize.w, 4) : 1) as 1 | 2 | 3 | 4 };
+        return {
+          ...w,
+          colSpan: w.colSpan || (def ? Math.min(def.defaultSize.w, 4) : 1) as 1 | 2 | 3 | 4,
+          rowSpan: w.rowSpan || (def?.defaultSize.h ?? 3),
+        };
       });
 
       const merged: DashboardConfig = {
@@ -167,6 +175,26 @@ export const useDashboardConfig = create<DashboardConfigState>((set, get) => ({
       ...config,
       widgets: config.widgets.map((w) =>
         w.widgetId === widgetId ? { ...w, colSpan: clamped } : w,
+      ),
+      lastModified: new Date().toISOString(),
+    };
+
+    saveToStorage(updated);
+    set({ config: updated });
+  },
+
+  resizeWidgetHeight: (widgetId: string, rowSpan: number) => {
+    const { config } = get();
+    if (!config) return;
+
+    const def = WIDGET_DEFINITIONS.find((d) => d.id === widgetId);
+    const minH = def?.minSize.h ?? 2;
+    const clamped = Math.max(minH, Math.min(8, rowSpan));
+
+    const updated: DashboardConfig = {
+      ...config,
+      widgets: config.widgets.map((w) =>
+        w.widgetId === widgetId ? { ...w, rowSpan: clamped } : w,
       ),
       lastModified: new Date().toISOString(),
     };
