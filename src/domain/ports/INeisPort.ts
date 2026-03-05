@@ -1,5 +1,6 @@
 import type { MealInfo, SchoolSearchResult } from '../entities/Meal';
 import type { NeisClassInfo, NeisTimetableRow, SchoolLevel } from '../entities/NeisTimetable';
+import type { NeisScheduleRow } from '../entities/NeisSchedule';
 
 /**
  * NEIS Open API 포트 인터페이스
@@ -48,4 +49,13 @@ export interface INeisPort {
     fromDate: string;
     toDate: string;
   }): Promise<readonly NeisTimetableRow[]>;
+
+  /** 학사일정 조회 */
+  getSchoolSchedule(params: {
+    apiKey: string;
+    officeCode: string;
+    schoolCode: string;
+    fromDate: string;
+    toDate: string;
+  }): Promise<readonly NeisScheduleRow[]>;
 }

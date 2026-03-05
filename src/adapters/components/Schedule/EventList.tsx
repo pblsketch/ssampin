@@ -5,6 +5,7 @@ import { calculateDDay } from '@domain/rules/ddayRules';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import type { HolidayInfo } from '@domain/rules/holidayRules';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
+import { getGradeBadgeText } from '@domain/entities/NeisSchedule';
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -36,6 +37,8 @@ interface EventCardProps {
 
 function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
   const isExternal = event.id.startsWith('ext:');
+  const isNeis = event.source === 'neis';
+  const isNeisHoliday = isNeis && event.neis?.subtractDayType === '공휴일';
   const today = useMemo(() => new Date(), []);
   const dday = calculateDDay(event.date, today);
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -53,6 +56,11 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
 
   // 멀티데이 이벤트 범위 표시
   const isMultiDay = event.endDate !== undefined;
+
+  // NEIS 학년 배지 텍스트
+  const gradeBadge = isNeis && event.neis?.gradeYn
+    ? getGradeBadgeText(event.neis.gradeYn)
+    : '';
 
   return (
     <div
@@ -73,12 +81,17 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
           <span className={`text-xs font-semibold ${colors.text} mb-0.5`}>
             {formatEventDate(event.date)}
           </span>
-          <h4 className={`text-base font-bold text-sp-text group-hover:${colors.text} transition-colors`}>
+          <h4 className={`text-base font-bold transition-colors ${
+            isNeisHoliday ? 'text-red-400' : 'text-sp-text'
+          } group-hover:${colors.text}`}>
             {event.title}
+            {isNeisHoliday && (
+              <span className="inline-block ml-1 text-red-400 text-sm align-middle">●</span>
+            )}
           </h4>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
           {/* D-Day 배지 */}
           {event.isDDay && dday > 0 && (
             <span
@@ -88,6 +101,18 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
                 } ${dday <= 7 ? 'animate-pulse' : ''}`}
             >
               D-{dday}
+            </span>
+          )}
+          {/* NEIS 출처 배지 */}
+          {isNeis && (
+            <span className="text-[9px] text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded font-medium border border-purple-500/20">
+              NEIS
+            </span>
+          )}
+          {/* NEIS 학년 배지 */}
+          {isNeis && gradeBadge && (
+            <span className="text-[9px] text-slate-300 bg-slate-600/40 px-1.5 py-0.5 rounded font-medium">
+              {gradeBadge}
             </span>
           )}
           {/* 카테고리 배지 */}
@@ -175,7 +200,9 @@ function HolidayCard({ holiday }: { holiday: HolidayInfo }) {
 }
 
 export function EventList({ events, categories, holidays, hideTitle, onEdit, onDelete }: EventListProps) {
-  const sortedEvents = useMemo(() => sortByDate(events), [events]);
+  // 숨긴 NEIS 일정 필터링
+  const visibleEvents = useMemo(() => events.filter((e) => !e.isHidden), [events]);
+  const sortedEvents = useMemo(() => sortByDate(visibleEvents), [visibleEvents]);
 
   // 이벤트와 공휴일을 날짜순으로 통합
   const mergedItems = useMemo(() => {

@@ -14,11 +14,13 @@ import { DayScheduleModal } from './DayScheduleModal';
 import { YearView } from './YearView';
 import { SemesterView } from './SemesterView';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
+import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { NeisSchedulePanel } from './NeisSchedulePanel';
 
 type ScheduleView = 'month' | 'semester' | 'year';
-type SourceFilter = 'all' | 'ssampin' | 'google';
+type SourceFilter = 'all' | 'ssampin' | 'google' | 'neis';
 
 const VIEW_LABELS: Record<ScheduleView, string> = {
   month: '월간',
@@ -71,7 +73,14 @@ export function Schedule() {
 
   // 구글 캘린더 연결 상태
   const { isConnected: googleConnected, syncState, syncNow: googleSyncNow, startAuth, isLoading: googleLoading, error: googleError } = useCalendarSyncStore();
+  // NEIS 학사일정 상태
+  const neisEnabled = useNeisScheduleStore((s) => s.settings.enabled);
+  const neisSyncStatus = useNeisScheduleStore((s) => s.syncStatus);
+  const neisSyncedCount = useNeisScheduleStore((s) => s.settings.syncedCount);
   const showToast = useToastStore((s) => s.show);
+
+  // NEIS 패널 상태
+  const [showNeisPanel, setShowNeisPanel] = useState(false);
 
   // 구글 캘린더 에러 토스트
   useEffect(() => {
@@ -121,7 +130,12 @@ export function Schedule() {
 
   // 필터링된 이벤트
   const filteredEvents = useMemo(() => {
-    let result = getEventsForMonth(events, year, month);
+    // 숨긴 NEIS 일정 제외
+    let result = getEventsForMonth(
+      events.filter((e) => !e.isHidden),
+      year,
+      month,
+    );
 
     if (selectedCategory) {
       result = filterByCategory(result, selectedCategory);
@@ -130,7 +144,9 @@ export function Schedule() {
     if (sourceFilter === 'google') {
       result = result.filter((e) => e.source === 'google');
     } else if (sourceFilter === 'ssampin') {
-      result = result.filter((e) => e.source !== 'google');
+      result = result.filter((e) => e.source !== 'google' && e.source !== 'neis');
+    } else if (sourceFilter === 'neis') {
+      result = result.filter((e) => e.source === 'neis');
     }
 
     return result;
@@ -174,6 +190,12 @@ export function Schedule() {
   }
 
   function handleDeleteEvent(id: string) {
+    // NEIS 일정은 숨기기 처리 (isHidden=true)
+    const event = events.find((e) => e.id === id);
+    if (event?.source === 'neis') {
+      void updateEvent({ ...event, isHidden: true });
+      return;
+    }
     void deleteEvent(id);
   }
 
@@ -228,6 +250,29 @@ export function Schedule() {
         </div>
 
         <div className="flex items-center gap-1.5 xl:gap-2 flex-wrap">
+          {/* NEIS 학사일정 버튼 */}
+          <button
+            type="button"
+            onClick={() => setShowNeisPanel(true)}
+            className={`flex items-center gap-1.5 border px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all ${
+              neisEnabled
+                ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10'
+                : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+            }`}
+            title="NEIS 학사일정 설정"
+          >
+            {neisSyncStatus === 'syncing' ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-400/30 border-t-purple-400" />
+            ) : (
+              <span className="material-symbols-outlined text-[16px]">school</span>
+            )}
+            <span className="hidden sm:inline">NEIS</span>
+            {neisEnabled && neisSyncedCount > 0 && (
+              <span className="text-purple-300 text-[10px] bg-purple-500/15 px-1.5 py-0.5 rounded">
+                {neisSyncedCount}
+              </span>
+            )}
+          </button>
           {/* 구글 캘린더 버튼 */}
           {googleConnected ? (
             <button
@@ -344,26 +389,58 @@ export function Schedule() {
                   })}
                 </div>
 
-                {/* 소스 필터 (구글 연결 시) */}
-                {googleConnected && (
+                {/* 소스 필터 (구글 또는 NEIS 연결 시) */}
+                {(googleConnected || neisEnabled) && (
                   <div className="flex items-center gap-1 ml-4 border-l border-sp-border pl-4">
-                    {(['all', 'ssampin', 'google'] as const).map((src) => (
+                    <button
+                      type="button"
+                      onClick={() => setSourceFilter('all')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === 'all'
+                        ? 'bg-sp-accent text-white'
+                        : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                        }`}
+                    >
+                      전체
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSourceFilter('ssampin')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === 'ssampin'
+                        ? 'bg-sp-accent text-white'
+                        : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                        }`}
+                    >
+                      쌤핀
+                    </button>
+                    {googleConnected && (
                       <button
-                        key={src}
                         type="button"
-                        onClick={() => setSourceFilter(src)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === src
+                        onClick={() => setSourceFilter('google')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === 'google'
                           ? 'bg-sp-accent text-white'
                           : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
                           }`}
                       >
-                        {src === 'all' ? '전체' : src === 'ssampin' ? '쌤핀' : (
-                          <span className="flex items-center gap-1">
-                            <GoogleBadge /> 구글
-                          </span>
-                        )}
+                        <span className="flex items-center gap-1">
+                          <GoogleBadge /> 구글
+                        </span>
                       </button>
-                    ))}
+                    )}
+                    {neisEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => setSourceFilter('neis')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sourceFilter === 'neis'
+                          ? 'bg-purple-500 text-white'
+                          : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                          }`}
+                      >
+                        <span className="flex items-center gap-1">
+                          <span className="text-[9px] text-purple-300 bg-purple-500/15 px-1 py-0.5 rounded font-medium">N</span>
+                          NEIS{neisSyncStatus === 'syncing' && ' ⟳'}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -487,6 +564,12 @@ export function Schedule() {
           onDeleteEvent={handleDeleteEvent}
         />
       )}
+
+      {/* NEIS 학사일정 패널 */}
+      <NeisSchedulePanel
+        open={showNeisPanel}
+        onClose={() => setShowNeisPanel(false)}
+      />
     </div>
   );
 }

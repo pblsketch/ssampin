@@ -16,6 +16,7 @@ import type { SchoolSearchResult } from '@domain/entities/Meal';
 import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { AppInfoSection } from './AppInfoSection';
 import { CalendarSettings } from './CalendarSettings';
+import { NeisScheduleSection } from './NeisScheduleSection';
 /* ─── Toggle Switch ─── */
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -796,6 +797,13 @@ export function SettingsPage() {
             pinStore={pinStore}
           />
 
+          {/* ── 그룹: 일정 관리 ── */}
+          <div className="flex items-center gap-3 mt-4 -mb-2">
+            <span className="material-symbols-outlined text-sp-accent text-[20px]">event</span>
+            <h2 className="text-sm font-bold text-sp-accent uppercase tracking-wider">일정 관리</h2>
+            <div className="flex-1 border-t border-sp-border/50" />
+          </div>
+
           {/* ── 섹션 7: 일정 카테고리 관리 ── */}
           <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <div className="flex items-center justify-between mb-6">
@@ -865,6 +873,14 @@ export function SettingsPage() {
               )}
             </div>
           </section>
+          {/* ── 섹션 7.5: NEIS 학사일정 ── */}
+          <NeisScheduleSection />
+
+          {/* ── 섹션 7.6: 구글 캘린더 연동 ── */}
+          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
+            <CalendarSettings />
+          </section>
+
           {/* ── 섹션 8: 날씨 설정 ── */}
           <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -1002,12 +1018,7 @@ export function SettingsPage() {
             </div>
           </section>
 
-          {/* ── 섹션 10: 구글 캘린더 연동 ── */}
-          <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
-            <CalendarSettings />
-          </section>
-
-          {/* ── 섹션 11: 앱 정보 ── */}
+          {/* ── 섹션 10: 앱 정보 ── */}
           <AppInfoSection />
 
         </div>

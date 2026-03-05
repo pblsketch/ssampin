@@ -72,7 +72,14 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
   const [customStart, setCustomStart] = useState(getTodayStr());
   const [customEnd, setCustomEnd] = useState(getTodayStr());
   const [description, setDescription] = useState('');
+  const [includeNeis, setIncludeNeis] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // NEIS 일정이 존재하는지 확인
+  const hasNeisEvents = useMemo(
+    () => events.some((e) => e.source === 'neis' && !e.isHidden),
+    [events],
+  );
 
   // 전체 선택 여부
   const allSelected = selectedCategories.size === categories.length;
@@ -152,6 +159,7 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
         startDate,
         endDate,
         description: description.trim(),
+        includeNeisEvents: includeNeis,
       });
 
       await triggerExport(shareFile);
@@ -292,6 +300,29 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
                 </div>
               )}
             </section>
+
+            {/* NEIS 학사일정 포함 옵션 */}
+            {hasNeisEvents && (
+              <section className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded font-medium border border-purple-500/20">
+                    NEIS
+                  </span>
+                  <span className="text-sm text-sp-text">학사일정 포함</span>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeNeis}
+                    onChange={(e) => setIncludeNeis(e.target.checked)}
+                    className="w-4 h-4 rounded border-sp-border bg-sp-bg text-purple-500 focus:ring-purple-500"
+                  />
+                  <span className="text-xs text-sp-muted">
+                    {includeNeis ? '포함' : '제외'}
+                  </span>
+                </label>
+              </section>
+            )}
 
             {/* 설명 */}
             <section>

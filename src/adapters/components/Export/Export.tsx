@@ -159,7 +159,7 @@ export function Export() {
             data = await exportSeatingToExcel(seating, getStudent, students, className);
             defaultFileName = '학급자리배치도.xlsx';
           } else if (item === 'events') {
-            data = await exportEventsToExcel(events);
+            data = await exportEventsToExcel(events.filter((e) => !e.isHidden));
             defaultFileName = '학교일정.xlsx';
           }
         } else if (selectedFormat === 'hwpx') {

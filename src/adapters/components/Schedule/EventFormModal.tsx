@@ -129,6 +129,12 @@ export function EventFormModal({
       ...(alerts.length > 0 && { alerts }),
       ...(recurrence && { recurrence }),
       ...(description.trim() && { description: description.trim() }),
+      // NEIS 일정 편집 시 기존 필드 보존 + isModified 플래그
+      ...(editEvent?.source === 'neis' && {
+        source: 'neis' as const,
+        neis: editEvent.neis,
+        isModified: true,
+      }),
     };
 
     onSubmit(event);
@@ -161,6 +167,29 @@ export function EventFormModal({
 
           {/* 폼 */}
           <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* NEIS 일정 안내 */}
+            {isEdit && editEvent?.source === 'neis' && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                <span className="material-symbols-outlined text-purple-400 text-[18px] mt-0.5">info</span>
+                <div className="text-xs text-purple-200/80">
+                  <p className="font-medium mb-0.5">NEIS에서 가져온 일정입니다</p>
+                  <p>수정하면 다음 동기화 시 덮어씌워지지 않습니다.</p>
+                  {editEvent.neis?.gradeYn && (
+                    <p className="mt-1 text-purple-300/60">
+                      해당 학년: {
+                        [
+                          editEvent.neis.gradeYn.grade1 && '1학년',
+                          editEvent.neis.gradeYn.grade2 && '2학년',
+                          editEvent.neis.gradeYn.grade3 && '3학년',
+                        ].filter(Boolean).join(', ') || '없음'
+                      }
+                      {editEvent.neis.subtractDayType && ` · ${editEvent.neis.subtractDayType}`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* 제목 */}
             <div>
               <label className="block text-sm font-medium text-sp-muted mb-1.5">

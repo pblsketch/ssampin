@@ -11,7 +11,13 @@ export class ExportEvents {
 
   async execute(options: ExportOptions): Promise<EventsShareFile> {
     const data = await this.eventsRepository.getEvents();
-    const events = data?.events ?? [];
+    // 숨긴 NEIS 일정은 내보내기에서 제외
+    // NEIS 일정은 includeNeisEvents 옵션에 따라 포함/제외
+    const events = (data?.events ?? []).filter((e) => {
+      if (e.isHidden) return false;
+      if (e.source === 'neis' && !options.includeNeisEvents) return false;
+      return true;
+    });
     const allCategories = data?.categories?.length ? [...data.categories] : [];
     const settings = await this.settingsRepository.getSettings();
 

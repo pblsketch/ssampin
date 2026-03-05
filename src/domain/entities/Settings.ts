@@ -1,5 +1,6 @@
 import type { PeriodTime } from '../valueObjects/PeriodTime';
 import type { PinSettings } from './PinSettings';
+import type { NeisScheduleSettings } from './NeisSchedule';
 
 export type SchoolLevel = 'elementary' | 'middle' | 'high';
 
@@ -104,4 +105,5 @@ export interface Settings {
   readonly weather: WeatherSettings;
   readonly menuOrder?: readonly string[];
   readonly feedback?: FeedbackConfig;
+  readonly neisSchedule?: NeisScheduleSettings;
 }

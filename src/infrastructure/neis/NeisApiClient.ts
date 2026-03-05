@@ -1,6 +1,7 @@
 import type { MealInfo, MealDish, SchoolSearchResult } from '@domain/entities/Meal';
 import type { NeisClassInfo, NeisTimetableRow, SchoolLevel } from '@domain/entities/NeisTimetable';
 import { NeisApiError, mapNeisErrorCode } from '@domain/entities/NeisTimetable';
+import type { NeisScheduleRow } from '@domain/entities/NeisSchedule';
 import type { INeisPort } from '@domain/ports/INeisPort';
 
 /**
@@ -287,6 +288,90 @@ export class NeisApiClient implements INeisPort {
     }
   }
 
+  /* ── 학사일정 조회 ── */
+
+  async getSchoolSchedule(params: {
+    apiKey: string;
+    officeCode: string;
+    schoolCode: string;
+    fromDate: string;
+    toDate: string;
+  }): Promise<readonly NeisScheduleRow[]> {
+    const allRows: NeisScheduleRow[] = [];
+    let pIndex = 1;
+    const pSize = 1000;
+
+    // 페이지네이션 자동 처리
+    while (true) {
+      const qs = new URLSearchParams({
+        KEY: params.apiKey,
+        Type: 'json',
+        pIndex: String(pIndex),
+        pSize: String(pSize),
+        ATPT_OFCDC_SC_CODE: params.officeCode,
+        SD_SCHUL_CODE: params.schoolCode,
+        AA_FROM_YMD: params.fromDate,
+        AA_TO_YMD: params.toDate,
+      });
+
+      const url = `${this.baseUrl}/SchoolSchedule?${qs.toString()}`;
+
+      try {
+        const res = await this.fetchWithTimeout(url);
+        const json = await res.json() as NeisApiResponse;
+        const data = json['SchoolSchedule'];
+
+        if (!data || data.length < 2) {
+          // 첫 페이지에서 데이터 없음 → 빈 결과
+          if (pIndex === 1) {
+            this.checkNeisError(json);
+            return [];
+          }
+          break;
+        }
+
+        const head = data[0]?.head;
+        if (!head) break;
+
+        const result = head[1]?.RESULT;
+        if (result?.CODE === 'INFO-200') {
+          // 데이터 없음 (정상 응답)
+          return [];
+        }
+        if (result?.CODE !== 'INFO-000') {
+          throw new NeisApiError(mapNeisErrorCode(result?.CODE ?? ''), result?.MESSAGE ?? '');
+        }
+
+        const totalCount = head[0]?.list_total_count ?? 0;
+        const rows = data[1]?.row;
+        if (!rows) break;
+
+        for (const row of rows) {
+          allRows.push({
+            AA_YMD: row['AA_YMD'] ?? '',
+            EVENT_NM: row['EVENT_NM'] ?? '',
+            EVENT_CNTNT: row['EVENT_CNTNT'] ?? '',
+            ONE_GRADE_EVENT_YN: row['ONE_GRADE_EVENT_YN'] ?? 'N',
+            TW_GRADE_EVENT_YN: row['TW_GRADE_EVENT_YN'] ?? 'N',
+            THREE_GRADE_EVENT_YN: row['THREE_GRADE_EVENT_YN'] ?? 'N',
+            SBTR_DD_SC_NM: row['SBTR_DD_SC_NM'] ?? '',
+            AY: row['AY'] ?? '',
+            LOAD_DTM: row['LOAD_DTM'] ?? '',
+          });
+        }
+
+        // 모든 데이터를 가져왔으면 종료
+        if (allRows.length >= totalCount) break;
+        pIndex++;
+      } catch (e) {
+        if (e instanceof NeisApiError) throw e;
+        throw new NeisApiError('NETWORK_ERROR', (e as Error).message);
+      }
+    }
+
+    return allRows;
+  }
+
   /* ── 공통 유틸리티 ── */
 
   /** 타임아웃 있는 fetch (10초) */
@@ -308,11 +393,11 @@ export class NeisApiClient implements INeisPort {
     }
   }
 
-  /** JSON 응답에서 NEIS 에러 구조 확인 */
+  /** JSON 응답에서 NEIS 에러 구조 확인 — INFO-200(데이터 없음)은 정상 처리 */
   private checkNeisError(json: Record<string, unknown>): void {
     const resultObj = json as { RESULT?: { CODE?: string; MESSAGE?: string } };
     const result = resultObj.RESULT;
-    if (result?.CODE && result.CODE !== 'INFO-000') {
+    if (result?.CODE && result.CODE !== 'INFO-000' && result.CODE !== 'INFO-200') {
       throw new NeisApiError(mapNeisErrorCode(result.CODE), result.MESSAGE ?? '');
     }
   }

@@ -52,6 +52,7 @@ export interface ExportOptions {
   readonly startDate?: string;
   readonly endDate?: string;
   readonly description: string;
+  readonly includeNeisEvents?: boolean;
 }
 
 /** 중복 처리 전략 */

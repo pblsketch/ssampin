@@ -25,7 +25,7 @@ import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
 import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
-import { ToastContainer } from '@adapters/components/common/Toast';
+import { ToastContainer, useToastStore } from '@adapters/components/common/Toast';
 import { UpdateNotification } from '@adapters/components/common/UpdateNotification';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -173,6 +173,35 @@ export function App() {
 
   // 구글 캘린더 자동 동기화
   useAutoSync();
+
+  // NEIS 학사일정 자동 동기화 (앱 시작 시) + 학기 초 안내
+  const showToast = useToastStore((s) => s.show);
+  useEffect(() => {
+    const initNeisSync = async () => {
+      const { useNeisScheduleStore } = await import('@adapters/stores/useNeisScheduleStore');
+      await useNeisScheduleStore.getState().loadSettings();
+      const neisSettings = useNeisScheduleStore.getState().settings;
+
+      if (neisSettings.enabled) {
+        void useNeisScheduleStore.getState().syncIfNeeded();
+      }
+
+      // 학기 초(3/1~3/15, 9/1~9/15) 동기화 안내
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const day = now.getDate();
+      const isSemesterStart = (month === 3 || month === 9) && day <= 15;
+
+      if (isSemesterStart && neisSettings.enabled && !neisSettings.lastSyncAt) {
+        showToast(
+          '새 학기가 시작되었습니다! 설정에서 NEIS 학사일정을 동기화해보세요.',
+          'info',
+        );
+      }
+    };
+    void initNeisSync();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fontSizeClass = (() => {
     switch (settings.fontSize) {

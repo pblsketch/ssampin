@@ -11,3 +11,5 @@ Thumbs.db
 landing/node_modules
 landing/.next
 NUL
+.vercel
+.env*.local

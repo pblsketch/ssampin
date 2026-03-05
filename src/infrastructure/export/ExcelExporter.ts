@@ -459,13 +459,32 @@ export async function parseEventsFromExcel(
   return { events, categoryNames: Array.from(categorySet) };
 }
 
+function getEventGradeText(event: SchoolEvent): string {
+  if (!event.neis?.gradeYn) return '';
+  const { grade1, grade2, grade3 } = event.neis.gradeYn;
+  if (grade1 && grade2 && grade3) return '전학년';
+  const grades: string[] = [];
+  if (grade1) grades.push('1');
+  if (grade2) grades.push('2');
+  if (grade3) grades.push('3');
+  return grades.join(',');
+}
+
+function getEventSourceText(event: SchoolEvent): string {
+  switch (event.source) {
+    case 'neis': return 'NEIS';
+    case 'google': return '구글';
+    default: return '쌤핀';
+  }
+}
+
 export async function exportEventsToExcel(
   events: readonly SchoolEvent[],
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('학교 일정');
 
-  const headerRow = ws.addRow(['날짜', '제목', '카테고리', '시간', '장소', '설명']);
+  const headerRow = ws.addRow(['날짜', '제목', '카테고리', '시간', '장소', '설명', '해당학년', '출처']);
   headerRow.eachCell((cell) => applyHeaderStyle(cell));
 
   ws.getColumn(1).width = 14;
@@ -474,6 +493,8 @@ export async function exportEventsToExcel(
   ws.getColumn(4).width = 16;
   ws.getColumn(5).width = 16;
   ws.getColumn(6).width = 30;
+  ws.getColumn(7).width = 10;
+  ws.getColumn(8).width = 8;
 
   const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -486,6 +507,8 @@ export async function exportEventsToExcel(
       event.time ?? '',
       event.location ?? '',
       event.description ?? '',
+      getEventGradeText(event),
+      getEventSourceText(event),
     ]);
     row.eachCell((cell) => applyCellStyle(cell));
   }

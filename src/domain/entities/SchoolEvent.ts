@@ -96,9 +96,26 @@ export interface SchoolEvent {
   readonly lastSyncedAt?: string;       // ISO 8601
   readonly googleUpdatedAt?: string;    // ISO 8601
   readonly etag?: string;
-  readonly source?: 'ssampin' | 'google';
+  readonly source?: 'ssampin' | 'google' | 'neis';
   readonly startTime?: string;          // "HH:mm"
   readonly endTime?: string;            // "HH:mm"
+
+  // NEIS 학사일정 전용 필드 (모두 optional, 하위 호환성 유지)
+  readonly neis?: {
+    readonly eventId: string;        // `${AA_YMD}_${hash(EVENT_NM)}` 고유 키
+    readonly eventName: string;      // 원본 행사명
+    readonly schoolYear: string;     // 학년도
+    readonly gradeYn: {
+      readonly grade1: boolean;
+      readonly grade2: boolean;
+      readonly grade3: boolean;
+    };
+    readonly subtractDayType: string; // 수업공제일 구분 (공휴일/해당없음)
+    readonly loadDate: string;        // 데이터 적재일
+    readonly lastSyncAt: string;      // 마지막 동기화 시간
+  };
+  readonly isModified?: boolean;     // 사용자가 편집했으면 true → 동기화 시 보호
+  readonly isHidden?: boolean;       // 숨기기 처리
 }
 
 export interface SchoolEventsData {
