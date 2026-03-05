@@ -13,6 +13,7 @@ import { CATEGORY_COLOR_PRESETS } from '@domain/entities/SchoolEvent';
 import type { PeriodPreset } from '@domain/rules/periodRules';
 import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
 import type { SchoolSearchResult } from '@domain/entities/Meal';
+import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { AppInfoSection } from './AppInfoSection';
 import { CalendarSettings } from './CalendarSettings';
 /* ─── Toggle Switch ─── */
@@ -310,13 +311,7 @@ export function SettingsPage() {
   }
 
   /* ── 점심시간 row insertion logic ── */
-  // Insert lunch row after the last morning period (period ending at or before 12:30)
-  const lunchIndex = draft.periodTimes.findIndex(
-    (p, i) => {
-      const next = draft.periodTimes[i + 1];
-      return i < draft.periodTimes.length - 1 && p.end >= '12:00' && next !== undefined && next.start >= '12:30';
-    },
-  );
+  const lunchIndex = getLunchBreakIndex(draft.periodTimes);
 
   return (
     <div className="-m-8 flex flex-col h-[calc(100%+4rem)]">
@@ -607,13 +602,15 @@ export function SettingsPage() {
                 </thead>
                 <tbody className="divide-y divide-sp-border">
                   {draft.periodTimes.map((pt, i) => {
-                    const isAfterLunch = lunchIndex >= 0 && i === lunchIndex + 1;
+                    const isAfterLunch = lunchIndex >= 0 && i === lunchIndex;
+                    const lunchTimeStr = isAfterLunch ? formatLunchBreakTime(draft.periodTimes, lunchIndex) : '';
                     return (
                       <PeriodRows
                         key={pt.period}
                         period={pt}
                         index={i}
                         showLunchBefore={isAfterLunch}
+                        lunchTimeStr={lunchTimeStr}
                         onChangeStart={(v) => updatePeriod(i, 'start', v)}
                         onChangeEnd={(v) => updatePeriod(i, 'end', v)}
                         onDelete={() => deletePeriod(i)}
@@ -1057,6 +1054,7 @@ function PeriodRows({
   period,
   index,
   showLunchBefore,
+  lunchTimeStr,
   onChangeStart,
   onChangeEnd,
   onDelete,
@@ -1065,6 +1063,7 @@ function PeriodRows({
   period: PeriodTime;
   index: number;
   showLunchBefore: boolean;
+  lunchTimeStr: string;
   onChangeStart: (v: string) => void;
   onChangeEnd: (v: string) => void;
   onDelete: () => void;
@@ -1075,8 +1074,8 @@ function PeriodRows({
       {showLunchBefore && (
         <tr className="bg-sp-surface/80 border-y-2 border-sp-border">
           <td className="px-4 py-3 font-medium text-sp-muted italic">점심</td>
-          <td className="px-4 py-3 text-sp-muted">12:00</td>
-          <td className="px-4 py-3 text-sp-muted">13:00</td>
+          <td className="px-4 py-3 text-sp-muted">{lunchTimeStr.split(' ~ ')[0] || ''}</td>
+          <td className="px-4 py-3 text-sp-muted">{lunchTimeStr.split(' ~ ')[1] || ''}</td>
           <td className="px-4 py-3" />
         </tr>
       )}
