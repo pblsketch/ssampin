@@ -216,23 +216,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
 
   /* ── 나이스 불러오기 핸들러 ── */
   const hasExistingData = useMemo(() => {
-    if (tab === 'class') {
-      return DAYS_OF_WEEK.some((day) =>
-        (classSchedule[day] ?? []).some((cp) => cp.subject.trim() !== ''),
-      );
-    }
     return DAYS_OF_WEEK.some((day) =>
-      (teacherSchedule[day] ?? []).some((tp) => tp !== null && tp.subject.trim() !== ''),
+      (classSchedule[day] ?? []).some((cp) => cp.subject.trim() !== ''),
     );
-  }, [tab, classSchedule, teacherSchedule]);
+  }, [classSchedule]);
 
   const handleNeisImport = useCallback(
-    async (data: ClassScheduleData | TeacherScheduleData, maxPeriods: number) => {
-      if (tab === 'class') {
-        await updateClassSchedule(data as ClassScheduleData);
-      } else {
-        await updateTeacherSchedule(data as TeacherScheduleData);
-      }
+    async (data: ClassScheduleData, maxPeriods: number) => {
+      await updateClassSchedule(data);
 
       // 교시 수가 다르면 설정도 업데이트
       if (maxPeriods !== settings.maxPeriods) {
@@ -243,7 +234,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
       setShowNeisImport(false);
       onSaved();
     },
-    [tab, updateClassSchedule, updateTeacherSchedule, settings.maxPeriods, updateSettings, onSaved],
+    [updateClassSchedule, settings.maxPeriods, updateSettings, onSaved],
   );
 
   const handleSave = async () => {
@@ -305,14 +296,18 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowNeisImport(true)}
-            className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined text-[20px]">download</span>
-            <span>나이스에서 불러오기</span>
-          </button>
-          <div className="w-px h-8 bg-sp-border" />
+          {tab === 'class' && (
+            <>
+              <button
+                onClick={() => setShowNeisImport(true)}
+                className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[20px]">download</span>
+                <span>나이스에서 불러오기</span>
+              </button>
+              <div className="w-px h-8 bg-sp-border" />
+            </>
+          )}
           <button
             onClick={() => void undo()}
             title="실행 취소 (Ctrl+Z)"
@@ -432,7 +427,6 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
       <NeisImportModal
         isOpen={showNeisImport}
         onClose={() => setShowNeisImport(false)}
-        mode={tab}
         onImport={(data, maxPeriods) => void handleNeisImport(data, maxPeriods)}
         hasExistingData={hasExistingData}
       />

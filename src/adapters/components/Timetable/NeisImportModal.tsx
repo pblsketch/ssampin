@@ -4,7 +4,7 @@ import { useMealStore } from '@adapters/stores/useMealStore';
 import { neisPort } from '@adapters/di/container';
 import { NEIS_API_KEY } from '@domain/entities/Meal';
 import type { SchoolSearchResult } from '@domain/entities/Meal';
-import type { NeisClassInfo, NeisTimetableRow } from '@domain/entities/NeisTimetable';
+import type { NeisClassInfo } from '@domain/entities/NeisTimetable';
 import {
   NeisApiError,
   getNeisErrorMessage,
@@ -16,20 +16,16 @@ import {
   getLastWeekRange,
   formatDateDisplay,
 } from '@domain/entities/NeisTimetable';
-import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
+import type { ClassScheduleData } from '@domain/entities/Timetable';
 import {
   transformToClassSchedule,
-  mergeClassTimetablesToTeacher,
   getMaxPeriod,
 } from '@domain/rules/neisTransformRules';
-
-type TabType = 'class' | 'teacher';
 
 interface NeisImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  mode: TabType;
-  onImport: (data: ClassScheduleData | TeacherScheduleData, maxPeriods: number) => void;
+  onImport: (data: ClassScheduleData, maxPeriods: number) => void;
   hasExistingData: boolean;
 }
 
@@ -37,12 +33,7 @@ type WizardStep = 'school' | 'classSelect' | 'period' | 'confirm' | 'loading' | 
 
 type PeriodOption = 'thisWeek' | 'lastWeek' | 'custom';
 
-interface ClassSelection {
-  grade: string;
-  className: string;
-}
-
-export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingData }: NeisImportModalProps) {
+export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData }: NeisImportModalProps) {
   const { settings } = useSettingsStore();
   const { searchResults, searching, searchSchools, clearSearch } = useMealStore();
 
@@ -55,14 +46,8 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
   const [classList, setClassList] = useState<readonly NeisClassInfo[]>([]);
   const [classListLoading, setClassListLoading] = useState(false);
 
-  // class 모드: 단일 선택
   const [selectedGrade, setSelectedGrade] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
-
-  // teacher 모드: 복수 선택
-  const [multiGradeClasses, setMultiGradeClasses] = useState<Map<string, readonly NeisClassInfo[]>>(new Map());
-  const [selectedClasses, setSelectedClasses] = useState<ClassSelection[]>([]);
-  const [multiLoading, setMultiLoading] = useState(false);
 
   /* ── 기간 ── */
   const [periodOption, setPeriodOption] = useState<PeriodOption>('thisWeek');
@@ -111,9 +96,9 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
     };
   }, [schoolQuery, searchSchools, clearSearch]);
 
-  /* ── 학년 선택 시 반 목록 로드 (class 모드) ── */
+  /* ── 학년 선택 시 반 목록 로드 ── */
   useEffect(() => {
-    if (!selectedSchool || !selectedGrade || mode === 'teacher') return;
+    if (!selectedSchool || !selectedGrade) return;
 
     setClassListLoading(true);
     setSelectedClass('');
@@ -134,38 +119,7 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
       .finally(() => {
         setClassListLoading(false);
       });
-  }, [selectedSchool, selectedGrade, academicYear, apiKey, mode]);
-
-  /* ── teacher 모드: 모든 학년의 반 목록 로드 ── */
-  useEffect(() => {
-    if (!selectedSchool || mode !== 'teacher' || step !== 'classSelect') return;
-
-    setMultiLoading(true);
-    const promises = gradeRange.map(async (g) => {
-      const grade = String(g);
-      try {
-        const list = await neisPort.getClassList({
-          apiKey,
-          officeCode: selectedSchool.atptCode,
-          schoolCode: selectedSchool.schoolCode,
-          academicYear,
-          grade,
-        });
-        return { grade, list };
-      } catch {
-        return { grade, list: [] as NeisClassInfo[] };
-      }
-    });
-
-    void Promise.all(promises).then((results) => {
-      const map = new Map<string, readonly NeisClassInfo[]>();
-      for (const { grade, list } of results) {
-        if (list.length > 0) map.set(grade, list);
-      }
-      setMultiGradeClasses(map);
-      setMultiLoading(false);
-    });
-  }, [selectedSchool, mode, step, gradeRange, academicYear, apiKey]);
+  }, [selectedSchool, selectedGrade, academicYear, apiKey]);
 
   /* ── 기간 계산 ── */
   const dateRange = useMemo(() => {
@@ -173,15 +127,6 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
     if (periodOption === 'lastWeek') return getLastWeekRange();
     return { fromDate: customFrom.replace(/-/g, ''), toDate: customTo.replace(/-/g, '') };
   }, [periodOption, customFrom, customTo]);
-
-  /* ── teacher 모드: 반 선택 토글 ── */
-  const toggleClassSelection = useCallback((grade: string, className: string) => {
-    setSelectedClasses((prev) => {
-      const exists = prev.some((s) => s.grade === grade && s.className === className);
-      if (exists) return prev.filter((s) => !(s.grade === grade && s.className === className));
-      return [...prev, { grade, className }];
-    });
-  }, []);
 
   /* ── 불러오기 실행 ── */
   const executeImport = useCallback(async () => {
@@ -191,75 +136,30 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
     setErrorMsg('');
 
     try {
-      if (mode === 'class') {
-        setImportProgress('시간표를 불러오는 중...');
-        const rows = await neisPort.getTimetable({
-          apiKey,
-          officeCode: selectedSchool.atptCode,
-          schoolCode: selectedSchool.schoolCode,
-          schoolLevel: neisLevel,
-          academicYear,
-          semester,
-          grade: selectedGrade,
-          className: selectedClass,
-          fromDate: dateRange.fromDate,
-          toDate: dateRange.toDate,
-        });
+      setImportProgress('시간표를 불러오는 중...');
+      const rows = await neisPort.getTimetable({
+        apiKey,
+        officeCode: selectedSchool.atptCode,
+        schoolCode: selectedSchool.schoolCode,
+        schoolLevel: neisLevel,
+        academicYear,
+        semester,
+        grade: selectedGrade,
+        className: selectedClass,
+        fromDate: dateRange.fromDate,
+        toDate: dateRange.toDate,
+      });
 
-        if (rows.length === 0) {
-          setErrorMsg('해당 기간의 시간표 데이터가 없습니다. 학기 중인지 확인해주세요.');
-          setStep('error');
-          return;
-        }
-
-        const maxPeriod = getMaxPeriod(rows);
-        const data = transformToClassSchedule(rows, maxPeriod);
-        onImport(data, maxPeriod);
-        setStep('done');
-      } else {
-        // teacher 모드: 복수 반 병렬 조회
-        const total = selectedClasses.length;
-        const results: { grade: string; className: string; rows: readonly NeisTimetableRow[] }[] = [];
-        let completed = 0;
-
-        const settled = await Promise.allSettled(
-          selectedClasses.map(async ({ grade, className }) => {
-            const rows = await neisPort.getTimetable({
-              apiKey,
-              officeCode: selectedSchool.atptCode,
-              schoolCode: selectedSchool.schoolCode,
-              schoolLevel: neisLevel,
-              academicYear,
-              semester,
-              grade,
-              className,
-              fromDate: dateRange.fromDate,
-              toDate: dateRange.toDate,
-            });
-            completed++;
-            setImportProgress(`${total}개 반 중 ${completed}개 완료...`);
-            return { grade, className, rows };
-          }),
-        );
-
-        for (const result of settled) {
-          if (result.status === 'fulfilled') {
-            results.push(result.value);
-          }
-        }
-
-        if (results.length === 0) {
-          setErrorMsg('시간표 데이터를 불러올 수 없습니다. 학기 중인지 확인해주세요.');
-          setStep('error');
-          return;
-        }
-
-        const allRows = results.flatMap((r) => r.rows);
-        const maxPeriod = getMaxPeriod(allRows);
-        const data = mergeClassTimetablesToTeacher(results, maxPeriod);
-        onImport(data, maxPeriod);
-        setStep('done');
+      if (rows.length === 0) {
+        setErrorMsg('해당 기간의 시간표 데이터가 없습니다. 학기 중인지 확인해주세요.');
+        setStep('error');
+        return;
       }
+
+      const maxPeriod = getMaxPeriod(rows);
+      const data = transformToClassSchedule(rows, maxPeriod);
+      onImport(data, maxPeriod);
+      setStep('done');
     } catch (e) {
       if (e instanceof NeisApiError) {
         setErrorMsg(getNeisErrorMessage(e.errorType));
@@ -268,7 +168,7 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
       }
       setStep('error');
     }
-  }, [selectedSchool, mode, selectedGrade, selectedClass, selectedClasses, neisLevel, academicYear, semester, dateRange, apiKey, onImport]);
+  }, [selectedSchool, selectedGrade, selectedClass, neisLevel, academicYear, semester, dateRange, apiKey, onImport]);
 
   /* ── 다음 단계 진행 ── */
   const goNext = useCallback(() => {
@@ -294,16 +194,13 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
   /* ── 다음 버튼 활성 조건 ── */
   const canGoNext = useMemo(() => {
     if (step === 'school') return selectedSchool !== null;
-    if (step === 'classSelect') {
-      if (mode === 'class') return selectedGrade !== '' && selectedClass !== '';
-      return selectedClasses.length > 0;
-    }
+    if (step === 'classSelect') return selectedGrade !== '' && selectedClass !== '';
     if (step === 'period') {
       if (periodOption === 'custom') return customFrom !== '' && customTo !== '';
       return true;
     }
     return false;
-  }, [step, selectedSchool, mode, selectedGrade, selectedClass, selectedClasses, periodOption, customFrom, customTo]);
+  }, [step, selectedSchool, selectedGrade, selectedClass, periodOption, customFrom, customTo]);
 
   /* ── 학교 선택 핸들러 ── */
   const handleSelectSchool = useCallback((school: SchoolSearchResult) => {
@@ -330,7 +227,6 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
       setSchoolQuery('');
       setSelectedGrade('');
       setSelectedClass('');
-      setSelectedClasses([]);
       setClassList([]);
       setPeriodOption('thisWeek');
       setShowOverwriteConfirm(false);
@@ -339,7 +235,7 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
 
   if (!isOpen) return null;
 
-  const stepLabels = ['학교 선택', mode === 'class' ? '학년/반 선택' : '담당 학급 선택', '기간 선택'];
+  const stepLabels = ['학교 선택', '학년/반 선택', '기간 선택'];
   const currentStepNum = step === 'school' ? 1 : step === 'classSelect' ? 2 : 3;
 
   return (
@@ -467,8 +363,8 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
             </div>
           )}
 
-          {/* Step 2: 학년/반 선택 (class 모드) */}
-          {step === 'classSelect' && mode === 'class' && (
+          {/* Step 2: 학년/반 선택 */}
+          {step === 'classSelect' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -508,62 +404,6 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
               </div>
               <p className="text-xs text-sp-muted">
                 선택한 반의 시간표를 불러옵니다.
-              </p>
-            </div>
-          )}
-
-          {/* Step 2: 담당 학급 선택 (teacher 모드) */}
-          {step === 'classSelect' && mode === 'teacher' && (
-            <div className="space-y-4">
-              {multiLoading ? (
-                <div className="flex items-center justify-center gap-2 py-8 text-sp-muted text-sm">
-                  <div className="w-5 h-5 border-2 border-sp-accent/30 border-t-sp-accent rounded-full animate-spin" />
-                  학급 목록을 불러오는 중...
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {Array.from(multiGradeClasses.entries()).map(([grade, classes]) => (
-                    <div key={grade}>
-                      <p className="text-xs font-bold text-sp-muted mb-1.5">{grade}학년</p>
-                      <div className="flex flex-wrap gap-2">
-                        {classes.map((c) => {
-                          const isSelected = selectedClasses.some(
-                            (s) => s.grade === grade && s.className === c.CLASS_NM,
-                          );
-                          return (
-                            <button
-                              key={`${grade}-${c.CLASS_NM}`}
-                              onClick={() => toggleClassSelection(grade, c.CLASS_NM)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                isSelected
-                                  ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                                  : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
-                              }`}
-                            >
-                              {grade}-{c.CLASS_NM}
-                              {isSelected && (
-                                <span className="material-symbols-outlined text-xs ml-1">check</span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {selectedClasses.length > 0 && (
-                <div className="p-3 bg-sp-surface rounded-xl border border-sp-border">
-                  <p className="text-xs text-sp-muted">
-                    선택됨: {selectedClasses.map((s) => `${s.grade}-${s.className}`).join(', ')} ({selectedClasses.length}개 반)
-                  </p>
-                </div>
-              )}
-
-              <p className="text-xs text-sp-muted">
-                선택한 반의 시간표를 모두 불러와서 교사 시간표를 구성합니다.
-                불러온 후 수동으로 조정할 수 있습니다.
               </p>
             </div>
           )}
@@ -635,9 +475,7 @@ export function NeisImportModal({ isOpen, onClose, mode, onImport, hasExistingDa
 
               <div className="p-3 bg-sp-surface rounded-xl border border-sp-border">
                 <p className="text-xs text-sp-muted">
-                  {mode === 'class'
-                    ? `${selectedGrade}학년 ${selectedClass}반의 시간표를 불러옵니다.`
-                    : `${selectedClasses.length}개 반의 시간표를 불러옵니다.`}
+                  {selectedGrade}학년 {selectedClass}반의 시간표를 불러옵니다.
                 </p>
                 <p className="text-xs text-sp-muted mt-1">
                   학년도 {academicYear}년 {semester}학기
