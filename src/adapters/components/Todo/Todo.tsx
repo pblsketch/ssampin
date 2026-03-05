@@ -285,14 +285,14 @@ export function Todo() {
                           key={p}
                           type="button"
                           onClick={() => setNewPriority(p)}
-                          className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                          className={`flex flex-col items-center px-2 py-1 rounded-md text-xs font-medium transition-colors ${
                             newPriority === p
                               ? `${config.bgColor || 'bg-sp-surface'} ${config.color} ring-1 ring-current`
                               : 'text-sp-muted hover:text-sp-text'
                           }`}
-                          title={config.label}
                         >
-                          {config.icon}
+                          <span>{config.icon}</span>
+                          <span className="text-[10px] leading-tight mt-0.5">{config.label}</span>
                         </button>
                       );
                     })}
