@@ -180,7 +180,7 @@ function ClassTimetableList({
 
   return (
     <div className="space-y-1">
-      {periods.slice(0, maxPeriods).map((cp, idx) => {
+      {periods.slice(0, Math.max(periods.length, maxPeriods)).map((cp, idx) => {
         const period = idx + 1;
         const pt = periodTimeMap.get(period);
         const isCurrent = currentPeriod === period;
@@ -244,7 +244,7 @@ function TeacherTimetableList({
 
   return (
     <div className="space-y-1">
-      {periods.slice(0, maxPeriods).map((tp, idx) => {
+      {periods.slice(0, Math.max(periods.length, maxPeriods)).map((tp, idx) => {
         const period = idx + 1;
         const pt = periodTimeMap.get(period);
         const isCurrent = currentPeriod === period;
