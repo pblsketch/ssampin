@@ -94,4 +94,52 @@ export class ManageEvents {
 
     await this.eventsRepository.saveEvents(updatedData);
   }
+
+  async updateCategory(
+    id: string,
+    partial: Partial<Pick<CategoryItem, 'name' | 'color'>>,
+  ): Promise<void> {
+    const data = await this.eventsRepository.getEvents();
+    const categories = data?.categories ?? [...DEFAULT_CATEGORIES];
+
+    const updatedCategories: readonly CategoryItem[] = categories.map((c) =>
+      c.id === id ? { ...c, ...partial } : c,
+    );
+    const updatedData: SchoolEventsData = {
+      events: data?.events ?? [],
+      categories: updatedCategories,
+    };
+
+    await this.eventsRepository.saveEvents(updatedData);
+  }
+
+  async reorderCategories(orderedIds: string[]): Promise<void> {
+    const data = await this.eventsRepository.getEvents();
+    const categories = data?.categories ?? [...DEFAULT_CATEGORIES];
+
+    const orderedSet = new Set(orderedIds);
+    const reordered: CategoryItem[] = [];
+
+    // Add categories in the specified order
+    for (const id of orderedIds) {
+      const category = categories.find((c) => c.id === id);
+      if (category) {
+        reordered.push(category);
+      }
+    }
+
+    // Add remaining categories not in orderedIds
+    for (const category of categories) {
+      if (!orderedSet.has(category.id)) {
+        reordered.push(category);
+      }
+    }
+
+    const updatedData: SchoolEventsData = {
+      events: data?.events ?? [],
+      categories: reordered as readonly CategoryItem[],
+    };
+
+    await this.eventsRepository.saveEvents(updatedData);
+  }
 }

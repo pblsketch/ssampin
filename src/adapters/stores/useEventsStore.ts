@@ -60,6 +60,8 @@ interface EventsState {
   // 카테고리 액션
   addCategory: (name: string, color: string) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
+  updateCategory: (id: string, partial: Partial<Pick<CategoryItem, 'name' | 'color'>>) => Promise<void>;
+  reorderCategories: (orderedIds: string[]) => Promise<void>;
 
   // 공유 상태
   shareFile: EventsShareFile | null;
@@ -323,6 +325,32 @@ export const useEventsStore = create<EventsState>((set) => {
       set((state) => ({
         categories: state.categories.filter((c) => c.id !== id),
       }));
+    },
+
+    updateCategory: async (id, partial) => {
+      await manageEvents.updateCategory(id, partial);
+      set((state) => ({
+        categories: state.categories.map((c) =>
+          c.id === id ? { ...c, ...partial } : c,
+        ),
+      }));
+    },
+
+    reorderCategories: async (orderedIds) => {
+      await manageEvents.reorderCategories(orderedIds);
+      set((state) => {
+        const catMap = new Map(state.categories.map((c) => [c.id, c]));
+        const reordered: CategoryItem[] = [];
+        for (const id of orderedIds) {
+          const cat = catMap.get(id);
+          if (cat) reordered.push(cat);
+        }
+        // Add any remaining categories not in orderedIds
+        for (const cat of state.categories) {
+          if (!orderedIds.includes(cat.id)) reordered.push(cat);
+        }
+        return { categories: reordered };
+      });
     },
 
     exportEvents: async (options) => {
