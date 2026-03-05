@@ -382,6 +382,8 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                     .filter((s) => !s.isVacant)
                     .map((student) => {
                       const isExcluded = excludedIds.has(student.id);
+                      const studentName = student.name || `${student.studentNumber ?? 0}번`;
+                      const isPicked = pickedItems.includes(studentName);
                       return (
                         <button
                           key={student.id}
@@ -389,10 +391,12 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                           className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                             isExcluded
                               ? 'bg-sp-surface text-sp-muted/50 line-through border border-sp-border/50'
-                              : 'bg-sp-accent/10 text-sp-accent border border-sp-accent/30 hover:bg-sp-accent/20'
+                              : isPicked
+                                ? 'bg-sp-surface text-sp-muted line-through border border-sp-border'
+                                : 'bg-sp-accent/10 text-sp-accent border border-sp-accent/30 hover:bg-sp-accent/20'
                           }`}
                         >
-                          {student.name || `${student.studentNumber ?? 0}번`}
+                          {studentName}
                         </button>
                       );
                     })}
