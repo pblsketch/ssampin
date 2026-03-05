@@ -3,9 +3,9 @@ import FadeIn from './FadeIn';
 
 const checklist = [
   '시간표 + 일정 + 급식 한눈에',
-  '투명도 자유롭게 조절',
-  '항상 위에 표시',
-  '크기 자유롭게 조절',
+  '4가지 레이아웃 (단일/가로/세로/4분할)',
+  '투명도 조절 + 항상 위 표시',
+  '탭 필터링으로 원하는 정보만',
 ];
 
 export default function WidgetMode() {

@@ -38,7 +38,7 @@ export default function Hero() {
 
               {/* 서브 카피 */}
               <p className="mt-6 max-w-xl text-base leading-relaxed text-sp-muted md:text-lg">
-                시간표, 자리 배치, 일정, 급식, 날씨, 쌤도구까지
+                시간표, 자리 배치, 일정, 담임메모, 할 일, 급식, 날씨, 쌤도구까지
                 <br className="hidden md:block" />
                 한 화면에서 관리하세요.
               </p>
@@ -63,7 +63,7 @@ export default function Hero() {
             className="hidden flex-col gap-px overflow-hidden rounded-2xl border border-sp-border md:flex"
           >
             {[
-              { label: '핵심 기능', value: '10가지+', sub: '올인원' },
+              { label: '핵심 기능', value: '15가지+', sub: '올인원' },
               { label: '완전 무료', value: '₩0', sub: '광고 없음' },
               { label: '오프라인', value: '100%', sub: '로컬 저장' },
             ].map((stat, i) => (
@@ -107,6 +107,9 @@ export default function Hero() {
               '쌤도구',
               'PIN 잠금',
               '미니 창 모드',
+              '담임메모',
+              '할 일',
+              '내보내기',
             ].map((kw) => (
               <span key={kw} className="text-xs text-sp-muted">
                 {kw}

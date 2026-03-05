@@ -11,13 +11,13 @@ const formats = [
     name: 'Excel',
     label: '엑셀 파일',
     accent: 'border-t-green-400',
-    uses: ['시간표', '자리 배치', '일정'],
+    uses: ['시간표', '자리 배치', '일정', '담임메모'],
   },
   {
     name: 'PDF',
     label: 'PDF 문서',
     accent: 'border-t-red-400',
-    uses: ['인쇄용', '보고서'],
+    uses: ['자리 배치'],
   },
 ];
 
