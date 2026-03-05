@@ -290,13 +290,20 @@ export function Widget() {
                     width: `${100 / (effectiveMode === 'quad' ? 0.7 : 0.85)}%`,
                   } : undefined}
                 >
-                  <div className="grid grid-cols-4 gap-3 grid-flow-row-dense items-start">
+                  <div
+                    className="grid grid-cols-4 gap-3 grid-flow-row-dense"
+                    style={{ gridAutoRows: '80px' }}
+                  >
                     {filteredWidgets.map((instance) => {
                       const definition = getWidgetById(instance.widgetId);
                       if (!definition) return null;
 
                       return (
-                        <div key={instance.widgetId} className={getSpanClass(instance.colSpan)}>
+                        <div
+                          key={instance.widgetId}
+                          className={getSpanClass(instance.colSpan)}
+                          style={{ gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}` }}
+                        >
                           <WidgetCard definition={definition} onNavigate={handleWidgetNavigate} />
                         </div>
                       );
