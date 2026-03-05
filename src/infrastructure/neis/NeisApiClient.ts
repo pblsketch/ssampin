@@ -1,4 +1,6 @@
 import type { MealInfo, MealDish, SchoolSearchResult } from '@domain/entities/Meal';
+import type { NeisClassInfo, NeisTimetableRow, SchoolLevel } from '@domain/entities/NeisTimetable';
+import { NeisApiError, mapNeisErrorCode } from '@domain/entities/NeisTimetable';
 import type { INeisPort } from '@domain/ports/INeisPort';
 
 /**
@@ -154,6 +156,164 @@ export class NeisApiClient implements INeisPort {
       }));
     } catch {
       return [];
+    }
+  }
+
+  /* ── 학급 목록 조회 ── */
+
+  async getClassList(params: {
+    apiKey: string;
+    officeCode: string;
+    schoolCode: string;
+    academicYear: string;
+    grade: string;
+  }): Promise<readonly NeisClassInfo[]> {
+    const qs = new URLSearchParams({
+      KEY: params.apiKey,
+      Type: 'json',
+      pIndex: '1',
+      pSize: '100',
+      ATPT_OFCDC_SC_CODE: params.officeCode,
+      SD_SCHUL_CODE: params.schoolCode,
+      AY: params.academicYear,
+      GRADE: params.grade,
+    });
+
+    const url = `${this.baseUrl}/classInfo?${qs.toString()}`;
+
+    try {
+      const res = await this.fetchWithTimeout(url);
+      const json = await res.json() as NeisApiResponse;
+      const data = json['classInfo'];
+      if (!data || data.length < 2) {
+        this.checkNeisError(json);
+        return [];
+      }
+
+      const head = data[0]?.head;
+      if (!head) return [];
+      const result = head[1]?.RESULT;
+      if (result?.CODE !== 'INFO-000') {
+        throw new NeisApiError(mapNeisErrorCode(result?.CODE ?? ''), result?.MESSAGE ?? '');
+      }
+
+      const rows = data[1]?.row;
+      if (!rows) return [];
+
+      return rows
+        .map((row) => ({
+          CLASS_NM: row['CLASS_NM'] ?? '',
+          GRADE: row['GRADE'] ?? '',
+        }))
+        .sort((a, b) => {
+          const numA = parseInt(a.CLASS_NM, 10);
+          const numB = parseInt(b.CLASS_NM, 10);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return a.CLASS_NM.localeCompare(b.CLASS_NM);
+        });
+    } catch (e) {
+      if (e instanceof NeisApiError) throw e;
+      throw new NeisApiError('NETWORK_ERROR', (e as Error).message);
+    }
+  }
+
+  /* ── 시간표 조회 ── */
+
+  async getTimetable(params: {
+    apiKey: string;
+    officeCode: string;
+    schoolCode: string;
+    schoolLevel: SchoolLevel;
+    academicYear: string;
+    semester: string;
+    grade: string;
+    className: string;
+    fromDate: string;
+    toDate: string;
+  }): Promise<readonly NeisTimetableRow[]> {
+    const endpointMap: Record<SchoolLevel, string> = {
+      els: 'elsTimetable',
+      mis: 'misTimetable',
+      his: 'hisTimetable',
+    };
+    const endpoint = endpointMap[params.schoolLevel];
+
+    const qs = new URLSearchParams({
+      KEY: params.apiKey,
+      Type: 'json',
+      pIndex: '1',
+      pSize: '1000',
+      ATPT_OFCDC_SC_CODE: params.officeCode,
+      SD_SCHUL_CODE: params.schoolCode,
+      AY: params.academicYear,
+      SEM: params.semester,
+      GRADE: params.grade,
+      CLASS_NM: params.className,
+      TI_FROM_YMD: params.fromDate,
+      TI_TO_YMD: params.toDate,
+    });
+
+    const url = `${this.baseUrl}/${endpoint}?${qs.toString()}`;
+
+    try {
+      const res = await this.fetchWithTimeout(url);
+      const json = await res.json() as NeisApiResponse;
+      const data = json[endpoint];
+      if (!data || data.length < 2) {
+        this.checkNeisError(json);
+        return [];
+      }
+
+      const head = data[0]?.head;
+      if (!head) return [];
+      const result = head[1]?.RESULT;
+      if (result?.CODE !== 'INFO-000') {
+        throw new NeisApiError(mapNeisErrorCode(result?.CODE ?? ''), result?.MESSAGE ?? '');
+      }
+
+      const rows = data[1]?.row;
+      if (!rows) return [];
+
+      return rows.map((row) => ({
+        PERIO: row['PERIO'] ?? '',
+        ITRT_CNTNT: row['ITRT_CNTNT'] ?? '',
+        ALL_TI_YMD: row['ALL_TI_YMD'] ?? '',
+        GRADE: row['GRADE'] ?? '',
+        CLASS_NM: row['CLASS_NM'] ?? '',
+      }));
+    } catch (e) {
+      if (e instanceof NeisApiError) throw e;
+      throw new NeisApiError('NETWORK_ERROR', (e as Error).message);
+    }
+  }
+
+  /* ── 공통 유틸리티 ── */
+
+  /** 타임아웃 있는 fetch (10초) */
+  private async fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res;
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') {
+        throw new NeisApiError('NETWORK_ERROR', '나이스 서버 응답이 느립니다. 잠시 후 다시 시도해주세요.');
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** JSON 응답에서 NEIS 에러 구조 확인 */
+  private checkNeisError(json: Record<string, unknown>): void {
+    const resultObj = json as { RESULT?: { CODE?: string; MESSAGE?: string } };
+    const result = resultObj.RESULT;
+    if (result?.CODE && result.CODE !== 'INFO-000') {
+      throw new NeisApiError(mapNeisErrorCode(result.CODE), result.MESSAGE ?? '');
     }
   }
 }
