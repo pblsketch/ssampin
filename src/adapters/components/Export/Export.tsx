@@ -4,6 +4,7 @@ import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 /* eslint-disable no-restricted-imports */
 import {
@@ -11,16 +12,18 @@ import {
   exportTeacherScheduleToExcel,
   exportSeatingToExcel,
   exportEventsToExcel,
+  exportStudentRecordsToExcel,
 } from '@infrastructure/export/ExcelExporter';
 import {
   exportClassScheduleToHwpx,
   exportTeacherScheduleToHwpx,
   exportSeatingToHwpx,
+  exportStudentRecordsToHwpx,
 } from '@infrastructure/export/HwpxExporter';
 import { ExportPreviewModal } from './ExportPreviewModal';
 /* eslint-enable no-restricted-imports */
 
-export type ExportItem = 'classSchedule' | 'teacherSchedule' | 'seating' | 'events';
+export type ExportItem = 'classSchedule' | 'teacherSchedule' | 'seating' | 'events' | 'studentRecords';
 export type ExportFormat = 'excel' | 'hwpx' | 'pdf';
 
 interface ExportItemConfig {
@@ -59,6 +62,13 @@ const EXPORT_ITEMS: ExportItemConfig[] = [
     description: '등록된 학교 일정 목록',
     icon: 'event_note',
     formats: ['excel', 'pdf'],
+  },
+  {
+    id: 'studentRecords',
+    label: '담임 메모',
+    description: '담임 메모장 기록 내보내기',
+    icon: 'assignment_ind',
+    formats: ['excel', 'hwpx'],
   },
 ];
 
@@ -105,6 +115,11 @@ export function Export() {
   const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
   const className = useSettingsStore((s) => s.settings.className);
   const loadSettings = useSettingsStore((s) => s.load);
+  const studentRecords = useStudentRecordsStore((s) => s.records);
+  const studentCategories = useStudentRecordsStore((s) => s.categories);
+  const loadStudentRecords = useStudentRecordsStore((s) => s.load);
+  const schoolName = useSettingsStore((s) => s.settings.schoolName);
+  const teacherName = useSettingsStore((s) => s.settings.teacherName);
   const showToast = useToastStore((s) => s.show);
 
   useEffect(() => {
@@ -113,7 +128,8 @@ export function Export() {
     void loadSchedule();
     void loadEvents();
     void loadSettings();
-  }, [loadSeating, loadStudents, loadSchedule, loadEvents, loadSettings]);
+    void loadStudentRecords();
+  }, [loadSeating, loadStudents, loadSchedule, loadEvents, loadSettings, loadStudentRecords]);
 
   const toggleItem = useCallback((item: ExportItem) => {
     setSelectedItems((prev) => {
@@ -161,6 +177,9 @@ export function Export() {
           } else if (item === 'events') {
             data = await exportEventsToExcel(events.filter((e) => !e.isHidden));
             defaultFileName = '학교일정.xlsx';
+          } else if (item === 'studentRecords') {
+            data = await exportStudentRecordsToExcel(studentRecords, students, studentCategories);
+            defaultFileName = '담임메모.xlsx';
           }
         } else if (selectedFormat === 'hwpx') {
           if (item === 'classSchedule') {
@@ -172,6 +191,12 @@ export function Export() {
           } else if (item === 'seating') {
             data = await exportSeatingToHwpx(seating, getStudent, students, className);
             defaultFileName = '학급자리배치도.hwpx';
+          } else if (item === 'studentRecords') {
+            data = await exportStudentRecordsToHwpx(
+              studentRecords, students, studentCategories,
+              { schoolName, className, teacherName },
+            );
+            defaultFileName = '담임기록부.hwpx';
           }
         } else if (selectedFormat === 'pdf') {
           if (window.electronAPI) {
@@ -245,6 +270,10 @@ export function Export() {
     events,
     maxPeriods,
     className,
+    studentRecords,
+    studentCategories,
+    schoolName,
+    teacherName,
     showToast,
   ]);
 

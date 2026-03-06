@@ -56,6 +56,10 @@ interface ElectronAPI {
   stopLiveVote: () => Promise<void>;
   onLiveVoteStudentVoted: (callback: (data: { optionId: string; totalVoters: number }) => void) => () => void;
   onLiveVoteConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  // Live Vote Tunnel
+  tunnelAvailable: () => Promise<boolean>;
+  tunnelInstall: () => Promise<void>;
+  tunnelStart: () => Promise<{ tunnelUrl: string }>;
   // Live Survey
   startLiveSurvey: (data: {
     question: string;

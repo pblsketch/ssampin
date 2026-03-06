@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StudentRecord } from '@domain/entities/StudentRecord';
+import type { StudentRecord, CounselingMethod } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import { studentRecordsRepository } from '@adapters/di/container';
@@ -83,9 +83,13 @@ interface StudentRecordsState {
     subcategory: string,
     content: string,
     date: string,
+    method?: CounselingMethod,
+    followUp?: string,
+    followUpDate?: string,
   ) => Promise<void>;
   updateRecord: (record: StudentRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
+  toggleFollowUpDone: (recordId: string) => Promise<void>;
   setViewMode: (mode: ViewMode) => void;
   setPeriodFilter: (filter: PeriodFilter) => void;
 
@@ -125,7 +129,7 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
         }
       },
 
-      addRecord: async (studentId, category, subcategory, content, date) => {
+      addRecord: async (studentId, category, subcategory, content, date, method?, followUp?, followUpDate?) => {
         const newRecord: StudentRecord = {
           id: crypto.randomUUID(),
           studentId,
@@ -134,6 +138,8 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
           content,
           date,
           createdAt: new Date().toISOString(),
+          ...(method ? { method } : {}),
+          ...(followUp ? { followUp, followUpDate, followUpDone: false } : {}),
         };
         await manageRecords.add(newRecord);
         set((state) => ({ records: [...state.records, newRecord] }));
@@ -152,6 +158,16 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
         await manageRecords.delete(id);
         set((state) => ({
           records: state.records.filter((r) => r.id !== id),
+        }));
+      },
+
+      toggleFollowUpDone: async (recordId) => {
+        const record = get().records.find((r) => r.id === recordId);
+        if (!record || !record.followUp) return;
+        const updated = { ...record, followUpDone: !record.followUpDone };
+        await manageRecords.update(updated);
+        set((state) => ({
+          records: state.records.map((r) => (r.id === recordId ? updated : r)),
         }));
       },
 

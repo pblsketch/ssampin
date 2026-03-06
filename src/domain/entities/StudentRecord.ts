@@ -1,5 +1,7 @@
 import type { RecordCategoryItem } from '../valueObjects/RecordCategory';
 
+export type CounselingMethod = 'phone' | 'face' | 'online' | 'visit' | 'text' | 'other';
+
 export interface StudentRecord {
   readonly id: string;
   readonly studentId: string;
@@ -8,6 +10,10 @@ export interface StudentRecord {
   readonly content: string;
   readonly date: string;
   readonly createdAt: string;
+  readonly method?: CounselingMethod;
+  readonly followUp?: string;
+  readonly followUpDate?: string;
+  readonly followUpDone?: boolean;
 }
 
 export interface StudentRecordsData {

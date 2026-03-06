@@ -4,7 +4,7 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { Student } from '@domain/entities/Student';
-import type { StudentRecord } from '@domain/entities/StudentRecord';
+import type { StudentRecord, CounselingMethod } from '@domain/entities/StudentRecord';
 import {
   filterByStudent,
   filterByCategory,
@@ -13,6 +13,7 @@ import {
   sortByDateDesc,
 } from '@domain/rules/studentRecordRules';
 import { RecordCategoryManagementModal } from './RecordCategoryManagementModal';
+import { DateNavigator } from './DateNavigator';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -96,6 +97,7 @@ export function StudentRecords() {
   const { students, load: loadStudents, loaded: studentsLoaded } =
     useStudentStore();
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(todayString());
 
   useEffect(() => {
     void load();
@@ -152,9 +154,14 @@ export function StudentRecords() {
         <ClassTab label="담임" isActive />
       </div>
 
+      {/* 날짜 선택 (입력 모드에서만) */}
+      {viewMode === 'input' && (
+        <DateNavigator selectedDate={selectedDate} onDateChange={setSelectedDate} />
+      )}
+
       {/* 모드별 콘텐츠 */}
       {viewMode === 'input' && (
-        <InputMode students={students} records={records} categories={categories} />
+        <InputMode students={students} records={records} categories={categories} selectedDate={selectedDate} />
       )}
       {viewMode === 'progress' && (
         <ProgressMode students={students} records={records} categories={categories} />
@@ -199,7 +206,27 @@ interface ModeProps {
   categories: readonly RecordCategoryItem[];
 }
 
-function InputMode({ students, categories }: ModeProps) {
+interface InputModeProps extends ModeProps {
+  selectedDate: string;
+}
+
+const METHOD_OPTIONS: { value: CounselingMethod; icon: string; label: string }[] = [
+  { value: 'phone', icon: '\uD83D\uDCDE', label: '전화' },
+  { value: 'face', icon: '\uD83E\uDD1D', label: '대면' },
+  { value: 'online', icon: '\uD83D\uDCBB', label: '온라인' },
+  { value: 'visit', icon: '\uD83C\uDFE0', label: '가정방문' },
+  { value: 'text', icon: '\uD83D\uDCAC', label: '문자' },
+  { value: 'other', icon: '\uD83D\uDCDD', label: '기타' },
+];
+
+/** 상담 방법 아이콘 반환 */
+function getMethodIcon(method: CounselingMethod | undefined): string {
+  if (!method) return '';
+  const found = METHOD_OPTIONS.find((m) => m.value === method);
+  return found?.icon ?? '';
+}
+
+function InputMode({ students, records, categories, selectedDate }: InputModeProps) {
   const { addRecord } = useStudentRecordsStore();
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(
     new Set(),
@@ -210,6 +237,7 @@ function InputMode({ students, categories }: ModeProps) {
   } | null>(null);
   const [attendanceType, setAttendanceType] = useState<string | null>(null);
   const [memo, setMemo] = useState('');
+  const [selectedMethod, setSelectedMethod] = useState<CounselingMethod | undefined>(undefined);
 
   const toggleStudent = useCallback((id: string) => {
     setSelectedStudents((prev) => {
@@ -263,14 +291,15 @@ function InputMode({ students, categories }: ModeProps) {
   const handleSave = useCallback(async () => {
     if (selectedStudents.size === 0 || selectedSub === null) return;
 
-    const today = todayString();
+    const method = selectedSub.categoryId === 'counseling' ? selectedMethod : undefined;
     const promises = Array.from(selectedStudents).map((studentId) =>
       addRecord(
         studentId,
         selectedSub.categoryId,
         selectedSub.subcategory,
         memo,
-        today,
+        selectedDate,
+        method,
       ),
     );
     await Promise.all(promises);
@@ -280,7 +309,18 @@ function InputMode({ students, categories }: ModeProps) {
     setSelectedSub(null);
     setAttendanceType(null);
     setMemo('');
-  }, [selectedStudents, selectedSub, memo, addRecord]);
+    setSelectedMethod(undefined);
+  }, [selectedStudents, selectedSub, memo, selectedDate, selectedMethod, addRecord]);
+
+  // 선택된 날짜의 기존 기록
+  const dateRecords = useMemo(() => {
+    return records.filter((r) => r.date === selectedDate);
+  }, [records, selectedDate]);
+
+  const studentMap = useMemo(
+    () => new Map(students.map((s) => [s.id, s])),
+    [students],
+  );
 
   const canSave = selectedStudents.size > 0 && selectedSub !== null;
 
@@ -416,6 +456,35 @@ function InputMode({ students, categories }: ModeProps) {
           </div>
         </div>
 
+        {/* 상담 방법 (counseling 카테고리 선택 시만) */}
+        {selectedSub?.categoryId === 'counseling' && (
+          <div className="rounded-xl bg-sp-card p-5">
+            <h3 className="text-sm font-bold text-sp-text flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-base">call</span>
+              상담 방법
+              <span className="text-xs text-sp-muted font-normal">(선택사항)</span>
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {METHOD_OPTIONS.map((opt) => {
+                const isSelected = selectedMethod === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSelectedMethod(isSelected ? undefined : opt.value)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      isSelected
+                        ? 'bg-sp-accent text-white'
+                        : 'bg-sp-surface text-sp-muted hover:text-white hover:bg-sp-surface/80'
+                    }`}
+                  >
+                    {opt.icon} {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* 메모 */}
         <div className="rounded-xl bg-sp-card p-5">
           <h3 className="text-sm font-bold text-sp-text flex items-center gap-2 mb-3">
@@ -428,6 +497,48 @@ function InputMode({ students, categories }: ModeProps) {
             placeholder="추가 메모가 있으면 입력하세요... (선택사항)"
             className="w-full h-24 bg-sp-surface border border-sp-border rounded-lg p-3 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
           />
+        </div>
+
+        {/* 선택 날짜 기록 미리보기 */}
+        <div className="rounded-xl bg-sp-card p-5">
+          {dateRecords.length > 0 ? (
+            <>
+              <h3 className="text-sm font-bold text-sp-text flex items-center gap-2 mb-3">
+                <span>{'\uD83D\uDCCB'}</span>
+                {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
+              </h3>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                {dateRecords.map((record) => {
+                  const student = studentMap.get(record.studentId);
+                  return (
+                    <div
+                      key={record.id}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <span className={getRecordTagClass(record.category, categories)}>
+                        {record.subcategory}
+                      </span>
+                      {record.method && (
+                        <span className="text-sp-muted">{getMethodIcon(record.method)}</span>
+                      )}
+                      <span className="text-sp-text font-medium">
+                        {student?.name ?? '?'}
+                      </span>
+                      {record.content && (
+                        <span className="text-sp-muted truncate flex-1">
+                          {record.content}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-sp-muted text-center py-2">
+              이 날짜에 기록이 없습니다
+            </p>
+          )}
         </div>
 
         {/* 저장 버튼 */}
@@ -444,7 +555,7 @@ function InputMode({ students, categories }: ModeProps) {
         </button>
 
         <p className="text-center text-xs text-sp-muted">
-          💡 카테고리만 선택해도 바로 저장할 수 있어요
+          {'\uD83D\uDCA1'} 카테고리만 선택해도 바로 저장할 수 있어요
         </p>
       </div>
     </div>
@@ -769,6 +880,11 @@ function SearchMode({ students, records, categories }: ModeProps) {
                       <span className={getRecordTagClass(record.category, categories)}>
                         {record.subcategory}
                       </span>
+                      {record.method && (
+                        <span className="text-xs text-sp-muted" title={METHOD_OPTIONS.find((m) => m.value === record.method)?.label}>
+                          {getMethodIcon(record.method)}
+                        </span>
+                      )}
                       <span className="text-sm text-sp-text font-medium min-w-[60px]">
                         {student?.name ?? '?'}
                       </span>

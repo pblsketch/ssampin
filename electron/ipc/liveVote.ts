@@ -9,6 +9,7 @@ import http from 'http';
 import os from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
 import { generateVotingHTML } from './liveVoteHTML';
+import { isTunnelAvailable, installTunnel, openTunnel, closeTunnel } from './tunnel';
 
 /** WSL/Hyper-V 등 가상 네트워크 대역 (외부 기기 접속 불가) */
 const VIRTUAL_PREFIXES = ['172.16.', '172.17.', '172.18.', '172.19.', '172.20.',
@@ -59,6 +60,9 @@ let session: LiveVoteSession | null = null;
  */
 function closeSession(): void {
   if (!session) return;
+
+  // 터널 종료
+  closeTunnel();
 
   // 연결된 클라이언트에 세션 종료 알림
   for (const client of session.clients) {
@@ -243,5 +247,32 @@ export function registerLiveVoteHandlers(mainWindow: BrowserWindow): void {
    */
   ipcMain.handle('live-vote:stop', (): void => {
     closeSession();
+  });
+
+  /**
+   * live-vote:tunnel-available — cloudflared 바이너리 설치 여부
+   */
+  ipcMain.handle('live-vote:tunnel-available', (): boolean => {
+    return isTunnelAvailable();
+  });
+
+  /**
+   * live-vote:tunnel-install — cloudflared 바이너리 다운로드 (첫 사용 시)
+   */
+  ipcMain.handle('live-vote:tunnel-install', async (): Promise<void> => {
+    await installTunnel();
+  });
+
+  /**
+   * live-vote:tunnel-start — Cloudflare 터널 시작
+   * 로컬 서버가 이미 실행 중이어야 한다.
+   * @returns { tunnelUrl } 공개 HTTPS URL
+   */
+  ipcMain.handle('live-vote:tunnel-start', async (): Promise<{ tunnelUrl: string }> => {
+    if (!session) throw new Error('투표 세션이 없습니다');
+    const address = session.server.address();
+    if (!address || typeof address === 'string') throw new Error('서버가 준비되지 않았습니다');
+    const tunnelUrl = await openTunnel(address.port);
+    return { tunnelUrl };
   });
 }

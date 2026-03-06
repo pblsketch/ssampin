@@ -222,6 +222,11 @@ interface LiveVotePanelProps {
   isFullscreen: boolean;
   showQRFullscreen: boolean;
   onToggleQRFullscreen: () => void;
+  // Tunnel props
+  tunnelUrl: string | null;
+  tunnelLoading: boolean;
+  tunnelError: string | null;
+  onStartTunnel: () => void;
 }
 
 function LiveVotePanel({
@@ -233,34 +238,38 @@ function LiveVotePanel({
   isFullscreen,
   showQRFullscreen,
   onToggleQRFullscreen,
+  tunnelUrl,
+  tunnelLoading,
+  tunnelError,
+  onStartTunnel,
 }: LiveVotePanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fullscreenCanvasRef = useRef<HTMLCanvasElement>(null);
-  const voteUrl = `http://${selectedIP}:${serverInfo.port}`;
+  const displayUrl = tunnelUrl ?? `http://${selectedIP}:${serverInfo.port}`;
 
   // Generate QR code
   useEffect(() => {
     if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, voteUrl, {
+      QRCode.toCanvas(canvasRef.current, displayUrl, {
         width: 200,
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
       }).catch(() => {/* ignore */});
     }
-  }, [voteUrl]);
+  }, [displayUrl]);
 
   // Generate fullscreen QR
   useEffect(() => {
     if (showQRFullscreen && fullscreenCanvasRef.current) {
-      QRCode.toCanvas(fullscreenCanvasRef.current, voteUrl, {
+      QRCode.toCanvas(fullscreenCanvasRef.current, displayUrl, {
         width: 400,
         margin: 3,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
       }).catch(() => {/* ignore */});
     }
-  }, [voteUrl, showQRFullscreen]);
+  }, [displayUrl, showQRFullscreen]);
 
   // Fullscreen QR overlay
   if (showQRFullscreen) {
@@ -271,7 +280,10 @@ function LiveVotePanel({
       >
         <canvas ref={fullscreenCanvasRef} className="mb-6" />
         <p className="text-gray-800 text-xl font-bold mb-2">📊 투표 참여하기</p>
-        <p className="text-gray-600 text-lg font-mono">{voteUrl}</p>
+        <p className="text-gray-600 text-lg font-mono">{displayUrl}</p>
+        {tunnelUrl && (
+          <p className="text-blue-500 text-sm mt-1">인터넷 모드 (Wi-Fi 불필요)</p>
+        )}
         <p className="text-gray-400 text-sm mt-4">화면을 클릭하면 돌아갑니다</p>
       </div>
     );
@@ -306,10 +318,10 @@ function LiveVotePanel({
           <canvas ref={canvasRef} />
         </div>
 
-        {/* URL + IP selector */}
+        {/* URL + IP selector + Tunnel */}
         <div className="flex flex-col gap-2">
-          <p className="text-white font-mono text-sm break-all">{voteUrl}</p>
-          {serverInfo.localIPs.length > 1 && (
+          <p className="text-white font-mono text-sm break-all">{displayUrl}</p>
+          {!tunnelUrl && serverInfo.localIPs.length > 1 && (
             <select
               value={selectedIP}
               onChange={(e) => onSelectIP(e.target.value)}
@@ -320,9 +332,29 @@ function LiveVotePanel({
               ))}
             </select>
           )}
-          <p className="text-sp-muted text-xs">
-            학생들이 같은 Wi-Fi에서 QR을 스캔하세요
-          </p>
+          {tunnelUrl ? (
+            <p className="text-blue-400 text-xs">
+              🌐 인터넷 모드 — Wi-Fi 연결 불필요
+            </p>
+          ) : (
+            <p className="text-sp-muted text-xs">
+              학생들이 같은 Wi-Fi에서 QR을 스캔하세요
+            </p>
+          )}
+
+          {/* Tunnel toggle */}
+          {!tunnelUrl && (
+            <button
+              onClick={onStartTunnel}
+              disabled={tunnelLoading}
+              className="mt-1 px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-wait"
+            >
+              {tunnelLoading ? '🔄 인터넷 연결 준비 중...' : '🌐 인터넷으로 공유'}
+            </button>
+          )}
+          {tunnelError && (
+            <p className="text-red-400 text-xs">{tunnelError}</p>
+          )}
         </div>
       </div>
     </div>
@@ -354,6 +386,11 @@ interface VotingViewProps {
   showQRFullscreen: boolean;
   onToggleQRFullscreen: () => void;
   liveError: string | null;
+  // Tunnel props
+  tunnelUrl: string | null;
+  tunnelLoading: boolean;
+  tunnelError: string | null;
+  onStartTunnel: () => void;
 }
 
 function VotingView({
@@ -377,6 +414,10 @@ function VotingView({
   showQRFullscreen,
   onToggleQRFullscreen,
   liveError,
+  tunnelUrl,
+  tunnelLoading,
+  tunnelError,
+  onStartTunnel,
 }: VotingViewProps) {
   const totalVotes = options.reduce((sum, o) => sum + o.votes, 0);
   const maxVotes = Math.max(...options.map((o) => o.votes), 1);
@@ -477,6 +518,10 @@ function VotingView({
           isFullscreen={isFullscreen}
           showQRFullscreen={showQRFullscreen}
           onToggleQRFullscreen={onToggleQRFullscreen}
+          tunnelUrl={tunnelUrl}
+          tunnelLoading={tunnelLoading}
+          tunnelError={tunnelError}
+          onStartTunnel={onStartTunnel}
         />
       )}
 
@@ -788,6 +833,9 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
   const [selectedIP, setSelectedIP] = useState('');
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
+  const [tunnelLoading, setTunnelLoading] = useState(false);
+  const [tunnelError, setTunnelError] = useState<string | null>(null);
 
   const handleStart = useCallback((q: string, opts: PollOption[]) => {
     setQuestion(q);
@@ -858,6 +906,33 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
     setConnectedStudents(0);
     setShowQRFullscreen(false);
     setLiveError(null);
+    setTunnelUrl(null);
+    setTunnelLoading(false);
+    setTunnelError(null);
+  }, []);
+
+  const handleStartTunnel = useCallback(async () => {
+    if (!window.electronAPI?.tunnelStart) {
+      setTunnelError('인터넷 공유 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
+      return;
+    }
+    try {
+      setTunnelLoading(true);
+      setTunnelError(null);
+
+      // 바이너리가 없으면 설치 (첫 사용 시)
+      const available = await window.electronAPI.tunnelAvailable();
+      if (!available) {
+        await window.electronAPI.tunnelInstall();
+      }
+
+      const result = await window.electronAPI.tunnelStart();
+      setTunnelUrl(result.tunnelUrl);
+    } catch {
+      setTunnelError('인터넷 연결에 실패했습니다. 네트워크를 확인해주세요.');
+    } finally {
+      setTunnelLoading(false);
+    }
   }, []);
 
   const handleClose = useCallback(() => {
@@ -941,6 +1016,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           showQRFullscreen={showQRFullscreen}
           onToggleQRFullscreen={handleToggleQRFullscreen}
           liveError={liveError}
+          tunnelUrl={tunnelUrl}
+          tunnelLoading={tunnelLoading}
+          tunnelError={tunnelError}
+          onStartTunnel={handleStartTunnel}
         />
       )}
       {viewMode === 'results' && (

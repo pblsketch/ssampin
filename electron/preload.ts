@@ -126,6 +126,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('live-vote:connection-count', handler);
     return () => { ipcRenderer.removeListener('live-vote:connection-count', handler); };
   },
+  // Live Vote Tunnel
+  tunnelAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('live-vote:tunnel-available'),
+  tunnelInstall: (): Promise<void> =>
+    ipcRenderer.invoke('live-vote:tunnel-install'),
+  tunnelStart: (): Promise<{ tunnelUrl: string }> =>
+    ipcRenderer.invoke('live-vote:tunnel-start'),
   // Live Survey
   startLiveSurvey: (data: {
     question: string;

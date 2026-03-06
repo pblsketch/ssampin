@@ -1,4 +1,5 @@
 import type { StudentRecord, AttendanceStats } from '../entities/StudentRecord';
+import type { Student } from '../entities/Student';
 
 /**
  * 학생별 기록 필터
@@ -100,6 +101,81 @@ export function sortByDateDesc(
     if (a.date !== b.date) return b.date.localeCompare(a.date);
     return b.createdAt.localeCompare(a.createdAt);
   });
+}
+
+/**
+ * 키워드 검색 (content 필드에서 대소문자 무시)
+ */
+export function filterByKeyword(
+  records: readonly StudentRecord[],
+  keyword: string,
+): readonly StudentRecord[] {
+  const lower = keyword.toLowerCase();
+  return records.filter((r) => r.content.toLowerCase().includes(lower));
+}
+
+/**
+ * 카테고리별 요약 통계
+ */
+export interface CategorySummary {
+  readonly total: number;
+  readonly attendance: number;
+  readonly counseling: number;
+  readonly life: number;
+  readonly etc: number;
+}
+
+export function getCategorySummary(
+  records: readonly StudentRecord[],
+): CategorySummary {
+  let attendance = 0;
+  let counseling = 0;
+  let life = 0;
+  let etc = 0;
+  for (const r of records) {
+    if (r.category === 'attendance') attendance++;
+    else if (r.category === 'counseling') counseling++;
+    else if (r.category === 'life') life++;
+    else etc++;
+  }
+  return { total: records.length, attendance, counseling, life, etc };
+}
+
+/**
+ * 주의 학생 판정 (결석/지각 초과)
+ */
+export interface WarningStudent {
+  readonly student: Student;
+  readonly absent: number;
+  readonly late: number;
+  readonly reasons: string[];
+}
+
+export function getWarningStudents(
+  records: readonly StudentRecord[],
+  students: readonly Student[],
+  thresholds: { absent: number; late: number } = { absent: 3, late: 5 },
+): readonly WarningStudent[] {
+  const result: WarningStudent[] = [];
+  for (const student of students) {
+    const stats = getAttendanceStats(records, student.id);
+    const reasons: string[] = [];
+    if (stats.absent >= thresholds.absent) {
+      reasons.push(`결석 ${stats.absent}회`);
+    }
+    if (stats.late >= thresholds.late) {
+      reasons.push(`지각 ${stats.late}회`);
+    }
+    if (reasons.length > 0) {
+      result.push({
+        student,
+        absent: stats.absent,
+        late: stats.late,
+        reasons,
+      });
+    }
+  }
+  return result;
 }
 
 /**

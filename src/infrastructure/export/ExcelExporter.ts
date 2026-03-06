@@ -3,6 +3,9 @@ import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Ti
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
+import type { StudentRecord, AttendanceStats } from '@domain/entities/StudentRecord';
+import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
+import { getAttendanceStats } from '@domain/rules/studentRecordRules';
 
 const SUBJECT_COLORS: Record<string, string> = {
   '국어': 'FFFDE68A',
@@ -457,6 +460,178 @@ export async function parseEventsFromExcel(
   });
 
   return { events, categoryNames: Array.from(categorySet) };
+}
+
+const COUNSELING_METHOD_MAP: Record<string, string> = {
+  phone: '전화',
+  face: '대면',
+  online: '온라인',
+  visit: '가정방문',
+  text: '문자',
+  other: '기타',
+};
+
+const CATEGORY_ROW_COLORS: Record<string, string> = {
+  attendance: 'FFFEE2E2',
+  counseling: 'FFDBEAFE',
+  life: 'FFD1FAE5',
+};
+
+export async function exportStudentRecordsToExcel(
+  records: readonly StudentRecord[],
+  students: readonly Student[],
+  categories: readonly RecordCategoryItem[],
+  period?: { start: string; end: string },
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+
+  // Filter records by period if provided
+  const filteredRecords = period
+    ? records.filter((r) => r.date >= period.start && r.date <= period.end)
+    : records;
+
+  // Helper maps
+  const studentMap = new Map<string, Student>(students.map((s) => [s.id, s]));
+  const categoryMap = new Map<string, string>(categories.map((c) => [c.id, c.name]));
+
+  // ─── Sheet 1: 전체 기록 ────────────────────────────────────────────────────
+  const ws1 = workbook.addWorksheet('전체 기록');
+
+  const sheet1Headers = ['날짜', '학생', '카테고리', '서브카테고리', '상담방법', '내용', '후속조치'];
+  const sheet1HeaderRow = ws1.addRow(sheet1Headers);
+  sheet1HeaderRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws1.getColumn(1).width = 14;
+  ws1.getColumn(2).width = 12;
+  ws1.getColumn(3).width = 14;
+  ws1.getColumn(4).width = 16;
+  ws1.getColumn(5).width = 12;
+  ws1.getColumn(6).width = 40;
+  ws1.getColumn(7).width = 20;
+
+  const sortedRecords = [...filteredRecords].sort((a, b) => b.date.localeCompare(a.date));
+
+  for (const record of sortedRecords) {
+    const student = studentMap.get(record.studentId);
+    const studentName = student?.name ?? '';
+    const categoryName = categoryMap.get(record.category) ?? record.category;
+    const method = record.method ? (COUNSELING_METHOD_MAP[record.method] ?? '') : '';
+    const bgColor = CATEGORY_ROW_COLORS[record.category] ?? 'FFF3F4F6';
+
+    const row = ws1.addRow([
+      record.date,
+      studentName,
+      categoryName,
+      record.subcategory,
+      method,
+      record.content,
+      '',
+    ]);
+    row.eachCell((cell) => applyCellStyle(cell, bgColor));
+    // Left-align content column
+    ws1.getCell(row.number, 6).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  }
+
+  // ─── Sheet 2: 출결 통계 ───────────────────────────────────────────────────
+  const ws2 = workbook.addWorksheet('출결 통계');
+
+  const sheet2Headers = ['번호', '이름', '결석', '지각', '조퇴', '결과', '합계'];
+  const sheet2HeaderRow = ws2.addRow(sheet2Headers);
+  sheet2HeaderRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws2.getColumn(1).width = 8;
+  ws2.getColumn(2).width = 12;
+  ws2.getColumn(3).width = 8;
+  ws2.getColumn(4).width = 8;
+  ws2.getColumn(5).width = 8;
+  ws2.getColumn(6).width = 8;
+  ws2.getColumn(7).width = 8;
+
+  const activeStudents = [...students]
+    .filter((s) => !s.isVacant)
+    .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
+
+  let totalAbsent = 0;
+  let totalLate = 0;
+  let totalEarlyLeave = 0;
+  let totalResultAbsent = 0;
+  let totalSum = 0;
+
+  for (const student of activeStudents) {
+    const stats: AttendanceStats = getAttendanceStats(filteredRecords, student.id);
+    const sum = stats.absent + stats.late + stats.earlyLeave + stats.resultAbsent;
+
+    totalAbsent += stats.absent;
+    totalLate += stats.late;
+    totalEarlyLeave += stats.earlyLeave;
+    totalResultAbsent += stats.resultAbsent;
+    totalSum += sum;
+
+    const row = ws2.addRow([
+      String(student.studentNumber ?? '').padStart(2, '0'),
+      student.name,
+      stats.absent,
+      stats.late,
+      stats.earlyLeave,
+      stats.resultAbsent,
+      sum,
+    ]);
+    row.eachCell((cell) => applyCellStyle(cell));
+
+    // Highlight absent >= 3
+    if (stats.absent >= 3) {
+      ws2.getCell(row.number, 3).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFEE2E2' },
+      };
+    }
+  }
+
+  // Bottom totals row
+  const totalRow = ws2.addRow(['합계', '', totalAbsent, totalLate, totalEarlyLeave, totalResultAbsent, totalSum]);
+  totalRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  // ─── Sheet 3: 학생별 요약 ─────────────────────────────────────────────────
+  const ws3 = workbook.addWorksheet('학생별 요약');
+
+  const sheet3Headers = ['번호', '이름', '총기록', '출결', '상담', '생활', '최근기록일'];
+  const sheet3HeaderRow = ws3.addRow(sheet3Headers);
+  sheet3HeaderRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws3.getColumn(1).width = 8;
+  ws3.getColumn(2).width = 12;
+  ws3.getColumn(3).width = 8;
+  ws3.getColumn(4).width = 8;
+  ws3.getColumn(5).width = 8;
+  ws3.getColumn(6).width = 8;
+  ws3.getColumn(7).width = 14;
+
+  for (const student of activeStudents) {
+    const studentRecords = filteredRecords.filter((r) => r.studentId === student.id);
+    const totalCount = studentRecords.length;
+    const attendanceCount = studentRecords.filter((r) => r.category === 'attendance').length;
+    const counselingCount = studentRecords.filter((r) => r.category === 'counseling').length;
+    const lifeCount = studentRecords.filter((r) => r.category === 'life').length;
+
+    const latestDate = studentRecords.reduce<string>((latest, r) => {
+      return r.date > latest ? r.date : latest;
+    }, '');
+
+    const row = ws3.addRow([
+      String(student.studentNumber ?? '').padStart(2, '0'),
+      student.name,
+      totalCount,
+      attendanceCount,
+      counselingCount,
+      lifeCount,
+      latestDate,
+    ]);
+    row.eachCell((cell) => applyCellStyle(cell));
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer as ArrayBuffer;
 }
 
 function getEventGradeText(event: SchoolEvent): string {
