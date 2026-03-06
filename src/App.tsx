@@ -9,6 +9,7 @@ import { Schedule } from '@adapters/components/Schedule/Schedule';
 import { Todo } from '@adapters/components/Todo/Todo';
 import { MemoPage } from '@adapters/components/Memo/MemoPage';
 import { MealPage } from '@adapters/components/Meal/MealPage';
+import { ClassManagementPage } from '@adapters/components/ClassManagement/ClassManagementPage';
 import { SettingsPage } from '@adapters/components/Settings/SettingsPage';
 import { Widget } from '@adapters/components/Widget/Widget';
 import { Export } from '@adapters/components/Export/Export';
@@ -36,6 +37,7 @@ import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { validateShareFile } from '@domain/rules/shareRules';
+import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -68,6 +70,9 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   }
   if (page === 'memo') {
     return <PinGuard feature="memo"><MemoPage /></PinGuard>;
+  }
+  if (page === 'class-management') {
+    return <ClassManagementPage />;
   }
   if (page === 'settings') {
     return <SettingsPage />;
@@ -211,6 +216,9 @@ export function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 테마 CSS 변수 주입 (useLayoutEffect)
+  useThemeApplier();
+
   const fontSizeClass = (() => {
     switch (settings.fontSize) {
       case 'small': return 'text-[13px]';
@@ -221,35 +229,17 @@ export function App() {
     }
   })();
 
-  const [systemDark, setSystemDark] = useState(
-    () => window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  const themeClass = (() => {
-    if (settings.theme === 'light') return 'theme-light';
-    if (settings.theme === 'dark') return 'theme-dark';
-    // 'system': follow OS preference
-    return systemDark ? 'theme-dark' : 'theme-light';
-  })();
-
   // 위젯 모드: URL에 ?mode=widget 또는 #widget 이 있으면 위젯 전용 렌더링
   if (isWidgetMode()) {
     return (
-      <div className={`h-screen w-screen bg-transparent ${fontSizeClass} ${themeClass}`}>
+      <div className={`h-screen w-screen bg-transparent ${fontSizeClass}`}>
         <Widget />
       </div>
     );
   }
 
   return (
-    <div className={`flex h-screen bg-sp-bg ${fontSizeClass} ${themeClass}`}>
+    <div className={`flex h-screen bg-sp-bg ${fontSizeClass}`}>
       {!isFullscreen && (
         <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} onFeedback={() => setShowFeedback(true)} />
       )}

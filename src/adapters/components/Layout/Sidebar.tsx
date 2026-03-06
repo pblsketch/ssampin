@@ -9,6 +9,7 @@ export type PageId =
   | 'meal'
   | 'memo'
   | 'todo'
+  | 'class-management'
   | 'export'
   | 'tools'
   | 'tool-timer'
@@ -44,7 +45,7 @@ interface NavItem {
   icon: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
+export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: '대시보드', icon: 'dashboard' },
   { id: 'timetable', label: '시간표', icon: 'calendar_view_day' },
   { id: 'seating', label: '학급 자리 배치', icon: 'airline_seat_recline_normal' },
@@ -53,6 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'meal', label: '급식', icon: 'restaurant' },
   { id: 'memo', label: '메모', icon: 'sticky_note_2' },
   { id: 'todo', label: '할 일', icon: 'check_circle' },
+  { id: 'class-management', label: '수업 관리', icon: 'menu_book' },
   { id: 'tools', label: '쌤도구', icon: 'construction' },
   { id: 'export', label: '내보내기', icon: 'ios_share' },
 ];
@@ -82,7 +84,7 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
 
 /** PIN 보호 불가 페이지 (대시보드, 내보내기, 쌤도구, 설정) */
 const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
-  'dashboard', 'export', 'tools',
+  'dashboard', 'export', 'tools', 'class-management',
   'tool-timer', 'tool-random', 'tool-traffic-light', 'tool-scoreboard',
   'tool-roulette', 'tool-dice', 'tool-coin', 'tool-poll', 'tool-survey', 'tool-seat-picker', 'settings',
 ]);
@@ -116,6 +118,12 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
       return aIdx - bIdx;
     });
   }, [settings.menuOrder]);
+
+  const visibleItems = useMemo(() => {
+    const hidden = settings.hiddenMenus;
+    if (!hidden || hidden.length === 0) return sortedItems;
+    return sortedItems.filter((item) => !hidden.includes(item.id));
+  }, [sortedItems, settings.hiddenMenus]);
 
   const handleDragStart = useCallback((e: React.DragEvent, id: PageId) => {
     setDraggedId(id);
@@ -171,7 +179,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
 
       {/* 네비게이션 */}
       <nav className="flex-1 px-4 py-2 flex flex-col gap-1 overflow-y-auto">
-        {sortedItems.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = currentPage === item.id
             || (item.id === 'tools' && currentPage.startsWith('tool-'));
           const isDragged = draggedId === item.id;

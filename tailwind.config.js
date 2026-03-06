@@ -15,6 +15,7 @@ export default {
           card: 'var(--sp-card)',
           border: 'var(--sp-border)',
           accent: 'var(--sp-accent)',
+          'accent-fg': 'var(--sp-accent-fg)',
           highlight: 'var(--sp-highlight)',
           text: 'var(--sp-text)',
           muted: 'var(--sp-muted)',

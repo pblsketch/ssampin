@@ -10,6 +10,7 @@
     --sp-card: var(--sp-card-base);
     --sp-border: #2a3548;
     --sp-accent: #3b82f6;
+    --sp-accent-fg: #ffffff;
     --sp-highlight: #f59e0b;
     --sp-text: #e2e8f0;
     --sp-muted: #94a3b8;
@@ -149,15 +150,16 @@ body {
   color: var(--sp-text) !important;
 }
 
-/* ─── Restore white text on colored/accent backgrounds ─── */
+/* ─── Auto-contrast: accent 배경 위 텍스트 가독성 보장 ─── */
+/* --sp-accent-fg는 useThemeApplier에서 accent 밝기 기반으로 자동 계산 */
 /* Same element: e.g. <button class="bg-sp-accent text-white"> */
-.theme-light .bg-sp-accent.text-white {
-  color: white !important;
+.bg-sp-accent.text-white {
+  color: var(--sp-accent-fg, white) !important;
 }
 
 /* Child element: e.g. <div class="bg-sp-accent"><span class="text-white"> */
-.theme-light .bg-sp-accent .text-white {
-  color: white !important;
+.bg-sp-accent .text-white {
+  color: var(--sp-accent-fg, white) !important;
 }
 
 /* Subject/category color backgrounds */
@@ -232,21 +234,10 @@ body {
   background-color: var(--sp-surface) !important;
 }
 
-/* Timetable grid borders — per-theme */
-.theme-light .timetable-grid td,
-.theme-light .timetable-grid th {
-  border-color: #a0a8b4 !important;
-}
-
-.theme-dark .timetable-grid td,
-.theme-dark .timetable-grid th {
-  border-color: #2a3f5c !important;
-}
-
-/* Default (no theme class) — same as dark */
+/* Timetable grid borders — 테마 CSS 변수 기반으로 자동 적용 */
 .timetable-grid td,
 .timetable-grid th {
-  border-color: #2a3f5c;
+  border-color: var(--sp-border) !important;
 }
 
 /* bg-slate-600/700 borders → sp-border */

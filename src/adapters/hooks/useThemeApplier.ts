@@ -1,0 +1,112 @@
+import { useLayoutEffect } from 'react';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { getPresetTheme, PRESET_THEMES } from '@domain/entities/DashboardTheme';
+import type { ThemeColors } from '@domain/entities/DashboardTheme';
+
+/**
+ * HEX (#rrggbb) 를 "r, g, b" RGB 문자열로 변환
+ */
+function hexToRgb(hex: string): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `${r}, ${g}, ${b}`;
+}
+
+/**
+ * 색상의 perceived brightness (0~1)
+ * 0.55 이상이면 "밝은 색"으로 판단하여 어두운 전경색 필요
+ */
+function perceivedBrightness(hex: string): number {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16) / 255;
+  const g = parseInt(h.substring(2, 4), 16) / 255;
+  const b = parseInt(h.substring(4, 6), 16) / 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+function isLightColor(hex: string): boolean {
+  return perceivedBrightness(hex) > 0.5;
+}
+
+/**
+ * accent 배경 위 텍스트 색상 자동 결정
+ * 밝은 accent → 어두운 텍스트, 어두운 accent → 흰색 텍스트
+ */
+function computeAccentFg(accent: string): string {
+  return perceivedBrightness(accent) > 0.55 ? '#111111' : '#ffffff';
+}
+
+/**
+ * 테마 색상으로부터 모든 CSS 변수를 document에 적용
+ */
+function applyThemeColors(colors: ThemeColors): void {
+  const root = document.documentElement;
+  root.style.setProperty('--sp-bg', colors.bg);
+  root.style.setProperty('--sp-surface', colors.surface);
+  root.style.setProperty('--sp-card-base', colors.card);
+  root.style.setProperty('--sp-card', 'var(--sp-card-base)');
+  root.style.setProperty('--sp-border', colors.border);
+  root.style.setProperty('--sp-accent', colors.accent);
+  root.style.setProperty('--sp-accent-fg', computeAccentFg(colors.accent));
+  root.style.setProperty('--sp-highlight', colors.highlight);
+  root.style.setProperty('--sp-text', colors.text);
+  root.style.setProperty('--sp-muted', colors.muted);
+  root.style.setProperty('--sp-widget-rgb', hexToRgb(colors.bg));
+  root.style.setProperty('--sp-today-bg', isLightColor(colors.bg) ? '#dbeafe' : 'rgba(30, 41, 59, 0.8)');
+  root.style.setProperty('--memo-dot-color', isLightColor(colors.bg) ? 'rgba(0, 0, 0, 0.12)' : '#223149');
+
+  // theme-light/theme-dark CSS 클래스 적용 (기존 CSS 오버라이드 규칙 호환)
+  const light = isLightColor(colors.bg);
+  root.classList.toggle('theme-light', light);
+  root.classList.toggle('theme-dark', !light);
+}
+
+/**
+ * 현재 settings에서 적용할 테마 색상을 결정
+ */
+function resolveColors(
+  dashboardTheme: { presetId: string; customColors?: ThemeColors } | undefined,
+  fallbackTheme: string,
+  systemDark: boolean,
+): ThemeColors {
+  if (dashboardTheme) {
+    const { presetId, customColors } = dashboardTheme;
+    if (presetId === 'custom' && customColors) return customColors;
+    if (presetId !== 'custom') return getPresetTheme(presetId as 'dark').colors;
+    return PRESET_THEMES[0]!.colors;
+  }
+  // 폴백: 기존 theme 필드 사용
+  if (fallbackTheme === 'light') return getPresetTheme('light').colors;
+  if (fallbackTheme === 'dark') return getPresetTheme('dark').colors;
+  return getPresetTheme(systemDark ? 'dark' : 'light').colors;
+}
+
+/**
+ * CSS 변수를 직접 document.documentElement에 주입하여 테마를 적용한다.
+ * useLayoutEffect로 렌더링 전에 적용 (FOUC 방지)
+ */
+export function useThemeApplier(): void {
+  const settings = useSettingsStore((s) => s.settings);
+
+  useLayoutEffect(() => {
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const colors = resolveColors(settings.dashboardTheme, settings.theme, systemDark);
+    applyThemeColors(colors);
+  }, [settings.dashboardTheme, settings.theme]);
+
+  // system 테마 변경 감지
+  useLayoutEffect(() => {
+    if (settings.dashboardTheme) return;
+    if (settings.theme !== 'system') return;
+
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => {
+      const colors = getPresetTheme(mq.matches ? 'dark' : 'light').colors;
+      applyThemeColors(colors);
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [settings.dashboardTheme, settings.theme]);
+}

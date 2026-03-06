@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
@@ -6,7 +6,8 @@ import { usePinStore } from '@adapters/stores/usePinStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { Settings, WidgetSettings, SystemSettings, NeisSettings, WeatherSettings, SchoolLevel } from '@domain/entities/Settings';
 import type { PinSettings, ProtectedFeatures, ProtectedFeatureKey } from '@domain/entities/PinSettings';
-import { PROTECTABLE_PAGES } from '@adapters/components/Layout/Sidebar';
+import { PROTECTABLE_PAGES, NAV_ITEMS } from '@adapters/components/Layout/Sidebar';
+import type { PageId } from '@adapters/components/Layout/Sidebar';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { CategoryItem } from '@domain/entities/SchoolEvent';
 import { CATEGORY_COLOR_PRESETS } from '@domain/entities/SchoolEvent';
@@ -18,6 +19,8 @@ import { AppInfoSection } from './AppInfoSection';
 import { CalendarSettings } from './CalendarSettings';
 import { NeisScheduleSection } from './NeisScheduleSection';
 import { SeatRelationSection } from './SeatRelationSection';
+import { ThemeSection } from './ThemeSection';
+import type { DashboardThemeSettings } from '@domain/entities/Settings';
 /* ─── Toggle Switch ─── */
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -198,6 +201,10 @@ export function SettingsPage() {
 
   const patchWeather = useCallback((p: Partial<WeatherSettings>) => {
     setDraft((prev) => ({ ...prev, weather: { ...prev.weather, ...p } }));
+  }, []);
+
+  const patchDashboardTheme = useCallback((t: DashboardThemeSettings) => {
+    setDraft((prev) => ({ ...prev, dashboardTheme: t }));
   }, []);
 
   const handleSchoolSearch = useCallback(() => {
@@ -779,6 +786,9 @@ export function SettingsPage() {
             </div>
           </section>
 
+          {/* ── 섹션 5.5: 메뉴 표시 설정 ── */}
+          <MenuVisibilitySection draft={draft} patch={patch} />
+
           {/* ── 섹션 6: PIN 잠금 설정 ── */}
           <PinLockSection
             draft={draft}
@@ -968,31 +978,12 @@ export function SettingsPage() {
               <h3 className="text-lg font-bold text-sp-text">디스플레이</h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* 테마 설정 */}
-              <div>
-                <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">테마 (Theme)</h4>
-                <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
-                  {([
-                    { value: 'system', label: '시스템 설정', icon: 'brightness_auto' },
-                    { value: 'light', label: '라이트 테마', icon: 'light_mode' },
-                    { value: 'dark', label: '다크 테마', icon: 'dark_mode' },
-                  ] as const).map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => patch({ theme: opt.value })}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${draft.theme === opt.value
-                        ? 'bg-sp-accent text-white shadow-md'
-                        : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
-                        }`}
-                    >
-                      <span className="material-symbols-outlined text-[18px]">{opt.icon}</span>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div className="grid grid-cols-1 gap-8">
+              {/* 테마 설정 — 프리셋 + 커스텀 */}
+              <ThemeSection
+                dashboardTheme={draft.dashboardTheme}
+                onChange={patchDashboardTheme}
+              />
 
               {/* 글꼴 크기 설정 */}
               <div>
@@ -1157,6 +1148,139 @@ function CategoryRow({
         </button>
       )}
     </div>
+  );
+}
+
+/* ─── Menu Visibility & Order Section ─── */
+function MenuVisibilitySection({ draft, patch }: { draft: Settings; patch: (p: Partial<Settings>) => void }) {
+  const [draggedId, setDraggedId] = useState<PageId | null>(null);
+  const [dragOverId, setDragOverId] = useState<PageId | null>(null);
+
+  const sortedItems = useMemo(() => {
+    const order = draft.menuOrder;
+    if (!order || order.length === 0) return NAV_ITEMS;
+    return [...NAV_ITEMS].sort((a, b) => {
+      const aIdx = order.indexOf(a.id);
+      const bIdx = order.indexOf(b.id);
+      if (aIdx === -1 && bIdx === -1) return 0;
+      if (aIdx === -1) return 1;
+      if (bIdx === -1) return -1;
+      return aIdx - bIdx;
+    });
+  }, [draft.menuOrder]);
+
+  const handleDragStart = useCallback((e: React.DragEvent, id: PageId) => {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, id: PageId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedId !== id) setDragOverId(id);
+  }, [draggedId]);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetId: PageId) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+    const currentOrder = sortedItems.map((item) => item.id);
+    const dragIdx = currentOrder.indexOf(draggedId);
+    const targetIdx = currentOrder.indexOf(targetId);
+    const newOrder = [...currentOrder];
+    newOrder.splice(dragIdx, 1);
+    newOrder.splice(targetIdx, 0, draggedId);
+    patch({ menuOrder: newOrder });
+    setDraggedId(null);
+    setDragOverId(null);
+  }, [draggedId, sortedItems, patch]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedId(null);
+    setDragOverId(null);
+  }, []);
+
+  const handleResetOrder = useCallback(() => {
+    patch({ menuOrder: NAV_ITEMS.map((item) => item.id) });
+  }, [patch]);
+
+  return (
+    <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined text-sp-accent">menu</span>
+          <h3 className="text-lg font-bold text-sp-text">메뉴 표시 설정</h3>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleResetOrder}
+            className="text-xs text-sp-muted hover:text-sp-text transition-colors px-3 py-1.5 rounded-lg border border-sp-border hover:bg-sp-text/5"
+          >
+            순서 초기화
+          </button>
+          <button
+            type="button"
+            onClick={() => patch({ hiddenMenus: [] })}
+            className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors px-3 py-1.5 rounded-lg border border-sp-accent/30 hover:bg-sp-accent/10"
+          >
+            모두 표시
+          </button>
+        </div>
+      </div>
+      <p className="text-sm text-sp-muted mb-4">드래그하여 메뉴 순서를 변경하고, 토글로 표시/숨김을 설정할 수 있습니다.</p>
+      <div className="flex flex-col gap-1">
+        {sortedItems.map((item) => {
+          const isAlwaysVisible = item.id === 'dashboard';
+          const isHidden = (draft.hiddenMenus ?? []).includes(item.id);
+          const isDragged = draggedId === item.id;
+          const isDragOver = dragOverId === item.id && draggedId !== item.id;
+
+          return (
+            <div
+              key={item.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, item.id)}
+              onDragOver={(e) => handleDragOver(e, item.id)}
+              onDrop={(e) => handleDrop(e, item.id)}
+              onDragEnd={handleDragEnd}
+              onDragLeave={() => { if (dragOverId === item.id) setDragOverId(null); }}
+              className={`flex items-center justify-between py-2.5 px-3 rounded-lg transition-all select-none ${
+                isDragged ? 'opacity-30' : ''
+              } ${isDragOver ? 'ring-2 ring-sp-accent/50 bg-sp-accent/5' : 'hover:bg-sp-surface/50'}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-[16px] text-sp-muted/40 cursor-grab active:cursor-grabbing">
+                  drag_indicator
+                </span>
+                <span className={`material-symbols-outlined text-[18px] ${isAlwaysVisible ? 'text-sp-muted/50' : isHidden ? 'text-sp-muted/30' : 'text-sp-muted'}`}>{item.icon}</span>
+                <span className={`text-sm font-medium ${isAlwaysVisible ? 'text-sp-muted/70' : isHidden ? 'text-sp-muted/40' : 'text-sp-text'}`}>{item.label}</span>
+                {isAlwaysVisible && (
+                  <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">항상 표시</span>
+                )}
+              </div>
+              <Toggle
+                checked={isAlwaysVisible ? true : !isHidden}
+                onChange={isAlwaysVisible ? () => undefined : (visible) => {
+                  const current = draft.hiddenMenus ?? [];
+                  if (visible) {
+                    patch({ hiddenMenus: current.filter((id) => id !== item.id) });
+                  } else {
+                    if (!current.includes(item.id)) {
+                      patch({ hiddenMenus: [...current, item.id] });
+                    }
+                  }
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

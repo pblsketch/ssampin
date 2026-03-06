@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections } from '@domain/entities/Settings';
+import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, DashboardThemeSettings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
 
@@ -148,6 +148,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           workSymbols: { ...DEFAULT_SETTINGS.workSymbols, ...((saved as unknown as { workSymbols?: Partial<Settings['workSymbols']> }).workSymbols ?? {}) },
           weather: { ...DEFAULT_SETTINGS.weather, ...((saved as unknown as { weather?: Partial<Settings['weather']> }).weather ?? {}) },
           feedback: { ...DEFAULT_SETTINGS.feedback, ...((saved as unknown as { feedback?: Partial<FeedbackConfig> }).feedback ?? {}) } as FeedbackConfig,
+          dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings }).dashboardTheme,
         };
         set({ settings: merged, loaded: true, isFirstRun: false });
       } else {

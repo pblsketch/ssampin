@@ -1,6 +1,12 @@
 import type { PeriodTime } from '../valueObjects/PeriodTime';
 import type { PinSettings } from './PinSettings';
 import type { NeisScheduleSettings } from './NeisSchedule';
+import type { PresetThemeId, ThemeColors } from './DashboardTheme';
+
+export interface DashboardThemeSettings {
+  readonly presetId: PresetThemeId | 'custom';
+  readonly customColors?: ThemeColors;
+}
 
 export type SchoolLevel = 'elementary' | 'middle' | 'high';
 
@@ -104,6 +110,8 @@ export interface Settings {
   readonly workSymbols: WorkSymbolsSettings;
   readonly weather: WeatherSettings;
   readonly menuOrder?: readonly string[];
+  readonly hiddenMenus?: readonly string[];
   readonly feedback?: FeedbackConfig;
   readonly neisSchedule?: NeisScheduleSettings;
+  readonly dashboardTheme?: DashboardThemeSettings;
 }

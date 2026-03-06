@@ -1,0 +1,17 @@
+export type AttendanceStatus = 'present' | 'absent' | 'late';
+
+export interface StudentAttendance {
+  readonly number: number;
+  readonly status: AttendanceStatus;
+}
+
+export interface AttendanceRecord {
+  readonly classId: string;
+  readonly date: string;
+  readonly period: number;
+  readonly students: readonly StudentAttendance[];
+}
+
+export interface AttendanceData {
+  readonly records: readonly AttendanceRecord[];
+}
