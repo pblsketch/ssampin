@@ -4,7 +4,7 @@ import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import { MemoFormattedText } from './MemoFormattedText';
-import { MemoFormatToolbar } from './MemoFormatToolbar';
+import { MemoRichEditor } from './MemoRichEditor';
 
 const POPUP_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-100',
@@ -45,7 +45,6 @@ export function MemoDetailPopup({
   const isEmpty = memo.content.trim() === '';
   const [isEditing, setIsEditing] = useState(isEmpty);
   const [editContent, setEditContent] = useState(memo.content);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const savedContentRef = useRef(memo.content);
 
   // Sync editContent when memo prop changes (e.g. after color change returns updated memo)
@@ -53,24 +52,6 @@ export function MemoDetailPopup({
     setEditContent(memo.content);
     savedContentRef.current = memo.content;
   }, [memo.id, memo.content]);
-
-  // Auto-focus textarea when entering edit mode
-  useEffect(() => {
-    if (isEditing && textareaRef.current) {
-      const ta = textareaRef.current;
-      ta.focus();
-      ta.selectionStart = ta.value.length;
-    }
-  }, [isEditing]);
-
-  // Auto-resize textarea
-  useEffect(() => {
-    if (isEditing && textareaRef.current) {
-      const ta = textareaRef.current;
-      ta.style.height = 'auto';
-      ta.style.height = `${ta.scrollHeight}px`;
-    }
-  }, [isEditing, editContent]);
 
   const saveContent = useCallback(async () => {
     if (editContent !== savedContentRef.current && onUpdate) {
@@ -84,11 +65,11 @@ export function MemoDetailPopup({
     setIsEditing(false);
   }, [saveContent]);
 
-  const handleTextareaKeyDown = useCallback(
-    async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleEditorKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        await saveContent();
+        void saveContent();
         setIsEditing(false);
       }
     },
@@ -213,32 +194,15 @@ export function MemoDetailPopup({
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 pb-2">
           {isEditing ? (
-            <>
-              <MemoFormatToolbar
-                textareaRef={textareaRef}
-                content={editContent}
-                onContentChange={setEditContent}
-              />
-              <textarea
-                ref={textareaRef}
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                onBlur={() => void handleBlur()}
-                onKeyDown={(e) => void handleTextareaKeyDown(e)}
-                className="w-full resize-none bg-transparent text-sm leading-relaxed text-slate-700 outline-none placeholder:text-slate-400"
-                placeholder="메모를 입력하세요..."
-                style={{ minHeight: '80px', overflow: 'hidden' }}
-              />
-              {editContent && (
-                <div className="mt-2 border-t border-black/10 pt-2">
-                  <span className="mb-1 block text-[10px] font-medium text-slate-400">미리보기</span>
-                  <MemoFormattedText
-                    content={editContent}
-                    className="text-sm leading-relaxed text-slate-700"
-                  />
-                </div>
-              )}
-            </>
+            <MemoRichEditor
+              initialContent={editContent}
+              onContentChange={setEditContent}
+              onBlur={() => void handleBlur()}
+              onKeyDown={handleEditorKeyDown}
+              className="w-full text-sm leading-relaxed text-slate-700 outline-none"
+              style={{ minHeight: '120px' }}
+              autoFocus
+            />
           ) : (
             memo.content ? (
               <MemoFormattedText

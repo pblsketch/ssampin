@@ -175,3 +175,78 @@ export function parseInlineMarkdown(content: string): FormattedSegment[] {
 
   return segments;
 }
+
+/* ──────────────────────────────────────────────
+ * HTML ↔ Markdown 변환 (contentEditable WYSIWYG 용)
+ * ──────────────────────────────────────────────*/
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** 마크다운 → HTML (contentEditable 초기화용) */
+export function markdownToHtml(content: string): string {
+  if (!content) return '';
+  const segments = parseInlineMarkdown(content);
+  const parts: string[] = [];
+  for (const seg of segments) {
+    let text = escapeHtml(seg.text).replace(/\n/g, '<br>');
+    if (seg.bold) text = `<b>${text}</b>`;
+    if (seg.underline) text = `<u>${text}</u>`;
+    if (seg.strikethrough) text = `<s>${text}</s>`;
+    parts.push(text);
+  }
+  return parts.join('');
+}
+
+/** HTML DOM → 마크다운 (contentEditable 저장용) */
+export function htmlToMarkdown(element: HTMLElement): string {
+  let result = '';
+  for (let i = 0; i < element.childNodes.length; i++) {
+    const node = element.childNodes[i]!;
+    if (node.nodeType === Node.TEXT_NODE) {
+      result += node.textContent ?? '';
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+
+      if (tag === 'br') {
+        result += '\n';
+      } else {
+        let inner = htmlToMarkdown(el);
+
+        if (tag === 'div' || tag === 'p') {
+          if (result.length > 0 && !result.endsWith('\n')) {
+            result += '\n';
+          }
+          result += inner;
+        } else if (tag === 'b' || tag === 'strong') {
+          result += `**${inner}**`;
+        } else if (tag === 'u') {
+          result += `__${inner}__`;
+        } else if (tag === 's' || tag === 'del' || tag === 'strike') {
+          result += `~~${inner}~~`;
+        } else if (tag === 'span') {
+          // 일부 브라우저가 인라인 스타일로 서식 적용
+          const style = el.style;
+          if (style.fontWeight === 'bold' || style.fontWeight === '700') {
+            inner = `**${inner}**`;
+          }
+          if (style.textDecoration.includes('underline')) {
+            inner = `__${inner}__`;
+          }
+          if (style.textDecoration.includes('line-through')) {
+            inner = `~~${inner}~~`;
+          }
+          result += inner;
+        } else {
+          result += inner;
+        }
+      }
+    }
+  }
+  return result;
+}

@@ -4,7 +4,7 @@ import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { MemoFormattedText } from './MemoFormattedText';
-import { MemoFormatToolbar } from './MemoFormatToolbar';
+import { MemoRichEditor } from './MemoRichEditor';
 
 const NOTE_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-200',
@@ -52,18 +52,10 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
   const dragOffset = useRef({ x: 0, y: 0 });
   const mouseDownPos = useRef({ x: 0, y: 0 });
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setContent(memo.content);
   }, [memo.content]);
-
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      textareaRef.current.focus();
-      textareaRef.current.selectionStart = textareaRef.current.value.length;
-    }
-  }, [editing]);
 
   const handleDoubleClick = useCallback(() => {
     // Cancel pending single-click timer (prevents popup from opening)
@@ -245,30 +237,14 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
       {/* Content */}
       <div className="flex h-full flex-col gap-2 p-5 pt-1">
         {editing ? (
-          <>
-            <MemoFormatToolbar
-              textareaRef={textareaRef}
-              content={content}
-              onContentChange={setContent}
-            />
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onBlur={handleBlur}
-              onKeyDown={handleKeyDown}
-              className="min-h-[60px] w-full resize-none bg-transparent text-sm leading-relaxed text-slate-700 outline-none placeholder:text-slate-400"
-              placeholder="메모를 입력하세요..."
-            />
-            {content && (
-              <div className="mt-1 border-t border-slate-300/50 pt-1">
-                <MemoFormattedText
-                  content={content}
-                  className="text-sm leading-relaxed text-slate-700"
-                />
-              </div>
-            )}
-          </>
+          <MemoRichEditor
+            initialContent={content}
+            onContentChange={setContent}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className="min-h-[140px] w-full text-sm leading-relaxed text-slate-700 outline-none"
+            autoFocus
+          />
         ) : (
           memo.content ? (
             <MemoFormattedText
