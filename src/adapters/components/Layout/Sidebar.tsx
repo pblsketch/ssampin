@@ -21,6 +21,8 @@ export type PageId =
   | 'tool-qrcode'
   | 'tool-work-symbols'
   | 'tool-poll'
+  | 'tool-survey'
+  | 'tool-wordcloud'
   | 'tool-seat-picker'
   | 'tool-supsori'
   | 'tool-pblsketch'
@@ -82,7 +84,7 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
 const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
   'dashboard', 'export', 'tools',
   'tool-timer', 'tool-random', 'tool-traffic-light', 'tool-scoreboard',
-  'tool-roulette', 'tool-dice', 'tool-coin', 'tool-poll', 'tool-seat-picker', 'settings',
+  'tool-roulette', 'tool-dice', 'tool-coin', 'tool-poll', 'tool-survey', 'tool-seat-picker', 'settings',
 ]);
 
 /** NAV_ITEMS에서 자동 파생된 PIN 보호 가능 페이지 목록 */
@@ -242,7 +244,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           <span className="text-xs font-medium">건의사항 보내기</span>
         </button>
 
-        <p className="text-[10px] text-sp-muted text-center mt-2">v0.2.3</p>
+        <p className="text-[10px] text-sp-muted text-center mt-2">v0.2.4</p>
       </div>
     </aside>
   );

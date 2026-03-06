@@ -6,6 +6,8 @@ import { attachToDesktop, attachToDesktopAsync } from './workerw';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
+import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
+import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
 
 declare const __dirname: string;
 
@@ -814,6 +816,8 @@ if (!gotTheLock) {
     createWindow();
     registerOAuthHandlers(mainWindow!);
     registerLiveVoteHandlers(mainWindow!);
+    registerLiveSurveyHandlers(mainWindow!);
+    registerLiveWordCloudHandlers(mainWindow!);
     createTray();
     setupAutoUpdater();
 

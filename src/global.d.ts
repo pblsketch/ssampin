@@ -56,6 +56,22 @@ interface ElectronAPI {
   stopLiveVote: () => Promise<void>;
   onLiveVoteStudentVoted: (callback: (data: { optionId: string; totalVoters: number }) => void) => () => void;
   onLiveVoteConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  // Live Survey
+  startLiveSurvey: (data: {
+    question: string;
+    maxLength: number;
+  }) => Promise<{ port: number; localIPs: string[] }>;
+  stopLiveSurvey: () => Promise<void>;
+  onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void) => () => void;
+  onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  // Live Word Cloud
+  startLiveWordCloud: (data: {
+    question: string;
+    maxSubmissions: number;
+  }) => Promise<{ port: number; localIPs: string[] }>;
+  stopLiveWordCloud: () => Promise<void>;
+  onLiveWordCloudWordSubmitted: (callback: (data: { word: string; count: number; totalWords: number }) => void) => () => void;
+  onLiveWordCloudConnectionCount: (callback: (data: { count: number }) => void) => () => void;
 }
 
 interface Window {

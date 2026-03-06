@@ -126,4 +126,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('live-vote:connection-count', handler);
     return () => { ipcRenderer.removeListener('live-vote:connection-count', handler); };
   },
+  // Live Survey
+  startLiveSurvey: (data: {
+    question: string;
+    maxLength: number;
+  }): Promise<{ port: number; localIPs: string[] }> =>
+    ipcRenderer.invoke('live-survey:start', data),
+  stopLiveSurvey: (): Promise<void> =>
+    ipcRenderer.invoke('live-survey:stop'),
+  onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { text: string; totalResponders: number }) => callback(data);
+    ipcRenderer.on('live-survey:student-submitted', handler);
+    return () => { ipcRenderer.removeListener('live-survey:student-submitted', handler); };
+  },
+  onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { count: number }) => callback(data);
+    ipcRenderer.on('live-survey:connection-count', handler);
+    return () => { ipcRenderer.removeListener('live-survey:connection-count', handler); };
+  },
+  // Live Word Cloud
+  startLiveWordCloud: (data: {
+    question: string;
+    maxSubmissions: number;
+  }): Promise<{ port: number; localIPs: string[] }> =>
+    ipcRenderer.invoke('live-wordcloud:start', data),
+  stopLiveWordCloud: (): Promise<void> =>
+    ipcRenderer.invoke('live-wordcloud:stop'),
+  onLiveWordCloudWordSubmitted: (callback: (data: { word: string; count: number; totalWords: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { word: string; count: number; totalWords: number }) => callback(data);
+    ipcRenderer.on('live-wordcloud:word-submitted', handler);
+    return () => { ipcRenderer.removeListener('live-wordcloud:word-submitted', handler); };
+  },
+  onLiveWordCloudConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { count: number }) => callback(data);
+    ipcRenderer.on('live-wordcloud:connection-count', handler);
+    return () => { ipcRenderer.removeListener('live-wordcloud:connection-count', handler); };
+  },
 });

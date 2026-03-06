@@ -23,6 +23,8 @@ import { ToolCoin } from '@adapters/components/Tools/ToolCoin';
 import { ToolQRCode } from '@adapters/components/Tools/ToolQRCode';
 import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
 import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
+import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
+import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
 import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer, useToastStore } from '@adapters/components/common/Toast';
@@ -105,6 +107,12 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   }
   if (page === 'tool-poll') {
     return <ToolPoll onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-survey') {
+    return <ToolSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-wordcloud') {
+    return <ToolWordCloud onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
   }
   if (page === 'tool-seat-picker') {
     return <ToolSeatPicker onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
