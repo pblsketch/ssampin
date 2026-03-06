@@ -3,6 +3,8 @@ import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { MemoFormattedText } from './MemoFormattedText';
+import { MemoFormatToolbar } from './MemoFormatToolbar';
 
 const NOTE_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-200',
@@ -243,21 +245,41 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
       {/* Content */}
       <div className="flex h-full flex-col gap-2 p-5 pt-1">
         {editing ? (
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onBlur={handleBlur}
-            onKeyDown={handleKeyDown}
-            className="min-h-[140px] w-full resize-none bg-transparent text-sm leading-relaxed text-slate-700 outline-none placeholder:text-slate-400"
-            placeholder="메모를 입력하세요..."
-          />
-        ) : (
-          <div className="min-h-[140px] whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-            {memo.content || (
-              <span className="text-slate-400">더블 클릭하여 메모를 작성하세요</span>
+          <>
+            <MemoFormatToolbar
+              textareaRef={textareaRef}
+              content={content}
+              onContentChange={setContent}
+            />
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown}
+              className="min-h-[60px] w-full resize-none bg-transparent text-sm leading-relaxed text-slate-700 outline-none placeholder:text-slate-400"
+              placeholder="메모를 입력하세요..."
+            />
+            {content && (
+              <div className="mt-1 border-t border-slate-300/50 pt-1">
+                <MemoFormattedText
+                  content={content}
+                  className="text-sm leading-relaxed text-slate-700"
+                />
+              </div>
             )}
-          </div>
+          </>
+        ) : (
+          memo.content ? (
+            <MemoFormattedText
+              content={memo.content}
+              className="min-h-[140px] text-sm leading-relaxed text-slate-700"
+            />
+          ) : (
+            <div className="min-h-[140px] text-sm leading-relaxed text-slate-700">
+              <span className="text-slate-400">더블 클릭하여 메모를 작성하세요</span>
+            </div>
+          )
         )}
       </div>
 

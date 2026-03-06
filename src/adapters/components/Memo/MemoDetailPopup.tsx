@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
+import { MemoFormattedText } from './MemoFormattedText';
+import { MemoFormatToolbar } from './MemoFormatToolbar';
 
 const POPUP_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-100',
@@ -211,25 +213,47 @@ export function MemoDetailPopup({
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 pb-2">
           {isEditing ? (
-            <textarea
-              ref={textareaRef}
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              onBlur={() => void handleBlur()}
-              onKeyDown={(e) => void handleTextareaKeyDown(e)}
-              className="w-full resize-none bg-transparent text-sm leading-relaxed text-slate-700 outline-none placeholder:text-slate-400"
-              placeholder="메모를 입력하세요..."
-              style={{ minHeight: '120px', overflow: 'hidden' }}
-            />
-          ) : (
-            <div
-              className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700"
-              style={{ minHeight: '120px' }}
-            >
-              {memo.content || (
-                <span className="text-slate-400">메모 내용이 없습니다</span>
+            <>
+              <MemoFormatToolbar
+                textareaRef={textareaRef}
+                content={editContent}
+                onContentChange={setEditContent}
+              />
+              <textarea
+                ref={textareaRef}
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                onBlur={() => void handleBlur()}
+                onKeyDown={(e) => void handleTextareaKeyDown(e)}
+                className="w-full resize-none bg-transparent text-sm leading-relaxed text-slate-700 outline-none placeholder:text-slate-400"
+                placeholder="메모를 입력하세요..."
+                style={{ minHeight: '80px', overflow: 'hidden' }}
+              />
+              {editContent && (
+                <div className="mt-2 border-t border-black/10 pt-2">
+                  <span className="mb-1 block text-[10px] font-medium text-slate-400">미리보기</span>
+                  <MemoFormattedText
+                    content={editContent}
+                    className="text-sm leading-relaxed text-slate-700"
+                  />
+                </div>
               )}
-            </div>
+            </>
+          ) : (
+            memo.content ? (
+              <MemoFormattedText
+                content={memo.content}
+                className="text-sm leading-relaxed text-slate-700"
+                style={{ minHeight: '120px' }}
+              />
+            ) : (
+              <div
+                className="text-sm leading-relaxed text-slate-700"
+                style={{ minHeight: '120px' }}
+              >
+                <span className="text-slate-400">메모 내용이 없습니다</span>
+              </div>
+            )
           )}
         </div>
 
