@@ -397,44 +397,38 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
         </div>
       </div>
 
-      {/* 우측: 템플릿 + 카테고리 + 메모 + 후속조치 + 저장 */}
-      <div className="w-[380px] flex flex-col gap-4 shrink-0 overflow-y-auto">
-        {/* 2-2: 템플릿 선택 */}
-        <div className="rounded-xl bg-sp-card p-5">
-          <h3 className="text-sm font-bold text-sp-text flex items-center gap-2 mb-3">
-            <span>{'\uD83D\uDCDD'}</span>
-            템플릿
-          </h3>
-          <select
-            onChange={(e) => {
-              if (e.target.value) handleTemplateSelect(e.target.value);
-              e.target.value = '';
-            }}
-            defaultValue=""
-            className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-          >
-            <option value="">템플릿을 선택하세요...</option>
-            {DEFAULT_TEMPLATES.map((tpl) => (
-              <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* 카테고리 선택 */}
-        <div className="rounded-xl bg-sp-card p-5 flex-1 overflow-y-auto">
-          <h3 className="text-sm font-bold text-sp-text flex items-center gap-2 mb-4">
-            <span className="material-symbols-outlined text-base">category</span>
-            카테고리 선택
-          </h3>
-          <div className="space-y-4">
+      {/* 우측 패널 */}
+      <div className="w-[380px] flex flex-col gap-3 shrink-0 overflow-y-auto">
+        {/* 카드 1: 카테고리 선택 + 템플릿 */}
+        <div className="rounded-xl bg-sp-card p-4 flex-1 overflow-y-auto">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">category</span>
+              카테고리
+            </h3>
+            <select
+              onChange={(e) => {
+                if (e.target.value) handleTemplateSelect(e.target.value);
+                e.target.value = '';
+              }}
+              defaultValue=""
+              className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            >
+              <option value="">{'\uD83D\uDCDD'} 템플릿</option>
+              {DEFAULT_TEMPLATES.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-3">
             {categories.map((cat) => (
               <div key={cat.id}>
-                <p className={`text-xs font-semibold mb-2 ${getCategoryLabelColor(cat.color)}`}>
+                <p className={`text-xs font-semibold mb-1.5 ${getCategoryLabelColor(cat.color)}`}>
                   {cat.name}
                 </p>
                 {cat.id === 'attendance' ? (
                   <div className="space-y-2">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       {ATTENDANCE_TYPES.map((type) => {
                         const isTypeSelected = attendanceType === type;
                         return (
@@ -451,8 +445,8 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                     </div>
                     {attendanceType && (
                       <div className="ml-2 pl-3 border-l-2 border-red-500/30">
-                        <p className="text-[11px] text-sp-muted mb-1.5">사유 선택</p>
-                        <div className="flex flex-wrap gap-2">
+                        <p className="text-[11px] text-sp-muted mb-1">사유</p>
+                        <div className="flex flex-wrap gap-1.5">
                           {ATTENDANCE_REASONS.map((reason) => {
                             const combined = `${attendanceType} (${reason})`;
                             const isReasonSelected =
@@ -474,7 +468,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                     )}
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {cat.subcategories.map((sub) => {
                       const isSelected =
                         selectedSub?.categoryId === cat.id &&
@@ -497,123 +491,101 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
           </div>
         </div>
 
-        {/* 상담 방법 */}
-        {selectedSub?.categoryId === 'counseling' && (
-          <div className="rounded-xl bg-sp-card p-5">
-            <h3 className="text-sm font-bold text-sp-text flex items-center gap-2 mb-3">
-              <span className="material-symbols-outlined text-base">call</span>
-              상담 방법
-              <span className="text-xs text-sp-muted font-normal">(선택사항)</span>
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {METHOD_OPTIONS.map((opt) => {
-                const isSelected = selectedMethod === opt.value;
+        {/* 카드 2: 메모 + 상담방법 + 후속조치 통합 */}
+        <div className="rounded-xl bg-sp-card p-4 space-y-3">
+          {/* 상담 방법 (인라인, counseling일 때만) */}
+          {selectedSub?.categoryId === 'counseling' && (
+            <div>
+              <p className="text-xs text-sp-muted mb-1.5">상담 방법</p>
+              <div className="flex flex-wrap gap-1.5">
+                {METHOD_OPTIONS.map((opt) => {
+                  const isSelected = selectedMethod === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setSelectedMethod(isSelected ? undefined : opt.value)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                        isSelected
+                          ? 'bg-sp-accent text-white'
+                          : 'bg-sp-surface text-sp-muted hover:text-white hover:bg-sp-surface/80'
+                      }`}
+                    >
+                      {opt.icon} {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 메모 */}
+          <textarea
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            placeholder="메모 입력 (선택사항)"
+            className="w-full h-20 bg-sp-surface border border-sp-border rounded-lg p-3 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
+          />
+
+          {/* 후속 조치 (인라인 토글) */}
+          <div>
+            <button
+              onClick={() => setShowFollowUp(!showFollowUp)}
+              className="flex items-center gap-1.5 text-xs text-sp-muted hover:text-sp-text transition-colors"
+            >
+              <span className={`material-symbols-outlined text-sm transition-transform ${showFollowUp ? 'rotate-180' : ''}`}>
+                expand_more
+              </span>
+              {'\uD83D\uDCCC'} 후속 조치 추가
+            </button>
+            {showFollowUp && (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={followUp}
+                  onChange={(e) => setFollowUp(e.target.value)}
+                  placeholder="후속 조치 내용"
+                  className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                />
+                <input
+                  type="date"
+                  value={followUpDate}
+                  onChange={(e) => setFollowUpDate(e.target.value)}
+                  className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent w-32"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 날짜 기록 미리보기 (기록 있을 때만) */}
+        {dateRecords.length > 0 && (
+          <div className="rounded-xl bg-sp-card px-4 py-3">
+            <p className="text-xs text-sp-muted mb-1.5">
+              {'\uD83D\uDCCB'} {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
+            </p>
+            <div className="space-y-1 max-h-24 overflow-y-auto">
+              {dateRecords.map((record) => {
+                const student = studentMap.get(record.studentId);
                 return (
-                  <button
-                    key={opt.value}
-                    onClick={() => setSelectedMethod(isSelected ? undefined : opt.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      isSelected
-                        ? 'bg-sp-accent text-white'
-                        : 'bg-sp-surface text-sp-muted hover:text-white hover:bg-sp-surface/80'
-                    }`}
-                  >
-                    {opt.icon} {opt.label}
-                  </button>
+                  <div key={record.id} className="flex items-center gap-2 text-xs">
+                    <span className={getRecordTagClass(record.category, categories)}>
+                      {record.subcategory}
+                    </span>
+                    <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
+                    {record.content && (
+                      <span className="text-sp-muted truncate flex-1">{record.content}</span>
+                    )}
+                  </div>
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* 메모 */}
-        <div className="rounded-xl bg-sp-card p-5">
-          <h3 className="text-sm font-bold text-sp-text flex items-center gap-2 mb-3">
-            <span>✏️</span>
-            메모 내용
-          </h3>
-          <textarea
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
-            placeholder="추가 메모가 있으면 입력하세요... (선택사항)"
-            className="w-full h-24 bg-sp-surface border border-sp-border rounded-lg p-3 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
-          />
-        </div>
-
-        {/* 2-3: 후속 조치 */}
-        <div className="rounded-xl bg-sp-card p-5">
-          <button
-            onClick={() => setShowFollowUp(!showFollowUp)}
-            className="flex items-center gap-2 text-sm font-bold text-sp-text w-full"
-          >
-            <span>{'\uD83D\uDCCC'}</span>
-            후속 조치
-            <span className="text-xs text-sp-muted font-normal">(선택사항)</span>
-            <span className={`ml-auto material-symbols-outlined text-base text-sp-muted transition-transform ${showFollowUp ? 'rotate-180' : ''}`}>
-              expand_more
-            </span>
-          </button>
-          {showFollowUp && (
-            <div className="mt-3 space-y-3">
-              <textarea
-                value={followUp}
-                onChange={(e) => setFollowUp(e.target.value)}
-                placeholder="후속 조치 내용을 입력하세요..."
-                className="w-full h-16 bg-sp-surface border border-sp-border rounded-lg p-3 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
-              />
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-sp-muted">날짜</label>
-                <input
-                  type="date"
-                  value={followUpDate}
-                  onChange={(e) => setFollowUpDate(e.target.value)}
-                  className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 날짜별 기록 미리보기 */}
-        <div className="rounded-xl bg-sp-card p-5">
-          {dateRecords.length > 0 ? (
-            <>
-              <h3 className="text-sm font-bold text-sp-text flex items-center gap-2 mb-3">
-                <span>{'\uD83D\uDCCB'}</span>
-                {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
-              </h3>
-              <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                {dateRecords.map((record) => {
-                  const student = studentMap.get(record.studentId);
-                  return (
-                    <div key={record.id} className="flex items-center gap-2 text-xs">
-                      <span className={getRecordTagClass(record.category, categories)}>
-                        {record.subcategory}
-                      </span>
-                      {record.method && (
-                        <span className="text-sp-muted">{getMethodIcon(record.method)}</span>
-                      )}
-                      <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
-                      {record.content && (
-                        <span className="text-sp-muted truncate flex-1">{record.content}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-sp-muted text-center py-2">
-              이 날짜에 기록이 없습니다
-            </p>
-          )}
-        </div>
-
         {/* 저장 */}
         <button
           onClick={() => void handleSave()}
           disabled={!canSave}
-          className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${canSave
+          className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${canSave
             ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
             : 'bg-sp-surface text-sp-muted cursor-not-allowed'
             }`}
@@ -621,10 +593,6 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
           <span className="material-symbols-outlined text-base">save</span>
           저장하기
         </button>
-
-        <p className="text-center text-xs text-sp-muted">
-          {'\uD83D\uDCA1'} 카테고리만 선택해도 바로 저장할 수 있어요
-        </p>
       </div>
     </div>
   );
