@@ -10,18 +10,27 @@ import os from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
 import { generateVotingHTML } from './liveVoteHTML';
 
+/** WSL/Hyper-V 등 가상 네트워크 대역 (외부 기기 접속 불가) */
+const VIRTUAL_PREFIXES = ['172.16.', '172.17.', '172.18.', '172.19.', '172.20.',
+  '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.',
+  '172.28.', '172.29.', '172.30.', '172.31.'];
+
 /**
- * 로컬 IPv4 주소 목록 반환 (루프백 제외)
+ * 로컬 IPv4 주소 목록 반환 (루프백 + 가상 네트워크 제외)
  */
 function getLocalIPs(): string[] {
   const interfaces = os.networkInterfaces();
   const ips: string[] = [];
-  for (const iface of Object.values(interfaces)) {
+  for (const [name, iface] of Object.entries(interfaces)) {
     if (!iface) continue;
+    // vEthernet (WSL) 등 가상 인터페이스 이름 필터링
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('wsl') || lowerName.includes('docker') || lowerName.includes('vethernet')) continue;
     for (const alias of iface) {
-      if (alias.family === 'IPv4' && !alias.internal) {
-        ips.push(alias.address);
-      }
+      if (alias.family !== 'IPv4' || alias.internal) continue;
+      // 172.16.0.0/12 대역 제외 (WSL, Hyper-V, Docker 등)
+      if (VIRTUAL_PREFIXES.some((p) => alias.address.startsWith(p))) continue;
+      ips.push(alias.address);
     }
   }
   return ips;
