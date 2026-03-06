@@ -89,6 +89,9 @@ export const seatConstraintsRepository: ISeatConstraintsRepository =
 export const teachingClassRepository: ITeachingClassRepository =
   new JsonTeachingClassRepository(storage);
 
+export const bookmarkRepository: IBookmarkRepository =
+  new JsonBookmarkRepository(storage);
+
 export const neisPort: INeisPort = new NeisApiClient();
 
 // === Google Calendar 관련 ===
