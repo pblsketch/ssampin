@@ -1384,7 +1384,7 @@ function PinLockSection({
           pin: {
             enabled: false,
             pinHash: null,
-            protectedFeatures: { timetable: false, seating: false, schedule: false, studentRecords: false, meal: false, memo: false, todo: false },
+            protectedFeatures: { timetable: false, seating: false, schedule: false, studentRecords: false, meal: false, memo: false, todo: false, classManagement: false, bookmarks: false },
             autoLockMinutes: 5,
           },
         });

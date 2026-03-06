@@ -80,6 +80,8 @@ const DEFAULT_SETTINGS: Settings = {
       meal: false,
       memo: false,
       todo: false,
+      classManagement: false,
+      bookmarks: false,
     },
     autoLockMinutes: 5,
   },

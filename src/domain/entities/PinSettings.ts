@@ -5,7 +5,9 @@ export type ProtectedFeatureKey =
   | 'studentRecords'
   | 'meal'
   | 'memo'
-  | 'todo';
+  | 'todo'
+  | 'classManagement'
+  | 'bookmarks';
 
 export interface ProtectedFeatures {
   readonly timetable: boolean;
@@ -15,6 +17,8 @@ export interface ProtectedFeatures {
   readonly meal: boolean;
   readonly memo: boolean;
   readonly todo: boolean;
+  readonly classManagement: boolean;
+  readonly bookmarks: boolean;
 }
 
 export interface PinSettings {
