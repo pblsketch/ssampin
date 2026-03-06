@@ -5,6 +5,7 @@ import { WeeklyTimetable } from './items/WeeklyTimetable';
 import { TodayClass } from './items/TodayClass';
 import { ClassTimetable } from './items/ClassTimetable';
 import { Seating } from './items/Seating';
+import { TodayProgress } from './items/TodayProgress';
 import { Meal } from './items/Meal';
 import { Events } from './items/Events';
 import { Memo } from './items/Memo';
@@ -83,6 +84,22 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: Seating,
     navigateTo: 'seating',
     navigateLabel: '자리배치 보기',
+  },
+  {
+    id: 'today-progress',
+    name: '오늘 수업 진도',
+    icon: '📚',
+    description: '오늘 가르칠 학급별 진도 상태를 확인합니다',
+    category: 'class',
+    defaultSize: { w: 1, h: 4 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['middle', 'high'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: TodayProgress,
+    navigateTo: 'class-management',
+    navigateLabel: '수업 관리 보기',
   },
   {
     id: 'student-records',
