@@ -14,6 +14,7 @@ import { SettingsPage } from '@adapters/components/Settings/SettingsPage';
 import { Widget } from '@adapters/components/Widget/Widget';
 import { Export } from '@adapters/components/Export/Export';
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
+import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
 import { ToolTimer } from '@adapters/components/Tools/ToolTimer';
 import { ToolRandom } from '@adapters/components/Tools/ToolRandom';
 import { ToolTrafficLight } from '@adapters/components/Tools/ToolTrafficLight';
@@ -79,6 +80,9 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   }
   if (page === 'export') {
     return <Export />;
+  }
+  if (page === 'bookmarks') {
+    return <BookmarksPage />;
   }
   if (page === 'tools') {
     return <ToolsGrid onNavigate={onNavigate} />;

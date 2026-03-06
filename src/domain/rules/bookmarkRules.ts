@@ -56,7 +56,7 @@ export function isDuplicateUrl(
 }
 
 /**
- * 교사용 기본 프리셋 데이터 (4개 그룹, 17개 사이트)
+ * 교사용 기본 프리셋 데이터 (4개 그룹, 16개 사이트)
  */
 export function getDefaultPresets(): BookmarkData {
   const now = new Date().toISOString();
@@ -70,17 +70,15 @@ export function getDefaultPresets(): BookmarkData {
 
   const bookmarks: Bookmark[] = [
     // 💼 업무
-    { id: 'preset-b-1', name: 'NEIS', url: 'https://www.neis.go.kr', iconType: 'emoji', iconValue: '🏛️', groupId: 'preset-work', order: 0, createdAt: now, updatedAt: now },
-    { id: 'preset-b-2', name: 'K-에듀파인', url: 'https://www.edufin.go.kr', iconType: 'emoji', iconValue: '💰', groupId: 'preset-work', order: 1, createdAt: now, updatedAt: now },
-    { id: 'preset-b-3', name: '업무관리시스템', url: 'https://gw.sen.go.kr', iconType: 'emoji', iconValue: '📋', groupId: 'preset-work', order: 2, createdAt: now, updatedAt: now },
-    { id: 'preset-b-4', name: '정부24', url: 'https://www.gov.kr', iconType: 'emoji', iconValue: '🇰🇷', groupId: 'preset-work', order: 3, createdAt: now, updatedAt: now },
+    { id: 'preset-b-1', name: '대국민 나이스', url: 'https://www.neis.go.kr', iconType: 'emoji', iconValue: '🏛️', groupId: 'preset-work', order: 0, createdAt: now, updatedAt: now },
+    { id: 'preset-b-4', name: '정부24', url: 'https://plus.gov.kr', iconType: 'emoji', iconValue: '🇰🇷', groupId: 'preset-work', order: 1, createdAt: now, updatedAt: now },
 
     // 📚 수업 준비
     { id: 'preset-b-5', name: '에듀넷', url: 'https://www.edunet.net', iconType: 'emoji', iconValue: '📖', groupId: 'preset-prep', order: 0, createdAt: now, updatedAt: now },
     { id: 'preset-b-6', name: 'EBS', url: 'https://www.ebs.co.kr', iconType: 'emoji', iconValue: '📺', groupId: 'preset-prep', order: 1, createdAt: now, updatedAt: now },
-    { id: 'preset-b-7', name: '디지털교과서', url: 'https://digital.edunet.net', iconType: 'emoji', iconValue: '📱', groupId: 'preset-prep', order: 2, createdAt: now, updatedAt: now },
-    { id: 'preset-b-8', name: '한국교육과정평가원', url: 'https://www.kice.re.kr', iconType: 'emoji', iconValue: '📊', groupId: 'preset-prep', order: 3, createdAt: now, updatedAt: now },
-    { id: 'preset-b-9', name: '학교알리미', url: 'https://www.schoolinfo.go.kr', iconType: 'emoji', iconValue: '🔔', groupId: 'preset-prep', order: 4, createdAt: now, updatedAt: now },
+    { id: 'preset-b-8', name: '한국교육과정평가원', url: 'https://www.kice.re.kr', iconType: 'emoji', iconValue: '📊', groupId: 'preset-prep', order: 2, createdAt: now, updatedAt: now },
+    { id: 'preset-b-9', name: '학교알리미', url: 'https://www.schoolinfo.go.kr', iconType: 'emoji', iconValue: '🔔', groupId: 'preset-prep', order: 3, createdAt: now, updatedAt: now },
+    { id: 'preset-b-18', name: 'PBL스케치', url: 'https://pblsketch.xyz', iconType: 'emoji', iconValue: '🎯', groupId: 'preset-prep', order: 4, createdAt: now, updatedAt: now },
 
     // 🛠️ 수업 도구
     { id: 'preset-b-10', name: '멘티미터', url: 'https://www.mentimeter.com', iconType: 'emoji', iconValue: '📊', groupId: 'preset-tools', order: 0, createdAt: now, updatedAt: now },
@@ -92,7 +90,8 @@ export function getDefaultPresets(): BookmarkData {
     // 🤖 AI·에듀테크
     { id: 'preset-b-15', name: '뤼튼', url: 'https://wrtn.ai', iconType: 'emoji', iconValue: '✨', groupId: 'preset-ai', order: 0, createdAt: now, updatedAt: now },
     { id: 'preset-b-16', name: 'ChatGPT', url: 'https://chat.openai.com', iconType: 'emoji', iconValue: '🤖', groupId: 'preset-ai', order: 1, createdAt: now, updatedAt: now },
-    { id: 'preset-b-17', name: '클래스팅', url: 'https://www.classting.com', iconType: 'emoji', iconValue: '🏫', groupId: 'preset-ai', order: 2, createdAt: now, updatedAt: now },
+    { id: 'preset-b-19', name: 'Gemini', url: 'https://gemini.google.com', iconType: 'emoji', iconValue: '💎', groupId: 'preset-ai', order: 2, createdAt: now, updatedAt: now },
+    { id: 'preset-b-20', name: 'Claude', url: 'https://claude.ai', iconType: 'emoji', iconValue: '🧠', groupId: 'preset-ai', order: 3, createdAt: now, updatedAt: now },
   ];
 
   return { groups, bookmarks };

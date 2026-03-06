@@ -10,6 +10,7 @@ import { Events } from './items/Events';
 import { Memo } from './items/Memo';
 import { StudentRecords } from './items/StudentRecords';
 import { TodoWidget } from './items/TodoWidget';
+import { BookmarksWidget } from './items/Bookmarks';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -166,6 +167,24 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: TodoWidget,
     navigateTo: 'todo',
     navigateLabel: '할 일 전체 보기',
+  },
+
+  // ─── 즐겨찾기 카테고리 ───
+  {
+    id: 'bookmarks',
+    name: '즐겨찾기',
+    icon: '⭐',
+    description: '자주 사용하는 사이트 바로가기',
+    category: 'info',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: BookmarksWidget,
+    navigateTo: 'bookmarks',
+    navigateLabel: '즐겨찾기 전체 보기',
   },
 ];
 

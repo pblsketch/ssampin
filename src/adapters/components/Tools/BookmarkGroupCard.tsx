@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import type { Bookmark, BookmarkGroup } from '@domain/entities/Bookmark';
 import { sortBookmarksByOrder, getBookmarksByGroup } from '@domain/rules/bookmarkRules';
 import { BookmarkCard } from './BookmarkCard';
@@ -32,7 +32,6 @@ export function BookmarkGroupCard({
   onDragGroupOver,
   onDropGroup,
 }: BookmarkGroupCardProps) {
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const groupBookmarks = getBookmarksByGroup(bookmarks, group.id);
 
   const handleBookmarkDragStart = useCallback(
@@ -68,7 +67,6 @@ export function BookmarkGroupCard({
       ids.splice(fromIndex, 1);
       ids.splice(toIndex, 0, draggedId);
       onReorderBookmarks(group.id, ids);
-      setDragOverId(null);
     },
     [bookmarks, group.id, onReorderBookmarks],
   );
