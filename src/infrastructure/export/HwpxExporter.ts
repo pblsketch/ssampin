@@ -2,6 +2,14 @@ import { HwpxDocument, fetchSkeletonHwpx, loadSkeletonHwpx } from '@ubermensch12
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
+import type { StudentRecord } from '@domain/entities/StudentRecord';
+import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
+import {
+  getAttendanceStats,
+  sortByDateDesc,
+  filterByStudent,
+  filterByCategory,
+} from '@domain/rules/studentRecordRules';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -336,6 +344,156 @@ export async function exportSeatingToHwpx(
   // 명렬표 아래 빈 영역 병합 (학생 수 < totalRows인 경우)
   if (rosterStudents.length + 1 < totalRows) {
     table.mergeCells(rosterStudents.length + 1, rosterCol, totalRows - 1, rosterCol + 1);
+  }
+
+  return doc.save();
+}
+
+const COUNSELING_METHOD_LABELS: Record<string, string> = {
+  phone: '전화',
+  face: '대면',
+  online: '온라인',
+  visit: '가정방문',
+  text: '문자',
+  other: '기타',
+};
+
+export async function exportStudentRecordsToHwpx(
+  records: readonly StudentRecord[],
+  students: readonly Student[],
+  categories: readonly RecordCategoryItem[],
+  settings: { schoolName: string; className: string; teacherName: string },
+  period?: { start: string; end: string },
+): Promise<Uint8Array> {
+  // categories is reserved for future filtering; suppress unused-variable lint
+  void (filterByCategory as unknown);
+  void categories;
+
+  const doc = await createDoc();
+
+  const titleCharId = doc.ensureRunStyle({ bold: true, fontSize: 16 });
+  const centerParaId = doc.ensureParaStyle({ alignment: 'CENTER' });
+  const headerCharId = doc.ensureRunStyle({ bold: true, fontSize: 10 });
+  const bodyCharId = doc.ensureRunStyle({ fontSize: 9 });
+  const subHeaderCharId = doc.ensureRunStyle({ bold: true, fontSize: 11 });
+
+  while (doc.paragraphs.length > 0) {
+    doc.removeParagraph(0, 0);
+  }
+
+  // ── Page 1: Cover ──
+  doc.addParagraph('담임 기록부', { charPrIdRef: titleCharId, paraPrIdRef: centerParaId });
+  doc.addParagraph();
+  doc.addParagraph(settings.schoolName || '학교명', { paraPrIdRef: centerParaId });
+  doc.addParagraph(settings.className || '학급명', { paraPrIdRef: centerParaId });
+  doc.addParagraph(`담임: ${settings.teacherName || '교사명'}`, { paraPrIdRef: centerParaId });
+  if (period) {
+    doc.addParagraph(`기간: ${period.start} ~ ${period.end}`, { paraPrIdRef: centerParaId });
+  }
+
+  // ── Pages 2+: Student-by-student records ──
+  const activeStudents = [...students]
+    .filter((s) => !s.isVacant)
+    .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
+
+  const RECORD_COLS = 5; // 날짜 | 구분 | 내용 | 상담방법 | 후속조치
+
+  for (const student of activeStudents) {
+    doc.addParagraph();
+    doc.addParagraph(`${student.studentNumber}번 ${student.name}`, {
+      charPrIdRef: subHeaderCharId,
+    });
+
+    let studentRecords = filterByStudent(records, student.id);
+
+    if (period) {
+      studentRecords = studentRecords.filter(
+        (r) => r.date >= period.start && r.date <= period.end,
+      );
+    }
+
+    studentRecords = sortByDateDesc(studentRecords);
+
+    if (studentRecords.length === 0) {
+      doc.addParagraph('기록 없음');
+    } else {
+      const rowCount = studentRecords.length + 1; // header + data rows
+      const tablePara = doc.addParagraph();
+      const table = tablePara.addTable(rowCount, RECORD_COLS);
+
+      // Header row
+      table.setCellText(0, 0, '날짜');
+      table.setCellText(0, 1, '구분');
+      table.setCellText(0, 2, '내용');
+      table.setCellText(0, 3, '상담방법');
+      table.setCellText(0, 4, '후속조치');
+
+      // Data rows
+      for (const [i, rec] of studentRecords.entries()) {
+        const r = i + 1;
+        const methodLabel = rec.method ? (COUNSELING_METHOD_LABELS[rec.method] ?? '') : '';
+        table.setCellText(r, 0, rec.date);
+        table.setCellText(r, 1, rec.subcategory);
+        table.setCellText(r, 2, rec.content);
+        table.setCellText(r, 3, methodLabel);
+        table.setCellText(r, 4, '');
+      }
+
+      // Apply styles
+      applyStyleToAllCells(table, rowCount, RECORD_COLS, { charPrId: bodyCharId });
+      for (let c = 0; c < RECORD_COLS; c++) {
+        applyCellStyle(table, 0, c, { charPrId: headerCharId, paraPrId: centerParaId });
+      }
+    }
+
+    // Attendance summary for this student (uses all records, not date-filtered)
+    const allStudentRecords = filterByStudent(records, student.id);
+    const stats = getAttendanceStats(allStudentRecords, student.id);
+    doc.addParagraph(
+      `출결: 결석 ${stats.absent} / 지각 ${stats.late} / 조퇴 ${stats.earlyLeave} / 결과 ${stats.resultAbsent}`,
+    );
+    doc.addParagraph(); // separator
+  }
+
+  // ── Last page: Attendance summary table ──
+  doc.addParagraph();
+  doc.addParagraph('출결 현황표', { charPrIdRef: subHeaderCharId });
+
+  const ATTENDANCE_COLS = 7; // 번호 | 이름 | 결석 | 지각 | 조퇴 | 결과 | 합계
+  const attendanceRows = activeStudents.length + 1;
+  const attendancePara = doc.addParagraph();
+  const attendanceTable = attendancePara.addTable(attendanceRows, ATTENDANCE_COLS);
+
+  // Header
+  attendanceTable.setCellText(0, 0, '번호');
+  attendanceTable.setCellText(0, 1, '이름');
+  attendanceTable.setCellText(0, 2, '결석');
+  attendanceTable.setCellText(0, 3, '지각');
+  attendanceTable.setCellText(0, 4, '조퇴');
+  attendanceTable.setCellText(0, 5, '결과');
+  attendanceTable.setCellText(0, 6, '합계');
+
+  // Data rows
+  for (const [i, student] of activeStudents.entries()) {
+    const r = i + 1;
+    const st = getAttendanceStats(records, student.id);
+    const total = st.absent + st.late + st.earlyLeave + st.resultAbsent;
+    attendanceTable.setCellText(r, 0, String(student.studentNumber ?? ''));
+    attendanceTable.setCellText(r, 1, student.name);
+    attendanceTable.setCellText(r, 2, String(st.absent));
+    attendanceTable.setCellText(r, 3, String(st.late));
+    attendanceTable.setCellText(r, 4, String(st.earlyLeave));
+    attendanceTable.setCellText(r, 5, String(st.resultAbsent));
+    attendanceTable.setCellText(r, 6, String(total));
+  }
+
+  // Apply styles
+  applyStyleToAllCells(attendanceTable, attendanceRows, ATTENDANCE_COLS, {
+    charPrId: bodyCharId,
+    paraPrId: centerParaId,
+  });
+  for (let c = 0; c < ATTENDANCE_COLS; c++) {
+    applyCellStyle(attendanceTable, 0, c, { charPrId: headerCharId, paraPrId: centerParaId });
   }
 
   return doc.save();

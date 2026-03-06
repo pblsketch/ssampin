@@ -8,6 +8,11 @@ function todayString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function formatDateKR(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 const FALLBACK_COLOR = RECORD_COLOR_MAP['gray']!;
 
 function getTagClass(color: string): string {
@@ -52,6 +57,11 @@ export function DashboardStudentRecords() {
     () => sortByDateDesc(records.filter((r) => r.date === today)),
     [records, today],
   );
+
+  // 2-3: 미완료 후속 조치
+  const pendingFollowUps = useMemo(() => {
+    return records.filter((r) => r.followUp && !r.followUpDone);
+  }, [records]);
 
   // Filtered records based on active tab
   const filteredRecords = useMemo(() => {
@@ -215,6 +225,35 @@ export function DashboardStudentRecords() {
           </ul>
         )}
       </div>
+
+      {/* 2-3: 미완료 후속 조치 */}
+      {pendingFollowUps.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-sp-border">
+          <h4 className="text-xs font-bold text-sp-text mb-2">
+            {'\uD83D\uDCCC'} 미완료 후속 조치 ({pendingFollowUps.length}건)
+          </h4>
+          <ul className="space-y-1.5">
+            {pendingFollowUps.slice(0, 3).map((record) => {
+              const student = studentMap.get(record.studentId);
+              const isOverdue = record.followUpDate ? record.followUpDate < today : false;
+              const isToday = record.followUpDate === today;
+              const colorClass = isOverdue ? 'text-red-400' : isToday ? 'text-orange-400' : 'text-sp-muted';
+              return (
+                <li key={record.id} className="flex items-center gap-2 text-xs">
+                  <span className={`font-medium ${colorClass}`}>
+                    {record.followUpDate ? formatDateKR(record.followUpDate) : '-'}
+                  </span>
+                  <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
+                  <span className="text-sp-muted truncate flex-1">{record.followUp}</span>
+                </li>
+              );
+            })}
+            {pendingFollowUps.length > 3 && (
+              <li className="text-xs text-sp-muted">+{pendingFollowUps.length - 3}건 더</li>
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

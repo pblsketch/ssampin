@@ -31,6 +31,7 @@ export function ExportPreviewModal({
             case 'teacherSchedule': return '교사 시간표';
             case 'seating': return '학급 자리 배치도';
             case 'events': return '학교 일정';
+            case 'studentRecords': return '담임 메모';
             default: return item;
         }
     });
