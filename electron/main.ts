@@ -212,6 +212,9 @@ function createTray(): void {
 }
 
 function applySystemSettings(): void {
+  // 개발 모드에서는 자동 실행 설정하지 않음
+  if (process.env['VITE_DEV_SERVER_URL']) return;
+
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
@@ -220,7 +223,8 @@ function applySystemSettings(): void {
       const autoLaunch = settings.system?.autoLaunch ?? false;
       app.setLoginItemSettings({
         openAtLogin: autoLaunch,
-        path: app.getPath('exe'),
+        name: '쌤핀',
+        enabled: autoLaunch,
       });
     }
   } catch {
@@ -457,12 +461,14 @@ function registerIpcHandlers(): void {
       const filePath = path.join(getDataDir(), `${filename}.json`);
       fs.writeFileSync(filePath, data, 'utf-8');
 
-      if (filename === 'settings') {
+      if (filename === 'settings' && !process.env['VITE_DEV_SERVER_URL']) {
         try {
           const settings = JSON.parse(data);
+          const autoLaunch = settings.system?.autoLaunch ?? false;
           app.setLoginItemSettings({
-            openAtLogin: settings.system?.autoLaunch ?? false,
-            path: app.getPath('exe'),
+            openAtLogin: autoLaunch,
+            name: '쌤핀',
+            enabled: autoLaunch,
           });
         } catch {
           // ignore parsing error
