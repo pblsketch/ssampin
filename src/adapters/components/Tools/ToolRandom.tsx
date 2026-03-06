@@ -2,7 +2,9 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
 import { PresetSelector } from './PresetSelector';
+import { ClassRosterSelector } from './ClassRosterSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { shuffleArray, pickRandom } from '@domain/rules/randomRules';
 
 interface ToolRandomProps {
@@ -11,7 +13,7 @@ interface ToolRandomProps {
 }
 
 type PickMode = 'single' | 'multiple' | 'order';
-type DataSource = 'students' | 'range' | 'custom';
+type DataSource = 'students' | 'range' | 'custom' | 'classRoster';
 
 interface RangeConfig {
   start: number;
@@ -28,10 +30,19 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const [rangeConfig, setRangeConfig] = useState<RangeConfig>({ start: 1, end: 35 });
   const [customText, setCustomText] = useState('');
 
+  // --- Class Roster State ---
+  const [selectedRosterId, setSelectedRosterId] = useState<string | null>(null);
+  const [rosterExcludedNames, setRosterExcludedNames] = useState<Set<string>>(new Set());
+
   // --- Seating Store ---
   const students = useStudentStore((s) => s.students);
   const loaded = useStudentStore((s) => s.loaded);
   const loadStudents = useStudentStore((s) => s.load);
+
+  // --- Class Roster Store ---
+  const rosters = useClassRosterStore((s) => s.rosters);
+  const rosterLoaded = useClassRosterStore((s) => s.loaded);
+  const loadRosters = useClassRosterStore((s) => s.load);
 
   // --- Pick State ---
   const [pickedItems, setPickedItems] = useState<string[]>([]);
@@ -50,12 +61,11 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const speedRef = useRef(50);
   const stepCountRef = useRef(0);
 
-  // Load student store on mount
+  // Load stores on mount
   useEffect(() => {
-    if (!loaded) {
-      loadStudents();
-    }
-  }, [loaded, loadStudents]);
+    if (!loaded) loadStudents();
+    if (!rosterLoaded) loadRosters();
+  }, [loaded, loadStudents, rosterLoaded, loadRosters]);
 
   // Cleanup animation on unmount
   useEffect(() => {
@@ -88,8 +98,14 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
           .map((line) => line.trim())
           .filter((line) => line.length > 0);
       }
+      case 'classRoster': {
+        const roster = rosters.find((r) => r.id === selectedRosterId);
+        if (!roster) return [];
+        return roster.studentNames
+          .filter((name) => name.trim().length > 0 && !rosterExcludedNames.has(name));
+      }
     }
-  }, [dataSource, students, excludedIds, rangeConfig, customText]);
+  }, [dataSource, students, excludedIds, rangeConfig, customText, rosters, selectedRosterId, rosterExcludedNames]);
 
   // Reset state when mode or data source changes
   useEffect(() => {
@@ -277,6 +293,24 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
     setRevealedCount(0);
   }, []);
 
+  // Reset roster exclusions when data source changes
+  useEffect(() => {
+    setRosterExcludedNames(new Set());
+  }, [dataSource]);
+
+  // --- Toggle roster name exclusion ---
+  const toggleRosterNameExclusion = useCallback((name: string) => {
+    setRosterExcludedNames((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  }, []);
+
   // --- Toggle student exclusion ---
   const toggleStudentExclusion = useCallback((studentId: string) => {
     setExcludedIds((prev) => {
@@ -349,9 +383,10 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
 
         {/* Data Source Selection */}
         <div className="bg-sp-card rounded-xl border border-sp-border p-4">
-          <div className="flex gap-2 mb-4 justify-center">
+          <div className="flex gap-2 mb-4 justify-center flex-wrap">
             {([
-              { key: 'students' as const, label: '👩\u200D🎓 우리 반 학생' },
+              { key: 'students' as const, label: '👩\u200D🎓 우리 반' },
+              { key: 'classRoster' as const, label: '📋 다른 반' },
               { key: 'range' as const, label: '🔢 번호 범위' },
               { key: 'custom' as const, label: '✏️ 직접 입력' },
             ]).map((src) => (
@@ -408,6 +443,16 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                 </div>
               )}
             </div>
+          )}
+
+          {dataSource === 'classRoster' && (
+            <ClassRosterSelector
+              selectedRosterId={selectedRosterId}
+              onSelectRoster={setSelectedRosterId}
+              excludedNames={rosterExcludedNames}
+              onToggleExclusion={toggleRosterNameExclusion}
+              pickedItems={pickedItems}
+            />
           )}
 
           {dataSource === 'range' && (

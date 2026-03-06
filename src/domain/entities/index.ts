@@ -30,3 +30,5 @@ export type { SchoolLevel, WidgetSettings, SystemSettings, Settings } from './Se
 export type { SsampinShareFile } from './ShareFile';
 
 export type { MessageData } from './Message';
+
+export type { ClassRoster, ClassRostersData } from './ClassRoster';
