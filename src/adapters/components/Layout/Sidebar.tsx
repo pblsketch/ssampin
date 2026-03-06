@@ -10,6 +10,7 @@ export type PageId =
   | 'memo'
   | 'todo'
   | 'class-management'
+  | 'bookmarks'
   | 'export'
   | 'tools'
   | 'tool-timer'
@@ -51,11 +52,12 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'seating', label: '학급 자리 배치', icon: 'airline_seat_recline_normal' },
   { id: 'schedule', label: '일정', icon: 'event_note' },
   { id: 'student-records', label: '담임메모', icon: 'school' },
-  { id: 'meal', label: '급식', icon: 'restaurant' },
   { id: 'memo', label: '메모', icon: 'sticky_note_2' },
   { id: 'todo', label: '할 일', icon: 'check_circle' },
   { id: 'class-management', label: '수업 관리', icon: 'menu_book' },
+  { id: 'bookmarks', label: '즐겨찾기', icon: 'bookmark' },
   { id: 'tools', label: '쌤도구', icon: 'construction' },
+  { id: 'meal', label: '급식', icon: 'restaurant' },
   { id: 'export', label: '내보내기', icon: 'ios_share' },
 ];
 
@@ -84,7 +86,7 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
 
 /** PIN 보호 불가 페이지 (대시보드, 내보내기, 쌤도구, 설정) */
 const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
-  'dashboard', 'export', 'tools', 'class-management',
+  'dashboard', 'export', 'tools', 'bookmarks', 'class-management',
   'tool-timer', 'tool-random', 'tool-traffic-light', 'tool-scoreboard',
   'tool-roulette', 'tool-dice', 'tool-coin', 'tool-poll', 'tool-survey', 'tool-seat-picker', 'settings',
 ]);
