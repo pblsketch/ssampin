@@ -640,7 +640,7 @@ export function Seating() {
           <div>
             <h2 className="text-xl font-bold text-sp-text tracking-tight">학급 자리 배치도</h2>
             <p className="text-xs text-sp-muted">
-              1학년 2반 ({totalStudents}명)
+              {className || '학급 미설정'} ({totalStudents}명)
             </p>
           </div>
         </div>
