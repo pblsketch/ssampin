@@ -17,6 +17,7 @@ import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/t
 import { AppInfoSection } from './AppInfoSection';
 import { CalendarSettings } from './CalendarSettings';
 import { NeisScheduleSection } from './NeisScheduleSection';
+import { SeatRelationSection } from './SeatRelationSection';
 /* ─── Toggle Switch ─── */
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -796,6 +797,9 @@ export function SettingsPage() {
             setPinError={setPinError}
             pinStore={pinStore}
           />
+
+          {/* ── 섹션 6.5: 좌석 관계 설정 ── */}
+          <SeatRelationSection />
 
           {/* ── 그룹: 일정 관리 ── */}
           <div className="flex items-center gap-3 mt-4 -mb-2">

@@ -4,7 +4,9 @@ import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { shuffleArray } from '@domain/rules/randomRules';
+import { validateConstraints } from '@domain/rules/seatRules';
 import { seatingRepository } from '@adapters/di/container';
+import { useSeatConstraintsStore } from '@adapters/stores/useSeatConstraintsStore';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 
@@ -293,10 +295,26 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
       seats: newSeats,
     };
 
+    // 조건 위반 검증 (학생 이름 없이 경고)
+    const constraints = useSeatConstraintsStore.getState().constraints;
+    const { valid } = validateConstraints(
+      newSeating.seats,
+      constraints,
+      newSeating.rows,
+      newSeating.cols,
+    );
+
     try {
       await seatingRepository.saveSeating(newSeating);
       useSeatingStore.setState({ seating: newSeating });
-      useToastStore.getState().show('학급 자리 배치가 업데이트되었습니다', 'success');
+      if (!valid) {
+        useToastStore.getState().show(
+          '일부 배치 조건을 만족하지 못한 좌석이 있습니다',
+          'info',
+        );
+      } else {
+        useToastStore.getState().show('학급 자리 배치가 업데이트되었습니다', 'success');
+      }
       setShowSaveModal(false);
     } catch {
       useToastStore.getState().show('저장에 실패했습니다', 'error');

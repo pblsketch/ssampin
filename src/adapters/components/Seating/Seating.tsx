@@ -8,6 +8,8 @@ import { exportSeatingToExcel, exportRosterToExcel, parseRosterFromExcel } from 
 import { exportSeatingToHwpx } from '@infrastructure/export/HwpxExporter';
 /* eslint-enable no-restricted-imports */
 import { ShuffleOverlay } from './ShuffleOverlay';
+import { SeatZoneModal } from './SeatZoneModal';
+import { ConstraintHintBadge } from './ConstraintHintBadge';
 
 /* ──────────────────────── 뷰 모드 타입 ──────────────────────── */
 
@@ -128,11 +130,14 @@ function SeatCard({
         onDragEnd={onDragEnd}
       >
         <div className="flex justify-between items-start">
-          <span className="text-xs font-mono text-sp-accent font-bold">
-            {studentNumber !== undefined
-              ? String(studentNumber).padStart(2, '0')
-              : '--'}
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-mono text-sp-accent font-bold">
+              {studentNumber !== undefined
+                ? String(studentNumber).padStart(2, '0')
+                : '--'}
+            </span>
+            {studentId && <ConstraintHintBadge studentId={studentId} />}
+          </div>
           <span className="material-symbols-outlined text-sm text-sp-muted">drag_indicator</span>
         </div>
         <input
@@ -419,6 +424,7 @@ export function Seating() {
   const [bulkText, setBulkText] = useState('');
   const [showShuffle, setShowShuffle] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showConstraintModal, setShowConstraintModal] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const rosterFileRef = useRef<HTMLInputElement>(null);
 
@@ -490,7 +496,18 @@ export function Seating() {
   const confirmRandomize = useCallback(async () => {
     setShowConfirm(false);
     setShowShuffle(true);
-    await randomize();
+    const result = await randomize();
+    if (result && !result.success) {
+      useToastStore.getState().show(
+        '일부 배치 조건을 완전히 만족하지 못했습니다',
+        'info',
+      );
+    } else if (result && result.relaxed) {
+      useToastStore.getState().show(
+        '배치 조건이 일부 완화되어 적용되었습니다',
+        'info',
+      );
+    }
   }, [randomize]);
 
    
@@ -664,6 +681,13 @@ export function Seating() {
               >
                 <span className="material-symbols-outlined text-lg">shuffle</span>
                 <span>자리 바꾸기</span>
+              </button>
+              <button
+                onClick={() => setShowConstraintModal(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-lg">tune</span>
+                <span>배치 조건</span>
               </button>
               <button
                 onClick={() => setEditing(!isEditing)}
@@ -1102,6 +1126,12 @@ export function Seating() {
           </div>
         </div>
       )}
+
+      {/* 배치 조건 모달 */}
+      <SeatZoneModal
+        open={showConstraintModal}
+        onClose={() => setShowConstraintModal(false)}
+      />
     </div>
   );
 }

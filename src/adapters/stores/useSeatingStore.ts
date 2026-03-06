@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { countStudents, countEmptySeats } from '@domain/rules/seatRules';
-import { seatingRepository } from '@adapters/di/container';
+import type { ShuffleResult } from '@domain/rules/seatRules';
+import { seatingRepository, seatConstraintsRepository } from '@adapters/di/container';
 import { SwapSeats } from '@usecases/seating/SwapSeats';
 import { RandomizeSeats } from '@usecases/seating/RandomizeSeats';
 import { UpdateSeating } from '@usecases/seating/UpdateSeating';
@@ -103,7 +104,7 @@ interface SeatingState {
 
   load: () => Promise<void>;
   swapSeats: (r1: number, c1: number, r2: number, c2: number) => Promise<void>;
-  randomize: () => Promise<void>;
+  randomize: () => Promise<ShuffleResult | null>;
   updateStudent: (row: number, col: number, studentId: string | null) => Promise<void>;
   setEditing: (editing: boolean) => void;
   undo: () => Promise<void>;
@@ -127,7 +128,7 @@ const EMPTY_SEATING: SeatingData = { rows: 1, cols: 1, seats: [[null]] };
 
 export const useSeatingStore = create<SeatingState>((set, get) => {
   const swapSeatsUC = new SwapSeats(seatingRepository);
-  const randomizeUC = new RandomizeSeats(seatingRepository);
+  const randomizeUC = new RandomizeSeats(seatingRepository, seatConstraintsRepository);
   const updateUC = new UpdateSeating(seatingRepository);
   const clearUC = new ClearSeating(seatingRepository);
 
@@ -217,10 +218,11 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     randomize: async () => {
       try {
         pushToHistory();
-        const updated = await randomizeUC.execute();
+        const { seating: updated, result } = await randomizeUC.execute();
         set({ seating: updated });
+        return result;
       } catch {
-        // 무시
+        return null;
       }
     },
 

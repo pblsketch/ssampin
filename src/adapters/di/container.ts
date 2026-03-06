@@ -17,6 +17,7 @@ import type { IExternalCalendarRepository } from '@domain/repositories/IExternal
 import type { IGoogleAuthPort } from '@domain/ports/IGoogleAuthPort';
 import type { IGoogleCalendarPort } from '@domain/ports/IGoogleCalendarPort';
 import type { ICalendarSyncRepository } from '@domain/repositories/ICalendarSyncRepository';
+import type { ISeatConstraintsRepository } from '@domain/repositories/ISeatConstraintsRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -35,6 +36,7 @@ import { JsonMessageRepository } from '@adapters/repositories/JsonMessageReposit
 import { JsonStudentRepository } from '@adapters/repositories/JsonStudentRepository';
 import { JsonExternalCalendarRepository } from '@adapters/repositories/JsonExternalCalendarRepository';
 import { GoogleCalendarSyncRepository } from '@adapters/repositories/GoogleCalendarSyncRepository';
+import { JsonSeatConstraintsRepository } from '@adapters/repositories/JsonSeatConstraintsRepository';
 
 import { AuthenticateGoogle } from '@usecases/calendar/AuthenticateGoogle';
 import { SyncToGoogle } from '@usecases/calendar/SyncToGoogle';
@@ -76,6 +78,9 @@ export const studentRepository: IStudentRepository =
 
 export const externalCalendarRepository: IExternalCalendarRepository =
   new JsonExternalCalendarRepository(storage);
+
+export const seatConstraintsRepository: ISeatConstraintsRepository =
+  new JsonSeatConstraintsRepository(storage);
 
 export const neisPort: INeisPort = new NeisApiClient();
 

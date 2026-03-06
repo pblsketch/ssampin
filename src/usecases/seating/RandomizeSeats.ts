@@ -1,19 +1,31 @@
 import type { SeatingData } from '@domain/entities/Seating';
 import type { ISeatingRepository } from '@domain/repositories/ISeatingRepository';
-import { shuffleSeats } from '@domain/rules/seatRules';
+import type { ISeatConstraintsRepository } from '@domain/repositories/ISeatConstraintsRepository';
+import { shuffleSeatsWithConstraints } from '@domain/rules/seatRules';
+import type { ShuffleResult } from '@domain/rules/seatRules';
 
 export class RandomizeSeats {
-  constructor(private readonly seatingRepo: ISeatingRepository) {}
+  constructor(
+    private readonly seatingRepo: ISeatingRepository,
+    private readonly constraintsRepo: ISeatConstraintsRepository,
+  ) {}
 
-  async execute(): Promise<SeatingData> {
+  async execute(): Promise<{ seating: SeatingData; result: ShuffleResult }> {
     const current = await this.seatingRepo.getSeating();
     if (current === null) {
       throw new Error('좌석 데이터가 없습니다.');
     }
 
-    const newSeats = shuffleSeats(current.seats);
-    const updated: SeatingData = { ...current, seats: newSeats };
+    const constraints = await this.constraintsRepo.getConstraints();
+    const result = shuffleSeatsWithConstraints(
+      current.seats,
+      constraints,
+      current.rows,
+      current.cols,
+    );
+
+    const updated: SeatingData = { ...current, seats: result.seats };
     await this.seatingRepo.saveSeating(updated);
-    return updated;
+    return { seating: updated, result };
   }
 }
