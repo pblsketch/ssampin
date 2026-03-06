@@ -1,0 +1,238 @@
+/**
+ * 실시간 학생 투표 IPC 핸들러
+ *
+ * 로컬 HTTP 서버 + WebSocket 서버를 열어 학생들이
+ * 스마트폰 브라우저로 접속해 투표할 수 있게 한다.
+ */
+import { ipcMain, BrowserWindow } from 'electron';
+import http from 'http';
+import os from 'os';
+import { WebSocketServer, WebSocket } from 'ws';
+import { generateVotingHTML } from './liveVoteHTML';
+
+/**
+ * 로컬 IPv4 주소 목록 반환 (루프백 제외)
+ */
+function getLocalIPs(): string[] {
+  const interfaces = os.networkInterfaces();
+  const ips: string[] = [];
+  for (const iface of Object.values(interfaces)) {
+    if (!iface) continue;
+    for (const alias of iface) {
+      if (alias.family === 'IPv4' && !alias.internal) {
+        ips.push(alias.address);
+      }
+    }
+  }
+  return ips;
+}
+
+interface VoteOption {
+  id: string;
+  text: string;
+  color: string;
+}
+
+interface LiveVoteSession {
+  server: http.Server;
+  wss: WebSocketServer;
+  question: string;
+  options: VoteOption[];
+  votes: Map<string, string>; // sessionToken -> optionId
+  clients: Set<WebSocket>;
+}
+
+/** 현재 실행 중인 투표 세션 (하나만 허용) */
+let session: LiveVoteSession | null = null;
+
+/**
+ * 세션을 완전히 정리한다.
+ */
+function closeSession(): void {
+  if (!session) return;
+
+  // 연결된 클라이언트에 세션 종료 알림
+  for (const client of session.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ type: 'closed' }));
+      client.close();
+    }
+  }
+
+  session.wss.close();
+  session.server.close();
+  session = null;
+}
+
+/**
+ * 실시간 투표 IPC 핸들러 등록
+ * @param mainWindow 렌더러에 이벤트를 전달할 메인 윈도우
+ */
+export function registerLiveVoteHandlers(mainWindow: BrowserWindow): void {
+  /**
+   * live-vote:start — 투표 세션 시작
+   *
+   * @param args.question 투표 질문
+   * @param args.options  선택지 목록 { id, text, color }
+   * @returns { port, localIPs }
+   */
+  ipcMain.handle(
+    'live-vote:start',
+    async (
+      _event,
+      args: { question: string; options: VoteOption[] },
+    ): Promise<{ port: number; localIPs: string[] }> => {
+      return new Promise<{ port: number; localIPs: string[] }>((resolve, reject) => {
+        // 기존 세션 정리
+        closeSession();
+
+        const { question, options } = args;
+        const html = generateVotingHTML(question, options);
+
+        const server = http.createServer((req, res) => {
+          const pathname = req.url?.split('?')[0] ?? '/';
+
+          if (pathname === '/') {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+            return;
+          }
+
+          if (pathname === '/health') {
+            res.writeHead(200);
+            res.end('OK');
+            return;
+          }
+
+          res.writeHead(404);
+          res.end('Not Found');
+        });
+
+        const wss = new WebSocketServer({ server });
+
+        wss.on('connection', (ws: WebSocket) => {
+          if (!session) {
+            ws.close();
+            return;
+          }
+
+          session.clients.add(ws);
+
+          // 연결 수 변경 알림
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('live-vote:connection-count', {
+              count: session.clients.size,
+            });
+          }
+
+          ws.on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
+            if (!session) return;
+
+            let parsed: unknown;
+            try {
+              const raw = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+              parsed = JSON.parse(raw);
+            } catch {
+              // 파싱 실패 → 무시
+              return;
+            }
+
+            if (typeof parsed !== 'object' || parsed === null) return;
+            const msg = parsed as Record<string, unknown>;
+            const type = msg['type'];
+
+            if (type === 'join') {
+              const sessionToken = msg['sessionToken'];
+              if (typeof sessionToken !== 'string') return;
+
+              if (session.votes.has(sessionToken)) {
+                ws.send(JSON.stringify({ type: 'already_voted' }));
+              } else {
+                ws.send(
+                  JSON.stringify({
+                    type: 'poll',
+                    question: session.question,
+                    options: session.options,
+                  }),
+                );
+              }
+              return;
+            }
+
+            if (type === 'vote') {
+              const optionId = msg['optionId'];
+              const sessionToken = msg['sessionToken'];
+
+              if (typeof optionId !== 'string' || typeof sessionToken !== 'string') return;
+
+              // 유효한 옵션인지 검증
+              const validOption = session.options.some((o) => o.id === optionId);
+              if (!validOption) return;
+
+              if (session.votes.has(sessionToken)) {
+                ws.send(JSON.stringify({ type: 'already_voted' }));
+                return;
+              }
+
+              session.votes.set(sessionToken, optionId);
+              ws.send(JSON.stringify({ type: 'voted', optionId }));
+
+              if (!mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('live-vote:student-voted', {
+                  optionId,
+                  totalVoters: session.votes.size,
+                });
+              }
+              return;
+            }
+          });
+
+          ws.on('close', () => {
+            if (!session) return;
+            session.clients.delete(ws);
+
+            if (!mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('live-vote:connection-count', {
+                count: session.clients.size,
+              });
+            }
+          });
+        });
+
+        // 모든 인터페이스에서 수신, OS가 포트 선택
+        try {
+          server.listen(0, '0.0.0.0', () => {
+            const address = server.address();
+            if (!address || typeof address === 'string') {
+              reject(new Error('Failed to get server address'));
+              return;
+            }
+
+            const port = address.port;
+            const localIPs = getLocalIPs();
+
+            session = {
+              server,
+              wss,
+              question,
+              options,
+              votes: new Map(),
+              clients: new Set(),
+            };
+
+            resolve({ port, localIPs });
+          });
+        } catch (err) {
+          reject(err);
+        }
+      });
+    },
+  );
+
+  /**
+   * live-vote:stop — 투표 세션 종료
+   */
+  ipcMain.handle('live-vote:stop', (): void => {
+    closeSession();
+  });
+}

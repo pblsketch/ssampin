@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { PollOption } from '@domain/entities/Poll';
+import QRCode from 'qrcode';
 
 interface ToolPollProps {
   onBack: () => void;
@@ -210,6 +211,124 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
   );
 }
 
+/* ───────────────── Live Vote Panel ───────────────── */
+
+interface LiveVotePanelProps {
+  serverInfo: { port: number; localIPs: string[] };
+  connectedStudents: number;
+  selectedIP: string;
+  onSelectIP: (ip: string) => void;
+  onStop: () => void;
+  isFullscreen: boolean;
+  showQRFullscreen: boolean;
+  onToggleQRFullscreen: () => void;
+}
+
+function LiveVotePanel({
+  serverInfo,
+  connectedStudents,
+  selectedIP,
+  onSelectIP,
+  onStop,
+  isFullscreen,
+  showQRFullscreen,
+  onToggleQRFullscreen,
+}: LiveVotePanelProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fullscreenCanvasRef = useRef<HTMLCanvasElement>(null);
+  const voteUrl = `http://${selectedIP}:${serverInfo.port}`;
+
+  // Generate QR code
+  useEffect(() => {
+    if (canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, voteUrl, {
+        width: 200,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+        errorCorrectionLevel: 'M',
+      }).catch(() => {/* ignore */});
+    }
+  }, [voteUrl]);
+
+  // Generate fullscreen QR
+  useEffect(() => {
+    if (showQRFullscreen && fullscreenCanvasRef.current) {
+      QRCode.toCanvas(fullscreenCanvasRef.current, voteUrl, {
+        width: 400,
+        margin: 3,
+        color: { dark: '#000000', light: '#ffffff' },
+        errorCorrectionLevel: 'M',
+      }).catch(() => {/* ignore */});
+    }
+  }, [voteUrl, showQRFullscreen]);
+
+  // Fullscreen QR overlay
+  if (showQRFullscreen) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white cursor-pointer"
+        onClick={onToggleQRFullscreen}
+      >
+        <canvas ref={fullscreenCanvasRef} className="mb-6" />
+        <p className="text-gray-800 text-xl font-bold mb-2">📊 투표 참여하기</p>
+        <p className="text-gray-600 text-lg font-mono">{voteUrl}</p>
+        <p className="text-gray-400 text-sm mt-4">화면을 클릭하면 돌아갑니다</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col items-center gap-3 shrink-0 ${isFullscreen ? '' : ''}`}>
+      <div className="flex items-center gap-2 w-full">
+        <span className="text-green-400 text-sm font-bold">● LIVE</span>
+        <span className="text-sp-muted text-sm">
+          접속 학생: <span className="text-white font-bold">{connectedStudents}명</span>
+        </span>
+        <div className="flex-1" />
+        <button
+          onClick={onToggleQRFullscreen}
+          className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-white text-xs transition-all"
+          title="QR 코드 크게 보기"
+        >
+          🔍 크게
+        </button>
+        <button
+          onClick={onStop}
+          className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 text-xs font-medium transition-all"
+        >
+          학생 투표 종료
+        </button>
+      </div>
+
+      <div className="flex items-center gap-4">
+        {/* QR Code */}
+        <div className="bg-white rounded-lg p-2">
+          <canvas ref={canvasRef} />
+        </div>
+
+        {/* URL + IP selector */}
+        <div className="flex flex-col gap-2">
+          <p className="text-white font-mono text-sm break-all">{voteUrl}</p>
+          {serverInfo.localIPs.length > 1 && (
+            <select
+              value={selectedIP}
+              onChange={(e) => onSelectIP(e.target.value)}
+              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-white focus:border-sp-accent focus:outline-none"
+            >
+              {serverInfo.localIPs.map((ip) => (
+                <option key={ip} value={ip}>{ip}</option>
+              ))}
+            </select>
+          )}
+          <p className="text-sp-muted text-xs">
+            학생들이 같은 Wi-Fi에서 QR을 스캔하세요
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ───────────────── Voting View ───────────────── */
 
 interface VotingViewProps {
@@ -224,6 +343,17 @@ interface VotingViewProps {
   onReset: () => void;
   onShowFinalResults: () => void;
   onDirectInput: (optionId: string) => void;
+  // Live vote props
+  isLiveMode: boolean;
+  liveServerInfo: { port: number; localIPs: string[] } | null;
+  connectedStudents: number;
+  selectedIP: string;
+  onSelectIP: (ip: string) => void;
+  onStartLive: () => void;
+  onStopLive: () => void;
+  showQRFullscreen: boolean;
+  onToggleQRFullscreen: () => void;
+  liveError: string | null;
 }
 
 function VotingView({
@@ -237,6 +367,16 @@ function VotingView({
   onClose,
   onReset,
   onShowFinalResults,
+  isLiveMode,
+  liveServerInfo,
+  connectedStudents,
+  selectedIP,
+  onSelectIP,
+  onStartLive,
+  onStopLive,
+  showQRFullscreen,
+  onToggleQRFullscreen,
+  liveError,
 }: VotingViewProps) {
   const totalVotes = options.reduce((sum, o) => sum + o.votes, 0);
   const maxVotes = Math.max(...options.map((o) => o.votes), 1);
@@ -325,6 +465,27 @@ function VotingView({
           {question}
         </h2>
       </div>
+
+      {/* Live vote panel */}
+      {isLiveMode && liveServerInfo && (
+        <LiveVotePanel
+          serverInfo={liveServerInfo}
+          connectedStudents={connectedStudents}
+          selectedIP={selectedIP}
+          onSelectIP={onSelectIP}
+          onStop={onStopLive}
+          isFullscreen={isFullscreen}
+          showQRFullscreen={showQRFullscreen}
+          onToggleQRFullscreen={onToggleQRFullscreen}
+        />
+      )}
+
+      {/* Live vote error */}
+      {liveError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm shrink-0">
+          {liveError}
+        </div>
+      )}
 
       {/* Option cards */}
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3">
@@ -452,6 +613,17 @@ function VotingView({
         <span className="text-sp-muted text-sm font-medium">
           총 <span className="text-white font-bold">{totalVotes}표</span>
         </span>
+        {/* Student live vote toggle */}
+        <button
+          onClick={isLiveMode ? onStopLive : onStartLive}
+          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+            isLiveMode
+              ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
+              : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:bg-white/5'
+          }`}
+        >
+          {isLiveMode ? `📱 학생 투표 중 (${connectedStudents}명)` : '📱 학생 투표'}
+        </button>
         <div className="flex items-center gap-2">
           <button
             onClick={onToggleResults}
@@ -610,6 +782,12 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
   const [options, setOptions] = useState<PollOption[]>([]);
   const [isOpen, setIsOpen] = useState(true);
   const [showResults, setShowResults] = useState(false);
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(null);
+  const [connectedStudents, setConnectedStudents] = useState(0);
+  const [selectedIP, setSelectedIP] = useState('');
+  const [showQRFullscreen, setShowQRFullscreen] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   const handleStart = useCallback((q: string, opts: PollOption[]) => {
     setQuestion(q);
@@ -633,20 +811,8 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
     setShowResults((prev) => !prev);
   }, []);
 
-  const handleClose = useCallback(() => {
-    setIsOpen(false);
-  }, []);
-
   const handleShowFinalResults = useCallback(() => {
     setViewMode('results');
-  }, []);
-
-  const handleReset = useCallback(() => {
-    setViewMode('create');
-    setQuestion('');
-    setOptions([]);
-    setIsOpen(true);
-    setShowResults(false);
   }, []);
 
   const handleRevote = useCallback(() => {
@@ -659,6 +825,92 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
   const handleDirectInput = useCallback((optionId: string) => {
     // Handled inside VotingView via long-press
     void optionId;
+  }, []);
+
+  const handleStartLive = useCallback(async () => {
+    if (!window.electronAPI?.startLiveVote) {
+      setLiveError('학생 투표 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
+      return;
+    }
+    try {
+      setLiveError(null);
+      const data = options.map((o) => ({ id: o.id, text: o.text, color: o.color }));
+      const info = await window.electronAPI.startLiveVote({ question, options: data });
+      if (info.localIPs.length === 0) {
+        setLiveError('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
+        return;
+      }
+      setLiveServerInfo(info);
+      setSelectedIP(info.localIPs[0]!);
+      setIsLiveMode(true);
+      setConnectedStudents(0);
+    } catch {
+      setLiveError('학생 투표 서버를 시작할 수 없습니다.');
+    }
+  }, [question, options]);
+
+  const handleStopLive = useCallback(async () => {
+    if (window.electronAPI?.stopLiveVote) {
+      await window.electronAPI.stopLiveVote();
+    }
+    setIsLiveMode(false);
+    setLiveServerInfo(null);
+    setConnectedStudents(0);
+    setShowQRFullscreen(false);
+    setLiveError(null);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setIsOpen(false);
+    if (isLiveMode) {
+      handleStopLive();
+    }
+  }, [isLiveMode, handleStopLive]);
+
+  const handleReset = useCallback(() => {
+    if (isLiveMode) {
+      handleStopLive();
+    }
+    setViewMode('create');
+    setQuestion('');
+    setOptions([]);
+    setIsOpen(true);
+    setShowResults(false);
+  }, [isLiveMode, handleStopLive]);
+
+  const handleToggleQRFullscreen = useCallback(() => {
+    setShowQRFullscreen((prev) => !prev);
+  }, []);
+
+  const handleSelectIP = useCallback((ip: string) => {
+    setSelectedIP(ip);
+  }, []);
+
+  // Live vote IPC event listeners
+  useEffect(() => {
+    if (!isLiveMode || !window.electronAPI) return;
+
+    const unsubVoted = window.electronAPI.onLiveVoteStudentVoted?.((data) => {
+      handleVote(data.optionId, 1);
+    });
+
+    const unsubCount = window.electronAPI.onLiveVoteConnectionCount?.((data) => {
+      setConnectedStudents(data.count);
+    });
+
+    return () => {
+      unsubVoted?.();
+      unsubCount?.();
+    };
+  }, [isLiveMode, handleVote]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (window.electronAPI?.stopLiveVote) {
+        window.electronAPI.stopLiveVote();
+      }
+    };
   }, []);
 
   return (
@@ -679,6 +931,16 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           onReset={handleReset}
           onShowFinalResults={handleShowFinalResults}
           onDirectInput={handleDirectInput}
+          isLiveMode={isLiveMode}
+          liveServerInfo={liveServerInfo}
+          connectedStudents={connectedStudents}
+          selectedIP={selectedIP}
+          onSelectIP={handleSelectIP}
+          onStartLive={handleStartLive}
+          onStopLive={handleStopLive}
+          showQRFullscreen={showQRFullscreen}
+          onToggleQRFullscreen={handleToggleQRFullscreen}
+          liveError={liveError}
         />
       )}
       {viewMode === 'results' && (

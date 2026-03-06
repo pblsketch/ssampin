@@ -5,6 +5,7 @@ import { autoUpdater } from 'electron-updater';
 import { attachToDesktop, attachToDesktopAsync } from './workerw';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
+import { registerLiveVoteHandlers } from './ipc/liveVote';
 
 declare const __dirname: string;
 
@@ -812,6 +813,7 @@ if (!gotTheLock) {
     registerSecureStorageHandlers();
     createWindow();
     registerOAuthHandlers(mainWindow!);
+    registerLiveVoteHandlers(mainWindow!);
     createTray();
     setupAutoUpdater();
 

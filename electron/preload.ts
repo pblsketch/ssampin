@@ -108,4 +108,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
       window.removeEventListener('offline', offlineHandler);
     };
   },
+  // Live Vote
+  startLiveVote: (data: {
+    question: string;
+    options: { id: string; text: string; color: string }[];
+  }): Promise<{ port: number; localIPs: string[] }> =>
+    ipcRenderer.invoke('live-vote:start', data),
+  stopLiveVote: (): Promise<void> =>
+    ipcRenderer.invoke('live-vote:stop'),
+  onLiveVoteStudentVoted: (callback: (data: { optionId: string; totalVoters: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { optionId: string; totalVoters: number }) => callback(data);
+    ipcRenderer.on('live-vote:student-voted', handler);
+    return () => { ipcRenderer.removeListener('live-vote:student-voted', handler); };
+  },
+  onLiveVoteConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { count: number }) => callback(data);
+    ipcRenderer.on('live-vote:connection-count', handler);
+    return () => { ipcRenderer.removeListener('live-vote:connection-count', handler); };
+  },
 });

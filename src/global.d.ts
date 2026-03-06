@@ -48,6 +48,14 @@ interface ElectronAPI {
   secureDelete: (key: string) => Promise<void>;
   // Network status
   onNetworkChange: (callback: (online: boolean) => void) => () => void;
+  // Live Vote
+  startLiveVote: (data: {
+    question: string;
+    options: { id: string; text: string; color: string }[];
+  }) => Promise<{ port: number; localIPs: string[] }>;
+  stopLiveVote: () => Promise<void>;
+  onLiveVoteStudentVoted: (callback: (data: { optionId: string; totalVoters: number }) => void) => () => void;
+  onLiveVoteConnectionCount: (callback: (data: { count: number }) => void) => () => void;
 }
 
 interface Window {
