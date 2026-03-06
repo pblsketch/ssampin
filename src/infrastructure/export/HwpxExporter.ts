@@ -596,7 +596,9 @@ export async function exportSeatingToHwpx(
 
       if (desc.type === 'seat') {
         const seatRow = seating.seats[dataRow];
-        const studentId = seatRow ? (seatRow[desc.seatIdx!] ?? null) : null;
+        // 좌우 반전: 교사 관점(UI) → 학생 관점(인쇄물)
+        const mirroredColIdx = seatCols - 1 - desc.seatIdx!;
+        const studentId = seatRow ? (seatRow[mirroredColIdx] ?? null) : null;
         const student = getStudent(studentId);
         cell.borderFillIDRef = solidBorder;
         cell.setMargin({ left: 510, right: 510, top: 141, bottom: 141 });
