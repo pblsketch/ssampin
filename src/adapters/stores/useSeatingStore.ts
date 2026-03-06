@@ -35,7 +35,7 @@ function createSeatingFromStudents(students: readonly Student[]): SeatingData {
   return { rows, cols, seats };
 }
 
-/** 좌석에서 명렬표에 없거나 결번인 학생 ID를 제거 */
+/** 좌석에서 명렬표에 없거나 결번인 학생 ID를 제거하고, 새로 추가된 학생을 빈 자리에 배치 */
 function sanitizeSeating(
   seating: SeatingData,
   students: readonly Student[],
@@ -43,8 +43,10 @@ function sanitizeSeating(
   const activeIds = new Set(
     students.filter((s) => !s.isVacant).map((s) => s.id),
   );
+
+  // 1단계: 비활성/결번 학생 제거
   let changed = false;
-  const seats = seating.seats.map((row) =>
+  let seats = seating.seats.map((row) =>
     row.map((cell) => {
       if (cell !== null && !activeIds.has(cell)) {
         changed = true;
@@ -53,7 +55,42 @@ function sanitizeSeating(
       return cell;
     }),
   );
-  return changed ? { ...seating, seats } : seating;
+
+  // 2단계: 그리드에 없는 활성 학생 탐색
+  const seatedIds = new Set(seats.flat().filter((cell): cell is string => cell !== null));
+  const unplaced = [...activeIds].filter((id) => !seatedIds.has(id));
+
+  if (unplaced.length === 0) {
+    return changed ? { ...seating, seats } : seating;
+  }
+
+  changed = true;
+  let queue = [...unplaced];
+
+  // 3단계: 기존 빈 자리(null)에 미배치 학생 채우기
+  seats = seats.map((row) =>
+    row.map((cell) => {
+      if (cell === null && queue.length > 0) {
+        return queue.shift()!;
+      }
+      return cell;
+    }),
+  );
+
+  // 4단계: 아직 남은 미배치 학생 → 새 행 추가
+  if (queue.length > 0) {
+    const cols = seating.cols;
+    while (queue.length > 0) {
+      const newRow: (string | null)[] = [];
+      for (let c = 0; c < cols; c++) {
+        newRow.push(queue.length > 0 ? (queue.shift()!) : null);
+      }
+      seats.push(newRow);
+    }
+  }
+
+  const newRows = seats.length;
+  return { ...seating, rows: newRows, seats };
 }
 
 interface SeatingState {

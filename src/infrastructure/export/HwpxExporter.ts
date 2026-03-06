@@ -1,4 +1,5 @@
 import { HwpxDocument, fetchSkeletonHwpx, loadSkeletonHwpx } from '@ubermensch1218/hwpxcore';
+import JSZip from 'jszip';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
@@ -29,6 +30,93 @@ async function ensureSkeleton(): Promise<void> {
 async function createDoc(): Promise<HwpxDocument> {
   await ensureSkeleton();
   return HwpxDocument.open(loadSkeletonHwpx());
+}
+
+/**
+ * hwpxcore bug workaround: secPr (section properties including page size,
+ * margins, orientation) lives inside the first paragraph's <hp:run> in
+ * section0.xml.  When we call removeParagraph() to clear content, the secPr
+ * is destroyed and doc.save() does not regenerate it.
+ *
+ * Fix: extract the skeleton's first <hp:p> (which holds secPr in its run),
+ * patch pagePr/margin, strip colPr and linesegarray remnants, then inject
+ * as a dedicated paragraph before the content paragraphs after doc.save().
+ * Hangul requires secPr to live in its own <hp:p> — injecting into an
+ * existing content run does NOT produce landscape orientation.
+ */
+async function buildSecPrParagraph(opts: {
+  landscape: 'WIDELY' | 'NARROWLY';
+  width: number;
+  height: number;
+  margin: { top: number; bottom: number; left: number; right: number; header: number; footer: number };
+}): Promise<string | null> {
+  const skelBytes = loadSkeletonHwpx();
+  const zip = await JSZip.loadAsync(skelBytes);
+  const sectionFile = zip.file('Contents/section0.xml');
+  if (!sectionFile) return null;
+  const xml = await sectionFile.async('string');
+
+  // The skeleton's first <hp:p> contains <hp:run> with <hp:secPr>
+  const match = xml.match(/<hp:p [^>]*>[\s\S]*?<\/hp:p>/);
+  if (!match) return null;
+
+  let para = match[0];
+
+  // Patch pagePr attributes
+  para = para.replace(
+    /<hp:pagePr[^>]*>/,
+    `<hp:pagePr landscape="${opts.landscape}" width="${opts.width}" height="${opts.height}" gutterType="LEFT_ONLY">`,
+  );
+  // Patch margin (keep original format — do NOT add gutter="0" as it breaks landscape)
+  para = para.replace(
+    /<hp:margin[^>]*\/>/,
+    `<hp:margin header="${opts.margin.header}" footer="${opts.margin.footer}" left="${opts.margin.left}" right="${opts.margin.right}" top="${opts.margin.top}" bottom="${opts.margin.bottom}"/>`,
+  );
+
+  // IMPORTANT: Keep colPr and linesegarray in the secPr paragraph!
+  // Hangul requires these elements for landscape orientation to work.
+  // They are only stripped from content paragraphs in saveWithSectionProps().
+
+  return para;
+}
+
+/**
+ * Save the document and inject the secPr paragraph as a dedicated <hp:p>
+ * before the first content paragraph in section0.xml.  Also removes any
+ * linesegarray and colPr remnants from content paragraphs.
+ */
+async function saveWithSectionProps(
+  doc: HwpxDocument,
+  secPrParagraph: string | null,
+): Promise<Uint8Array> {
+  const savedBytes = await doc.save();
+  if (!secPrParagraph) return savedBytes;
+
+  const zip = await JSZip.loadAsync(savedBytes);
+  const sectionFile = zip.file('Contents/section0.xml');
+  if (!sectionFile) return savedBytes;
+
+  let sectionXml = await sectionFile.async('string');
+
+  // 1) Remove any existing secPr
+  sectionXml = sectionXml.replace(/<hp:secPr[\s\S]*?<\/hp:secPr>/g, '');
+
+  // 2) Remove linesegarray (portrait layout cache from skeleton)
+  sectionXml = sectionXml.replace(/<hp:linesegarray>[\s\S]*?<\/hp:linesegarray>/g, '');
+
+  // 3) Remove colPr ctrl remnants from skeleton
+  sectionXml = sectionXml.replace(/<hp:ctrl><hp:colPr[^/]*\/><\/hp:ctrl>/g, '');
+
+  // 4) Inject the secPr paragraph before the first content <hp:p>
+  const firstPIdx = sectionXml.indexOf('<hp:p ');
+  if (firstPIdx >= 0) {
+    sectionXml = sectionXml.slice(0, firstPIdx)
+      + secPrParagraph
+      + sectionXml.slice(firstPIdx);
+  }
+
+  zip.file('Contents/section0.xml', sectionXml);
+  return await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 
 function findChildByLocalName(parent: Element, name: string): Element | null {
@@ -77,6 +165,68 @@ function applyStyleToAllCells(
       applyCellStyle(table, r, c, opts);
     }
   }
+}
+
+/**
+ * Configure a table element for absolute positioning on the page.
+ * Sets textWrap, noAdjust attributes on the <tbl> element and
+ * updates/creates <sz> and <pos> child elements for precise placement.
+ */
+function setTableAbsolutePosition(
+  tableElement: Element,
+  opts: {
+    textWrap: string;
+    width: number;
+    height: number;
+    horzOffset: number;
+    vertOffset: number;
+    horzRelTo: string;
+    vertRelTo: string;
+    flowWithText?: string;
+    allowOverlap?: string;
+  },
+): void {
+  const HP_NS = 'http://www.hancom.co.kr/hwpml/2011/paragraph';
+
+  // Set table-level attributes for floating
+  tableElement.setAttribute('textWrap', opts.textWrap);
+  tableElement.setAttribute('textFlow', 'BOTH_SIDES');
+  tableElement.setAttribute('noAdjust', '1');
+
+  // Update <sz> child element
+  const szEl = findChildByLocalName(tableElement, 'sz');
+  if (szEl) {
+    szEl.setAttribute('width', String(opts.width));
+    szEl.setAttribute('widthRelTo', 'ABSOLUTE');
+    szEl.setAttribute('height', String(opts.height));
+    szEl.setAttribute('heightRelTo', 'ABSOLUTE');
+    szEl.setAttribute('protect', '0');
+  }
+
+  // Update <pos> child element
+  let posEl = findChildByLocalName(tableElement, 'pos');
+  if (!posEl) {
+    const ownerDoc = tableElement.ownerDocument!;
+    posEl = ownerDoc.createElementNS(HP_NS, 'pos');
+    // Insert after <sz> if it exists, otherwise prepend
+    const afterSz = szEl?.nextSibling ?? tableElement.firstChild;
+    if (afterSz) {
+      tableElement.insertBefore(posEl, afterSz);
+    } else {
+      tableElement.appendChild(posEl);
+    }
+  }
+  posEl.setAttribute('treatAsChar', '0');
+  posEl.setAttribute('affectLSpacing', '0');
+  posEl.setAttribute('flowWithText', opts.flowWithText ?? '1');
+  posEl.setAttribute('allowOverlap', opts.allowOverlap ?? '0');
+  posEl.setAttribute('holdAnchorAndSO', '0');
+  posEl.setAttribute('vertRelTo', opts.vertRelTo);
+  posEl.setAttribute('horzRelTo', opts.horzRelTo);
+  posEl.setAttribute('vertAlign', 'TOP');
+  posEl.setAttribute('horzAlign', 'LEFT');
+  posEl.setAttribute('vertOffset', String(opts.vertOffset));
+  posEl.setAttribute('horzOffset', String(opts.horzOffset));
 }
 
 export async function exportClassScheduleToHwpx(
@@ -196,12 +346,14 @@ export async function exportSeatingToHwpx(
 ): Promise<Uint8Array> {
   const doc = await createDoc();
 
-  // ── Page setup: A4 portrait ──
+  // ── Page setup: A4 Landscape ──
+  // Hangul uses landscape="WIDELY" for landscape orientation.
+  // Width/height are swapped compared to portrait A4.
   const section = doc.section(0);
   section.properties.setPageSize({
-    width: 59528,
-    height: 84188,
-    orientation: 'PORTRAIT',
+    width: 84188,
+    height: 59528,
+    orientation: 'WIDELY',
   });
   section.properties.setPageMargins({
     top: 2834,
@@ -219,7 +371,16 @@ export async function exportSeatingToHwpx(
   const rosterHeaderCharId = doc.ensureRunStyle({ bold: true, fontSize: 9 });
   const rosterCharId = doc.ensureRunStyle({ fontSize: 9 });
 
-  // Border fill styles
+  // Border fill styles — noBorder MUST be created first so the skeleton's
+  // default borderFill (id=3, no borders) is assigned to noBorder, not solidBorder.
+  const noBorder = doc.oxml.ensureBorderFillStyle({
+    sides: {
+      left: { type: 'NONE', width: '0.12 mm', color: '#000000' },
+      right: { type: 'NONE', width: '0.12 mm', color: '#000000' },
+      top: { type: 'NONE', width: '0.12 mm', color: '#000000' },
+      bottom: { type: 'NONE', width: '0.12 mm', color: '#000000' },
+    },
+  });
   const solidBorder = doc.oxml.ensureBorderFillStyle({
     sides: {
       left: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
@@ -228,7 +389,6 @@ export async function exportSeatingToHwpx(
       bottom: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
     },
   });
-  const noBorder = doc.ensureBasicBorderFill();
   const gapBorder = doc.oxml.ensureBorderFillStyle({
     sides: {
       left: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
@@ -278,6 +438,14 @@ export async function exportSeatingToHwpx(
   const numberCharId = doc.ensureRunStyle({ fontSize: numberFontSize });
   const nameCharId = doc.ensureRunStyle({ bold: true, fontSize: nameFontSize });
 
+  // Build secPr paragraph from skeleton (will be injected after doc.save())
+  const secPrParagraph = await buildSecPrParagraph({
+    landscape: 'WIDELY',
+    width: 84188,
+    height: 59528,
+    margin: { top: 2834, bottom: 2834, left: 2834, right: 2834, header: 2834, footer: 1417 },
+  });
+
   while (doc.paragraphs.length > 0) {
     doc.removeParagraph(0, 0);
   }
@@ -287,13 +455,12 @@ export async function exportSeatingToHwpx(
     .filter((s) => !s.isVacant)
     .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
-  // ── Title ──
+  // ── Title — tables are anchored to this paragraph ──
   const title = formatSeatingTitleHwpx(className);
-  doc.addParagraph(title, {
+  const titlePara = doc.addParagraph(title, {
     charPrIdRef: titleCharId,
     paraPrIdRef: centerParaId,
   });
-  doc.addParagraph();
 
   // ══════════════════════════════════════════════════════════════
   //  TABLE 1: Seating Chart
@@ -317,9 +484,7 @@ export async function exportSeatingToHwpx(
     if (i > 0) colDescs.push({ type: 'gap' });
     colDescs.push({ type: 'seat', seatIdx: i });
   }
-  // Center aisle (3 columns)
-  colDescs.push({ type: 'aisle' });
-  colDescs.push({ type: 'aisle' });
+  // Center aisle (1 column, same width as gap for uniform spacing)
   colDescs.push({ type: 'aisle' });
   // Right half
   for (let i = 0; i < rightCols; i++) {
@@ -329,39 +494,37 @@ export async function exportSeatingToHwpx(
 
   const tableCols = colDescs.length;
 
-  // Rows: seatGridRows seat rows + 1 separator row + 2 교탁 rows = seatGridRows + 3
-  const seatTableRows = seatGridRows + 3;
+  // Rows: seatGridRows seat rows + 1 separator row + 1 교탁 row = seatGridRows + 2
+  const seatTableRows = seatGridRows + 2;
   const separatorRow = seatGridRows;
-  const gyotakRow1 = seatGridRows + 1;
-  const gyotakRow2 = seatGridRows + 2;
+  const gyotakRow = seatGridRows + 1;
 
-  // Column widths
-  const SEAT_W = 9364;
+  // Column widths — gaps and aisle are fixed-size, seat width is dynamic
   const GAP_W = 1303;
-  const AISLE_W = 1305;
+  const AISLE_W = GAP_W; // same width for uniform spacing
 
-  // Calculate the last seat col width to fill remaining space
-  // Total used by non-last-seat columns:
-  let usedWidth = 0;
+  // Seating table width — reduced to fit seating + roster side-by-side on one page
+  const ROSTER_GAP = 2500;
+  const SEAT_TABLE_TARGET_W = 52000;
+
+  // Dynamically compute seat column width so the table fits exactly
   const seatColIndices: number[] = [];
+  let numGapCols = 0;
+  let numAisleCols = 0;
   for (let ci = 0; ci < tableCols; ci++) {
     const desc = colDescs[ci]!;
-    if (desc.type === 'seat') {
-      seatColIndices.push(ci);
-      usedWidth += SEAT_W;
-    } else if (desc.type === 'gap') {
-      usedWidth += GAP_W;
-    } else {
-      usedWidth += AISLE_W;
-    }
+    if (desc.type === 'seat') seatColIndices.push(ci);
+    else if (desc.type === 'gap') numGapCols++;
+    else numAisleCols++;
   }
-  // Adjust last seat column to fill page width (53860)
-  const PAGE_W = 53860;
+  const numSeatCols = seatColIndices.length;
+  const fixedWidth = numGapCols * GAP_W + numAisleCols * AISLE_W;
+  const availableForSeats = SEAT_TABLE_TARGET_W - fixedWidth;
+  const SEAT_W = Math.floor(availableForSeats / numSeatCols);
   const lastSeatColIdx = seatColIndices[seatColIndices.length - 1]!;
-  const lastSeatW = SEAT_W + (PAGE_W - usedWidth);
+  const lastSeatW = availableForSeats - SEAT_W * (numSeatCols - 1);
 
-  const seatPara = doc.addParagraph();
-  const seatTable = seatPara.addTable(seatTableRows, tableCols);
+  const seatTable = titlePara.addTable(seatTableRows, tableCols);
   seatTable.pageBreak = 'NONE';
 
   // Set column widths
@@ -377,6 +540,8 @@ export async function exportSeatingToHwpx(
   }
 
   // Helper: set two-line cell content (number + name)
+  // Creates a second paragraph from scratch to avoid cloneNode issues
+  // (cloning copies linesegarray with invalid layout data that crashes Hangul)
   function setCellTwoLines(
     table: typeof seatTable,
     row: number,
@@ -395,16 +560,29 @@ export async function exportSeatingToHwpx(
     if (!subList) return;
     const firstPara = findChildByLocalName(subList, 'p');
     if (!firstPara) return;
-    const newPara = firstPara.cloneNode(true) as Element;
+
+    // Remove linesegarray from first paragraph if present
+    const firstLsa = findChildByLocalName(firstPara, 'linesegarray');
+    if (firstLsa) firstPara.removeChild(firstLsa);
+
+    // Build second paragraph from scratch (not cloneNode)
+    const ownerDoc = subList.ownerDocument!;
+    const ns = firstPara.namespaceURI!;
+    const newPara = ownerDoc.createElementNS(ns, 'p');
     newPara.setAttribute('paraPrIDRef', paraPrId);
-    const run = findChildByLocalName(newPara, 'run');
-    if (run) {
-      run.setAttribute('charPrIDRef', line2CharPrId);
-      const t = findChildByLocalName(run, 't');
-      if (t) t.textContent = line2;
-    }
-    const paraId = String(Date.now() + Math.random());
-    newPara.setAttribute('id', paraId);
+    newPara.setAttribute('styleIDRef', '0');
+    newPara.setAttribute('pageBreak', '0');
+    newPara.setAttribute('columnBreak', '0');
+    newPara.setAttribute('merged', '0');
+    newPara.setAttribute('id', String(Math.floor(Math.random() * 2000000000)));
+
+    const newRun = ownerDoc.createElementNS(ns, 'run');
+    newRun.setAttribute('charPrIDRef', line2CharPrId);
+    const newT = ownerDoc.createElementNS(ns, 't');
+    newT.textContent = line2;
+    newRun.appendChild(newT);
+    newPara.appendChild(newRun);
+
     subList.appendChild(newPara);
   }
 
@@ -448,10 +626,9 @@ export async function exportSeatingToHwpx(
       }
     }
 
-    // Merge center aisle columns for this row
+    // Style center aisle column (single column, no merge needed)
     const aisleStart = colDescs.findIndex((d) => d.type === 'aisle');
     if (aisleStart >= 0) {
-      seatTable.mergeCells(displayRow, aisleStart, displayRow, aisleStart + 2);
       seatTable.cell(displayRow, aisleStart).borderFillIDRef = gapBorder;
     }
   }
@@ -470,9 +647,9 @@ export async function exportSeatingToHwpx(
   seatTable.mergeCells(separatorRow, 0, separatorRow, tableCols - 1);
   seatTable.cell(separatorRow, 0).borderFillIDRef = noBorder;
 
-  // ── 교탁 area (rows gyotakRow1, gyotakRow2) ──
-  // 5 regions: [left empty] [left gap] [교탁 center] [right gap] [right empty]
-  // 교탁 spans from the innermost left seat through the aisle to the innermost right seat
+  // ── 교탁 area (single row with horizontal merges) ──
+  // hwpxcore bug: rowSpan merges that consume ALL cells in a row produce
+  // an empty <tr> which Hangul rejects. Use horizontal-only merges instead.
   const lastLeftSeatCol = seatColIndices[leftCols - 1]!;
   const firstRightSeatCol = seatColIndices[leftCols]!;
   const gyotakStartCol = lastLeftSeatCol;
@@ -489,57 +666,67 @@ export async function exportSeatingToHwpx(
 
   const GYOTAK_H = 5971;
 
-  // Initialize all cells in 교탁 rows
-  for (let row = gyotakRow1; row <= gyotakRow2; row++) {
-    for (let ci = 0; ci < tableCols; ci++) {
-      seatTable.setCellText(row, ci, '');
-    }
+  // Initialize all cells in 교탁 row
+  for (let ci = 0; ci < tableCols; ci++) {
+    seatTable.setCellText(gyotakRow, ci, '');
   }
 
-  // Region 1: Left empty block (rowSpan=2, noBorder)
+  // Region 1: Left empty block (noBorder)
   if (gLeftEmptyEnd >= 0) {
-    seatTable.mergeCells(gyotakRow1, 0, gyotakRow2, gLeftEmptyEnd);
-    seatTable.cell(gyotakRow1, 0).borderFillIDRef = noBorder;
-    seatTable.cell(gyotakRow1, 0).setSize(SEAT_W, GYOTAK_H);
+    seatTable.mergeCells(gyotakRow, 0, gyotakRow, gLeftEmptyEnd);
+    seatTable.cell(gyotakRow, 0).borderFillIDRef = noBorder;
+    seatTable.cell(gyotakRow, 0).setSize(SEAT_W, GYOTAK_H);
   }
 
   // Region 2: Left gap column (rightOnlyBorder)
   if (gLeftGapCol >= 0) {
-    seatTable.mergeCells(gyotakRow1, gLeftGapCol, gyotakRow2, gLeftGapCol);
-    seatTable.cell(gyotakRow1, gLeftGapCol).borderFillIDRef = rightOnlyBorder;
-    seatTable.cell(gyotakRow1, gLeftGapCol).setSize(GAP_W, GYOTAK_H);
+    seatTable.cell(gyotakRow, gLeftGapCol).borderFillIDRef = rightOnlyBorder;
+    seatTable.cell(gyotakRow, gLeftGapCol).setSize(GAP_W, GYOTAK_H);
   }
 
-  // Region 3: 교탁 center (inner-left seat + aisle cols + inner-right seat, rowSpan=2)
-  seatTable.mergeCells(gyotakRow1, gyotakStartCol, gyotakRow2, gyotakEndCol);
-  seatTable.cell(gyotakRow1, gyotakStartCol).borderFillIDRef = solidBorder;
-  seatTable.cell(gyotakRow1, gyotakStartCol).vertAlign = 'CENTER';
-  seatTable.cell(gyotakRow1, gyotakStartCol).setSize(SEAT_W * 2 + AISLE_W * 3, GYOTAK_H);
-  seatTable.setCellText(gyotakRow1, gyotakStartCol, '교 탁');
-  applyCellStyle(seatTable, gyotakRow1, gyotakStartCol, {
+  // Region 3: 교탁 center
+  seatTable.mergeCells(gyotakRow, gyotakStartCol, gyotakRow, gyotakEndCol);
+  seatTable.cell(gyotakRow, gyotakStartCol).borderFillIDRef = solidBorder;
+  seatTable.cell(gyotakRow, gyotakStartCol).vertAlign = 'CENTER';
+  seatTable.cell(gyotakRow, gyotakStartCol).setSize(SEAT_W * 2 + AISLE_W, GYOTAK_H);
+  seatTable.setCellText(gyotakRow, gyotakStartCol, '교 탁');
+  applyCellStyle(seatTable, gyotakRow, gyotakStartCol, {
     charPrId: boardCharId,
     paraPrId: centerParaId,
   });
 
   // Region 4: Right gap column (leftOnlyBorder)
   if (gRightGapCol >= 0) {
-    seatTable.mergeCells(gyotakRow1, gRightGapCol, gyotakRow2, gRightGapCol);
-    seatTable.cell(gyotakRow1, gRightGapCol).borderFillIDRef = leftOnlyBorder;
-    seatTable.cell(gyotakRow1, gRightGapCol).setSize(GAP_W, GYOTAK_H);
+    seatTable.cell(gyotakRow, gRightGapCol).borderFillIDRef = leftOnlyBorder;
+    seatTable.cell(gyotakRow, gRightGapCol).setSize(GAP_W, GYOTAK_H);
   }
 
-  // Region 5: Right empty block (rowSpan=2, noBorder)
+  // Region 5: Right empty block (noBorder)
   if (gRightEmptyStart <= tableCols - 1) {
-    seatTable.mergeCells(gyotakRow1, gRightEmptyStart, gyotakRow2, tableCols - 1);
-    seatTable.cell(gyotakRow1, gRightEmptyStart).borderFillIDRef = noBorder;
-    seatTable.cell(gyotakRow1, gRightEmptyStart).setSize(SEAT_W, GYOTAK_H);
+    seatTable.mergeCells(gyotakRow, gRightEmptyStart, gyotakRow, tableCols - 1);
+    seatTable.cell(gyotakRow, gRightEmptyStart).borderFillIDRef = noBorder;
+    seatTable.cell(gyotakRow, gRightEmptyStart).setSize(SEAT_W, GYOTAK_H);
   }
 
-  // ══════════════════════════════════════════════════════════════
-  //  TABLE 0: Student Roster (명렬표) — placed after seating table
-  // ══════════════════════════════════════════════════════════════
+  // ── Seating table absolute positioning (left side of page) ──
+  // PAGE-relative positioning with flowWithText=0 ensures both tables
+  // stay on the same page regardless of paragraph flow.
+  const seatTableHeight = seatGridRows * seatH + 2745 + GYOTAK_H;
+  setTableAbsolutePosition(seatTable.element, {
+    textWrap: 'IN_FRONT_OF_TEXT',
+    width: SEAT_TABLE_TARGET_W,
+    height: seatTableHeight,
+    horzOffset: 2834,
+    vertOffset: 8500,
+    horzRelTo: 'PAGE',
+    vertRelTo: 'PAGE',
+    flowWithText: '0',
+    allowOverlap: '1',
+  });
 
-  doc.addParagraph();
+  // ══════════════════════════════════════════════════════════════
+  //  TABLE 0: Student Roster (명렬표) — placed beside seating table
+  // ══════════════════════════════════════════════════════════════
 
   const MIN_DATA_ROWS = 30;
   const dataRows = Math.max(rosterStudents.length, MIN_DATA_ROWS);
@@ -561,8 +748,9 @@ export async function exportSeatingToHwpx(
   const ROSTER_HEADER_H = 1850;
   const ROSTER_DATA_H = 1410;
 
-  const rosterPara = doc.addParagraph();
-  const rosterTable = rosterPara.addTable(rosterTableRows, ROSTER_COLS);
+  // Add roster table to the title paragraph — both tables use PAGE-relative
+  // positioning with flowWithText=0 to stay on the same page.
+  const rosterTable = titlePara.addTable(rosterTableRows, ROSTER_COLS);
   rosterTable.pageBreak = 'NONE';
 
   // Column widths
@@ -616,7 +804,23 @@ export async function exportSeatingToHwpx(
     }
   }
 
-  return await doc.save();
+  // ── Roster table absolute positioning (right side of page) ──
+  const ROSTER_W = ROSTER_NUM_W + ROSTER_NAME_W + ROSTER_GENDER_W;
+  const rosterTotalHeight = ROSTER_HEADER_H * 2 + dataRows * ROSTER_DATA_H;
+  const rosterHorzOffset = 2834 + SEAT_TABLE_TARGET_W + ROSTER_GAP; // from page edge
+  setTableAbsolutePosition(rosterTable.element, {
+    textWrap: 'IN_FRONT_OF_TEXT',
+    width: ROSTER_W,
+    height: rosterTotalHeight,
+    horzOffset: rosterHorzOffset,
+    vertOffset: 5668,
+    horzRelTo: 'PAGE',
+    vertRelTo: 'PAGE',
+    flowWithText: '0',
+    allowOverlap: '1',
+  });
+
+  return await saveWithSectionProps(doc, secPrParagraph);
 }
 
 const COUNSELING_METHOD_LABELS: Record<string, string> = {
