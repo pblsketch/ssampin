@@ -141,6 +141,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('live-survey:start', data),
   stopLiveSurvey: (): Promise<void> =>
     ipcRenderer.invoke('live-survey:stop'),
+  surveyTunnelAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('live-survey:tunnel-available'),
+  surveyTunnelInstall: (): Promise<void> =>
+    ipcRenderer.invoke('live-survey:tunnel-install'),
+  surveyTunnelStart: (): Promise<{ tunnelUrl: string }> =>
+    ipcRenderer.invoke('live-survey:tunnel-start'),
   onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void): (() => void) => {
     const handler = (_event: unknown, data: { text: string; totalResponders: number }) => callback(data);
     ipcRenderer.on('live-survey:student-submitted', handler);
@@ -169,4 +175,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('live-wordcloud:connection-count', handler);
     return () => { ipcRenderer.removeListener('live-wordcloud:connection-count', handler); };
   },
+  // Live Word Cloud Tunnel
+  wordcloudTunnelAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('live-wordcloud:tunnel-available'),
+  wordcloudTunnelInstall: (): Promise<void> =>
+    ipcRenderer.invoke('live-wordcloud:tunnel-install'),
+  wordcloudTunnelStart: (): Promise<{ tunnelUrl: string }> =>
+    ipcRenderer.invoke('live-wordcloud:tunnel-start'),
 });

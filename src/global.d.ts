@@ -66,6 +66,9 @@ interface ElectronAPI {
     maxLength: number;
   }) => Promise<{ port: number; localIPs: string[] }>;
   stopLiveSurvey: () => Promise<void>;
+  surveyTunnelAvailable: () => Promise<boolean>;
+  surveyTunnelInstall: () => Promise<void>;
+  surveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
   onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void) => () => void;
   onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Live Word Cloud
@@ -76,6 +79,10 @@ interface ElectronAPI {
   stopLiveWordCloud: () => Promise<void>;
   onLiveWordCloudWordSubmitted: (callback: (data: { word: string; count: number; totalWords: number }) => void) => () => void;
   onLiveWordCloudConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  // Live Word Cloud Tunnel
+  wordcloudTunnelAvailable: () => Promise<boolean>;
+  wordcloudTunnelInstall: () => Promise<void>;
+  wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
 }
 
 interface Window {

@@ -928,8 +928,9 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
 
       const result = await window.electronAPI.tunnelStart();
       setTunnelUrl(result.tunnelUrl);
-    } catch {
-      setTunnelError('인터넷 연결에 실패했습니다. 네트워크를 확인해주세요.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTunnelError(`인터넷 연결 실패: ${msg}`);
     } finally {
       setTunnelLoading(false);
     }

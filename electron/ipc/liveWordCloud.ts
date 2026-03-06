@@ -9,6 +9,7 @@ import http from 'http';
 import os from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
 import { generateWordCloudHTML } from './liveWordCloudHTML';
+import { isTunnelAvailable, installTunnel, openTunnel, closeTunnel } from './tunnel';
 
 /** WSL/Hyper-V 등 가상 네트워크 대역 (외부 기기 접속 불가) */
 const VIRTUAL_PREFIXES = ['172.16.', '172.17.', '172.18.', '172.19.', '172.20.',
@@ -59,6 +60,9 @@ let session: LiveWordCloudSession | null = null;
  */
 function closeSession(): void {
   if (!session) return;
+
+  // 터널 종료
+  closeTunnel();
 
   for (const client of session.clients) {
     if (client.readyState === WebSocket.OPEN) {
@@ -248,5 +252,32 @@ export function registerLiveWordCloudHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('live-wordcloud:stop', (): void => {
     closeSession();
+  });
+
+  /**
+   * live-wordcloud:tunnel-available — cloudflared 바이너리 설치 여부
+   */
+  ipcMain.handle('live-wordcloud:tunnel-available', (): boolean => {
+    return isTunnelAvailable();
+  });
+
+  /**
+   * live-wordcloud:tunnel-install — cloudflared 바이너리 다운로드 (첫 사용 시)
+   */
+  ipcMain.handle('live-wordcloud:tunnel-install', async (): Promise<void> => {
+    await installTunnel();
+  });
+
+  /**
+   * live-wordcloud:tunnel-start — Cloudflare 터널 시작
+   * 로컬 서버가 이미 실행 중이어야 한다.
+   * @returns { tunnelUrl } 공개 HTTPS URL
+   */
+  ipcMain.handle('live-wordcloud:tunnel-start', async (): Promise<{ tunnelUrl: string }> => {
+    if (!session) throw new Error('워드클라우드 세션이 없습니다');
+    const address = session.server.address();
+    if (!address || typeof address === 'string') throw new Error('서버가 준비되지 않았습니다');
+    const tunnelUrl = await openTunnel(address.port);
+    return { tunnelUrl };
   });
 }

@@ -266,7 +266,8 @@ export function generateWordCloudHTML(
         }
 
         try {
-          ws = new WebSocket('ws://' + location.host);
+          var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          ws = new WebSocket(wsProto + '//' + location.host);
         } catch (e) {
           scheduleReconnect();
           return;

@@ -6,19 +6,33 @@
  * 학생들이 같은 WiFi 없이도 모바일 데이터로 접속 가능.
  */
 import fs from 'fs';
-import { Tunnel, bin, install } from 'cloudflared';
+import { app } from 'electron';
+import { Tunnel, bin, install, use } from 'cloudflared';
 
 let activeTunnel: Tunnel | null = null;
 
+/**
+ * 패키지된 Electron 앱에서는 asar 내부 경로가 실제 파일시스템과 다르다.
+ * cloudflared 바이너리는 app.asar.unpacked에 있으므로 경로를 보정한다.
+ */
+function getActualBinPath(): string {
+  if (app.isPackaged) {
+    return bin.replace('app.asar', 'app.asar.unpacked');
+  }
+  return bin;
+}
+
 /** cloudflared 바이너리가 설치되어 있는지 확인 */
 export function isTunnelAvailable(): boolean {
-  return fs.existsSync(bin);
+  const actualBin = getActualBinPath();
+  return fs.existsSync(actualBin);
 }
 
 /** 바이너리 설치 (첫 사용 시, ~40MB 다운로드) */
 export async function installTunnel(): Promise<void> {
-  if (!fs.existsSync(bin)) {
-    await install(bin);
+  const actualBin = getActualBinPath();
+  if (!fs.existsSync(actualBin)) {
+    await install(actualBin);
   }
 }
 
@@ -27,15 +41,22 @@ export async function openTunnel(localPort: number): Promise<string> {
   await installTunnel();
   closeTunnel();
 
-  const t = Tunnel.quick(`http://localhost:${localPort}`, {
-    '--no-autoupdate': true,
-  });
+  // 패키지된 앱에서 바이너리 경로 보정
+  use(getActualBinPath());
+
+  const t = Tunnel.quick(`http://localhost:${localPort}`);
 
   activeTunnel = t;
 
+  // stderr 로그 수집 (디버깅용)
+  let lastStderr = '';
+  t.on('stderr', (data: string) => {
+    lastStderr = data;
+  });
+
   const publicUrl = await new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error('터널 연결 시간 초과 (30초)'));
+      reject(new Error(`터널 연결 시간 초과 (30초). ${lastStderr}`));
     }, 30000);
 
     t.once('url', (url: string) => {
@@ -45,7 +66,14 @@ export async function openTunnel(localPort: number): Promise<string> {
 
     t.once('error', (err: Error) => {
       clearTimeout(timeout);
-      reject(err);
+      reject(new Error(`터널 오류: ${err.message}`));
+    });
+
+    t.once('exit', (code: number | null) => {
+      clearTimeout(timeout);
+      if (code !== null && code !== 0) {
+        reject(new Error(`cloudflared 종료 (코드: ${code}). ${lastStderr}`));
+      }
     });
   });
 
