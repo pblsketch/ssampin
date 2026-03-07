@@ -6,6 +6,7 @@ import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/cate
 import type { HolidayInfo } from '@domain/rules/holidayRules';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { getGradeBadgeText } from '@domain/entities/NeisSchedule';
+import { periodToLabel } from '@adapters/presenters/periodPresenter';
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -147,8 +148,14 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
         </div>
       </div>
 
-      {/* 시간 / 장소 / 멀티데이 */}
+      {/* 교시 / 시간 / 장소 / 멀티데이 */}
       <div className="flex items-center gap-4 text-xs text-sp-muted">
+        {event.period && (
+          <div className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">class</span>
+            {periodToLabel(event.period)}
+          </div>
+        )}
         {event.time && (
           <div className="flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">schedule</span>

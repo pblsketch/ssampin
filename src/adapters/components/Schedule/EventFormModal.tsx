@@ -26,6 +26,19 @@ const CUSTOM_UNITS: { key: CustomUnit; label: string; minutes: number }[] = [
   { key: 'day', label: '일', minutes: 1440 },
 ];
 
+const PERIOD_OPTIONS: { key: string; label: string }[] = [
+  { key: '', label: '선택 안 함' },
+  { key: '1', label: '1교시' },
+  { key: '2', label: '2교시' },
+  { key: '3', label: '3교시' },
+  { key: '4', label: '4교시' },
+  { key: '5', label: '5교시' },
+  { key: '6', label: '6교시' },
+  { key: '7', label: '7교시' },
+  { key: 'afterSchool', label: '방과후' },
+  { key: 'allDay', label: '종일' },
+];
+
 const RECURRENCE_OPTIONS: { key: Recurrence | ''; label: string }[] = [
   { key: '', label: '반복 없음' },
   { key: 'weekly', label: '매주' },
@@ -55,6 +68,7 @@ export function EventFormModal({
   const [location, setLocation] = useState('');
   const [isDDay, setIsDDay] = useState(false);
   const [alerts, setAlerts] = useState<AlertTiming[]>([]);
+  const [period, setPeriod] = useState('');
   const [recurrence, setRecurrence] = useState<Recurrence | ''>('');
   const [description, setDescription] = useState('');
   const [customValue, setCustomValue] = useState('');
@@ -70,6 +84,7 @@ export function EventFormModal({
       setTime(editEvent.time ?? '');
       setLocation(editEvent.location ?? '');
       setIsDDay(editEvent.isDDay ?? false);
+      setPeriod(editEvent.period ?? '');
       setAlerts([...(editEvent.alerts ?? [])]);
       setRecurrence(editEvent.recurrence ?? '');
       setDescription(editEvent.description ?? '');
@@ -127,6 +142,7 @@ export function EventFormModal({
       ...(location.trim() && { location: location.trim() }),
       ...(isDDay && { isDDay: true }),
       ...(alerts.length > 0 && { alerts }),
+      ...(period && { period }),
       ...(recurrence && { recurrence }),
       ...(description.trim() && { description: description.trim() }),
       // NEIS 일정 편집 시 기존 필드 보존 + isModified 플래그
@@ -244,6 +260,22 @@ export function EventFormModal({
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 교시 */}
+            <div>
+              <label className="block text-sm font-medium text-sp-muted mb-1.5">교시</label>
+              <select
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+              >
+                {PERIOD_OPTIONS.map(({ key, label }) => (
+                  <option key={key} value={key}>
+                    {label}
                   </option>
                 ))}
               </select>
