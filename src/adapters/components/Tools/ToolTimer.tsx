@@ -571,6 +571,14 @@ function TimerMode() {
   const [flashCount, setFlashCount] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // 시간 조정 단위 (초)
+  const ADJUST_AMOUNTS = [
+    { label: '10초', seconds: 10 },
+    { label: '30초', seconds: 30 },
+    { label: '1분', seconds: 60 },
+    { label: '5분', seconds: 300 },
+  ] as const;
+
   // 알람음 설정 (from store)
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.update);
@@ -598,22 +606,31 @@ function TimerMode() {
     if (remaining <= 0) return;
     setState('running');
     setShowSoundPanel(false);
-    const startTime = Date.now();
-    const startRemaining = remaining;
+
+    // 1초마다 remaining을 1씩 감소 (adjustTime과 호환)
+    let lastTick = Date.now();
     intervalRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const next = startRemaining - elapsed;
-      if (next <= 0) {
-        setRemaining(0);
-        setState('finished');
-        clearTimer();
-        playAlarmSound(selectedSound, volume, boost, customDataUrl);
-        setFlashCount(6);
-      } else {
-        setRemaining(next);
+      const now = Date.now();
+      const delta = Math.floor((now - lastTick) / 1000);
+      if (delta >= 1) {
+        lastTick = now - ((now - lastTick) % 1000);
+        setRemaining((prev) => {
+          const next = prev - delta;
+          if (next <= 0) {
+            setState('finished');
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+            playAlarmSound(selectedSound, volume, boost, customDataUrl);
+            setFlashCount(6);
+            return 0;
+          }
+          return next;
+        });
       }
     }, 100);
-  }, [remaining, clearTimer, selectedSound, volume, boost, customDataUrl]);
+  }, [remaining, selectedSound, volume, boost, customDataUrl]);
 
   const pause = useCallback(() => {
     setState('paused');
@@ -649,6 +666,18 @@ function TimerMode() {
   const dismiss = useCallback(() => {
     reset();
   }, [reset]);
+
+  /** 타이머 시간 조정 (+/- 버튼) */
+  const adjustTime = useCallback((delta: number) => {
+    setRemaining((prev) => {
+      const next = prev + delta;
+      return Math.max(1, Math.min(5999, next));
+    });
+    setTotalSeconds((prev) => {
+      const next = prev + delta;
+      return Math.max(1, Math.min(5999, next));
+    });
+  }, []);
 
   const handleSelectSound = useCallback(async (id: AlarmSoundId) => {
     await updateSettings({
@@ -756,11 +785,17 @@ function TimerMode() {
       } else if (e.key === 'Enter' && state === 'finished') {
         e.preventDefault();
         dismiss();
+      } else if (e.key === 'ArrowUp' && (state === 'running' || state === 'paused')) {
+        e.preventDefault();
+        adjustTime(30);
+      } else if (e.key === 'ArrowDown' && (state === 'running' || state === 'paused')) {
+        e.preventDefault();
+        adjustTime(-30);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state, start, pause, reset, dismiss]);
+  }, [state, start, pause, reset, dismiss, adjustTime]);
 
   const ratio = totalSeconds > 0 ? remaining / totalSeconds : 0;
   const isFlashing = flashCount > 0 && flashCount % 2 === 0;
@@ -824,12 +859,55 @@ function TimerMode() {
         </button>
       </div>
 
-      {/* 프로그레스 링 + 시간 */}
-      <div className="relative w-[300px] h-[300px] flex items-center justify-center">
-        <CircleProgress ratio={ratio} />
-        <span className="text-7xl md:text-8xl font-mono font-bold text-white z-10 select-none">
-          {formatTime(remaining)}
-        </span>
+      {/* 시간 조정 + 프로그레스 링 영역 */}
+      <div className="flex items-center gap-4">
+        {/* 왼쪽: 감소(-) 버튼 그룹 */}
+        <div className="flex flex-col gap-2">
+          {ADJUST_AMOUNTS.map((adj) => (
+            <button
+              key={`minus-${adj.seconds}`}
+              onClick={() => adjustTime(-adj.seconds)}
+              disabled={state === 'idle' || state === 'finished' || remaining <= adj.seconds}
+              className="group flex items-center gap-1 px-3 py-1.5 rounded-lg
+                bg-sp-card border border-sp-border text-sp-muted
+                hover:text-red-400 hover:border-red-400/40 hover:bg-red-400/5
+                disabled:opacity-20 disabled:cursor-not-allowed
+                transition-all text-xs font-medium"
+              title={`${adj.label} 빼기`}
+            >
+              <span className="material-symbols-outlined text-[14px] group-hover:text-red-400">remove</span>
+              {adj.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 중앙: 프로그레스 링 + 시간 */}
+        <div className="relative w-[300px] h-[300px] flex items-center justify-center">
+          <CircleProgress ratio={ratio} />
+          <span className="text-7xl md:text-8xl font-mono font-bold text-white z-10 select-none">
+            {formatTime(remaining)}
+          </span>
+        </div>
+
+        {/* 오른쪽: 증가(+) 버튼 그룹 */}
+        <div className="flex flex-col gap-2">
+          {ADJUST_AMOUNTS.map((adj) => (
+            <button
+              key={`plus-${adj.seconds}`}
+              onClick={() => adjustTime(adj.seconds)}
+              disabled={state === 'idle' || state === 'finished' || remaining + adj.seconds > 5999}
+              className="group flex items-center gap-1 px-3 py-1.5 rounded-lg
+                bg-sp-card border border-sp-border text-sp-muted
+                hover:text-emerald-400 hover:border-emerald-400/40 hover:bg-emerald-400/5
+                disabled:opacity-20 disabled:cursor-not-allowed
+                transition-all text-xs font-medium"
+              title={`${adj.label} 추가`}
+            >
+              <span className="material-symbols-outlined text-[14px] group-hover:text-emerald-400">add</span>
+              {adj.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 컨트롤 */}
@@ -1082,6 +1160,8 @@ export function ToolTimer({ onBack, isFullscreen }: ToolTimerProps) {
         { key: ' ', label: '시작/일시정지', description: '타이머 토글', handler: () => {} },
         { key: 'r', label: '리셋', description: '타이머 리셋', handler: () => {} },
         { key: 'Enter', label: '확인', description: '종료 확인', handler: () => {} },
+        { key: '↑', label: '+30초', description: '시간 추가', handler: () => {} },
+        { key: '↓', label: '-30초', description: '시간 빼기', handler: () => {} },
       ];
     }
     return [
