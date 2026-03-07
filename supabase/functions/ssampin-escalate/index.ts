@@ -73,18 +73,22 @@ async function sendEscalationEmail(params: {
     .map((msg) => `<p><strong>${msg.role === 'user' ? '👤 사용자' : '🤖 AI'}:</strong> ${escapeHtml(msg.content)}</p>`)
     .join('');
 
-  const html = `
-    <h2>${emoji} 쌤핀 ${label}</h2>
-    <hr/>
-    <h3>📝 내용</h3>
-    <p>${escapeHtml(params.message)}</p>
-    ${params.userEmail ? `<p><strong>회신 이메일:</strong> ${escapeHtml(params.userEmail)}</p>` : ''}
-    ${params.appVersion ? `<p><strong>앱 버전:</strong> ${escapeHtml(params.appVersion)}</p>` : ''}
-    <h3>💬 대화 맥락</h3>
-    ${conversationHtml || '<p>(대화 맥락 없음)</p>'}
-    <hr/>
-    <p style="color: #999; font-size: 12px;">쌤핀 AI 챗봇에서 자동 전달됨</p>
-  `;
+  const html = `<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="utf-8"></head>
+<body style="font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;">
+  <h2>${emoji} 쌤핀 ${label}</h2>
+  <hr/>
+  <h3>📝 내용</h3>
+  <p>${escapeHtml(params.message)}</p>
+  ${params.userEmail ? `<p><strong>회신 이메일:</strong> ${escapeHtml(params.userEmail)}</p>` : ''}
+  ${params.appVersion ? `<p><strong>앱 버전:</strong> ${escapeHtml(params.appVersion)}</p>` : ''}
+  <h3>💬 대화 맥락</h3>
+  ${conversationHtml || '<p>(대화 맥락 없음)</p>'}
+  <hr/>
+  <p style="color: #999; font-size: 12px;">쌤핀 AI 챗봇에서 자동 전달됨</p>
+</body>
+</html>`;
 
   try {
     const response = await fetch('https://api.resend.com/emails', {
