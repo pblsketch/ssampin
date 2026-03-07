@@ -98,7 +98,7 @@ export default function Feedback() {
 
         <FadeIn delay={0.3}>
           <p className="mt-8 text-center text-sm text-sp-muted">
-            💡 급한 버그는 채팅으로, 자세한 의견은 설문지로 보내주시면 큰 도움이 됩니다!
+            💡 사용법이 궁금하면 AI에게, 자세한 의견은 설문지로 보내주시면 큰 도움이 됩니다!
           </p>
         </FadeIn>
       </div>
