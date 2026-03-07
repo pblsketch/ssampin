@@ -1,6 +1,6 @@
 {
   "name": "ssampin",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "쌤핀 - 교사용 데스크톱 대시보드",
   "private": true,
   "license": "MIT",
@@ -13,9 +13,15 @@
     "electron:build": "npm run build && electron-builder",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.{ts,tsx}\""
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "embed": "tsx scripts/embed-docs.ts --all",
+    "embed:dry": "tsx scripts/embed-docs.ts --all --dry-run",
+    "embed:file": "tsx scripts/embed-docs.ts --file",
+    "test:chatbot": "tsx scripts/test-chatbot.ts"
   },
   "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@supabase/supabase-js": "^2.49.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -44,6 +50,7 @@
     "electron": "^32.3.3",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.27.3",
+    "tsx": "^4.19.0",
     "eslint": "^10.0.2",
     "gh-pages": "^6.3.0",
     "postcss": "^8.5.1",
