@@ -17,3 +17,31 @@ body {
   background: #0a0e17;
   color: #f8fafc;
 }
+
+/* 채팅 위젯 애니메이션 */
+@keyframes animate-in-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes animate-in-slide-from-bottom {
+  from { transform: translateY(1rem); }
+  to { transform: translateY(0); }
+}
+.animate-in {
+  animation: animate-in-fade 200ms ease-out, animate-in-slide-from-bottom 200ms ease-out;
+}
+
+/* 채팅 메시지 스크롤바 */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #2a3548;
+  border-radius: 2px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}

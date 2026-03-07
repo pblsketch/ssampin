@@ -6,8 +6,12 @@ const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
 
 export default function Feedback() {
   const handleOpenChat = () => {
-    if (typeof window !== 'undefined' && window.Tawk_API) {
-      window.Tawk_API.maximize();
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const openChat = (window as any).__ssampin_open_chat;
+      if (typeof openChat === 'function') {
+        openChat();
+      }
     }
   };
 
@@ -32,31 +36,31 @@ export default function Feedback() {
             <div className="flex flex-col rounded-xl border border-sp-border bg-sp-card p-6 transition-all duration-200 hover:scale-[1.02] hover:border-sp-accent">
               <div className="mb-4 flex items-center gap-2">
                 <span className="text-2xl">💬</span>
-                <h3 className="text-lg font-bold text-sp-text">실시간 채팅</h3>
+                <h3 className="text-lg font-bold text-sp-text">AI 도우미</h3>
                 <span className="ml-auto flex items-center gap-1.5 text-xs text-emerald-400">
                   <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                   온라인
                 </span>
               </div>
               <p className="mb-4 text-sm text-sp-muted">
-                지금 바로 대화하세요!
+                쌤핀 AI에게 바로 물어보세요!
               </p>
               <ul className="mb-6 flex-1 space-y-2 text-sm text-sp-muted">
                 <li className="flex items-center gap-2">
-                  <span className="text-sp-accent">•</span> 버그 신고
+                  <span className="text-sp-accent">•</span> 사용법 질문
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-sp-accent">•</span> 빠른 질문
+                  <span className="text-sp-accent">•</span> 버그 신고 &amp; 기능 제안
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-sp-accent">•</span> 스크린샷 첨부 가능 📎
+                  <span className="text-sp-accent">•</span> 즉시 답변 🤖
                 </li>
               </ul>
               <button
                 onClick={handleOpenChat}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sp-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 active:bg-blue-700"
               >
-                💬 채팅 시작하기
+                🤖 AI에게 물어보기
               </button>
             </div>
 
