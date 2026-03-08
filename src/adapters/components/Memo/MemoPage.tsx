@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
@@ -14,6 +15,7 @@ const COLOR_BG: Record<MemoColor, string> = {
 };
 
 export function MemoPage() {
+  const { track } = useAnalytics();
   const { memos, loaded, load, addMemo, deleteMemo, updateMemo, updateColor, arrangeInGrid } = useMemoStore();
   const [selectedColor, setSelectedColor] = useState<MemoColor>('yellow');
   const [topMemoId, setTopMemoId] = useState<string | null>(null);
@@ -25,8 +27,9 @@ export function MemoPage() {
   }, [load]);
 
   const handleAddMemo = useCallback(() => {
+    track('memo_create');
     void addMemo('', selectedColor);
-  }, [addMemo, selectedColor]);
+  }, [addMemo, selectedColor, track]);
 
   // Sync detailMemo with store changes
   useEffect(() => {

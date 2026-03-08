@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
@@ -36,6 +37,7 @@ function formatTimeFromMinutes(totalMinutes: number): string {
 }
 
 export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps) {
+  const { track } = useAnalytics();
   const {
     classSchedule, teacherSchedule, updateClassSchedule, updateTeacherSchedule,
     undo, redo, clearAll, canUndo, canRedo,
@@ -181,6 +183,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   // 교시 추가
   const addPeriod = useCallback(() => {
     if (localMaxPeriods >= MAX_PERIODS_LIMIT) return;
+    track('timetable_edit', { action: 'add' });
     const newCount = localMaxPeriods + 1;
 
     // 새 교시의 PeriodTime이 없으면 생성
@@ -206,13 +209,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     }
 
     setLocalMaxPeriods(newCount);
-  }, [localMaxPeriods, localPeriodTimes, classGrid.length, settings.schoolLevel]);
+  }, [localMaxPeriods, localPeriodTimes, classGrid.length, settings.schoolLevel, track]);
 
   // 교시 삭제
   const removePeriod = useCallback(() => {
     if (localMaxPeriods <= MIN_PERIODS_LIMIT) return;
+    track('timetable_edit', { action: 'delete' });
     setLocalMaxPeriods((prev) => prev - 1);
-  }, [localMaxPeriods]);
+  }, [localMaxPeriods, track]);
 
   /* ── 나이스 불러오기 핸들러 ── */
   const hasExistingData = useMemo(() => {
@@ -239,6 +243,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
 
   const handleSave = async () => {
     setSaving(true);
+    track('timetable_edit', { action: 'edit' });
     try {
       if (tab === 'class') {
         const data: Record<string, ClassPeriod[]> = {};

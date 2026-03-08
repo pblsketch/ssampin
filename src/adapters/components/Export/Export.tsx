@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -97,6 +98,7 @@ const FORMAT_CONFIG: Record<
 };
 
 export function Export() {
+  const { track } = useAnalytics();
   const [selectedItems, setSelectedItems] = useState<Set<ExportItem>>(new Set());
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -158,6 +160,7 @@ export function Export() {
   const handleExport = useCallback(async () => {
     if (selectedItems.size === 0 || !selectedFormat) return;
     setIsExporting(true);
+    track('export', { format: selectedFormat });
 
     try {
       for (const item of selectedItems) {
@@ -275,6 +278,7 @@ export function Export() {
     schoolName,
     teacherName,
     showToast,
+    track,
   ]);
 
   return (

@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolCoinProps {
   onBack: () => void;
@@ -16,6 +17,11 @@ type CoinResult = 'heads' | 'tails' | null;
 const BASE_SPINS = 6; // number of full 360-degree rotations before landing
 
 export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'coin' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [rotation, setRotation] = useState(0);
   const [isFlipping, setIsFlipping] = useState(false);
   const [result, setResult] = useState<CoinResult>(null);

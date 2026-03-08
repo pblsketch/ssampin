@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Todo as TodoType, TodoPriority } from '@domain/entities/Todo';
 import {
   sortTodos,
@@ -574,6 +575,7 @@ interface TodoItemProps {
 }
 
 function TodoItem({ todo, overdue, categories, onToggle, onDelete }: TodoItemProps) {
+  const { track } = useAnalytics();
   const [hovered, setHovered] = useState(false);
   const priorityConfig = PRIORITY_CONFIG[todo.priority ?? 'none'];
   const cat = categories.find((c) => c.id === todo.category);
@@ -581,7 +583,10 @@ function TodoItem({ todo, overdue, categories, onToggle, onDelete }: TodoItemPro
   return (
     <li
       className="flex items-center gap-3 px-4 py-2.5 border-t border-sp-border/50 transition-colors hover:bg-sp-surface/30 cursor-pointer"
-      onClick={() => onToggle(todo.id)}
+      onClick={() => {
+        track('todo_toggle', { completed: !todo.completed });
+        onToggle(todo.id);
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

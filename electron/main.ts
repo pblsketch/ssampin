@@ -853,6 +853,13 @@ if (!gotTheLock) {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // Analytics flush 신호 전송
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('analytics:flush');
+  }
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.webContents.send('analytics:flush');
+  }
 });
 
 app.on('window-all-closed', () => {

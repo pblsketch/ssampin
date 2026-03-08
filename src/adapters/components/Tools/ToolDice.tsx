@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolDiceProps {
   onBack: () => void;
@@ -216,6 +217,11 @@ function Dice3D({ value, isRolling, rollId, size }: Dice3DProps) {
 type DiceCount = 1 | 2 | 3;
 
 export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'dice' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [diceCount, setDiceCount] = useState<DiceCount>(1);
   const [results, setResults] = useState<number[]>([1]);
   const [isRolling, setIsRolling] = useState(false);

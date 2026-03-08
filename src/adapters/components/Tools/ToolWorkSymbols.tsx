@@ -3,6 +3,7 @@ import { ToolLayout } from './ToolLayout';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { DEFAULT_WORK_SYMBOLS } from '@adapters/stores/useSettingsStore';
 import type { WorkSymbolItem } from '@domain/entities/Settings';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolWorkSymbolsProps {
   onBack: () => void;
@@ -405,6 +406,11 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
 // ─── Main Component ────────────────────────────────────────────
 
 export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'activity_symbol' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.update);
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { shuffleArray } from '@domain/rules/randomRules';
@@ -34,6 +35,11 @@ interface Assignment {
 /* ─── Component ─────────────────────────────────────────── */
 
 export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'seat_picker' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const students = useStudentStore((s) => s.students);
   const getStudent = useStudentStore((s) => s.getStudent);
   const seating = useSeatingStore((s) => s.seating);

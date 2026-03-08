@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useClock } from '@adapters/hooks/useClock';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
@@ -28,6 +29,7 @@ interface ContextMenuState {
 const LAYOUT_CYCLE: WidgetLayoutMode[] = ['full', 'split-h', 'split-v', 'quad'];
 
 export function Widget() {
+  const { track } = useAnalytics();
   const clock = useClock();
   const { load: loadSchedule } = useScheduleStore();
   const { settings, update } = useSettingsStore();
@@ -87,6 +89,12 @@ export function Widget() {
     loadConfig();
   }, [loadSchedule, loadTodos, loadEvents, loadMemos, loadMessage, loadConfig]);
 
+  // 위젯 오픈 추적
+  useEffect(() => {
+    track('widget_open', { trigger: 'close_button' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 레이아웃 모드 변경 (설정 저장 + 창 크기 조절)
   const setLayoutMode = useCallback((mode: WidgetLayoutMode) => {
     void update({ widget: { ...settings.widget, layoutMode: mode } });
@@ -139,6 +147,7 @@ export function Widget() {
 
   // 더블클릭 → 전체 앱으로 전환
   const handleHeaderDoubleClick = () => {
+    track('widget_close');
     window.electronAPI?.toggleWidget();
   };
 
@@ -240,7 +249,7 @@ export function Widget() {
             {/* 전체 화면 전환 버튼 */}
             <button
               className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
-              onClick={() => window.electronAPI?.toggleWidget()}
+              onClick={() => { track('widget_close'); window.electronAPI?.toggleWidget(); }}
               title="전체 화면으로 전환"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>

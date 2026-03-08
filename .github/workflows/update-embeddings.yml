@@ -1,0 +1,42 @@
+name: Update AI Chatbot Embeddings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/user-guide.md'
+      - 'landing/src/components/FAQ.tsx'
+      - 'README.md'
+      - 'CHANGELOG.md'
+  workflow_dispatch:
+
+jobs:
+  update-embeddings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run embedding script
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/embed-docs.ts --all
+
+      - name: Run quality tests
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: npx tsx scripts/test-chatbot.ts
+        continue-on-error: true

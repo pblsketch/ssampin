@@ -783,6 +783,16 @@ export function SettingsPage() {
                   />
                 </div>
               </div>
+              <div className="flex items-center justify-between pt-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-sp-text">앱 사용 통계 수집</span>
+                  <span className="text-xs text-sp-muted">앱 개선을 위해 익명 사용 통계를 수집합니다. 개인정보는 수집되지 않습니다.</span>
+                </div>
+                <Toggle
+                  checked={draft.analytics?.enabled ?? true}
+                  onChange={(v) => setDraft((prev) => ({ ...prev, analytics: { enabled: v } }))}
+                />
+              </div>
             </div>
           </section>
 

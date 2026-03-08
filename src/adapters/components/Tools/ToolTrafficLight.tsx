@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 type LightColor = 'red' | 'yellow' | 'green' | null;
 type Mode = 'manual' | 'auto';
@@ -91,6 +92,11 @@ function formatTime(seconds: number): string {
 }
 
 export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'traffic_light' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [mode, setMode] = useState<Mode>('manual');
   const [activeLight, setActiveLight] = useState<LightColor>(null);
 

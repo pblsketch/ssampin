@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { getEventsForMonth, filterByCategory } from '@domain/rules/eventRules';
 import { getCategoryColors } from '@adapters/presenters/categoryPresenter';
@@ -36,6 +37,7 @@ function formatDateStr(date: Date): string {
 }
 
 export function Schedule() {
+  const { track } = useAnalytics();
   const {
     events,
     categories,
@@ -167,6 +169,7 @@ export function Schedule() {
     if (editingEvent) {
       void updateEvent(event);
     } else {
+      track('event_create', { category: event.category });
       void addEvent({
         title: event.title,
         date: event.date,

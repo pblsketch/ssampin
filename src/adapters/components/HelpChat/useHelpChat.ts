@@ -1,0 +1,247 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { searchOfflineFaq } from './offlineFaq';
+import type {
+  HelpChatMessage,
+  HelpChatStatus,
+  ChatApiResponse,
+  EscalationPayload,
+  EscalationApiResponse,
+} from './types';
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+const CHAT_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ssampin-chat` : '';
+const ESCALATE_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ssampin-escalate` : '';
+
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** 앱 컨텍스트 정보 (에스컬레이션 시 자동 첨부) */
+function getAppContext(): string {
+  const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
+  const platform = navigator.platform;
+  const screen = `${window.screen.width}x${window.screen.height}`;
+  return `[앱 v${version}, ${platform}, ${screen}]`;
+}
+
+const WELCOME_MESSAGE: HelpChatMessage = {
+  id: 'welcome',
+  role: 'assistant',
+  content:
+    '안녕하세요! 🎓 쌤핀 AI 도우미예요.\n\n쌤핀의 기능이나 사용법에 대해 궁금한 점이 있으면 편하게 물어보세요!\n\n예시:\n- "시간표 설정은 어떻게 하나요?"\n- "좌석 배치 방법을 알려주세요"\n- "위젯 모드가 뭔가요?"',
+  timestamp: Date.now(),
+};
+
+/** AI 도움말 채팅 훅 */
+export function useHelpChat() {
+  const [messages, setMessages] = useState<HelpChatMessage[]>([WELCOME_MESSAGE]);
+  const [status, setStatus] = useState<HelpChatStatus>('idle');
+  const [escalationType, setEscalationType] = useState<'bug' | 'feature' | 'other' | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const sessionIdRef = useRef(generateId());
+
+  // 온라인/오프라인 상태 감지
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (api?.onNetworkChange) {
+      return api.onNetworkChange((online) => setIsOnline(online));
+    }
+    // 브라우저 폴백
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  /** 어시스턴트 메시지 추가 */
+  const addAssistantMessage = useCallback((content: string, extra?: Partial<HelpChatMessage>) => {
+    const msg: HelpChatMessage = {
+      id: generateId(),
+      role: 'assistant',
+      content,
+      timestamp: Date.now(),
+      ...extra,
+    };
+    setMessages((prev) => [...prev, msg]);
+  }, []);
+
+  /** 오프라인 FAQ 응답 */
+  const handleOfflineResponse = useCallback((query: string) => {
+    const matches = searchOfflineFaq(query);
+    if (matches.length > 0) {
+      const content = matches
+        .map((m) => `**Q: ${m.question}**\n${m.answer}`)
+        .join('\n\n');
+      addAssistantMessage(content, { isOffline: true });
+    } else {
+      addAssistantMessage(
+        '현재 오프라인 상태예요. 인터넷에 연결하면 더 정확한 답변을 받으실 수 있어요!\n\n기본 FAQ에서 답을 찾지 못했어요.',
+        { isOffline: true },
+      );
+    }
+  }, [addAssistantMessage]);
+
+  /** 메시지 전송 */
+  const sendMessage = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || status === 'loading') return;
+
+    // 유저 메시지 추가
+    const userMsg: HelpChatMessage = {
+      id: generateId(),
+      role: 'user',
+      content: trimmed,
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setStatus('loading');
+    setEscalationType(null);
+
+    // 오프라인이거나 API 미설정 → 로컬 FAQ
+    if (!isOnline || !CHAT_ENDPOINT || !SUPABASE_ANON_KEY) {
+      handleOfflineResponse(trimmed);
+      setStatus('idle');
+      return;
+    }
+
+    try {
+      const history = messages
+        .filter((m) => m.id !== 'welcome')
+        .slice(-6)
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      const res = await fetch(CHAT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          message: trimmed,
+          sessionId: sessionIdRef.current,
+          history,
+          source: 'app',
+          appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
+        }),
+      });
+
+      if (res.status === 429) {
+        addAssistantMessage('⏳ 잠시 후 다시 시도해 주세요. 요청이 너무 많아요.');
+        setStatus('idle');
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = (await res.json()) as ChatApiResponse;
+
+      if (data.type === 'escalation') {
+        addAssistantMessage(data.message, {
+          responseType: 'escalation',
+          escalationType: data.escalationType,
+        });
+        setEscalationType(data.escalationType ?? 'other');
+        setStatus('escalation');
+      } else {
+        addAssistantMessage(data.message, {
+          sources: data.sources,
+          confidence: data.confidence,
+          responseType: 'answer',
+        });
+        setStatus('idle');
+      }
+    } catch {
+      // 네트워크 에러 → 오프라인 폴백
+      const matches = searchOfflineFaq(trimmed);
+      if (matches.length > 0) {
+        const content = `⚡ 네트워크 연결이 불안정해요. 로컬 FAQ에서 찾은 답변이에요:\n\n${matches.map((m) => `**Q: ${m.question}**\n${m.answer}`).join('\n\n')}`;
+        addAssistantMessage(content, { isOffline: true });
+      } else {
+        addAssistantMessage(
+          '네트워크 연결이 불안정해요. 인터넷 연결을 확인해 주세요!',
+          { isOffline: true },
+        );
+      }
+      setStatus('error');
+    }
+  }, [messages, status, isOnline, handleOfflineResponse, addAssistantMessage]);
+
+  /** 에스컬레이션 제출 */
+  const submitEscalation = useCallback(async (data: EscalationPayload) => {
+    setStatus('loading');
+
+    if (!isOnline || !ESCALATE_ENDPOINT || !SUPABASE_ANON_KEY) {
+      addAssistantMessage(
+        '오프라인 상태에서는 전달이 어려워요. 인터넷에 연결한 후 다시 시도해 주세요.',
+        { isOffline: true },
+      );
+      setEscalationType(null);
+      setStatus('idle');
+      return;
+    }
+
+    try {
+      const res = await fetch(ESCALATE_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          ...data,
+          sessionId: sessionIdRef.current,
+          appVersion: data.appVersion ?? (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined),
+          appSettings: getAppContext(),
+        }),
+      });
+
+      const result = (await res.json()) as EscalationApiResponse;
+      addAssistantMessage(
+        result.ok
+          ? '✅ 전달 완료! 빠르게 확인하겠습니다. 다른 질문이 있으면 편하게 물어보세요!'
+          : '전달 중 문제가 발생했어요. 나중에 다시 시도해 주세요.',
+      );
+      setEscalationType(null);
+      setStatus('idle');
+    } catch {
+      addAssistantMessage('전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.');
+      setStatus('error');
+    }
+  }, [isOnline, addAssistantMessage]);
+
+  /** 에스컬레이션 취소 */
+  const cancelEscalation = useCallback(() => {
+    setEscalationType(null);
+    setStatus('idle');
+    addAssistantMessage('알겠어요! 다른 궁금한 점이 있으면 물어보세요 😊');
+  }, [addAssistantMessage]);
+
+  /** 대화 초기화 */
+  const clearChat = useCallback(() => {
+    setMessages([WELCOME_MESSAGE]);
+    setStatus('idle');
+    setEscalationType(null);
+    sessionIdRef.current = generateId();
+  }, []);
+
+  return {
+    messages,
+    status,
+    escalationType,
+    isOnline,
+    sendMessage,
+    submitEscalation,
+    cancelEscalation,
+    clearChat,
+  };
+}

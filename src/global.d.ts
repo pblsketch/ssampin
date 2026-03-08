@@ -83,6 +83,8 @@ interface ElectronAPI {
   wordcloudTunnelAvailable: () => Promise<boolean>;
   wordcloudTunnelInstall: () => Promise<void>;
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  // Analytics
+  onAnalyticsFlush: (callback: () => void) => () => void;
 }
 
 interface Window {

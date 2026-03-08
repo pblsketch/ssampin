@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { ToolLayout } from './ToolLayout';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolQRCodeProps {
   onBack: () => void;
@@ -112,6 +113,11 @@ function FullscreenQR({
 // ─── 메인 컴포넌트 ──────────────────────────────────────────
 
 export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'qr' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [tab, setTab] = useState<TabMode>('url');
   const [urlInput, setUrlInput] = useState('');
   const [textInput, setTextInput] = useState('');

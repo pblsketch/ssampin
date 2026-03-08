@@ -3,6 +3,7 @@ import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
 import type { Team } from '@domain/entities/Team';
 import { getRanking } from '@domain/rules/scoreRules';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolScoreboardProps {
   onBack: () => void;
@@ -370,6 +371,11 @@ function ScoreboardView({
 /* ──────────────── Main Component ──────────────── */
 
 export function ToolScoreboard({ onBack, isFullscreen }: ToolScoreboardProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'scoreboard' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [viewMode, setViewMode] = useState<ViewMode>('setup');
   const [teamCount, setTeamCount] = useState(4);
   const [teams, setTeams] = useState<Team[]>(() => makeDefaultTeams(4));

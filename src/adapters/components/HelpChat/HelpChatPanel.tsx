@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useHelpChat } from './useHelpChat';
 import { HelpChatWindow } from './HelpChatWindow';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 /** 플로팅 AI 도움말 패널 — 앱 어디서나 접근 가능 */
 export function HelpChatPanel() {
+  const { track } = useAnalytics();
   const [isOpen, setIsOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const chat = useHelpChat();
@@ -30,12 +32,18 @@ export function HelpChatPanel() {
   }, []);
 
   const handleOpen = () => {
+    track('chatbot_open');
     setIsOpen(true);
     setHasNewMessage(false);
   };
 
   const handleClose = () => {
     setIsOpen(false);
+  };
+
+  const handleSend = (message: string) => {
+    track('chatbot_message');
+    chat.sendMessage(message);
   };
 
   return (
@@ -54,7 +62,7 @@ export function HelpChatPanel() {
             status={chat.status}
             escalationType={chat.escalationType}
             isOnline={chat.isOnline}
-            onSend={chat.sendMessage}
+            onSend={handleSend}
             onEscalate={chat.submitEscalation}
             onCancelEscalation={chat.cancelEscalation}
             onClear={chat.clearChat}

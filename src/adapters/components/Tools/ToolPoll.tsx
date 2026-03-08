@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { PollOption } from '@domain/entities/Poll';
 import QRCode from 'qrcode';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolPollProps {
   onBack: () => void;
@@ -822,6 +823,11 @@ function ResultsView({ question, options, isFullscreen, onRevote, onNewPoll }: R
 /* ──────────────── Main Component ──────────────── */
 
 export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'vote' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [viewMode, setViewMode] = useState<ViewMode>('create');
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<PollOption[]>([]);

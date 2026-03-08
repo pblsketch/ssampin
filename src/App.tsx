@@ -32,6 +32,7 @@ import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer, useToastStore } from '@adapters/components/common/Toast';
 import { UpdateNotification } from '@adapters/components/common/UpdateNotification';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
+import { HelpChatPanel } from '@adapters/components/HelpChat';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
@@ -39,6 +40,7 @@ import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -139,6 +141,19 @@ export function App() {
   const [showFeedback, setShowFeedback] = useState(false);
   const { setShareFile, setShowImportModal } = useEventsStore();
   const { settings } = useSettingsStore();
+  const { track } = useAnalytics();
+
+  // Analytics: 앱 시작 이벤트
+  useEffect(() => {
+    track('app_open', { launchMode: isWidgetMode() ? 'widget' : 'normal' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Analytics: 페이지 이동 추적
+  useEffect(() => {
+    track('page_view', { page: currentPage });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   // 전체화면 상태 감지
   useEffect(() => {
@@ -162,6 +177,7 @@ export function App() {
           setCurrentPage('schedule');
           setShareFile(shareFile);
           setShowImportModal(true);
+          track('share_import');
         }
       } catch {
         // Invalid file, ignore
@@ -255,6 +271,7 @@ export function App() {
       <ToastContainer />
       <Onboarding />
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+      <HelpChatPanel />
     </div>
   );
 }

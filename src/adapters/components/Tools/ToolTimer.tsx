@@ -4,6 +4,7 @@ import type { KeyboardShortcut } from './types';
 import { formatTime, formatTimeMs } from '@domain/rules/timerRules';
 import type { AlarmSoundId } from '@domain/entities/Settings';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolTimerProps {
   onBack: () => void;
@@ -1152,6 +1153,11 @@ function StopwatchMode() {
 // ─── 메인 컴포넌트 ──────────────────────────────────────────
 
 export function ToolTimer({ onBack, isFullscreen }: ToolTimerProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'timer' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [tab, setTab] = useState<Tab>('timer');
 
   const displayShortcuts = useMemo<KeyboardShortcut[]>(() => {

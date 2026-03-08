@@ -182,4 +182,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('live-wordcloud:tunnel-install'),
   wordcloudTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('live-wordcloud:tunnel-start'),
+  // Analytics flush
+  onAnalyticsFlush: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('analytics:flush', handler);
+    return () => { ipcRenderer.removeListener('analytics:flush', handler); };
+  },
 });

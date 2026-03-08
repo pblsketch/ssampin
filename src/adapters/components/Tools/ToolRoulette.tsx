@@ -3,6 +3,7 @@ import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
 import { PresetSelector } from './PresetSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolRouletteProps {
   onBack: () => void;
@@ -38,6 +39,11 @@ function truncateName(name: string, maxLen: number): string {
 }
 
 export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'roulette' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [items, setItems] = useState<string[]>(['항목 1', '항목 2', '항목 3']);
   const [inputMode, setInputMode] = useState<'students' | 'custom'>('custom');
   const [newItemText, setNewItemText] = useState('');

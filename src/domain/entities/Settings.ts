@@ -109,6 +109,9 @@ export interface Settings {
   readonly alarmSound: AlarmSoundSettings;
   readonly workSymbols: WorkSymbolsSettings;
   readonly weather: WeatherSettings;
+  readonly analytics?: {
+    readonly enabled: boolean;
+  };
   readonly menuOrder?: readonly string[];
   readonly hiddenMenus?: readonly string[];
   readonly feedback?: FeedbackConfig;

@@ -3,6 +3,7 @@ import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 /* eslint-disable no-restricted-imports */
 import { exportSeatingToExcel, exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/export/ExcelExporter';
 import { exportSeatingToHwpx } from '@infrastructure/export/HwpxExporter';
@@ -385,6 +386,7 @@ function RosterView({ isRosterEditing }: RosterViewProps) {
 /* ──────────────────────── 메인 Seating 페이지 ──────────────────────── */
 
 export function Seating() {
+  const { track } = useAnalytics();
   const {
     seating,
     loaded: seatingLoaded,
@@ -476,12 +478,13 @@ export function Seating() {
   const handleDrop = useCallback(
     (row: number, col: number) => {
       if (dragSource !== null) {
+        track('seating_drag');
         void swapSeats(dragSource.row, dragSource.col, row, col);
       }
       setDragSource(null);
       setDragTarget(null);
     },
-    [dragSource, swapSeats],
+    [dragSource, swapSeats, track],
   );
 
   const handleDragEnd = useCallback(() => {
@@ -496,6 +499,7 @@ export function Seating() {
   const confirmRandomize = useCallback(async () => {
     setShowConfirm(false);
     setShowShuffle(true);
+    track('seating_shuffle', { studentCount: totalStudents });
     const result = await randomize();
     if (result && !result.success) {
       useToastStore.getState().show(
@@ -508,7 +512,7 @@ export function Seating() {
         'info',
       );
     }
-  }, [randomize]);
+  }, [randomize, track, totalStudents]);
 
    
   const handleEditSave = useCallback(

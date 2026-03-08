@@ -98,6 +98,9 @@ const DEFAULT_SETTINGS: Settings = {
     location: null,
     refreshIntervalMin: 30,
   },
+  analytics: {
+    enabled: true,
+  },
   feedback: {
     // TODO: Google Forms 연동 시 formUrl에 입력 (비어있으면 클립보드 폴백 방식 사용)
     formUrl: '',

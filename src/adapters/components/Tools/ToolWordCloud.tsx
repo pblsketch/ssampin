@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
 import QRCode from 'qrcode';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolWordCloudProps {
   onBack: () => void;
@@ -335,6 +336,11 @@ function WordCloudDisplay({ words, question, isFullscreen, totalSubmissions }: W
 /* ───────────────── Main Component ───────────────── */
 
 export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'wordcloud' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [viewMode, setViewMode] = useState<ViewMode>('create');
   const [question, setQuestion] = useState('');
   const [words, setWords] = useState<WordEntry[]>([]);

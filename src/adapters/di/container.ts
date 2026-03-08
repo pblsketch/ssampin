@@ -20,12 +20,14 @@ import type { ICalendarSyncRepository } from '@domain/repositories/ICalendarSync
 import type { ISeatConstraintsRepository } from '@domain/repositories/ISeatConstraintsRepository';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 import type { IBookmarkRepository } from '@domain/repositories/IBookmarkRepository';
+import type { IAnalyticsPort } from '@domain/ports/IAnalyticsPort';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
 import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
 import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
 import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarApiClient';
+import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnalyticsAdapter';
 
 import { JsonScheduleRepository } from '@adapters/repositories/JsonScheduleRepository';
 import { JsonSeatingRepository } from '@adapters/repositories/JsonSeatingRepository';
@@ -126,3 +128,7 @@ export const syncFromGoogle = new SyncFromGoogle(
   eventsRepository,
   () => authenticateGoogle.getValidAccessToken(),
 );
+
+// === Analytics ===
+
+export const analyticsPort: IAnalyticsPort = new SupabaseAnalyticsAdapter();

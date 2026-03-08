@@ -6,6 +6,7 @@ import { ClassRosterSelector } from './ClassRosterSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { shuffleArray, pickRandom } from '@domain/rules/randomRules';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolRandomProps {
   onBack: () => void;
@@ -21,6 +22,11 @@ interface RangeConfig {
 }
 
 export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
+  const { track } = useAnalytics();
+  useEffect(() => {
+    track('tool_use', { tool: 'random_picker' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // --- Mode & Data Source ---
   const [mode, setMode] = useState<PickMode>('single');
   const [dataSource, setDataSource] = useState<DataSource>('students');
