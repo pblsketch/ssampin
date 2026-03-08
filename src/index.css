@@ -23,6 +23,12 @@
     background-color: var(--sp-bg);
     color: var(--sp-text);
   }
+
+  input[type='date'],
+  input[type='time'],
+  input[type='datetime-local'] {
+    color-scheme: dark;
+  }
 }
 
 :root {

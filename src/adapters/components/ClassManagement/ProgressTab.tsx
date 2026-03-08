@@ -5,6 +5,12 @@ import type { TeachingClass } from '@domain/entities/TeachingClass';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function todayString(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -50,6 +56,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   const [formLesson, setFormLesson] = useState('');
   const [formNote, setFormNote] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState('');
+  const [editPeriod, setEditPeriod] = useState(1);
   const [editUnit, setEditUnit] = useState('');
   const [editLesson, setEditLesson] = useState('');
   const [editNote, setEditNote] = useState('');
@@ -59,6 +67,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   const [importLoading, setImportLoading] = useState(false);
   const [importSuccessCount, setImportSuccessCount] = useState<number | null>(null);
   const [selectedImportIds, setSelectedImportIds] = useState<ReadonlySet<string>>(new Set());
+  const [importDateOverrides, setImportDateOverrides] = useState<Map<string, string>>(new Map());
+  const [importDateShiftDays, setImportDateShiftDays] = useState(0);
 
   // 해당 학급 진도 항목만 필터, 날짜 내림차순 → 교시 오름차순 정렬
   const entries = useMemo(() => {
@@ -124,6 +134,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
 
   const startEdit = useCallback((entry: ProgressEntry) => {
     setEditingId(entry.id);
+    setEditDate(entry.date);
+    setEditPeriod(entry.period);
     setEditUnit(entry.unit);
     setEditLesson(entry.lesson);
     setEditNote(entry.note);
@@ -138,13 +150,15 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       if (!editUnit.trim() || !editLesson.trim()) return;
       await updateProgressEntry({
         ...entry,
+        date: editDate,
+        period: editPeriod,
         unit: editUnit.trim(),
         lesson: editLesson.trim(),
         note: editNote.trim(),
       });
       setEditingId(null);
     },
-    [editUnit, editLesson, editNote, updateProgressEntry],
+    [editDate, editPeriod, editUnit, editLesson, editNote, updateProgressEntry],
   );
 
   /* ── 다른 반에서 불러오기 ── */
@@ -182,7 +196,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       for (const entry of toImport) {
         await addProgressEntry(
           classId,
-          entry.date,
+          importDateOverrides.get(entry.id) ?? entry.date,
           entry.period,
           entry.unit,
           entry.lesson,
@@ -206,6 +220,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     setImportSourceClassId(null);
     setImportSuccessCount(null);
     setSelectedImportIds(new Set());
+    setImportDateOverrides(new Map());
+    setImportDateShiftDays(0);
   }, []);
 
   const toggleImportEntry = useCallback((id: string) => {
@@ -411,10 +427,24 @@ export function ProgressTab({ classId }: ProgressTabProps) {
               {editingId === entry.id ? (
                 /* ── 인라인 편집 모드 ── */
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-sp-muted mb-1">
-                    <span>{entry.date}</span>
-                    <span className="text-sp-border">|</span>
-                    <span>{entry.period}교시</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+                    />
+                    <select
+                      value={editPeriod}
+                      onChange={(e) => setEditPeriod(Number(e.target.value))}
+                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                        <option key={p} value={p}>{p}교시</option>
+                      ))}
+                    </select>
                   </div>
                   <input
                     type="text"
@@ -614,6 +644,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                       onClick={() => {
                         setImportSourceClassId(null);
                         setSelectedImportIds(new Set());
+                        setImportDateOverrides(new Map());
+                        setImportDateShiftDays(0);
                       }}
                       className="p-1 text-sp-muted hover:text-sp-text transition-colors rounded"
                     >
@@ -645,6 +677,52 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                     </button>
                   )}
 
+                  {/* 날짜 일괄 조정 */}
+                  {sourceEntries.length > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-sp-surface border border-sp-border rounded-lg">
+                      <span className="text-xs text-sp-muted shrink-0">날짜 일괄 조정</span>
+                      <input
+                        type="number"
+                        value={importDateShiftDays}
+                        onChange={(e) => setImportDateShiftDays(Number(e.target.value))}
+                        placeholder="0"
+                        className="w-20 px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                   text-sp-text text-sm focus:outline-none focus:border-sp-accent text-center"
+                      />
+                      <span className="text-xs text-sp-muted shrink-0">일</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (importDateShiftDays === 0) return;
+                          setImportDateOverrides((prev) => {
+                            const next = new Map(prev);
+                            for (const id of selectedImportIds) {
+                              const entry = sourceEntries.find((e) => e.id === id);
+                              if (!entry) continue;
+                              const base = next.get(id) ?? entry.date;
+                              next.set(id, shiftDate(base, importDateShiftDays));
+                            }
+                            return next;
+                          });
+                        }}
+                        className="px-3 py-1 bg-sp-accent/20 text-sp-accent text-xs rounded-lg
+                                   hover:bg-sp-accent/30 transition-colors font-medium"
+                      >
+                        적용
+                      </button>
+                      {importDateOverrides.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setImportDateOverrides(new Map())}
+                          className="px-3 py-1 bg-sp-surface border border-sp-border text-sp-muted text-xs
+                                     rounded-lg hover:text-sp-text transition-colors"
+                        >
+                          초기화
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {sourceEntries.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-sp-muted gap-2">
                       <span className="material-symbols-outlined text-3xl">inbox</span>
@@ -654,27 +732,49 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                     <div className="space-y-1 max-h-64 overflow-y-auto">
                       {sourceEntries.map((entry) => {
                         const isSelected = selectedImportIds.has(entry.id);
+                        const overriddenDate = importDateOverrides.get(entry.id) ?? entry.date;
                         return (
-                          <button
+                          <div
                             key={entry.id}
-                            type="button"
-                            onClick={() => toggleImportEntry(entry.id)}
                             className={`w-full flex items-start gap-3 px-3 py-2 rounded-lg
-                                       text-left transition-colors ${
+                                       transition-colors ${
                               isSelected
                                 ? 'bg-sp-accent/10 border border-sp-accent/30'
-                                : 'bg-sp-surface border border-sp-border hover:border-sp-border/80'
+                                : 'bg-sp-surface border border-sp-border'
                             }`}
                           >
-                            <span className={`material-symbols-outlined text-base mt-0.5 shrink-0 ${
-                              isSelected ? 'text-sp-accent' : 'text-sp-muted'
-                            }`}>
-                              {isSelected ? 'check_box' : 'check_box_outline_blank'}
-                            </span>
-                            <span className="text-xs text-sp-muted shrink-0 mt-0.5 w-24">
-                              {entry.date}, {entry.period}교시
-                            </span>
-                            <span className="text-sm text-sp-text min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => toggleImportEntry(entry.id)}
+                              className="mt-0.5 shrink-0"
+                            >
+                              <span className={`material-symbols-outlined text-base ${
+                                isSelected ? 'text-sp-accent' : 'text-sp-muted'
+                              }`}>
+                                {isSelected ? 'check_box' : 'check_box_outline_blank'}
+                              </span>
+                            </button>
+                            <div className="shrink-0 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="date"
+                                value={overriddenDate}
+                                onChange={(e) => {
+                                  setImportDateOverrides((prev) => {
+                                    const next = new Map(prev);
+                                    next.set(entry.id, e.target.value);
+                                    return next;
+                                  });
+                                }}
+                                className="w-32 px-2 py-0.5 bg-sp-card border border-sp-border rounded-lg
+                                           text-sp-text text-xs focus:outline-none focus:border-sp-accent"
+                              />
+                              <span className="text-xs text-sp-muted text-center">{entry.period}교시</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleImportEntry(entry.id)}
+                              className="text-sm text-sp-text min-w-0 text-left flex-1"
+                            >
                               {entry.unit}
                               <span className="text-sp-muted mx-1">&gt;</span>
                               {entry.lesson}
@@ -683,8 +783,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                                   {entry.note}
                                 </span>
                               )}
-                            </span>
-                          </button>
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
