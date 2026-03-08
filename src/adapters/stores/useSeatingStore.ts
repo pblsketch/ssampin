@@ -267,12 +267,16 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         newSeats.push(newRow);
       }
 
-      const updated: SeatingData = { rows: clampedRows, cols: clampedCols, seats: newSeats };
+      let updated: SeatingData = { rows: clampedRows, cols: clampedCols, seats: newSeats };
+
+      // 잘려나간 영역의 학생을 빈 자리에 재배치
+      const students = useStudentStore.getState().students;
+      updated = sanitizeSeating(updated, students);
 
       try {
         await seatingRepository.saveSeating(updated);
         set({ seating: updated });
-        await useSettingsStore.getState().update({ seatingRows: clampedRows, seatingCols: clampedCols });
+        await useSettingsStore.getState().update({ seatingRows: updated.rows, seatingCols: updated.cols });
       } catch {
         // 무시
       }
