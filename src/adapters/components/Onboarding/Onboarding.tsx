@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Settings, SchoolLevel } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
 
 export function Onboarding() {
+    const { track } = useAnalytics();
     const { isFirstRun, completeOnboarding } = useSettingsStore();
     const [step, setStep] = useState(1);
 
@@ -23,6 +25,7 @@ export function Onboarding() {
     const prevStep = () => setStep((s) => Math.max(1, s - 1));
 
     const handleFinish = async () => {
+        track('onboarding_complete', { step: 4 });
         await completeOnboarding(draft);
     };
 
@@ -108,7 +111,7 @@ export function Onboarding() {
                                         value={draft.schoolName}
                                         onChange={(e) => patch({ schoolName: e.target.value })}
                                         placeholder="예: 서울미래초등학교"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -118,7 +121,7 @@ export function Onboarding() {
                                         value={draft.className}
                                         onChange={(e) => patch({ className: e.target.value })}
                                         placeholder="예: 6학년 3반"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -128,7 +131,7 @@ export function Onboarding() {
                                         value={draft.teacherName}
                                         onChange={(e) => patch({ teacherName: e.target.value })}
                                         placeholder="홍길동"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -138,7 +141,7 @@ export function Onboarding() {
                                         value={draft.subject}
                                         onChange={(e) => patch({ subject: e.target.value })}
                                         placeholder="구분 없음 (담임)"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                             </div>
@@ -189,7 +192,7 @@ export function Onboarding() {
                                                             type="time"
                                                             value={pt.start}
                                                             onChange={(e) => updatePeriod(i, 'start', e.target.value)}
-                                                            className="bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
+                                                            className="bg-[#0d1117] border border-slate-600 rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
                                                         />
                                                     </td>
                                                     <td className="py-2">
@@ -197,7 +200,7 @@ export function Onboarding() {
                                                             type="time"
                                                             value={pt.end}
                                                             onChange={(e) => updatePeriod(i, 'end', e.target.value)}
-                                                            className="bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
+                                                            className="bg-[#0d1117] border border-slate-600 rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
                                                         />
                                                     </td>
                                                 </tr>
