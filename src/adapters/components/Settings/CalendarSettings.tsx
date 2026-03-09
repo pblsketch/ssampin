@@ -25,7 +25,7 @@ export function CalendarSettings() {
   } = useCalendarSyncStore();
 
   const handleDisconnect = () => {
-    if (window.confirm('구글 캘린더 연결을 해제하시겠습니까?\n구글에서 가져온 일정이 모두 제거됩니다.')) {
+    if (window.confirm('구글 계정 연결을 해제하시겠습니까?\n구글에서 가져온 일정이 모두 제거됩니다.')) {
       disconnect();
     }
   };
@@ -34,11 +34,12 @@ export function CalendarSettings() {
 
   return (
     <div className="space-y-4">
+      {/* 섹션 헤더: 구글 연동 */}
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-          <span className="material-symbols-outlined">event</span>
+          <span className="material-symbols-outlined">account_circle</span>
         </div>
-        <h3 className="text-lg font-bold text-sp-text">구글 캘린더 연동</h3>
+        <h3 className="text-lg font-bold text-sp-text">구글 연동</h3>
       </div>
 
       {error && (
@@ -47,10 +48,11 @@ export function CalendarSettings() {
         </div>
       )}
 
+      {/* 계정 연결 상태 */}
       {!isConnected ? (
         <div className="space-y-3">
           <p className="text-sm text-sp-muted">
-            구글 캘린더를 연결하면 쌤핀의 일정이 자동으로 동기화됩니다.
+            구글 계정을 연결하면 캘린더 동기화와 과제수합(드라이브) 기능을 사용할 수 있습니다.
           </p>
           <button
             onClick={startAuth}
@@ -65,47 +67,67 @@ export function CalendarSettings() {
             ) : (
               <>
                 <span className="material-symbols-outlined text-[18px]">link</span>
-                구글 캘린더 연결하기
+                구글 계정 연결하기
               </>
             )}
           </button>
         </div>
       ) : (
         <div className="space-y-3">
+          {/* 연결된 계정 정보 */}
           <div className="flex items-center gap-3 rounded-lg bg-sp-surface p-3">
             <span className="text-green-400 material-symbols-outlined">check_circle</span>
             <div className="flex-1">
               <p className="text-sm font-medium text-sp-text">연결됨</p>
               <p className="text-xs text-sp-muted">{email}</p>
-              {syncState.lastSyncedAt && (
-                <p className="text-xs text-sp-muted">
-                  마지막 동기화: {new Date(syncState.lastSyncedAt).toLocaleString('ko-KR')}
-                </p>
-              )}
             </div>
-            <div className="flex items-center gap-2">
+            <button
+              onClick={handleDisconnect}
+              disabled={isLoading}
+              className="rounded-lg border border-sp-border px-3 py-1.5 text-xs text-sp-muted transition-colors hover:border-red-500/50 hover:text-red-400 disabled:opacity-50"
+            >
+              연결 해제
+            </button>
+          </div>
+
+          {/* 연동 기능 목록 */}
+          <div className="space-y-2">
+            {/* 캘린더 동기화 */}
+            <div className="flex items-center gap-3 rounded-lg border border-sp-border p-3">
+              <div className="p-1.5 rounded-md bg-blue-500/10 text-blue-400">
+                <span className="material-symbols-outlined text-[18px]">event</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-sp-text">캘린더 동기화</p>
+                <p className="text-xs text-sp-muted">일정 자동 동기화</p>
+              </div>
               <button
                 onClick={() => setShowCalendarPicker(true)}
                 className="rounded-lg bg-sp-accent/20 px-3 py-1.5 text-xs text-sp-accent transition-colors hover:bg-sp-accent/30"
               >
                 캘린더 선택 ({enabledCount})
               </button>
-              <button
-                onClick={handleDisconnect}
-                disabled={isLoading}
-                className="rounded-lg border border-sp-border px-3 py-1.5 text-xs text-sp-muted transition-colors hover:border-red-500/50 hover:text-red-400 disabled:opacity-50"
-              >
-                연결 해제
-              </button>
+            </div>
+
+            {/* 과제수합 (드라이브) */}
+            <div className="flex items-center gap-3 rounded-lg border border-sp-border p-3">
+              <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400">
+                <span className="material-symbols-outlined text-[18px]">folder_open</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-sp-text">과제수합 (드라이브)</p>
+                <p className="text-xs text-sp-muted">학생 제출 파일을 드라이브에 저장</p>
+              </div>
+              <span className="text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded">사용 가능</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* 동기화 옵션 (연결된 경우만) */}
+      {/* 캘린더 동기화 설정 (연결된 경우만) */}
       {isConnected && (
         <div className="space-y-3 rounded-lg border border-sp-border p-4">
-          <h4 className="text-sm font-semibold text-sp-text">동기화 설정</h4>
+          <h4 className="text-sm font-semibold text-sp-text">캘린더 동기화 설정</h4>
 
           {/* 동기화 주기 */}
           <div className="flex items-center justify-between">
@@ -203,7 +225,7 @@ export function CalendarSettings() {
         </button>
       </div>
 
-      {/* 캘린더 선택 모달 (최초 연결 후 자동 표시 or 수동 열기) */}
+      {/* 캘린더 선택 모달 */}
       <CalendarMappingModal
         isOpen={showCalendarPicker}
         onClose={() => setShowCalendarPicker(false)}

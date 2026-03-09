@@ -93,12 +93,12 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
 
         // OAuth 토큰을 Supabase에 저장 (최초 1회 or 갱신)
         const accessToken = await authenticateGoogle.getValidAccessToken();
-        const email = await authenticateGoogle.getEmail();
-        if (email) {
+        const refreshToken = await authenticateGoogle.getRefreshToken();
+        if (refreshToken) {
           try {
             await assignmentServicePort.saveTeacherToken({
               accessToken,
-              refreshToken: '', // refresh token은 getValidAccessToken 내부에서 관리
+              refreshToken,
               expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
             });
           } catch {
@@ -176,6 +176,9 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
         return data?.adminKey ?? '';
       })();
 
+      // Track previous submission count for new submission detection
+      let prevSubmissionCount = get().submissions.filter((s) => s.status !== 'missing').length;
+
       const stopPolling = assignmentSupabaseClient.startPolling(
         assignmentId,
         adminKey,
@@ -184,6 +187,27 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
           try {
             const useCases = createAssignmentUseCases(getAccessToken);
             const details = await useCases.getSubmissions.execute(assignmentId);
+
+            // Detect new submissions
+            const currentSubmittedCount = details.filter((s) => s.status !== 'missing').length;
+            if (currentSubmittedCount > prevSubmissionCount) {
+              const newSubmissions = details.filter((d) => {
+                if (d.status === 'missing') return false;
+                const prevDetail = get().submissions.find(
+                  (s) => s.studentNumber === d.studentNumber,
+                );
+                return !prevDetail || prevDetail.status === 'missing';
+              });
+
+              if (newSubmissions.length > 0) {
+                const names = newSubmissions.map((s) => `${s.studentNumber}번 ${s.studentName}`).join(', ');
+                window.dispatchEvent(new CustomEvent('ssampin:new-submission', {
+                  detail: { names, count: newSubmissions.length },
+                }));
+              }
+            }
+            prevSubmissionCount = currentSubmittedCount;
+
             set({ submissions: details });
 
             // assignments 목록도 업데이트

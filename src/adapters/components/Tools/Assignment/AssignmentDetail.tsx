@@ -96,6 +96,18 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
     };
   }, [selectedAssignmentId, isOnline]);
 
+  // Toast notification for new submissions
+  useEffect(() => {
+    function handleNewSubmission(e: Event) {
+      const { names, count } = (e as CustomEvent<{ names: string; count: number }>).detail;
+      showToast(`${names}이(가) 과제를 제출했습니다`, 'success');
+      // Suppress unused variable warning
+      void count;
+    }
+    window.addEventListener('ssampin:new-submission', handleNewSubmission);
+    return () => window.removeEventListener('ssampin:new-submission', handleNewSubmission);
+  }, [showToast]);
+
   async function handleCopyMissing() {
     if (!selectedAssignmentId) return;
     const text = await getMissingListText(selectedAssignmentId);
@@ -264,6 +276,13 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
         <span>제출: {submittedCount}/{totalCount}명</span>
       </div>
 
+      {/* Assignment description */}
+      {currentAssignment.description && (
+        <div className="bg-sp-surface/50 rounded-lg px-5 py-3 mb-4 ml-12">
+          <p className="text-sm text-sp-muted leading-relaxed">{currentAssignment.description}</p>
+        </div>
+      )}
+
       {/* Submission list */}
       <div className="bg-sp-card rounded-xl border border-sp-border/50 overflow-hidden mb-6">
         <div className="px-5 py-3 border-b border-sp-border/30">
@@ -333,7 +352,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
             <div className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-sm pointer-events-auto p-6">
               <h3 className="text-lg font-bold text-sp-text mb-2">{`'${currentAssignment.title}' 과제를 삭제하시겠습니까?`}</h3>
-              <p className="text-sm text-sp-muted mb-6">Supabase 데이터가 삭제됩니다. 드라이브에 저장된 파일은 유지됩니다.</p>
+              <p className="text-sm text-sp-muted mb-6">삭제된 과제는 복구할 수 없습니다. 드라이브에 저장된 파일은 유지됩니다.</p>
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}

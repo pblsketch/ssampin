@@ -900,7 +900,7 @@ export function SettingsPage() {
           {/* ── 섹션 7.5: NEIS 학사일정 ── */}
           <NeisScheduleSection />
 
-          {/* ── 섹션 7.6: 구글 캘린더 연동 ── */}
+          {/* ── 섹션 7.6: 구글 연동 ── */}
           <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
             <CalendarSettings />
           </section>

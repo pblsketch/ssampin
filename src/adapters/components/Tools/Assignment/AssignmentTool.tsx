@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useOnlineStatus } from '@adapters/hooks/useOnlineStatus';
+import { useToastStore } from '@adapters/components/common/Toast';
 import type { AssignmentWithStatus } from '@usecases/assignment/GetAssignments';
 import { AssignmentCreateModal } from './AssignmentCreateModal';
 import { OfflineNotice } from './OfflineNotice';
@@ -12,9 +13,11 @@ interface AssignmentToolProps {
 }
 
 export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
-  const { assignments, isLoading, error, loadAssignments, needsGoogleConnect, clearGoogleConnectState } = useAssignmentStore();
-  const startAuth = useCalendarSyncStore((s) => s.startAuth);
+  const { assignments, isLoading, error, loadAssignments, needsGoogleConnect, clearGoogleConnectState, deleteAssignment } = useAssignmentStore();
+  const { startAuth, isConnected: googleConnected, isLoading: googleAuthLoading } = useCalendarSyncStore();
+  const showToast = useToastStore((s) => s.show);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AssignmentWithStatus | null>(null);
   const { isOnline, checkOnline } = useOnlineStatus();
 
   async function handleGoogleConnect() {
@@ -33,6 +36,18 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
       loadAssignments();
     }
   }, [isOnline]);
+
+  function handleCopyLink(assignmentId: string) {
+    const url = `https://ssampin.vercel.app/submit/${assignmentId}`;
+    navigator.clipboard.writeText(url);
+    showToast('제출 링크가 복사되었습니다', 'success');
+  }
+
+  async function handleDeleteAssignment() {
+    if (!deleteTarget) return;
+    await deleteAssignment(deleteTarget.id);
+    setDeleteTarget(null);
+  }
 
   const activeAssignments = assignments.filter((a) => !a.isExpired);
   const expiredAssignments = assignments.filter((a) => a.isExpired);
@@ -74,16 +89,41 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
             <span>과제수합</span>
           </h1>
         </div>
-        {!needsGoogleConnect && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            aria-label="새 과제"
-            className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 text-sm font-medium"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            새 과제
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* 구글 연동 버튼 */}
+          {googleConnected ? (
+            <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-3 py-2 rounded-lg" title="구글 계정 연결됨">
+              <span className="material-symbols-outlined text-[16px]">check_circle</span>
+              구글 연결됨
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleGoogleConnect()}
+              disabled={googleAuthLoading}
+              className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+              title="구글 계정 연결"
+            >
+              {googleAuthLoading ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
+              ) : (
+                <span className="material-symbols-outlined text-[16px]">add_link</span>
+              )}
+              {googleAuthLoading ? '연결 중...' : '구글 연동'}
+            </button>
+          )}
+          {/* 새 과제 버튼 */}
+          {!needsGoogleConnect && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              aria-label="새 과제"
+              className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 text-sm font-medium"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              새 과제
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Google 계정 연결 필요 */}
@@ -164,6 +204,8 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
                     key={assignment.id}
                     assignment={assignment}
                     onClick={() => onDetail(assignment.id)}
+                    onDelete={(id) => setDeleteTarget(assignments.find((a) => a.id === id) ?? null)}
+                    onCopyLink={handleCopyLink}
                   />
                 ))}
               </div>
@@ -180,6 +222,8 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
                     key={assignment.id}
                     assignment={assignment}
                     onClick={() => onDetail(assignment.id)}
+                    onDelete={(id) => setDeleteTarget(assignments.find((a) => a.id === id) ?? null)}
+                    onCopyLink={handleCopyLink}
                   />
                 ))}
               </div>
@@ -198,6 +242,23 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
           }}
         />
       )}
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-sm pointer-events-auto p-6">
+              <h3 className="text-lg font-bold text-sp-text mb-2">{`'${deleteTarget.title}' 과제를 삭제하시겠습니까?`}</h3>
+              <p className="text-sm text-sp-muted mb-6">삭제된 과제는 복구할 수 없습니다. 드라이브에 저장된 파일은 유지됩니다.</p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sp-muted hover:text-sp-text rounded-lg hover:bg-sp-border/30 transition-colors text-sm">취소</button>
+                <button onClick={() => void handleDeleteAssignment()} className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm">삭제</button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -206,10 +267,16 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
 function AssignmentCard({
   assignment,
   onClick,
+  onDelete,
+  onCopyLink,
 }: {
   assignment: AssignmentWithStatus;
   onClick: () => void;
+  onDelete: (id: string) => void;
+  onCopyLink: (id: string) => void;
 }) {
+  const [showMenu, setShowMenu] = useState(false);
+
   const progress = assignment.totalCount > 0
     ? Math.round((assignment.submittedCount / assignment.totalCount) * 100)
     : 0;
@@ -235,11 +302,38 @@ function AssignmentCard({
             {assignment.title}
           </h3>
         </div>
-        {isComplete && (
-          <span className="text-xs px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-full font-medium">
-            완료!
-          </span>
-        )}
+        <div className="flex items-center gap-1">
+          {isComplete && (
+            <span className="text-xs px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-full font-medium">
+              완료!
+            </span>
+          )}
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-1 rounded hover:bg-sp-border/40 transition-colors opacity-0 group-hover:opacity-100"
+              aria-label="메뉴"
+            >
+              <span className="material-symbols-outlined text-sp-muted text-[18px]">more_vert</span>
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 top-8 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">
+                <button
+                  onClick={() => { setShowMenu(false); onCopyLink(assignment.id); }}
+                  className="w-full px-4 py-2 text-left text-sm text-sp-text hover:bg-sp-border/30 transition-colors"
+                >
+                  링크 복사
+                </button>
+                <button
+                  onClick={() => { setShowMenu(false); onDelete(assignment.id); }}
+                  className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-sp-border/30 transition-colors"
+                >
+                  과제 삭제
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 text-sm text-sp-muted mb-3">

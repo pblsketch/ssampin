@@ -60,6 +60,12 @@ export class AuthenticateGoogle {
     return tokens?.email ?? null;
   }
 
+  /** 저장된 리프레시 토큰 반환 */
+  async getRefreshToken(): Promise<string | null> {
+    const tokens = await this.syncRepo.getAuthTokens();
+    return tokens?.refreshToken ?? null;
+  }
+
   /** 연결 해제 (토큰 폐기 + 로컬 삭제) */
   async disconnect(): Promise<void> {
     const tokens = await this.syncRepo.getAuthTokens();
