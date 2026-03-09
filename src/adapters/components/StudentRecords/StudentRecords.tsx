@@ -122,6 +122,16 @@ export function StudentRecords() {
     void loadStudents();
   }, [load, loadStudents]);
 
+  // 담임 반 학생 ID로 필터링 — 다른 학급 학생 기록 제외
+  const studentIds = useMemo(
+    () => new Set(students.map((s) => s.id)),
+    [students],
+  );
+  const filteredRecords = useMemo(
+    () => records.filter((r) => studentIds.has(r.studentId)),
+    [records, studentIds],
+  );
+
   if (!loaded || !studentsLoaded) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -174,13 +184,13 @@ export function StudentRecords() {
       )}
 
       {viewMode === 'input' && (
-        <InputMode students={students} records={records} categories={categories} selectedDate={selectedDate} />
+        <InputMode students={students} records={filteredRecords} categories={categories} selectedDate={selectedDate} />
       )}
       {viewMode === 'progress' && (
-        <ProgressMode students={students} records={records} categories={categories} />
+        <ProgressMode students={students} records={filteredRecords} categories={categories} />
       )}
       {viewMode === 'search' && (
-        <SearchMode students={students} records={records} categories={categories} />
+        <SearchMode students={students} records={filteredRecords} categories={categories} />
       )}
 
       {showCategoryModal && (

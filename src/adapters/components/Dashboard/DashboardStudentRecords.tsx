@@ -42,6 +42,16 @@ export function DashboardStudentRecords() {
     void loadStudents();
   }, [load, loadStudents]);
 
+  // 담임 반 학생 ID로 필터링 — 다른 학급 학생 기록 제외
+  const studentIds = useMemo(
+    () => new Set(students.map((s) => s.id)),
+    [students],
+  );
+  const homeroomRecords = useMemo(
+    () => records.filter((r) => studentIds.has(r.studentId)),
+    [records, studentIds],
+  );
+
   const categoryColorMap = useMemo(
     () => new Map(categories.map((c) => [c.id, c.color])),
     [categories],
@@ -54,14 +64,14 @@ export function DashboardStudentRecords() {
 
   const today = todayString();
   const todayRecords = useMemo(
-    () => sortByDateDesc(records.filter((r) => r.date === today)),
-    [records, today],
+    () => sortByDateDesc(homeroomRecords.filter((r) => r.date === today)),
+    [homeroomRecords, today],
   );
 
   // 2-3: 미완료 후속 조치
   const pendingFollowUps = useMemo(() => {
-    return records.filter((r) => r.followUp && !r.followUpDone);
-  }, [records]);
+    return homeroomRecords.filter((r) => r.followUp && !r.followUpDone);
+  }, [homeroomRecords]);
 
   // Filtered records based on active tab
   const filteredRecords = useMemo(() => {
