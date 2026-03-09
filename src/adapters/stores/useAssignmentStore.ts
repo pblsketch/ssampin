@@ -96,10 +96,14 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
         const refreshToken = await authenticateGoogle.getRefreshToken();
         if (refreshToken) {
           try {
+            const expiresAtMs = await authenticateGoogle.getExpiresAt();
+            const expiresAt = expiresAtMs
+              ? new Date(expiresAtMs).toISOString()
+              : new Date(Date.now() + 3600 * 1000).toISOString();
             await assignmentServicePort.saveTeacherToken({
               accessToken,
               refreshToken,
-              expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
+              expiresAt,
             });
           } catch {
             // 토큰 저장 실패는 무시 (이미 저장되어 있을 수 있음)

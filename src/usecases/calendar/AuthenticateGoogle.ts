@@ -66,6 +66,12 @@ export class AuthenticateGoogle {
     return tokens?.refreshToken ?? null;
   }
 
+  /** 저장된 토큰 만료 시각 반환 (밀리초 timestamp) */
+  async getExpiresAt(): Promise<number | null> {
+    const tokens = await this.syncRepo.getAuthTokens();
+    return tokens?.expiresAt ?? null;
+  }
+
   /** 연결 해제 (토큰 폐기 + 로컬 삭제) */
   async disconnect(): Promise<void> {
     const tokens = await this.syncRepo.getAuthTokens();

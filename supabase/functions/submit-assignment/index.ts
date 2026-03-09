@@ -7,8 +7,8 @@
  * 4) 재제출 체크
  * 5) 파일 형식 체크
  * 6) 교사 OAuth 토큰 복호화
- * 7) 토큰 만료 시 refresh (1회 리트라이)
- * 8) Google Drive 업로드
+ * 7) 토큰 만료 5분 전 자동 갱신 + 401 시 강제 재갱신
+ * 8) Google Drive 업로드 (401 시 1회 재시도)
  * 9) submissions upsert
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
@@ -19,6 +19,7 @@ import { decrypt, encrypt } from '../_shared/crypto.ts';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3';
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // 만료 5분 전부터 미리 갱신
 
 /** 차단 확장자 */
 const BLOCKED_EXTENSIONS = [
@@ -159,6 +160,106 @@ async function updateDriveFile(
   return res.json();
 }
 
+/**
+ * 교사 토큰을 복호화하고, 만료 임박/만료 시 자동 갱신하여 유효한 access_token 반환.
+ * 갱신 성공 시 DB에 새 토큰 암호화 저장.
+ *
+ * @param forceRefresh true이면 expires_at 무시하고 강제 갱신 (Drive 401 재시도용)
+ */
+async function getValidAccessToken(
+  supabase: ReturnType<typeof createClient>,
+  teacherId: string,
+  encryptionKey: string,
+  forceRefresh = false,
+): Promise<string> {
+  const { data: tokenRecord, error: tokenError } = await supabase
+    .from('teacher_tokens')
+    .select('*')
+    .eq('teacher_id', teacherId)
+    .single();
+
+  if (tokenError || !tokenRecord) {
+    throw new Error('TEACHER_TOKEN_NOT_FOUND');
+  }
+
+  const record = tokenRecord as TokenRecord;
+
+  let accessToken = await decrypt(
+    record.encrypted_access_token,
+    encryptionKey,
+    record.access_iv,
+    record.access_tag,
+  );
+
+  // 만료 5분 전부터 미리 갱신 (버퍼), 또는 forceRefresh 시 무조건 갱신
+  const expiresAt = new Date(record.expires_at).getTime();
+  const needsRefresh = forceRefresh || expiresAt - Date.now() < TOKEN_REFRESH_BUFFER_MS;
+
+  if (needsRefresh) {
+    const refreshToken = await decrypt(
+      record.encrypted_refresh_token,
+      encryptionKey,
+      record.refresh_iv,
+      record.refresh_tag,
+    );
+
+    const clientId = Deno.env.get('GOOGLE_CLIENT_ID')!;
+    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')!;
+
+    try {
+      const newTokens = await refreshGoogleToken(refreshToken, clientId, clientSecret);
+
+      // 새 토큰 암호화 후 DB 업데이트
+      const encAccess = await encrypt(newTokens.access_token, encryptionKey);
+      const encRefresh = await encrypt(refreshToken, encryptionKey);
+
+      await supabase
+        .from('teacher_tokens')
+        .update({
+          encrypted_access_token: encAccess.ciphertext,
+          access_iv: encAccess.iv,
+          access_tag: encAccess.tag,
+          encrypted_refresh_token: encRefresh.ciphertext,
+          refresh_iv: encRefresh.iv,
+          refresh_tag: encRefresh.tag,
+          expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('teacher_id', teacherId);
+
+      accessToken = newTokens.access_token;
+    } catch {
+      // 경쟁 조건: 다른 인스턴스가 이미 갱신했을 수 있음 → DB 재조회
+      const { data: retryRecord } = await supabase
+        .from('teacher_tokens')
+        .select('*')
+        .eq('teacher_id', teacherId)
+        .single();
+
+      if (!retryRecord) {
+        throw new Error('TEACHER_TOKEN_NOT_FOUND');
+      }
+
+      const retry = retryRecord as TokenRecord;
+      const retryExpiresAt = new Date(retry.expires_at).getTime();
+
+      // 재조회한 토큰도 만료 → refresh_token이 무효화됨 (교사 재인증 필요)
+      if (retryExpiresAt - Date.now() < TOKEN_REFRESH_BUFFER_MS) {
+        throw new Error('TOKEN_REFRESH_FAILED');
+      }
+
+      accessToken = await decrypt(
+        retry.encrypted_access_token,
+        encryptionKey,
+        retry.access_iv,
+        retry.access_tag,
+      );
+    }
+  }
+
+  return accessToken;
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -171,14 +272,19 @@ serve(async (req: Request) => {
     const studentId = formData.get('studentId') as string | null;
     const studentNumber = parseInt(formData.get('studentNumber') as string, 10);
     const studentName = formData.get('studentName') as string;
-    const file = formData.get('file') as File;
+    const file = formData.get('file') as File | null;
+    const textContent = formData.get('textContent') as string | null;
 
-    if (!assignmentId || !studentNumber || !studentName || !file) {
+    if (!assignmentId || !studentNumber || !studentName) {
       return errorResponse('필수 필드가 누락되었습니다', 400);
     }
 
+    if (!file && !textContent) {
+      return errorResponse('파일 또는 텍스트를 제출해야 합니다', 400);
+    }
+
     // 1. 파일 크기 체크
-    if (file.size > MAX_FILE_SIZE) {
+    if (file && file.size > MAX_FILE_SIZE) {
       return errorResponse('파일 크기는 10MB 이하만 가능합니다', 400);
     }
 
@@ -221,106 +327,65 @@ serve(async (req: Request) => {
       return errorResponse('허용되지 않는 파일 형식입니다', 400);
     }
 
-    // 6. 교사 OAuth 토큰 조회 + 복호화
-    const { data: tokenRecord, error: tokenError } = await supabase
-      .from('teacher_tokens')
-      .select('*')
-      .eq('teacher_id', assignment.teacher_id)
-      .single();
-
-    if (tokenError || !tokenRecord) {
-      return errorResponse('교사 인증 정보를 찾을 수 없습니다', 500);
-    }
-
+    // 6~7. 교사 OAuth 토큰 복호화 + 만료 시 자동 갱신 (5분 버퍼)
     const encryptionKey = Deno.env.get('ENCRYPTION_KEY')!;
-    const record = tokenRecord as TokenRecord;
+    let accessToken: string;
 
-    let accessToken = await decrypt(
-      record.encrypted_access_token,
-      encryptionKey,
-      record.access_iv,
-      record.access_tag,
-    );
-
-    // 7. 토큰 만료 시 refresh (최대 1회 리트라이)
-    if (new Date(record.expires_at) <= new Date()) {
-      const refreshToken = await decrypt(
-        record.encrypted_refresh_token,
-        encryptionKey,
-        record.refresh_iv,
-        record.refresh_tag,
-      );
-
-      try {
-        const clientId = Deno.env.get('GOOGLE_CLIENT_ID')!;
-        const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')!;
-        const newTokens = await refreshGoogleToken(refreshToken, clientId, clientSecret);
-
-        // 새 토큰 암호화 후 DB 업데이트
-        const encAccess = await encrypt(newTokens.access_token, encryptionKey);
-        const encRefresh = await encrypt(refreshToken, encryptionKey);
-
-        await supabase
-          .from('teacher_tokens')
-          .update({
-            encrypted_access_token: encAccess.ciphertext,
-            access_iv: encAccess.iv,
-            access_tag: encAccess.tag,
-            encrypted_refresh_token: encRefresh.ciphertext,
-            refresh_iv: encRefresh.iv,
-            refresh_tag: encRefresh.tag,
-            expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('teacher_id', assignment.teacher_id);
-
-        accessToken = newTokens.access_token;
-      } catch {
-        // 경쟁 조건: 다른 인스턴스가 이미 갱신했을 수 있음 → DB 재조회
-        const { data: retryRecord } = await supabase
-          .from('teacher_tokens')
-          .select('*')
-          .eq('teacher_id', assignment.teacher_id)
-          .single();
-
-        if (retryRecord) {
-          const retry = retryRecord as TokenRecord;
-          accessToken = await decrypt(
-            retry.encrypted_access_token,
-            encryptionKey,
-            retry.access_iv,
-            retry.access_tag,
-          );
-        }
+    try {
+      accessToken = await getValidAccessToken(supabase, assignment.teacher_id, encryptionKey);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === 'TEACHER_TOKEN_NOT_FOUND') {
+        return errorResponse('교사 인증 정보를 찾을 수 없습니다', 500);
       }
+      if (msg === 'TOKEN_REFRESH_FAILED') {
+        return errorResponse(
+          '교사의 Google 인증이 만료되었습니다. 교사에게 쌤핀 앱에서 Google 계정을 다시 연결하도록 안내해주세요.',
+          401,
+        );
+      }
+      throw err;
     }
 
-    // 8. Google Drive 업로드
+    // 8. Google Drive 업로드 (401 시 토큰 재갱신 후 1회 재시도)
     const paddedNumber = String(studentNumber).padStart(2, '0');
     const driveFileName = `${paddedNumber}_${studentName}_${file.name}`;
     const mimeType = file.type || 'application/octet-stream';
 
+    const doDriveUpload = async (token: string): Promise<string> => {
+      if (existingSubmission?.drive_file_id) {
+        const result = await updateDriveFile(token, existingSubmission.drive_file_id, file, mimeType);
+        return result.id;
+      } else {
+        const result = await uploadToDrive(token, assignment.drive_folder_id, driveFileName, file, mimeType);
+        return result.id;
+      }
+    };
+
     let driveFileId: string;
 
-    if (existingSubmission?.drive_file_id) {
-      // 재제출: 기존 파일 업데이트
-      const result = await updateDriveFile(
-        accessToken,
-        existingSubmission.drive_file_id,
-        file,
-        mimeType,
-      );
-      driveFileId = result.id;
-    } else {
-      // 신규 제출: 새 파일 업로드
-      const result = await uploadToDrive(
-        accessToken,
-        assignment.drive_folder_id,
-        driveFileName,
-        file,
-        mimeType,
-      );
-      driveFileId = result.id;
+    try {
+      driveFileId = await doDriveUpload(accessToken);
+    } catch (uploadErr) {
+      // 401/403 → 토큰 강제 재갱신 후 1회 재시도
+      const errMsg = (uploadErr as Error).message;
+      if (errMsg.includes('401') || errMsg.includes('403')) {
+        try {
+          accessToken = await getValidAccessToken(supabase, assignment.teacher_id, encryptionKey, true);
+          driveFileId = await doDriveUpload(accessToken);
+        } catch (retryErr) {
+          const retryMsg = (retryErr as Error).message;
+          if (retryMsg === 'TOKEN_REFRESH_FAILED') {
+            return errorResponse(
+              '교사의 Google 인증이 만료되었습니다. 교사에게 쌤핀 앱에서 Google 계정을 다시 연결하도록 안내해주세요.',
+              401,
+            );
+          }
+          throw retryErr;
+        }
+      } else {
+        throw uploadErr;
+      }
     }
 
     // 9. submissions upsert (assignment_id + student_number 기준)
