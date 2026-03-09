@@ -16,6 +16,7 @@ const tools = [
   { emoji: '🪑', name: '자리 뽑기', desc: '내 손으로 뽑는 내 자리' },
   { emoji: '🌳', name: '숲소리', desc: '교육 웹진' },
   { emoji: '🎯', name: 'PBL스케치', desc: '수업 및 평가 설계 도구' },
+  { emoji: '📎', name: '과제수합', desc: '링크 하나로 과제 수합' },
 ];
 
 export default function ClassroomTools() {
@@ -24,7 +25,7 @@ export default function ClassroomTools() {
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn>
           <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
-            쌤도구 15가지
+            쌤도구 16가지
           </p>
           <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
             수업에 바로 쓰는 쌤도구

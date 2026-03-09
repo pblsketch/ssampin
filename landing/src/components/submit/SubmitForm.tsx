@@ -33,12 +33,12 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [nameWarning, setNameWarning] = useState(false);
   const [remainingTime, setRemainingTime] = useState('');
-  const [submitMode, setSubmitMode] = useState<'file' | 'text'>('file');
   const [textContent, setTextContent] = useState('');
   const [submittedInfo, setSubmittedInfo] = useState<{
     number: number;
     name: string;
-    fileName: string;
+    fileName: string | null;
+    textContent: string | null;
     time: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -117,42 +117,34 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
     const num = parseInt(studentNumber, 10);
     if (isNaN(num)) return;
 
-    if (submitMode === 'file') {
-      if (!file) return;
-    } else {
-      if (!textContent.trim()) return;
-    }
+    const hasFile = !!file;
+    const hasText = !!textContent.trim();
+    if (!hasFile && !hasText) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
-      let result;
-      if (submitMode === 'text') {
-        const blob = new Blob([textContent], { type: 'text/plain' });
-        const textFile = new File([blob], `${studentName}_과제.txt`, { type: 'text/plain' });
-        result = await submitAssignment({
-          assignmentId: assignment.id,
-          studentNumber: num,
-          studentName,
-          file: textFile,
-        });
-      } else {
-        result = await submitAssignment({
-          assignmentId: assignment.id,
-          studentNumber: num,
-          studentName,
-          file: file!,
-        });
-      }
+      // 파일이 없고 텍스트만 있으면 텍스트를 .txt 파일로 변환
+      const submitFile = hasFile
+        ? file
+        : new File([textContent], `${studentName}_과제.txt`, { type: 'text/plain' });
+
+      const result = await submitAssignment({
+        assignmentId: assignment.id,
+        studentNumber: num,
+        studentName,
+        file: submitFile,
+        textContent: hasText ? textContent : undefined,
+      });
 
       if (result.success) {
         const now = new Date();
-        const fileName = submitMode === 'text' ? `${studentName}_과제.txt` : file!.name;
         setSubmittedInfo({
           number: num,
           name: studentName,
-          fileName,
+          fileName: hasFile ? file.name : null,
+          textContent: hasText ? textContent : null,
           time: `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
         });
         setView('success');
@@ -190,9 +182,7 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
 
   const deadline = new Date(assignment.deadline);
   const deadlineText = `${deadline.getFullYear()}년 ${deadline.getMonth() + 1}월 ${deadline.getDate()}일 ${String(deadline.getHours()).padStart(2, '0')}:${String(deadline.getMinutes()).padStart(2, '0')}`;
-  const canSubmit = studentNumber && studentName && !isSubmitting && (
-    (submitMode === 'file' && file) || (submitMode === 'text' && textContent.trim())
-  );
+  const canSubmit = studentNumber && studentName && !isSubmitting && (file || textContent.trim());
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -256,110 +246,80 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
 
       <div className="h-px bg-sp-border/50 my-6" />
 
-      {/* Submit mode toggle */}
-      <div className="flex rounded-lg overflow-hidden border border-sp-border mb-4">
-        <button
-          type="button"
-          onClick={() => setSubmitMode('file')}
-          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-            submitMode === 'file'
-              ? 'bg-sp-accent text-white'
-              : 'bg-sp-card text-sp-muted hover:text-sp-text'
-          }`}
-        >
-          📎 파일 제출
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubmitMode('text')}
-          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-            submitMode === 'text'
-              ? 'bg-sp-accent text-white'
-              : 'bg-sp-card text-sp-muted hover:text-sp-text'
-          }`}
-        >
-          ✏️ 텍스트 제출
-        </button>
+      {/* File selection */}
+      <div className="mb-5">
+        <label className="block text-sm font-medium text-sp-text mb-1.5">📎 파일 첨부</label>
+
+        {file ? (
+          <div className="flex items-center gap-3 p-3 bg-sp-card border border-sp-accent/30 rounded-lg">
+            <span className="text-sp-accent text-lg">📎</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sp-text text-sm truncate">{file.name}</p>
+              <p className="text-sp-muted text-xs">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+            </div>
+            <button
+              onClick={() => setFile(null)}
+              aria-label="파일 제거"
+              className="text-sp-muted hover:text-red-400 transition-colors text-sm"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="파일 선택"
+              className="flex-1 px-4 py-3 bg-sp-card border border-sp-border border-dashed rounded-lg text-sp-muted hover:border-sp-accent/50 hover:text-sp-text transition-colors flex items-center justify-center gap-2 text-sm"
+            >
+              📎 파일 선택
+            </button>
+            <button
+              onClick={() => cameraInputRef.current?.click()}
+              aria-label="카메라 촬영"
+              className="flex-1 px-4 py-3 bg-sp-card border border-sp-border border-dashed rounded-lg text-sp-muted hover:border-sp-accent/50 hover:text-sp-text transition-colors flex items-center justify-center gap-2 text-sm"
+            >
+              📷 카메라
+            </button>
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={acceptAttr}
+          onChange={handleFileChange}
+          className="hidden"
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        <p className="text-xs text-sp-muted/60 mt-1.5">
+          허용: {FILE_TYPE_LABELS[assignment.fileTypeRestriction] ?? '모든 파일'} · 최대 10MB
+        </p>
       </div>
 
-      {/* File selection */}
-      {submitMode === 'file' && (
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-sp-text mb-1.5">파일</label>
-
-          {file ? (
-            <div className="flex items-center gap-3 p-3 bg-sp-card border border-sp-accent/30 rounded-lg">
-              <span className="text-sp-accent text-lg">📎</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sp-text text-sm truncate">{file.name}</p>
-                <p className="text-sp-muted text-xs">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
-              </div>
-              <button
-                onClick={() => setFile(null)}
-                aria-label="파일 제거"
-                className="text-sp-muted hover:text-red-400 transition-colors text-sm"
-              >
-                ✕
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="파일 선택"
-                className="w-full px-4 py-3 bg-sp-card border border-sp-border border-dashed rounded-lg text-sp-muted hover:border-sp-accent/50 hover:text-sp-text transition-colors flex items-center justify-center gap-2"
-              >
-                📎 파일 선택
-              </button>
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                aria-label="카메라 촬영"
-                className="w-full px-4 py-3 bg-sp-card border border-sp-border border-dashed rounded-lg text-sp-muted hover:border-sp-accent/50 hover:text-sp-text transition-colors flex items-center justify-center gap-2"
-              >
-                📷 카메라 촬영
-              </button>
-            </div>
-          )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={acceptAttr}
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-
-          <p className="text-xs text-sp-muted/60 mt-2">
-            허용: {FILE_TYPE_LABELS[assignment.fileTypeRestriction] ?? '모든 파일'} · 최대 10MB
-          </p>
-        </div>
-      )}
-
       {/* Text submission */}
-      {submitMode === 'text' && (
-        <div className="mb-6">
-          <label htmlFor="text-content" className="block text-sm font-medium text-sp-text mb-1.5">내용</label>
-          <textarea
-            id="text-content"
-            value={textContent}
-            onChange={(e) => setTextContent(e.target.value)}
-            placeholder="과제 내용을 입력하세요"
-            rows={8}
-            className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none"
-          />
-          <p className="text-xs text-sp-muted/60 mt-2">
-            텍스트는 .txt 파일로 변환되어 제출됩니다
-          </p>
-        </div>
-      )}
+      <div className="mb-6">
+        <label htmlFor="text-content" className="block text-sm font-medium text-sp-text mb-1.5">✏️ 텍스트 입력</label>
+        <textarea
+          id="text-content"
+          value={textContent}
+          onChange={(e) => setTextContent(e.target.value)}
+          placeholder="과제 내용을 입력하세요 (선택)"
+          rows={5}
+          className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none text-sm"
+        />
+        <p className="text-xs text-sp-muted/60 mt-1.5">
+          파일과 텍스트를 함께 제출하거나, 하나만 제출할 수도 있습니다
+        </p>
+      </div>
 
       {/* Submit button */}
       <button

@@ -5,7 +5,8 @@ import type { AssignmentPublic } from './submitApi';
 interface SubmittedInfo {
   number: number;
   name: string;
-  fileName: string;
+  fileName: string | null;
+  textContent: string | null;
   time: string;
 }
 
@@ -31,10 +32,18 @@ export function SubmitSuccess({ assignment, submittedInfo, onResubmit }: SubmitS
             <p className="text-xs text-sp-muted mb-0.5">이름</p>
             <p className="text-sp-text">{submittedInfo.number}번 {submittedInfo.name}</p>
           </div>
-          <div>
-            <p className="text-xs text-sp-muted mb-0.5">파일</p>
-            <p className="text-sp-text truncate">{submittedInfo.fileName}</p>
-          </div>
+          {submittedInfo.fileName && (
+            <div>
+              <p className="text-xs text-sp-muted mb-0.5">파일</p>
+              <p className="text-sp-text truncate">{submittedInfo.fileName}</p>
+            </div>
+          )}
+          {submittedInfo.textContent && (
+            <div>
+              <p className="text-xs text-sp-muted mb-0.5">텍스트</p>
+              <p className="text-sp-text text-sm line-clamp-3 whitespace-pre-wrap">{submittedInfo.textContent}</p>
+            </div>
+          )}
           <div>
             <p className="text-xs text-sp-muted mb-0.5">시간</p>
             <p className="text-sp-text">{submittedInfo.time}</p>

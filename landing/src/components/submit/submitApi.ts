@@ -43,12 +43,16 @@ export async function submitAssignment(data: {
   studentNumber: number;
   studentName: string;
   file: File;
+  textContent?: string;
 }): Promise<SubmitResult> {
   const formData = new FormData();
   formData.append('assignmentId', data.assignmentId);
   formData.append('studentNumber', String(data.studentNumber));
   formData.append('studentName', data.studentName);
   formData.append('file', data.file);
+  if (data.textContent) {
+    formData.append('textContent', data.textContent);
+  }
 
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-assignment`, {
