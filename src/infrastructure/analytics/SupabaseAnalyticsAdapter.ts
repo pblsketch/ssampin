@@ -10,6 +10,7 @@ const MAX_OFFLINE_QUEUE = 500;
 const OFFLINE_QUEUE_KEY = 'ssampin_analytics_queue';
 
 interface AnalyticsRecord {
+  event_id: string;
   event: string;
   properties: Record<string, unknown>;
   app_version: string;
@@ -41,7 +42,19 @@ export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
   }
 
   track(event: string, properties: Record<string, unknown> = {}): void {
+    // 개발 환경에서는 추적 건너뜀 (강제 플래그 없으면)
+    const isDev = import.meta.env.DEV ||
+      (typeof window !== 'undefined' && window.location.hostname === 'localhost');
+    const forceAnalytics = typeof window !== 'undefined' &&
+      localStorage.getItem('ssampin_force_analytics') === 'true';
+
+    if (isDev && !forceAnalytics) {
+      console.debug('[Analytics skip]', event, properties);
+      return;
+    }
+
     const record: AnalyticsRecord = {
+      event_id: crypto.randomUUID(),
       event,
       properties,
       app_version: this.appVersion,
@@ -99,7 +112,7 @@ export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
     try {
       const { error } = await this.supabase
         .from('app_analytics')
-        .insert(toSend);
+        .upsert(toSend, { onConflict: 'event_id', ignoreDuplicates: true });
 
       if (error) {
         console.warn('[Analytics] Supabase insert failed:', error.message);

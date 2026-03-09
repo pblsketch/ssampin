@@ -5,7 +5,6 @@ import type { AnalyticsEventName, AnalyticsEventProperties } from '@domain/value
 
 const DEVICE_ID_KEY = 'ssampin_device_id';
 
-/** device_id를 로드하거나 최초 생성한다 */
 function getOrCreateDeviceId(): string {
   let id = localStorage.getItem(DEVICE_ID_KEY);
   if (!id) {
@@ -16,22 +15,26 @@ function getOrCreateDeviceId(): string {
 }
 
 /**
- * Analytics 훅.
- * 앱 최초 마운트 시 device_id / app_version 초기화,
- * 앱 종료 시 flush + app_close 이벤트 전송을 담당한다.
+ * Analytics 라이프사이클 훅.
+ * App.tsx에서만 1회 호출 — device_id/app_version 초기화 + 앱 종료 시 flush.
  */
-export function useAnalytics() {
+export function useAnalyticsLifecycle() {
   const startTimeRef = useRef(Date.now());
-  const analyticsEnabled = useSettingsStore((s) => s.settings.analytics?.enabled ?? true);
 
   // 초기화 (최초 1회)
   useEffect(() => {
     const deviceId = getOrCreateDeviceId();
     analyticsPort.setDeviceId(deviceId);
     analyticsPort.setAppVersion(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0');
+
+    // session_start 이벤트 추가
+    const LAUNCH_COUNT_KEY = 'ssampin_launch_count';
+    const launchCount = parseInt(localStorage.getItem(LAUNCH_COUNT_KEY) || '0', 10) + 1;
+    localStorage.setItem(LAUNCH_COUNT_KEY, launchCount.toString());
+    analyticsPort.track('session_start', { isReturning: launchCount > 1, launchCount });
   }, []);
 
-  // 앱 종료 시 flush
+  // 앱 종료 시 flush (여기서만 등록!)
   useEffect(() => {
     const handleBeforeUnload = () => {
       const sessionDuration = Math.round((Date.now() - startTimeRef.current) / 1000);
@@ -57,6 +60,14 @@ export function useAnalytics() {
       unsubscribe?.();
     };
   }, []);
+}
+
+/**
+ * Analytics 추적 훅.
+ * 모든 컴포넌트에서 사용 — track 함수만 반환.
+ */
+export function useAnalytics() {
+  const analyticsEnabled = useSettingsStore((s) => s.settings.analytics?.enabled ?? true);
 
   /** 타입 안전한 track 함수 */
   const track = useCallback(

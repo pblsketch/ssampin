@@ -43,7 +43,7 @@ import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
-import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -158,6 +158,7 @@ export function App() {
   const [showFeedback, setShowFeedback] = useState(false);
   const { setShareFile, setShowImportModal } = useEventsStore();
   const { settings } = useSettingsStore();
+  useAnalyticsLifecycle();
   const { track } = useAnalytics();
 
   // Analytics: 앱 시작 이벤트
@@ -165,6 +166,30 @@ export function App() {
     track('app_open', { launchMode: isWidgetMode() ? 'widget' : 'normal' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 전역 에러 추적
+  useEffect(() => {
+    const handleError = (e: ErrorEvent) => {
+      track('error', {
+        message: e.message || 'Unknown error',
+        component: 'global',
+        stack: e.error?.stack?.substring(0, 500),
+      });
+    };
+    const handleRejection = (e: PromiseRejectionEvent) => {
+      track('error', {
+        message: String((e.reason as { message?: string })?.message || e.reason || 'Unhandled rejection'),
+        component: 'global',
+        stack: String((e.reason as { stack?: string })?.stack || '').substring(0, 500),
+      });
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, [track]);
 
   // Analytics: 페이지 이동 추적
   useEffect(() => {

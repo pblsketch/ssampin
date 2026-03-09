@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
@@ -137,6 +138,7 @@ const SCHOOL_LEVEL_OPTIONS: { value: SchoolLevel; label: string; desc: string }[
 ];
 
 export function SettingsPage() {
+  const { track } = useAnalytics();
   const { settings, loaded, load, update } = useSettingsStore();
   const {
     categories,
@@ -275,6 +277,27 @@ export function SettingsPage() {
     try {
       await update(draft);
       showToast('설정이 저장되었습니다.', 'success');
+
+      // school_set 이벤트: 학교 이름이 변경된 경우
+      if (draft.schoolName !== settings.schoolName || draft.schoolLevel !== settings.schoolLevel) {
+        const regionMatch = draft.neis.schoolName.match(/\(([^)]+)\)/);
+        track('school_set', {
+          school: draft.schoolName,
+          level: draft.schoolLevel,
+          region: regionMatch ? (regionMatch[1] ?? 'unknown') : 'unknown',
+        });
+      }
+
+      // class_set 이벤트: 학급 정보가 변경된 경우
+      if (draft.className !== settings.className) {
+        const gradeMatch = draft.className.match(/(\d+)학년/);
+        const classMatch = draft.className.match(/(\d+)반/);
+        track('class_set', {
+          grade: gradeMatch ? parseInt(gradeMatch[1] ?? '0', 10) : 0,
+          classNum: classMatch ? parseInt(classMatch[1] ?? '0', 10) : 0,
+          studentCount: 0,
+        });
+      }
     } catch {
       showToast('설정 저장에 실패했습니다.', 'error');
     } finally {

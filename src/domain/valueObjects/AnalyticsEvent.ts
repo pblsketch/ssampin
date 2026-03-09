@@ -17,7 +17,12 @@ export type AnalyticsEventName =
   | 'chatbot_open'
   | 'chatbot_message'
   | 'update_installed'
-  | 'onboarding_complete';
+  | 'onboarding_complete'
+  | 'school_set'
+  | 'class_set'
+  | 'error'
+  | 'feature_discovery'
+  | 'session_start';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -55,4 +60,9 @@ export interface AnalyticsEventProperties {
   chatbot_message: Record<string, never>;
   update_installed: { from: string; to: string };
   onboarding_complete: { step: number };
+  school_set: { school: string; level: string; region: string };
+  class_set: { grade: number; classNum: number; studentCount: number };
+  error: { message: string; component: string; stack?: string };
+  feature_discovery: { feature: string; source: 'menu' | 'shortcut' | 'tooltip' | 'search' };
+  session_start: { isReturning: boolean; launchCount: number };
 }

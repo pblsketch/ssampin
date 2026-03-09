@@ -26,6 +26,27 @@ export function Onboarding() {
 
     const handleFinish = async () => {
         track('onboarding_complete', { step: 4 });
+
+        // school_set 이벤트
+        if (draft.schoolName) {
+            track('school_set', {
+                school: draft.schoolName,
+                level: draft.schoolLevel ?? 'middle',
+                region: 'unknown',
+            });
+        }
+
+        // class_set 이벤트
+        if (draft.className) {
+            const gradeMatch = draft.className.match(/(\d+)학년/);
+            const classMatch = draft.className.match(/(\d+)반/);
+            track('class_set', {
+                grade: gradeMatch ? parseInt(gradeMatch[1] ?? '0', 10) : 0,
+                classNum: classMatch ? parseInt(classMatch[1] ?? '0', 10) : 0,
+                studentCount: 0,
+            });
+        }
+
         await completeOnboarding(draft);
     };
 

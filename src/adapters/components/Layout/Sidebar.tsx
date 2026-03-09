@@ -34,6 +34,7 @@ export type PageId =
 
 import { useState, useMemo, useCallback } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { SyncStatusBar } from '@adapters/components/Calendar/SyncStatusBar';
 
 interface SidebarProps {
@@ -106,6 +107,7 @@ export const PROTECTABLE_PAGES: readonly ProtectablePage[] = NAV_ITEMS
   }));
 
 export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
+  const { track } = useAnalytics();
   const { settings } = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.update);
 
@@ -200,7 +202,10 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
               onDrop={(e) => handleDrop(e, item.id)}
               onDragEnd={handleDragEnd}
               onDragLeave={() => { if (dragOverId === item.id) setDragOverId(null); }}
-              onClick={() => onNavigate(item.id)}
+              onClick={() => {
+                track('feature_discovery', { feature: item.id, source: 'menu' });
+                onNavigate(item.id);
+              }}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left group ${
                 isActive
                   ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/20'
@@ -223,7 +228,10 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
       <div className="p-4 border-t border-sp-border">
         <SyncStatusBar />
         <button
-          onClick={() => onNavigate('settings')}
+          onClick={() => {
+            track('feature_discovery', { feature: 'settings', source: 'menu' });
+            onNavigate('settings');
+          }}
           className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all w-full text-left ${currentPage === 'settings'
             ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/20'
             : 'text-sp-muted hover:text-white hover:bg-white/5'
