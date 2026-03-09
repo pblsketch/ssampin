@@ -1,9 +1,38 @@
 import { Metadata } from 'next';
+import EventLog from './EventLog';
 
 export const metadata: Metadata = {
   title: '쌤핀 Analytics',
   robots: 'noindex, nofollow',
 };
+
+// ── 한글 라벨 매핑 ──
+
+const TOOL_LABELS: Record<string, string> = {
+  timer: '타이머',
+  random_picker: '랜덤뽑기',
+  roulette: '룰렛',
+  scoreboard: '점수판',
+  traffic_light: '신호등',
+  dice: '주사위',
+  coin: '동전던지기',
+  qr: 'QR코드',
+  activity_symbol: '활동기호',
+  vote: '투표',
+  survey: '설문조사',
+  wordcloud: '워드클라우드',
+  seat_picker: '자리뽑기',
+};
+
+// ── 유틸리티 함수 ──
+
+function formatDuration(seconds: number): string {
+  if (seconds < 0 || !Number.isFinite(seconds)) return '-';
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  if (m === 0) return `${s}초`;
+  return `${m}분 ${s}초`;
+}
 
 // Supabase REST API 직접 호출 (서버 사이드)
 async function fetchView<T>(viewName: string): Promise<T[]> {
@@ -42,7 +71,7 @@ async function fetchRecentEvents(): Promise<Array<{
   if (!url || !key) return [];
 
   const res = await fetch(
-    `${url}/rest/v1/app_analytics?select=event,properties,device_id,app_version,created_at&order=created_at.desc&limit=30`,
+    `${url}/rest/v1/app_analytics?select=event,properties,device_id,app_version,created_at&order=created_at.desc&limit=50`,
     {
       headers: {
         apikey: key,
@@ -146,8 +175,8 @@ export default async function AdminAnalyticsPage() {
                 value={weekly[0]?.weekly_active_users?.toString() || '0'}
               />
               <SummaryCard
-                label="평균 세션(초)"
-                value={sessions[0]?.avg_seconds?.toString() || '-'}
+                label="평균 세션"
+                value={sessions[0] ? formatDuration(sessions[0].avg_seconds) : '-'}
               />
             </div>
 
@@ -206,7 +235,9 @@ export default async function AdminAnalyticsPage() {
                   <div className="space-y-2">
                     {tools.map((t) => (
                       <div key={t.tool_name} className="flex items-center gap-3">
-                        <span className="w-28 text-sm truncate">{t.tool_name}</span>
+                        <span className="w-28 text-sm truncate" title={t.tool_name}>
+                          {TOOL_LABELS[t.tool_name] || t.tool_name}
+                        </span>
                         <div className="flex-1 bg-gray-800 rounded-full h-5 overflow-hidden">
                           <div
                             className="bg-blue-500 h-full rounded-full flex items-center justify-end pr-2 text-xs font-medium"
@@ -264,9 +295,9 @@ export default async function AdminAnalyticsPage() {
                     <tr className="text-gray-400 border-b border-gray-800">
                       <th className="text-left py-2 px-3">날짜</th>
                       <th className="text-right py-2 px-3">세션 수</th>
-                      <th className="text-right py-2 px-3">평균(초)</th>
-                      <th className="text-right py-2 px-3">중간값(초)</th>
-                      <th className="text-right py-2 px-3">최대(초)</th>
+                      <th className="text-right py-2 px-3">평균</th>
+                      <th className="text-right py-2 px-3">중간값</th>
+                      <th className="text-right py-2 px-3">최대</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -274,9 +305,9 @@ export default async function AdminAnalyticsPage() {
                       <tr key={s.date} className="border-b border-gray-800/50 hover:bg-gray-900/50">
                         <td className="py-2 px-3">{s.date}</td>
                         <td className="text-right py-2 px-3">{s.sessions}</td>
-                        <td className="text-right py-2 px-3">{s.avg_seconds}</td>
-                        <td className="text-right py-2 px-3">{s.median_seconds}</td>
-                        <td className="text-right py-2 px-3">{s.max_seconds}</td>
+                        <td className="text-right py-2 px-3">{formatDuration(s.avg_seconds)}</td>
+                        <td className="text-right py-2 px-3">{formatDuration(s.median_seconds)}</td>
+                        <td className="text-right py-2 px-3">{formatDuration(s.max_seconds)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -284,46 +315,9 @@ export default async function AdminAnalyticsPage() {
               </div>
             </Section>
 
-            {/* 최근 이벤트 로그 */}
-            <Section title="최근 이벤트 (30건)">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-gray-400 border-b border-gray-800">
-                      <th className="text-left py-2 px-3">시각</th>
-                      <th className="text-left py-2 px-3">이벤트</th>
-                      <th className="text-left py-2 px-3">속성</th>
-                      <th className="text-left py-2 px-3">기기</th>
-                      <th className="text-left py-2 px-3">버전</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentEvents.map((e, i) => (
-                      <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-900/50">
-                        <td className="py-2 px-3 text-gray-400 whitespace-nowrap">
-                          {new Date(e.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="py-2 px-3">
-                          <span className="bg-gray-800 px-2 py-0.5 rounded text-xs font-mono">
-                            {e.event}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-gray-400 text-xs max-w-xs truncate">
-                          {Object.keys(e.properties).length > 0
-                            ? JSON.stringify(e.properties)
-                            : '-'}
-                        </td>
-                        <td className="py-2 px-3 text-gray-500 text-xs font-mono">
-                          {e.device_id?.slice(0, 8)}
-                        </td>
-                        <td className="py-2 px-3 text-gray-500 text-xs">
-                          {e.app_version}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {/* 최근 이벤트 로그 (Client Component) */}
+            <Section title="최근 이벤트">
+              <EventLog events={recentEvents} />
             </Section>
           </>
         )}
@@ -366,27 +360,53 @@ function BarChart<T extends Record<string, unknown>>({
   if (data.length === 0) return <p className="text-gray-500 text-sm">데이터 없음</p>;
 
   const maxVal = Math.max(...data.map((d) => Number(d[valueKey]) || 0));
+  // 그리드 라인 값 계산 (4등분)
+  const gridLines = maxVal > 0
+    ? [0.25, 0.5, 0.75, 1].map((ratio) => Math.round(maxVal * ratio))
+    : [];
 
   return (
-    <div className="flex items-end gap-1.5 h-40">
-      {data.map((d, i) => {
-        const val = Number(d[valueKey]) || 0;
-        const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
-        const label = String(d[labelKey]);
-        return (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1">
-            <span className="text-xs text-gray-300">{val}</span>
-            <div
-              className="w-full bg-blue-500 rounded-t transition-all"
-              style={{ height: `${Math.max(pct, 2)}%` }}
-              title={`${label}: ${val}`}
-            />
-            <span className="text-[10px] text-gray-500 truncate w-full text-center">
-              {formatLabel ? formatLabel(label) : label}
+    <div className={`relative ${data.length <= 5 ? 'max-w-lg' : 'w-full'}`}>
+      {/* 그리드 라인 (수평 가이드라인) */}
+      <div className="absolute inset-0 flex flex-col justify-end pointer-events-none" style={{ bottom: '1.5rem' }}>
+        {gridLines.map((val, i) => (
+          <div
+            key={i}
+            className="absolute left-0 right-0 border-t border-gray-700/40"
+            style={{ bottom: `calc(${((i + 1) / 4) * 100}% + 1.5rem)` }}
+          >
+            <span className="absolute -top-3 -left-1 text-[10px] text-gray-600">
+              {val}
             </span>
           </div>
-        );
-      })}
+        ))}
+      </div>
+      <div className="flex items-end gap-2 h-48 relative z-10">
+        {data.map((d, i) => {
+          const val = Number(d[valueKey]) || 0;
+          const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
+          const label = String(d[labelKey]);
+          return (
+            <div key={i} className="flex-1 min-w-[2.5rem] flex flex-col items-center gap-1 group">
+              {/* 호버 시 상세 정보 */}
+              <div className="relative">
+                <span className="text-xs text-gray-300 group-hover:hidden">{val}</span>
+                <span className="text-xs text-blue-300 font-medium hidden group-hover:inline">
+                  {val}
+                </span>
+              </div>
+              <div
+                className="w-full bg-blue-500 rounded-t transition-all group-hover:bg-blue-400 cursor-default"
+                style={{ height: `${Math.max(pct, 3)}%` }}
+                title={`${formatLabel ? formatLabel(label) : label}: ${val}`}
+              />
+              <span className="text-[10px] text-gray-500 group-hover:text-gray-300 truncate w-full text-center transition-colors">
+                {formatLabel ? formatLabel(label) : label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
