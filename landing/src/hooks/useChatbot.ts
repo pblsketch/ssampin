@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { fileToDataUrl, resizeImage } from '../utils/imageUtils';
 import type {
   ChatMessage,
+  ChatImage,
   ChatResponse,
   ChatStatus,
   EscalationData,
@@ -52,11 +54,49 @@ export function useChatbot() {
     return sessionIdRef.current;
   }, []);
 
+  function addAssistantMessage(content: string) {
+    const msg: ChatMessage = {
+      id: generateId(),
+      role: 'assistant',
+      content,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, msg]);
+  }
+
+  /** File[] → ChatImage[] 변환 */
+  const convertFilesToChatImages = useCallback(async (files: File[]): Promise<ChatImage[]> => {
+    const results: ChatImage[] = [];
+    for (const file of files) {
+      const raw = await fileToDataUrl(file);
+      const dataUrl = await resizeImage(raw);
+      results.push({
+        id: generateId(),
+        dataUrl,
+        mimeType: file.type,
+        fileName: file.name,
+        size: file.size,
+      });
+    }
+    return results;
+  }, []);
+
   /** 메시지 전송 */
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, imageFiles?: File[]) => {
       const trimmed = text.trim();
-      if (!trimmed || status === 'loading') return;
+      if (!trimmed && (!imageFiles || imageFiles.length === 0)) return;
+      if (status === 'loading') return;
+
+      // 이미지 변환
+      let chatImages: ChatImage[] | undefined;
+      if (imageFiles && imageFiles.length > 0) {
+        try {
+          chatImages = await convertFilesToChatImages(imageFiles);
+        } catch {
+          // 이미지 변환 실패 시 텍스트만 전송
+        }
+      }
 
       // 유저 메시지 추가
       const userMsg: ChatMessage = {
@@ -64,17 +104,23 @@ export function useChatbot() {
         role: 'user',
         content: trimmed,
         timestamp: new Date(),
+        ...(chatImages && chatImages.length > 0 ? { images: chatImages } : {}),
       };
       setMessages((prev) => [...prev, userMsg]);
       setStatus('loading');
       setEscalationType(null);
 
       try {
-        // 히스토리 구성 (최근 6개)
         const history = messages
           .filter((m) => m.id !== 'welcome')
           .slice(-6)
           .map((m) => ({ role: m.role, content: m.content }));
+
+        // API용 이미지 데이터
+        const apiImages = chatImages?.map((img) => ({
+          mimeType: img.mimeType,
+          data: img.dataUrl.replace(/^data:image\/\w+;base64,/, ''),
+        }));
 
         const res = await fetch(CHAT_ENDPOINT, {
           method: 'POST',
@@ -88,6 +134,7 @@ export function useChatbot() {
             sessionId: getSession(),
             history,
             source: 'landing',
+            ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
           }),
         });
 
@@ -124,15 +171,25 @@ export function useChatbot() {
         setStatus('error');
       }
     },
-    [messages, status, getSession]
+    [messages, status, getSession, convertFilesToChatImages]
   );
 
   /** 에스컬레이션 제출 */
   const submitEscalation = useCallback(
-    async (data: Omit<EscalationData, 'sessionId'>) => {
+    async (data: Omit<EscalationData, 'sessionId'>, imageFiles?: File[]) => {
       setStatus('loading');
 
       try {
+        // 스크린샷 이미지 변환
+        let apiImages: { mimeType: string; data: string }[] | undefined;
+        if (imageFiles && imageFiles.length > 0) {
+          const chatImages = await convertFilesToChatImages(imageFiles);
+          apiImages = chatImages.map((img) => ({
+            mimeType: img.mimeType,
+            data: img.dataUrl.replace(/^data:image\/\w+;base64,/, ''),
+          }));
+        }
+
         const res = await fetch(ESCALATE_ENDPOINT, {
           method: 'POST',
           headers: {
@@ -143,6 +200,7 @@ export function useChatbot() {
           body: JSON.stringify({
             ...data,
             sessionId: getSession(),
+            ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
           }),
         });
 
@@ -159,7 +217,7 @@ export function useChatbot() {
         setStatus('error');
       }
     },
-    [getSession]
+    [getSession, convertFilesToChatImages]
   );
 
   /** 에스컬레이션 취소 */
@@ -179,16 +237,6 @@ export function useChatbot() {
       sessionStorage.removeItem('ssampin-chat-session');
     }
   }, []);
-
-  function addAssistantMessage(content: string) {
-    const msg: ChatMessage = {
-      id: generateId(),
-      role: 'assistant',
-      content,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, msg]);
-  }
 
   return {
     messages,

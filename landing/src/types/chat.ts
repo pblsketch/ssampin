@@ -1,5 +1,13 @@
 /** AI 챗봇 관련 타입 정의 */
 
+export interface ChatImage {
+  id: string;
+  dataUrl: string;
+  mimeType: string;
+  fileName: string;
+  size: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -7,6 +15,7 @@ export interface ChatMessage {
   timestamp: Date;
   sources?: string[];
   confidence?: number;
+  images?: ChatImage[];
 }
 
 export interface ChatResponseAnswer {

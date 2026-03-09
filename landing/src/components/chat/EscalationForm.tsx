@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { validateImage } from '../../utils/imageUtils';
 import type { EscalationData } from '../../types/chat';
+
+const MAX_SCREENSHOTS = 3;
 
 interface Props {
   type: 'bug' | 'feature' | 'other';
-  onSubmit: (data: Omit<EscalationData, 'sessionId'>) => void;
+  onSubmit: (data: Omit<EscalationData, 'sessionId'>, images?: File[]) => void;
   onCancel: () => void;
   disabled?: boolean;
 }
@@ -31,18 +34,58 @@ const TYPE_INFO: Record<string, { emoji: string; label: string; placeholder: str
 export default function EscalationForm({ type, onSubmit, onCancel, disabled }: Props) {
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
+  const [screenshots, setScreenshots] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const info = TYPE_INFO[type] ?? TYPE_INFO.other;
+
+  // 미리보기 URL 생성/해제
+  useEffect(() => {
+    const urls = screenshots.map((f) => URL.createObjectURL(f));
+    setPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [screenshots]);
+
+  const addScreenshots = useCallback((files: File[]) => {
+    setScreenshots((prev) => {
+      const remaining = MAX_SCREENSHOTS - prev.length;
+      if (remaining <= 0) return prev;
+      const validFiles: File[] = [];
+      for (const f of files.slice(0, remaining)) {
+        if (validateImage(f).valid) {
+          validFiles.push(f);
+        }
+      }
+      return [...prev, ...validFiles];
+    });
+  }, []);
+
+  const removeScreenshot = useCallback((index: number) => {
+    setScreenshots((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
-    onSubmit({
-      type,
-      message: message.trim(),
-      email: email.trim() || undefined,
-    });
+    onSubmit(
+      {
+        type,
+        message: message.trim(),
+        email: email.trim() || undefined,
+      },
+      screenshots.length > 0 ? screenshots : undefined,
+    );
   };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      addScreenshots(Array.from(e.target.files));
+    }
+    e.target.value = '';
+  };
+
+  const canAttach = screenshots.length < MAX_SCREENSHOTS;
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-sp-border bg-sp-surface p-4">
@@ -68,6 +111,48 @@ export default function EscalationForm({ type, onSubmit, onCancel, disabled }: P
         required
         disabled={disabled}
         className="mb-2 w-full resize-none rounded-lg border border-sp-border bg-sp-card px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-50"
+      />
+
+      {/* 스크린샷 미리보기 */}
+      {previews.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {previews.map((url, i) => (
+            <div key={url} className="group relative">
+              <img
+                src={url}
+                alt={screenshots[i]?.name ?? '스크린샷'}
+                className="h-14 w-14 rounded-lg border border-sp-border object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => removeScreenshot(i)}
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                aria-label="스크린샷 삭제"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 스크린샷 첨부 버튼 */}
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={disabled || !canAttach}
+        className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-sp-border py-2 text-xs text-sp-muted transition-colors hover:border-sp-accent hover:text-sp-text disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        📷 스크린샷 첨부 ({screenshots.length}/{MAX_SCREENSHOTS})
+      </button>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        multiple
+        onChange={handleFileChange}
+        className="hidden"
       />
 
       <input

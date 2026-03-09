@@ -12,8 +12,8 @@ interface Props {
   messages: ChatMessageType[];
   status: ChatStatus;
   escalationType: 'bug' | 'feature' | 'other' | null;
-  onSend: (message: string) => void;
-  onEscalate: (data: Omit<EscalationData, 'sessionId'>) => void;
+  onSend: (message: string, images?: File[]) => void;
+  onEscalate: (data: Omit<EscalationData, 'sessionId'>, images?: File[]) => void;
   onCancelEscalation: () => void;
   onClear: () => void;
   onClose: () => void;
