@@ -97,6 +97,9 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   }, [studentNumber, assignment.students]);
 
   const acceptAttr = FILE_TYPE_ACCEPT[assignment.fileTypeRestriction] ?? '*/*';
+  const st = assignment.submitType ?? 'file'; // 기존 과제 호환: 기본값 'file'
+  const showFile = st === 'file' || st === 'both';
+  const showText = st === 'text' || st === 'both';
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
@@ -125,16 +128,11 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
     setError(null);
 
     try {
-      // 파일이 없고 텍스트만 있으면 텍스트를 .txt 파일로 변환
-      const submitFile = hasFile
-        ? file
-        : new File([textContent], `${studentName}_과제.txt`, { type: 'text/plain' });
-
       const result = await submitAssignment({
         assignmentId: assignment.id,
         studentNumber: num,
         studentName,
-        file: submitFile,
+        file: hasFile ? file : undefined,
         textContent: hasText ? textContent : undefined,
       });
 
@@ -247,8 +245,9 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
       <div className="h-px bg-sp-border/50 my-6" />
 
       {/* File selection */}
+      {showFile && (
       <div className="mb-5">
-        <label className="block text-sm font-medium text-sp-text mb-1.5">📎 파일 첨부</label>
+        <label className="block text-sm font-medium text-sp-text mb-1.5">📎 파일 첨부{st === 'both' && <span className="text-sp-muted font-normal"> (선택)</span>}</label>
 
         {file ? (
           <div className="flex items-center gap-3 p-3 bg-sp-card border border-sp-accent/30 rounded-lg">
@@ -304,10 +303,12 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
           허용: {FILE_TYPE_LABELS[assignment.fileTypeRestriction] ?? '모든 파일'} · 최대 10MB
         </p>
       </div>
+      )}
 
       {/* Text submission */}
+      {showText && (
       <div className="mb-6">
-        <label htmlFor="text-content" className="block text-sm font-medium text-sp-text mb-1.5">✏️ 텍스트 입력</label>
+        <label htmlFor="text-content" className="block text-sm font-medium text-sp-text mb-1.5">✏️ 텍스트 입력{st === 'both' && <span className="text-sp-muted font-normal"> (선택)</span>}</label>
         <textarea
           id="text-content"
           value={textContent}
@@ -316,10 +317,13 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
           rows={5}
           className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none text-sm"
         />
-        <p className="text-xs text-sp-muted/60 mt-1.5">
-          파일과 텍스트를 함께 제출하거나, 하나만 제출할 수도 있습니다
-        </p>
+        {st === 'both' && (
+          <p className="text-xs text-sp-muted/60 mt-1.5">
+            파일과 텍스트를 함께 제출하거나, 하나만 제출할 수도 있습니다
+          </p>
+        )}
       </div>
+      )}
 
       {/* Submit button */}
       <button

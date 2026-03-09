@@ -14,6 +14,7 @@ export interface CreateAssignmentServiceRequest {
   }>;
   readonly driveFolderId: string;
   readonly driveRootFolderId?: string;
+  readonly submitType?: string;
   readonly fileTypeRestriction?: string;
   readonly allowLate?: boolean;
   readonly allowResubmit?: boolean;

@@ -322,69 +322,70 @@ serve(async (req: Request) => {
       return errorResponse('이미 제출되었습니다', 403);
     }
 
-    // 5. 파일 형식 체크
-    if (!isAllowedFile(file.name, assignment.file_type_restriction)) {
+    // 5. 파일 형식 체크 (파일이 있을 때만)
+    if (file && !isAllowedFile(file.name, assignment.file_type_restriction)) {
       return errorResponse('허용되지 않는 파일 형식입니다', 400);
     }
 
-    // 6~7. 교사 OAuth 토큰 복호화 + 만료 시 자동 갱신 (5분 버퍼)
-    const encryptionKey = Deno.env.get('ENCRYPTION_KEY')!;
-    let accessToken: string;
+    // 6~7. 교사 OAuth 토큰 복호화 + 만료 시 자동 갱신 (파일 업로드 필요 시)
+    let driveFileId: string | null = null;
 
-    try {
-      accessToken = await getValidAccessToken(supabase, assignment.teacher_id, encryptionKey);
-    } catch (err) {
-      const msg = (err as Error).message;
-      if (msg === 'TEACHER_TOKEN_NOT_FOUND') {
-        return errorResponse('교사 인증 정보를 찾을 수 없습니다', 500);
-      }
-      if (msg === 'TOKEN_REFRESH_FAILED') {
-        return errorResponse(
-          '교사의 Google 인증이 만료되었습니다. 교사에게 쌤핀 앱에서 Google 계정을 다시 연결하도록 안내해주세요.',
-          401,
-        );
-      }
-      throw err;
-    }
+    if (file) {
+      const encryptionKey = Deno.env.get('ENCRYPTION_KEY')!;
+      let accessToken: string;
 
-    // 8. Google Drive 업로드 (401 시 토큰 재갱신 후 1회 재시도)
-    const paddedNumber = String(studentNumber).padStart(2, '0');
-    const driveFileName = `${paddedNumber}_${studentName}_${file.name}`;
-    const mimeType = file.type || 'application/octet-stream';
-
-    const doDriveUpload = async (token: string): Promise<string> => {
-      if (existingSubmission?.drive_file_id) {
-        const result = await updateDriveFile(token, existingSubmission.drive_file_id, file, mimeType);
-        return result.id;
-      } else {
-        const result = await uploadToDrive(token, assignment.drive_folder_id, driveFileName, file, mimeType);
-        return result.id;
-      }
-    };
-
-    let driveFileId: string;
-
-    try {
-      driveFileId = await doDriveUpload(accessToken);
-    } catch (uploadErr) {
-      // 401/403 → 토큰 강제 재갱신 후 1회 재시도
-      const errMsg = (uploadErr as Error).message;
-      if (errMsg.includes('401') || errMsg.includes('403')) {
-        try {
-          accessToken = await getValidAccessToken(supabase, assignment.teacher_id, encryptionKey, true);
-          driveFileId = await doDriveUpload(accessToken);
-        } catch (retryErr) {
-          const retryMsg = (retryErr as Error).message;
-          if (retryMsg === 'TOKEN_REFRESH_FAILED') {
-            return errorResponse(
-              '교사의 Google 인증이 만료되었습니다. 교사에게 쌤핀 앱에서 Google 계정을 다시 연결하도록 안내해주세요.',
-              401,
-            );
-          }
-          throw retryErr;
+      try {
+        accessToken = await getValidAccessToken(supabase, assignment.teacher_id, encryptionKey);
+      } catch (err) {
+        const msg = (err as Error).message;
+        if (msg === 'TEACHER_TOKEN_NOT_FOUND') {
+          return errorResponse('교사 인증 정보를 찾을 수 없습니다', 500);
         }
-      } else {
-        throw uploadErr;
+        if (msg === 'TOKEN_REFRESH_FAILED') {
+          return errorResponse(
+            '교사의 Google 인증이 만료되었습니다. 교사에게 쌤핀 앱에서 Google 계정을 다시 연결하도록 안내해주세요.',
+            401,
+          );
+        }
+        throw err;
+      }
+
+      // 8. Google Drive 업로드 (401 시 토큰 재갱신 후 1회 재시도)
+      const paddedNumber = String(studentNumber).padStart(2, '0');
+      const driveFileName = `${paddedNumber}_${studentName}_${file.name}`;
+      const mimeType = file.type || 'application/octet-stream';
+
+      const doDriveUpload = async (token: string): Promise<string> => {
+        if (existingSubmission?.drive_file_id) {
+          const result = await updateDriveFile(token, existingSubmission.drive_file_id, file, mimeType);
+          return result.id;
+        } else {
+          const result = await uploadToDrive(token, assignment.drive_folder_id, driveFileName, file, mimeType);
+          return result.id;
+        }
+      };
+
+      try {
+        driveFileId = await doDriveUpload(accessToken);
+      } catch (uploadErr) {
+        const errMsg = (uploadErr as Error).message;
+        if (errMsg.includes('401') || errMsg.includes('403')) {
+          try {
+            accessToken = await getValidAccessToken(supabase, assignment.teacher_id, encryptionKey);
+            driveFileId = await doDriveUpload(accessToken);
+          } catch (retryErr) {
+            const retryMsg = (retryErr as Error).message;
+            if (retryMsg === 'TOKEN_REFRESH_FAILED') {
+              return errorResponse(
+                '교사의 Google 인증이 만료되었습니다. 교사에게 쌤핀 앱에서 Google 계정을 다시 연결하도록 안내해주세요.',
+                401,
+              );
+            }
+            throw retryErr;
+          }
+        } else {
+          throw uploadErr;
+        }
       }
     }
 
@@ -398,9 +399,10 @@ serve(async (req: Request) => {
           student_number: studentNumber,
           student_name: studentName,
           submitted_at: new Date().toISOString(),
-          file_name: file.name,
-          file_size: file.size,
+          file_name: file?.name ?? null,
+          file_size: file?.size ?? 0,
           drive_file_id: driveFileId,
+          text_content: textContent || null,
           is_late: isLate,
         },
         { onConflict: 'assignment_id,student_number' },

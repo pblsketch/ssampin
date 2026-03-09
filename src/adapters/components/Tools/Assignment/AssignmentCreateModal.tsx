@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { useStudentLists } from '@adapters/hooks/useStudentLists';
 import type { FileTypeRestriction } from '@domain/valueObjects/FileTypeRestriction';
+import type { SubmitType } from '@domain/entities/Assignment';
 import type { StudentListOption } from '@adapters/hooks/useStudentLists';
 import { DriveFolderInput } from './DriveFolderInput';
 
@@ -9,6 +10,12 @@ interface AssignmentCreateModalProps {
   onClose: () => void;
   onCreated: (assignmentId: string) => void;
 }
+
+const SUBMIT_TYPE_OPTIONS: { value: SubmitType; label: string; icon: string }[] = [
+  { value: 'file', label: '파일만', icon: 'attach_file' },
+  { value: 'text', label: '텍스트만', icon: 'edit_note' },
+  { value: 'both', label: '파일 + 텍스트', icon: 'note_stack_add' },
+];
 
 const FILE_TYPE_OPTIONS: { value: FileTypeRestriction; label: string; description: string }[] = [
   { value: 'all', label: '전체', description: '모든 파일' },
@@ -29,6 +36,7 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
     studentLists[0] ?? null,
   );
   const [folderName, setFolderName] = useState('');
+  const [submitType, setSubmitType] = useState<SubmitType>('file');
   const [fileType, setFileType] = useState<FileTypeRestriction>('all');
   const [allowLate, setAllowLate] = useState(true);
   const [allowResubmit, setAllowResubmit] = useState(true);
@@ -65,6 +73,7 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
           students: selectedTarget.students,
         },
         driveFolderName: effectiveFolderName,
+        submitType,
         fileTypeRestriction: fileType,
         allowLate,
         allowResubmit,
@@ -201,7 +210,30 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
             <div className="border-t border-sp-border/40 pt-5">
               <h3 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">옵션</h3>
 
-              {/* File type */}
+              {/* Submit type */}
+              <div className="mb-4">
+                <label className="text-sm text-sp-text mb-2 block">제출 방식</label>
+                <div className="flex gap-2">
+                  {SUBMIT_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setSubmitType(opt.value)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        submitType === opt.value
+                          ? 'bg-sp-accent text-white'
+                          : 'bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">{opt.icon}</span>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* File type — only when file submission is enabled */}
+              {submitType !== 'text' && (
               <div className="flex items-center justify-between mb-4">
                 <label className="text-sm text-sp-text">파일 형식</label>
                 <select
@@ -216,6 +248,7 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
                   ))}
                 </select>
               </div>
+              )}
 
               {/* Allow late */}
               <div className="flex items-center justify-between mb-4">

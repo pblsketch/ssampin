@@ -1,11 +1,14 @@
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
+export type SubmitType = 'file' | 'text' | 'both';
+
 export interface AssignmentPublic {
   id: string;
   title: string;
   description?: string;
   deadline: string;
+  submitType: SubmitType;
   fileTypeRestriction: 'all' | 'image' | 'document';
   allowLate: boolean;
   allowResubmit: boolean;
@@ -42,14 +45,16 @@ export async function submitAssignment(data: {
   assignmentId: string;
   studentNumber: number;
   studentName: string;
-  file: File;
+  file?: File;
   textContent?: string;
 }): Promise<SubmitResult> {
   const formData = new FormData();
   formData.append('assignmentId', data.assignmentId);
   formData.append('studentNumber', String(data.studentNumber));
   formData.append('studentName', data.studentName);
-  formData.append('file', data.file);
+  if (data.file) {
+    formData.append('file', data.file);
+  }
   if (data.textContent) {
     formData.append('textContent', data.textContent);
   }

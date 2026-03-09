@@ -2,6 +2,7 @@ import type {
   Assignment,
   AssignmentTarget,
   AssignmentsData,
+  SubmitType,
 } from '@domain/entities/Assignment';
 import type { FileTypeRestriction } from '@domain/valueObjects/FileTypeRestriction';
 import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepository';
@@ -14,6 +15,7 @@ export interface CreateAssignmentParams {
   readonly deadline: string;
   readonly target: AssignmentTarget;
   readonly driveFolderName: string;
+  readonly submitType: SubmitType;
   readonly fileTypeRestriction: FileTypeRestriction;
   readonly allowLate: boolean;
   readonly allowResubmit: boolean;
@@ -51,6 +53,7 @@ export class CreateAssignment {
       })),
       driveFolderId: subFolder.id,
       driveRootFolderId: rootFolder.id,
+      submitType: params.submitType,
       fileTypeRestriction: params.fileTypeRestriction,
       allowLate: params.allowLate,
       allowResubmit: params.allowResubmit,
@@ -68,6 +71,7 @@ export class CreateAssignment {
         name: subFolder.name,
         rootFolderId: rootFolder.id,
       },
+      submitType: params.submitType,
       fileTypeRestriction: params.fileTypeRestriction,
       allowLate: params.allowLate,
       allowResubmit: params.allowResubmit,

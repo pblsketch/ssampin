@@ -39,6 +39,7 @@ serve(async (req: Request) => {
       title: assignment.title,
       description: assignment.description,
       deadline: assignment.deadline,
+      submitType: assignment.submit_type ?? 'file',
       fileTypeRestriction: assignment.file_type_restriction,
       allowLate: assignment.allow_late,
       allowResubmit: assignment.allow_resubmit,

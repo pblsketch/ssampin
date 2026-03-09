@@ -20,6 +20,7 @@ export interface CreateAssignmentRequest {
   }>;
   readonly driveFolderId: string;
   readonly driveRootFolderId?: string;
+  readonly submitType?: string;
   readonly fileTypeRestriction?: string;
   readonly allowLate?: boolean;
   readonly allowResubmit?: boolean;
@@ -112,9 +113,10 @@ export class AssignmentSupabaseClient {
       student_number: number;
       student_name: string;
       submitted_at: string;
-      file_name: string;
+      file_name: string | null;
       file_size: number;
       drive_file_id: string | null;
+      text_content: string | null;
       is_late: boolean;
     }>>(
       'get-submissions',
@@ -132,6 +134,7 @@ export class AssignmentSupabaseClient {
       fileName: s.file_name,
       fileSize: s.file_size,
       driveFileId: s.drive_file_id ?? undefined,
+      textContent: s.text_content ?? undefined,
       isLate: s.is_late,
     }));
   }

@@ -15,6 +15,7 @@ function formatTime(d: Date): string {
 }
 
 function SubmissionRow({ detail }: { detail: SubmissionDetail }) {
+  const [showText, setShowText] = useState(false);
   const statusConfig = {
     submitted: { icon: '✅', color: 'text-emerald-400' },
     late: { icon: '⚠️', color: 'text-amber-400' },
@@ -29,25 +30,43 @@ function SubmissionRow({ detail }: { detail: SubmissionDetail }) {
       })()
     : null;
 
+  const hasText = !!detail.submission?.textContent;
+
   return (
-    <div className="flex items-center px-5 py-3 hover:bg-sp-surface/50 transition-colors">
-      <span className="text-sp-muted text-sm w-12">{detail.studentNumber}번</span>
-      <span className="text-sp-text font-medium text-sm w-20">{detail.studentName}</span>
-      <span className="mx-3">{config.icon}</span>
-      {detail.status === 'missing' ? (
-        <span className={`text-sm ${config.color}`}>미제출</span>
-      ) : (
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-sp-muted">{dateText}</span>
-          {detail.submission && (
-            <span className="text-sp-muted/70 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px]">description</span>
-              {detail.submission.fileName}
-            </span>
-          )}
-          {detail.status === 'late' && (
-            <span className="text-xs px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded font-medium">지각</span>
-          )}
+    <div>
+      <div className="flex items-center px-5 py-3 hover:bg-sp-surface/50 transition-colors">
+        <span className="text-sp-muted text-sm w-12">{detail.studentNumber}번</span>
+        <span className="text-sp-text font-medium text-sm w-20">{detail.studentName}</span>
+        <span className="mx-3">{config.icon}</span>
+        {detail.status === 'missing' ? (
+          <span className={`text-sm ${config.color}`}>미제출</span>
+        ) : (
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-sp-muted">{dateText}</span>
+            {detail.submission?.fileName && (
+              <span className="text-sp-muted/70 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">description</span>
+                {detail.submission.fileName}
+              </span>
+            )}
+            {hasText && (
+              <button
+                onClick={() => setShowText(!showText)}
+                className="text-sp-accent/80 hover:text-sp-accent flex items-center gap-0.5 text-xs font-medium transition-colors"
+              >
+                <span className="material-symbols-outlined text-[14px]">{showText ? 'expand_less' : 'expand_more'}</span>
+                텍스트
+              </button>
+            )}
+            {detail.status === 'late' && (
+              <span className="text-xs px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded font-medium">지각</span>
+            )}
+          </div>
+        )}
+      </div>
+      {showText && detail.submission?.textContent && (
+        <div className="mx-5 mb-3 px-4 py-3 bg-sp-surface/70 rounded-lg border border-sp-border/30">
+          <p className="text-sm text-sp-text whitespace-pre-wrap leading-relaxed">{detail.submission.textContent}</p>
         </div>
       )}
     </div>

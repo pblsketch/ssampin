@@ -20,6 +20,9 @@ export interface DriveFolder {
   readonly rootFolderId?: string;
 }
 
+/** 제출 방식: 파일만 / 텍스트만 / 둘 다 */
+export type SubmitType = 'file' | 'text' | 'both';
+
 export interface Assignment {
   readonly id: string;
   /** 과제 제목 */
@@ -30,6 +33,8 @@ export interface Assignment {
   readonly deadline: string;
   readonly target: AssignmentTarget;
   readonly driveFolder: DriveFolder;
+  /** 제출 방식 */
+  readonly submitType: SubmitType;
   /** 허용 파일 형식 */
   readonly fileTypeRestriction: 'all' | 'image' | 'document';
   /** 지각 제출 허용 여부 */
@@ -54,11 +59,13 @@ export interface Submission {
   readonly studentName: string;
   /** 제출일시 (ISO 8601) */
   readonly submittedAt: string;
-  readonly fileName: string;
+  readonly fileName: string | null;
   /** 파일 크기 (bytes) */
   readonly fileSize: number;
   /** Google Drive 파일 ID */
   readonly driveFileId?: string;
+  /** 텍스트 제출 내용 */
+  readonly textContent?: string;
   /** 지각 제출 여부 */
   readonly isLate: boolean;
 }
