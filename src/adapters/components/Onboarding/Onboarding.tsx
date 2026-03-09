@@ -17,7 +17,7 @@ export function Onboarding() {
         teacherName: '',
         subject: '',
         schoolLevel: 'middle',
-        maxPeriods: 6,
+        maxPeriods: generatePeriodTimes(getDefaultPreset('middle')).length,
         periodTimes: generatePeriodTimes(getDefaultPreset('middle')),
     });
 

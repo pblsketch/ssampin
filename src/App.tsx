@@ -28,6 +28,9 @@ import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
 import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
+import { AssignmentTool } from '@adapters/components/Tools/Assignment/AssignmentTool';
+import { AssignmentDetail } from '@adapters/components/Tools/Assignment/AssignmentDetail';
+import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer, useToastStore } from '@adapters/components/common/Toast';
 import { UpdateNotification } from '@adapters/components/common/UpdateNotification';
@@ -127,6 +130,20 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   }
   if (page === 'tool-seat-picker') {
     return <ToolSeatPicker onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-assignment') {
+    return (
+      <AssignmentTool
+        onBack={() => onNavigate('tools')}
+        onDetail={(id) => {
+          useAssignmentStore.getState().selectAssignment(id);
+          onNavigate('tool-assignment-detail');
+        }}
+      />
+    );
+  }
+  if (page === 'tool-assignment-detail') {
+    return <AssignmentDetail onBack={() => onNavigate('tool-assignment')} />;
   }
   return (
     <div className="flex h-full items-center justify-center">

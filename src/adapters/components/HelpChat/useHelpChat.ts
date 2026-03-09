@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { searchOfflineFaq } from './offlineFaq';
+import { fileToDataUrl, resizeImage } from './imageUtils';
 import type {
   HelpChatMessage,
   HelpChatStatus,
   ChatApiResponse,
+  ChatImage,
   EscalationPayload,
   EscalationApiResponse,
 } from './types';
@@ -87,10 +89,38 @@ export function useHelpChat() {
     }
   }, [addAssistantMessage]);
 
+  /** File[] → ChatImage[] 변환 */
+  const convertFilesToChatImages = useCallback(async (files: File[]): Promise<ChatImage[]> => {
+    const results: ChatImage[] = [];
+    for (const file of files) {
+      const raw = await fileToDataUrl(file);
+      const dataUrl = await resizeImage(raw);
+      results.push({
+        id: generateId(),
+        dataUrl,
+        mimeType: file.type,
+        fileName: file.name,
+        size: file.size,
+      });
+    }
+    return results;
+  }, []);
+
   /** 메시지 전송 */
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (text: string, imageFiles?: File[]) => {
     const trimmed = text.trim();
-    if (!trimmed || status === 'loading') return;
+    if (!trimmed && (!imageFiles || imageFiles.length === 0)) return;
+    if (status === 'loading') return;
+
+    // 이미지 변환
+    let chatImages: ChatImage[] | undefined;
+    if (imageFiles && imageFiles.length > 0) {
+      try {
+        chatImages = await convertFilesToChatImages(imageFiles);
+      } catch {
+        // 이미지 변환 실패 시 텍스트만 전송
+      }
+    }
 
     // 유저 메시지 추가
     const userMsg: HelpChatMessage = {
@@ -98,6 +128,7 @@ export function useHelpChat() {
       role: 'user',
       content: trimmed,
       timestamp: Date.now(),
+      ...(chatImages && chatImages.length > 0 ? { images: chatImages } : {}),
     };
     setMessages((prev) => [...prev, userMsg]);
     setStatus('loading');
@@ -116,6 +147,12 @@ export function useHelpChat() {
         .slice(-6)
         .map((m) => ({ role: m.role, content: m.content }));
 
+      // API용 이미지 데이터 (base64 순수 데이터만 전송)
+      const apiImages = chatImages?.map((img) => ({
+        mimeType: img.mimeType,
+        data: img.dataUrl.replace(/^data:image\/\w+;base64,/, ''),
+      }));
+
       const res = await fetch(CHAT_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -129,6 +166,7 @@ export function useHelpChat() {
           history,
           source: 'app',
           appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
+          ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
         }),
       });
 
@@ -173,10 +211,10 @@ export function useHelpChat() {
       }
       setStatus('error');
     }
-  }, [messages, status, isOnline, handleOfflineResponse, addAssistantMessage]);
+  }, [messages, status, isOnline, handleOfflineResponse, addAssistantMessage, convertFilesToChatImages]);
 
   /** 에스컬레이션 제출 */
-  const submitEscalation = useCallback(async (data: EscalationPayload) => {
+  const submitEscalation = useCallback(async (data: EscalationPayload, imageFiles?: File[]) => {
     setStatus('loading');
 
     if (!isOnline || !ESCALATE_ENDPOINT || !SUPABASE_ANON_KEY) {
@@ -190,6 +228,16 @@ export function useHelpChat() {
     }
 
     try {
+      // 스크린샷 이미지 변환
+      let apiImages: { mimeType: string; data: string }[] | undefined;
+      if (imageFiles && imageFiles.length > 0) {
+        const chatImages = await convertFilesToChatImages(imageFiles);
+        apiImages = chatImages.map((img) => ({
+          mimeType: img.mimeType,
+          data: img.dataUrl.replace(/^data:image\/\w+;base64,/, ''),
+        }));
+      }
+
       const res = await fetch(ESCALATE_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -202,6 +250,7 @@ export function useHelpChat() {
           sessionId: sessionIdRef.current,
           appVersion: data.appVersion ?? (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined),
           appSettings: getAppContext(),
+          ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
         }),
       });
 
@@ -217,7 +266,7 @@ export function useHelpChat() {
       addAssistantMessage('전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.');
       setStatus('error');
     }
-  }, [isOnline, addAssistantMessage]);
+  }, [isOnline, addAssistantMessage, convertFilesToChatImages]);
 
   /** 에스컬레이션 취소 */
   const cancelEscalation = useCallback(() => {

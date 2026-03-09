@@ -1,5 +1,13 @@
 /** AI 도움말 챗봇 타입 정의 */
 
+export interface ChatImage {
+  readonly id: string;
+  readonly dataUrl: string;
+  readonly mimeType: string;
+  readonly fileName: string;
+  readonly size: number;
+}
+
 export interface HelpChatMessage {
   readonly id: string;
   readonly role: 'user' | 'assistant';
@@ -10,6 +18,7 @@ export interface HelpChatMessage {
   readonly isOffline?: boolean;
   readonly responseType?: 'answer' | 'escalation';
   readonly escalationType?: 'bug' | 'feature' | 'other';
+  readonly images?: readonly ChatImage[];
 }
 
 export interface ChatApiResponse {

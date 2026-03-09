@@ -182,6 +182,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('live-wordcloud:tunnel-install'),
   wordcloudTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('live-wordcloud:tunnel-start'),
+  // Widget 입력 검증 (WorkerW 연결 후 마우스 입력 확인)
+  verifyWidgetInput: () => ipcRenderer.send('widget:input-verified'),
+  onVerifyInput: (callback: () => void) => {
+    ipcRenderer.on('widget:verify-input', callback);
+  },
+  offVerifyInput: (callback: () => void) => {
+    ipcRenderer.removeListener('widget:verify-input', callback);
+  },
   // Analytics flush
   onAnalyticsFlush: (callback: () => void): (() => void) => {
     const handler = () => callback();

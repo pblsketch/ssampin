@@ -77,8 +77,31 @@ if ($current -eq $ww) {
 Write-Output "SUCCESS"
 `;
 
+// ─── WorkerW에서 분리하는 스크립트 (입력 검증 실패 시 폴백용) ──────────────
+const PS_DETACH_SCRIPT = `
+param([long]$hwnd)
+
+if (-not ([System.Management.Automation.PSTypeName]'SsamPinDesktop').Type) {
+  Add-Type -Language CSharp -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class SsamPinDesktop {
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetParent(IntPtr child, IntPtr newParent);
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hwnd, int cmd);
+}
+"@ 2>$null
+}
+
+[SsamPinDesktop]::SetParent([IntPtr]$hwnd, [IntPtr]::Zero)
+[SsamPinDesktop]::ShowWindow([IntPtr]$hwnd, 5)
+Write-Output "DETACHED"
+`;
+
 // ─── 스크립트 파일 캐싱 ───────────────────────────────────────────────────
 let _scriptPath: string | null = null;
+let _detachScriptPath: string | null = null;
 
 function getScriptPath(): string {
   if (_scriptPath && existsSync(_scriptPath)) return _scriptPath;
@@ -87,6 +110,15 @@ function getScriptPath(): string {
   _scriptPath = join(dir, 'workerw.ps1');
   writeFileSync(_scriptPath, PS_SCRIPT, { encoding: 'utf8' });
   return _scriptPath;
+}
+
+function getDetachScriptPath(): string {
+  if (_detachScriptPath && existsSync(_detachScriptPath)) return _detachScriptPath;
+  const dir = join(tmpdir(), 'ssampin-widget');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  _detachScriptPath = join(dir, 'workerw-detach.ps1');
+  writeFileSync(_detachScriptPath, PS_DETACH_SCRIPT, { encoding: 'utf8' });
+  return _detachScriptPath;
 }
 
 // ─── 공개 API ─────────────────────────────────────────────────────────────
@@ -154,6 +186,54 @@ export function attachToDesktopAsync(hwndBuffer: Buffer): Promise<boolean> {
  * @param hwndBuffer  BrowserWindow.getNativeWindowHandle() 반환값
  * @returns 성공 여부 (실패 시 창은 일반 플로팅 모드로 유지됨)
  */
+/**
+ * WorkerW(바탕화면 레이어)에서 분리하여 독립 윈도우로 복원한다. (비동기)
+ * 입력 검증 실패 시 폴백으로 사용.
+ * @param hwndBuffer  BrowserWindow.getNativeWindowHandle() 반환값
+ * @returns Promise<boolean> — 성공 여부
+ */
+export function detachFromDesktopAsync(hwndBuffer: Buffer): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const hwnd = readHwnd(hwndBuffer);
+      if (hwnd === 0) {
+        console.warn('[workerw] detach: HWND가 0입니다.');
+        resolve(false);
+        return;
+      }
+      const scriptFile = getDetachScriptPath();
+      execFile(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-NonInteractive',
+          '-File',
+          scriptFile,
+          String(hwnd),
+        ],
+        { timeout: 10_000, windowsHide: true },
+        (err, stdout) => {
+          if (err) {
+            console.error('[workerw] detachFromDesktopAsync 오류:', String(err).substring(0, 300));
+            resolve(false);
+            return;
+          }
+          const output = stdout.trim();
+          const ok = output === 'DETACHED';
+          console.log('[workerw]', ok ? '바탕화면 레이어에서 분리 완료' : `분리 실패: ${output}`);
+          resolve(ok);
+        },
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[workerw] detachFromDesktopAsync 예외:', msg.substring(0, 300));
+      resolve(false);
+    }
+  });
+}
+
 export function attachToDesktop(hwndBuffer: Buffer): boolean {
   try {
     const hwnd = readHwnd(hwndBuffer);

@@ -4,6 +4,7 @@ export interface GoogleAuthTokens {
   readonly refreshToken: string;
   readonly expiresAt: number;  // Unix timestamp (ms)
   readonly email: string;
+  readonly grantedScopes?: readonly string[];  // 인증 시 부여된 스코프
 }
 
 /** 구글 OAuth 인증 포트 */
@@ -16,4 +17,6 @@ export interface IGoogleAuthPort {
   refreshTokens(refreshToken: string): Promise<GoogleAuthTokens>;
   /** 토큰 폐기 */
   revokeTokens(accessToken: string): Promise<void>;
+  /** 앱에서 필요한 OAuth 스코프 목록 */
+  getRequiredScopes(): readonly string[];
 }

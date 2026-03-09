@@ -24,7 +24,20 @@ export class AuthenticateGoogle {
   /** 유효한 액세스 토큰 반환 (만료 시 자동 갱신) */
   async getValidAccessToken(): Promise<string> {
     const tokens = await this.syncRepo.getAuthTokens();
-    if (!tokens) throw new Error('Not connected to Google Calendar');
+    if (!tokens) throw new Error('Google 계정이 연결되어 있지 않습니다');
+
+    // 스코프 변경 감지: 저장된 토큰에 필요한 스코프가 없으면 재인증 필요
+    const required = this.authPort.getRequiredScopes();
+    const granted = tokens.grantedScopes ?? [];
+    const missingScopes = required.filter((s) => !granted.includes(s));
+
+    if (missingScopes.length > 0) {
+      // 기존 토큰 삭제 (재인증 유도)
+      await this.syncRepo.deleteAuthTokens();
+      throw new Error(
+        'Google 계정 권한이 업데이트되었습니다. 설정에서 Google 계정을 다시 연결해주세요.',
+      );
+    }
 
     if (isTokenExpired(tokens.expiresAt)) {
       const refreshed = await this.authPort.refreshTokens(tokens.refreshToken);

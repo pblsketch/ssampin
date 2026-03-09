@@ -33,6 +33,12 @@ export interface AlarmSoundSettings {
 
 export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';
 
+// 바탕화면 고정 모드
+// - 'auto': WorkerW 연결 시도 + 입력 검증 + 실패 시 플로팅 폴백
+// - 'desktop': WorkerW 강제 연결 (검증 없음, 고급 사용자용)
+// - 'floating': WorkerW 연결 안 함, 항상 플로팅 모드
+export type WidgetDesktopMode = 'auto' | 'desktop' | 'floating';
+
 export interface WidgetVisibleSections {
   readonly dateTime: boolean;
   readonly weather: boolean;
@@ -59,6 +65,7 @@ export interface WidgetSettings {
   readonly closeToWidget: boolean;
   readonly visibleSections: WidgetVisibleSections;
   readonly layoutMode: WidgetLayoutMode;
+  readonly desktopMode: WidgetDesktopMode;
 }
 
 export interface SystemSettings {

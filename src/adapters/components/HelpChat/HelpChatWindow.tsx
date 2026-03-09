@@ -10,8 +10,8 @@ interface Props {
   readonly status: HelpChatStatus;
   readonly escalationType: 'bug' | 'feature' | 'other' | null;
   readonly isOnline: boolean;
-  readonly onSend: (message: string) => void;
-  readonly onEscalate: (data: EscalationPayload) => void;
+  readonly onSend: (message: string, images?: File[]) => void;
+  readonly onEscalate: (data: EscalationPayload, images?: File[]) => void;
   readonly onCancelEscalation: () => void;
   readonly onClear: () => void;
   readonly onClose: () => void;

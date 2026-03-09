@@ -68,13 +68,43 @@ export function Widget() {
     return () => window.removeEventListener('resize', checkSize);
   }, [layoutMode]);
 
-  // 위젯 모드: body/html 배경을 투명하게 (Electron transparent 창이 바탕화면을 비춰보이도록)
+  // 위젯 모드: 투명 영역 hit-test 보강
+  // transparent: true 창에서 완전 투명 영역은 클릭이 통과됨
+  // 미세한 배경색(alpha 0.01)을 적용하여 hit-test 보장
   useEffect(() => {
-    document.documentElement.style.backgroundColor = 'transparent';
-    document.body.style.backgroundColor = 'transparent';
+    document.documentElement.style.backgroundColor = 'rgba(0,0,0,0.01)';
+    document.body.style.backgroundColor = 'rgba(0,0,0,0.01)';
     return () => {
       document.documentElement.style.backgroundColor = '';
       document.body.style.backgroundColor = '';
+    };
+  }, []);
+
+  // WorkerW 연결 후 입력 검증 (메인 프로세스가 요청 시 마우스 이벤트로 응답)
+  useEffect(() => {
+    const handler = () => {
+      const onAnyInput = () => {
+        window.electronAPI?.verifyWidgetInput();
+        cleanup();
+      };
+
+      document.addEventListener('mousemove', onAnyInput, { once: true });
+      document.addEventListener('pointerdown', onAnyInput, { once: true });
+      document.addEventListener('pointermove', onAnyInput, { once: true });
+
+      const cleanup = () => {
+        document.removeEventListener('mousemove', onAnyInput);
+        document.removeEventListener('pointerdown', onAnyInput);
+        document.removeEventListener('pointermove', onAnyInput);
+      };
+
+      // 2.5초 후 자동 정리 (메인에서 2초에 폴백하므로 여유)
+      setTimeout(cleanup, 2500);
+    };
+
+    window.electronAPI?.onVerifyInput(handler);
+    return () => {
+      window.electronAPI?.offVerifyInput(handler);
     };
   }, []);
 

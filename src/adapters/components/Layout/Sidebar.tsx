@@ -28,6 +28,8 @@ export type PageId =
   | 'tool-seat-picker'
   | 'tool-supsori'
   | 'tool-pblsketch'
+  | 'tool-assignment'
+  | 'tool-assignment-detail'
   | 'settings';
 
 import { useState, useMemo, useCallback } from 'react';
@@ -256,7 +258,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           <span className="text-xs font-medium">건의사항 보내기</span>
         </button>
 
-        <p className="text-[10px] text-sp-muted text-center mt-2">v0.2.9</p>
+        <p className="text-[10px] text-sp-muted text-center mt-2">v0.3.0</p>
       </div>
     </aside>
   );

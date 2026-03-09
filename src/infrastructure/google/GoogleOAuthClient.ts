@@ -30,6 +30,12 @@ interface UserInfoResponse {
 }
 
 export class GoogleOAuthClient implements IGoogleAuthPort {
+  private static readonly SCOPES = [
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/userinfo.email',
+  ] as const;
+
   private readonly clientId: string;
   private readonly clientSecret: string;
 
@@ -49,10 +55,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
       client_id: this.clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
-      scope: [
-        'https://www.googleapis.com/auth/calendar',
-        'https://www.googleapis.com/auth/userinfo.email',
-      ].join(' '),
+      scope: GoogleOAuthClient.SCOPES.join(' '),
       access_type: 'offline',
       prompt: 'consent',
     });
@@ -109,6 +112,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
       refreshToken: data.refresh_token,
       expiresAt: Date.now() + data.expires_in * 1000,
       email,
+      grantedScopes: [...GoogleOAuthClient.SCOPES],
     };
   }
 
@@ -143,6 +147,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
       refreshToken, // refresh token은 변경되지 않음
       expiresAt: Date.now() + data.expires_in * 1000,
       email,
+      grantedScopes: [...GoogleOAuthClient.SCOPES],
     };
   }
 
@@ -154,6 +159,21 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
     await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(accessToken)}`, {
       method: 'POST',
     });
+  }
+
+  /**
+   * 액세스 토큰으로 교사 이메일 조회
+   * @param accessToken OAuth 액세스 토큰
+   */
+  async getEmail(accessToken: string): Promise<string> {
+    return this.fetchUserEmail(accessToken);
+  }
+
+  /**
+   * 앱에서 필요한 OAuth 스코프 목록 반환
+   */
+  getRequiredScopes(): readonly string[] {
+    return GoogleOAuthClient.SCOPES;
   }
 
   /**

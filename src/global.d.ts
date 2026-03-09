@@ -83,6 +83,10 @@ interface ElectronAPI {
   wordcloudTunnelAvailable: () => Promise<boolean>;
   wordcloudTunnelInstall: () => Promise<void>;
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  // Widget 입력 검증 (WorkerW 연결 후 마우스 입력 확인)
+  verifyWidgetInput: () => void;
+  onVerifyInput: (callback: () => void) => void;
+  offVerifyInput: (callback: () => void) => void;
   // Analytics
   onAnalyticsFlush: (callback: () => void) => () => void;
 }

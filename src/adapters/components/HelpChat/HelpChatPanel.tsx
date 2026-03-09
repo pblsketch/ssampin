@@ -41,9 +41,9 @@ export function HelpChatPanel() {
     setIsOpen(false);
   };
 
-  const handleSend = (message: string) => {
+  const handleSend = (message: string, images?: File[]) => {
     track('chatbot_message');
-    chat.sendMessage(message);
+    chat.sendMessage(message, images);
   };
 
   return (

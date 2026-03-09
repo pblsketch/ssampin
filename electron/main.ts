@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeI
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
-import { attachToDesktop, attachToDesktopAsync } from './workerw';
+import { attachToDesktopAsync, detachFromDesktopAsync } from './workerw';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
@@ -233,7 +233,7 @@ function applySystemSettings(): void {
 }
 
 function startWidgetHeartbeat(): void {
-  // 30초마다 WorkerW 연결 상태 재확인 (Explorer 재시작 등 대비)
+  // 15초마다 WorkerW 연결 상태 재확인 (Explorer 재시작/바탕화면 슬라이드쇼 대비)
   if (widgetHeartbeat) clearInterval(widgetHeartbeat);
   widgetHeartbeat = setInterval(() => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
@@ -244,12 +244,11 @@ function startWidgetHeartbeat(): void {
           // WorkerW 재연결 성공 → desktop 모드 유지 (alwaysOnTop 불필요)
           widgetAttachedToDesktop = true;
         } else {
-          // WorkerW 연결 끊김 → 플로팅 모드로 전환, 사용자 설정 적용
+          // WorkerW 연결 끊김 → 즉시 플로팅 모드로 전환
           if (widgetAttachedToDesktop) {
-            // desktop → floating 전환 시 alwaysOnTop 재적용
+            console.log('[widget] WorkerW 연결 해제 감지, 플로팅 모드로 전환');
             widgetAttachedToDesktop = false;
             widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
-            console.log('[widget] WorkerW 연결 해제, alwaysOnTop =', widgetDesiredAlwaysOnTop);
           }
         }
       }).catch(() => {/* ignore heartbeat errors */});
@@ -257,7 +256,7 @@ function startWidgetHeartbeat(): void {
       if (widgetHeartbeat) clearInterval(widgetHeartbeat);
       widgetHeartbeat = null;
     }
-  }, 30_000);
+  }, 15_000);
 }
 
 function stopWidgetHeartbeat(): void {
@@ -268,7 +267,7 @@ function stopWidgetHeartbeat(): void {
 }
 
 function createWidgetWindow(
-  options: { width: number; height: number; alwaysOnTop: boolean },
+  options: { width: number; height: number; alwaysOnTop: boolean; desktopMode?: string },
   onReady?: () => void,
 ): void {
   const savedBounds = readWidgetBounds();
@@ -323,26 +322,58 @@ function createWidgetWindow(
 
     // WorkerW 바탕화면 레이어에 붙이기 (Windows 전용)
     if (process.platform === 'win32') {
-      // 렌더러가 안정화된 후 WorkerW에 붙이기 (200ms 딜레이)
-      setTimeout(() => {
-        if (!widgetWindow || widgetWindow.isDestroyed()) return;
-        const hwndBuf = widgetWindow.getNativeWindowHandle();
-        attachToDesktopAsync(hwndBuf).then((attached) => {
+      const desktopMode = options.desktopMode ?? 'auto';
+
+      if (desktopMode === 'floating') {
+        // 사용자 설정: WorkerW 연결 안 함, 바로 플로팅 모드
+        widgetAttachedToDesktop = false;
+        widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
+        console.log('[widget] 플로팅 모드 (사용자 설정)');
+      } else {
+        // 렌더러가 안정화된 후 WorkerW에 붙이기 (200ms 딜레이)
+        setTimeout(() => {
           if (!widgetWindow || widgetWindow.isDestroyed()) return;
-          if (attached) {
-            // WorkerW에 붙으면 desktop 모드 (child window이므로 setAlwaysOnTop 불필요)
-            widgetAttachedToDesktop = true;
-            // 하트비트 시작: Explorer 재시작 등에 대비해 30초마다 재연결
-            startWidgetHeartbeat();
-            console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
-          } else {
-            // 연결 실패 → 플로팅 모드: 이제 사용자 설정에 따라 alwaysOnTop 적용
-            widgetAttachedToDesktop = false;
-            widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
-            console.warn('[widget] WorkerW 연결 실패, alwaysOnTop =', widgetDesiredAlwaysOnTop);
-          }
-        });
-      }, 200);
+          const hwndBuf = widgetWindow.getNativeWindowHandle();
+          attachToDesktopAsync(hwndBuf).then((attached) => {
+            if (!widgetWindow || widgetWindow.isDestroyed()) return;
+            if (attached) {
+              // WorkerW에 붙으면 desktop 모드 (child window이므로 setAlwaysOnTop 불필요)
+              widgetAttachedToDesktop = true;
+              startWidgetHeartbeat();
+              console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
+
+              // auto 모드: 입력 검증 (2초 타이머)
+              if (desktopMode === 'auto') {
+                const verifyTimeout = setTimeout(() => {
+                  console.warn('[widget] 입력 검증 실패 — WorkerW에서 분리하고 플로팅 모드로 전환');
+                  if (widgetWindow && !widgetWindow.isDestroyed()) {
+                    detachFromDesktopAsync(widgetWindow.getNativeWindowHandle()).then(() => {
+                      if (widgetWindow && !widgetWindow.isDestroyed()) {
+                        widgetAttachedToDesktop = false;
+                        widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
+                        stopWidgetHeartbeat();
+                      }
+                    });
+                  }
+                }, 2000);
+
+                ipcMain.once('widget:input-verified', () => {
+                  clearTimeout(verifyTimeout);
+                  console.log('[widget] 입력 검증 성공 — 바탕화면 모드 유지');
+                });
+
+                widgetWindow.webContents.send('widget:verify-input');
+              }
+              // desktop 모드: 검증 없이 강제 연결 유지
+            } else {
+              // 연결 실패 → 플로팅 모드: 사용자 설정에 따라 alwaysOnTop 적용
+              widgetAttachedToDesktop = false;
+              widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
+              console.warn('[widget] WorkerW 연결 실패, alwaysOnTop =', widgetDesiredAlwaysOnTop);
+            }
+          });
+        }, 200);
+      }
     }
 
     onReady?.();
@@ -380,13 +411,13 @@ function createWidgetWindow(
   });
 }
 
-function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnTop: boolean; startInWidgetMode: boolean; closeToWidget: boolean } {
+function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnTop: boolean; startInWidgetMode: boolean; closeToWidget: boolean; desktopMode: string } {
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const settings = JSON.parse(raw) as {
-        widget?: { width?: number; height?: number; alwaysOnTop?: boolean; transparent?: boolean; closeToWidget?: boolean };
+        widget?: { width?: number; height?: number; alwaysOnTop?: boolean; transparent?: boolean; closeToWidget?: boolean; desktopMode?: string };
       };
       return {
         width: settings.widget?.width ?? 920,
@@ -394,12 +425,13 @@ function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnT
         alwaysOnTop: settings.widget?.alwaysOnTop ?? true,
         startInWidgetMode: settings.widget?.transparent ?? false,
         closeToWidget: settings.widget?.closeToWidget ?? true,
+        desktopMode: settings.widget?.desktopMode ?? 'auto',
       };
     }
   } catch {
     // fall through to defaults
   }
-  return { width: 920, height: 700, alwaysOnTop: true, startInWidgetMode: false, closeToWidget: true };
+  return { width: 920, height: 700, alwaysOnTop: true, startInWidgetMode: false, closeToWidget: true, desktopMode: 'auto' };
 }
 
 function setupAutoUpdater(): void {

@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS: Settings = {
     alwaysOnTop: true,
     closeToWidget: true,
     layoutMode: 'full',
+    desktopMode: 'auto',
     visibleSections: {
       dateTime: true,
       weather: true,
@@ -155,7 +156,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           feedback: { ...DEFAULT_SETTINGS.feedback, ...((saved as unknown as { feedback?: Partial<FeedbackConfig> }).feedback ?? {}) } as FeedbackConfig,
           dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings }).dashboardTheme,
         };
-        set({ settings: merged, loaded: true, isFirstRun: false });
+        // maxPeriods가 periodTimes 개수보다 작으면 보정 (온보딩 버그 마이그레이션)
+        const corrected = merged.periodTimes && merged.maxPeriods < merged.periodTimes.length
+          ? { ...merged, maxPeriods: merged.periodTimes.length }
+          : merged;
+        set({ settings: corrected, loaded: true, isFirstRun: false });
       } else {
         set({ loaded: true, isFirstRun: true });
       }

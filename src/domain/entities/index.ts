@@ -34,3 +34,12 @@ export type { MessageData } from './Message';
 export type { ClassRoster, ClassRostersData } from './ClassRoster';
 
 export * from './Survey';
+
+export type {
+  Assignment,
+  AssignmentTarget,
+  StudentInfo,
+  DriveFolder,
+  Submission,
+  AssignmentsData,
+} from './Assignment';

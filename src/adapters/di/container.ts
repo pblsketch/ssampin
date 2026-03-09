@@ -21,6 +21,9 @@ import type { ISeatConstraintsRepository } from '@domain/repositories/ISeatConst
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 import type { IBookmarkRepository } from '@domain/repositories/IBookmarkRepository';
 import type { IAnalyticsPort } from '@domain/ports/IAnalyticsPort';
+import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepository';
+import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
+import type { IAssignmentServicePort } from '@domain/ports/IAssignmentServicePort';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -28,6 +31,8 @@ import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
 import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
 import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarApiClient';
 import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnalyticsAdapter';
+import { GoogleDriveClient } from '@infrastructure/google/GoogleDriveClient';
+import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
 
 import { JsonScheduleRepository } from '@adapters/repositories/JsonScheduleRepository';
 import { JsonSeatingRepository } from '@adapters/repositories/JsonSeatingRepository';
@@ -43,11 +48,18 @@ import { GoogleCalendarSyncRepository } from '@adapters/repositories/GoogleCalen
 import { JsonSeatConstraintsRepository } from '@adapters/repositories/JsonSeatConstraintsRepository';
 import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeachingClassRepository';
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
+import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentRepository';
 
 import { AuthenticateGoogle } from '@usecases/calendar/AuthenticateGoogle';
 import { SyncToGoogle } from '@usecases/calendar/SyncToGoogle';
 import { SyncFromGoogle } from '@usecases/calendar/SyncFromGoogle';
 import { ManageCalendarMapping } from '@usecases/calendar/ManageCalendarMapping';
+
+import { CreateAssignment } from '@usecases/assignment/CreateAssignment';
+import { GetAssignments } from '@usecases/assignment/GetAssignments';
+import { GetSubmissions } from '@usecases/assignment/GetSubmissions';
+import { DeleteAssignment } from '@usecases/assignment/DeleteAssignment';
+import { CopyMissingList } from '@usecases/assignment/CopyMissingList';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI != null;
 
@@ -132,3 +144,60 @@ export const syncFromGoogle = new SyncFromGoogle(
 // === Analytics ===
 
 export const analyticsPort: IAnalyticsPort = new SupabaseAnalyticsAdapter();
+
+// === 과제수합 관련 ===
+
+export const assignmentRepository: IAssignmentRepository =
+  new JsonAssignmentRepository(storage);
+
+// 구체 클래스 참조 (startPolling 접근용)
+export const assignmentSupabaseClient = new AssignmentSupabaseClient();
+
+export const assignmentServicePort: IAssignmentServicePort =
+  assignmentSupabaseClient;
+
+// GoogleDriveClient는 토큰 getter가 필요 → 인증 후 lazy 초기화
+let _driveClient: GoogleDriveClient | null = null;
+
+export function getGoogleDriveClient(
+  getAccessToken: () => Promise<string>,
+): IGoogleDrivePort {
+  if (!_driveClient) {
+    _driveClient = new GoogleDriveClient(getAccessToken);
+  }
+  return _driveClient;
+}
+
+export function resetGoogleDriveClient(): void {
+  _driveClient = null;
+}
+
+// UseCase 팩토리 (Drive 클라이언트가 lazy이므로 팩토리 패턴)
+export function createAssignmentUseCases(getAccessToken: () => Promise<string>) {
+  const drivePort = getGoogleDriveClient(getAccessToken);
+
+  return {
+    createAssignment: new CreateAssignment(
+      assignmentRepository,
+      drivePort,
+      assignmentServicePort,
+      getAccessToken,
+    ),
+    getAssignments: new GetAssignments(
+      assignmentRepository,
+      assignmentServicePort,
+    ),
+    getSubmissions: new GetSubmissions(
+      assignmentRepository,
+      assignmentServicePort,
+    ),
+    deleteAssignment: new DeleteAssignment(
+      assignmentRepository,
+      assignmentServicePort,
+    ),
+    copyMissingList: new CopyMissingList(
+      assignmentRepository,
+      assignmentServicePort,
+    ),
+  };
+}
