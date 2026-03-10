@@ -108,6 +108,8 @@ export default function Hero() {
               'PIN 잠금',
               '미니 창 모드',
               '담임메모',
+              '수업 관리',
+              '과제 수합',
               '할 일',
               '내보내기',
             ].map((kw) => (
