@@ -9,6 +9,15 @@ export function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+/** 예고 알림을 트리거해야 하는지 판단 */
+export function shouldTriggerPreWarning(
+  remaining: number,
+  secondsBefore: number,
+  alreadyTriggered: boolean,
+): boolean {
+  return !alreadyTriggered && remaining <= secondsBefore && remaining > 0;
+}
+
 /** "01:23.45" 형식 (스톱워치용, ms 단위 입력) */
 export function formatTimeMs(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);

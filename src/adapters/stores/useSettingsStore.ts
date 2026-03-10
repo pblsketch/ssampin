@@ -91,6 +91,11 @@ const DEFAULT_SETTINGS: Settings = {
     customAudioName: null,
     volume: 0.8,
     boost: 1,
+    preWarning: {
+      enabled: true,
+      secondsBefore: 60,
+      sound: 'gentle-chime',
+    },
   },
   workSymbols: {
     symbols: DEFAULT_WORK_SYMBOLS,
@@ -150,7 +155,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           system: { ...DEFAULT_SETTINGS.system, ...((saved as unknown as { system?: Partial<Settings['system']> }).system ?? {}) },
           neis: { ...DEFAULT_SETTINGS.neis, ...((saved as unknown as { neis?: Partial<Settings['neis']> }).neis ?? {}) },
           pin: { ...DEFAULT_SETTINGS.pin, ...((saved as unknown as { pin?: Partial<Settings['pin']> }).pin ?? {}) },
-          alarmSound: { ...DEFAULT_SETTINGS.alarmSound, ...((saved as unknown as { alarmSound?: Partial<Settings['alarmSound']> }).alarmSound ?? {}) },
+          alarmSound: {
+            ...DEFAULT_SETTINGS.alarmSound,
+            ...((saved as unknown as { alarmSound?: Partial<Settings['alarmSound']> }).alarmSound ?? {}),
+            preWarning: {
+              ...DEFAULT_SETTINGS.alarmSound.preWarning,
+              ...((saved as unknown as { alarmSound?: { preWarning?: Partial<Settings['alarmSound']['preWarning']> } }).alarmSound?.preWarning ?? {}),
+            },
+          },
           workSymbols: { ...DEFAULT_SETTINGS.workSymbols, ...((saved as unknown as { workSymbols?: Partial<Settings['workSymbols']> }).workSymbols ?? {}) },
           weather: { ...DEFAULT_SETTINGS.weather, ...((saved as unknown as { weather?: Partial<Settings['weather']> }).weather ?? {}) },
           feedback: { ...DEFAULT_SETTINGS.feedback, ...((saved as unknown as { feedback?: Partial<FeedbackConfig> }).feedback ?? {}) } as FeedbackConfig,

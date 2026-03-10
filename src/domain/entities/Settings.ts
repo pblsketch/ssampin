@@ -13,6 +13,14 @@ export type SchoolLevel = 'elementary' | 'middle' | 'high';
 
 export type AlarmSoundId = 'beep' | 'school-bell' | 'alarm-clock' | 'gentle-chime' | 'buzzer' | 'custom';
 
+export type PreWarningSoundId = 'gentle-chime' | 'soft-bell' | 'tick-tock';
+
+export interface PreWarningSettings {
+  readonly enabled: boolean;
+  readonly secondsBefore: number;
+  readonly sound: PreWarningSoundId;
+}
+
 export interface WorkSymbolItem {
   readonly id: string;
   readonly emoji: string;
@@ -30,6 +38,7 @@ export interface AlarmSoundSettings {
   readonly customAudioName: string | null;
   readonly volume: number; // 0.0 ~ 1.0
   readonly boost: number;  // 1 | 2 | 3 | 4 — 볼륨 증폭 배수
+  readonly preWarning: PreWarningSettings;
 }
 
 export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';
