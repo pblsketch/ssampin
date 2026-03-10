@@ -102,7 +102,7 @@ const softwareJsonLd = {
     price: '0',
     priceCurrency: 'KRW',
   },
-  softwareVersion: '0.3.3',
+  softwareVersion: '0.3.4',
   author: {
     '@type': 'Person',
     name: 'PBL Sketch',
