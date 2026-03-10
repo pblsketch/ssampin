@@ -3,7 +3,7 @@ import FadeIn from './FadeIn';
 export default function MealAndWeather() {
   return (
     <section className="bg-sp-surface py-24">
-      <div className="mx-auto max-w-6xl px-4">
+      <div className="mx-auto max-w-7xl px-4">
         <FadeIn>
           <div className="mb-12">
             <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
@@ -18,7 +18,7 @@ export default function MealAndWeather() {
           </div>
         </FadeIn>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {/* 급식 카드 */}
           <FadeIn delay={0.05}>
             <div className="h-full rounded-2xl border border-white/10 bg-sp-card p-8">
