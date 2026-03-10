@@ -376,14 +376,15 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         <div
           className={`grid items-center px-4 py-2.5 bg-sp-bg/50 text-xs font-medium text-sp-muted ${
             isEditing
-              ? 'grid-cols-[3rem_1fr_1fr_2.5rem]'
+              ? 'grid-cols-[3rem_1fr_1fr_8rem_2.5rem]'
               : 'grid-cols-[3rem_1fr_1fr_8rem]'
           }`}
         >
           <span>번호</span>
           <span>이름</span>
           <span>메모</span>
-          {isEditing ? <span /> : <span className="text-center">출석</span>}
+          <span className="text-center">출석</span>
+          {isEditing && <span />}
         </div>
 
         {/* 학생 행 */}
@@ -398,7 +399,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 key={`${student.number}-${idx}`}
                 className={`grid items-center px-4 py-2 hover:bg-white/[0.02] transition-colors ${
                   isEditing
-                    ? 'grid-cols-[3rem_1fr_1fr_2.5rem]'
+                    ? 'grid-cols-[3rem_1fr_1fr_8rem_2.5rem]'
                     : 'grid-cols-[3rem_1fr_1fr_8rem]'
                 }`}
               >
@@ -457,17 +458,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                   </button>
                 )}
 
-                {/* 출석 / 삭제 버튼 */}
-                {isEditing ? (
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => removeRow(idx)}
-                      className="p-1 text-sp-muted hover:text-red-400 rounded transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  </div>
-                ) : attendanceInitialized ? (
+                {/* 출석 */}
+                {attendanceInitialized ? (
                   <div className="flex justify-center">
                     <button
                       onClick={() => toggleStatus(student.number)}
@@ -484,6 +476,18 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                   </div>
                 ) : (
                   <div />
+                )}
+
+                {/* 삭제 (편집 모드) */}
+                {isEditing && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => removeRow(idx)}
+                      className="p-1 text-sp-muted hover:text-red-400 rounded transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  </div>
                 )}
               </div>
             );

@@ -575,7 +575,6 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
           <div className="rounded-xl bg-sp-card px-4 py-3">
             <p className="text-xs text-sp-muted mb-1.5">
               {'\uD83D\uDCCB'} {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
-              <span className="text-sp-muted/60 ml-1.5">· 호버하여 수정/삭제</span>
             </p>
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {dateRecords.map((record) => {
@@ -594,7 +593,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                         {record.content && (
                           <span className="text-sp-muted truncate flex-1">{record.content}</span>
                         )}
-                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 ml-auto transition-opacity flex-shrink-0">
+                        <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
                           <button
                             onClick={() => {
                               setEditingRecordId(record.id);
