@@ -649,7 +649,7 @@ function TodoGroup({
   const totalCount = items.length;
 
   return (
-    <div className="bg-sp-card rounded-xl ring-1 ring-sp-border">
+    <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-visible">
       {/* 그룹 헤더 */}
       <button
         type="button"
