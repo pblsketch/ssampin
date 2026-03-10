@@ -70,18 +70,6 @@ const troubleshootCases = [
       { text: <>여전히 안 되면: 설치 파일 우클릭 → &quot;속성&quot; → <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크 → 확인 후 다시 실행</> },
     ],
   },
-  {
-    id: 'school-pc',
-    icon: '🏫',
-    label: '학교 PC에서 안 돼요',
-    title: '학교 PC에서 설치가 안 될 때',
-    description: '학교 보안 정책으로 프로그램 설치가 제한된 경우예요.',
-    steps: [
-      { text: <>학교 IT 담당 선생님께 &quot;쌤핀&quot; 설치 허용을 요청해주세요</> },
-      { text: <>또는 개인 노트북에서 설치 후 사용하실 수 있어요</> },
-    ],
-    extraTip: '포터블(설치 없는) 버전도 준비 중이에요!',
-  },
 ];
 
 export default function InstallGuide() {
@@ -126,7 +114,7 @@ export default function InstallGuide() {
             </p>
 
             {/* 증상 선택 버튼 그리드 */}
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {troubleshootCases.map((tc) => (
                 <button
                   key={tc.id}
