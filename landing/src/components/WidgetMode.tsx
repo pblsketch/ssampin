@@ -22,10 +22,10 @@ export default function WidgetMode() {
           <FadeIn className="w-full md:w-1/2">
             <div className="overflow-hidden rounded-2xl border border-white/10">
               <Image
-                src="/images/timetable.png"
-                alt="쌤핀 시간표 화면"
-                width={1440}
-                height={900}
+                src="/images/widget-mode.png"
+                alt="쌤핀 위젯 모드 - 데스크톱 위에 띄운 대시보드"
+                width={1920}
+                height={1080}
                 className="h-auto w-full"
               />
             </div>
