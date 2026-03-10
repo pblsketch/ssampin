@@ -78,8 +78,6 @@ export function AppInfoSection() {
   const [noteLoading, setNoteLoading] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isElectron = !!window.electronAPI;
-
   useEffect(() => {
     const api = window.electronAPI;
     if (!api) return;
@@ -168,14 +166,9 @@ export function AppInfoSection() {
       </div>
 
       {/* Update section */}
-      {!isElectron ? (
-        <p className="text-xs text-sp-muted">
-          브라우저 모드에서는 업데이트 확인을 사용할 수 없습니다.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {/* idle */}
-          {status === 'idle' && (
+      <div className="space-y-3">
+        {/* idle */}
+        {status === 'idle' && (
             <button
               type="button"
               onClick={handleCheckUpdate}
@@ -319,25 +312,24 @@ export function AppInfoSection() {
             </div>
           )}
 
-          {/* error */}
-          {status === 'error' && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-red-400 text-sm">
-                <span className="material-symbols-outlined text-[18px]">error</span>
-                {errorMsg || '업데이트 확인 중 오류가 발생했습니다.'}
-              </div>
-              <button
-                type="button"
-                onClick={handleCheckUpdate}
-                className="px-4 py-2 rounded-lg bg-sp-accent/10 text-sp-accent text-sm font-medium hover:bg-sp-accent/20 transition-colors flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined text-[18px]">refresh</span>
-                다시 시도
-              </button>
+        {/* error */}
+        {status === 'error' && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <span className="material-symbols-outlined text-[18px]">error</span>
+              {errorMsg || '업데이트 확인 중 오류가 발생했습니다.'}
             </div>
-          )}
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={handleCheckUpdate}
+              className="px-4 py-2 rounded-lg bg-sp-accent/10 text-sp-accent text-sm font-medium hover:bg-sp-accent/20 transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">refresh</span>
+              다시 시도
+            </button>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
