@@ -183,7 +183,7 @@ export function NeisTimetableAutoSyncSection() {
   };
 
   return (
-    <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
+    <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 mb-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 rounded-lg bg-sp-accent/10 text-sp-accent">
           <span className="material-symbols-outlined">sync</span>

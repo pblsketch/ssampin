@@ -106,7 +106,7 @@ export function NeisScheduleSection() {
   };
 
   return (
-    <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">
+    <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 mb-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
           <span className="material-symbols-outlined">calendar_month</span>
