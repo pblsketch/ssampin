@@ -1025,11 +1025,11 @@ function TimerMode() {
           {/* 예고 알림 배너 */}
           {showPreWarningBanner && state === 'running' && (
             <div className="absolute -top-2 left-0 right-0 z-30 flex justify-center animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-amber-500/25 border border-amber-500/40 backdrop-blur-sm shadow-sm">
-                <span className="material-symbols-outlined text-amber-600 dark:text-amber-300 text-[20px]">
+              <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-amber-500 shadow-md">
+                <span className="material-symbols-outlined text-white text-[20px]">
                   notifications_active
                 </span>
-                <span className="text-sm font-bold text-amber-700 dark:text-amber-200">
+                <span className="text-sm font-bold text-white">
                   {remaining >= 60 ? `${Math.ceil(remaining / 60)}분` : `${remaining}초`} 남았어요! 마무리 준비~
                 </span>
               </div>
@@ -1123,9 +1123,9 @@ function TimerMode() {
             onClick={() => { setShowPreWarningPanel((v) => !v); setShowSoundPanel(false); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
               showPreWarningPanel
-                ? 'bg-amber-600/20 text-amber-700 dark:text-amber-300 border border-amber-600/40'
+                ? 'bg-amber-500 text-white border border-amber-500'
                 : preWarning.enabled
-                  ? 'bg-sp-card border border-sp-border text-amber-700 dark:text-amber-300 hover:border-amber-500/40'
+                  ? 'bg-sp-card border border-amber-500/50 text-sp-text hover:border-amber-500'
                   : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-amber-500/40'
             }`}
           >
