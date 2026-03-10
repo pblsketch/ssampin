@@ -648,6 +648,7 @@ function TimerMode() {
   const [selectedPreset, setSelectedPreset] = useState(300);
   const [showCustom, setShowCustom] = useState(false);
   const [showSoundPanel, setShowSoundPanel] = useState(false);
+  const [showPreWarningPanel, setShowPreWarningPanel] = useState(false);
   const [flashCount, setFlashCount] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -1092,33 +1093,54 @@ function TimerMode() {
         <div className="w-16 h-16" />
       </div>
 
-      {/* 알람음 토글 버튼 */}
+      {/* 알람음 / 예고 알림 토글 버튼 */}
       {state !== 'running' && (
-        <button
-          onClick={() => setShowSoundPanel((v) => !v)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
-            showSoundPanel
-              ? 'bg-sp-accent/15 text-sp-accent border border-sp-accent/30'
-              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/40'
-          }`}
-        >
-          <span className="material-symbols-outlined text-[18px]">
-            {volume === 0 ? 'volume_off' : 'volume_up'}
-          </span>
-          <span>
-            알람음: {selectedSound === 'custom' && customAudioName
-              ? customAudioName
-              : ALARM_PRESETS.find((p) => p.id === selectedSound)?.label ?? '기본 알림'}
-          </span>
-          <span className="material-symbols-outlined text-[16px]">
-            {showSoundPanel ? 'expand_less' : 'expand_more'}
-          </span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 알람음 버튼 */}
+          <button
+            onClick={() => { setShowSoundPanel((v) => !v); setShowPreWarningPanel(false); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
+              showSoundPanel
+                ? 'bg-sp-accent/15 text-sp-accent border border-sp-accent/30'
+                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/40'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              {volume === 0 ? 'volume_off' : 'volume_up'}
+            </span>
+            <span>
+              알람음: {selectedSound === 'custom' && customAudioName
+                ? customAudioName
+                : ALARM_PRESETS.find((p) => p.id === selectedSound)?.label ?? '기본 알림'}
+            </span>
+            <span className="material-symbols-outlined text-[16px]">
+              {showSoundPanel ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+
+          {/* 예고 알림 버튼 */}
+          <button
+            onClick={() => { setShowPreWarningPanel((v) => !v); setShowSoundPanel(false); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
+              showPreWarningPanel
+                ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
+                : preWarning.enabled
+                  ? 'bg-sp-card border border-sp-border text-amber-400 hover:border-amber-500/40'
+                  : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-amber-500/40'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+            <span>예고 알림{preWarning.enabled ? `: ${preWarning.secondsBefore < 60 ? `${preWarning.secondsBefore}초` : `${preWarning.secondsBefore / 60}분`} 전` : ' (꺼짐)'}</span>
+            <span className="material-symbols-outlined text-[16px]">
+              {showPreWarningPanel ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+        </div>
       )}
 
-      {/* 알람음 설정 패널 (접힘/펼침) */}
+      {/* 알람음 설정 패널 */}
       {showSoundPanel && state !== 'running' && (
-        <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200 space-y-0">
+        <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200">
           <AlarmSoundSelector
             selectedSound={selectedSound}
             customAudioName={customAudioName}
@@ -1131,43 +1153,47 @@ function TimerMode() {
             onVolumeChange={handleVolumeChange}
             onBoostChange={handleBoostChange}
           />
+        </div>
+      )}
 
-          {/* ─── 예고 알림 설정 ─── */}
-          <div className="mt-4 pt-4 border-t border-sp-border">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-400 text-[18px]">
-                  notifications_active
-                </span>
-                <span className="text-sm font-medium text-sp-text">예고 알림</span>
-                <span className="text-[10px] text-sp-muted">(종료 전 미리 알림)</span>
-              </div>
-              <button
-                onClick={() => handlePreWarningChange({ ...preWarning, enabled: !preWarning.enabled })}
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  preWarning.enabled ? 'bg-amber-500' : 'bg-sp-border'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                    preWarning.enabled ? 'translate-x-5' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
+      {/* 예고 알림 설정 패널 */}
+      {showPreWarningPanel && state !== 'running' && (
+        <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-amber-400 text-[18px]">
+                notifications_active
+              </span>
+              <span className="text-sm font-medium text-sp-text">종료 전 예고 알림</span>
             </div>
+            <button
+              onClick={() => handlePreWarningChange({ ...preWarning, enabled: !preWarning.enabled })}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                preWarning.enabled ? 'bg-amber-500' : 'bg-sp-border'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  preWarning.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
 
-            {preWarning.enabled && (
-              <div className="space-y-3 animate-in fade-in duration-200">
-                {/* 예고 시간 선택 */}
+          {preWarning.enabled && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              {/* 예고 시간 선택 */}
+              <div>
+                <p className="text-xs text-sp-muted mb-2">알림 시점</p>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-sp-muted">종료</span>
                   {PRE_WARNING_TIMES.map((sec) => (
                     <button
                       key={sec}
                       onClick={() => handlePreWarningChange({ ...preWarning, secondsBefore: sec })}
-                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all border ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                         preWarning.secondsBefore === sec
-                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                          ? 'bg-amber-500 border-amber-500 text-white'
                           : 'bg-sp-card border-sp-border text-sp-muted hover:text-white'
                       }`}
                     >
@@ -1176,8 +1202,11 @@ function TimerMode() {
                   ))}
                   <span className="text-xs text-sp-muted">전</span>
                 </div>
+              </div>
 
-                {/* 예고 알림음 선택 */}
+              {/* 예고 알림음 선택 */}
+              <div>
+                <p className="text-xs text-sp-muted mb-2">알림음</p>
                 <div className="flex gap-2">
                   {PRE_WARNING_PRESETS.map((preset) => (
                     <button
@@ -1186,20 +1215,26 @@ function TimerMode() {
                         handlePreWarningChange({ ...preWarning, sound: preset.id });
                         playPreWarningSound(preset.id, volume, boost);
                       }}
-                      className={`flex-1 flex flex-col items-center gap-1 p-2.5 rounded-lg border transition-all ${
+                      className={`flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
                         preWarning.sound === preset.id
-                          ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                          : 'bg-sp-card border-sp-border text-sp-muted hover:text-white'
+                          ? 'bg-amber-500 border-amber-500 text-white'
+                          : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:border-amber-500/40'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[18px]">{preset.icon}</span>
-                      <span className="text-[10px] font-medium">{preset.label}</span>
+                      <span className="material-symbols-outlined text-[20px]">{preset.icon}</span>
+                      <span className="text-xs font-medium">{preset.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {!preWarning.enabled && (
+            <p className="text-xs text-sp-muted text-center py-2">
+              활성화하면 타이머 종료 전 미리 알림을 받을 수 있어요
+            </p>
+          )}
         </div>
       )}
 
