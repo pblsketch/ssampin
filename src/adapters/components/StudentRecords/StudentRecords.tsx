@@ -248,7 +248,11 @@ function getMethodIcon(method: CounselingMethod | undefined): string {
 }
 
 function InputMode({ students, records, categories, selectedDate }: InputModeProps) {
-  const { addRecord } = useStudentRecordsStore();
+  const { addRecord, deleteRecord, updateRecord } = useStudentRecordsStore();
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [editingCategory, setEditingCategory] = useState('');
+  const [editingSubcat, setEditingSubcat] = useState('');
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<{
     categoryId: string;
@@ -571,23 +575,79 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
           <div className="rounded-xl bg-sp-card px-4 py-3">
             <p className="text-xs text-sp-muted mb-1.5">
               {'\uD83D\uDCCB'} {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
+              <span className="text-sp-muted/60 ml-1.5">· 호버하여 수정/삭제</span>
             </p>
-            <div className="space-y-1 max-h-24 overflow-y-auto">
+            <div className="space-y-1 max-h-32 overflow-y-auto">
               {dateRecords.map((record) => {
                 const student = studentMap.get(record.studentId);
+                const isEditing = editingRecordId === record.id;
                 return (
-                  <div key={record.id} className="flex items-center gap-2 text-xs">
+                  <div key={record.id} className={`group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors ${
+                    isEditing ? 'bg-sp-accent/10 ring-1 ring-sp-accent/30' : 'hover:bg-sp-surface/50'
+                  }`}>
                     <span className={getRecordTagClass(record.category, categories)}>
                       {record.subcategory}
                     </span>
                     <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
-                    {record.content && (
-                      <span className="text-sp-muted truncate flex-1">{record.content}</span>
+                    {!isEditing && (
+                      <>
+                        {record.content && (
+                          <span className="text-sp-muted truncate flex-1">{record.content}</span>
+                        )}
+                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 ml-auto transition-opacity flex-shrink-0">
+                          <button
+                            onClick={() => {
+                              setEditingRecordId(record.id);
+                              setEditingContent(record.content);
+                              setEditingCategory(record.category);
+                              setEditingSubcat(record.subcategory);
+                            }}
+                            className="text-sp-muted hover:text-sp-accent transition-colors"
+                            title="수정"
+                          >
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                          </button>
+                          <button
+                            onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void deleteRecord(record.id); }}
+                            className="text-sp-muted hover:text-red-400 transition-colors"
+                            title="삭제"
+                          >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    {isEditing && (
+                      <span className="ml-auto text-[10px] text-sp-accent font-medium">수정 중</span>
                     )}
                   </div>
                 );
               })}
             </div>
+            {/* 편집 에디터: 기록 리스트 바깥에 별도 카드로 렌더링 */}
+            {editingRecordId && (() => {
+              const editingRecord = dateRecords.find((r) => r.id === editingRecordId);
+              if (!editingRecord) return null;
+              return (
+                <div className="mt-2">
+                  <InlineRecordEditor
+                    record={editingRecord}
+                    categories={categories}
+                    editContent={editingContent}
+                    setEditContent={setEditingContent}
+                    editCategory={editingCategory}
+                    setEditCategory={setEditingCategory}
+                    editSubcategory={editingSubcat}
+                    setEditSubcategory={setEditingSubcat}
+                    onSave={() => {
+                      void updateRecord({ ...editingRecord, content: editingContent, category: editingCategory, subcategory: editingSubcat });
+                      setEditingRecordId(null);
+                    }}
+                    onCancel={() => setEditingRecordId(null)}
+                  />
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -908,6 +968,9 @@ const COUNSELING_METHODS: { value: CounselingMethod; label: string }[] = [
 function SearchMode({ students, records, categories }: ModeProps) {
   const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone } =
     useStudentRecordsStore();
+  const [dismissedSearchGuide, setDismissedSearchGuide] = useState(
+    () => localStorage.getItem('ssampin:record-search-guide-dismissed') === 'true',
+  );
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
@@ -917,6 +980,8 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [followUpOnly, setFollowUpOnly] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editSubcategory, setEditSubcategory] = useState('');
 
   // debounce keyword
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1009,13 +1074,22 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const handleEdit = useCallback((record: StudentRecord) => {
     setEditingId(record.id);
     setEditContent(record.content);
+    setEditCategory(record.category);
+    setEditSubcategory(record.subcategory);
   }, []);
 
   const handleEditSave = useCallback(async (record: StudentRecord) => {
-    await updateRecord({ ...record, content: editContent });
+    await updateRecord({
+      ...record,
+      content: editContent,
+      category: editCategory,
+      subcategory: editSubcategory,
+    });
     setEditingId(null);
     setEditContent('');
-  }, [editContent, updateRecord]);
+    setEditCategory('');
+    setEditSubcategory('');
+  }, [editContent, editCategory, editSubcategory, updateRecord]);
 
   // 2-1: 타임라인 뷰 데이터 (학생 선택 시)
   const selectedStudent = selectedStudentId ? students.find((s) => s.id === selectedStudentId) : null;
@@ -1029,6 +1103,25 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
   return (
     <div className="flex-1 flex flex-col gap-4 min-h-0">
+      {/* 수정 안내 배너 (첫 방문 시) */}
+      {!dismissedSearchGuide && (
+        <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
+                        rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+          <span className="material-symbols-outlined text-base">tips_and_updates</span>
+          <span>각 기록의 <span className="inline-flex items-center gap-0.5 mx-0.5"><span className="material-symbols-outlined text-sm">edit</span></span> 버튼으로 내용을 수정하고, <span className="inline-flex items-center gap-0.5 mx-0.5"><span className="material-symbols-outlined text-sm">delete</span></span> 버튼으로 삭제할 수 있습니다.</span>
+          <button
+            onClick={() => {
+              setDismissedSearchGuide(true);
+              localStorage.setItem('ssampin:record-search-guide-dismissed', 'true');
+            }}
+            className="ml-auto text-sp-muted hover:text-sp-text transition-colors flex-shrink-0"
+            title="닫기"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      )}
+
       {/* 2-4: 강화된 필터 바 */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* 키워드 검색 */}
@@ -1152,6 +1245,10 @@ function SearchMode({ students, records, categories }: ModeProps) {
           editingId={editingId}
           editContent={editContent}
           setEditContent={setEditContent}
+          editCategory={editCategory}
+          setEditCategory={setEditCategory}
+          editSubcategory={editSubcategory}
+          setEditSubcategory={setEditSubcategory}
           onEditSave={handleEditSave}
           onEditCancel={() => setEditingId(null)}
         />
@@ -1166,6 +1263,10 @@ function SearchMode({ students, records, categories }: ModeProps) {
           editingId={editingId}
           editContent={editContent}
           setEditContent={setEditContent}
+          editCategory={editCategory}
+          setEditCategory={setEditCategory}
+          editSubcategory={editSubcategory}
+          setEditSubcategory={setEditSubcategory}
           onEditSave={handleEditSave}
           onEditCancel={() => setEditingId(null)}
         />
@@ -1176,7 +1277,19 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
 /* ──────────────────────── 2-1: 학생별 타임라인 뷰 ──────────────────────── */
 
-interface StudentTimelineViewProps {
+interface RecordEditProps {
+  editingId: string | null;
+  editContent: string;
+  setEditContent: (v: string) => void;
+  editCategory: string;
+  setEditCategory: (v: string) => void;
+  editSubcategory: string;
+  setEditSubcategory: (v: string) => void;
+  onEditSave: (record: StudentRecord) => Promise<void>;
+  onEditCancel: () => void;
+}
+
+interface StudentTimelineViewProps extends RecordEditProps {
   student: Student;
   records: readonly StudentRecord[];
   categories: readonly RecordCategoryItem[];
@@ -1185,17 +1298,14 @@ interface StudentTimelineViewProps {
   onEdit: (record: StudentRecord) => void;
   onDelete: (id: string) => Promise<void>;
   onToggleFollowUp: (id: string) => Promise<void>;
-  editingId: string | null;
-  editContent: string;
-  setEditContent: (v: string) => void;
-  onEditSave: (record: StudentRecord) => Promise<void>;
-  onEditCancel: () => void;
 }
 
 function StudentTimelineView({
   student, records, categories, stats,
   onEdit, onDelete, onToggleFollowUp,
-  editingId, editContent, setEditContent, onEditSave, onEditCancel,
+  editingId, editContent, setEditContent,
+  editCategory, setEditCategory, editSubcategory, setEditSubcategory,
+  onEditSave, onEditCancel,
 }: StudentTimelineViewProps) {
   const studentIdx = student.studentNumber ?? 0;
 
@@ -1252,7 +1362,9 @@ function StudentTimelineView({
                         {/* 도트 */}
                         <div className={`absolute -left-[23px] top-3 w-2.5 h-2.5 rounded-full ${getCategoryDotColor(record.category, categories)} z-10`} />
 
-                        <div className="group rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-colors">
+                        <div className={`group rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-all ${
+                          isEditing ? 'ring-1 ring-sp-accent/40' : editingId ? 'opacity-60' : ''
+                        }`}>
                           <div className="flex items-center gap-2 mb-1">
                             <span className={getRecordTagClass(record.category, categories)}>
                               {record.subcategory}
@@ -1273,15 +1385,18 @@ function StudentTimelineView({
                           </div>
 
                           {isEditing ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                value={editContent}
-                                onChange={(e) => setEditContent(e.target.value)}
-                                className="flex-1 bg-sp-surface border border-sp-border rounded px-2 py-1 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                              />
-                              <button onClick={() => void onEditSave(record)} className="text-xs text-sp-accent">저장</button>
-                              <button onClick={onEditCancel} className="text-xs text-sp-muted">취소</button>
-                            </div>
+                            <InlineRecordEditor
+                              record={record}
+                              categories={categories}
+                              editContent={editContent}
+                              setEditContent={setEditContent}
+                              editCategory={editCategory}
+                              setEditCategory={setEditCategory}
+                              editSubcategory={editSubcategory}
+                              setEditSubcategory={setEditSubcategory}
+                              onSave={() => void onEditSave(record)}
+                              onCancel={onEditCancel}
+                            />
                           ) : (
                             <>
                               {record.content && (
@@ -1305,9 +1420,21 @@ function StudentTimelineView({
                                   </button>
                                 </div>
                               )}
-                              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2 mt-1 transition-opacity">
-                                <button onClick={() => onEdit(record)} className="text-xs text-sp-muted hover:text-sp-accent">수정</button>
-                                <button onClick={() => void onDelete(record.id)} className="text-xs text-sp-muted hover:text-red-400">삭제</button>
+                              <div className="flex items-center gap-1 mt-1">
+                                <button
+                                  onClick={() => onEdit(record)}
+                                  className="p-0.5 rounded text-sp-muted/50 hover:text-sp-accent hover:bg-sp-accent/10 transition-colors"
+                                  title="수정"
+                                >
+                                  <span className="material-symbols-outlined text-sm">edit</span>
+                                </button>
+                                <button
+                                  onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void onDelete(record.id); }}
+                                  className="p-0.5 rounded text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                  title="삭제"
+                                >
+                                  <span className="material-symbols-outlined text-sm">delete</span>
+                                </button>
                               </div>
                             </>
                           )}
@@ -1340,24 +1467,21 @@ function StudentTimelineView({
 
 /* ──────────────────────── 기본 기록 리스트 뷰 ──────────────────────── */
 
-interface DefaultRecordListViewProps {
+interface DefaultRecordListViewProps extends RecordEditProps {
   grouped: [string, StudentRecord[]][];
   categories: readonly RecordCategoryItem[];
   studentMap: Map<string, Student>;
   onEdit: (record: StudentRecord) => void;
   onDelete: (id: string) => Promise<void>;
   onToggleFollowUp: (id: string) => Promise<void>;
-  editingId: string | null;
-  editContent: string;
-  setEditContent: (v: string) => void;
-  onEditSave: (record: StudentRecord) => Promise<void>;
-  onEditCancel: () => void;
 }
 
 function DefaultRecordListView({
   grouped, categories, studentMap,
   onEdit, onDelete, onToggleFollowUp,
-  editingId, editContent, setEditContent, onEditSave, onEditCancel,
+  editingId, editContent, setEditContent,
+  editCategory, setEditCategory, editSubcategory, setEditSubcategory,
+  onEditSave, onEditCancel,
 }: DefaultRecordListViewProps) {
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
@@ -1378,7 +1502,9 @@ function DefaultRecordListView({
                 return (
                   <div
                     key={record.id}
-                    className="group flex items-center gap-3 rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-colors"
+                    className={`group flex items-center gap-3 rounded-lg bg-sp-card p-3 hover:bg-sp-card/80 transition-all ${
+                      isEditing ? 'ring-1 ring-sp-accent/40' : editingId ? 'opacity-60' : ''
+                    }`}
                   >
                     <span
                       className="text-[11px] font-medium text-sp-muted rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 whitespace-nowrap tabular-nums flex-shrink-0"
@@ -1407,21 +1533,36 @@ function DefaultRecordListView({
                       {student?.name ?? '?'}
                     </span>
                     {isEditing ? (
-                      <div className="flex-1 flex items-center gap-2">
-                        <input
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          className="flex-1 bg-sp-surface border border-sp-border rounded px-2 py-1 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                        />
-                        <button onClick={() => void onEditSave(record)} className="text-xs text-sp-accent hover:text-sp-accent/80">저장</button>
-                        <button onClick={onEditCancel} className="text-xs text-sp-muted hover:text-white">취소</button>
-                      </div>
+                      <InlineRecordEditor
+                        record={record}
+                        categories={categories}
+                        editContent={editContent}
+                        setEditContent={setEditContent}
+                        editCategory={editCategory}
+                        setEditCategory={setEditCategory}
+                        editSubcategory={editSubcategory}
+                        setEditSubcategory={setEditSubcategory}
+                        onSave={() => void onEditSave(record)}
+                        onCancel={onEditCancel}
+                      />
                     ) : (
                       <>
                         <span className="flex-1 text-sm text-sp-muted">{record.content || ''}</span>
-                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2 transition-opacity">
-                          <button onClick={() => onEdit(record)} className="text-xs text-sp-muted hover:text-sp-accent transition-colors">수정</button>
-                          <button onClick={() => void onDelete(record.id)} className="text-xs text-sp-muted hover:text-red-400 transition-colors">삭제</button>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => onEdit(record)}
+                            className="p-1 rounded text-sp-muted/50 hover:text-sp-accent hover:bg-sp-accent/10 transition-colors"
+                            title="수정"
+                          >
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                          </button>
+                          <button
+                            onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void onDelete(record.id); }}
+                            className="p-1 rounded text-sp-muted/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            title="삭제"
+                          >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
                         </div>
                       </>
                     )}
@@ -1449,6 +1590,185 @@ function StatItem({ label, value, color }: StatItemProps) {
     <div className="flex items-center gap-1.5">
       <span className="text-xs text-sp-muted">{label}</span>
       <span className={`text-sm font-bold ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+/* ──────────────────────── 공용 인라인 편집 컴포넌트 ──────────────────────── */
+
+interface InlineRecordEditorProps {
+  record: StudentRecord;
+  categories: readonly RecordCategoryItem[];
+  editContent: string;
+  setEditContent: (v: string) => void;
+  editCategory: string;
+  setEditCategory: (v: string) => void;
+  editSubcategory: string;
+  setEditSubcategory: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  compact?: boolean;
+}
+
+function InlineRecordEditor({
+  categories,
+  editContent,
+  setEditContent,
+  editCategory,
+  setEditCategory,
+  editSubcategory,
+  setEditSubcategory,
+  onSave,
+  onCancel,
+  compact,
+}: InlineRecordEditorProps) {
+  const cat = useMemo(() => categories.find((c) => c.id === editCategory), [editCategory, categories]);
+  const isAttendance = editCategory === 'attendance';
+
+  // Local attendance 2-level state
+  const [localAttType, setLocalAttType] = useState('');
+  const [localAttReason, setLocalAttReason] = useState('');
+
+  // Initialize attendance state from editSubcategory when category switches to attendance
+  useEffect(() => {
+    if (!isAttendance) { setLocalAttType(''); setLocalAttReason(''); return; }
+    const match = editSubcategory.match(/^(.+?)\s*\((.+?)\)$/);
+    if (match) {
+      setLocalAttType(match[1] ?? '');
+      setLocalAttReason(match[2] ?? '');
+    } else {
+      setLocalAttType('');
+      setLocalAttReason('');
+    }
+    // Only re-parse when category changes to attendance or on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editCategory]);
+
+  const chipSize = compact ? 'text-[11px] px-2 py-0.5' : 'px-2.5 py-1 text-xs';
+
+  return (
+    <div className={compact
+      ? 'bg-sp-surface/80 border border-sp-accent/30 rounded-lg p-2 space-y-1.5 animate-fade-in'
+      : 'bg-sp-surface/80 border border-sp-accent/30 rounded-xl p-3 space-y-2.5 animate-fade-in'
+    }>
+      {/* 카테고리 */}
+      <div>
+        <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>카테고리</p>
+        <div className="flex flex-wrap gap-1.5">
+          {categories.map((c) => {
+            const isSelected = c.id === editCategory;
+            const colorSet = RECORD_COLOR_MAP[c.color] ?? GRAY_COLOR;
+            return (
+              <button
+                key={c.id}
+                onClick={() => {
+                  setEditCategory(c.id);
+                  setEditSubcategory('');
+                  setLocalAttType('');
+                  setLocalAttReason('');
+                }}
+                className={`${chipSize} rounded-lg font-medium transition-all cursor-pointer select-none ${
+                  isSelected ? colorSet.activeBg : colorSet.inactiveBg
+                }`}
+              >
+                {c.name.split(' (')[0]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 세부 항목 */}
+      {cat && (
+        <div>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>세부 항목</p>
+          {isAttendance ? (
+            <div className="space-y-1.5">
+              {/* 출결 유형 */}
+              <div className="flex flex-wrap gap-1.5">
+                {ATTENDANCE_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      setLocalAttType(t);
+                      setLocalAttReason('');
+                      setEditSubcategory('');
+                    }}
+                    className={getSubcategoryChipClass(cat.color, localAttType === t).replace(
+                      compact ? '' : '',
+                      ''
+                    ) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                  >
+                    {localAttType === t && <span className="mr-0.5">✓</span>}{t}
+                  </button>
+                ))}
+              </div>
+              {/* 출결 사유 (유형 선택 시만) */}
+              {localAttType && (
+                <div className="ml-2 pl-3 border-l-2 border-red-500/30">
+                  <p className="text-[11px] text-sp-muted mb-1">사유</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ATTENDANCE_REASONS.map((r) => {
+                      const isReasonSelected = localAttReason === r;
+                      return (
+                        <button
+                          key={r}
+                          onClick={() => {
+                            setLocalAttReason(r);
+                            setEditSubcategory(`${localAttType} (${r})`);
+                          }}
+                          className={getSubcategoryChipClass(cat.color, isReasonSelected) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                        >
+                          {isReasonSelected && <span className="mr-0.5">✓</span>}{r}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {cat.subcategories.map((sub) => {
+                const isSelected = editSubcategory === sub;
+                return (
+                  <button
+                    key={sub}
+                    onClick={() => setEditSubcategory(sub)}
+                    className={getSubcategoryChipClass(cat.color, isSelected) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                  >
+                    {isSelected && <span className="mr-0.5">✓</span>}{sub}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 메모 */}
+      <div>
+        <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>메모</p>
+        <input
+          value={editContent}
+          onChange={(e) => setEditContent(e.target.value)}
+          placeholder="메모 (선택)"
+          className="w-full bg-sp-surface border border-sp-border rounded-lg text-sm text-sp-text px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-sp-accent"
+        />
+      </div>
+
+      {/* 액션 버튼 */}
+      <div className="flex justify-end gap-2 mt-1">
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text hover:bg-sp-surface"
+        >취소</button>
+        <button
+          onClick={onSave}
+          disabled={!editSubcategory}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-accent text-white hover:bg-sp-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
+        >저장</button>
+      </div>
     </div>
   );
 }

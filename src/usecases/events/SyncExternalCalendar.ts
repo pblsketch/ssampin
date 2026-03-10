@@ -2,6 +2,7 @@ import type { IEventsRepository } from '@domain/repositories/IEventsRepository';
 import type { ExternalCalendarSource } from '@domain/entities/ExternalCalendar';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { parseICal } from '@infrastructure/calendar/ICalParser';
+import { sanitizeEventTitle } from '@domain/rules/eventRules';
 
 export interface SyncResult {
   readonly added: number;
@@ -45,7 +46,7 @@ export class SyncExternalCalendar {
 
       const converted: SchoolEvent = {
         id: eventId,
-        title: pe.summary,
+        title: sanitizeEventTitle(pe.summary),
         date: pe.dtstart,
         ...(pe.dtend && pe.dtend !== pe.dtstart ? { endDate: pe.dtend } : {}),
         category: source.categoryId,

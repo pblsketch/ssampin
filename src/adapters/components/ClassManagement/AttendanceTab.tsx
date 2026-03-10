@@ -43,6 +43,11 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
   const [localStudents, setLocalStudents] = useState<StudentAttendance[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [hasExistingRecord, setHasExistingRecord] = useState(false);
+  const [hasModified, setHasModified] = useState(false);
+  const [dismissedGuide, setDismissedGuide] = useState(
+    () => localStorage.getItem('ssampin:attendance-guide-dismissed') === 'true',
+  );
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = cls?.students ?? [];
@@ -60,6 +65,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
             status: map.get(s.number) ?? 'present',
           })),
         );
+        setHasExistingRecord(true);
       } else {
         setLocalStudents(
           students.map((s) => ({
@@ -67,8 +73,10 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
             status: 'present' as AttendanceStatus,
           })),
         );
+        setHasExistingRecord(false);
       }
       setInitialized(true);
+      setHasModified(false);
       setSaveStatus('idle');
     },
     [classId, students, getAttendanceRecord],
@@ -106,6 +114,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
           : s,
       ),
     );
+    setHasModified(true);
     setSaveStatus('idle');
   }, []);
 
@@ -119,8 +128,13 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     };
     await saveAttendanceRecord(record);
     setSaveStatus('saved');
+    setHasModified(false);
+    if (!dismissedGuide) {
+      setDismissedGuide(true);
+      localStorage.setItem('ssampin:attendance-guide-dismissed', 'true');
+    }
     setTimeout(() => setSaveStatus('idle'), 2000);
-  }, [classId, date, period, localStudents, saveAttendanceRecord]);
+  }, [classId, date, period, localStudents, saveAttendanceRecord, dismissedGuide]);
 
   // 통계
   const stats = useMemo(() => {
@@ -179,6 +193,45 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
         </div>
       </div>
 
+      {/* ── 수정 안내 바 (이전 기록 불러왔을 때 + 첫 방문 시) ── */}
+      {hasExistingRecord && initialized && !dismissedGuide && (
+        <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
+                        rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+          <span className="material-symbols-outlined text-base">edit_note</span>
+          <span>이전 기록을 불러왔습니다. 학생을 클릭하면 출결 상태를 수정할 수 있습니다.</span>
+          <button
+            onClick={() => {
+              setDismissedGuide(true);
+              localStorage.setItem('ssampin:attendance-guide-dismissed', 'true');
+            }}
+            className="ml-auto text-sp-muted hover:text-sp-text transition-colors"
+            title="닫기"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── 상태 순환 범례 ── */}
+      {hasExistingRecord && initialized && !dismissedGuide && (
+        <div className="flex items-center gap-3 text-xs text-sp-muted px-1">
+          <span className="text-sp-muted/70">상태 변경 순서:</span>
+          <span className="flex items-center gap-1 text-green-400">
+            <span className="material-symbols-outlined text-sm">check_circle</span>출석
+          </span>
+          <span className="text-sp-muted/50">→</span>
+          <span className="flex items-center gap-1 text-red-400">
+            <span className="material-symbols-outlined text-sm">cancel</span>결석
+          </span>
+          <span className="text-sp-muted/50">→</span>
+          <span className="flex items-center gap-1 text-amber-400">
+            <span className="material-symbols-outlined text-sm">schedule</span>지각
+          </span>
+          <span className="text-sp-muted/50">→</span>
+          <span className="text-sp-muted/70">(반복)</span>
+        </div>
+      )}
+
       {/* ── 통계 바 ── */}
       <div className="flex items-center gap-4 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5">
         {(Object.keys(STATUS_CONFIG) as AttendanceStatus[]).map((status) => (
@@ -236,7 +289,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
                       className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs
                                  font-medium cursor-pointer transition-colors ${config.badge}
                                  hover:opacity-80`}
-                      title="클릭하여 상태 변경"
+                      title={`클릭하여 출결 상태 변경 (${config.label} → ${STATUS_CONFIG[STATUS_CYCLE[status]].label})`}
                     >
                       <span className="material-symbols-outlined text-sm">
                         {config.icon}
@@ -261,6 +314,8 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
             saveStatus === 'saved'
               ? 'bg-green-500/20 text-green-400'
               : 'bg-sp-accent text-white hover:bg-sp-accent/80'
+          } ${
+            hasModified && saveStatus === 'idle' ? 'animate-pulse ring-2 ring-sp-accent/50' : ''
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           <span className="material-symbols-outlined text-lg">

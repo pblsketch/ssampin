@@ -5,6 +5,7 @@ import { calculateDDay } from '@domain/rules/ddayRules';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
+import { isUrlLike } from '@domain/rules/eventRules';
 
 const MAX_VISIBLE = 6;
 
@@ -65,7 +66,7 @@ function EventItem({ event, today, categories }: EventItemProps) {
 
       {/* 제목 */}
       <span className="flex-1 truncate text-sm text-sp-text">
-        {event.title}
+        {isUrlLike(event.title) ? '(제목 없음)' : event.title}
         {event.source === 'google' && <GoogleBadge className="ml-1" />}
       </span>
 

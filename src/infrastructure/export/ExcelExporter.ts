@@ -145,12 +145,24 @@ export async function exportSeatingToExcel(
     fitToHeight: 1,
   };
 
-  const rosterColStart = seating.cols + 2; // 1-indexed; cols+1 은 간격열
+  const isPairMode = !!seating.pairMode;
+
+  // 짝꿍 모드: 짝 그룹 사이에 빈 gap 열 삽입
+  const colMap: Array<{ type: 'seat'; col: number } | { type: 'gap' }> = [];
+  for (let c = 0; c < seating.cols; c++) {
+    if (isPairMode && c > 0 && c % 2 === 0) {
+      colMap.push({ type: 'gap' });
+    }
+    colMap.push({ type: 'seat', col: c });
+  }
+  const totalExcelCols = colMap.length;
+
+  const rosterColStart = totalExcelCols + 2; // 1-indexed; +1 은 간격열
 
   // Row 1: 제목
   const title = formatSeatingTitle(className);
   ws.addRow([title]);
-  ws.mergeCells(1, 1, 1, seating.cols);
+  ws.mergeCells(1, 1, 1, totalExcelCols);
   const titleCell = ws.getCell(1, 1);
   titleCell.font = { bold: true, size: 16 };
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -164,34 +176,42 @@ export async function exportSeatingToExcel(
   for (let displayR = 0; displayR < seating.rows; displayR++) {
     const actualR = seating.rows - 1 - displayR;
     const rowData: string[] = [];
-    for (let c = 0; c < seating.cols; c++) {
-      const studentId = seating.seats[actualR]?.[c] ?? null;
-      const student = getStudent(studentId);
-      rowData.push(student ? student.name : '');
+    for (const desc of colMap) {
+      if (desc.type === 'gap') {
+        rowData.push('');
+      } else {
+        const studentId = seating.seats[actualR]?.[desc.col] ?? null;
+        const student = getStudent(studentId);
+        rowData.push(student ? student.name : '');
+      }
     }
     const excelRow = ws.addRow(rowData);
     excelRow.height = 30;
-    excelRow.eachCell((cell, colNum) => {
-      if (colNum <= seating.cols) {
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-        };
-        if (cell.value) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
-          cell.font = { bold: true };
-        }
+    for (let i = 0; i < colMap.length; i++) {
+      const excelColNum = i + 1;
+      const cell = ws.getCell(excelRow.number, excelColNum);
+      if (colMap[i]!.type === 'gap') {
+        // gap 열: 테두리 없음
+        continue;
       }
-    });
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+      };
+      if (cell.value) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+        cell.font = { bold: true };
+      }
+    }
   }
 
   // 빈 행 + 교탁 (그리드 아래)
   const gyotakRowNum = gridStartRow + seating.rows;
   ws.addRow([]);
-  ws.mergeCells(gyotakRowNum, 1, gyotakRowNum, seating.cols);
+  ws.mergeCells(gyotakRowNum, 1, gyotakRowNum, totalExcelCols);
   const gyotakCell = ws.getCell(gyotakRowNum, 1);
   gyotakCell.value = '[ 교 탁 ]';
   gyotakCell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
@@ -232,12 +252,13 @@ export async function exportSeatingToExcel(
   });
 
   // 열 너비 설정
-  for (let c = 1; c <= seating.cols; c++) {
-    ws.getColumn(c).width = 12;
+  for (let i = 0; i < colMap.length; i++) {
+    const excelColNum = i + 1;
+    ws.getColumn(excelColNum).width = colMap[i]!.type === 'gap' ? 2 : 12;
   }
-  ws.getColumn(seating.cols + 1).width = 3;       // 간격열
-  ws.getColumn(rosterColStart).width = 6;          // 번호
-  ws.getColumn(rosterColStart + 1).width = 12;     // 이름
+  ws.getColumn(totalExcelCols + 1).width = 3;       // 간격열
+  ws.getColumn(rosterColStart).width = 6;            // 번호
+  ws.getColumn(rosterColStart + 1).width = 12;       // 이름
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer as ArrayBuffer;

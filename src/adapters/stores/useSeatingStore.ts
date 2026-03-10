@@ -112,6 +112,9 @@ interface SeatingState {
   clearAllSeats: () => Promise<void>;
   resizeGrid: (newRows: number, newCols: number) => Promise<void>;
 
+  /** 짝꿍 모드 토글 */
+  togglePairMode: () => Promise<void>;
+
   /** 명렬표 변경 시 좌석 동기화 */
   syncFromRoster: (students: readonly Student[]) => Promise<void>;
   /** 명렬표 전체 교체 시 좌석 재생성 */
@@ -248,6 +251,17 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
 
     setEditing: (editing) => set({ isEditing: editing }),
 
+    togglePairMode: async () => {
+      const { seating } = get();
+      const updated: SeatingData = { ...seating, pairMode: !seating.pairMode };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch {
+        // 무시
+      }
+    },
+
     resizeGrid: async (newRows, newCols) => {
       const clampedRows = Math.max(1, Math.min(10, newRows));
       const clampedCols = Math.max(1, Math.min(10, newCols));
@@ -267,7 +281,7 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         newSeats.push(newRow);
       }
 
-      let updated: SeatingData = { rows: clampedRows, cols: clampedCols, seats: newSeats };
+      let updated: SeatingData = { rows: clampedRows, cols: clampedCols, seats: newSeats, pairMode: seating.pairMode };
 
       // 잘려나간 영역의 학생을 빈 자리에 재배치
       const students = useStudentStore.getState().students;

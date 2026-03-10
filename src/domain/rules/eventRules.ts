@@ -1,6 +1,23 @@
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 
 /**
+ * 이벤트 제목이 URL 형식인지 판별
+ */
+export function isUrlLike(text: string): boolean {
+  const trimmed = text.trim();
+  return /^(https?:\/\/|webcal:\/\/|ftp:\/\/)/i.test(trimmed);
+}
+
+/**
+ * 이벤트 제목 정제 — URL이면 "(제목 없음)"으로 대체
+ */
+export function sanitizeEventTitle(title: string): string {
+  if (!title || !title.trim()) return '(제목 없음)';
+  if (isUrlLike(title)) return '(제목 없음)';
+  return title;
+}
+
+/**
  * 다일 일정 캘린더 바 (CalendarView 주 단위 렌더링용)
  */
 export interface CalendarBar {

@@ -25,6 +25,10 @@ interface SeatCardProps {
   isDragOver: boolean;
   isDragSource: boolean;
   isEditing: boolean;
+  /** 짝꿍 모드: 짝 그룹의 왼쪽 */
+  isLeftOfPair?: boolean;
+  /** 짝꿍 모드: 짝 그룹의 오른쪽 */
+  isRightOfPair?: boolean;
   onDragStart: (row: number, col: number) => void;
   onDragOver: (e: React.DragEvent, row: number, col: number) => void;
   onDragLeave: () => void;
@@ -40,6 +44,8 @@ function SeatCard({
   isDragOver,
   isDragSource,
   isEditing,
+  isLeftOfPair,
+  isRightOfPair,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -88,10 +94,22 @@ function SeatCard({
     [row, col, isEditing, onDrop],
   );
 
+  // 짝꿍 모드 border radius 조정
+  const pairRadiusClass = isLeftOfPair
+    ? 'rounded-l-lg rounded-r-none'
+    : isRightOfPair
+      ? 'rounded-r-lg rounded-l-none'
+      : 'rounded-lg';
+  const pairBorderClass = isLeftOfPair
+    ? 'border-r-0'
+    : isRightOfPair
+      ? 'border-l-0'
+      : '';
+
   /* 빈 자리 */
   if (isEmpty && !isEditing) {
     return (
-      <div className="group relative rounded-lg border-2 border-dashed p-3 flex flex-col items-center justify-center gap-1 min-h-[90px] transition-all border-sp-border/50 bg-sp-card/50">
+      <div className={`group relative border-2 border-dashed p-3 flex flex-col items-center justify-center gap-1 min-h-[90px] transition-all border-sp-border/50 bg-sp-card/50 ${pairRadiusClass} ${pairBorderClass}`}>
         <span className="text-xs text-sp-muted">빈 자리</span>
       </div>
     );
@@ -101,7 +119,7 @@ function SeatCard({
   if (isEditing && isEmpty) {
     return (
       <div
-        className={`relative rounded-lg border-2 border-dashed p-3 flex flex-col items-center justify-center gap-1 min-h-[90px] transition-all ${isDragOver
+        className={`relative border-2 border-dashed p-3 flex flex-col items-center justify-center gap-1 min-h-[90px] transition-all ${pairRadiusClass} ${pairBorderClass} ${isDragOver
           ? 'border-sp-accent bg-sp-accent/10'
           : 'border-sp-border/50 bg-sp-card/50'
           }`}
@@ -117,7 +135,7 @@ function SeatCard({
   if (isEditing) {
     return (
       <div
-        className={`relative rounded-lg border p-3 flex flex-col gap-2 min-h-[90px] transition-all cursor-grab active:cursor-grabbing ${isDragSource
+        className={`relative border p-3 flex flex-col gap-2 min-h-[90px] transition-all cursor-grab active:cursor-grabbing ${pairRadiusClass} ${pairBorderClass} ${isDragSource
           ? 'border-sp-accent/50 bg-sp-accent/5 opacity-50'
           : isDragOver
             ? 'border-sp-accent ring-2 ring-sp-accent shadow-[0_0_15px_rgba(59,130,246,0.5)] bg-sp-accent/20 scale-105 z-10'
@@ -168,7 +186,7 @@ function SeatCard({
 
   /* 보기 모드 - 드래그 비활성화 */
   return (
-    <div className="group relative rounded-lg border p-3 flex flex-col gap-2 shadow-sm transition-all min-h-[90px] border-sp-border bg-sp-card hover:border-sp-accent/50 hover:ring-1 hover:ring-sp-accent/50">
+    <div className={`group relative border p-3 flex flex-col gap-2 shadow-sm transition-all min-h-[90px] border-sp-border bg-sp-card hover:border-sp-accent/50 hover:ring-1 hover:ring-sp-accent/50 ${pairRadiusClass} ${pairBorderClass}`}>
       {/* 학번 */}
       <div className="flex justify-between items-start">
         <span className="text-xs font-mono text-sp-muted group-hover:text-sp-accent transition-colors">
@@ -404,6 +422,7 @@ export function Seating() {
     canRedo,
     resizeGrid,
     rebuildFromRoster,
+    togglePairMode,
   } = useSeatingStore();
 
   const {
@@ -694,6 +713,17 @@ export function Seating() {
                 <span>배치 조건</span>
               </button>
               <button
+                onClick={() => void togglePairMode()}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${seating.pairMode
+                  ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
+                  : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
+                  }`}
+                title="짝꿍 모드: 2명씩 짝 그룹으로 표시"
+              >
+                <span className="material-symbols-outlined text-lg">group</span>
+                <span>짝꿍</span>
+              </button>
+              <button
                 onClick={() => setEditing(!isEditing)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
                   ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
@@ -916,45 +946,116 @@ export function Seating() {
             )}
 
             {/* 좌석 그리드 */}
-            <div
-              className="w-full max-w-6xl mx-auto pb-8"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${seating.cols}, minmax(0, 1fr))`,
-                gap: '1.25rem',
-              }}
-            >
-              {seating.seats.map((row, ri) =>
-                row.map((studentId, ci) => {
-                  const isDragOver =
-                    dragTarget !== null &&
-                    dragTarget.row === ri &&
-                    dragTarget.col === ci;
-                  const isDragSource2 =
-                    dragSource !== null &&
-                    dragSource.row === ri &&
-                    dragSource.col === ci;
+            {seating.pairMode ? (
+              /* ── 짝꿍 모드 그리드 ── */
+              <div className="w-full max-w-6xl mx-auto pb-8 flex flex-col gap-5">
+                {seating.seats.map((row, ri) => {
+                  // 열을 짝 그룹으로 묶기: (0,1), (2,3), (4,5)...
+                  const pairs: { startCol: number; endCol: number }[] = [];
+                  for (let c = 0; c < seating.cols; c += 2) {
+                    pairs.push({ startCol: c, endCol: Math.min(c + 1, seating.cols - 1) });
+                  }
 
                   return (
-                    <SeatCard
-                      key={`${ri}-${ci}`}
-                      row={ri}
-                      col={ci}
-                      studentId={studentId}
-                      isDragOver={isDragOver}
-                      isDragSource={isDragSource2}
-                      isEditing={isEditing}
-                      onDragStart={handleDragStart}
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      onDragEnd={handleDragEnd}
-                      onEditSave={handleEditSave}
-                    />
+                    <div
+                      key={ri}
+                      className="flex items-stretch justify-center gap-6"
+                    >
+                      {pairs.map((pair, pi) => {
+                        const isSingleSeat = pair.startCol === pair.endCol;
+                        return (
+                          <div
+                            key={pi}
+                            className={`flex ${isSingleSeat ? '' : 'bg-sp-card/30 rounded-lg'}`}
+                            style={{ minWidth: isSingleSeat ? 140 : 280 }}
+                          >
+                            {/* 왼쪽 좌석 */}
+                            <div className="flex-1">
+                              <SeatCard
+                                row={ri}
+                                col={pair.startCol}
+                                studentId={row[pair.startCol] ?? null}
+                                isDragOver={dragTarget !== null && dragTarget.row === ri && dragTarget.col === pair.startCol}
+                                isDragSource={dragSource !== null && dragSource.row === ri && dragSource.col === pair.startCol}
+                                isEditing={isEditing}
+                                isLeftOfPair={!isSingleSeat}
+                                onDragStart={handleDragStart}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                onDragEnd={handleDragEnd}
+                                onEditSave={handleEditSave}
+                              />
+                            </div>
+                            {/* 오른쪽 좌석 (짝이 있을 때만) */}
+                            {!isSingleSeat && (
+                              <div className="flex-1">
+                                <SeatCard
+                                  row={ri}
+                                  col={pair.endCol}
+                                  studentId={row[pair.endCol] ?? null}
+                                  isDragOver={dragTarget !== null && dragTarget.row === ri && dragTarget.col === pair.endCol}
+                                  isDragSource={dragSource !== null && dragSource.row === ri && dragSource.col === pair.endCol}
+                                  isEditing={isEditing}
+                                  isRightOfPair
+                                  onDragStart={handleDragStart}
+                                  onDragOver={handleDragOver}
+                                  onDragLeave={handleDragLeave}
+                                  onDrop={handleDrop}
+                                  onDragEnd={handleDragEnd}
+                                  onEditSave={handleEditSave}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   );
-                }),
-              )}
-            </div>
+                })}
+              </div>
+            ) : (
+              /* ── 일반 그리드 ── */
+              <div
+                className="w-full max-w-6xl mx-auto pb-8"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${seating.cols}, minmax(0, 1fr))`,
+                  gap: '1.25rem',
+                }}
+              >
+                {seating.seats.map((row, ri) =>
+                  row.map((studentId, ci) => {
+                    const isDragOver =
+                      dragTarget !== null &&
+                      dragTarget.row === ri &&
+                      dragTarget.col === ci;
+                    const isDragSource2 =
+                      dragSource !== null &&
+                      dragSource.row === ri &&
+                      dragSource.col === ci;
+
+                    return (
+                      <SeatCard
+                        key={`${ri}-${ci}`}
+                        row={ri}
+                        col={ci}
+                        studentId={studentId}
+                        isDragOver={isDragOver}
+                        isDragSource={isDragSource2}
+                        isEditing={isEditing}
+                        onDragStart={handleDragStart}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        onDragEnd={handleDragEnd}
+                        onEditSave={handleEditSave}
+                      />
+                    );
+                  }),
+                )}
+              </div>
+            )}
 
             {/* 하단 정보 */}
             <div className="w-full max-w-6xl mx-auto flex items-center justify-between text-xs text-sp-muted py-4 border-t border-sp-border/50">

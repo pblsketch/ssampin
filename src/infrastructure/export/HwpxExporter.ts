@@ -413,7 +413,6 @@ export async function exportSeatingToHwpx(
       bottom: { type: 'NONE', width: '0.12 mm', color: '#000000' },
     },
   });
-
   // ── Row-count-dependent sizing ──
   const seatGridRows = seating.rows;
   const seatCols = seating.cols;
@@ -468,8 +467,8 @@ export async function exportSeatingToHwpx(
 
   // Column layout:
   //   Left half seats with gaps, center aisle (3 cols), right half seats with gaps
-  const leftCols = Math.ceil(seatCols / 2);
-  const rightCols = seatCols - leftCols;
+  let leftCols = Math.ceil(seatCols / 2);
+  let rightCols = seatCols - leftCols;
 
   // Build column descriptor array
   // Each entry: { type: 'seat'|'gap'|'aisle', seatIdx?: number }
@@ -478,18 +477,65 @@ export async function exportSeatingToHwpx(
     seatIdx?: number;
   }
   const colDescs: ColDesc[] = [];
+  const isPairMode = !!seating.pairMode;
 
-  // Left half
-  for (let i = 0; i < leftCols; i++) {
-    if (i > 0) colDescs.push({ type: 'gap' });
-    colDescs.push({ type: 'seat', seatIdx: i });
+  // 짝꿍 모드: 좌우 반전(미러링)을 고려한 짝 그룹 정렬
+  // mirroredPairOf: 테이블 seatIdx → 미러링 후 UI 짝 그룹 번호
+  const mirroredPairOf = (idx: number) => Math.floor((seatCols - 1 - idx) / 2);
+
+  if (isPairMode && leftCols > 0 && leftCols < seatCols) {
+    // 복도(aisle)가 미러링된 짝 그룹을 가르지 않도록 leftCols 조정
+    if (mirroredPairOf(leftCols - 1) === mirroredPairOf(leftCols)) {
+      const optionA = leftCols - 1;
+      const optionB = leftCols + 1;
+      const validA = optionA > 0;
+      const validB = optionB < seatCols;
+      if (validA && validB) {
+        const balanceA = Math.abs(optionA - (seatCols - optionA));
+        const balanceB = Math.abs(optionB - (seatCols - optionB));
+        leftCols = balanceA < balanceB ? optionA : optionB;
+      } else if (validA) {
+        leftCols = optionA;
+      } else if (validB) {
+        leftCols = optionB;
+      }
+      rightCols = seatCols - leftCols;
+    }
   }
-  // Center aisle (1 column, same width as gap for uniform spacing)
-  colDescs.push({ type: 'aisle' });
-  // Right half
-  for (let i = 0; i < rightCols; i++) {
-    if (i > 0) colDescs.push({ type: 'gap' });
-    colDescs.push({ type: 'seat', seatIdx: leftCols + i });
+
+  if (isPairMode) {
+    // 짝꿍 모드: 미러링된 짝 그룹 기준으로 gap 배치
+    // Left half
+    for (let i = 0; i < leftCols; i++) {
+      if (i > 0 && mirroredPairOf(i) !== mirroredPairOf(i - 1)) {
+        colDescs.push({ type: 'gap' });
+      }
+      colDescs.push({ type: 'seat', seatIdx: i });
+    }
+    // Center aisle
+    colDescs.push({ type: 'aisle' });
+    // Right half
+    for (let i = 0; i < rightCols; i++) {
+      const seatIdx = leftCols + i;
+      if (i > 0 && mirroredPairOf(seatIdx) !== mirroredPairOf(seatIdx - 1)) {
+        colDescs.push({ type: 'gap' });
+      }
+      colDescs.push({ type: 'seat', seatIdx });
+    }
+  } else {
+    // 일반 모드: 매 좌석 사이에 gap
+    // Left half
+    for (let i = 0; i < leftCols; i++) {
+      if (i > 0) colDescs.push({ type: 'gap' });
+      colDescs.push({ type: 'seat', seatIdx: i });
+    }
+    // Center aisle
+    colDescs.push({ type: 'aisle' });
+    // Right half
+    for (let i = 0; i < rightCols; i++) {
+      if (i > 0) colDescs.push({ type: 'gap' });
+      colDescs.push({ type: 'seat', seatIdx: leftCols + i });
+    }
   }
 
   const tableCols = colDescs.length;
@@ -600,6 +646,7 @@ export async function exportSeatingToHwpx(
         const mirroredColIdx = seatCols - 1 - desc.seatIdx!;
         const studentId = seatRow ? (seatRow[mirroredColIdx] ?? null) : null;
         const student = getStudent(studentId);
+
         cell.borderFillIDRef = solidBorder;
         cell.setMargin({ left: 510, right: 510, top: 141, bottom: 141 });
         cell.setSize(ci === lastSeatColIdx ? lastSeatW : SEAT_W, seatH);
