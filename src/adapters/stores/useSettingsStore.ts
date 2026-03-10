@@ -69,6 +69,14 @@ const DEFAULT_SETTINGS: Settings = {
     schoolCode: '',
     atptCode: '',
     schoolName: '',
+    autoSync: {
+      enabled: false,
+      grade: '',
+      className: '',
+      lastSyncDate: '',
+      lastSyncWeek: '',
+      syncTarget: 'class',
+    },
   },
   pin: {
     enabled: false,
@@ -153,7 +161,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             })(),
           },
           system: { ...DEFAULT_SETTINGS.system, ...((saved as unknown as { system?: Partial<Settings['system']> }).system ?? {}) },
-          neis: { ...DEFAULT_SETTINGS.neis, ...((saved as unknown as { neis?: Partial<Settings['neis']> }).neis ?? {}) },
+          neis: (() => {
+            const savedNeis = (saved as unknown as { neis?: Partial<Settings['neis']> }).neis ?? {};
+            const savedAutoSync = (savedNeis as unknown as { autoSync?: Partial<NonNullable<Settings['neis']['autoSync']>> }).autoSync;
+            return {
+              ...DEFAULT_SETTINGS.neis,
+              ...savedNeis,
+              autoSync: { ...DEFAULT_SETTINGS.neis.autoSync!, ...(savedAutoSync ?? {}) },
+            };
+          })(),
           pin: { ...DEFAULT_SETTINGS.pin, ...((saved as unknown as { pin?: Partial<Settings['pin']> }).pin ?? {}) },
           alarmSound: {
             ...DEFAULT_SETTINGS.alarmSound,

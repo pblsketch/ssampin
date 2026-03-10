@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-03-07T09:21:42.000Z",
+  "timestamp": "2026-03-09T16:17:34.937Z",
   "reason": "compaction",
   "status": {
     "version": "2.0",
-    "lastUpdated": "2026-03-07T09:21:15.357Z",
+    "lastUpdated": "2026-03-09T16:17:31.639Z",
     "activeFeatures": [
       "ssampin",
       "electron",
@@ -59,7 +59,15 @@
       "ssampin-escalate",
       "ssampin-embed",
       "chat",
-      "HelpChat"
+      "HelpChat",
+      "analytics",
+      "submit",
+      "submit-assignment",
+      "assignment",
+      "supabase",
+      "Assignment",
+      "create-assignment",
+      "get-assignment-public"
     ],
     "primaryFeature": "ssampin",
     "features": {
@@ -72,9 +80,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T00:41:40.105Z",
-          "lastUpdated": "2026-03-07T09:12:53.290Z"
+          "lastUpdated": "2026-03-07T16:44:17.525Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\App.tsx"
+        "lastFile": "e:/github/ssampin/src/App.tsx"
       },
       "electron": {
         "phase": "do",
@@ -85,9 +93,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T00:42:08.474Z",
-          "lastUpdated": "2026-03-06T14:26:21.731Z"
+          "lastUpdated": "2026-03-07T16:43:35.441Z"
         },
-        "lastFile": "e:\\github\\ssampin\\electron\\main.ts"
+        "lastFile": "e:/github/ssampin/electron/main.ts"
       },
       "entities": {
         "phase": "do",
@@ -98,9 +106,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T00:42:29.011Z",
-          "lastUpdated": "2026-03-07T08:32:48.418Z"
+          "lastUpdated": "2026-03-09T16:14:48.602Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\domain\\entities\\SchoolEvent.ts"
+        "lastFile": "e:/github/ssampin/src/domain/entities/Assignment.ts"
       },
       "valueObjects": {
         "phase": "do",
@@ -111,9 +119,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T00:42:33.723Z",
-          "lastUpdated": "2026-03-06T04:46:48.750Z"
+          "lastUpdated": "2026-03-07T16:41:15.586Z"
         },
-        "lastFile": "E:\\github\\ssampin\\src\\domain\\valueObjects\\DefaultTemplates.ts"
+        "lastFile": "e:/github/ssampin/src/domain/valueObjects/AnalyticsEvent.ts"
       },
       "rules": {
         "phase": "do",
@@ -137,9 +145,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T00:42:43.401Z",
-          "lastUpdated": "2026-03-05T15:41:41.769Z"
+          "lastUpdated": "2026-03-09T16:10:37.895Z"
         },
-        "lastFile": "E:\\github\\ssampin\\src\\domain\\ports\\INeisPort.ts"
+        "lastFile": "e:/github/ssampin/src/domain/ports/IAssignmentServicePort.ts"
       },
       "repositories": {
         "phase": "do",
@@ -241,9 +249,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T00:43:22.830Z",
-          "lastUpdated": "2026-03-07T08:33:12.753Z"
+          "lastUpdated": "2026-03-09T16:08:52.835Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\stores\\useEventsStore.ts"
+        "lastFile": "e:\\github\\ssampin\\src\\adapters\\stores\\useAssignmentStore.ts"
       },
       "adapters": {
         "phase": "do",
@@ -254,9 +262,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T00:43:26.955Z",
-          "lastUpdated": "2026-03-06T14:44:16.718Z"
+          "lastUpdated": "2026-03-08T13:18:32.230Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\hooks\\useThemeApplier.ts"
+        "lastFile": "E:/github/ssampin/src/adapters/components/common/UpdateNotification.tsx"
       },
       "presenters": {
         "phase": "do",
@@ -280,9 +288,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T00:43:39.637Z",
-          "lastUpdated": "2026-03-06T15:04:37.249Z"
+          "lastUpdated": "2026-03-07T16:42:35.849Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\di\\container.ts"
+        "lastFile": "e:/github/ssampin/src/adapters/di/container.ts"
       },
       "storage": {
         "phase": "do",
@@ -332,7 +340,7 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T01:04:54.193Z",
-          "lastUpdated": "2026-03-06T23:55:01.021Z"
+          "lastUpdated": "2026-03-08T13:19:23.646Z"
         },
         "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Layout\\Sidebar.tsx"
       },
@@ -358,9 +366,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T02:27:08.138Z",
-          "lastUpdated": "2026-03-06T14:28:44.814Z"
+          "lastUpdated": "2026-03-07T16:50:11.540Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Seating\\Seating.tsx"
+        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Seating\\Seating.tsx"
       },
       "Timetable": {
         "phase": "do",
@@ -371,9 +379,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T02:28:24.487Z",
-          "lastUpdated": "2026-03-05T16:21:10.427Z"
+          "lastUpdated": "2026-03-07T16:49:44.726Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Timetable\\TimetableEditor.tsx"
+        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Timetable\\TimetableEditor.tsx"
       },
       "StudentRecords": {
         "phase": "do",
@@ -397,9 +405,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T02:30:05.420Z",
-          "lastUpdated": "2026-03-07T08:34:21.651Z"
+          "lastUpdated": "2026-03-07T16:50:19.194Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Schedule\\EventList.tsx"
+        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Schedule\\Schedule.tsx"
       },
       "Todo": {
         "phase": "do",
@@ -410,9 +418,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T02:46:59.002Z",
-          "lastUpdated": "2026-03-05T15:56:05.902Z"
+          "lastUpdated": "2026-03-07T16:50:40.845Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Todo\\Todo.tsx"
+        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Todo\\Todo.tsx"
       },
       "Memo": {
         "phase": "do",
@@ -423,9 +431,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T02:47:00.623Z",
-          "lastUpdated": "2026-03-06T15:02:58.777Z"
+          "lastUpdated": "2026-03-07T16:50:27.939Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Memo\\MemoDetailPopup.tsx"
+        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Memo\\MemoPage.tsx"
       },
       "Settings": {
         "phase": "do",
@@ -436,9 +444,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T02:55:40.654Z",
-          "lastUpdated": "2026-03-06T15:41:52.206Z"
+          "lastUpdated": "2026-03-07T16:54:16.716Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Settings\\SettingsPage.tsx"
+        "lastFile": "e:/github/ssampin/src/adapters/components/Settings/SettingsPage.tsx"
       },
       "Widget": {
         "phase": "do",
@@ -449,9 +457,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T02:56:44.211Z",
-          "lastUpdated": "2026-03-05T16:42:16.549Z"
+          "lastUpdated": "2026-03-07T16:52:06.384Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Widget\\Widget.tsx"
+        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Widget\\Widget.tsx"
       },
       "Export": {
         "phase": "do",
@@ -462,9 +470,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T03:22:49.591Z",
-          "lastUpdated": "2026-03-06T04:49:51.947Z"
+          "lastUpdated": "2026-03-07T16:50:59.889Z"
         },
-        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Export\\ExportPreviewModal.tsx"
+        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Export\\Export.tsx"
       },
       "landing": {
         "phase": "do",
@@ -475,9 +483,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T06:53:28.915Z",
-          "lastUpdated": "2026-03-07T08:44:23.964Z"
+          "lastUpdated": "2026-03-09T15:59:14.610Z"
         },
-        "lastFile": "e:\\github\\ssampin\\landing\\src\\components\\Feedback.tsx"
+        "lastFile": "e:/github/ssampin/landing/src/components/ClassroomTools.tsx"
       },
       "meal": {
         "phase": "do",
@@ -553,9 +561,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-01T13:36:33.469Z",
-          "lastUpdated": "2026-03-07T05:41:05.440Z"
+          "lastUpdated": "2026-03-07T16:47:13.116Z"
         },
-        "lastFile": "e:/github/ssampin/src/adapters/components/Tools/ToolTimer.tsx"
+        "lastFile": "E:/github/ssampin/src/adapters/components/Tools/ToolSeatPicker.tsx"
       },
       "widgets": {
         "phase": "do",
@@ -592,9 +600,9 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-04T03:21:40.619Z",
-          "lastUpdated": "2026-03-04T16:18:58.937Z"
+          "lastUpdated": "2026-03-09T16:08:33.051Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\usecases\\calendar\\SyncFromGoogle.ts"
+        "lastFile": "e:\\github\\ssampin\\src\\usecases\\calendar\\AuthenticateGoogle.ts"
       },
       "Onboarding": {
         "phase": "do",
@@ -605,7 +613,7 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-04T15:48:18.784Z",
-          "lastUpdated": "2026-03-04T15:48:41.381Z"
+          "lastUpdated": "2026-03-08T12:53:55.727Z"
         },
         "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Onboarding\\Onboarding.tsx"
       },
@@ -683,7 +691,7 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-06T14:40:44.570Z",
-          "lastUpdated": "2026-03-06T15:00:34.878Z"
+          "lastUpdated": "2026-03-08T13:12:21.783Z"
         },
         "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\ClassManagement\\ProgressTab.tsx"
       },
@@ -709,7 +717,7 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-07T08:03:00.426Z",
-          "lastUpdated": "2026-03-07T09:21:15.357Z"
+          "lastUpdated": "2026-03-07T09:28:25.858Z"
         },
         "lastFile": "e:\\github\\ssampin\\scripts\\test-chatbot.ts"
       },
@@ -735,7 +743,7 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-07T08:16:57.523Z",
-          "lastUpdated": "2026-03-07T08:16:57.523Z"
+          "lastUpdated": "2026-03-07T10:07:40.094Z"
         },
         "lastFile": "e:\\github\\ssampin\\supabase\\functions\\ssampin-escalate\\index.ts"
       },
@@ -774,9 +782,113 @@
         "documents": {},
         "timestamps": {
           "started": "2026-03-07T09:10:17.209Z",
-          "lastUpdated": "2026-03-07T09:13:53.651Z"
+          "lastUpdated": "2026-03-07T16:51:19.773Z"
         },
-        "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\HelpChat\\HelpEscalationForm.tsx"
+        "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\HelpChat\\HelpChatPanel.tsx"
+      },
+      "analytics": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-07T16:41:51.914Z",
+          "lastUpdated": "2026-03-07T17:02:17.430Z"
+        },
+        "lastFile": "e:/github/ssampin/src/infrastructure/analytics/SupabaseAnalyticsAdapter.ts"
+      },
+      "submit": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T16:00:56.451Z",
+          "lastUpdated": "2026-03-09T16:16:24.652Z"
+        },
+        "lastFile": "e:/github/ssampin/landing/src/components/submit/SubmitForm.tsx"
+      },
+      "submit-assignment": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T16:07:20.205Z",
+          "lastUpdated": "2026-03-09T16:14:20.608Z"
+        },
+        "lastFile": "e:/github/ssampin/supabase/functions/submit-assignment/index.ts"
+      },
+      "assignment": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T16:11:00.635Z",
+          "lastUpdated": "2026-03-09T16:11:11.931Z"
+        },
+        "lastFile": "e:/github/ssampin/src/usecases/assignment/CreateAssignment.ts"
+      },
+      "supabase": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T16:11:24.804Z",
+          "lastUpdated": "2026-03-09T16:15:06.122Z"
+        },
+        "lastFile": "e:/github/ssampin/src/infrastructure/supabase/AssignmentSupabaseClient.ts"
+      },
+      "Assignment": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T16:12:08.628Z",
+          "lastUpdated": "2026-03-09T16:17:31.639Z"
+        },
+        "lastFile": "e:/github/ssampin/src/adapters/components/Tools/Assignment/AssignmentDetail.tsx"
+      },
+      "create-assignment": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T16:13:07.086Z",
+          "lastUpdated": "2026-03-09T16:13:12.823Z"
+        },
+        "lastFile": "e:/github/ssampin/supabase/functions/create-assignment/index.ts"
+      },
+      "get-assignment-public": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T16:13:28.243Z",
+          "lastUpdated": "2026-03-09T16:13:28.243Z"
+        },
+        "lastFile": "e:/github/ssampin/supabase/functions/get-assignment-public/index.ts"
       }
     },
     "pipeline": {
@@ -787,7 +899,7 @@
     "session": {
       "startedAt": "2026-03-01T00:40:27.620Z",
       "onboardingCompleted": false,
-      "lastActivity": "2026-03-07T09:21:15.357Z"
+      "lastActivity": "2026-03-09T16:17:31.639Z"
     },
     "history": [
       {
@@ -14353,6 +14465,954 @@
       {
         "timestamp": "2026-03-07T09:21:15.357Z",
         "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T09:25:01.095Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T09:28:25.858Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T09:34:03.302Z",
+        "feature": "landing",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T09:38:14.564Z",
+        "feature": "landing",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T09:38:27.001Z",
+        "feature": "Layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T09:38:32.865Z",
+        "feature": "landing",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T09:53:35.350Z",
+        "feature": "ssampin-escalate",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T10:07:40.094Z",
+        "feature": "ssampin-escalate",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T13:09:30.924Z",
+        "feature": "HelpChat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T13:10:04.776Z",
+        "feature": "adapters",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:40:54.025Z",
+        "feature": "ports",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:41:15.586Z",
+        "feature": "valueObjects",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:41:51.914Z",
+        "feature": "analytics",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:41:58.710Z",
+        "feature": "analytics",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:42:30.237Z",
+        "feature": "di",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:42:35.849Z",
+        "feature": "di",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:42:53.501Z",
+        "feature": "adapters",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:43:19.406Z",
+        "feature": "electron",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:43:35.441Z",
+        "feature": "electron",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:43:44.408Z",
+        "feature": "ssampin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:44:05.521Z",
+        "feature": "ssampin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:44:12.514Z",
+        "feature": "ssampin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:44:17.525Z",
+        "feature": "ssampin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:11.853Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:16.972Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:23.518Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:28.926Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:33.853Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:39.295Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:44.367Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:48.805Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:53.561Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:45:58.553Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:03.451Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:07.867Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:11.844Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:16.128Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:20.919Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:25.525Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:30.937Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:35.421Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:40.114Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:44.618Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:48.755Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:53.506Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:46:57.820Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:47:03.978Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:47:08.642Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:47:13.116Z",
+        "feature": "Tools",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:06.825Z",
+        "feature": "Timetable",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:10.044Z",
+        "feature": "Seating",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:11.294Z",
+        "feature": "Schedule",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:12.571Z",
+        "feature": "Memo",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:13.839Z",
+        "feature": "Todo",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:15.181Z",
+        "feature": "Export",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:16.940Z",
+        "feature": "HelpChat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:18.209Z",
+        "feature": "adapters",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:19.468Z",
+        "feature": "Onboarding",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:20.744Z",
+        "feature": "Widget",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:29.757Z",
+        "feature": "Timetable",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:31.921Z",
+        "feature": "Timetable",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:34.158Z",
+        "feature": "Timetable",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:35.435Z",
+        "feature": "Timetable",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:44.726Z",
+        "feature": "Timetable",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:52.463Z",
+        "feature": "Seating",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:49:59.083Z",
+        "feature": "Seating",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:00.847Z",
+        "feature": "Seating",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:11.540Z",
+        "feature": "Seating",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:17.122Z",
+        "feature": "Schedule",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:19.194Z",
+        "feature": "Schedule",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:26.487Z",
+        "feature": "Memo",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:27.939Z",
+        "feature": "Memo",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:38.772Z",
+        "feature": "Todo",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:40.845Z",
+        "feature": "Todo",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:47.107Z",
+        "feature": "Export",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:49.853Z",
+        "feature": "Export",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:50:59.889Z",
+        "feature": "Export",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:05.619Z",
+        "feature": "HelpChat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:06.969Z",
+        "feature": "HelpChat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:18.502Z",
+        "feature": "HelpChat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:19.773Z",
+        "feature": "HelpChat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:27.472Z",
+        "feature": "adapters",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:29.324Z",
+        "feature": "adapters",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:34.492Z",
+        "feature": "Onboarding",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:36.104Z",
+        "feature": "Onboarding",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:41.512Z",
+        "feature": "Widget",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:52.055Z",
+        "feature": "Widget",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:51:59.423Z",
+        "feature": "Widget",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:52:06.384Z",
+        "feature": "Widget",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:53:20.169Z",
+        "feature": "entities",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:53:36.389Z",
+        "feature": "stores",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:53:55.180Z",
+        "feature": "adapters",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T16:54:16.716Z",
+        "feature": "Settings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-07T17:02:17.430Z",
+        "feature": "analytics",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:53:49.905Z",
+        "feature": "Onboarding",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:53:55.727Z",
+        "feature": "Onboarding",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:54:18.165Z",
+        "feature": "stores",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:58:23.069Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:58:29.663Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:58:34.130Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:58:39.839Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:58:48.156Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:58:58.993Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:59:04.098Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:59:08.711Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:59:13.864Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T12:59:39.044Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:11:39.095Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:11:42.338Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:11:52.693Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:12:21.783Z",
+        "feature": "ClassManagement",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:17:56.298Z",
+        "feature": "adapters",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:18:32.230Z",
+        "feature": "adapters",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:19:20.805Z",
+        "feature": "landing",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:19:22.264Z",
+        "feature": "landing",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-08T13:19:23.646Z",
+        "feature": "Layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T15:59:09.447Z",
+        "feature": "landing",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T15:59:14.610Z",
+        "feature": "landing",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:00:56.451Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:01:09.890Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:01:16.722Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:01:43.291Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:01:59.846Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:02:12.287Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:02:19.038Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:07:20.205Z",
+        "feature": "submit-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:07:45.761Z",
+        "feature": "submit-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:08:10.259Z",
+        "feature": "submit-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:08:33.051Z",
+        "feature": "calendar",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:08:52.835Z",
+        "feature": "stores",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:09:43.368Z",
+        "feature": "submit-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:09:50.992Z",
+        "feature": "submit-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:09:59.077Z",
+        "feature": "submit-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:10:14.315Z",
+        "feature": "entities",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:10:37.895Z",
+        "feature": "ports",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:11:00.635Z",
+        "feature": "assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:11:06.622Z",
+        "feature": "assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:11:11.931Z",
+        "feature": "assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:11:24.804Z",
+        "feature": "supabase",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:12:08.628Z",
+        "feature": "Assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:12:14.554Z",
+        "feature": "Assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:12:21.216Z",
+        "feature": "Assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:12:34.710Z",
+        "feature": "Assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:13:07.086Z",
+        "feature": "create-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:13:12.823Z",
+        "feature": "create-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:13:28.243Z",
+        "feature": "get-assignment-public",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:13:58.244Z",
+        "feature": "submit-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:14:20.608Z",
+        "feature": "submit-assignment",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:14:48.602Z",
+        "feature": "entities",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:15:06.122Z",
+        "feature": "supabase",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:15:30.863Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:15:39.279Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:15:52.663Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:16:01.143Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:16:08.311Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:16:15.855Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:16:24.652Z",
+        "feature": "submit",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T16:17:31.639Z",
+        "feature": "Assignment",
         "phase": "do",
         "action": "updated"
       }

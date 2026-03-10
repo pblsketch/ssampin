@@ -367,6 +367,14 @@ body {
   color: #6d28d9 !important;
 }
 
+.theme-light .text-amber-300 {
+  color: #b45309 !important;
+}
+
+.theme-light .text-lime-300 {
+  color: #4d7c0f !important;
+}
+
 .theme-light .text-rose-300 {
   color: #be123c !important;
 }

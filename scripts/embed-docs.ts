@@ -78,7 +78,7 @@ const EMBEDDING_MODEL = 'gemini-embedding-001';
 const MAX_CHARS_PER_CHUNK = 1500;
 const BATCH_SIZE = 100;
 const INSERT_BATCH = 50;
-const APP_VERSION = '0.2.7';
+const APP_VERSION = '0.3.4';
 
 // ── 청킹 함수 ────────────────────────────────────────────
 

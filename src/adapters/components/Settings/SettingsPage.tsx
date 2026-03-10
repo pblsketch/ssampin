@@ -19,6 +19,7 @@ import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/t
 import { AppInfoSection } from './AppInfoSection';
 import { CalendarSettings } from './CalendarSettings';
 import { NeisScheduleSection } from './NeisScheduleSection';
+import { NeisTimetableAutoSyncSection } from './NeisTimetableAutoSyncSection';
 import { SeatRelationSection } from './SeatRelationSection';
 import { ThemeSection } from './ThemeSection';
 import type { DashboardThemeSettings } from '@domain/entities/Settings';
@@ -922,6 +923,9 @@ export function SettingsPage() {
           </section>
           {/* ── 섹션 7.5: NEIS 학사일정 ── */}
           <NeisScheduleSection />
+
+          {/* ── 섹션 7.55: NEIS 시간표 자동 동기화 ── */}
+          <NeisTimetableAutoSyncSection />
 
           {/* ── 섹션 7.6: 구글 연동 ── */}
           <section className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6">

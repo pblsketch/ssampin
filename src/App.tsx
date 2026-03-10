@@ -41,6 +41,7 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
+import { useNeisAutoSync } from '@adapters/hooks/useNeisAutoSync';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
@@ -248,6 +249,9 @@ export function App() {
 
   // 구글 캘린더 자동 동기화
   useAutoSync();
+
+  // NEIS 시간표 자동 동기화 (앱 시작 시)
+  useNeisAutoSync();
 
   // NEIS 학사일정 자동 동기화 (앱 시작 시) + 학기 초 안내
   const showToast = useToastStore((s) => s.show);

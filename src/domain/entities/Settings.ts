@@ -85,10 +85,20 @@ export interface SystemSettings {
   readonly doNotDisturbEnd: string;   // "HH:mm"
 }
 
+export interface NeisAutoSyncSettings {
+  readonly enabled: boolean;
+  readonly grade: string;
+  readonly className: string;
+  readonly lastSyncDate: string;
+  readonly lastSyncWeek: string;
+  readonly syncTarget: 'class' | 'both';
+}
+
 export interface NeisSettings {
   readonly schoolCode: string;      // SD_SCHUL_CODE
   readonly atptCode: string;        // ATPT_OFCDC_SC_CODE
   readonly schoolName: string;      // 선택된 학교명
+  readonly autoSync?: NeisAutoSyncSettings;
 }
 
 export interface WeatherLocation {

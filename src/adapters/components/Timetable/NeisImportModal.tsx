@@ -27,13 +27,14 @@ interface NeisImportModalProps {
   onClose: () => void;
   onImport: (data: ClassScheduleData, maxPeriods: number) => void;
   hasExistingData: boolean;
+  onEnableAutoSync?: (grade: string, className: string) => void;
 }
 
 type WizardStep = 'school' | 'classSelect' | 'period' | 'confirm' | 'loading' | 'done' | 'error';
 
 type PeriodOption = 'thisWeek' | 'lastWeek' | 'custom';
 
-export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData }: NeisImportModalProps) {
+export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, onEnableAutoSync }: NeisImportModalProps) {
   const { settings } = useSettingsStore();
   const { searchResults, searching, searchSchools, clearSearch } = useMealStore();
 
@@ -63,6 +64,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData }: 
   const [errorMsg, setErrorMsg] = useState('');
   const [importProgress, setImportProgress] = useState('');
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
+  const [autoSyncOffered, setAutoSyncOffered] = useState(false);
 
   const apiKey = NEIS_API_KEY;
   const neisLevel = settingsLevelToNeisLevel(settings.schoolLevel);
@@ -230,6 +232,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData }: 
       setClassList([]);
       setPeriodOption('thisWeek');
       setShowOverwriteConfirm(false);
+      setAutoSyncOffered(false);
     }
   }, [isOpen]);
 
@@ -494,12 +497,50 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData }: 
 
           {/* 완료 */}
           {step === 'done' && (
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
               <div className="w-14 h-14 rounded-full bg-green-500/20 flex items-center justify-center">
                 <span className="material-symbols-outlined text-green-400 text-3xl">check_circle</span>
               </div>
               <p className="text-sm font-medium text-sp-text">시간표를 성공적으로 불러왔습니다!</p>
               <p className="text-xs text-sp-muted">필요한 부분은 수동으로 수정할 수 있습니다.</p>
+
+              {/* 자동 동기화 제안 */}
+              {onEnableAutoSync && !settings.neis.autoSync?.enabled && !autoSyncOffered && selectedGrade && selectedClass && (
+                <div className="mt-4 w-full p-4 bg-sp-accent/5 border border-sp-accent/20 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined text-sp-accent text-xl mt-0.5">sync</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-sp-text">자동 동기화를 켤까요?</p>
+                      <p className="text-xs text-sp-muted mt-1">
+                        매주 앱을 시작할 때 {selectedGrade}학년 {selectedClass}반 시간표를 자동으로 가져옵니다.
+                      </p>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => {
+                            onEnableAutoSync(selectedGrade, selectedClass);
+                            setAutoSyncOffered(true);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-bold hover:bg-blue-600 transition-colors"
+                        >
+                          켜기
+                        </button>
+                        <button
+                          onClick={() => setAutoSyncOffered(true)}
+                          className="px-3 py-1.5 rounded-lg border border-sp-border text-xs text-sp-muted hover:text-sp-text transition-colors"
+                        >
+                          나중에
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {autoSyncOffered && settings.neis.autoSync?.enabled && (
+                <p className="text-xs text-green-400 flex items-center gap-1 mt-2">
+                  <span className="material-symbols-outlined text-sm">check</span>
+                  자동 동기화가 설정되었습니다
+                </p>
+              )}
             </div>
           )}
 

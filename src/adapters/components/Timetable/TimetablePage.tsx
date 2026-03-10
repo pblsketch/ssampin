@@ -8,11 +8,26 @@ import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
+import { DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
 import {
   getSubjectStyle,
   getLunchBreakIndex,
   formatLunchBreakTime,
 } from '@adapters/presenters/timetablePresenter';
+import { neisPort } from '@adapters/di/container';
+import { NEIS_API_KEY } from '@domain/entities/Meal';
+import {
+  getCurrentWeekRange,
+  settingsLevelToNeisLevel,
+  getCurrentAcademicYear,
+  getCurrentSemester,
+} from '@domain/entities/NeisTimetable';
+import {
+  transformToClassSchedule,
+  getMaxPeriod,
+} from '@domain/rules/neisTransformRules';
+import { smartAutoAssignColors, extractSubjectsFromSchedule } from '@domain/rules/subjectColorRules';
+import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 import { TimetableEditor } from './TimetableEditor';
 /* eslint-disable no-restricted-imports */
 import {
@@ -140,6 +155,84 @@ export function TimetablePage() {
     }
   }, [tab, classSchedule, teacherSchedule, settings.maxPeriods, showToast]);
 
+  // ── 자동 동기화 ──
+  const autoSync = settings.neis.autoSync;
+  const hasSchoolInfo = Boolean(settings.neis.atptCode && settings.neis.schoolCode);
+  const autoSyncReady = Boolean(autoSync?.enabled && autoSync?.grade && autoSync?.className && hasSchoolInfo);
+  const [syncing, setSyncing] = useState(false);
+
+  const updateSettings = useSettingsStore((s) => s.update);
+  const updateClassSchedule = useScheduleStore((s) => s.updateClassSchedule);
+
+  const handleToggleAutoSync = useCallback(async () => {
+    const nextEnabled = !(autoSync?.enabled ?? false);
+    if (nextEnabled && !hasSchoolInfo) {
+      showToast('설정에서 학교를 먼저 검색해주세요.', 'error');
+      return;
+    }
+    await updateSettings({
+      neis: {
+        ...settings.neis,
+        autoSync: {
+          ...(autoSync ?? { enabled: false, grade: '', className: '', lastSyncDate: '', lastSyncWeek: '', syncTarget: 'class' as const }),
+          enabled: nextEnabled,
+        },
+      },
+    });
+    showToast(nextEnabled ? '자동 동기화가 켜졌습니다.' : '자동 동기화가 꺼졌습니다.', 'info');
+  }, [autoSync, hasSchoolInfo, settings.neis, updateSettings, showToast]);
+
+  const handleSyncNow = useCallback(async () => {
+    if (!autoSyncReady) return;
+    setSyncing(true);
+    try {
+      const { fromDate, toDate } = getCurrentWeekRange();
+      const neisLevel = settingsLevelToNeisLevel(settings.schoolLevel);
+      const rows = await neisPort.getTimetable({
+        apiKey: NEIS_API_KEY,
+        officeCode: settings.neis.atptCode,
+        schoolCode: settings.neis.schoolCode,
+        schoolLevel: neisLevel,
+        academicYear: getCurrentAcademicYear(),
+        semester: getCurrentSemester(),
+        grade: autoSync!.grade,
+        className: autoSync!.className,
+        fromDate,
+        toDate,
+      });
+      if (rows.length === 0) {
+        showToast('해당 기간의 시간표 데이터가 없습니다.', 'error');
+        return;
+      }
+      const maxPeriods = getMaxPeriod(rows);
+      const data = transformToClassSchedule(rows, maxPeriods);
+      await updateClassSchedule(data);
+
+      const currentColors = settings.subjectColors ?? {};
+      const allSubjects = extractSubjectsFromSchedule(data);
+      const newSubjects = allSubjects.filter(
+        (s) => !(s in currentColors) && !(s in DEFAULT_SUBJECT_COLORS),
+      );
+      if (newSubjects.length > 0) {
+        const updatedColors = smartAutoAssignColors(currentColors, newSubjects);
+        await updateSettings({ subjectColors: updatedColors });
+      }
+
+      await updateSettings({
+        ...(maxPeriods > settings.maxPeriods ? { maxPeriods } : {}),
+        neis: {
+          ...settings.neis,
+          autoSync: { ...autoSync!, lastSyncDate: new Date().toISOString().slice(0, 10), lastSyncWeek: getCurrentISOWeek() },
+        },
+      });
+      showToast('시간표를 동기화했습니다!', 'success');
+    } catch {
+      showToast('동기화에 실패했습니다.', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  }, [autoSyncReady, autoSync, settings, updateClassSchedule, updateSettings, showToast]);
+
   const { className, teacherName } = settings;
   const yearStr = `${now.getFullYear()}학년도`;
   const semester = now.getMonth() < 8 ? '1학기' : '2학기';
@@ -170,7 +263,35 @@ export function TimetablePage() {
             {yearStr} {semester} | 주간 시간표
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* 자동 동기화 상태 (학급 시간표 탭에서만 표시) */}
+          {tab === 'class' && hasSchoolInfo && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void handleToggleAutoSync()}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all active:scale-95 border ${
+                  autoSync?.enabled
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                    : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
+                }`}
+                title={autoSync?.enabled ? '자동 동기화 끄기' : '자동 동기화 켜기'}
+              >
+                <span className={`block w-2 h-2 rounded-full ${autoSync?.enabled ? 'bg-emerald-400' : 'bg-sp-muted/50'}`} />
+                {autoSync?.enabled ? '자동 동기화' : '동기화 꺼짐'}
+              </button>
+              {autoSyncReady && (
+                <button
+                  onClick={() => void handleSyncNow()}
+                  disabled={syncing}
+                  className="flex items-center gap-1 rounded-xl bg-sp-surface border border-sp-border px-2.5 py-2 text-xs font-bold text-sp-muted hover:text-sp-accent transition-all active:scale-95 disabled:opacity-50"
+                  title={autoSync?.lastSyncDate ? `마지막 동기화: ${autoSync.lastSyncDate}` : '지금 동기화'}
+                >
+                  <span className={`material-symbols-outlined text-[16px] ${syncing ? 'animate-spin' : ''}`}>sync</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* 탭 토글 */}
           <div className="flex rounded-xl bg-sp-surface p-1 border border-sp-border">
             <TabButton active={tab === 'teacher'} onClick={() => setTab('teacher')} label="교사 시간표" />

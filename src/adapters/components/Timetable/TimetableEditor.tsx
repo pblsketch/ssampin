@@ -14,6 +14,8 @@ import {
 import { NeisImportModal } from './NeisImportModal';
 import type { SubjectColorId, SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { COLOR_PRESETS, getColorPreset, DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
+import { smartAutoAssignColors, extractSubjectsFromSchedule } from '@domain/rules/subjectColorRules';
+import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 
 type TabType = 'class' | 'teacher';
 
@@ -244,11 +246,41 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
         await updateSettings({ maxPeriods });
       }
 
-      useToastStore.getState().show('시간표를 성공적으로 불러왔습니다!', 'success');
-      setShowNeisImport(false);
-      onSaved();
+      // 새 과목에 자동 색상 배정
+      const currentColors = settings.subjectColors ?? {};
+      const allSubjects = extractSubjectsFromSchedule(data);
+      const newSubjects = allSubjects.filter(
+        (s) => !(s in currentColors) && !(s in DEFAULT_SUBJECT_COLORS),
+      );
+      if (newSubjects.length > 0) {
+        const updatedColors = smartAutoAssignColors(currentColors, newSubjects);
+        await updateSettings({ subjectColors: updatedColors });
+      }
+
+      // 모달 닫기는 하지 않음 — 모달의 'done' 스텝에서 자동 동기화 제안을 보여준 후
+      // 사용자가 "확인" 클릭 시 onClose에서 처리
     },
-    [updateClassSchedule, settings.maxPeriods, updateSettings, onSaved],
+    [updateClassSchedule, settings.maxPeriods, settings.subjectColors, updateSettings],
+  );
+
+  const handleEnableAutoSync = useCallback(
+    async (grade: string, className: string) => {
+      await updateSettings({
+        neis: {
+          ...settings.neis,
+          autoSync: {
+            enabled: true,
+            grade,
+            className,
+            lastSyncDate: new Date().toISOString().slice(0, 10),
+            lastSyncWeek: getCurrentISOWeek(),
+            syncTarget: 'class',
+          },
+        },
+      });
+      useToastStore.getState().show('자동 동기화가 설정되었습니다!', 'success');
+    },
+    [settings.neis, updateSettings],
   );
 
   const handleSave = async () => {
@@ -443,9 +475,13 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
       {/* 나이스 불러오기 모달 */}
       <NeisImportModal
         isOpen={showNeisImport}
-        onClose={() => setShowNeisImport(false)}
+        onClose={() => {
+          setShowNeisImport(false);
+          onSaved();
+        }}
         onImport={(data, maxPeriods) => void handleNeisImport(data, maxPeriods)}
         hasExistingData={hasExistingData}
+        onEnableAutoSync={(grade, cls) => void handleEnableAutoSync(grade, cls)}
       />
 
       {/* 모두 삭제 확인 모달 */}
