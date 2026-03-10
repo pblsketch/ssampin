@@ -166,6 +166,11 @@ export function AppInfoSection() {
       </div>
 
       {/* Update section */}
+      {!window.electronAPI ? (
+        <p className="text-xs text-sp-muted">
+          개발 모드에서는 업데이트 확인을 사용할 수 없습니다.
+        </p>
+      ) : (
       <div className="space-y-3">
         {/* idle */}
         {status === 'idle' && (
@@ -330,6 +335,7 @@ export function AppInfoSection() {
           </div>
         )}
       </div>
+      )}
     </section>
   );
 }
