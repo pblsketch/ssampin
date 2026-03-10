@@ -119,16 +119,30 @@ export function deduplicateNeisEvents(events: readonly NeisScheduleEvent[]): rea
   return result;
 }
 
-/** 현재 날짜 기반 학년도 범위 반환 (YYYYMMDD 형식) */
+/**
+ * 현재 날짜 기반 학년도 범위 반환 (YYYYMMDD 형식)
+ *
+ * NEIS 학년도(AY)는 시작 연도 기준:
+ *   - 2025학년도 = 2025.03.01 ~ 2026.02.28
+ *   - 2026학년도 = 2026.03.01 ~ 2027.02.28
+ *
+ * 3월 학년도 전환기에 새 학년도 데이터가 Open API에 아직 없을 수 있으므로,
+ * 이전 학년도 + 현재 학년도 2년치를 조회하여 빈 결과를 방지한다.
+ */
 export function getAcademicYearRange(): { fromDate: string; toDate: string; academicYear: string } {
   const now = new Date();
   const month = now.getMonth() + 1;
-  const year = month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const currentYear = now.getFullYear();
 
-  const fromDate = `${year}0301`;
-  const toDate = `${year + 1}0228`;
+  // 현재 학년도: 3월 이후면 올해, 1~2월이면 전년도
+  const academicYear = month >= 3 ? currentYear : currentYear - 1;
 
-  return { fromDate, toDate, academicYear: String(year) };
+  // 이전 학년도 시작 ~ 현재 학년도 끝 (2년치)
+  // 예: 2026년 3월 → 20250301 ~ 20270228
+  const fromDate = `${academicYear - 1}0301`;
+  const toDate = `${academicYear + 1}0228`;
+
+  return { fromDate, toDate, academicYear: String(academicYear) };
 }
 
 /** 학년 배지 텍스트 생성 */
