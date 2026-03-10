@@ -374,7 +374,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
                           fill="white"
                           fontSize={items.length <= 6 ? 14 : items.length <= 12 ? 12 : 10}
                           fontWeight="bold"
-                          fontFamily="'Noto Sans KR', sans-serif"
+                          fontFamily="inherit"
                           style={{ pointerEvents: 'none', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
                         >
                           {truncateName(item, maxChars)}

@@ -11,6 +11,19 @@ export interface DashboardThemeSettings {
 
 export type SchoolLevel = 'elementary' | 'middle' | 'high';
 
+export type FontFamily =
+  | 'noto-sans'
+  | 'pretendard'
+  | 'ibm-plex'
+  | 'nanum-gothic'
+  | 'nanum-square'
+  | 'gowun-dodum'
+  | 'suit'
+  | 'wanted-sans'
+  | 'paperlogy'
+  | 'kakao-big'
+  | 'spoqa-han-sans';
+
 export type AlarmSoundId = 'beep' | 'school-bell' | 'alarm-clock' | 'gentle-chime' | 'buzzer' | 'custom';
 
 export type PreWarningSoundId = 'gentle-chime' | 'soft-bell' | 'tick-tock';
@@ -131,6 +144,7 @@ export interface Settings {
   readonly system: SystemSettings;
   readonly theme: 'light' | 'dark' | 'system';
   readonly fontSize: 'small' | 'medium' | 'large' | 'xlarge';
+  readonly fontFamily?: FontFamily;
   readonly neis: NeisSettings;
   readonly pin: PinSettings;
   readonly alarmSound: AlarmSoundSettings;

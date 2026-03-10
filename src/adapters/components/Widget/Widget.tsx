@@ -206,7 +206,7 @@ export function Widget() {
         className="w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl border border-sp-border/50 flex flex-col overflow-hidden text-sp-text relative select-none"
         onContextMenu={handleContextMenu}
         style={{
-          fontFamily: "'Noto Sans KR', sans-serif",
+          fontFamily: 'inherit',
           backgroundColor: `rgba(var(--sp-widget-rgb), ${settings.widget.opacity})`,
           '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
         } as React.CSSProperties}

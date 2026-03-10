@@ -44,6 +44,7 @@ import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useNeisAutoSync } from '@adapters/hooks/useNeisAutoSync';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
+import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 
 function isWidgetMode(): boolean {
@@ -285,27 +286,43 @@ export function App() {
   // 테마 CSS 변수 주입 (useLayoutEffect)
   useThemeApplier();
 
-  const fontSizeClass = (() => {
+  // 글꼴 종류 적용
+  useFontApplier(settings.fontFamily ?? 'noto-sans');
+
+  // 글꼴 크기: html 루트 font-size를 변경하여 모든 rem 기반 크기를 비례 스케일링
+  useEffect(() => {
+    const root = document.documentElement;
     switch (settings.fontSize) {
-      case 'small': return 'text-[13px]';
-      case 'large': return 'text-[17px]';
-      case 'xlarge': return 'text-[19px]';
+      case 'small':
+        root.style.fontSize = '14px';
+        break;
+      case 'large':
+        root.style.fontSize = '18px';
+        break;
+      case 'xlarge':
+        root.style.fontSize = '20px';
+        break;
       case 'medium':
-      default: return 'text-[15px]';
+      default:
+        root.style.fontSize = '16px';
+        break;
     }
-  })();
+    return () => {
+      root.style.fontSize = '';
+    };
+  }, [settings.fontSize]);
 
   // 위젯 모드: URL에 ?mode=widget 또는 #widget 이 있으면 위젯 전용 렌더링
   if (isWidgetMode()) {
     return (
-      <div className={`h-screen w-screen bg-transparent ${fontSizeClass}`}>
+      <div className="h-screen w-screen bg-transparent">
         <Widget />
       </div>
     );
   }
 
   return (
-    <div className={`flex h-screen bg-sp-bg ${fontSizeClass}`}>
+    <div className="flex h-screen bg-sp-bg">
       {!isFullscreen && (
         <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} onFeedback={() => setShowFeedback(true)} />
       )}

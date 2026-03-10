@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
-import type { Settings, DashboardThemeSettings } from '@domain/entities/Settings';
+import type { Settings, DashboardThemeSettings, FontFamily } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { ThemeSection } from '../ThemeSection';
+import { FontSelector } from '../FontSelector';
 
 interface Props {
   draft: Settings;
@@ -12,6 +13,8 @@ export function DisplayTab({ draft, patch }: Props) {
   const patchDashboardTheme = useCallback((t: DashboardThemeSettings) => {
     patch({ dashboardTheme: t });
   }, [patch]);
+
+  const selectedFont: FontFamily = draft.fontFamily ?? 'noto-sans';
 
   return (
     <SettingsSection
@@ -24,6 +27,12 @@ export function DisplayTab({ draft, patch }: Props) {
         <ThemeSection
           dashboardTheme={draft.dashboardTheme}
           onChange={patchDashboardTheme}
+        />
+
+        {/* 글꼴 선택 */}
+        <FontSelector
+          value={selectedFont}
+          onChange={(font) => patch({ fontFamily: font })}
         />
 
         {/* 글꼴 크기 설정 */}
