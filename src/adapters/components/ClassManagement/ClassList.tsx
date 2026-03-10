@@ -1,25 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { getSubjectDotColor } from '@adapters/presenters/timetablePresenter';
 
 interface ClassListProps {
   onAddClass: () => void;
-}
-
-/** 과목명 → Tailwind 색상 매핑 */
-const SUBJECT_COLOR_MAP: Record<string, string> = {
-  '국어': 'bg-yellow-400',
-  '영어': 'bg-green-400',
-  '수학': 'bg-blue-400',
-  '과학': 'bg-purple-400',
-  '사회': 'bg-orange-400',
-  '체육': 'bg-red-400',
-  '음악': 'bg-pink-400',
-  '미술': 'bg-indigo-400',
-  '창체': 'bg-teal-400',
-};
-
-function getSubjectColor(subject: string): string {
-  return SUBJECT_COLOR_MAP[subject] ?? 'bg-sp-muted';
 }
 
 export function ClassList({ onAddClass }: ClassListProps) {
@@ -28,6 +13,7 @@ export function ClassList({ onAddClass }: ClassListProps) {
   const selectClass = useTeachingClassStore((s) => s.selectClass);
   const updateClass = useTeachingClassStore((s) => s.updateClass);
   const deleteClass = useTeachingClassStore((s) => s.deleteClass);
+  const subjectColors = useSettingsStore((s) => s.settings.subjectColors);
 
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -134,7 +120,7 @@ export function ClassList({ onAddClass }: ClassListProps) {
                     : 'hover:bg-white/5 border-l-2 border-transparent'
                 }`}
               >
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getSubjectColor(cls.subject)}`} />
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getSubjectDotColor(cls.subject, subjectColors)}`} />
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-medium truncate ${isSelected ? 'text-sp-text' : 'text-sp-muted'}`}>
                     {cls.name}

@@ -1,10 +1,9 @@
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
+import { resolvePreset } from '@domain/valueObjects/SubjectColor';
 
 /**
- * 과목별 셀 스타일 (디자인 예시 기준 컬러 매핑)
- *
- * 국어=blue, 수학=green, 영어=purple, 과학=indigo,
- * 사회=orange, 체육=red, 음악=pink, 미술=teal, 창체=cyan
+ * 과목별 셀 스타일 (bg / border / text Tailwind 클래스)
  */
 export interface SubjectStyle {
   readonly bg: string;
@@ -12,30 +11,41 @@ export interface SubjectStyle {
   readonly text: string;
 }
 
-const SUBJECT_STYLE_MAP: Record<string, SubjectStyle> = {
-  '국어': { bg: 'bg-blue-500/20', border: 'border-blue-500/30', text: 'text-blue-400' },
-  '수학': { bg: 'bg-emerald-500/20', border: 'border-emerald-500/30', text: 'text-emerald-400' },
-  '영어': { bg: 'bg-violet-500/20', border: 'border-violet-500/30', text: 'text-violet-400' },
-  '과학': { bg: 'bg-indigo-500/20', border: 'border-indigo-500/30', text: 'text-indigo-400' },
-  '사회': { bg: 'bg-orange-500/20', border: 'border-orange-500/30', text: 'text-orange-400' },
-  '체육': { bg: 'bg-red-500/20', border: 'border-red-500/30', text: 'text-red-400' },
-  '음악': { bg: 'bg-pink-500/20', border: 'border-pink-500/30', text: 'text-pink-400' },
-  '미술': { bg: 'bg-teal-500/20', border: 'border-teal-500/30', text: 'text-teal-400' },
-  '창체': { bg: 'bg-cyan-500/20', border: 'border-cyan-500/30', text: 'text-cyan-400' },
-};
-
-const DEFAULT_STYLE: SubjectStyle = {
-  bg: 'bg-cyan-500/20',
-  border: 'border-cyan-500/30',
-  text: 'text-cyan-400',
-};
-
 /**
- * 과목명으로 셀 스타일을 반환한다.
+ * 과목명 + 사용자 색상 설정으로 셀 스타일을 반환한다.
  * 매핑에 없는 과목(자율, 동아리, 진로 등)은 cyan 기본 스타일.
  */
-export function getSubjectStyle(subject: string): SubjectStyle {
-  return SUBJECT_STYLE_MAP[subject] ?? DEFAULT_STYLE;
+export function getSubjectStyle(
+  subject: string,
+  userColors?: SubjectColorMap,
+): SubjectStyle {
+  const p = resolvePreset(subject, userColors);
+  return { bg: p.tw.bg, border: p.tw.border, text: p.tw.text };
+}
+
+/** 도트 색상 (대시보드, ClassList 등에서 사용) */
+export function getSubjectDotColor(
+  subject: string,
+  userColors?: SubjectColorMap,
+): string {
+  return resolvePreset(subject, userColors).tw.bgSolid;
+}
+
+/** 텍스트 색상 (대시보드 시간표용) */
+export function getSubjectTextColor(
+  subject: string,
+  userColors?: SubjectColorMap,
+): string {
+  return resolvePreset(subject, userColors).tw.text;
+}
+
+/** 위젯용 bg + textLight 합친 클래스 문자열 */
+export function getSubjectWidgetStyle(
+  subject: string,
+  userColors?: SubjectColorMap,
+): string {
+  const p = resolvePreset(subject, userColors);
+  return `${p.tw.bg} ${p.tw.textLight}`;
 }
 
 /**

@@ -155,6 +155,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           weather: { ...DEFAULT_SETTINGS.weather, ...((saved as unknown as { weather?: Partial<Settings['weather']> }).weather ?? {}) },
           feedback: { ...DEFAULT_SETTINGS.feedback, ...((saved as unknown as { feedback?: Partial<FeedbackConfig> }).feedback ?? {}) } as FeedbackConfig,
           dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings }).dashboardTheme,
+          subjectColors: (saved as unknown as { subjectColors?: Settings['subjectColors'] }).subjectColors,
         };
         // maxPeriods가 periodTimes 개수보다 작으면 보정 (온보딩 버그 마이그레이션)
         const corrected = merged.periodTimes && merged.maxPeriods < merged.periodTimes.length

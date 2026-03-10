@@ -2,6 +2,7 @@ import type { PeriodTime } from '../valueObjects/PeriodTime';
 import type { PinSettings } from './PinSettings';
 import type { NeisScheduleSettings } from './NeisSchedule';
 import type { PresetThemeId, ThemeColors } from './DashboardTheme';
+import type { SubjectColorMap } from '../valueObjects/SubjectColor';
 
 export interface DashboardThemeSettings {
   readonly presetId: PresetThemeId | 'custom';
@@ -124,4 +125,5 @@ export interface Settings {
   readonly feedback?: FeedbackConfig;
   readonly neisSchedule?: NeisScheduleSettings;
   readonly dashboardTheme?: DashboardThemeSettings;
+  readonly subjectColors?: SubjectColorMap;
 }

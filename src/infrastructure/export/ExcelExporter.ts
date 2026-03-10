@@ -6,19 +6,8 @@ import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { StudentRecord, AttendanceStats } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { getAttendanceStats } from '@domain/rules/studentRecordRules';
-
-const SUBJECT_COLORS: Record<string, string> = {
-  '국어': 'FFFDE68A',
-  '영어': 'FFA7F3D0',
-  '수학': 'FF93C5FD',
-  '과학': 'FFC4B5FD',
-  '사회': 'FFFED7AA',
-  '체육': 'FFFCA5A5',
-  '음악': 'FFF9A8D4',
-  '미술': 'FFA5B4FC',
-  '창체': 'FF99F6E4',
-  '자율': 'FF99F6E4',
-};
+import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
+import { getSubjectArgb } from '@domain/valueObjects/SubjectColor';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -50,6 +39,7 @@ function applyCellStyle(cell: ExcelJS.Cell, bgColor?: string): void {
 export async function exportClassScheduleToExcel(
   schedule: ClassScheduleData,
   maxPeriods: number,
+  subjectColors?: SubjectColorMap,
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('학급 시간표');
@@ -76,7 +66,7 @@ export async function exportClassScheduleToExcel(
       } else {
         const val = cell.value as string;
         const subject = val.split(' (')[0] ?? '';
-        applyCellStyle(cell, SUBJECT_COLORS[subject]);
+        applyCellStyle(cell, getSubjectArgb(subject, subjectColors));
       }
     });
   }
@@ -88,6 +78,7 @@ export async function exportClassScheduleToExcel(
 export async function exportTeacherScheduleToExcel(
   schedule: TeacherScheduleData,
   maxPeriods: number,
+  subjectColors?: SubjectColorMap,
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('교사 시간표');
@@ -112,7 +103,7 @@ export async function exportTeacherScheduleToExcel(
       } else {
         const val = cell.value as string;
         const subject = val.split(' (')[0] ?? '';
-        applyCellStyle(cell, SUBJECT_COLORS[subject]);
+        applyCellStyle(cell, getSubjectArgb(subject, subjectColors));
       }
     });
   }

@@ -4,32 +4,8 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-
-/** 과목별 컬러 맵 */
-const SUBJECT_COLORS: Record<string, string> = {
-  '국어': 'text-yellow-400',
-  '영어': 'text-green-400',
-  '수학': 'text-blue-400',
-  '과학': 'text-purple-400',
-  '사회': 'text-orange-400',
-  '체육': 'text-red-400',
-  '음악': 'text-pink-400',
-  '미술': 'text-indigo-400',
-  '창체': 'text-teal-400',
-};
-
-/** 과목별 배경 도트 컬러 */
-const SUBJECT_DOT_COLORS: Record<string, string> = {
-  '국어': 'bg-yellow-400',
-  '영어': 'bg-green-400',
-  '수학': 'bg-blue-400',
-  '과학': 'bg-purple-400',
-  '사회': 'bg-orange-400',
-  '체육': 'bg-red-400',
-  '음악': 'bg-pink-400',
-  '미술': 'bg-indigo-400',
-  '창체': 'bg-teal-400',
-};
+import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
+import { getSubjectTextColor, getSubjectDotColor } from '@adapters/presenters/timetablePresenter';
 
 type TabType = 'class' | 'teacher';
 
@@ -111,6 +87,7 @@ export function DashboardTimetable() {
             periodTimeMap={periodTimeMap}
             currentPeriod={currentPeriod}
             maxPeriods={settings.maxPeriods}
+            subjectColors={settings.subjectColors}
           />
         ) : (
           <TeacherTimetableList
@@ -118,6 +95,7 @@ export function DashboardTimetable() {
             periodTimeMap={periodTimeMap}
             currentPeriod={currentPeriod}
             maxPeriods={settings.maxPeriods}
+            subjectColors={settings.subjectColors}
           />
         )}
       </div>
@@ -162,6 +140,7 @@ interface ClassTimetableListProps {
   periodTimeMap: Map<number, PeriodTime>;
   currentPeriod: number | null;
   maxPeriods: number;
+  subjectColors?: SubjectColorMap;
 }
 
 function ClassTimetableList({
@@ -169,6 +148,7 @@ function ClassTimetableList({
   periodTimeMap,
   currentPeriod,
   maxPeriods,
+  subjectColors,
 }: ClassTimetableListProps) {
   if (periods.length === 0) {
     return (
@@ -185,8 +165,8 @@ function ClassTimetableList({
         const pt = periodTimeMap.get(period);
         const isCurrent = currentPeriod === period;
         const subject = cp.subject;
-        const colorClass = SUBJECT_COLORS[subject] ?? 'text-sp-text';
-        const dotClass = SUBJECT_DOT_COLORS[subject] ?? 'bg-sp-muted';
+        const colorClass = getSubjectTextColor(subject, subjectColors) ?? 'text-sp-text';
+        const dotClass = getSubjectDotColor(subject, subjectColors) ?? 'bg-sp-muted';
 
         return (
           <div
@@ -226,6 +206,7 @@ interface TeacherTimetableListProps {
   periodTimeMap: Map<number, PeriodTime>;
   currentPeriod: number | null;
   maxPeriods: number;
+  subjectColors?: SubjectColorMap;
 }
 
 function TeacherTimetableList({
@@ -233,6 +214,7 @@ function TeacherTimetableList({
   periodTimeMap,
   currentPeriod,
   maxPeriods,
+  subjectColors,
 }: TeacherTimetableListProps) {
   if (periods.length === 0) {
     return (
@@ -249,8 +231,8 @@ function TeacherTimetableList({
         const pt = periodTimeMap.get(period);
         const isCurrent = currentPeriod === period;
         const subject = tp?.subject ?? '';
-        const colorClass = SUBJECT_COLORS[subject] ?? 'text-sp-text';
-        const dotClass = SUBJECT_DOT_COLORS[subject] ?? 'bg-sp-muted';
+        const colorClass = getSubjectTextColor(subject, subjectColors) ?? 'text-sp-text';
+        const dotClass = getSubjectDotColor(subject, subjectColors) ?? 'bg-sp-muted';
 
         return (
           <div

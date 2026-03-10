@@ -12,6 +12,8 @@ import {
   formatLunchBreakTime,
 } from '@adapters/presenters/timetablePresenter';
 import { NeisImportModal } from './NeisImportModal';
+import type { SubjectColorId, SubjectColorMap } from '@domain/valueObjects/SubjectColor';
+import { COLOR_PRESETS, getColorPreset, DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
 
 type TabType = 'class' | 'teacher';
 
@@ -52,7 +54,6 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   const [saving, setSaving] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showNeisImport, setShowNeisImport] = useState(false);
-
   const maxPeriods = settings.maxPeriods;
 
   // 로컬 교시 관리 상태
@@ -126,6 +127,15 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   const lunchTimeStr = useMemo(
     () => (lunchIndex >= 0 ? formatLunchBreakTime(visiblePeriodTimes, lunchIndex) : ''),
     [visiblePeriodTimes, lunchIndex],
+  );
+
+  const handleColorChange = useCallback(
+    (subject: string, colorId: SubjectColorId) => {
+      void updateSettings({
+        subjectColors: { ...settings.subjectColors, [subject]: colorId },
+      });
+    },
+    [settings.subjectColors, updateSettings],
   );
 
   const updateClassCell = useCallback(
@@ -396,6 +406,8 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                       onTeacherClassroomChange={updateTeacherClassroomCell}
                       lunchBefore={lunchIndex === periodIdx}
                       lunchTimeStr={lunchTimeStr}
+                      subjectColors={settings.subjectColors}
+                      onColorChange={handleColorChange}
                     />
                   ))}
                 </tbody>
@@ -491,6 +503,8 @@ interface EditorPeriodRowProps {
   onTeacherClassroomChange: (periodIdx: number, dayIdx: number, value: string) => void;
   lunchBefore: boolean;
   lunchTimeStr: string;
+  subjectColors?: SubjectColorMap;
+  onColorChange: (subject: string, colorId: SubjectColorId) => void;
 }
 
 function EditorPeriodRow({
@@ -507,7 +521,19 @@ function EditorPeriodRow({
   onTeacherClassroomChange,
   lunchBefore,
   lunchTimeStr,
+  subjectColors,
+  onColorChange,
 }: EditorPeriodRowProps) {
+  const [colorPickerDay, setColorPickerDay] = useState<number | null>(null);
+
+  // 팔레트 외부 클릭 시 닫기
+  useEffect(() => {
+    if (colorPickerDay === null) return;
+    const close = () => setColorPickerDay(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [colorPickerDay]);
+
   return (
     <>
       {lunchBefore && (
@@ -534,52 +560,103 @@ function EditorPeriodRow({
         <td className="px-4 py-3 text-center text-sp-muted text-sm border-r border-sp-border font-mono">
           {periodTime.start}
         </td>
-        {DAYS_OF_WEEK.map((_, dayIdx) => (
-          <td
-            key={dayIdx}
-            className={`p-1.5 ${dayIdx < DAYS_OF_WEEK.length - 1 ? 'border-r border-sp-border' : ''}`}
-          >
-            {tab === 'class' ? (
+        {DAYS_OF_WEEK.map((_, dayIdx) => {
+          const subjectValue = tab === 'class'
+            ? (classRow[dayIdx] ?? '').trim()
+            : (teacherSubjectRow[dayIdx] ?? '').trim();
+          const colorId = subjectValue
+            ? (subjectColors?.[subjectValue] ?? DEFAULT_SUBJECT_COLORS[subjectValue] ?? ('cyan' as SubjectColorId))
+            : ('cyan' as SubjectColorId);
+          const preset = getColorPreset(colorId);
+
+          return (
+            <td
+              key={dayIdx}
+              className={`p-1.5 relative ${dayIdx < DAYS_OF_WEEK.length - 1 ? 'border-r border-sp-border' : ''}`}
+            >
               <div className="flex flex-col gap-1">
-                <input
-                  type="text"
-                  value={classRow[dayIdx] ?? ''}
-                  onChange={(e) => onClassChange(periodIdx, dayIdx, e.target.value)}
-                  placeholder="과목"
-                  className="h-8 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs font-medium text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
-                />
-                <input
-                  type="text"
-                  value={classTeacherRow[dayIdx] ?? ''}
-                  onChange={(e) => onClassTeacherChange(periodIdx, dayIdx, e.target.value)}
-                  placeholder="교사"
-                  className="h-6 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs text-sp-muted placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
-                />
+                <div className="flex items-center gap-1">
+                  {subjectValue ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setColorPickerDay((prev) => (prev === dayIdx ? null : dayIdx));
+                      }}
+                      className={`w-4 h-4 rounded-full shrink-0 ${preset.tw.bgSolid} hover:scale-125 transition-transform`}
+                      title="색상 변경"
+                    />
+                  ) : (
+                    <span className="w-4 shrink-0" />
+                  )}
+                  {tab === 'class' ? (
+                    <input
+                      type="text"
+                      value={classRow[dayIdx] ?? ''}
+                      onChange={(e) => onClassChange(periodIdx, dayIdx, e.target.value)}
+                      placeholder="과목"
+                      className="h-8 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs font-medium text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={teacherSubjectRow[dayIdx] ?? ''}
+                      onChange={(e) => onTeacherSubjectChange(periodIdx, dayIdx, e.target.value)}
+                      placeholder="과목"
+                      className="h-8 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs font-medium text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
+                    />
+                  )}
+                </div>
+
+                {/* 인라인 색상 팔레트 */}
+                {colorPickerDay === dayIdx && subjectValue && (
+                  <div
+                    className="absolute left-1 top-full z-50 mt-0.5 p-2 rounded-xl bg-sp-card border border-sp-border shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="text-[10px] text-sp-muted mb-1.5 font-medium">{subjectValue}</p>
+                    <div className="grid grid-cols-8 gap-1.5">
+                      {COLOR_PRESETS.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          title={p.label}
+                          onClick={() => {
+                            onColorChange(subjectValue, p.id);
+                            setColorPickerDay(null);
+                          }}
+                          className={`w-5 h-5 rounded-full transition-all ${p.tw.bgSolid} ${
+                            colorId === p.id
+                              ? 'ring-2 ring-sp-accent ring-offset-1 ring-offset-sp-card scale-110'
+                              : 'hover:scale-110 opacity-70 hover:opacity-100'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {tab === 'class' ? (
+                  <input
+                    type="text"
+                    value={classTeacherRow[dayIdx] ?? ''}
+                    onChange={(e) => onClassTeacherChange(periodIdx, dayIdx, e.target.value)}
+                    placeholder="교사"
+                    className="h-6 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs text-sp-muted placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={teacherClassroomRow[dayIdx] ?? ''}
+                    onChange={(e) => onTeacherClassroomChange(periodIdx, dayIdx, e.target.value)}
+                    placeholder="학급"
+                    className="h-6 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs text-sp-muted placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
+                  />
+                )}
               </div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                <input
-                  type="text"
-                  value={teacherSubjectRow[dayIdx] ?? ''}
-                  onChange={(e) =>
-                    onTeacherSubjectChange(periodIdx, dayIdx, e.target.value)
-                  }
-                  placeholder="과목"
-                  className="h-8 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs font-medium text-sp-text placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
-                />
-                <input
-                  type="text"
-                  value={teacherClassroomRow[dayIdx] ?? ''}
-                  onChange={(e) =>
-                    onTeacherClassroomChange(periodIdx, dayIdx, e.target.value)
-                  }
-                  placeholder="학급"
-                  className="h-6 w-full rounded-md bg-sp-surface border border-sp-border px-2 text-center text-xs text-sp-muted placeholder:text-sp-muted/40 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/50 transition-colors"
-                />
-              </div>
-            )}
-          </td>
-        ))}
+            </td>
+          );
+        })}
       </tr>
     </>
   );

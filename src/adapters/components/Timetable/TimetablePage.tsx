@@ -7,6 +7,7 @@ import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
+import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import {
   getSubjectStyle,
   getLunchBreakIndex,
@@ -88,10 +89,10 @@ export function TimetablePage() {
 
       if (format === 'excel') {
         if (tab === 'class') {
-          data = await exportClassScheduleToExcel(classSchedule, settings.maxPeriods);
+          data = await exportClassScheduleToExcel(classSchedule, settings.maxPeriods, settings.subjectColors);
           defaultFileName = '학급시간표.xlsx';
         } else {
-          data = await exportTeacherScheduleToExcel(teacherSchedule, settings.maxPeriods);
+          data = await exportTeacherScheduleToExcel(teacherSchedule, settings.maxPeriods, settings.subjectColors);
           defaultFileName = '교사시간표.xlsx';
         }
       } else {
@@ -241,6 +242,7 @@ export function TimetablePage() {
                         )}
                         lunchBefore={lunchIndex === idx}
                         lunchTimeStr={lunchTimeStr}
+                        subjectColors={settings.subjectColors}
                       />
                     );
                   })}
@@ -330,6 +332,7 @@ interface PeriodRowProps {
   teacherPeriods: (TeacherPeriod | null)[];
   lunchBefore: boolean;
   lunchTimeStr: string;
+  subjectColors?: SubjectColorMap;
 }
 
 function PeriodRow({
@@ -341,6 +344,7 @@ function PeriodRow({
   teacherPeriods,
   lunchBefore,
   lunchTimeStr,
+  subjectColors,
 }: PeriodRowProps) {
   return (
     <>
@@ -401,6 +405,7 @@ function PeriodRow({
                 key={day}
                 subject={cp?.subject ?? ''}
                 teacher={cp?.teacher ?? ''}
+                subjectColors={subjectColors}
                 isToday={isToday}
                 isCurrent={isCurrent && isToday}
                 isLastCol={dayIdx === DAYS_OF_WEEK.length - 1}
@@ -416,6 +421,7 @@ function PeriodRow({
               isToday={isToday}
               isCurrent={isCurrent && isToday}
               isLastCol={dayIdx === DAYS_OF_WEEK.length - 1}
+              subjectColors={subjectColors}
             />
           );
         })}
@@ -430,9 +436,10 @@ interface SubjectCellProps {
   isToday: boolean;
   isCurrent: boolean;
   isLastCol: boolean;
+  subjectColors?: SubjectColorMap;
 }
 
-function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol }: SubjectCellProps) {
+function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectColors }: SubjectCellProps) {
   if (!subject) {
     return (
       <td
@@ -447,7 +454,7 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol }: Subjec
     );
   }
 
-  const style = getSubjectStyle(subject);
+  const style = getSubjectStyle(subject, subjectColors);
 
   const cellContent = (
     <div className="flex flex-col items-center justify-center gap-0.5">
@@ -494,9 +501,10 @@ interface TeacherCellProps {
   isToday: boolean;
   isCurrent: boolean;
   isLastCol: boolean;
+  subjectColors?: SubjectColorMap;
 }
 
-function TeacherCell({ period, isToday, isCurrent, isLastCol }: TeacherCellProps) {
+function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors }: TeacherCellProps) {
   if (!period) {
     return (
       <td
@@ -511,7 +519,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol }: TeacherCellProps
     );
   }
 
-  const style = getSubjectStyle(period.subject);
+  const style = getSubjectStyle(period.subject, subjectColors);
 
   const cellContent = (
     <div className="flex flex-col items-center justify-center gap-0.5">

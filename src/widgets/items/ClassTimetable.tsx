@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { getSubjectWidgetStyle } from '@adapters/presenters/timetablePresenter';
 
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 
@@ -12,17 +13,6 @@ const DAYS: readonly { key: DayOfWeek; label: string }[] = [
   { key: '금', label: '금' },
 ];
 
-const SUBJECT_BG: Record<string, string> = {
-  '국어': 'bg-yellow-500/20 text-yellow-300',
-  '영어': 'bg-green-500/20 text-green-300',
-  '수학': 'bg-blue-500/20 text-blue-300',
-  '과학': 'bg-purple-500/20 text-purple-300',
-  '사회': 'bg-orange-500/20 text-orange-300',
-  '체육': 'bg-red-500/20 text-red-300',
-  '음악': 'bg-pink-500/20 text-pink-300',
-  '미술': 'bg-indigo-500/20 text-indigo-300',
-  '창체': 'bg-teal-500/20 text-teal-300',
-};
 
 /**
  * 학급 시간표 위젯 (초등 담임용)
@@ -82,7 +72,7 @@ export function ClassTimetable() {
                 const dayData = classSchedule[key];
                 const cp = dayData?.[period - 1];
                 const subject = cp?.subject ?? '';
-                const colorClass = SUBJECT_BG[subject] ?? 'bg-sp-surface/50 text-sp-muted';
+                const colorClass = subject ? getSubjectWidgetStyle(subject, settings.subjectColors) : 'bg-sp-surface/50 text-sp-muted';
 
                 return (
                   <td key={key} className="p-0.5 border-b border-l">
