@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Todo, TodoCategory, TodoPriority, TodoRecurrence } from '@domain/entities/Todo';
+import type { Todo, TodoCategory, TodoPriority, TodoRecurrence, SubTask } from '@domain/entities/Todo';
 import { DEFAULT_TODO_CATEGORIES } from '@domain/entities/Todo';
 import { todoRepository } from '@adapters/di/container';
 import { ManageTodos } from '@usecases/todo/ManageTodos';
@@ -19,7 +19,15 @@ interface TodoState {
   ) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
-  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate'>>) => Promise<void>;
+  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+
+  // 서브태스크
+  addSubTask: (todoId: string, text: string) => Promise<void>;
+  toggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  deleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+
+  // 정렬
+  reorderTodos: (todoIds: string[], groupKey: string) => Promise<void>;
 
   // 아카이브
   archiveCompleted: () => Promise<number>;
@@ -100,6 +108,55 @@ export const useTodoStore = create<TodoState>((set, get) => {
         ),
       }));
       await manageTodos.updateTodo(id, changes);
+    },
+
+    addSubTask: async (todoId, text) => {
+      const subTask: SubTask = { id: crypto.randomUUID(), text, completed: false };
+      set((state) => ({
+        todos: state.todos.map((todo) =>
+          todo.id === todoId
+            ? { ...todo, subTasks: [...(todo.subTasks ?? []), subTask] }
+            : todo,
+        ),
+      }));
+      await manageTodos.addSubTask(todoId, text);
+    },
+
+    toggleSubTask: async (todoId, subTaskId) => {
+      set((state) => ({
+        todos: state.todos.map((todo) => {
+          if (todo.id !== todoId) return todo;
+          const subTasks = (todo.subTasks ?? []).map((st) =>
+            st.id === subTaskId ? { ...st, completed: !st.completed } : st,
+          );
+          return { ...todo, subTasks };
+        }),
+      }));
+      await manageTodos.toggleSubTask(todoId, subTaskId);
+    },
+
+    deleteSubTask: async (todoId, subTaskId) => {
+      set((state) => ({
+        todos: state.todos.map((todo) => {
+          if (todo.id !== todoId) return todo;
+          const subTasks = (todo.subTasks ?? []).filter((st) => st.id !== subTaskId);
+          return { ...todo, subTasks };
+        }),
+      }));
+      await manageTodos.deleteSubTask(todoId, subTaskId);
+    },
+
+    reorderTodos: async (todoIds) => {
+      const updates: { id: string; sortOrder: number }[] = todoIds.map((id, idx) => ({ id, sortOrder: idx }));
+      set((state) => ({
+        todos: state.todos.map((todo) => {
+          const entry = updates.find((u) => u.id === todo.id);
+          return entry ? { ...todo, sortOrder: entry.sortOrder } : todo;
+        }),
+      }));
+      for (const { id, sortOrder } of updates) {
+        await manageTodos.updateTodo(id, { sortOrder });
+      }
     },
 
     archiveCompleted: async () => {

@@ -8,11 +8,15 @@ export function sortTodos(todos: readonly Todo[]): readonly Todo[] {
   return [...todos].sort((a, b) => {
     // 1차: 완료 여부
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    // 2차: 우선순위 (높은 순)
+    // 2차: 수동 정렬 순서 (설정된 경우 최우선)
+    if (a.sortOrder !== undefined && b.sortOrder !== undefined) {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    }
+    // 3차: 우선순위 (높은 순)
     const pa = PRIORITY_CONFIG[a.priority ?? 'none'].sortOrder;
     const pb = PRIORITY_CONFIG[b.priority ?? 'none'].sortOrder;
     if (pa !== pb) return pa - pb;
-    // 3차: 마감일 (빠른 순)
+    // 4차: 마감일 (빠른 순)
     if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
     if (a.dueDate) return -1;
     if (b.dueDate) return 1;

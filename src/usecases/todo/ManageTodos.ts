@@ -1,4 +1,4 @@
-import type { Todo, TodoCategory, TodosData } from '@domain/entities/Todo';
+import type { Todo, TodoCategory, TodosData, SubTask } from '@domain/entities/Todo';
 import type { ITodoRepository } from '@domain/repositories/ITodoRepository';
 import { calculateNextDueDate } from '@domain/rules/todoRules';
 
@@ -33,7 +33,7 @@ export class ManageTodos {
   /**
    * 투두를 부분 업데이트합니다 (우선순위, 카테고리 등).
    */
-  async updateTodo(id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate'>>): Promise<void> {
+  async updateTodo(id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>): Promise<void> {
     const data = await this.todoRepository.getTodos();
     const currentTodos = data?.todos ?? [];
 
@@ -98,6 +98,49 @@ export class ManageTodos {
     const currentTodos = data?.todos ?? [];
     const filteredTodos: readonly Todo[] = currentTodos.filter((todo) => todo.id !== id);
     await this.todoRepository.saveTodos({ todos: filteredTodos, categories: data?.categories });
+  }
+
+  /** 서브태스크 추가 */
+  async addSubTask(todoId: string, text: string): Promise<SubTask> {
+    const data = await this.todoRepository.getTodos();
+    const todos = data?.todos ?? [];
+    const subTask: SubTask = { id: crypto.randomUUID(), text, completed: false };
+
+    const updated = todos.map((todo) =>
+      todo.id === todoId
+        ? { ...todo, subTasks: [...(todo.subTasks ?? []), subTask] }
+        : todo,
+    );
+    await this.todoRepository.saveTodos({ todos: updated, categories: data?.categories });
+    return subTask;
+  }
+
+  /** 서브태스크 토글 */
+  async toggleSubTask(todoId: string, subTaskId: string): Promise<void> {
+    const data = await this.todoRepository.getTodos();
+    const todos = data?.todos ?? [];
+
+    const updated = todos.map((todo) => {
+      if (todo.id !== todoId) return todo;
+      const subTasks = (todo.subTasks ?? []).map((st) =>
+        st.id === subTaskId ? { ...st, completed: !st.completed } : st,
+      );
+      return { ...todo, subTasks };
+    });
+    await this.todoRepository.saveTodos({ todos: updated, categories: data?.categories });
+  }
+
+  /** 서브태스크 삭제 */
+  async deleteSubTask(todoId: string, subTaskId: string): Promise<void> {
+    const data = await this.todoRepository.getTodos();
+    const todos = data?.todos ?? [];
+
+    const updated = todos.map((todo) => {
+      if (todo.id !== todoId) return todo;
+      const subTasks = (todo.subTasks ?? []).filter((st) => st.id !== subTaskId);
+      return { ...todo, subTasks };
+    });
+    await this.todoRepository.saveTodos({ todos: updated, categories: data?.categories });
   }
 
   /** 완료된 할 일 일괄 아카이브 */

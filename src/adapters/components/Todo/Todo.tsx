@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
-import type { Todo as TodoType, TodoPriority } from '@domain/entities/Todo';
+import type { Todo as TodoType, TodoPriority, TodoCategory } from '@domain/entities/Todo';
 import {
   sortTodos,
   filterByDateRange,
@@ -14,6 +14,23 @@ import {
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { RECURRENCE_PRESETS, getRecurrenceLabel } from '@domain/valueObjects/TodoRecurrence';
 import { TodoCategoryModal } from './TodoCategoryModal';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 type DateFilter = 'all' | 'today' | 'week';
 type ViewMode = 'active' | 'archive';
@@ -47,6 +64,50 @@ const CATEGORY_COLORS: Record<string, string> = {
   gray: 'bg-gray-500/20 text-gray-400',
 };
 
+const PRIORITY_LABELS: Record<TodoPriority, string> = {
+  none: '없음',
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
+};
+
+/* ─── Quick Postpone Options ─── */
+
+interface PostponeOption {
+  label: string;
+  getDate: () => string;
+}
+
+function getPostponeOptions(): PostponeOption[] {
+  const fmt = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayAfter = new Date(today);
+  dayAfter.setDate(dayAfter.getDate() + 2);
+  // Next Monday
+  const nextMonday = new Date(today);
+  const dayOfWeek = nextMonday.getDay();
+  const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+  nextMonday.setDate(nextMonday.getDate() + daysUntilMonday);
+  const nextWeek = new Date(today);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+
+  return [
+    { label: '내일', getDate: () => fmt(tomorrow) },
+    { label: '모레', getDate: () => fmt(dayAfter) },
+    { label: '다음 주 월요일', getDate: () => fmt(nextMonday) },
+    { label: '다음 주', getDate: () => fmt(nextWeek) },
+  ];
+}
+
+/* ─── Main Todo Component ─── */
+
 export function Todo() {
   const {
     todos,
@@ -56,6 +117,11 @@ export function Todo() {
     addTodo,
     toggleTodo,
     deleteTodo,
+    updateTodo,
+    addSubTask,
+    toggleSubTask,
+    deleteSubTask,
+    reorderTodos,
     archiveCompleted,
     restoreFromArchive,
     deleteArchived,
@@ -82,7 +148,7 @@ export function Todo() {
   const activeTodos = useMemo(() => filterActive(todos), [todos]);
   const archivedTodos = useMemo(() => filterArchived(todos), [todos]);
 
-  // 필터 → 정렬 (활성 뷰)
+  // 필터 -> 정렬 (활성 뷰)
   const filtered = useMemo(() => {
     let result = activeTodos;
     result = filterByDateRange(result, filter, now);
@@ -365,24 +431,22 @@ export function Todo() {
                     return (
                       <TodoGroup
                         key={groupKey}
+                        groupKey={groupKey}
                         label={GROUP_LABELS[groupKey] ?? groupKey}
-                        count={items.length}
+                        items={sortTodos(items)}
                         isOverdueGroup={groupKey === 'overdue'}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleGroup(groupKey)}
-                      >
-                        {!isCollapsed &&
-                          sortTodos(items).map((todo) => (
-                            <TodoItem
-                              key={todo.id}
-                              todo={todo}
-                              overdue={isOverdue(todo, now)}
-                              categories={categories}
-                              onToggle={toggleTodo}
-                              onDelete={deleteTodo}
-                            />
-                          ))}
-                      </TodoGroup>
+                        categories={categories}
+                        now={now}
+                        onToggle={toggleTodo}
+                        onDelete={deleteTodo}
+                        onUpdate={updateTodo}
+                        onAddSubTask={addSubTask}
+                        onToggleSubTask={toggleSubTask}
+                        onDeleteSubTask={deleteSubTask}
+                        onReorder={reorderTodos}
+                      />
                     );
                   })}
                 </div>
@@ -428,7 +492,7 @@ export function Todo() {
 
 interface ArchiveViewProps {
   todos: readonly TodoType[];
-  categories: readonly import('@domain/entities/Todo').TodoCategory[];
+  categories: readonly TodoCategory[];
   onRestore: (id: string) => void;
   onDelete: (id: string) => void;
   onDeleteAll: () => void;
@@ -516,25 +580,74 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
   );
 }
 
-/* ─── 서브 컴포넌트 ─── */
+/* ─── TodoGroup (with DnD + Completed Collapsing) ─── */
 
 interface TodoGroupProps {
+  groupKey: string;
   label: string;
-  count: number;
+  items: readonly TodoType[];
   isOverdueGroup: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
-  children: React.ReactNode;
+  categories: readonly TodoCategory[];
+  now: Date;
+  onToggle: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onAddSubTask: (todoId: string, text: string) => Promise<void>;
+  onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  onReorder: (todoIds: string[], groupKey: string) => Promise<void>;
 }
 
 function TodoGroup({
+  groupKey,
   label,
-  count,
+  items,
   isOverdueGroup,
   collapsed,
   onToggleCollapse,
-  children,
+  categories,
+  now,
+  onToggle,
+  onDelete,
+  onUpdate,
+  onAddSubTask,
+  onToggleSubTask,
+  onDeleteSubTask,
+  onReorder,
 }: TodoGroupProps) {
+  // Split items into incomplete and completed
+  const incompleteItems = useMemo(() => items.filter((t) => !t.completed), [items]);
+  const completedItems = useMemo(() => items.filter((t) => t.completed), [items]);
+  const [completedCollapsed, setCompletedCollapsed] = useState(true);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  // Build ordered IDs for the incomplete items (sortable)
+  const incompleteIds = useMemo(() => incompleteItems.map((t) => t.id), [incompleteItems]);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = incompleteIds.indexOf(active.id as string);
+      const newIndex = incompleteIds.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const reordered = arrayMove([...incompleteIds], oldIndex, newIndex);
+      void onReorder(reordered, groupKey);
+    },
+    [incompleteIds, onReorder, groupKey],
+  );
+
+  const totalCount = items.length;
+
   return (
     <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
       {/* 그룹 헤더 */}
@@ -557,111 +670,655 @@ function TodoGroup({
         >
           {label}
         </span>
-        <span className="text-xs text-sp-muted ml-1">({count})</span>
+        <span className="text-xs text-sp-muted ml-1">({totalCount})</span>
       </button>
 
       {/* 아이템 리스트 */}
-      {children}
+      {!collapsed && (
+        <>
+          {/* Incomplete items with drag-and-drop */}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={incompleteIds} strategy={verticalListSortingStrategy}>
+              <ul>
+                {incompleteItems.map((todo) => (
+                  <SortableTodoItem
+                    key={todo.id}
+                    todo={todo}
+                    overdue={isOverdue(todo, now)}
+                    categories={categories}
+                    onToggle={onToggle}
+                    onDelete={onDelete}
+                    onUpdate={onUpdate}
+                    onAddSubTask={onAddSubTask}
+                    onToggleSubTask={onToggleSubTask}
+                    onDeleteSubTask={onDeleteSubTask}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
+
+          {/* Completed items collapsible section */}
+          {completedItems.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setCompletedCollapsed((prev) => !prev)}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sp-muted hover:bg-sp-surface/30 transition-colors border-t border-sp-border/50"
+              >
+                <span
+                  className={`text-[10px] transition-transform ${
+                    completedCollapsed ? '' : 'rotate-90'
+                  }`}
+                >
+                  ▶
+                </span>
+                <span className="text-xs font-medium">
+                  완료 {completedItems.length}건
+                </span>
+              </button>
+              {!completedCollapsed && (
+                <ul>
+                  {completedItems.map((todo) => (
+                    <TodoItem
+                      key={todo.id}
+                      todo={todo}
+                      overdue={false}
+                      categories={categories}
+                      onToggle={onToggle}
+                      onDelete={onDelete}
+                      onUpdate={onUpdate}
+                      onAddSubTask={onAddSubTask}
+                      onToggleSubTask={onToggleSubTask}
+                      onDeleteSubTask={onDeleteSubTask}
+                    />
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </>
+      )}
     </div>
   );
+}
+
+/* ─── SortableTodoItem (wraps TodoItem with dnd-kit sortable) ─── */
+
+interface SortableTodoItemProps {
+  todo: TodoType;
+  overdue: boolean;
+  categories: readonly TodoCategory[];
+  onToggle: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onAddSubTask: (todoId: string, text: string) => Promise<void>;
+  onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+}
+
+function SortableTodoItem(props: SortableTodoItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.todo.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative' as const,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <TodoItem
+        {...props}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
+    </div>
+  );
+}
+
+/* ─── TodoItem (with inline edit, postpone, subtasks, drag handle) ─── */
+
+interface DragHandleProps {
+  [key: string]: unknown;
 }
 
 interface TodoItemProps {
   todo: TodoType;
   overdue: boolean;
-  categories: readonly import('@domain/entities/Todo').TodoCategory[];
-  onToggle: (id: string) => void;
-  onDelete: (id: string) => void;
+  categories: readonly TodoCategory[];
+  onToggle: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onAddSubTask: (todoId: string, text: string) => Promise<void>;
+  onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  dragHandleProps?: DragHandleProps;
 }
 
-function TodoItem({ todo, overdue, categories, onToggle, onDelete }: TodoItemProps) {
+function TodoItem({
+  todo,
+  overdue,
+  categories,
+  onToggle,
+  onDelete,
+  onUpdate,
+  onAddSubTask,
+  onToggleSubTask,
+  onDeleteSubTask,
+  dragHandleProps,
+}: TodoItemProps) {
   const { track } = useAnalytics();
   const [hovered, setHovered] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(todo.text);
+  const [editDueDate, setEditDueDate] = useState(todo.dueDate ?? '');
+  const [editPriority, setEditPriority] = useState<TodoPriority>(todo.priority ?? 'none');
+  const [editCategory, setEditCategory] = useState(todo.category ?? '');
+  const [showPostpone, setShowPostpone] = useState(false);
+  const [showCustomDate, setShowCustomDate] = useState(false);
+  const [customDate, setCustomDate] = useState('');
+  const [showSubTaskInput, setShowSubTaskInput] = useState(false);
+  const [subTaskText, setSubTaskText] = useState('');
+
+  const editRef = useRef<HTMLDivElement>(null);
+  const postponeRef = useRef<HTMLDivElement>(null);
+
   const priorityConfig = PRIORITY_CONFIG[todo.priority ?? 'none'];
   const cat = categories.find((c) => c.id === todo.category);
 
+  // Subtask stats
+  const subTasks = todo.subTasks ?? [];
+  const subTaskTotal = subTasks.length;
+  const subTaskCompleted = subTasks.filter((s) => s.completed).length;
+
+  // Click outside to save edit
+  useEffect(() => {
+    if (!editing) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (editRef.current && !editRef.current.contains(e.target as Node)) {
+        saveEdit();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  });
+
+  // Click outside to close postpone dropdown
+  useEffect(() => {
+    if (!showPostpone) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (postponeRef.current && !postponeRef.current.contains(e.target as Node)) {
+        setShowPostpone(false);
+        setShowCustomDate(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  });
+
+  const saveEdit = useCallback(() => {
+    const trimmed = editText.trim();
+    if (!trimmed) {
+      setEditText(todo.text);
+      setEditing(false);
+      return;
+    }
+    const changes: Record<string, string | undefined> = {};
+    if (trimmed !== todo.text) changes.text = trimmed;
+    if (editPriority !== (todo.priority ?? 'none')) changes.priority = editPriority;
+    if (editCategory !== (todo.category ?? '')) changes.category = editCategory || undefined;
+    if (editDueDate !== (todo.dueDate ?? '')) changes.dueDate = editDueDate || undefined;
+
+    if (Object.keys(changes).length > 0) {
+      void onUpdate(todo.id, changes as Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'dueDate'>>);
+    }
+    setEditing(false);
+  }, [editText, editPriority, editCategory, editDueDate, todo, onUpdate]);
+
+  const handleDoubleClick = useCallback(() => {
+    if (todo.completed) return;
+    setEditText(todo.text);
+    setEditDueDate(todo.dueDate ?? '');
+    setEditPriority(todo.priority ?? 'none');
+    setEditCategory(todo.category ?? '');
+    setEditing(true);
+  }, [todo]);
+
+  const handleEditKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveEdit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setEditing(false);
+      }
+    },
+    [saveEdit],
+  );
+
+  const handlePostpone = useCallback(
+    (newDate: string) => {
+      void onUpdate(todo.id, { dueDate: newDate });
+      setShowPostpone(false);
+      setShowCustomDate(false);
+    },
+    [todo.id, onUpdate],
+  );
+
+  const handleAddSubTask = useCallback(() => {
+    const text = subTaskText.trim();
+    if (!text) return;
+    void onAddSubTask(todo.id, text);
+    setSubTaskText('');
+  }, [subTaskText, todo.id, onAddSubTask]);
+
+  const handleSubTaskKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleAddSubTask();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSubTaskInput(false);
+        setSubTaskText('');
+      }
+    },
+    [handleAddSubTask],
+  );
+
+  // Auto-complete parent when all subtasks done
+  const handleToggleSubTask = useCallback(
+    (subTaskId: string) => {
+      void onToggleSubTask(todo.id, subTaskId);
+
+      // Check if after this toggle all will be completed
+      const targetSt = subTasks.find((s) => s.id === subTaskId);
+      if (!targetSt) return;
+      const willBeCompleted = !targetSt.completed;
+      if (willBeCompleted) {
+        const allOthersDone = subTasks.every((s) => s.id === subTaskId || s.completed);
+        if (allOthersDone && !todo.completed) {
+          // All subtasks will be completed - confirm auto-complete parent
+          setTimeout(() => {
+            if (window.confirm('모든 서브태스크가 완료되었습니다. 상위 할 일도 완료 처리할까요?')) {
+              void onToggle(todo.id);
+            }
+          }, 100);
+        }
+      }
+    },
+    [todo, subTasks, onToggleSubTask, onToggle],
+  );
+
+  // Inline edit mode
+  if (editing) {
+    return (
+      <div ref={editRef} className="border-t border-sp-border/50 px-4 py-3 bg-sp-surface/30">
+        <div className="flex flex-col gap-2">
+          {/* Text input */}
+          <input
+            type="text"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={handleEditKeyDown}
+            autoFocus
+            className="w-full bg-sp-surface text-sp-text text-sm px-3 py-2 rounded-lg border border-sp-accent focus:outline-none transition-colors"
+          />
+          <div className="flex gap-3 items-center flex-wrap">
+            {/* Date input */}
+            <input
+              type="date"
+              value={editDueDate}
+              onChange={(e) => setEditDueDate(e.target.value)}
+              className="bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+            />
+            {/* Priority buttons */}
+            <div className="flex items-center gap-1">
+              {PRIORITY_OPTIONS.map((p) => {
+                const config = PRIORITY_CONFIG[p];
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setEditPriority(p)}
+                    className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                      editPriority === p
+                        ? `${config.bgColor || 'bg-sp-surface'} ${config.color} ring-1 ring-current`
+                        : 'text-sp-muted hover:text-sp-text'
+                    }`}
+                  >
+                    {config.icon} {PRIORITY_LABELS[p]}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Category select */}
+            <select
+              value={editCategory}
+              onChange={(e) => setEditCategory(e.target.value)}
+              className="bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+            >
+              <option value="">카테고리 없음</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon} {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="px-3 py-1 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={saveEdit}
+              className="px-3 py-1 rounded-lg text-xs font-bold bg-sp-accent hover:bg-blue-600 text-white transition-colors"
+            >
+              저장
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Normal display mode
   return (
-    <li
-      className="flex items-center gap-3 px-4 py-2.5 border-t border-sp-border/50 transition-colors hover:bg-sp-surface/30 cursor-pointer"
-      onClick={() => {
-        track('todo_toggle', { completed: !todo.completed });
-        onToggle(todo.id);
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* 체크박스 */}
-      <Checkbox checked={todo.completed} />
-
-      {/* 우선순위 dot */}
-      {todo.priority && todo.priority !== 'none' && (
-        <span className={`text-[10px] ${priorityConfig.color}`} title={priorityConfig.label}>
-          {priorityConfig.icon}
-        </span>
-      )}
-
-      {/* 반복 아이콘 */}
-      {todo.recurrence && (
-        <span className="text-[10px] text-sp-muted" title={getRecurrenceLabel(todo.recurrence)}>
-          🔄
-        </span>
-      )}
-
-      {/* 텍스트 */}
-      <span
-        className={`flex-1 text-sm leading-tight transition-all ${
-          todo.completed
-            ? 'text-sp-muted line-through opacity-50'
-            : 'text-sp-text'
-        }`}
-      >
-        {todo.text}
-      </span>
-
-      {/* 카테고리 태그 */}
-      {cat && (
-        <span
-          className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-            CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'
-          }`}
-        >
-          {cat.icon} {cat.name}
-        </span>
-      )}
-
-      {/* 날짜 라벨 */}
-      {todo.dueDate && (
-        <span
-          className={`text-xs font-medium px-2 py-0.5 rounded ${
-            overdue
-              ? 'text-red-400 bg-red-400/10'
-              : todo.completed
-                ? 'text-sp-muted/50'
-                : 'text-sp-muted'
-          }`}
-        >
-          {formatDueDate(todo.dueDate)}
-        </span>
-      )}
-
-      {/* 삭제 버튼 (호버 시) */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(todo.id);
+    <>
+      <li
+        className="flex items-center gap-3 px-4 py-2.5 border-t border-sp-border/50 transition-colors hover:bg-sp-surface/30 group"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => {
+          setHovered(false);
+          // Don't close postpone on mouse leave to allow dropdown interaction
         }}
-        className={`p-1 rounded-lg transition-all ${
-          hovered
-            ? 'opacity-100 text-red-400 hover:bg-red-400/10'
-            : 'opacity-0'
-        }`}
       >
-        <span className="material-symbols-outlined text-[18px]">close</span>
-      </button>
-    </li>
+        {/* Drag handle */}
+        {dragHandleProps && (
+          <button
+            type="button"
+            className={`cursor-grab active:cursor-grabbing p-0.5 rounded text-sp-muted/50 hover:text-sp-muted transition-opacity ${
+              hovered ? 'opacity-100' : 'opacity-0'
+            }`}
+            {...dragHandleProps}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-sm leading-none select-none">⠿</span>
+          </button>
+        )}
+
+        {/* 체크박스 */}
+        <div
+          className="cursor-pointer"
+          onClick={() => {
+            track('todo_toggle', { completed: !todo.completed });
+            void onToggle(todo.id);
+          }}
+        >
+          <Checkbox checked={todo.completed} />
+        </div>
+
+        {/* 우선순위 dot */}
+        {todo.priority && todo.priority !== 'none' && (
+          <span className={`text-[10px] ${priorityConfig.color}`} title={priorityConfig.label}>
+            {priorityConfig.icon}
+          </span>
+        )}
+
+        {/* 반복 아이콘 */}
+        {todo.recurrence && (
+          <span className="text-[10px] text-sp-muted" title={getRecurrenceLabel(todo.recurrence)}>
+            🔄
+          </span>
+        )}
+
+        {/* 텍스트 (double-click to edit) */}
+        <span
+          className={`flex-1 text-sm leading-tight transition-all ${
+            todo.completed
+              ? 'text-sp-muted line-through opacity-50'
+              : 'text-sp-text'
+          }`}
+          onDoubleClick={handleDoubleClick}
+        >
+          {todo.text}
+        </span>
+
+        {/* Subtask progress */}
+        {subTaskTotal > 0 && (
+          <span className="text-[10px] text-sp-muted font-medium bg-sp-surface px-1.5 py-0.5 rounded">
+            {subTaskCompleted}/{subTaskTotal}
+          </span>
+        )}
+
+        {/* 카테고리 태그 */}
+        {cat && (
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+              CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'
+            }`}
+          >
+            {cat.icon} {cat.name}
+          </span>
+        )}
+
+        {/* 날짜 라벨 */}
+        {todo.dueDate && (
+          <span
+            className={`text-xs font-medium px-2 py-0.5 rounded ${
+              overdue
+                ? 'text-red-400 bg-red-400/10'
+                : todo.completed
+                  ? 'text-sp-muted/50'
+                  : 'text-sp-muted'
+            }`}
+          >
+            {formatDueDate(todo.dueDate)}
+          </span>
+        )}
+
+        {/* Add subtask button (hover, incomplete only) */}
+        {!todo.completed && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowSubTaskInput((prev) => !prev);
+            }}
+            className={`p-1 rounded-lg transition-all ${
+              hovered
+                ? 'opacity-100 text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10'
+                : 'opacity-0'
+            }`}
+            title="서브태스크 추가"
+          >
+            <span className="material-symbols-outlined text-[16px]">add_task</span>
+          </button>
+        )}
+
+        {/* Quick postpone button (hover, incomplete only) */}
+        {!todo.completed && (
+          <div className="relative" ref={postponeRef}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPostpone((prev) => !prev);
+                setShowCustomDate(false);
+              }}
+              className={`p-1 rounded-lg transition-all ${
+                hovered || showPostpone
+                  ? 'opacity-100 text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10'
+                  : 'opacity-0'
+              }`}
+              title="날짜 미루기"
+            >
+              <span className="text-sm">📅</span>
+            </button>
+
+            {/* Postpone dropdown */}
+            {showPostpone && (
+              <div className="absolute right-0 top-full mt-1 bg-sp-card rounded-xl ring-1 ring-sp-border shadow-xl z-20 py-1 min-w-[160px]">
+                {getPostponeOptions().map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePostpone(opt.getDate());
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-sp-text hover:bg-sp-surface transition-colors"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <div className="border-t border-sp-border/50 mt-1 pt-1">
+                  {!showCustomDate ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowCustomDate(true);
+                        setCustomDate(todo.dueDate ?? new Date().toISOString().slice(0, 10));
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-sp-accent hover:bg-sp-surface transition-colors"
+                    >
+                      날짜 선택...
+                    </button>
+                  ) : (
+                    <div className="px-3 py-1.5 flex gap-2 items-center">
+                      <input
+                        type="date"
+                        value={customDate}
+                        onChange={(e) => setCustomDate(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded border border-sp-border focus:border-sp-accent focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (customDate) handlePostpone(customDate);
+                        }}
+                        className="text-xs text-sp-accent hover:text-blue-400 font-medium"
+                      >
+                        확인
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 삭제 버튼 (호버 시) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            void onDelete(todo.id);
+          }}
+          className={`p-1 rounded-lg transition-all ${
+            hovered
+              ? 'opacity-100 text-red-400 hover:bg-red-400/10'
+              : 'opacity-0'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">close</span>
+        </button>
+      </li>
+
+      {/* Subtasks */}
+      {subTaskTotal > 0 && (
+        <ul className="border-t border-sp-border/30">
+          {subTasks.map((st) => (
+            <li
+              key={st.id}
+              className="flex items-center gap-2 pl-8 pr-4 py-1.5 hover:bg-sp-surface/20 transition-colors group/sub"
+            >
+              <div
+                className="cursor-pointer"
+                onClick={() => handleToggleSubTask(st.id)}
+              >
+                <Checkbox checked={st.completed} />
+              </div>
+              <span
+                className={`flex-1 text-xs leading-tight ${
+                  st.completed ? 'text-sp-muted line-through opacity-50' : 'text-sp-text/80'
+                }`}
+              >
+                {st.text}
+              </span>
+              <button
+                type="button"
+                onClick={() => void onDeleteSubTask(todo.id, st.id)}
+                className="p-0.5 rounded text-red-400/60 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover/sub:opacity-100 transition-all"
+              >
+                <span className="material-symbols-outlined text-[14px]">close</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Subtask input */}
+      {showSubTaskInput && (
+        <div className="flex items-center gap-2 pl-8 pr-4 py-2 border-t border-sp-border/30 bg-sp-surface/20">
+          <span className="text-sp-muted text-xs">└</span>
+          <input
+            type="text"
+            value={subTaskText}
+            onChange={(e) => setSubTaskText(e.target.value)}
+            onKeyDown={handleSubTaskKeyDown}
+            placeholder="서브태스크 입력..."
+            autoFocus
+            className="flex-1 bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors placeholder:text-sp-muted"
+          />
+          <button
+            type="button"
+            onClick={handleAddSubTask}
+            disabled={!subTaskText.trim()}
+            className="px-2 py-1 rounded-lg text-xs font-medium bg-sp-accent hover:bg-blue-600 disabled:opacity-40 text-white transition-colors"
+          >
+            추가
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowSubTaskInput(false);
+              setSubTaskText('');
+            }}
+            className="px-2 py-1 rounded-lg text-xs text-sp-muted hover:text-sp-text transition-colors"
+          >
+            취소
+          </button>
+        </div>
+      )}
+    </>
   );
 }
+
+/* ─── Checkbox ─── */
 
 interface CheckboxProps {
   checked: boolean;
@@ -696,7 +1353,7 @@ function Checkbox({ checked }: CheckboxProps) {
   );
 }
 
-/** "YYYY-MM-DD" → "M/D" 형식 */
+/** "YYYY-MM-DD" -> "M/D" 형식 */
 function formatDueDate(dateStr: string): string {
   const parts = dateStr.split('-');
   const monthStr = parts[1];

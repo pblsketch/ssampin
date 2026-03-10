@@ -26,6 +26,12 @@ export const DEFAULT_TODO_CATEGORIES: readonly TodoCategory[] = [
   { id: 'etc',     name: '기타',   color: 'gray',   icon: '📌' },
 ];
 
+export interface SubTask {
+  readonly id: string;
+  readonly text: string;
+  readonly completed: boolean;
+}
+
 export interface Todo {
   readonly id: string;
   readonly text: string;
@@ -36,6 +42,8 @@ export interface Todo {
   readonly category?: string;
   readonly recurrence?: TodoRecurrence;
   readonly archivedAt?: string;       // ISO 8601 — 아카이브 시각
+  readonly subTasks?: readonly SubTask[];
+  readonly sortOrder?: number;        // 수동 정렬 순서
 }
 
 export interface TodosData {
