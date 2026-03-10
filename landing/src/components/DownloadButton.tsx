@@ -115,6 +115,25 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
                   </li>
                 </ol>
               </div>
+              <div className="rounded-lg bg-amber-500/5 p-3">
+                <p className="text-xs font-semibold text-amber-300">
+                  C. 더블클릭해도 아무 반응이 없을 때
+                </p>
+                <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
+                    <span>백신(V3, 알약 등)의 <strong className="text-amber-200/80">&quot;실시간 감시&quot;</strong>를 일시 중지</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
+                    <span>설치 파일 다시 더블클릭</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">3</span>
+                    <span>설치 완료 후 <strong className="text-amber-200/80">실시간 감시 다시 켜기</strong></span>
+                  </li>
+                </ol>
+              </div>
             </div>
 
             <p className="mt-3 text-[0.7rem] text-amber-200/40">

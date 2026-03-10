@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import FadeIn from './FadeIn';
 
 const steps = [
@@ -18,7 +21,76 @@ const steps = [
   },
 ];
 
+const troubleshootCases = [
+  {
+    id: 'smartscreen',
+    icon: '🛡️',
+    label: '보안 경고가 떠요',
+    title: '"Windows의 PC 보호" 화면이 뜰 때',
+    description: 'Windows SmartScreen이 알 수 없는 앱을 차단한 경우예요.',
+    steps: [
+      { text: <><strong className="text-amber-200/80">&quot;추가 정보&quot;</strong>를 클릭합니다</> },
+      { text: <><strong className="text-amber-200/80">&quot;실행&quot;</strong> 버튼을 클릭합니다</> },
+    ],
+  },
+  {
+    id: 'smart-app-control',
+    icon: '⛔',
+    label: '스마트 앱 컨트롤',
+    title: '"스마트 앱 컨트롤이 차단했습니다" (Windows 11)',
+    description: 'Windows 11의 스마트 앱 컨트롤이 실행을 막은 경우예요.',
+    steps: [
+      { text: <>설치 파일을 우클릭 → <strong className="text-amber-200/80">&quot;속성&quot;</strong> 선택</> },
+      { text: <>하단 <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크박스 체크 → 확인</> },
+      { text: <>설치 파일을 다시 더블클릭</> },
+    ],
+  },
+  {
+    id: 'antivirus',
+    icon: '🦠',
+    label: '백신이 차단해요',
+    title: '백신(V3, 알약 등)이 차단하거나 삭제할 때',
+    description: '백신 프로그램이 설치 파일을 위험하다고 판단한 경우예요. 더블클릭해도 아무 반응이 없다면 이 경우일 가능성이 높아요!',
+    steps: [
+      { text: <>백신 프로그램을 열어 <strong className="text-amber-200/80">&quot;실시간 감시&quot;</strong> 또는 &quot;실시간 보호&quot;를 일시 중지합니다</> },
+      { text: <>설치 파일을 다시 더블클릭하여 설치합니다</> },
+      { text: <>설치가 끝나면 <strong className="text-amber-200/80">실시간 감시를 다시 켜주세요</strong></> },
+    ],
+    extraTip: 'V3: 트레이 아이콘 우클릭 → 실시간 검사 일시 중지\n알약: 트레이 아이콘 우클릭 → 실시간 감시 해제',
+  },
+  {
+    id: 'no-response',
+    icon: '😶',
+    label: '아무 반응이 없어요',
+    title: '더블클릭해도 아무 반응이 없을 때',
+    description: '설치 파일을 실행했는데 아무 창도 안 뜨는 경우예요.',
+    steps: [
+      { text: <>먼저 위의 <strong className="text-amber-200/80">&quot;백신 차단&quot;</strong> 해결법을 시도해보세요 (가장 흔한 원인!)</> },
+      { text: <>그래도 안 되면: 설치 파일 우클릭 → <strong className="text-amber-200/80">&quot;관리자 권한으로 실행&quot;</strong></> },
+      { text: <>여전히 안 되면: 설치 파일 우클릭 → &quot;속성&quot; → <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크 → 확인 후 다시 실행</> },
+    ],
+  },
+  {
+    id: 'school-pc',
+    icon: '🏫',
+    label: '학교 PC에서 안 돼요',
+    title: '학교 PC에서 설치가 안 될 때',
+    description: '학교 보안 정책으로 프로그램 설치가 제한된 경우예요.',
+    steps: [
+      { text: <>학교 IT 담당 선생님께 &quot;쌤핀&quot; 설치 허용을 요청해주세요</> },
+      { text: <>또는 개인 노트북에서 설치 후 사용하실 수 있어요</> },
+    ],
+    extraTip: '포터블(설치 없는) 버전도 준비 중이에요!',
+  },
+];
+
 export default function InstallGuide() {
+  const [openCase, setOpenCase] = useState<string | null>(null);
+
+  const toggleCase = (id: string) => {
+    setOpenCase((prev) => (prev === id ? null : id));
+  };
+
   return (
     <section className="bg-sp-bg py-24">
       <div className="mx-auto max-w-6xl px-6">
@@ -43,37 +115,78 @@ export default function InstallGuide() {
           ))}
         </div>
 
-        {/* 보안 경고 안내 */}
+        {/* 트러블슈팅 섹션 */}
         <FadeIn className="mt-10" delay={0.3}>
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-6">
-            <p className="font-medium text-amber-200">
-              Windows 보안 경고가 나타나면
+            <p className="text-lg font-semibold text-amber-200">
+              설치가 안 되시나요?
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-amber-200/70">
-              개인 개발 앱이라 아직 Microsoft 인증서가 없어요. 아래 방법 중 하나를 사용하세요.
+            <p className="mt-1.5 text-sm text-amber-200/70">
+              증상을 선택하면 해결 방법을 알려드려요!
             </p>
 
-            {/* 케이스 A: 일반 SmartScreen */}
-            <div className="mt-4 rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
-              <p className="text-xs font-semibold text-amber-300">
-                A. &quot;Microsoft Windows의 PC 보호&quot; 화면이 뜰 때
-              </p>
-              <p className="mt-1 text-xs text-amber-200/60">
-                &quot;추가 정보&quot; 클릭 → &quot;실행&quot; 클릭
-              </p>
+            {/* 증상 선택 버튼 그리드 */}
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {troubleshootCases.map((tc) => (
+                <button
+                  key={tc.id}
+                  type="button"
+                  onClick={() => toggleCase(tc.id)}
+                  className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-left text-sm font-medium transition-all ${
+                    openCase === tc.id
+                      ? 'border-amber-400/40 bg-amber-500/15 text-amber-200'
+                      : 'border-amber-500/15 bg-amber-500/5 text-amber-200/70 hover:border-amber-500/25 hover:bg-amber-500/10 hover:text-amber-200/90'
+                  }`}
+                >
+                  <span className="text-base">{tc.icon}</span>
+                  <span>{tc.label}</span>
+                </button>
+              ))}
             </div>
 
-            {/* 케이스 B: 스마트 앱 컨트롤 */}
-            <div className="mt-2 rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
-              <p className="text-xs font-semibold text-amber-300">
-                B. &quot;스마트 앱 컨트롤이 차단했습니다&quot; 화면이 뜰 때 (Windows 11)
-              </p>
-              <ol className="mt-1 space-y-0.5 text-xs text-amber-200/60">
-                <li>① 설치 파일을 우클릭 → &quot;속성&quot; 선택</li>
-                <li>② 하단 &quot;차단 해제&quot; 체크박스 체크 → 확인</li>
-                <li>③ 설치 파일 다시 실행</li>
-              </ol>
-            </div>
+            {/* 선택된 케이스 해결법 */}
+            {troubleshootCases.map((tc) => (
+              <div
+                key={tc.id}
+                className={`overflow-hidden transition-all duration-300 ${
+                  openCase === tc.id ? 'mt-4 max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+                }`}
+              >
+                <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
+                  <p className="text-sm font-semibold text-amber-300">
+                    {tc.icon} {tc.title}
+                  </p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-amber-200/60">
+                    {tc.description}
+                  </p>
+
+                  <ol className="mt-3 space-y-2">
+                    {tc.steps.map((step, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-xs text-amber-200/70">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">
+                          {i + 1}
+                        </span>
+                        <span className="pt-0.5">{step.text}</span>
+                      </li>
+                    ))}
+                  </ol>
+
+                  {tc.extraTip && (
+                    <div className="mt-3 rounded-md bg-amber-500/5 px-3 py-2">
+                      {tc.extraTip.split('\n').map((line, i) => (
+                        <p key={i} className="text-[0.7rem] text-amber-200/50">
+                          💡 {line}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <p className="mt-4 text-xs text-amber-200/40">
+              코드 서명 인증서를 준비 중이며, 곧 경고 없이 설치하실 수 있게 됩니다.
+            </p>
           </div>
         </FadeIn>
       </div>
