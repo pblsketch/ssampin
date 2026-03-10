@@ -12,6 +12,7 @@ import { Memo } from './items/Memo';
 import { StudentRecords } from './items/StudentRecords';
 import { TodoWidget } from './items/TodoWidget';
 import { BookmarksWidget } from './items/Bookmarks';
+import { DDayCounter } from './items/DDayCounter';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -184,6 +185,22 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: TodoWidget,
     navigateTo: 'todo',
     navigateLabel: '할 일 전체 보기',
+  },
+
+  // ─── D-Day 카운터 ───
+  {
+    id: 'dday-counter',
+    name: 'D-Day 카운터',
+    icon: '🎯',
+    description: '중요한 날까지 남은 일수를 확인합니다',
+    category: 'info',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: DDayCounter,
   },
 
   // ─── 즐겨찾기 카테고리 ───

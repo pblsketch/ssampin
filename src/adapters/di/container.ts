@@ -20,6 +20,7 @@ import type { ICalendarSyncRepository } from '@domain/repositories/ICalendarSync
 import type { ISeatConstraintsRepository } from '@domain/repositories/ISeatConstraintsRepository';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 import type { IBookmarkRepository } from '@domain/repositories/IBookmarkRepository';
+import type { IDDayRepository } from '@domain/repositories/IDDayRepository';
 import type { IAnalyticsPort } from '@domain/ports/IAnalyticsPort';
 import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepository';
 import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
@@ -48,6 +49,7 @@ import { GoogleCalendarSyncRepository } from '@adapters/repositories/GoogleCalen
 import { JsonSeatConstraintsRepository } from '@adapters/repositories/JsonSeatConstraintsRepository';
 import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeachingClassRepository';
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
+import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentRepository';
 
 import { AuthenticateGoogle } from '@usecases/calendar/AuthenticateGoogle';
@@ -105,6 +107,9 @@ export const teachingClassRepository: ITeachingClassRepository =
 
 export const bookmarkRepository: IBookmarkRepository =
   new JsonBookmarkRepository(storage);
+
+export const ddayRepository: IDDayRepository =
+  new JsonDDayRepository(storage);
 
 export const neisPort: INeisPort = new NeisApiClient();
 

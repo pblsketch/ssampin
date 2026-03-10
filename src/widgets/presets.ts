@@ -5,13 +5,13 @@ import type { PresetKey } from './types';
  * 첫 방문 시 자동 적용
  */
 export const WIDGET_PRESETS: Record<PresetKey, readonly string[]> = {
-  'elementary-homeroom': ['class-timetable', 'seating', 'meal', 'events', 'memo', 'student-records', 'todo'],
-  'elementary-subject': ['class-timetable', 'today-class', 'meal', 'events', 'memo', 'todo'],
-  'middle-homeroom': ['weekly-timetable', 'today-class', 'seating', 'today-progress', 'meal', 'events', 'memo', 'student-records', 'todo'],
-  'middle-subject': ['weekly-timetable', 'today-class', 'today-progress', 'meal', 'events', 'memo', 'todo'],
-  'high-homeroom': ['weekly-timetable', 'today-class', 'seating', 'today-progress', 'meal', 'events', 'memo', 'student-records', 'todo'],
-  'high-subject': ['weekly-timetable', 'today-class', 'today-progress', 'meal', 'events', 'memo', 'todo'],
-  'admin': ['weekly-timetable', 'today-class', 'meal', 'events', 'todo'],
+  'elementary-homeroom': ['class-timetable', 'seating', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'todo'],
+  'elementary-subject': ['class-timetable', 'today-class', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
+  'middle-homeroom': ['weekly-timetable', 'today-class', 'seating', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'todo'],
+  'middle-subject': ['weekly-timetable', 'today-class', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
+  'high-homeroom': ['weekly-timetable', 'today-class', 'seating', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'todo'],
+  'high-subject': ['weekly-timetable', 'today-class', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
+  'admin': ['weekly-timetable', 'today-class', 'meal', 'events', 'dday-counter', 'todo'],
 };
 
 /**
