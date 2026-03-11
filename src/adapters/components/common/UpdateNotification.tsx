@@ -46,33 +46,43 @@ function ChangeBadge({ type }: { type: ChangeType }) {
   );
 }
 
-async function fetchReleaseNotes(version: string): Promise<VersionNote | null> {
-  try {
-    const res = await fetch(
-      'https://raw.githubusercontent.com/pblsketch/ssampin/main/public/release-notes.json',
-      { signal: AbortSignal.timeout(5000) },
-    );
-    if (res.ok) {
-      const data: ReleaseNotesData = await res.json();
-      const found = data.versions.find((v) => v.version === version);
-      if (found) return found;
+async function fetchReleaseNotesSince(currentVersion: string, targetVersion: string): Promise<VersionNote[]> {
+  const fetchData = async (): Promise<ReleaseNotesData | null> => {
+    try {
+      const res = await fetch(
+        'https://raw.githubusercontent.com/pblsketch/ssampin/main/public/release-notes.json',
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (res.ok) return await res.json();
+    } catch {
+      // GitHub fetch failed
     }
-  } catch {
-    // GitHub fetch failed — try local fallback
-  }
-
-  try {
-    const res = await fetch('/release-notes.json');
-    if (res.ok) {
-      const data: ReleaseNotesData = await res.json();
-      return data.versions.find((v) => v.version === version) ?? null;
+    try {
+      const res = await fetch('/release-notes.json');
+      if (res.ok) return await res.json();
+    } catch {
+      // local fallback also failed
     }
-  } catch {
-    // local fallback also failed
-  }
+    return null;
+  };
 
-  return null;
+  const data = await fetchData();
+  if (!data) return [];
+
+  const compare = (a: string, b: string) => {
+    const pa = a.split('.').map(Number);
+    const pb = b.split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+    }
+    return 0;
+  };
+
+  return data.versions
+    .filter((v) => compare(v.version, currentVersion) > 0 && compare(v.version, targetVersion) <= 0)
+    .sort((a, b) => compare(b.version, a.version));
 }
+
 
 export function UpdateNotification() {
   const { track } = useAnalytics();
@@ -81,7 +91,7 @@ export function UpdateNotification() {
   const [progress, setProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [dismissed, setDismissed] = useState(false);
-  const [releaseNote, setReleaseNote] = useState<VersionNote | null>(null);
+  const [releaseNotes, setReleaseNotes] = useState<VersionNote[]>([]);
   const [noteLoading, setNoteLoading] = useState(false);
 
   // Electron update events
@@ -124,9 +134,10 @@ export function UpdateNotification() {
     let cancelled = false;
     setNoteLoading(true);
 
-    fetchReleaseNotes(info.version).then((note) => {
+    const currentVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+    fetchReleaseNotesSince(currentVersion, info.version).then((notes) => {
       if (!cancelled) {
-        setReleaseNote(note);
+        setReleaseNotes(notes);
         setNoteLoading(false);
       }
     });
@@ -179,8 +190,8 @@ export function UpdateNotification() {
                     <h2 className="text-sp-text text-base font-bold leading-tight">
                       쌤핀 v{info.version} 업데이트
                     </h2>
-                    {releaseNote?.date && (
-                      <p className="text-sp-muted text-xs mt-0.5">{releaseNote.date}</p>
+                    {releaseNotes[0]?.date && (
+                      <p className="text-sp-muted text-xs mt-0.5">{releaseNotes[0].date}</p>
                     )}
                   </div>
                 </div>
@@ -194,9 +205,9 @@ export function UpdateNotification() {
               </div>
 
               {/* Highlights */}
-              {releaseNote?.highlights && (
+              {releaseNotes[0]?.highlights && (
                 <p className="text-sp-text/80 text-sm leading-relaxed">
-                  {releaseNote.highlights}
+                  {releaseNotes[0].highlights}
                 </p>
               )}
             </div>
@@ -209,22 +220,37 @@ export function UpdateNotification() {
                   변경사항 불러오는 중...
                 </div>
               </div>
-            ) : releaseNote && releaseNote.changes.length > 0 ? (
-              <div className="px-6 pb-4">
-                <p className="text-sp-muted text-xs font-medium mb-3">이런 점이 바뀌었어요!</p>
-                <div className="space-y-2.5">
-                  {releaseNote.changes.map((c, i) => (
-                    <div key={i} className="flex items-start gap-2.5">
-                      <ChangeBadge type={c.type} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sp-text text-sm leading-snug">{c.title}</p>
-                        {c.description && (
-                          <p className="text-sp-muted text-xs leading-relaxed mt-0.5">{c.description}</p>
+            ) : releaseNotes.length > 0 ? (
+              <div className="px-6 pb-4 max-h-[40vh] overflow-y-auto">
+                {releaseNotes.map((note, vi) => (
+                  <div key={note.version}>
+                    {releaseNotes.length > 1 && (
+                      <div className={`flex items-center gap-2 ${vi > 0 ? 'mt-4 pt-3 border-t border-sp-border/30' : ''} mb-2.5`}>
+                        <span className="text-sp-accent text-xs font-bold">v{note.version}</span>
+                        <span className="text-sp-muted text-[10px]">{note.date}</span>
+                        {vi > 0 && note.highlights && (
+                          <span className="text-sp-muted text-[10px] truncate flex-1">— {note.highlights}</span>
                         )}
                       </div>
+                    )}
+                    {vi === 0 && (
+                      <p className="text-sp-muted text-xs font-medium mb-3">이런 점이 바뀌었어요!</p>
+                    )}
+                    <div className="space-y-2.5">
+                      {note.changes.map((c, i) => (
+                        <div key={i} className="flex items-start gap-2.5">
+                          <ChangeBadge type={c.type} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sp-text text-sm leading-snug">{c.title}</p>
+                            {c.description && (
+                              <p className="text-sp-muted text-xs leading-relaxed mt-0.5">{c.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="px-6 pb-4">
