@@ -270,6 +270,8 @@ serve(async (req: Request) => {
     const formData = await req.formData();
     const assignmentId = formData.get('assignmentId') as string;
     const studentId = formData.get('studentId') as string | null;
+    const studentGrade = (formData.get('studentGrade') as string | null) ?? '';
+    const studentClass = (formData.get('studentClass') as string | null) ?? '';
     const studentNumber = parseInt(formData.get('studentNumber') as string, 10);
     const studentName = formData.get('studentName') as string;
     const file = formData.get('file') as File | null;
@@ -310,11 +312,13 @@ serve(async (req: Request) => {
       return errorResponse('마감되었습니다', 403);
     }
 
-    // 4. 재제출 체크
+    // 4. 재제출 체크 (학년+반+번호로 고유 식별)
     const { data: existingSubmission } = await supabase
       .from('submissions')
       .select('id, drive_file_id')
       .eq('assignment_id', assignmentId)
+      .eq('student_grade', studentGrade)
+      .eq('student_class', studentClass)
       .eq('student_number', studentNumber)
       .single();
 
@@ -352,7 +356,8 @@ serve(async (req: Request) => {
 
       // 8. Google Drive 업로드 (401 시 토큰 재갱신 후 1회 재시도)
       const paddedNumber = String(studentNumber).padStart(2, '0');
-      const driveFileName = `${paddedNumber}_${studentName}_${file.name}`;
+      const gradeClassPrefix = studentGrade && studentClass ? `${studentGrade}-${studentClass}_` : '';
+      const driveFileName = `${gradeClassPrefix}${paddedNumber}_${studentName}_${file.name}`;
       const mimeType = file.type || 'application/octet-stream';
 
       const doDriveUpload = async (token: string): Promise<string> => {
@@ -389,13 +394,15 @@ serve(async (req: Request) => {
       }
     }
 
-    // 9. submissions upsert (assignment_id + student_number 기준)
+    // 9. submissions upsert (assignment_id + student_grade + student_class + student_number 기준)
     const { error: upsertError } = await supabase
       .from('submissions')
       .upsert(
         {
           assignment_id: assignmentId,
           student_id: studentId || null,
+          student_grade: studentGrade,
+          student_class: studentClass,
           student_number: studentNumber,
           student_name: studentName,
           submitted_at: new Date().toISOString(),
@@ -405,7 +412,7 @@ serve(async (req: Request) => {
           text_content: textContent || null,
           is_late: isLate,
         },
-        { onConflict: 'assignment_id,student_number' },
+        { onConflict: 'assignment_id,student_grade,student_class,student_number' },
       );
 
     if (upsertError) {

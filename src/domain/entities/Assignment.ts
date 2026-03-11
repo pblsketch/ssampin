@@ -54,6 +54,10 @@ export interface Submission {
   readonly assignmentId: string;
   /** 학생 ID (로컬 학생 데이터 연결용, 없을 수 있음) */
   readonly studentId?: string;
+  /** 학년 */
+  readonly studentGrade?: string;
+  /** 반 */
+  readonly studentClass?: string;
   /** 출석번호 */
   readonly studentNumber: number;
   readonly studentName: string;

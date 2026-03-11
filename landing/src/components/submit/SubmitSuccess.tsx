@@ -3,6 +3,8 @@
 import type { AssignmentPublic } from './submitApi';
 
 interface SubmittedInfo {
+  grade: string;
+  class: string;
   number: number;
   name: string;
   fileName: string | null;
@@ -30,7 +32,7 @@ export function SubmitSuccess({ assignment, submittedInfo, onResubmit }: SubmitS
           </div>
           <div>
             <p className="text-xs text-sp-muted mb-0.5">이름</p>
-            <p className="text-sp-text">{submittedInfo.number}번 {submittedInfo.name}</p>
+            <p className="text-sp-text">{submittedInfo.grade}학년 {submittedInfo.class}반 {submittedInfo.number}번 {submittedInfo.name}</p>
           </div>
           {submittedInfo.fileName && (
             <div>

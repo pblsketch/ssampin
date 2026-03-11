@@ -8,6 +8,8 @@ export interface AssignmentPublic {
   title: string;
   description?: string;
   deadline: string;
+  targetType: 'class' | 'teaching';
+  targetName: string;
   submitType: SubmitType;
   fileTypeRestriction: 'all' | 'image' | 'document';
   allowLate: boolean;
@@ -43,6 +45,8 @@ export interface SubmitResult {
 
 export async function submitAssignment(data: {
   assignmentId: string;
+  studentGrade: string;
+  studentClass: string;
   studentNumber: number;
   studentName: string;
   file?: File;
@@ -50,6 +54,8 @@ export async function submitAssignment(data: {
 }): Promise<SubmitResult> {
   const formData = new FormData();
   formData.append('assignmentId', data.assignmentId);
+  formData.append('studentGrade', data.studentGrade);
+  formData.append('studentClass', data.studentClass);
   formData.append('studentNumber', String(data.studentNumber));
   formData.append('studentName', data.studentName);
   if (data.file) {

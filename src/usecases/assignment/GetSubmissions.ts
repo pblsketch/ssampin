@@ -8,6 +8,8 @@ export interface SubmissionDetail {
   readonly studentId: string;
   readonly studentNumber: number;
   readonly studentName: string;
+  readonly studentGrade?: string;
+  readonly studentClass?: string;
   readonly status: SubmissionStatus;
   readonly submission?: Submission;
 }
@@ -48,6 +50,8 @@ export class GetSubmissions {
         studentId: student.id,
         studentNumber: student.number,
         studentName: student.name,
+        studentGrade: submission?.studentGrade,
+        studentClass: submission?.studentClass,
         status: getSubmissionStatus(hasSubmitted, isLate),
         submission,
       };

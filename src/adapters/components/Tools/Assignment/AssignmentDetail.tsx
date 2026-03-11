@@ -99,6 +99,9 @@ function SubmissionRow({ detail, onViewText }: { detail: SubmissionDetail; onVie
 
   return (
     <div className="flex items-center px-5 py-3 hover:bg-sp-surface/50 transition-colors">
+      {(detail.studentGrade || detail.studentClass) && (
+        <span className="text-sp-muted/70 text-xs w-16">{detail.studentGrade}-{detail.studentClass}</span>
+      )}
       <span className="text-sp-muted text-sm w-12">{detail.studentNumber}번</span>
       <span className="text-sp-text font-medium text-sm w-20">{detail.studentName}</span>
       <span className="mx-3">{config.icon}</span>
@@ -210,7 +213,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
     const ws = wb.addWorksheet('제출 현황');
 
     // 헤더
-    const headerRow = ws.addRow(['번호', '이름', '상태', '제출일시', '파일명', '텍스트 내용']);
+    const headerRow = ws.addRow(['학년', '반', '번호', '이름', '상태', '제출일시', '파일명', '텍스트 내용']);
     headerRow.eachCell((cell) => {
       cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
@@ -224,6 +227,8 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
         ? new Date(detail.submission.submittedAt).toLocaleString('ko-KR')
         : '';
       ws.addRow([
+        detail.studentGrade ?? '',
+        detail.studentClass ?? '',
         detail.studentNumber,
         detail.studentName,
         statusLabel[detail.status],
@@ -234,15 +239,17 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
     }
 
     // 열 너비
-    ws.getColumn(1).width = 8;
-    ws.getColumn(2).width = 12;
-    ws.getColumn(3).width = 10;
-    ws.getColumn(4).width = 20;
-    ws.getColumn(5).width = 25;
-    ws.getColumn(6).width = 50;
+    ws.getColumn(1).width = 8;   // 학년
+    ws.getColumn(2).width = 8;   // 반
+    ws.getColumn(3).width = 8;   // 번호
+    ws.getColumn(4).width = 12;  // 이름
+    ws.getColumn(5).width = 10;  // 상태
+    ws.getColumn(6).width = 20;  // 제출일시
+    ws.getColumn(7).width = 25;  // 파일명
+    ws.getColumn(8).width = 50;  // 텍스트 내용
 
     // 텍스트 내용 열 줄바꿈
-    ws.getColumn(6).alignment = { wrapText: true, vertical: 'top' };
+    ws.getColumn(8).alignment = { wrapText: true, vertical: 'top' };
 
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

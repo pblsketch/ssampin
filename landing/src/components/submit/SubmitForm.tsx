@@ -26,6 +26,8 @@ const FILE_TYPE_LABELS: Record<string, string> = {
 
 export function SubmitForm({ assignment }: SubmitFormProps) {
   const [view, setView] = useState<ViewState>('form');
+  const [studentGrade, setStudentGrade] = useState('');
+  const [studentClass, setStudentClass] = useState('');
   const [studentNumber, setStudentNumber] = useState('');
   const [studentName, setStudentName] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -35,6 +37,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   const [remainingTime, setRemainingTime] = useState('');
   const [textContent, setTextContent] = useState('');
   const [submittedInfo, setSubmittedInfo] = useState<{
+    grade: string;
+    class: string;
     number: number;
     name: string;
     fileName: string | null;
@@ -86,9 +90,13 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
       return;
     }
 
-    const found = assignment.students.find((s) => s.number === num);
-    if (found) {
-      setStudentName(found.name);
+    const matches = assignment.students.filter((s) => s.number === num);
+    if (matches.length === 1) {
+      setStudentName(matches[0].name);
+      setNameWarning(false);
+    } else if (matches.length > 1) {
+      // 번호가 같은 학생이 여러 명 (수업반) → 이름 직접 입력
+      setStudentName('');
       setNameWarning(false);
     } else {
       setStudentName('');
@@ -130,6 +138,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
     try {
       const result = await submitAssignment({
         assignmentId: assignment.id,
+        studentGrade: studentGrade.trim(),
+        studentClass: studentClass.trim(),
         studentNumber: num,
         studentName,
         file: hasFile ? file : undefined,
@@ -139,6 +149,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
       if (result.success) {
         const now = new Date();
         setSubmittedInfo({
+          grade: studentGrade.trim(),
+          class: studentClass.trim(),
           number: num,
           name: studentName,
           fileName: hasFile ? file.name : null,
@@ -180,7 +192,7 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
 
   const deadline = new Date(assignment.deadline);
   const deadlineText = `${deadline.getFullYear()}년 ${deadline.getMonth() + 1}월 ${deadline.getDate()}일 ${String(deadline.getHours()).padStart(2, '0')}:${String(deadline.getMinutes()).padStart(2, '0')}`;
-  const canSubmit = studentNumber && studentName && !isSubmitting && (file || textContent.trim());
+  const canSubmit = studentGrade.trim() && studentClass.trim() && studentNumber && studentName && !isSubmitting && (file || textContent.trim());
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -207,19 +219,45 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
         </div>
       )}
 
-      {/* Student number */}
+      {/* Student grade / class / number — 한 줄 */}
       <div className="mb-4">
-        <label htmlFor="student-number" className="block text-sm font-medium text-sp-text mb-1.5">번호</label>
-        <input
-          id="student-number"
-          type="number"
-          inputMode="numeric"
-          value={studentNumber}
-          onChange={(e) => setStudentNumber(e.target.value)}
-          placeholder="출석 번호"
-          min={1}
-          className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg"
-        />
+        <label className="block text-sm font-medium text-sp-text mb-1.5">학년 / 반 / 번호</label>
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <input
+              id="student-grade"
+              type="text"
+              inputMode="numeric"
+              value={studentGrade}
+              onChange={(e) => setStudentGrade(e.target.value)}
+              placeholder="학년"
+              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
+            />
+          </div>
+          <div className="flex-1">
+            <input
+              id="student-class"
+              type="text"
+              inputMode="numeric"
+              value={studentClass}
+              onChange={(e) => setStudentClass(e.target.value)}
+              placeholder="반"
+              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
+            />
+          </div>
+          <div className="flex-1">
+            <input
+              id="student-number"
+              type="number"
+              inputMode="numeric"
+              value={studentNumber}
+              onChange={(e) => setStudentNumber(e.target.value)}
+              placeholder="번호"
+              min={1}
+              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Student name */}

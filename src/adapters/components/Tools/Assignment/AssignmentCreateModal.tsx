@@ -158,7 +158,7 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
                   type="time"
                   value={deadlineTime}
                   onChange={(e) => setDeadlineTime(e.target.value)}
-                  className="w-32 px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
+                  className="w-40 px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
                 />
               </div>
             </div>
