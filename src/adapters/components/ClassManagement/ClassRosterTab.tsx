@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
+import { studentKey } from '@domain/entities/TeachingClass';
 import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
@@ -45,11 +46,28 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const cls = classes.find((c) => c.id === classId);
   const students = cls?.students ?? [];
 
+  const hasMixedGrades = useMemo(() => {
+    const withGrade = students.filter((s) => s.grade != null && s.classNum != null);
+    if (withGrade.length === 0) return false;
+    const first = withGrade[0];
+    return withGrade.some((s) => s.grade !== first!.grade || s.classNum !== first!.classNum);
+  }, [students]);
+
   /* ── 편집 모드 상태 ── */
   const [isEditing, setIsEditing] = useState(false);
   const [editStudents, setEditStudents] = useState<TeachingClassStudent[]>([]);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
+
+  const sortedStudents = useMemo(() => {
+    const list = isEditing ? editStudents : cls?.students ?? [];
+    if (!hasMixedGrades) return list;
+    return [...list].sort((a, b) => {
+      if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
+      if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
+      return a.number - b.number;
+    });
+  }, [isEditing, editStudents, cls?.students, hasMixedGrades]);
 
   /* ── 출석 상태 ── */
   const [date, setDate] = useState(todayString);
@@ -59,7 +77,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   /* ── 인라인 메모 편집 상태 ── */
-  const [editingMemoNumber, setEditingMemoNumber] = useState<number | null>(null);
+  const [editingMemoKey, setEditingMemoKey] = useState<string | null>(null);
   const [editingMemoValue, setEditingMemoValue] = useState('');
   const memoInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,17 +87,21 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     (d: string, p: number) => {
       const existing = getAttendanceRecord(classId, d, p);
       if (existing) {
-        const map = new Map(existing.students.map((s) => [s.number, s.status]));
+        const map = new Map(existing.students.map((s) => [studentKey(s), s.status]));
         setLocalAttendance(
           students.map((s) => ({
             number: s.number,
-            status: map.get(s.number) ?? 'present',
+            grade: s.grade,
+            classNum: s.classNum,
+            status: map.get(studentKey(s)) ?? 'present',
           })),
         );
       } else {
         setLocalAttendance(
           students.map((s) => ({
             number: s.number,
+            grade: s.grade,
+            classNum: s.classNum,
             status: 'present' as AttendanceStatus,
           })),
         );
@@ -114,10 +136,10 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     [date, loadRecord],
   );
 
-  const toggleStatus = useCallback((studentNumber: number) => {
+  const toggleStatus = useCallback((key: string) => {
     setLocalAttendance((prev) =>
       prev.map((s) =>
-        s.number === studentNumber
+        studentKey(s) === key
           ? { ...s, status: STATUS_CYCLE[s.status] }
           : s,
       ),
@@ -209,48 +231,79 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     });
   }, []);
 
+  const updateStudentGrade = useCallback((index: number, grade: number | undefined) => {
+    setEditStudents((prev) => {
+      const next = [...prev];
+      const existing = next[index];
+      if (existing) next[index] = { ...existing, grade };
+      return next;
+    });
+  }, []);
+
+  const updateStudentClassNum = useCallback((index: number, classNum: number | undefined) => {
+    setEditStudents((prev) => {
+      const next = [...prev];
+      const existing = next[index];
+      if (existing) next[index] = { ...existing, classNum };
+      return next;
+    });
+  }, []);
+
   const handlePasteImport = useCallback(() => {
     const lines = pasteText.trim().split('\n').filter((line) => line.trim());
     if (lines.length === 0) return;
 
     const parsed: TeachingClassStudent[] = lines.map((line, idx) => {
       const parts = line.split('\t');
-      if (parts.length >= 2 && parts[0] !== undefined && parts[1] !== undefined) {
-        const num = parseInt(parts[0].trim(), 10);
-        const name = parts[1].trim();
+      // 4열: 학년 반 번호 이름
+      if (parts.length >= 4) {
+        const grade = parseInt(parts[0]!.trim(), 10);
+        const classNum = parseInt(parts[1]!.trim(), 10);
+        const num = parseInt(parts[2]!.trim(), 10);
+        const name = parts[3]!.trim();
+        return {
+          number: isNaN(num) ? idx + 1 : num,
+          name,
+          grade: isNaN(grade) ? undefined : grade,
+          classNum: isNaN(classNum) ? undefined : classNum,
+        };
+      }
+      // 2열: 번호 이름
+      if (parts.length >= 2) {
+        const num = parseInt(parts[0]!.trim(), 10);
+        const name = parts[1]!.trim();
         return { number: isNaN(num) ? idx + 1 : num, name };
       }
+      // 1열: 이름만
       return { number: idx + 1, name: line.trim() };
     });
 
     setEditStudents(parsed);
     setShowPasteModal(false);
     setPasteText('');
-    if (!isEditing) {
-      setIsEditing(true);
-    }
+    if (!isEditing) setIsEditing(true);
   }, [pasteText, isEditing]);
 
   /* ──────────────────────── 인라인 메모 저장 ──────────────────────── */
 
-  const startMemoEdit = useCallback((studentNumber: number, currentMemo: string) => {
-    setEditingMemoNumber(studentNumber);
+  const startMemoEdit = useCallback((key: string, currentMemo: string) => {
+    setEditingMemoKey(key);
     setEditingMemoValue(currentMemo);
     // focus will be handled via useEffect-like ref callback
     setTimeout(() => memoInputRef.current?.focus(), 0);
   }, []);
 
   const saveMemo = useCallback(async () => {
-    if (editingMemoNumber === null || !cls) return;
+    if (editingMemoKey === null || !cls) return;
     const updatedStudents = cls.students.map((s) =>
-      s.number === editingMemoNumber
+      studentKey(s) === editingMemoKey
         ? { ...s, memo: editingMemoValue.trim() || undefined }
         : s,
     );
     await updateClass({ ...cls, students: updatedStudents });
-    setEditingMemoNumber(null);
+    setEditingMemoKey(null);
     setEditingMemoValue('');
-  }, [editingMemoNumber, editingMemoValue, cls, updateClass]);
+  }, [editingMemoKey, editingMemoValue, cls, updateClass]);
 
   const handleMemoKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -259,7 +312,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         void saveMemo();
       }
       if (e.key === 'Escape') {
-        setEditingMemoNumber(null);
+        setEditingMemoKey(null);
         setEditingMemoValue('');
       }
     },
@@ -276,7 +329,11 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     );
   }
 
-  const displayStudents = isEditing ? editStudents : cls.students;
+  const displayStudents = sortedStudents;
+
+  const gridCols = hasMixedGrades
+    ? (isEditing ? 'grid-cols-[4.5rem_3rem_1fr_1fr_8rem_2.5rem]' : 'grid-cols-[4.5rem_3rem_1fr_1fr_8rem]')
+    : (isEditing ? 'grid-cols-[3rem_1fr_1fr_8rem_2.5rem]' : 'grid-cols-[3rem_1fr_1fr_8rem]');
 
   return (
     <div className="space-y-4">
@@ -374,12 +431,9 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       <div className="bg-sp-card border border-sp-border rounded-xl overflow-hidden">
         {/* 테이블 헤더 */}
         <div
-          className={`grid items-center px-4 py-2.5 bg-sp-bg/50 text-xs font-medium text-sp-muted ${
-            isEditing
-              ? 'grid-cols-[3rem_1fr_1fr_8rem_2.5rem]'
-              : 'grid-cols-[3rem_1fr_1fr_8rem]'
-          }`}
+          className={`grid items-center px-4 py-2.5 bg-sp-bg/50 text-xs font-medium text-sp-muted ${gridCols}`}
         >
+          {hasMixedGrades && <span>소속</span>}
           <span>번호</span>
           <span>이름</span>
           <span>메모</span>
@@ -390,19 +444,46 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         {/* 학생 행 */}
         <div className="divide-y divide-sp-border/50">
           {displayStudents.map((student, idx) => {
-            const attendance = localAttendance.find((s) => s.number === student.number);
+            const attendance = localAttendance.find((s) => studentKey(s) === studentKey(student));
             const status = attendance?.status ?? 'present';
             const config = STATUS_CONFIG[status];
 
             return (
               <div
-                key={`${student.number}-${idx}`}
-                className={`grid items-center px-4 py-2 hover:bg-white/[0.02] transition-colors ${
-                  isEditing
-                    ? 'grid-cols-[3rem_1fr_1fr_8rem_2.5rem]'
-                    : 'grid-cols-[3rem_1fr_1fr_8rem]'
-                }`}
+                key={`${studentKey(student)}-${idx}`}
+                className={`grid items-center px-4 py-2 hover:bg-white/[0.02] transition-colors ${gridCols}`}
               >
+                {/* 소속 (학년-반, 혼합 학급일 때만) */}
+                {hasMixedGrades && (
+                  isEditing ? (
+                    <div className="flex gap-1 pr-1">
+                      <input
+                        type="number"
+                        value={student.grade ?? ''}
+                        onChange={(e) => updateStudentGrade(idx, e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        className="w-8 bg-sp-bg border border-sp-border rounded px-1 py-1 text-xs text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                        placeholder="학년"
+                        min={1}
+                        max={6}
+                      />
+                      <span className="text-sp-muted text-xs self-center">-</span>
+                      <input
+                        type="number"
+                        value={student.classNum ?? ''}
+                        onChange={(e) => updateStudentClassNum(idx, e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        className="w-8 bg-sp-bg border border-sp-border rounded px-1 py-1 text-xs text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                        placeholder="반"
+                        min={1}
+                        max={30}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-xs text-sp-muted">
+                      {student.grade != null && student.classNum != null ? `${student.grade}-${student.classNum}` : ''}
+                    </span>
+                  )
+                )}
+
                 {/* 번호 */}
                 <span className="text-sm text-sp-muted">{student.number}</span>
 
@@ -432,7 +513,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                       placeholder="메모 입력"
                     />
                   </div>
-                ) : editingMemoNumber === student.number ? (
+                ) : editingMemoKey === studentKey(student) ? (
                   <div className="pr-2">
                     <input
                       ref={memoInputRef}
@@ -447,7 +528,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                   </div>
                 ) : (
                   <button
-                    onClick={() => startMemoEdit(student.number, student.memo ?? '')}
+                    onClick={() => startMemoEdit(studentKey(student), student.memo ?? '')}
                     className="text-left text-sm truncate pr-2 py-1 rounded hover:bg-white/[0.04] transition-colors"
                   >
                     {student.memo ? (
@@ -462,7 +543,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 {attendanceInitialized ? (
                   <div className="flex justify-center">
                     <button
-                      onClick={() => toggleStatus(student.number)}
+                      onClick={() => toggleStatus(studentKey(student))}
                       className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs
                                  font-medium cursor-pointer transition-colors ${config.badge}
                                  hover:opacity-80`}
@@ -565,12 +646,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
             <h3 className="text-base font-bold text-sp-text mb-2">붙여넣기로 입력</h3>
             <p className="text-xs text-sp-muted mb-4">
               엑셀이나 한글에서 복사한 명렬표를 붙여넣으세요.<br />
-              &quot;번호{'\t'}이름&quot; 또는 &quot;이름&quot; 형식을 지원합니다.
+              &quot;학년{'\t'}반{'\t'}번호{'\t'}이름&quot; · &quot;번호{'\t'}이름&quot; · &quot;이름&quot; 형식을 지원합니다.
             </p>
             <textarea
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
-              placeholder={'1\t김민수\n2\t이영희\n3\t박철수'}
+              placeholder={'1\t2\t5\t김민수\n1\t2\t12\t이영희\n2\t3\t5\t박철수'}
               rows={10}
               className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent resize-none font-mono"
             />

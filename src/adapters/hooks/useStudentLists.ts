@@ -51,7 +51,7 @@ export function useStudentLists(): StudentListOption[] {
           type: 'teaching',
           name: `${tc.name} (${tc.subject})`,
           students: tc.students.map((s) => ({
-            id: `tc-${tc.id}-${s.number}`,
+            id: `tc-${tc.id}-${s.grade ?? 0}-${s.classNum ?? 0}-${s.number}`,
             number: s.number,
             name: s.name,
           })),
