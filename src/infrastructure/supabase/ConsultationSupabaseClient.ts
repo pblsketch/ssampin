@@ -163,18 +163,32 @@ export class ConsultationSupabaseClient {
       status: string;
     }> = [];
 
-    for (const d of params.dates) {
-      let current = parseTime(d.startTime);
-      const end = parseTime(d.endTime);
-      while (current + params.slotMinutes <= end) {
+    if (params.type === 'student') {
+      // 학생 상담: 프리셋 1개 = 슬롯 1개 (시간 분할 없음)
+      for (const d of params.dates) {
         slots.push({
           schedule_id: params.id,
           date: d.date,
-          start_time: formatTime(current),
-          end_time: formatTime(current + params.slotMinutes),
+          start_time: d.startTime,
+          end_time: d.endTime,
           status: 'available',
         });
-        current += params.slotMinutes;
+      }
+    } else {
+      // 학부모 상담: slotMinutes 단위로 분할
+      for (const d of params.dates) {
+        let current = parseTime(d.startTime);
+        const end = parseTime(d.endTime);
+        while (current + params.slotMinutes <= end) {
+          slots.push({
+            schedule_id: params.id,
+            date: d.date,
+            start_time: formatTime(current),
+            end_time: formatTime(current + params.slotMinutes),
+            status: 'available',
+          });
+          current += params.slotMinutes;
+        }
       }
     }
 

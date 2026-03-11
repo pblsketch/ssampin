@@ -223,10 +223,11 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
       if (!d.date || !d.startTime || !d.endTime) return { ...d, count: 0 };
       const start = parseTimeToMinutes(d.startTime);
       const end = parseTimeToMinutes(d.endTime);
-      const count = start < end ? Math.floor((end - start) / slotMinutes) : 0;
+      // 학생 상담: 프리셋 1개 = 슬롯 1개
+      const count = start < end ? (type === 'student' ? 1 : Math.floor((end - start) / slotMinutes)) : 0;
       return { ...d, count };
     });
-  }, [dates, slotMinutes]);
+  }, [dates, slotMinutes, type]);
 
   const totalSlots = slotPreview.reduce((sum, d) => sum + d.count, 0);
 
@@ -357,8 +358,8 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
             )}
           </div>
 
-          {/* 시간 단위 */}
-          <div>
+          {/* 시간 단위 (학부모 상담만) */}
+          {type !== 'student' && <div>
             <label className="text-xs font-medium text-sp-muted mb-1.5 block">슬롯 단위</label>
             <div className="flex flex-wrap gap-2">
               {SLOT_PRESETS.map((mins) => (
@@ -404,7 +405,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                 <span className="text-xs text-sp-muted">분 (5~180)</span>
               </div>
             )}
-          </div>
+          </div>}
 
           {/* 상담 날짜 */}
           <div>
@@ -572,7 +573,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                   <span className={totalSlots > 0 ? 'text-sp-text font-medium' : 'text-amber-400'}>
                     {totalSlots}슬롯
                   </span>
-                  {' '}({slotMinutes}분 간격)
+                  {type !== 'student' && ` (${slotMinutes}분 간격)`}
                 </span>
               </div>
             )}
