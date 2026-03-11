@@ -81,17 +81,28 @@ function computeBreakPresets(periodTimes: readonly PeriodTime[]): BreakPreset[] 
     }
   }
 
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const endMins = parseTimeToMinutes(sorted[i]!.end);
-    const nextStartMins = parseTimeToMinutes(sorted[i + 1]!.start);
-    if (nextStartMins <= endMins) continue;
-    const isLunch = i === longestGapIdx && longestGap >= 30;
+  for (let i = 0; i < sorted.length; i++) {
+    // 수업 시간
     presets.push({
-      id: isLunch ? 'lunch' : `break-${sorted[i]!.period}`,
-      label: isLunch ? '점심 시간' : `${sorted[i]!.period}교시 후`,
-      startTime: sorted[i]!.end,
-      endTime: sorted[i + 1]!.start,
+      id: `period-${sorted[i]!.period}`,
+      label: `${sorted[i]!.period}교시`,
+      startTime: sorted[i]!.start,
+      endTime: sorted[i]!.end,
     });
+
+    // 쉬는 시간 (다음 교시가 있는 경우)
+    if (i < sorted.length - 1) {
+      const endMins = parseTimeToMinutes(sorted[i]!.end);
+      const nextStartMins = parseTimeToMinutes(sorted[i + 1]!.start);
+      if (nextStartMins <= endMins) continue;
+      const isLunch = i === longestGapIdx && longestGap >= 30;
+      presets.push({
+        id: isLunch ? 'lunch' : `break-${sorted[i]!.period}`,
+        label: isLunch ? '점심 시간' : `${sorted[i]!.period}교시 후 쉬는 시간`,
+        startTime: sorted[i]!.end,
+        endTime: sorted[i + 1]!.start,
+      });
+    }
   }
 
   // 종례 후
