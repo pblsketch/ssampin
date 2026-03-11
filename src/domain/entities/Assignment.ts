@@ -47,6 +47,8 @@ export interface Assignment {
   readonly allowResubmit: boolean;
   /** 학생 제출 페이지 공유 URL */
   readonly shareUrl: string;
+  /** 축약된 공유 URL (숏링크) */
+  readonly shortUrl?: string;
   /** 교사 전용 관리 키 */
   readonly adminKey: string;
   /** 생성일시 (ISO 8601) */

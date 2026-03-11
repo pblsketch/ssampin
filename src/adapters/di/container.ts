@@ -36,6 +36,7 @@ import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarAp
 import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnalyticsAdapter';
 import { GoogleDriveClient } from '@infrastructure/google/GoogleDriveClient';
 import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
+import { ShortLinkClient } from '@infrastructure/supabase/ShortLinkClient';
 
 import { JsonScheduleRepository } from '@adapters/repositories/JsonScheduleRepository';
 import { JsonSeatingRepository } from '@adapters/repositories/JsonSeatingRepository';
@@ -166,6 +167,10 @@ export const assignmentSupabaseClient = new AssignmentSupabaseClient();
 
 export const assignmentServicePort: IAssignmentServicePort =
   assignmentSupabaseClient;
+
+// === 숏링크 ===
+
+export const shortLinkClient = new ShortLinkClient();
 
 // GoogleDriveClient는 토큰 getter가 필요 → 인증 후 lazy 초기화
 let _driveClient: GoogleDriveClient | null = null;

@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { useStudentLists } from '@adapters/hooks/useStudentLists';
 import type { FileTypeRestriction } from '@domain/valueObjects/FileTypeRestriction';
 import type { SubmitType } from '@domain/entities/Assignment';
 import type { StudentListOption } from '@adapters/hooks/useStudentLists';
 import { DriveFolderInput } from './DriveFolderInput';
+import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
+import { shortLinkClient } from '@adapters/di/container';
 
 interface AssignmentCreateModalProps {
   onClose: () => void;
@@ -40,7 +42,38 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
   const [fileType, setFileType] = useState<FileTypeRestriction>('all');
   const [allowLate, setAllowLate] = useState(true);
   const [allowResubmit, setAllowResubmit] = useState(true);
+  const [customLinkCode, setCustomLinkCode] = useState('');
+  const [linkCodeError, setLinkCodeError] = useState<string | null>(null);
+  const [isCheckingCode, setIsCheckingCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 커스텀 코드 실시간 검증 (디바운스 300ms)
+  useEffect(() => {
+    if (!customLinkCode) {
+      setLinkCodeError(null);
+      return;
+    }
+
+    const validation = validateCustomCode(customLinkCode);
+    if (!validation.valid) {
+      setLinkCodeError(validation.error ?? null);
+      return;
+    }
+
+    setIsCheckingCode(true);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const available = await shortLinkClient.isCodeAvailable(customLinkCode);
+          setLinkCodeError(available ? null : '이미 사용 중인 링크입니다');
+        } catch {
+          setLinkCodeError(null); // 네트워크 에러 시 무시
+        }
+        setIsCheckingCode(false);
+      })();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [customLinkCode]);
 
   // Auto-fill folder name when title changes
   const autoFolderName = useMemo(() => {
@@ -77,6 +110,7 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
         fileTypeRestriction: fileType,
         allowLate,
         allowResubmit,
+        customLinkCode: customLinkCode.trim() || undefined,
       });
       onCreated(assignment.id);
     } catch (err) {
@@ -281,7 +315,7 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
               </div>
 
               {/* Allow resubmit */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <label className="text-sm text-sp-text">재제출 허용</label>
                 <button
                   onClick={() => setAllowResubmit(!allowResubmit)}
@@ -297,6 +331,34 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
                     }`}
                   />
                 </button>
+              </div>
+
+              {/* Custom short link */}
+              <div>
+                <label className="text-sm text-sp-text mb-1.5 block">
+                  커스텀 링크 <span className="text-sp-muted">(선택)</span>
+                </label>
+                <div className="flex items-center gap-0">
+                  <span className="px-3 py-2.5 bg-sp-surface/60 border border-r-0 border-sp-border rounded-l-lg text-sp-muted text-sm whitespace-nowrap">
+                    ssampin.vercel.app/s/
+                  </span>
+                  <input
+                    type="text"
+                    value={customLinkCode}
+                    onChange={(e) => setCustomLinkCode(e.target.value)}
+                    placeholder="예: 1-2수학과제"
+                    className="flex-1 px-3 py-2.5 bg-sp-surface border border-sp-border rounded-r-lg text-sp-text placeholder-sp-muted/50 text-sm focus:outline-none focus:border-sp-accent transition-colors"
+                  />
+                </div>
+                {linkCodeError && (
+                  <p className="text-xs text-red-400 mt-1">{linkCodeError}</p>
+                )}
+                {customLinkCode && !linkCodeError && !isCheckingCode && (
+                  <p className="text-xs text-green-400 mt-1">사용 가능</p>
+                )}
+                <p className="text-xs text-sp-muted/50 mt-1">
+                  비워두면 자동으로 생성됩니다. 한글, 영문, 숫자, -, _ 사용 가능
+                </p>
               </div>
             </div>
           </div>

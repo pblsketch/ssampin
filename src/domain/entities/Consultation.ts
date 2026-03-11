@@ -16,6 +16,7 @@ export interface ConsultationSchedule {
   readonly targetStudents: readonly { readonly number: number }[];
   readonly message?: string;
   readonly shareUrl: string;
+  readonly shortUrl?: string;
   readonly adminKey: string;
   readonly isArchived: boolean;
   readonly createdAt: string;

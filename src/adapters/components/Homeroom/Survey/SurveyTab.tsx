@@ -42,7 +42,7 @@ interface SurveyShareModalProps {
 function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const showToast = useToastStore((s) => s.show);
-  const url = survey.shareUrl ?? '';
+  const url = survey.shortUrl ?? survey.shareUrl ?? '';
 
   useEffect(() => {
     if (!canvasRef.current || !url) return;

@@ -17,6 +17,7 @@ export interface Survey {
   readonly questions: readonly SurveyQuestion[];
   readonly mode: SurveyMode;
   readonly shareUrl?: string;
+  readonly shortUrl?: string;
   readonly dueDate?: string;
   readonly categoryColor: string;
   readonly isArchived: boolean;

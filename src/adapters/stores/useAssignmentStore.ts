@@ -8,6 +8,8 @@ import {
   assignmentSupabaseClient,
   createAssignmentUseCases,
   authenticateGoogle,
+  shortLinkClient,
+  assignmentRepository,
 } from '@adapters/di/container';
 
 interface AssignmentState {
@@ -27,7 +29,7 @@ interface AssignmentState {
   loadAssignments: () => Promise<void>;
 
   // 과제 생성
-  createAssignment: (params: CreateAssignmentParams) => Promise<Assignment>;
+  createAssignment: (params: CreateAssignmentParams & { customLinkCode?: string }) => Promise<Assignment>;
 
   // 과제 상세 + 제출 현황 로드
   loadAssignmentDetail: (assignmentId: string) => Promise<void>;
@@ -89,6 +91,7 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
     createAssignment: async (params) => {
       set({ isLoading: true, error: null });
       try {
+        const { customLinkCode, ...assignmentParams } = params;
         const useCases = createAssignmentUseCases(getAccessToken);
 
         // OAuth 토큰을 Supabase에 저장 (최초 1회 or 갱신)
@@ -110,11 +113,39 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
           }
         }
 
-        const assignment = await useCases.createAssignment.execute(params);
+        const assignment = await useCases.createAssignment.execute(assignmentParams);
+
+        // 숏링크 생성 (실패해도 과제 생성에는 영향 없음)
+        let finalAssignment = assignment;
+        try {
+          // 과제 마감일 + 90일을 만료일로 설정
+          const expiresAt = new Date(
+            new Date(assignment.deadline).getTime() + 90 * 24 * 60 * 60 * 1000,
+          ).toISOString();
+          const shortUrl = await shortLinkClient.createShortLink(
+            assignment.shareUrl,
+            customLinkCode || undefined,
+            expiresAt,
+          );
+          if (shortUrl !== assignment.shareUrl) {
+            finalAssignment = { ...assignment, shortUrl };
+            // 로컬 저장소에 shortUrl 반영
+            const data = await assignmentRepository.getAssignments();
+            const existing = data?.assignments ?? [];
+            await assignmentRepository.saveAssignments({
+              assignments: existing.map((a) =>
+                a.id === assignment.id ? { ...a, shortUrl } : a,
+              ),
+            });
+          }
+        } catch {
+          // 숏링크 생성 실패는 무시 — 원본 URL로 동작
+        }
+
         // 목록 새로고침
         await get().loadAssignments();
         set({ isLoading: false });
-        return assignment;
+        return finalAssignment;
       } catch (err) {
         const message = (err as Error).message;
         const isGoogleError = message.includes('Google 계정') || message.includes('Drive API');

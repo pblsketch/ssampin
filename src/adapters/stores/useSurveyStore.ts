@@ -5,7 +5,7 @@ import type {
   SurveyLocalEntry,
   SurveysData,
 } from '@domain/entities/Survey';
-import { surveyRepository } from '@adapters/di/container';
+import { surveyRepository, shortLinkClient } from '@adapters/di/container';
 
 const SHARE_BASE_URL = 'https://ssampin.vercel.app/check';
 
@@ -45,12 +45,28 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
   createSurvey: async (params) => {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
+    const shareUrl = params.mode === 'student' ? `${SHARE_BASE_URL}/${id}` : undefined;
+
+    // 학생 모드일 때 숏링크 생성
+    let shortUrl: string | undefined;
+    if (shareUrl) {
+      try {
+        const expiresAt = params.dueDate
+          ? new Date(new Date(params.dueDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+          : undefined; // 기한 없으면 기본 90일
+        const result = await shortLinkClient.createShortLink(shareUrl, undefined, expiresAt);
+        if (result !== shareUrl) shortUrl = result;
+      } catch {
+        // 숏링크 생성 실패는 무시
+      }
+    }
 
     const survey: Survey = {
       ...params,
       id,
       createdAt,
-      shareUrl: params.mode === 'student' ? `${SHARE_BASE_URL}/${id}` : undefined,
+      shareUrl,
+      shortUrl,
       adminKey: params.mode === 'student' ? crypto.randomUUID().slice(0, 8) : undefined,
     };
 

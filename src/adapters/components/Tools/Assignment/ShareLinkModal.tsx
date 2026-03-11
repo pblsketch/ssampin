@@ -14,6 +14,9 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
+  // 숏링크가 있으면 우선 사용
+  const displayUrl = assignment.shortUrl ?? assignment.shareUrl;
+
   useEffect(() => {
     if (!isOpen) return;
     const canvas = canvasRef.current;
@@ -21,7 +24,7 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
 
     QRCode.toCanvas(
       canvas,
-      assignment.shareUrl,
+      displayUrl,
       {
         width: 200,
         margin: 2,
@@ -34,10 +37,10 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
         }
       },
     );
-  }, [isOpen, assignment.shareUrl]);
+  }, [isOpen, displayUrl]);
 
   async function handleCopyLink() {
-    await navigator.clipboard.writeText(assignment.shareUrl);
+    await navigator.clipboard.writeText(displayUrl);
     showToast('링크가 복사되었습니다', 'success');
   }
 
@@ -90,9 +93,15 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
             </div>
 
             {/* Share URL */}
-            <p className="text-sm text-sp-muted break-all text-center mb-6 px-4 select-all">
-              {assignment.shareUrl}
+            <p className="text-sm text-sp-text break-all text-center mb-1 px-4 select-all font-medium">
+              {displayUrl}
             </p>
+            {assignment.shortUrl && (
+              <p className="text-xs text-sp-muted/60 break-all text-center mb-6 px-4">
+                {assignment.shareUrl}
+              </p>
+            )}
+            {!assignment.shortUrl && <div className="mb-6" />}
 
             {/* Action buttons */}
             <div className="flex items-center gap-3 w-full justify-center">

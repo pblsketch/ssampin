@@ -3,7 +3,7 @@ import type {
   ConsultationSchedule,
   ConsultationsData,
 } from '@domain/entities/Consultation';
-import { consultationRepository } from '@adapters/di/container';
+import { consultationRepository, shortLinkClient } from '@adapters/di/container';
 
 const SHARE_BASE_URL = 'https://ssampin.vercel.app/booking';
 
@@ -13,7 +13,7 @@ interface ConsultationState {
 
   load: () => Promise<void>;
   createSchedule: (
-    params: Omit<ConsultationSchedule, 'id' | 'createdAt' | 'shareUrl' | 'adminKey' | 'isArchived'>,
+    params: Omit<ConsultationSchedule, 'id' | 'createdAt' | 'shareUrl' | 'shortUrl' | 'adminKey' | 'isArchived'>,
   ) => Promise<ConsultationSchedule>;
   deleteSchedule: (id: string) => Promise<void>;
   archiveSchedule: (id: string) => Promise<void>;
@@ -38,11 +38,27 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     const shareUrl = `${SHARE_BASE_URL}/${id}`;
     const createdAt = new Date().toISOString();
 
+    // 상담 날짜 중 가장 마지막 날짜 + 30일을 만료일로 설정
+    const lastDate = params.dates.length > 0
+      ? [...params.dates].sort((a, b) => b.date.localeCompare(a.date))[0]!.date
+      : createdAt.slice(0, 10);
+    const expiresAt = new Date(new Date(lastDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // 숏링크 생성 (실패해도 무시)
+    let shortUrl: string | undefined;
+    try {
+      const result = await shortLinkClient.createShortLink(shareUrl, undefined, expiresAt);
+      if (result !== shareUrl) shortUrl = result;
+    } catch {
+      // 숏링크 생성 실패는 무시
+    }
+
     const schedule: ConsultationSchedule = {
       ...params,
       id,
       adminKey,
       shareUrl,
+      shortUrl,
       createdAt,
       isArchived: false,
     };
