@@ -41,8 +41,7 @@ interface ConsultationShareModalProps {
 function ConsultationShareModal({ schedule, onClose }: ConsultationShareModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const showToast = useToastStore((s) => s.show);
-  const baseUrl = schedule.shortUrl ?? schedule.shareUrl;
-  const url = `${baseUrl}#key=${encodeURIComponent(schedule.adminKey)}`;
+  const url = schedule.shortUrl ?? schedule.shareUrl;
 
   useEffect(() => {
     if (!canvasRef.current || !url) return;
