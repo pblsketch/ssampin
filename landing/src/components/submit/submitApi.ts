@@ -14,7 +14,7 @@ export interface AssignmentPublic {
   fileTypeRestriction: 'all' | 'image' | 'document';
   allowLate: boolean;
   allowResubmit: boolean;
-  students: { number: number; name: string }[];
+  students: { number: number; name: string; grade?: number; classNum?: number }[];
 }
 
 export async function getAssignmentPublic(

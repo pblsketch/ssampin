@@ -81,7 +81,7 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
     return () => clearInterval(interval);
   }, [assignment.deadline, assignment.allowLate]);
 
-  // Student number auto-fill
+  // Student auto-fill: grade + class + number → name
   useEffect(() => {
     const num = parseInt(studentNumber, 10);
     if (isNaN(num)) {
@@ -90,19 +90,33 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
       return;
     }
 
-    const matches = assignment.students.filter((s) => s.number === num);
+    const gradeNum = parseInt(studentGrade, 10);
+    const classNum = parseInt(studentClass, 10);
+    const hasGradeClass = !isNaN(gradeNum) && !isNaN(classNum);
+
+    // 학년/반/번호 복합 매칭 우선
+    let matches = hasGradeClass
+      ? assignment.students.filter((s) =>
+          s.number === num && s.grade === gradeNum && s.classNum === classNum,
+        )
+      : [];
+
+    // 복합 매칭 결과 없으면 번호만으로 매칭 (담임반 등 grade 없는 경우)
+    if (matches.length === 0 && !hasGradeClass) {
+      matches = assignment.students.filter((s) => s.number === num);
+    }
+
     if (matches.length === 1) {
       setStudentName(matches[0].name);
       setNameWarning(false);
     } else if (matches.length > 1) {
-      // 번호가 같은 학생이 여러 명 (수업반) → 이름 직접 입력
       setStudentName('');
       setNameWarning(false);
     } else {
       setStudentName('');
-      setNameWarning(true);
+      setNameWarning(hasGradeClass || !assignment.students.some((s) => s.grade != null));
     }
-  }, [studentNumber, assignment.students]);
+  }, [studentGrade, studentClass, studentNumber, assignment.students]);
 
   const acceptAttr = FILE_TYPE_ACCEPT[assignment.fileTypeRestriction] ?? '*/*';
   const st = assignment.submitType ?? 'file'; // 기존 과제 호환: 기본값 'file'
@@ -269,8 +283,17 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
           value={studentName}
           onChange={(e) => {
             setStudentName(e.target.value);
-            const found = assignment.students.some((s) => s.name === e.target.value);
-            setNameWarning(!!e.target.value && !found);
+            const val = e.target.value;
+            if (!val) { setNameWarning(false); return; }
+            const gradeNum = parseInt(studentGrade, 10);
+            const classNum = parseInt(studentClass, 10);
+            const num = parseInt(studentNumber, 10);
+            const hasAll = !isNaN(gradeNum) && !isNaN(classNum) && !isNaN(num);
+            // 학년/반/번호가 모두 있으면 복합 매칭, 아니면 이름만
+            const found = hasAll
+              ? assignment.students.some((s) => s.name === val && s.grade === gradeNum && s.classNum === classNum && s.number === num)
+              : assignment.students.some((s) => s.name === val);
+            setNameWarning(!found);
           }}
           placeholder="이름을 입력하세요"
           className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg"

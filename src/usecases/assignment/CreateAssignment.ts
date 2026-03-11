@@ -50,6 +50,8 @@ export class CreateAssignment {
         id: s.id,
         number: s.number,
         name: s.name,
+        grade: s.grade,
+        classNum: s.classNum,
       })),
       driveFolderId: subFolder.id,
       driveRootFolderId: rootFolder.id,

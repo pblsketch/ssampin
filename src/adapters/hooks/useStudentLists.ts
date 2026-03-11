@@ -55,6 +55,8 @@ export function useStudentLists(): StudentListOption[] {
             id: `tc-${tc.id}-${s.grade ?? 0}-${s.classNum ?? 0}-${s.number}`,
             number: s.number,
             name: s.name,
+            grade: s.grade,
+            classNum: s.classNum,
           })),
         });
       }

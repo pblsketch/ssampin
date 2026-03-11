@@ -19,23 +19,36 @@ export class CopyMissingList {
       assignment.adminKey,
     );
 
-    // 제출한 학생 번호 Set
-    const submittedNumbers = new Set(
-      submissions.map((s) => s.studentNumber),
+    // 제출한 학생 복합키 Set (grade-class-number)
+    const submittedKeys = new Set(
+      submissions.map((s) => {
+        if (s.studentGrade && s.studentClass) {
+          return `${s.studentGrade}-${s.studentClass}-${s.studentNumber}`;
+        }
+        return String(s.studentNumber);
+      }),
     );
 
-    // 미제출 학생 필터
-    const missingStudents = assignment.target.students.filter(
-      (s) => !submittedNumbers.has(s.number),
-    );
+    // 미제출 학생 필터 (복합키 매칭)
+    const missingStudents = assignment.target.students.filter((s) => {
+      if (s.grade != null && s.classNum != null) {
+        return !submittedKeys.has(`${s.grade}-${s.classNum}-${s.number}`);
+      }
+      return !submittedKeys.has(String(s.number));
+    });
 
     if (missingStudents.length === 0) {
       return `[${assignment.title}] 모든 학생이 제출했습니다!`;
     }
 
-    // 미제출자 목록 텍스트 생성
+    // 미제출자 목록 텍스트 생성 (소속 정보 포함)
     const studentList = missingStudents
-      .map((s) => `${s.number}번 ${s.name}`)
+      .map((s) => {
+        const prefix = s.grade != null && s.classNum != null
+          ? `${s.grade}-${s.classNum} `
+          : '';
+        return `${prefix}${s.number}번 ${s.name}`;
+      })
       .join(', ');
 
     // 마감일 포맷 (한국어)

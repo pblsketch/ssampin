@@ -11,6 +11,8 @@ export interface CreateAssignmentServiceRequest {
     readonly id: string;
     readonly number: number;
     readonly name: string;
+    readonly grade?: number;
+    readonly classNum?: number;
   }>;
   readonly driveFolderId: string;
   readonly driveRootFolderId?: string;

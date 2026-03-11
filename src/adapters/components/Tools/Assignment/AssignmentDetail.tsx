@@ -99,8 +99,8 @@ function SubmissionRow({ detail, onViewText }: { detail: SubmissionDetail; onVie
 
   return (
     <div className="flex items-center px-5 py-3 hover:bg-sp-surface/50 transition-colors">
-      {(detail.studentGrade || detail.studentClass) && (
-        <span className="text-sp-muted/70 text-xs w-16">{detail.studentGrade}-{detail.studentClass}</span>
+      {detail.studentGrade && detail.studentClass && (
+        <span className="text-sp-muted/70 text-xs w-16 shrink-0">{detail.studentGrade}-{detail.studentClass}</span>
       )}
       <span className="text-sp-muted text-sm w-12">{detail.studentNumber}번</span>
       <span className="text-sp-text font-medium text-sm w-20">{detail.studentName}</span>

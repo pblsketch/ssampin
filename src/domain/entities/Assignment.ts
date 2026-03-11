@@ -3,6 +3,10 @@ export interface StudentInfo {
   /** 출석번호 */
   readonly number: number;
   readonly name: string;
+  /** 학년 (수업반: 서로 다른 소속 학생이 섞인 경우) */
+  readonly grade?: number;
+  /** 반 (수업반: 서로 다른 소속 학생이 섞인 경우) */
+  readonly classNum?: number;
 }
 
 export interface AssignmentTarget {

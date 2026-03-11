@@ -45,9 +45,9 @@ serve(async (req: Request) => {
       fileTypeRestriction: assignment.file_type_restriction,
       allowLate: assignment.allow_late,
       allowResubmit: assignment.allow_resubmit,
-      // student_list에서 number, name만 반환 (id 제외)
-      students: (assignment.student_list as Array<{ number: number; name: string }>).map(
-        (s) => ({ number: s.number, name: s.name }),
+      // student_list에서 number, name, grade, classNum 반환 (id 제외)
+      students: (assignment.student_list as Array<{ number: number; name: string; grade?: number; classNum?: number }>).map(
+        (s) => ({ number: s.number, name: s.name, grade: s.grade, classNum: s.classNum }),
       ),
     });
   } catch (err) {
