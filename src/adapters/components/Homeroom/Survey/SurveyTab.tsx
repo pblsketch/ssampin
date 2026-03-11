@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { surveySupabaseClient } from '@adapters/di/container';
+import { surveySupabaseClient, shortLinkClient } from '@adapters/di/container';
 import {
   getActiveSurveys,
   getArchivedSurveys,
@@ -42,7 +42,20 @@ interface SurveyShareModalProps {
 function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const showToast = useToastStore((s) => s.show);
-  const url = survey.shortUrl ?? survey.shareUrl ?? '';
+  const [url, setUrl] = useState(survey.shortUrl ?? survey.shareUrl ?? '');
+
+  // shortUrl이 없으면 조회/생성 시도
+  useEffect(() => {
+    if (survey.shortUrl || !survey.shareUrl) return;
+    let cancelled = false;
+    shortLinkClient.createShortLink(survey.shareUrl).then((result) => {
+      if (cancelled || result === survey.shareUrl) return;
+      setUrl(result);
+      // 스토어에도 반영하여 다음에는 즉시 표시
+      void useSurveyStore.getState().updateSurvey({ ...survey, shortUrl: result });
+    }).catch(() => { /* 네트워크 실패는 무시 — 기존 URL 유지 */ });
+    return () => { cancelled = true; };
+  }, [survey]);
 
   useEffect(() => {
     if (!canvasRef.current || !url) return;

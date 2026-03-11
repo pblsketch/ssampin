@@ -9,6 +9,7 @@ import type { ReadonlyModeProps } from '@adapters/components/Homeroom/shared/Stu
 import type { Survey, SurveyResponse } from '@domain/entities/Survey';
 import { getStudentResponseProgress } from '@domain/rules/surveyRules';
 import type { SurveySupabaseClient, SurveyResponsePublic } from '@infrastructure/supabase/SurveySupabaseClient';
+import { shortLinkClient } from '@adapters/di/container';
 
 /* ──────────────── Props ──────────────── */
 
@@ -294,7 +295,8 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
       {showShareModal && survey.shareUrl && (
         <ShareModal
           title={survey.title}
-          url={survey.shareUrl}
+          url={survey.shortUrl ?? survey.shareUrl}
+          survey={survey}
           onClose={() => setShowShareModal(false)}
         />
       )}
@@ -318,12 +320,26 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
 interface ShareModalProps {
   title: string;
   url: string;
+  survey: Survey;
   onClose: () => void;
 }
 
-function ShareModal({ title, url, onClose }: ShareModalProps) {
+function ShareModal({ title, url: initialUrl, survey, onClose }: ShareModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const showToast = useToastStore((s) => s.show);
+  const [url, setUrl] = useState(initialUrl);
+
+  // shortUrl이 없으면 조회/생성 시도
+  useEffect(() => {
+    if (survey.shortUrl || !survey.shareUrl) return;
+    let cancelled = false;
+    shortLinkClient.createShortLink(survey.shareUrl).then((result) => {
+      if (cancelled || result === survey.shareUrl) return;
+      setUrl(result);
+      void useSurveyStore.getState().updateSurvey({ ...survey, shortUrl: result });
+    }).catch(() => { /* 네트워크 실패는 무시 */ });
+    return () => { cancelled = true; };
+  }, [survey]);
 
   useEffect(() => {
     if (!canvasRef.current || !url) return;
