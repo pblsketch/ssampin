@@ -75,6 +75,9 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           return (a.name || '').localeCompare(b.name || '', 'ko');
         case 'number':
         default:
+          // 소속(학년→반) 순 → 번호 순
+          if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
+          if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
           return a.number - b.number;
       }
     });
@@ -287,22 +290,59 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     });
   }, []);
 
-  /* ── 학년/반 일괄 입력 ── */
-  const [bulkGrade, setBulkGrade] = useState('');
-  const [bulkClassNum, setBulkClassNum] = useState('');
+  /* ── 반별 인원 입력 ── */
+  const [bulkEntries, setBulkEntries] = useState<Array<{ grade: string; classNum: string; count: string }>>([
+    { grade: '', classNum: '', count: '' },
+  ]);
 
-  const applyBulkGrade = useCallback(() => {
-    const g = bulkGrade ? parseInt(bulkGrade, 10) : undefined;
-    const c = bulkClassNum ? parseInt(bulkClassNum, 10) : undefined;
-    if (g == null && c == null) return;
-    setEditStudents((prev) =>
-      prev.map((s) => ({
-        ...s,
-        ...(g != null ? { grade: g } : {}),
-        ...(c != null ? { classNum: c } : {}),
-      })),
-    );
-  }, [bulkGrade, bulkClassNum]);
+  const updateBulkEntry = useCallback((index: number, field: 'grade' | 'classNum' | 'count', value: string) => {
+    setBulkEntries((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index]!, [field]: value };
+      return next;
+    });
+  }, []);
+
+  const addBulkEntry = useCallback(() => {
+    setBulkEntries((prev) => {
+      // 마지막 항목의 학년을 복사
+      const last = prev[prev.length - 1];
+      return [...prev, { grade: last?.grade ?? '', classNum: '', count: '' }];
+    });
+  }, []);
+
+  const removeBulkEntry = useCallback((index: number) => {
+    setBulkEntries((prev) => prev.length > 1 ? prev.filter((_, i) => i !== index) : prev);
+  }, []);
+
+  const applyBulkEntries = useCallback(() => {
+    // 학년 → 반 순으로 정렬 후 생성
+    const sorted = [...bulkEntries]
+      .map((e) => ({ grade: parseInt(e.grade, 10), classNum: parseInt(e.classNum, 10), count: parseInt(e.count, 10) }))
+      .filter((e) => !isNaN(e.grade) && !isNaN(e.classNum) && !isNaN(e.count) && e.count > 0)
+      .sort((a, b) => a.grade - b.grade || a.classNum - b.classNum);
+    const students: TeachingClassStudent[] = [];
+    for (const entry of sorted) {
+      for (let i = 1; i <= entry.count; i++) {
+        students.push({ number: i, name: '', grade: entry.grade, classNum: entry.classNum });
+      }
+    }
+    if (students.length > 0) {
+      setEditStudents(students);
+    }
+  }, [bulkEntries]);
+
+  const bulkValid = bulkEntries.some((e) => {
+    const g = parseInt(e.grade, 10);
+    const c = parseInt(e.classNum, 10);
+    const n = parseInt(e.count, 10);
+    return !isNaN(g) && !isNaN(c) && !isNaN(n) && n > 0;
+  });
+
+  const bulkTotal = bulkEntries.reduce((sum, e) => {
+    const n = parseInt(e.count, 10);
+    return sum + (isNaN(n) ? 0 : n);
+  }, 0);
 
   const handlePasteImport = useCallback(() => {
     const lines = pasteText.trim().split('\n').filter((line) => line.trim());
@@ -512,41 +552,73 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         </div>
       </div>
 
-      {/* ── 학년/반 일괄 입력 (편집 모드) ── */}
+      {/* ── 반별 인원 입력 (편집 모드) ── */}
       {isEditing && (
-        <div className="flex items-center gap-3 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5">
-          <span className="text-xs text-sp-muted whitespace-nowrap">소속 일괄 입력</span>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              value={bulkGrade}
-              onChange={(e) => setBulkGrade(e.target.value)}
-              className="w-14 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
-              placeholder="학년"
-              min={1}
-              max={6}
-            />
-            <span className="text-xs text-sp-muted">학년</span>
-            <input
-              type="number"
-              value={bulkClassNum}
-              onChange={(e) => setBulkClassNum(e.target.value)}
-              className="w-14 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
-              placeholder="반"
-              min={1}
-              max={30}
-            />
-            <span className="text-xs text-sp-muted">반</span>
+        <div className="bg-sp-surface border border-sp-border rounded-xl px-4 py-3 space-y-2">
+          {bulkEntries.map((entry, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="number"
+                value={entry.grade}
+                onChange={(e) => updateBulkEntry(i, 'grade', e.target.value)}
+                className="w-14 bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                placeholder="학년"
+                min={1}
+                max={6}
+              />
+              <span className="text-xs text-sp-muted">학년</span>
+              <input
+                type="number"
+                value={entry.classNum}
+                onChange={(e) => updateBulkEntry(i, 'classNum', e.target.value)}
+                className="w-14 bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                placeholder="반"
+                min={1}
+                max={30}
+              />
+              <span className="text-xs text-sp-muted">반</span>
+              <input
+                type="number"
+                value={entry.count}
+                onChange={(e) => updateBulkEntry(i, 'count', e.target.value)}
+                className="w-14 bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                placeholder="인원"
+                min={1}
+              />
+              <span className="text-xs text-sp-muted">명</span>
+              {bulkEntries.length > 1 && (
+                <button
+                  onClick={() => removeBulkEntry(i)}
+                  className="p-1 text-sp-muted hover:text-red-400 rounded transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              )}
+              {i === bulkEntries.length - 1 && (
+                <button
+                  onClick={addBulkEntry}
+                  className="flex items-center gap-0.5 px-2 py-1 text-xs text-sp-accent hover:bg-sp-accent/10 rounded-lg transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm">add</span>
+                  반 추가
+                </button>
+              )}
+            </div>
+          ))}
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={applyBulkEntries}
+              disabled={!bulkValid}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs text-sp-accent bg-sp-accent/10 rounded-lg
+                         hover:bg-sp-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-sm">done_all</span>
+              명단 생성
+            </button>
+            {bulkTotal > 0 && (
+              <span className="text-xs text-sp-muted">총 {bulkTotal}명</span>
+            )}
           </div>
-          <button
-            onClick={applyBulkGrade}
-            disabled={!bulkGrade && !bulkClassNum}
-            className="flex items-center gap-1 px-3 py-1 text-xs text-sp-accent bg-sp-accent/10 rounded-lg
-                       hover:bg-sp-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-sm">done_all</span>
-            전체 적용
-          </button>
         </div>
       )}
 
