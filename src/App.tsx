@@ -4,7 +4,6 @@ import { EventPopup } from '@adapters/components/Dashboard/EventPopup';
 import { Dashboard } from '@adapters/components/Dashboard/Dashboard';
 import { Seating } from '@adapters/components/Seating/Seating';
 import { TimetablePage } from '@adapters/components/Timetable/TimetablePage';
-import { StudentRecords } from '@adapters/components/StudentRecords/StudentRecords';
 import { HomeroomPage } from '@adapters/components/Homeroom/HomeroomPage';
 import { Schedule } from '@adapters/components/Schedule/Schedule';
 import { Todo } from '@adapters/components/Todo/Todo';

@@ -10,7 +10,11 @@ interface ToolSurveyProps {
 
 type ViewMode = 'create' | 'surveying' | 'results';
 
-import type { SurveyResponse } from '@domain/entities/Survey';
+interface SurveyResponse {
+  id: string;
+  text: string;
+  submittedAt: number;
+}
 
 const MAX_LENGTH_OPTIONS = [50, 100, 200, 500] as const;
 
