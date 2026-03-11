@@ -2,11 +2,16 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import { consultationSupabaseClient } from '@adapters/di/container';
 import { decrypt } from '@domain/rules/cryptoUtils';
-import type { ConsultationSchedule } from '@domain/entities/Consultation';
+import {
+  buildConsultationEventTitle,
+  buildConsultationEventDescription,
+} from '@domain/rules/consultationCalendarRules';
+import type { ConsultationSchedule, ConsultationMethod } from '@domain/entities/Consultation';
 import type { SlotPublic, BookingPublic } from '@infrastructure/supabase/ConsultationSupabaseClient';
 import type { RecordPrefill } from '../HomeroomPage';
 
@@ -152,9 +157,19 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   const [decryptedInfoMap, setDecryptedInfoMap] = useState<Map<string, string>>(new Map());
   const [decryptedMemoMap, setDecryptedMemoMap] = useState<Map<string, string>>(new Map());
   const [showExport, setShowExport] = useState(false);
+  const [showAllUnbooked, setShowAllUnbooked] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showShareLink, setShowShareLink] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [addedToCalendarIds, setAddedToCalendarIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(`ssampin:consultation-cal:${schedule.id}`);
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const [addingCalendarId, setAddingCalendarId] = useState<string | null>(null);
   const stopPollingRef = useRef<(() => void) | null>(null);
 
   const nonVacant = useMemo(() => students.filter((s) => !s.isVacant), [students]);
@@ -238,6 +253,21 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     return slots.filter((s) => s.date === selectedDate);
   }, [slots, selectedDate]);
 
+  /* ── 오전/오후 그룹 ── */
+  const slotSections = useMemo(() => {
+    const morning: typeof filteredSlots = [];
+    const afternoon: typeof filteredSlots = [];
+    for (const slot of filteredSlots) {
+      const hour = parseInt(slot.startTime.slice(0, 2), 10);
+      if (hour < 12) morning.push(slot);
+      else afternoon.push(slot);
+    }
+    const sections: { label: string; slots: typeof filteredSlots }[] = [];
+    if (morning.length > 0) sections.push({ label: '오전', slots: morning });
+    if (afternoon.length > 0) sections.push({ label: '오후', slots: afternoon });
+    return sections;
+  }, [filteredSlots]);
+
   /* ── 학생 번호 → 이름 ── */
   function getStudentName(studentNumber: number): string {
     const s = nonVacant[studentNumber - 1];
@@ -247,6 +277,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   /* ── 진행률 ── */
   const totalSlots = slots.length;
   const bookedSlots = slots.filter((s) => s.status === 'booked').length;
+  const blockedSlots = slots.filter((s) => s.status === 'blocked').length;
   const percentage = totalSlots > 0 ? Math.round((bookedSlots / totalSlots) * 100) : 0;
 
   /* ── 미신청 학생 ── */
@@ -303,6 +334,55 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     await navigator.clipboard.writeText(schedule.shareUrl);
     showToast('링크가 복사되었습니다', 'success');
   }, [schedule.shareUrl, showToast]);
+
+  const handleAddToCalendar = useCallback(async (
+    booking: BookingPublic,
+    slot: SlotPublic,
+  ) => {
+    setAddingCalendarId(booking.id);
+    try {
+      const studentName = getStudentName(booking.studentNumber);
+      const raw = decryptedInfoMap.get(booking.id);
+      const parsed = raw ? parseBookerInfo(raw) : null;
+      const topic = decryptedMemoMap.get(booking.id);
+
+      const title = buildConsultationEventTitle(
+        booking.studentNumber,
+        studentName,
+        booking.method as ConsultationMethod,
+        schedule.type,
+        parsed?.relation,
+      );
+      const description = buildConsultationEventDescription({
+        method: booking.method as ConsultationMethod,
+        bookerName: parsed?.name,
+        bookerPhone: parsed?.contact,
+        topic,
+      });
+
+      await useEventsStore.getState().addEvent({
+        title,
+        date: slot.date,
+        category: 'class',
+        description,
+        time: `${slot.startTime} - ${slot.endTime}`,
+      });
+
+      const next = new Set(addedToCalendarIds);
+      next.add(booking.id);
+      setAddedToCalendarIds(next);
+      localStorage.setItem(
+        `ssampin:consultation-cal:${schedule.id}`,
+        JSON.stringify([...next]),
+      );
+      showToast('일정이 캘린더에 추가되었습니다', 'success');
+    } catch {
+      showToast('캘린더 추가에 실패했습니다', 'error');
+    } finally {
+      setAddingCalendarId(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decryptedInfoMap, decryptedMemoMap, addedToCalendarIds, schedule.id, showToast, nonVacant]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -368,7 +448,10 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
 
       {/* 요약 */}
       <div className="text-xs text-sp-muted mb-3 flex items-center gap-2 flex-wrap">
-        <span>{schedule.type === 'parent' ? '👨‍👩‍👧 학부모 상담' : '🙋 학생 상담'}</span>
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-xs">{schedule.type === 'parent' ? 'family_restroom' : 'school'}</span>
+          {schedule.type === 'parent' ? '학부모 상담' : '학생 상담'}
+        </span>
         <span>·</span>
         <span>{bookedSlots}/{totalSlots} 예약 ({percentage}%)</span>
         <span>·</span>
@@ -400,108 +483,207 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
         ))}
       </div>
 
+      {/* 예약 현황 진행 바 */}
+      {filteredSlots.length > 0 && (() => {
+        const dateBooked = filteredSlots.filter((s) => s.status === 'booked').length;
+        const dateBlocked = filteredSlots.filter((s) => s.status === 'blocked').length;
+        const dateTotal = filteredSlots.length;
+        const bookedPct = Math.round((dateBooked / dateTotal) * 100);
+        const blockedPct = Math.round((dateBlocked / dateTotal) * 100);
+        return (
+          <div className="mb-3">
+            <div className="flex items-center justify-between text-[10px] text-sp-muted mb-1">
+              <span>예약 현황</span>
+              <span className="text-sp-text font-medium">{dateBooked}/{dateTotal}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-sp-border/30 overflow-hidden flex" aria-label={`예약 ${dateBooked}명 / 전체 ${dateTotal}슬롯`}>
+              {bookedPct > 0 && (
+                <div
+                  className="bg-green-500/70 transition-all duration-500"
+                  style={{ width: `${bookedPct}%` }}
+                />
+              )}
+              {blockedPct > 0 && (
+                <div
+                  className="bg-red-500/50 transition-all duration-500"
+                  style={{ width: `${blockedPct}%` }}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 슬롯 리스트 */}
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-1.5">
-          {filteredSlots.map((slot) => {
-            const booking = bookings.find((b) => b.slotId === slot.id);
-            const isBooked = slot.status === 'booked';
-            const isBlocked = slot.status === 'blocked';
-            return (
-              <div
-                key={slot.id}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
-                  isBooked
-                    ? 'bg-green-500/10 border border-green-500/20'
-                    : isBlocked
-                      ? 'bg-red-500/10 border border-red-500/20'
-                      : 'bg-sp-surface border border-sp-border'
-                }`}
-              >
-                {/* 시간 */}
-                <span className="text-xs text-sp-muted font-mono w-12 shrink-0">
-                  {slot.startTime}
+        <div className="flex flex-col gap-2">
+          {slotSections.map((section, si) => (
+            <div key={section.label}>
+              {/* 섹션 헤더 */}
+              <div className={`flex items-center gap-2 px-1 mb-1.5 ${si > 0 ? 'mt-3' : ''}`}>
+                <span className="text-[10px] font-bold text-sp-muted uppercase tracking-widest">
+                  {section.label}
                 </span>
-
-                {/* 상태 아이콘 */}
-                <span className={`text-sm ${isBooked ? 'text-green-400' : isBlocked ? 'text-red-400' : 'text-sp-muted'}`}>
-                  {isBooked ? '✅' : isBlocked ? '🚫' : '⬜'}
+                <span className="text-[10px] text-sp-muted/50 bg-sp-surface rounded-full px-1.5 py-0.5">
+                  {section.slots.length}슬롯
                 </span>
-
-                {/* 내용 */}
-                <div className="flex-1 min-w-0">
-                  {isBooked && booking ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sp-text text-xs font-medium">
-                        {booking.studentNumber}번 {getStudentName(booking.studentNumber)}
-                      </span>
-                      {(() => {
-                        const raw = decryptedInfoMap.get(booking.id);
-                        if (!raw) return null;
-                        const parsed = parseBookerInfo(raw);
-                        if (parsed) {
-                          return (
-                            <>
-                              <span className="text-sp-muted text-xs">
-                                {parsed.relation} {parsed.name}
-                              </span>
-                              <span className="text-sp-muted text-xs flex items-center gap-0.5">
-                                <span className="material-symbols-outlined text-xs">call</span>
-                                {parsed.contact}
-                              </span>
-                            </>
-                          );
-                        }
-                        return <span className="text-sp-muted text-xs">({raw})</span>;
-                      })()}
-                      <span className="text-sp-muted text-xs flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-xs">
-                          {getMethodIcon(booking.method)}
-                        </span>
-                        {getMethodLabel(booking.method)}
-                      </span>
-                      {decryptedMemoMap.get(booking.id) && (
-                        <span className="text-sp-muted text-xs flex items-center gap-0.5" title={decryptedMemoMap.get(booking.id)}>
-                          <span className="material-symbols-outlined text-xs">chat</span>
-                          {decryptedMemoMap.get(booking.id)!.length > 15
-                            ? decryptedMemoMap.get(booking.id)!.slice(0, 15) + '…'
-                            : decryptedMemoMap.get(booking.id)}
-                        </span>
-                      )}
-                      {onWriteRecord && (
-                        <button
-                          onClick={() => {
-                            const student = nonVacant[booking.studentNumber - 1];
-                            if (!student) return;
-                            onWriteRecord({
-                              studentId: student.id,
-                              category: 'counseling',
-                              subcategory: schedule.type === 'parent' ? '학부모상담' : '학생상담',
-                              method: booking.method === 'video' ? 'online' : booking.method,
-                              date: slot.date,
-                            });
-                          }}
-                          className="ml-auto text-sp-accent hover:text-sp-accent/80 transition-colors flex items-center gap-0.5 shrink-0"
-                          title="상담 기록 작성"
-                        >
-                          <span className="material-symbols-outlined text-sm">edit_note</span>
-                          <span className="text-[11px]">기록</span>
-                        </button>
-                      )}
-                    </div>
-                  ) : isBlocked ? (
-                    <span className="text-red-400 text-xs">차단된 슬롯</span>
-                  ) : (
-                    <span className="text-sp-muted text-xs">빈 슬롯</span>
-                  )}
-                </div>
+                <div className="flex-1 h-px bg-sp-border/40" />
               </div>
-            );
-          })}
+
+              {/* 슬롯 목록 */}
+              <div className="flex flex-col gap-1.5">
+                {section.slots.map((slot) => {
+                  const booking = bookings.find((b) => b.slotId === slot.id);
+                  const isBooked = slot.status === 'booked';
+                  const isBlocked = slot.status === 'blocked';
+                  return (
+                    <div
+                      key={slot.id}
+                      className={`flex items-start gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                        isBooked
+                          ? 'bg-green-500/8 border border-green-500/20 border-l-2 border-l-green-500 shadow-sm'
+                          : isBlocked
+                            ? 'bg-sp-surface/40 border border-sp-border/30 opacity-60'
+                            : 'bg-transparent border border-dashed border-sp-border/60 hover:bg-sp-accent/5 hover:border-sp-accent/40'
+                      }`}
+                      {...(isBlocked ? { 'aria-disabled': 'true' } : {})}
+                    >
+                      {/* 시간 */}
+                      <div className="flex flex-col items-end shrink-0 w-14">
+                        <span className="text-xs font-semibold text-sp-text font-mono leading-none">
+                          {slot.startTime.slice(0, 5)}
+                        </span>
+                        <span className="text-[10px] text-sp-muted/70 font-mono leading-none mt-0.5">
+                          {slot.endTime.slice(0, 5)}
+                        </span>
+                      </div>
+
+                      {/* 상태 아이콘 */}
+                      <span className={`text-sm mt-0.5 ${isBooked ? 'text-green-400' : isBlocked ? 'text-red-400' : 'text-sp-border'}`}>
+                        <span className="material-symbols-outlined text-base">
+                          {isBooked ? 'check_circle' : isBlocked ? 'do_not_disturb_on' : 'radio_button_unchecked'}
+                        </span>
+                      </span>
+
+                      {/* 내용 */}
+                      <div className="flex-1 min-w-0">
+                        {isBooked && booking ? (
+                          <div>
+                            {/* 1줄: 학생 정보 + 액션 */}
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-500/15 text-green-400 border border-green-500/25">
+                                <span className="material-symbols-outlined text-xs">check_circle</span>
+                                예약됨
+                              </span>
+                              <span className="text-sp-text text-xs font-medium">
+                                {booking.studentNumber}번 {getStudentName(booking.studentNumber)}
+                              </span>
+                              {/* 액션 버튼들 */}
+                              <div className="ml-auto flex items-center gap-1 shrink-0">
+                                {addedToCalendarIds.has(booking.id) ? (
+                                  <span className="text-green-400 flex items-center gap-0.5 text-[11px]">
+                                    <span className="material-symbols-outlined text-sm">event_available</span>
+                                    추가됨
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => { void handleAddToCalendar(booking, slot); }}
+                                    disabled={addingCalendarId === booking.id}
+                                    className="text-sp-muted hover:text-sp-accent transition-colors flex items-center gap-0.5 disabled:opacity-50"
+                                    title="캘린더에 추가"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">
+                                      {addingCalendarId === booking.id ? 'hourglass_empty' : 'calendar_add_on'}
+                                    </span>
+                                    <span className="text-[11px]">캘린더</span>
+                                  </button>
+                                )}
+                                {onWriteRecord && (
+                                  <button
+                                    onClick={() => {
+                                      const student = nonVacant[booking.studentNumber - 1];
+                                      if (!student) return;
+                                      onWriteRecord({
+                                        studentId: student.id,
+                                        category: 'counseling',
+                                        subcategory: schedule.type === 'parent' ? '학부모상담' : '학생상담',
+                                        method: booking.method === 'video' ? 'online' : booking.method,
+                                        date: slot.date,
+                                      });
+                                    }}
+                                    className="text-sp-accent hover:text-sp-accent/80 transition-colors flex items-center gap-0.5"
+                                    title="상담 기록 작성"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">edit_note</span>
+                                    <span className="text-[11px]">기록</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            {/* 2줄: 보호자 정보 + 상담 방식 */}
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[11px] text-sp-muted">
+                              {(() => {
+                                const raw = decryptedInfoMap.get(booking.id);
+                                if (!raw) return null;
+                                const parsed = parseBookerInfo(raw);
+                                if (parsed) {
+                                  return (
+                                    <>
+                                      <span>{parsed.relation} {parsed.name}</span>
+                                      <span className="text-sp-border">·</span>
+                                      <span className="flex items-center gap-0.5">
+                                        <span className="material-symbols-outlined text-xs">call</span>
+                                        {parsed.contact}
+                                      </span>
+                                      <span className="text-sp-border">·</span>
+                                    </>
+                                  );
+                                }
+                                return <><span>({raw})</span><span className="text-sp-border">·</span></>;
+                              })()}
+                              <span className="flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-xs">
+                                  {getMethodIcon(booking.method)}
+                                </span>
+                                {getMethodLabel(booking.method)}
+                              </span>
+                              {decryptedMemoMap.get(booking.id) && (
+                                <>
+                                  <span className="text-sp-border">·</span>
+                                  <span className="flex items-center gap-0.5" title={decryptedMemoMap.get(booking.id)}>
+                                    <span className="material-symbols-outlined text-xs">chat</span>
+                                    {decryptedMemoMap.get(booking.id)!.length > 15
+                                      ? decryptedMemoMap.get(booking.id)!.slice(0, 15) + '…'
+                                      : decryptedMemoMap.get(booking.id)}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ) : isBlocked ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-red-400 text-xs">차단된 슬롯</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-sp-muted/70">예약 가능</span>
+                            <span className="ml-auto text-[10px] text-sp-accent/50 font-medium">
+                              {schedule.slotMinutes}분
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
           {filteredSlots.length === 0 && (
-            <div className="py-8 text-center text-sm text-sp-muted">
-              이 날짜에 슬롯이 없습니다
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-sp-muted">
+              <span className="material-symbols-outlined text-3xl">event_busy</span>
+              <p className="text-sm font-medium">이 날짜에 슬롯이 없습니다</p>
             </div>
           )}
         </div>
@@ -510,16 +692,42 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
       {/* 하단: 통계 + 미신청 학생 */}
       <div className="mt-3 pt-3 border-t border-sp-border">
         <div className="flex flex-wrap gap-3 text-xs text-sp-muted mb-2">
-          <span>✅ 예약: <strong className="text-green-400">{bookedSlots}명</strong></span>
-          <span>⬜ 빈 슬롯: <strong>{totalSlots - bookedSlots}</strong></span>
+          <span className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-xs text-green-400">event_available</span>
+            예약: <strong className="text-green-400">{bookedSlots}명</strong>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-xs">schedule</span>
+            빈 슬롯: <strong>{totalSlots - bookedSlots - blockedSlots}</strong>
+          </span>
         </div>
         {unbookedStudents.length > 0 && (
-          <div className="text-xs text-amber-400 flex items-start gap-1">
-            <span>⚠️</span>
-            <span>
-              미신청: {unbookedStudents.slice(0, 10).map((s) => `${s.number}번 ${s.name}`).join(', ')}
-              {unbookedStudents.length > 10 && ` 외 ${unbookedStudents.length - 10}명`}
-            </span>
+          <div className="rounded-lg bg-sp-card border border-sp-border p-2.5">
+            <button
+              type="button"
+              onClick={() => setShowAllUnbooked((v) => !v)}
+              className="w-full flex items-center justify-between text-xs text-orange-400 hover:text-orange-300 transition-colors"
+            >
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="material-symbols-outlined text-xs">warning</span>
+                미신청: {unbookedStudents.length}명
+              </span>
+              <span className="text-[10px] text-sp-muted">
+                {showAllUnbooked ? '접기 ▲' : '펼치기 ▼'}
+              </span>
+            </button>
+            {showAllUnbooked && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {unbookedStudents.map((s) => (
+                  <span
+                    key={s.number}
+                    className="inline-flex items-center px-2 py-0.5 rounded bg-sp-border/60 text-sp-text text-[11px]"
+                  >
+                    {s.number}번 {s.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
