@@ -72,7 +72,7 @@ function EventItem({ event, categories }: EventItemProps) {
       <div className="flex-1 min-w-0">
         <p className="text-base font-medium text-sp-text truncate">
           {event.title}{' '}
-          <span className="text-sp-muted text-sm font-normal">[{categoryInfo.name}]</span>
+          <span className="text-sp-muted text-sm font-normal max-w-[100px] truncate inline-block align-bottom">[{categoryInfo.name}]</span>
         </p>
         {event.time && (
           <div className="flex items-center gap-1.5 mt-1 text-sm text-sp-muted">

@@ -78,7 +78,7 @@ function EventItem({ event, today, categories }: EventItemProps) {
       )}
 
       {/* 카테고리 라벨 */}
-      <span className="shrink-0 rounded px-1.5 py-0.5 text-xs text-sp-muted bg-sp-surface">
+      <span className="shrink-0 rounded px-1.5 py-0.5 text-xs text-sp-muted bg-sp-surface max-w-[80px] truncate">
         {categoryInfo.name}
       </span>
     </div>

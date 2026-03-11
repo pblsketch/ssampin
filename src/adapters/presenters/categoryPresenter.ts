@@ -30,6 +30,21 @@ const FALLBACK_COLORS: CategoryColors = {
 };
 
 /**
+ * 구글 캘린더 ID 패턴 감지
+ * 예: "cba4qi5i0qup1r4f01qkulh778@group.calendar.google.com"
+ *     "xxxx@group.calendar"
+ *     "someone@gmail.com"
+ */
+function isGoogleCalendarId(id: string): boolean {
+  return (
+    id.includes('@group.calendar') ||
+    id.includes('@gmail.com') ||
+    id.includes('calendar.google.com') ||
+    (id.includes('@') && id.length > 30)
+  );
+}
+
+/**
  * 카테고리 ID로 CategoryItem 조회
  */
 export function getCategoryInfo(
@@ -39,7 +54,11 @@ export function getCategoryInfo(
   return (
     categories.find((c) => c.id === categoryId) ??
     DEFAULT_CATEGORIES.find((c) => c.id === categoryId) ??
-    { id: categoryId, name: categoryId, color: 'gray' }
+    {
+      id: categoryId,
+      name: isGoogleCalendarId(categoryId) ? '구글 캘린더' : categoryId,
+      color: isGoogleCalendarId(categoryId) ? 'blue' : 'gray',
+    }
   );
 }
 

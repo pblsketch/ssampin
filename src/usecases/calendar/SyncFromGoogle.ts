@@ -57,6 +57,20 @@ export class SyncFromGoogle {
       // 이벤트 처리
       const evData = await this.eventsRepo.getEvents();
       const events: SchoolEvent[] = [...(evData?.events ?? [])];
+      const categories = [...(evData?.categories ?? [])];
+
+      // categoryId가 기존 카테고리에 없으면 자동 생성
+      if (!categories.some((c) => c.id === categoryId)) {
+        const mappings = await this.syncRepo.getMappings();
+        const mapping = mappings.find((m) => m.googleCalendarId === calendarId);
+        const calendarName = mapping?.googleCalendarName ?? '구글 캘린더';
+
+        categories.push({
+          id: categoryId,
+          name: calendarName,
+          color: 'blue',
+        });
+      }
 
       // 삭제 처리
       for (const deletedId of result.deletedEventIds) {
@@ -87,7 +101,7 @@ export class SyncFromGoogle {
         }
       }
 
-      await this.eventsRepo.saveEvents({ events, categories: evData?.categories });
+      await this.eventsRepo.saveEvents({ events, categories });
 
       // syncToken 저장
       if (result.nextSyncToken) {
