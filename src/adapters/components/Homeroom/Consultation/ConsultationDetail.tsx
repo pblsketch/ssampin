@@ -62,7 +62,7 @@ interface ConsultationShareModalProps {
 function ConsultationShareModal({ schedule, onClose, onCopyLink }: ConsultationShareModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const showToast = useToastStore((s) => s.show);
-  const url = schedule.shareUrl;
+  const url = `${schedule.shareUrl}#key=${encodeURIComponent(schedule.adminKey)}`;
 
   useEffect(() => {
     if (!canvasRef.current || !url) return;
@@ -332,9 +332,10 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   }, [deleteSchedule, schedule.id, showToast, onBack]);
 
   const handleCopyLink = useCallback(async () => {
-    await navigator.clipboard.writeText(schedule.shareUrl);
+    const fullUrl = `${schedule.shareUrl}#key=${encodeURIComponent(schedule.adminKey)}`;
+    await navigator.clipboard.writeText(fullUrl);
     showToast('링크가 복사되었습니다', 'success');
-  }, [schedule.shareUrl, showToast]);
+  }, [schedule.shareUrl, schedule.adminKey, showToast]);
 
   const handleAddToCalendar = useCallback(async (
     booking: BookingPublic,
