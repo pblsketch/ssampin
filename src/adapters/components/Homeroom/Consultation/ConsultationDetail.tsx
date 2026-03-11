@@ -38,6 +38,14 @@ function getMethodLabel(m: string): string {
   }
 }
 
+function parseBookerInfo(raw: string): { relation: string; name: string; contact: string } | null {
+  const parts = raw.split('|');
+  if (parts.length >= 3) {
+    return { relation: parts[0]!, name: parts[1]!, contact: parts[2]! };
+  }
+  return null;
+}
+
 /* ──────────────── ConsultationShareModal ──────────────── */
 
 interface ConsultationShareModalProps {
@@ -142,6 +150,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [decryptedInfoMap, setDecryptedInfoMap] = useState<Map<string, string>>(new Map());
+  const [decryptedMemoMap, setDecryptedMemoMap] = useState<Map<string, string>>(new Map());
   const [showExport, setShowExport] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showShareLink, setShowShareLink] = useState(false);
@@ -190,18 +199,28 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   /* ── 예약자 정보 복호화 ── */
   useEffect(() => {
     const decryptAll = async () => {
-      const map = new Map<string, string>();
+      const infoMap = new Map<string, string>();
+      const memoMap = new Map<string, string>();
       for (const b of bookings) {
         if (b.bookerInfoEncrypted) {
           try {
             const info = await decrypt(b.bookerInfoEncrypted, schedule.adminKey);
-            map.set(b.id, info);
+            infoMap.set(b.id, info);
           } catch {
-            map.set(b.id, '(정보 없음)');
+            infoMap.set(b.id, '(정보 없음)');
+          }
+        }
+        if (b.memoEncrypted) {
+          try {
+            const memo = await decrypt(b.memoEncrypted, schedule.adminKey);
+            memoMap.set(b.id, memo);
+          } catch {
+            // ignore
           }
         }
       }
-      setDecryptedInfoMap(map);
+      setDecryptedInfoMap(infoMap);
+      setDecryptedMemoMap(memoMap);
     };
     void decryptAll();
   }, [bookings, schedule.adminKey]);
@@ -248,6 +267,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
       { key: 'studentName', label: '학생명' },
       { key: 'bookerInfo', label: '예약자 정보' },
       { key: 'method', label: '상담 방식' },
+      { key: 'topic', label: '상담 주제' },
     ];
     const rows = slots.map((slot) => {
       const booking = bookings.find((b) => b.slotId === slot.id);
@@ -259,11 +279,12 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
         studentName: booking ? getStudentName(booking.studentNumber) : '-',
         bookerInfo: booking ? (decryptedInfoMap.get(booking.id) ?? '-') : '-',
         method: booking ? getMethodLabel(booking.method) : '-',
+        topic: booking ? (decryptedMemoMap.get(booking.id) ?? '-') : '-',
       };
     });
     return { columns, rows };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, bookings, decryptedInfoMap, nonVacant]);
+  }, [slots, bookings, decryptedInfoMap, decryptedMemoMap, nonVacant]);
 
   /* ── 메뉴 핸들러 ── */
   const handleArchive = useCallback(async () => {
@@ -414,17 +435,39 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                       <span className="text-sp-text text-xs font-medium">
                         {booking.studentNumber}번 {getStudentName(booking.studentNumber)}
                       </span>
-                      {decryptedInfoMap.get(booking.id) && (
-                        <span className="text-sp-muted text-xs">
-                          ({decryptedInfoMap.get(booking.id)})
-                        </span>
-                      )}
+                      {(() => {
+                        const raw = decryptedInfoMap.get(booking.id);
+                        if (!raw) return null;
+                        const parsed = parseBookerInfo(raw);
+                        if (parsed) {
+                          return (
+                            <>
+                              <span className="text-sp-muted text-xs">
+                                {parsed.relation} {parsed.name}
+                              </span>
+                              <span className="text-sp-muted text-xs flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-xs">call</span>
+                                {parsed.contact}
+                              </span>
+                            </>
+                          );
+                        }
+                        return <span className="text-sp-muted text-xs">({raw})</span>;
+                      })()}
                       <span className="text-sp-muted text-xs flex items-center gap-0.5">
                         <span className="material-symbols-outlined text-xs">
                           {getMethodIcon(booking.method)}
                         </span>
                         {getMethodLabel(booking.method)}
                       </span>
+                      {decryptedMemoMap.get(booking.id) && (
+                        <span className="text-sp-muted text-xs flex items-center gap-0.5" title={decryptedMemoMap.get(booking.id)}>
+                          <span className="material-symbols-outlined text-xs">chat</span>
+                          {decryptedMemoMap.get(booking.id)!.length > 15
+                            ? decryptedMemoMap.get(booking.id)!.slice(0, 15) + '…'
+                            : decryptedMemoMap.get(booking.id)}
+                        </span>
+                      )}
                       {onWriteRecord && (
                         <button
                           onClick={() => {

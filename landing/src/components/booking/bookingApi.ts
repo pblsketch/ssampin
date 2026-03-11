@@ -139,6 +139,7 @@ export async function bookSlot(params: {
   studentNumber: number;
   bookerInfoEncrypted?: string;
   method: 'face' | 'phone' | 'video';
+  memoEncrypted?: string;
 }): Promise<BookResult> {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/book_consultation_slot`, {
@@ -150,7 +151,7 @@ export async function bookSlot(params: {
         p_student_number: params.studentNumber,
         p_booker_info: params.bookerInfoEncrypted ?? null,
         p_method: params.method,
-        p_memo: null,
+        p_memo: params.memoEncrypted ?? null,
       }),
     });
 

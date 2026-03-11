@@ -50,6 +50,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
   const [adminKey, setAdminKey] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [consultationTopic, setConsultationTopic] = useState('');
 
   /* ── URL 해시에서 adminKey 추출 ── */
   useEffect(() => {
@@ -120,12 +121,18 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
       bookerInfoEncrypted = await encrypt(`${parentRelation}|${parentName}|${parentContact}`, adminKey);
     }
 
+    let memoEncrypted: string | undefined;
+    if (consultationTopic.trim() && adminKey) {
+      memoEncrypted = await encrypt(consultationTopic.trim(), adminKey);
+    }
+
     const result = await bookSlot({
       scheduleId,
       slotId: selectedSlotId,
       studentNumber,
       bookerInfoEncrypted,
       method: selectedMethod,
+      memoEncrypted,
     });
 
     setIsSubmitting(false);
@@ -145,6 +152,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
     parentRelation,
     parentName,
     parentContact,
+    consultationTopic,
     scheduleId,
     reloadSlots,
   ]);
@@ -176,6 +184,8 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
             onParentRelationChange={setParentRelation}
             onParentNameChange={setParentName}
             onParentContactChange={setParentContact}
+            consultationTopic={consultationTopic}
+            onTopicChange={setConsultationTopic}
             onNext={handleInfoNext}
           />
         )}
@@ -206,6 +216,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
             parentContact={parentContact}
             selectedMethod={selectedMethod}
             selectedSlot={selectedSlot}
+            consultationTopic={consultationTopic}
             onBack={() => setView('method')}
             onSubmit={handleBooking}
             isSubmitting={isSubmitting}
@@ -295,6 +306,8 @@ function InfoView({
   onParentRelationChange,
   onParentNameChange,
   onParentContactChange,
+  consultationTopic,
+  onTopicChange,
   onNext,
 }: {
   schedule: SchedulePublic;
@@ -304,6 +317,8 @@ function InfoView({
   onParentRelationChange: (v: string) => void;
   onParentNameChange: (v: string) => void;
   onParentContactChange: (v: string) => void;
+  consultationTopic: string;
+  onTopicChange: (v: string) => void;
   onNext: (num: number) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<number | null>(null);
@@ -361,21 +376,13 @@ function InfoView({
           <div className="flex flex-col gap-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">학생과의 관계 *</label>
-              <div className="grid grid-cols-4 gap-2">
-                {['어머니', '아버지', '조부모', '기타'].map((rel) => (
-                  <button
-                    key={rel}
-                    onClick={() => onParentRelationChange(rel)}
-                    className={`min-h-10 rounded-xl text-sm font-medium transition-all ${
-                      parentRelation === rel
-                        ? 'bg-blue-500 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {rel}
-                  </button>
-                ))}
-              </div>
+              <input
+                type="text"
+                value={parentRelation}
+                onChange={(e) => onParentRelationChange(e.target.value)}
+                placeholder="예: 어머니, 아버지, 이모 등"
+                className="w-full min-h-12 border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-colors"
+              />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">이름 *</label>
@@ -400,6 +407,19 @@ function InfoView({
           </div>
         </div>
       )}
+
+      {/* 상담 주제 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-4">
+        <h3 className="text-sm font-bold text-gray-900 mb-4">상담 주제 (선택)</h3>
+        <textarea
+          value={consultationTopic}
+          onChange={(e) => onTopicChange(e.target.value)}
+          placeholder="상담하고 싶은 내용을 간단히 적어주세요"
+          rows={3}
+          maxLength={200}
+          className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-colors resize-none"
+        />
+      </div>
 
       <button
         onClick={() => { void handleContinue(); }}
@@ -605,6 +625,7 @@ function ConfirmView({
   parentContact,
   selectedMethod,
   selectedSlot,
+  consultationTopic,
   onBack,
   onSubmit,
   isSubmitting,
@@ -617,6 +638,7 @@ function ConfirmView({
   parentContact: string;
   selectedMethod: 'face' | 'phone' | 'video';
   selectedSlot: SlotPublic;
+  consultationTopic: string;
   onBack: () => void;
   onSubmit: () => void;
   isSubmitting: boolean;
@@ -652,6 +674,9 @@ function ConfirmView({
           )}
           {schedule.type === 'parent' && parentContact && (
             <SummaryRow label="연락처" value={parentContact} />
+          )}
+          {consultationTopic.trim() && (
+            <SummaryRow label="상담 주제" value={consultationTopic.trim()} />
           )}
         </div>
       </div>
