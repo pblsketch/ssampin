@@ -75,6 +75,7 @@ export class SurveySupabaseClient {
     id: string;
     title: string;
     description?: string;
+    mode: 'teacher' | 'student';
     questions: unknown;
     dueDate?: string;
     adminKey: string;
@@ -90,6 +91,7 @@ export class SurveySupabaseClient {
         id: params.id,
         title: params.title,
         description: params.description ?? null,
+        mode: params.mode,
         questions: params.questions,
         due_date: params.dueDate ?? null,
         admin_key: params.adminKey,

@@ -44,6 +44,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
   const [studentNumber, setStudentNumber] = useState<number | null>(null);
   const [parentName, setParentName] = useState('');
   const [parentContact, setParentContact] = useState('');
+  const [parentRelation, setParentRelation] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<'face' | 'phone' | 'video' | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [adminKey, setAdminKey] = useState('');
@@ -116,7 +117,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
 
     let bookerInfoEncrypted: string | undefined;
     if (schedule.type === 'parent' && adminKey) {
-      bookerInfoEncrypted = await encrypt(`${parentName}|${parentContact}`, adminKey);
+      bookerInfoEncrypted = await encrypt(`${parentRelation}|${parentName}|${parentContact}`, adminKey);
     }
 
     const result = await bookSlot({
@@ -141,6 +142,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
     selectedSlotId,
     selectedMethod,
     adminKey,
+    parentRelation,
     parentName,
     parentContact,
     scheduleId,
@@ -168,8 +170,10 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
         {view === 'info' && schedule && (
           <InfoView
             schedule={schedule}
+            parentRelation={parentRelation}
             parentName={parentName}
             parentContact={parentContact}
+            onParentRelationChange={setParentRelation}
             onParentNameChange={setParentName}
             onParentContactChange={setParentContact}
             onNext={handleInfoNext}
@@ -197,6 +201,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
           <ConfirmView
             schedule={schedule}
             studentNumber={studentNumber}
+            parentRelation={parentRelation}
             parentName={parentName}
             parentContact={parentContact}
             selectedMethod={selectedMethod}
@@ -284,15 +289,19 @@ function SuccessView() {
 
 function InfoView({
   schedule,
+  parentRelation,
   parentName,
   parentContact,
+  onParentRelationChange,
   onParentNameChange,
   onParentContactChange,
   onNext,
 }: {
   schedule: SchedulePublic;
+  parentRelation: string;
   parentName: string;
   parentContact: string;
+  onParentRelationChange: (v: string) => void;
   onParentNameChange: (v: string) => void;
   onParentContactChange: (v: string) => void;
   onNext: (num: number) => Promise<void>;
@@ -303,7 +312,7 @@ function InfoView({
   const isParent = schedule.type === 'parent';
   const canContinue =
     selected !== null &&
-    (!isParent || (parentName.trim().length > 0 && parentContact.trim().length > 0));
+    (!isParent || (parentName.trim().length > 0 && parentContact.trim().length > 0 && parentRelation.length > 0));
 
   const handleContinue = async () => {
     if (selected === null || !canContinue) return;
@@ -350,6 +359,24 @@ function InfoView({
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-4">
           <h3 className="text-sm font-bold text-gray-900 mb-4">예약자 정보 입력</h3>
           <div className="flex flex-col gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">학생과의 관계 *</label>
+              <div className="grid grid-cols-4 gap-2">
+                {['어머니', '아버지', '조부모', '기타'].map((rel) => (
+                  <button
+                    key={rel}
+                    onClick={() => onParentRelationChange(rel)}
+                    className={`min-h-10 rounded-xl text-sm font-medium transition-all ${
+                      parentRelation === rel
+                        ? 'bg-blue-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {rel}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">이름 *</label>
               <input
@@ -573,6 +600,7 @@ function TimeView({
 function ConfirmView({
   schedule,
   studentNumber,
+  parentRelation,
   parentName,
   parentContact,
   selectedMethod,
@@ -584,6 +612,7 @@ function ConfirmView({
 }: {
   schedule: SchedulePublic;
   studentNumber: number;
+  parentRelation: string;
   parentName: string;
   parentContact: string;
   selectedMethod: 'face' | 'phone' | 'video';
@@ -615,6 +644,9 @@ function ConfirmView({
           <SummaryRow label="상담 방식" value={`${methodIcon} ${methodLabel}`} />
           <SummaryRow label="날짜" value={formatDateLong(selectedSlot.date)} />
           <SummaryRow label="시간" value={`${selectedSlot.startTime} ~ ${selectedSlot.endTime}`} />
+          {schedule.type === 'parent' && parentRelation && (
+            <SummaryRow label="학생과의 관계" value={parentRelation} />
+          )}
           {schedule.type === 'parent' && parentName && (
             <SummaryRow label="예약자 이름" value={parentName} />
           )}

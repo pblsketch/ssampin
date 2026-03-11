@@ -69,21 +69,23 @@ CREATE POLICY "consultation_slots_service_all" ON consultation_slots
 CREATE POLICY "consultation_bookings_service_all" ON consultation_bookings
   FOR ALL USING (auth.role() = 'service_role');
 
--- 동시 예약 방지 DB 함수
+-- 동시 예약 방지 DB 함수 (JSONB 반환)
 CREATE OR REPLACE FUNCTION book_consultation_slot(
   p_schedule_id UUID,
   p_slot_id UUID,
   p_student_number INT,
-  p_booker_info_encrypted TEXT DEFAULT NULL,
+  p_booker_info TEXT DEFAULT NULL,
   p_method TEXT DEFAULT 'face',
-  p_memo_encrypted TEXT DEFAULT NULL
+  p_memo TEXT DEFAULT NULL
 )
-RETURNS UUID
+RETURNS JSONB
 LANGUAGE plpgsql
+SECURITY DEFINER
 AS $$
 DECLARE
   v_booking_id UUID;
   v_slot_status TEXT;
+  v_existing INT;
 BEGIN
   -- 슬롯 잠금 (FOR UPDATE)
   SELECT status INTO v_slot_status
@@ -92,21 +94,31 @@ BEGIN
   FOR UPDATE;
 
   IF v_slot_status IS NULL THEN
-    RAISE EXCEPTION 'Slot not found';
+    RETURN jsonb_build_object('success', false, 'error', 'slot_not_found');
   END IF;
 
   IF v_slot_status <> 'available' THEN
-    RAISE EXCEPTION 'Slot is not available';
+    RETURN jsonb_build_object('success', false, 'error', 'already_booked');
+  END IF;
+
+  -- 중복 예약 방지
+  SELECT 1 INTO v_existing
+  FROM consultation_bookings
+  WHERE schedule_id = p_schedule_id AND student_number = p_student_number
+  LIMIT 1;
+
+  IF v_existing IS NOT NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'student_already_booked');
   END IF;
 
   -- 예약 삽입
   INSERT INTO consultation_bookings (schedule_id, slot_id, student_number, booker_info_encrypted, method, memo_encrypted)
-  VALUES (p_schedule_id, p_slot_id, p_student_number, p_booker_info_encrypted, p_method, p_memo_encrypted)
+  VALUES (p_schedule_id, p_slot_id, p_student_number, p_booker_info, p_method, p_memo)
   RETURNING id INTO v_booking_id;
 
   -- 슬롯 상태 업데이트
   UPDATE consultation_slots SET status = 'booked' WHERE id = p_slot_id;
 
-  RETURN v_booking_id;
+  RETURN jsonb_build_object('success', true, 'bookingId', v_booking_id);
 END;
 $$;

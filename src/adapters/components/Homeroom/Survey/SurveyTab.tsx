@@ -1,6 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import QRCode from 'qrcode';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useToastStore } from '@adapters/components/common/Toast';
+import { surveySupabaseClient } from '@adapters/di/container';
 import {
   getActiveSurveys,
   getArchivedSurveys,
@@ -29,21 +32,127 @@ function getColor(color: string) {
   return COLOR_MAP[color] ?? COLOR_MAP.blue!;
 }
 
+/* ──────────────── SurveyShareModal ──────────────── */
+
+interface SurveyShareModalProps {
+  survey: Survey;
+  onClose: () => void;
+}
+
+function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const showToast = useToastStore((s) => s.show);
+  const url = survey.shareUrl ?? '';
+
+  useEffect(() => {
+    if (!canvasRef.current || !url) return;
+    void QRCode.toCanvas(canvasRef.current, url, {
+      width: 220,
+      margin: 2,
+      color: { dark: '#1a2332', light: '#ffffff' },
+    });
+  }, [url]);
+
+  const handleCopyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('링크가 복사되었습니다', 'success');
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('링크가 복사되었습니다', 'success');
+    }
+  }, [url, showToast]);
+
+  const handleDownloadQR = useCallback(() => {
+    if (!canvasRef.current) return;
+    const link = document.createElement('a');
+    link.download = `설문_QR_${survey.title.slice(0, 20)}.png`;
+    link.href = canvasRef.current.toDataURL('image/png');
+    link.click();
+    showToast('QR 이미지가 저장되었습니다', 'success');
+  }, [survey.title, showToast]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-4 border-b border-sp-border">
+          <h3 className="text-sm font-bold text-sp-text">설문 공유</h3>
+          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+            <span className="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+
+        {/* 본문 */}
+        <div className="p-5 flex flex-col items-center gap-4">
+          <p className="text-xs text-sp-muted text-center">{survey.title}</p>
+
+          {/* QR 코드 */}
+          <div className="bg-white rounded-xl p-3">
+            <canvas ref={canvasRef} />
+          </div>
+
+          {/* 링크 */}
+          <div className="w-full flex items-center gap-2 bg-sp-surface rounded-lg border border-sp-border px-3 py-2">
+            <span className="material-symbols-outlined text-sm text-sp-muted">link</span>
+            <span className="flex-1 text-xs text-sp-text truncate select-all">{url}</span>
+            <button
+              onClick={handleCopyLink}
+              className="shrink-0 text-xs text-sp-accent hover:text-sp-accent/80 font-medium transition-colors"
+            >
+              복사
+            </button>
+          </div>
+
+          {/* 버튼들 */}
+          <div className="w-full grid grid-cols-2 gap-2">
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">content_copy</span>
+              링크 복사
+            </button>
+            <button
+              onClick={handleDownloadQR}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent/50 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">download</span>
+              QR 저장
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ──────────────── SurveyCard ──────────────── */
 
 interface SurveyCardProps {
   survey: Survey;
   totalStudents: number;
   onSelect: (id: string) => void;
+  onShare: (survey: Survey) => void;
 }
 
-function SurveyCard({ survey, totalStudents, onSelect }: SurveyCardProps) {
+function SurveyCard({ survey, totalStudents, onSelect, onShare }: SurveyCardProps) {
   const localData = useSurveyStore((s) => s.getLocalData(survey.id));
   const color = getColor(survey.categoryColor);
 
   const progress = survey.mode === 'teacher'
     ? getTeacherCheckProgress(survey, localData, totalStudents)
-    : getStudentResponseProgress([], totalStudents); // 서버 응답은 프롬프트 7~8에서
+    : getStudentResponseProgress([], totalStudents);
 
   const modeLabel = survey.mode === 'teacher' ? '✏️ 교사 체크' : '📱 학생 응답';
   const questionTypes = survey.questions
@@ -56,9 +165,12 @@ function SurveyCard({ survey, totalStudents, onSelect }: SurveyCardProps) {
     .join(', ');
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(survey.id)}
-      className={`w-full text-left rounded-xl border border-sp-border p-4 transition-all hover:border-sp-accent/50 hover:shadow-lg ${color.bg}`}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(survey.id); }}
+      className={`w-full text-left rounded-xl border border-sp-border p-4 transition-all hover:border-sp-accent/50 hover:shadow-lg cursor-pointer ${color.bg}`}
     >
       <div className="flex items-start gap-3">
         <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${color.dot}`} />
@@ -93,23 +205,24 @@ function SurveyCard({ survey, totalStudents, onSelect }: SurveyCardProps) {
             {progress.percentage}%
           </div>
 
-          {/* 학생 응답 모드 → 링크 공유 */}
+          {/* 학생 응답 모드 → 공유 버튼 (링크 + QR) */}
           {survey.mode === 'student' && survey.shareUrl && (
-            <div className="mt-2">
+            <div className="mt-2 flex items-center gap-2">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigator.clipboard.writeText(survey.shareUrl!);
+                  onShare(survey);
                 }}
-                className="text-[11px] text-sp-accent hover:text-sp-accent/80 transition-colors"
+                className="text-[11px] text-sp-accent hover:text-sp-accent/80 transition-colors flex items-center gap-1"
               >
-                🔗 링크 공유
+                <span className="material-symbols-outlined text-xs">share</span>
+                공유 (링크 + QR)
               </button>
             </div>
           )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -122,6 +235,7 @@ export function SurveyTab() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [selectedSurveyId, setSelectedSurveyId] = useState<string | null>(null);
+  const [shareSurvey, setShareSurvey] = useState<Survey | null>(null);
 
   useEffect(() => {
     if (!loaded) void load();
@@ -141,6 +255,10 @@ export function SurveyTab() {
     setView('detail');
   };
 
+  const handleShare = useCallback((survey: Survey) => {
+    setShareSurvey(survey);
+  }, []);
+
   if (!loaded) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -157,7 +275,7 @@ export function SurveyTab() {
       return <SurveyDetail survey={survey} onBack={handleBack} />;
     }
     if (survey?.mode === 'student') {
-      return <SurveyStudentDetail survey={survey} onBack={handleBack} />;
+      return <SurveyStudentDetail survey={survey} onBack={handleBack} supabaseClient={surveySupabaseClient} />;
     }
   }
 
@@ -203,6 +321,7 @@ export function SurveyTab() {
                     survey={s}
                     totalStudents={totalStudents}
                     onSelect={handleSelect}
+                    onShare={handleShare}
                   />
                 ))}
               </>
@@ -226,6 +345,7 @@ export function SurveyTab() {
                     survey={s}
                     totalStudents={totalStudents}
                     onSelect={handleSelect}
+                    onShare={handleShare}
                   />
                 ))}
               </>
@@ -236,6 +356,10 @@ export function SurveyTab() {
 
       {showCreateModal && (
         <SurveyCreateModal onClose={() => setShowCreateModal(false)} />
+      )}
+
+      {shareSurvey && (
+        <SurveyShareModal survey={shareSurvey} onClose={() => setShareSurvey(null)} />
       )}
     </div>
   );

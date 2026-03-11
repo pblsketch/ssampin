@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { surveySupabaseClient } from '@adapters/di/container';
 import type { SurveyMode, QuestionType } from '@domain/entities/Survey';
 
 /* ──────────────── 타입 ──────────────── */
@@ -114,21 +115,44 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
     if (!canSubmit) return;
     setSaving(true);
     try {
-      await createSurvey({
+      const mappedQuestions = questions.map((q) => ({
+        id: q.id,
+        type: q.type,
+        label: q.label.trim(),
+        options: q.type === 'choice' ? q.options.filter((o) => o.trim()) : undefined,
+        required: q.required,
+      }));
+
+      const survey = await createSurvey({
         title: title.trim(),
         description: description.trim() || undefined,
         mode,
-        questions: questions.map((q) => ({
-          id: q.id,
-          type: q.type,
-          label: q.label.trim(),
-          options: q.type === 'choice' ? q.options.filter((o) => o.trim()) : undefined,
-          required: q.required,
-        })),
+        questions: mappedQuestions,
         dueDate: dueDate || undefined,
         categoryColor: color,
         isArchived: false,
       });
+
+      // 학생 응답 모드 → Supabase에 업로드 (공유 링크가 동작하도록)
+      if (mode === 'student' && survey.adminKey) {
+        try {
+          await surveySupabaseClient.createSurvey({
+            id: survey.id,
+            title: survey.title,
+            description: survey.description,
+            mode: 'student',
+            questions: mappedQuestions,
+            dueDate: survey.dueDate,
+            adminKey: survey.adminKey,
+            targetCount: survey.targetCount ?? 30,
+          });
+        } catch {
+          showToast('설문은 저장되었지만 온라인 공유 설정에 실패했습니다', 'error');
+          onClose();
+          return;
+        }
+      }
+
       showToast('설문이 생성되었습니다', 'success');
       onClose();
     } catch {

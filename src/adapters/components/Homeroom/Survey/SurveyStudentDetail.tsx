@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -27,7 +28,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
   const [responses, setResponses] = useState<SurveyResponsePublic[]>([]);
   const [showExport, setShowExport] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [showShareLink, setShowShareLink] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const stopPollingRef = useRef<(() => void) | null>(null);
 
@@ -47,6 +48,32 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  /* ── Supabase에 설문이 없으면 자동 업로드 ── */
+  useEffect(() => {
+    if (!supabaseClient || !isOnline || !survey.adminKey) return;
+
+    const ensureOnline = async () => {
+      try {
+        const existing = await supabaseClient.getSurvey(survey.id);
+        if (!existing) {
+          await supabaseClient.createSurvey({
+            id: survey.id,
+            title: survey.title,
+            description: survey.description,
+            mode: survey.mode,
+            questions: survey.questions,
+            dueDate: survey.dueDate,
+            adminKey: survey.adminKey!,
+            targetCount: survey.targetCount ?? 30,
+          });
+        }
+      } catch {
+        // 자동 업로드 실패는 무시 (다음에 재시도)
+      }
+    };
+    void ensureOnline();
+  }, [survey, supabaseClient, isOnline]);
 
   /* ── 폴링 (30초) ── */
   useEffect(() => {
@@ -80,7 +107,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
 
   /* ── 학생 번호→이름 매핑 (로컬 명단) ── */
   const respondedMap = useMemo(() => {
-    const map = new Map<string, string>(); // studentId → 'responded' | ''
+    const map = new Map<string, string>();
     const nonVacant = students.filter((s) => !s.isVacant);
     const respondedNumbers = new Set(responses.map((r) => r.studentNumber));
 
@@ -162,12 +189,6 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
     onBack();
   }, [deleteSurvey, survey.id, showToast, onBack]);
 
-  const handleCopyLink = useCallback(async () => {
-    if (!survey.shareUrl) return;
-    await navigator.clipboard.writeText(survey.shareUrl);
-    showToast('링크가 복사되었습니다', 'success');
-  }, [survey.shareUrl, showToast]);
-
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* 헤더 */}
@@ -185,11 +206,11 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
         <div className="flex items-center gap-1.5 shrink-0">
           {survey.shareUrl && (
             <button
-              onClick={() => setShowShareLink(true)}
+              onClick={() => setShowShareModal(true)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sp-surface text-sp-muted text-xs hover:text-sp-text transition-colors"
             >
               <span className="material-symbols-outlined text-sm">share</span>
-              링크 공유
+              공유
             </button>
           )}
           <button
@@ -269,39 +290,13 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
         <span>미응답: <strong>{progress.total - progress.completed}명</strong></span>
       </div>
 
-      {/* 링크 공유 모달 */}
-      {showShareLink && survey.shareUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowShareLink(false)}>
-          <div className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-sp-text flex items-center gap-2">
-                <span className="material-symbols-outlined text-sp-accent">share</span>
-                설문 공유
-              </h3>
-              <button onClick={() => setShowShareLink(false)} className="text-sp-muted hover:text-sp-text transition-colors">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <p className="text-sm text-sp-text mb-3 text-center">{survey.title}</p>
-
-            <p className="text-xs text-sp-muted break-all text-center mb-4 select-all bg-sp-surface p-3 rounded-lg">
-              {survey.shareUrl}
-            </p>
-
-            <button
-              onClick={() => void handleCopyLink()}
-              className="w-full px-4 py-2.5 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <span className="material-symbols-outlined text-base">content_copy</span>
-              링크 복사
-            </button>
-
-            <p className="text-[10px] text-sp-muted/60 text-center mt-3">
-              학생들에게 이 링크를 공유하세요.
-            </p>
-          </div>
-        </div>
+      {/* 공유 모달 (QR + 링크) */}
+      {showShareModal && survey.shareUrl && (
+        <ShareModal
+          title={survey.title}
+          url={survey.shareUrl}
+          onClose={() => setShowShareModal(false)}
+        />
       )}
 
       {/* 내보내기 모달 */}
@@ -314,6 +309,118 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
           fileName={survey.title}
         />
       )}
+    </div>
+  );
+}
+
+/* ──────────────── ShareModal (QR + 링크) ──────────────── */
+
+interface ShareModalProps {
+  title: string;
+  url: string;
+  onClose: () => void;
+}
+
+function ShareModal({ title, url, onClose }: ShareModalProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const showToast = useToastStore((s) => s.show);
+
+  useEffect(() => {
+    if (!canvasRef.current || !url) return;
+    void QRCode.toCanvas(canvasRef.current, url, {
+      width: 220,
+      margin: 2,
+      color: { dark: '#1a2332', light: '#ffffff' },
+    });
+  }, [url]);
+
+  const handleCopyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('링크가 복사되었습니다', 'success');
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('링크가 복사되었습니다', 'success');
+    }
+  }, [url, showToast]);
+
+  const handleDownloadQR = useCallback(() => {
+    if (!canvasRef.current) return;
+    const link = document.createElement('a');
+    link.download = `설문_QR_${title.slice(0, 20)}.png`;
+    link.href = canvasRef.current.toDataURL('image/png');
+    link.click();
+    showToast('QR 이미지가 저장되었습니다', 'success');
+  }, [title, showToast]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-4 border-b border-sp-border">
+          <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+            <span className="material-symbols-outlined text-sp-accent text-base">share</span>
+            설문 공유
+          </h3>
+          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+            <span className="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+
+        {/* 본문 */}
+        <div className="p-5 flex flex-col items-center gap-4">
+          <p className="text-xs text-sp-muted text-center">{title}</p>
+
+          {/* QR 코드 */}
+          <div className="bg-white rounded-xl p-3">
+            <canvas ref={canvasRef} />
+          </div>
+
+          {/* 링크 */}
+          <div className="w-full flex items-center gap-2 bg-sp-surface rounded-lg border border-sp-border px-3 py-2">
+            <span className="material-symbols-outlined text-sm text-sp-muted">link</span>
+            <span className="flex-1 text-xs text-sp-text truncate select-all">{url}</span>
+            <button
+              onClick={() => void handleCopyLink()}
+              className="shrink-0 text-xs text-sp-accent hover:text-sp-accent/80 font-medium transition-colors"
+            >
+              복사
+            </button>
+          </div>
+
+          {/* 버튼들 */}
+          <div className="w-full grid grid-cols-2 gap-2">
+            <button
+              onClick={() => void handleCopyLink()}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">content_copy</span>
+              링크 복사
+            </button>
+            <button
+              onClick={handleDownloadQR}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent/50 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">download</span>
+              QR 저장
+            </button>
+          </div>
+
+          <p className="text-[10px] text-sp-muted/60 text-center">
+            학생들에게 QR 코드를 보여주거나 링크를 공유하세요.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

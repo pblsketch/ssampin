@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -35,6 +36,99 @@ function getMethodLabel(m: string): string {
     case 'video': return '화상';
     default: return m;
   }
+}
+
+/* ──────────────── ConsultationShareModal ──────────────── */
+
+interface ConsultationShareModalProps {
+  schedule: ConsultationSchedule;
+  onClose: () => void;
+  onCopyLink: () => Promise<void>;
+}
+
+function ConsultationShareModal({ schedule, onClose, onCopyLink }: ConsultationShareModalProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const showToast = useToastStore((s) => s.show);
+  const url = schedule.shareUrl;
+
+  useEffect(() => {
+    if (!canvasRef.current || !url) return;
+    void QRCode.toCanvas(canvasRef.current, url, {
+      width: 220,
+      margin: 2,
+      color: { dark: '#1a2332', light: '#ffffff' },
+    });
+  }, [url]);
+
+  const handleDownloadQR = useCallback(() => {
+    if (!canvasRef.current) return;
+    const link = document.createElement('a');
+    link.download = `상담_QR_${schedule.title.slice(0, 20)}.png`;
+    link.href = canvasRef.current.toDataURL('image/png');
+    link.click();
+    showToast('QR 이미지가 저장되었습니다', 'success');
+  }, [schedule.title, showToast]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-4 border-b border-sp-border">
+          <h3 className="text-sm font-bold text-sp-text">상담 예약 공유</h3>
+          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+            <span className="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+
+        {/* 본문 */}
+        <div className="p-5 flex flex-col items-center gap-4">
+          <p className="text-xs text-sp-muted text-center">{schedule.title}</p>
+
+          {/* QR 코드 */}
+          <div className="bg-white rounded-xl p-3">
+            <canvas ref={canvasRef} />
+          </div>
+
+          {/* 링크 */}
+          <div className="w-full flex items-center gap-2 bg-sp-surface rounded-lg border border-sp-border px-3 py-2">
+            <span className="material-symbols-outlined text-sm text-sp-muted">link</span>
+            <span className="flex-1 text-xs text-sp-text truncate select-all">{url}</span>
+            <button
+              onClick={() => { void onCopyLink(); }}
+              className="shrink-0 text-xs text-sp-accent hover:text-sp-accent/80 font-medium transition-colors"
+            >
+              복사
+            </button>
+          </div>
+
+          {/* 버튼들 */}
+          <div className="w-full grid grid-cols-2 gap-2">
+            <button
+              onClick={() => { void onCopyLink(); }}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">content_copy</span>
+              링크 복사
+            </button>
+            <button
+              onClick={handleDownloadQR}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent/50 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">download</span>
+              QR 저장
+            </button>
+          </div>
+
+          <p className="text-[10px] text-sp-muted/60 text-center">
+            학부모/학생에게 이 링크를 공유하세요.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ──────────────── 컴포넌트 ──────────────── */
@@ -389,46 +483,11 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
 
       {/* 링크 공유 모달 */}
       {showShareLink && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setShowShareLink(false)}
-        >
-          <div
-            className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-sp-text flex items-center gap-2">
-                <span className="material-symbols-outlined text-sp-accent">share</span>
-                상담 예약 공유
-              </h3>
-              <button
-                onClick={() => setShowShareLink(false)}
-                className="text-sp-muted hover:text-sp-text transition-colors"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <p className="text-sm text-sp-text mb-3 text-center">{schedule.title}</p>
-
-            <p className="text-xs text-sp-muted break-all text-center mb-4 select-all bg-sp-surface p-3 rounded-lg">
-              {schedule.shareUrl}
-            </p>
-
-            <button
-              onClick={() => void handleCopyLink()}
-              className="w-full px-4 py-2.5 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <span className="material-symbols-outlined text-base">content_copy</span>
-              링크 복사
-            </button>
-
-            <p className="text-[10px] text-sp-muted/60 text-center mt-3">
-              학부모/학생에게 이 링크를 공유하세요.
-            </p>
-          </div>
-        </div>
+        <ConsultationShareModal
+          schedule={schedule}
+          onClose={() => setShowShareLink(false)}
+          onCopyLink={handleCopyLink}
+        />
       )}
 
       {/* 내보내기 모달 */}

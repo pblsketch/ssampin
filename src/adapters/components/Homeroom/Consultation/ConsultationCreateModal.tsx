@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { consultationSupabaseClient } from '@adapters/di/container';
 import type { ConsultationType, ConsultationMethod } from '@domain/entities/Consultation';
 
@@ -29,7 +30,7 @@ const METHOD_OPTIONS: { value: ConsultationMethod; label: string; icon: string }
   { value: 'video', label: '화상', icon: 'videocam' },
 ];
 
-const SLOT_OPTIONS = [10, 15, 20, 30];
+const SLOT_PRESETS = [10, 15, 20, 30, 60];
 
 /* ──────────────── 유틸 ──────────────── */
 
@@ -43,11 +44,14 @@ function parseTimeToMinutes(t: string): number {
 export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProps) {
   const { createSchedule } = useConsultationStore();
   const showToast = useToastStore((s) => s.show);
+  const { students } = useStudentStore();
 
   const [title, setTitle] = useState('');
   const [type, setType] = useState<ConsultationType>('parent');
   const [methods, setMethods] = useState<ConsultationMethod[]>(['face']);
   const [slotMinutes, setSlotMinutes] = useState(15);
+  const [customSlot, setCustomSlot] = useState(false);
+  const [customSlotValue, setCustomSlotValue] = useState('');
   const [dates, setDates] = useState<DateEntry[]>([]);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
@@ -123,7 +127,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
         slotMinutes,
         dates: dates.filter((d) => d.date && d.startTime && d.endTime),
         targetClassName: '',
-        targetStudents: [],
+        targetStudents: students.filter((s) => !s.isVacant).map((_, i) => ({ number: i + 1 })),
         message: message.trim() || undefined,
       });
 
@@ -230,21 +234,50 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
           {/* 시간 단위 */}
           <div>
             <label className="text-xs font-medium text-sp-muted mb-1.5 block">슬롯 단위</label>
-            <div className="flex gap-2">
-              {SLOT_OPTIONS.map((mins) => (
+            <div className="flex flex-wrap gap-2">
+              {SLOT_PRESETS.map((mins) => (
                 <button
                   key={mins}
-                  onClick={() => setSlotMinutes(mins)}
+                  onClick={() => { setSlotMinutes(mins); setCustomSlot(false); }}
                   className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
-                    slotMinutes === mins
+                    slotMinutes === mins && !customSlot
                       ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                       : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
                   }`}
                 >
-                  {mins}분
+                  {mins >= 60 ? `${mins / 60}시간` : `${mins}분`}
                 </button>
               ))}
+              <button
+                onClick={() => { setCustomSlot(true); setCustomSlotValue(String(slotMinutes)); }}
+                className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                  customSlot
+                    ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                    : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                직접 입력
+              </button>
             </div>
+            {customSlot && (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="number"
+                  min={5}
+                  max={180}
+                  value={customSlotValue}
+                  onChange={(e) => {
+                    setCustomSlotValue(e.target.value);
+                    const v = parseInt(e.target.value, 10);
+                    if (v >= 5 && v <= 180) setSlotMinutes(v);
+                  }}
+                  className="w-20 bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                  placeholder="분"
+                  autoFocus
+                />
+                <span className="text-xs text-sp-muted">분 (5~180)</span>
+              </div>
+            )}
           </div>
 
           {/* 상담 날짜 */}
@@ -256,39 +289,43 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               {slotPreview.map((d, idx) => {
                 const isInvalid = d.date !== '' && d.startTime >= d.endTime;
                 return (
-                  <div key={idx} className="bg-sp-surface rounded-lg p-3 border border-sp-border">
+                  <div key={idx} className="bg-sp-surface rounded-lg p-3 border border-sp-border flex flex-col gap-2">
+                    {/* 1줄: 날짜 + 삭제 */}
                     <div className="flex items-center gap-2">
                       <input
                         type="date"
                         value={d.date}
                         onChange={(e) => updateDate(idx, 'date', e.target.value)}
-                        className="bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                        className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
                       />
+                      <button
+                        onClick={() => removeDate(idx)}
+                        className="text-sp-muted hover:text-red-400 transition-colors shrink-0"
+                      >
+                        <span className="material-symbols-outlined text-base">delete</span>
+                      </button>
+                    </div>
+                    {/* 2줄: 시간 범위 + 슬롯 수 */}
+                    <div className="flex items-center gap-2">
                       <input
                         type="time"
                         value={d.startTime}
                         onChange={(e) => updateDate(idx, 'startTime', e.target.value)}
-                        className="bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                        className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
                       />
                       <span className="text-sp-muted text-xs">~</span>
                       <input
                         type="time"
                         value={d.endTime}
                         onChange={(e) => updateDate(idx, 'endTime', e.target.value)}
-                        className="bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                        className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
                       />
                       <span className="text-xs text-sp-muted shrink-0">
                         → <span className={d.count > 0 ? 'text-sp-accent font-medium' : 'text-sp-muted'}>{d.count}슬롯</span>
                       </span>
-                      <button
-                        onClick={() => removeDate(idx)}
-                        className="ml-auto text-sp-muted hover:text-red-400 transition-colors shrink-0"
-                      >
-                        <span className="material-symbols-outlined text-base">delete</span>
-                      </button>
                     </div>
                     {isInvalid && (
-                      <p className="text-[10px] text-amber-400 mt-1.5">종료 시간이 시작 시간보다 이전입니다</p>
+                      <p className="text-[10px] text-amber-400">종료 시간이 시작 시간보다 이전입니다</p>
                     )}
                   </div>
                 );

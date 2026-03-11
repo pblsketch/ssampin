@@ -289,9 +289,9 @@ export class ConsultationSupabaseClient {
         p_schedule_id: params.scheduleId,
         p_slot_id: params.slotId,
         p_student_number: params.studentNumber,
-        p_booker_info_encrypted: params.bookerInfoEncrypted ?? null,
+        p_booker_info: params.bookerInfoEncrypted ?? null,
         p_method: params.method,
-        p_memo_encrypted: params.memoEncrypted ?? null,
+        p_memo: params.memoEncrypted ?? null,
       }),
     });
 
