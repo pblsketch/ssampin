@@ -581,7 +581,6 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                           const raw = decryptedInfoMap.get(booking.id);
                           const parsed = raw ? parseBookerInfo(raw) : null;
                           const memo = decryptedMemoMap.get(booking.id);
-                          const hasDetail = parsed || raw || memo;
                           return (
                           <div>
                             {/* 1줄: 학생 정보 + 상담 방식 + 상세 토글 + 액션 */}
@@ -599,18 +598,16 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                 </span>
                                 {getMethodLabel(booking.method)}
                               </span>
-                              {hasDetail && (
-                                <button
-                                  onClick={toggleExpand}
-                                  className="text-sp-muted hover:text-sp-accent transition-colors flex items-center gap-0.5"
-                                  title={isExpanded ? '상세 정보 접기' : '상세 정보 보기'}
-                                >
-                                  <span className="material-symbols-outlined text-sm">
-                                    {isExpanded ? 'expand_less' : 'expand_more'}
-                                  </span>
-                                  <span className="text-[11px]">{isExpanded ? '접기' : '상세'}</span>
-                                </button>
-                              )}
+                              <button
+                                onClick={toggleExpand}
+                                className="text-sp-muted hover:text-sp-accent transition-colors flex items-center gap-0.5"
+                                title={isExpanded ? '상세 정보 접기' : '상세 정보 보기'}
+                              >
+                                <span className="material-symbols-outlined text-sm">
+                                  {isExpanded ? 'expand_less' : 'expand_more'}
+                                </span>
+                                <span className="text-[11px]">{isExpanded ? '접기' : '상세'}</span>
+                              </button>
                               {/* 액션 버튼들 */}
                               <div className="ml-auto flex items-center gap-1 shrink-0">
                                 {addedToCalendarIds.has(booking.id) ? (
@@ -686,6 +683,12 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                     <span className="material-symbols-outlined text-xs text-sp-muted/60 mt-0.5">chat</span>
                                     <span className="text-sp-muted/60 w-12 shrink-0">메모</span>
                                     <span className="text-sp-text">{memo}</span>
+                                  </div>
+                                )}
+                                {!parsed && !raw && !memo && (
+                                  <div className="flex items-center gap-2 text-sp-muted/50">
+                                    <span className="material-symbols-outlined text-xs">info</span>
+                                    <span>추가 입력 정보가 없습니다</span>
                                   </div>
                                 )}
                               </div>
