@@ -86,31 +86,16 @@ async function fetchRecentEvents(): Promise<Array<{
   return res.json();
 }
 
-// 총 이벤트 수 / 고유 사용자 수 조회
+// 총 이벤트 수 / 고유 사용자 수 조회 (daily 뷰에서 합산)
 async function fetchTotals(): Promise<{ totalEvents: number; uniqueDevices: number }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) return { totalEvents: 0, uniqueDevices: 0 };
 
-  // 총 이벤트 수
-  const countRes = await fetch(
-    `${url}/rest/v1/app_analytics?select=id&head=true`,
-    {
-      method: 'HEAD',
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        Prefer: 'count=exact',
-      },
-      next: { revalidate: 300 },
-    }
-  );
-  const totalEvents = parseInt(countRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-
-  // 고유 기기 수 - daily active에서 최근 30일 합산
-  const dailyData = await fetchView<{ dau: number }>('analytics_daily_active');
-  const uniqueDevices = dailyData.length > 0 ? Math.max(...dailyData.map(d => d.dau)) : 0;
+  const daily = await fetchView<{ dau: number; events: number }>('analytics_daily_active');
+  const totalEvents = daily.reduce((sum, d) => sum + (d.events ?? 0), 0);
+  const uniqueDevices = daily.length > 0 ? Math.max(...daily.map(d => d.dau)) : 0;
 
   return { totalEvents, uniqueDevices };
 }
