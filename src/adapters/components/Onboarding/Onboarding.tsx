@@ -60,6 +60,12 @@ export function Onboarding() {
         setDraft((prev) => ({ ...prev, schoolLevel: level, maxPeriods: times.length, periodTimes: times }));
     };
 
+    const toTimeStr = (minutes: number): string => {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+
     const updatePeriod = (index: number, field: 'start' | 'end', value: string) => {
         setDraft((prev) => {
             const arr = [...(prev.periodTimes ?? [])] as PeriodTime[];
@@ -68,11 +74,21 @@ export function Onboarding() {
 
             if (field === 'start' && prev.schoolLevel) {
                 const duration = PERIOD_DURATION[prev.schoolLevel];
-                const startMin = parseMinutes(value);
-                const endH = Math.floor((startMin + duration) / 60);
-                const endM = (startMin + duration) % 60;
-                const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-                arr[index] = { period: existing.period, start: value, end: endStr };
+                const delta = parseMinutes(value) - parseMinutes(existing.start);
+
+                // 현재 교시: 시작 시간 변경 + 종료 시간 자동 계산
+                arr[index] = { period: existing.period, start: value, end: toTimeStr(parseMinutes(value) + duration) };
+
+                // 이후 교시: 동일한 delta만큼 시작·종료 시간 이동
+                for (let i = index + 1; i < arr.length; i++) {
+                    const p = arr[i];
+                    if (!p) continue;
+                    arr[i] = {
+                        period: p.period,
+                        start: toTimeStr(parseMinutes(p.start) + delta),
+                        end: toTimeStr(parseMinutes(p.end) + delta),
+                    };
+                }
             } else {
                 arr[index] = { period: existing.period, start: existing.start, end: existing.end, [field]: value };
             }
@@ -132,7 +148,7 @@ export function Onboarding() {
                                         value={draft.schoolName}
                                         onChange={(e) => patch({ schoolName: e.target.value })}
                                         placeholder="예: 서울미래초등학교"
-                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -142,7 +158,7 @@ export function Onboarding() {
                                         value={draft.className}
                                         onChange={(e) => patch({ className: e.target.value })}
                                         placeholder="예: 6학년 3반"
-                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -152,7 +168,7 @@ export function Onboarding() {
                                         value={draft.teacherName}
                                         onChange={(e) => patch({ teacherName: e.target.value })}
                                         placeholder="홍길동"
-                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -162,7 +178,7 @@ export function Onboarding() {
                                         value={draft.subject}
                                         onChange={(e) => patch({ subject: e.target.value })}
                                         placeholder="구분 없음 (담임)"
-                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                             </div>
