@@ -48,6 +48,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   /* ── 편집 모드 상태 ── */
   const [isEditing, setIsEditing] = useState(false);
+  const [sortBy, setSortBy] = useState<'number' | 'name' | 'grade'>('number');
   const [editStudents, setEditStudents] = useState<TeachingClassStudent[]>([]);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -60,13 +61,24 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const sortedStudents = useMemo(() => {
     const list = isEditing ? editStudents : cls?.students ?? [];
-    if (!hasGradeInfo) return list;
     return [...list].sort((a, b) => {
-      if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
-      if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
-      return a.number - b.number;
+      switch (sortBy) {
+        case 'grade':
+          // 소속이 있는 학생 먼저, 없는 학생은 뒤로
+          if ((a.grade != null) !== (b.grade != null)) return a.grade != null ? -1 : 1;
+          if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
+          if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
+          return a.number - b.number;
+        case 'name':
+          // 결번은 뒤로
+          if ((a.isVacant ?? false) !== (b.isVacant ?? false)) return a.isVacant ? 1 : -1;
+          return (a.name || '').localeCompare(b.name || '', 'ko');
+        case 'number':
+        default:
+          return a.number - b.number;
+      }
     });
-  }, [isEditing, editStudents, cls?.students, hasGradeInfo]);
+  }, [isEditing, editStudents, cls?.students, sortBy]);
 
   /* ── 출석 상태 ── */
   const [date, setDate] = useState(todayString);
@@ -84,11 +96,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const loadRecord = useCallback(
     (d: string, p: number) => {
+      const activeStudents = students.filter((s) => !s.isVacant);
       const existing = getAttendanceRecord(classId, d, p);
       if (existing) {
         const map = new Map(existing.students.map((s) => [studentKey(s), s.status]));
         setLocalAttendance(
-          students.map((s) => ({
+          activeStudents.map((s) => ({
             number: s.number,
             grade: s.grade,
             classNum: s.classNum,
@@ -97,7 +110,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         );
       } else {
         setLocalAttendance(
-          students.map((s) => ({
+          activeStudents.map((s) => ({
             number: s.number,
             grade: s.grade,
             classNum: s.classNum,
@@ -205,21 +218,26 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     });
   }, []);
 
-  const updateStudentMemoInEdit = useCallback((index: number, memo: string) => {
-    setEditStudents((prev) => {
-      const next = [...prev];
-      const existing = next[index];
-      if (existing) {
-        next[index] = { ...existing, memo: memo || undefined };
-      }
-      return next;
-    });
-  }, []);
 
   const addRow = useCallback(() => {
     setEditStudents((prev) => {
       const nextNumber = prev.length > 0 ? Math.max(...prev.map((s) => s.number)) + 1 : 1;
       return [...prev, { number: nextNumber, name: '' }];
+    });
+  }, []);
+
+  const setStudentCount = useCallback((count: number) => {
+    if (count < 1) return;
+    setEditStudents((prev) => {
+      if (count > prev.length) {
+        const newRows: TeachingClassStudent[] = [];
+        const maxNum = prev.length > 0 ? Math.max(...prev.map((s) => s.number)) : 0;
+        for (let i = 0; i < count - prev.length; i++) {
+          newRows.push({ number: maxNum + i + 1, name: '' });
+        }
+        return [...prev, ...newRows];
+      }
+      return prev.slice(0, count);
     });
   }, []);
 
@@ -244,6 +262,21 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       const next = [...prev];
       const existing = next[index];
       if (existing) next[index] = { ...existing, classNum };
+      return next;
+    });
+  }, []);
+
+  const toggleVacant = useCallback((index: number) => {
+    setEditStudents((prev) => {
+      const next = [...prev];
+      const existing = next[index];
+      if (existing) {
+        next[index] = {
+          ...existing,
+          isVacant: !existing.isVacant,
+          name: !existing.isVacant ? '' : existing.name,
+        };
+      }
       return next;
     });
   }, []);
@@ -378,8 +411,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const showGradeCol = isEditing || hasGradeInfo;
 
   const gridCols = showGradeCol
-    ? (isEditing ? 'grid-cols-[4.5rem_3rem_1fr_1fr_8rem_2.5rem]' : 'grid-cols-[4.5rem_3rem_1fr_1fr_8rem]')
-    : 'grid-cols-[3rem_1fr_1fr_8rem]';
+    ? (isEditing ? 'grid-cols-[7rem_3.5rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[5rem_3.5rem_1fr_1fr_8rem]')
+    : (isEditing ? 'grid-cols-[3rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[3rem_1fr_1fr_8rem]');
 
   return (
     <div className="space-y-4">
@@ -517,24 +550,48 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         <div
           className={`grid items-center px-4 py-2.5 bg-sp-bg/50 text-xs font-medium text-sp-muted ${gridCols}`}
         >
-          {showGradeCol && <span>소속</span>}
-          <span>번호</span>
-          <span>이름</span>
-          <span>메모</span>
-          <span className="text-center">출석</span>
+          {showGradeCol && (
+            <button
+              onClick={() => setSortBy('grade')}
+              className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'grade' ? 'text-sp-accent' : ''}`}
+            >
+              소속
+              {sortBy === 'grade' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+            </button>
+          )}
+          <button
+            onClick={() => setSortBy('number')}
+            className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'number' ? 'text-sp-accent' : ''}`}
+          >
+            번호
+            {sortBy === 'number' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+          </button>
+          <button
+            onClick={() => setSortBy('name')}
+            className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'name' ? 'text-sp-accent' : ''}`}
+          >
+            이름
+            {sortBy === 'name' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+          </button>
+          <span>{isEditing ? '' : '메모'}</span>
+          <span className="text-center">{isEditing ? '결번' : '출석'}</span>
           {isEditing && <span />}
         </div>
 
         {/* 학생 행 */}
         <div className="divide-y divide-sp-border/50">
-          {displayStudents.map((student, idx) => {
+          {displayStudents.map((student) => {
+            // 편집 모드에서 정렬 시 원래 인덱스를 찾아야 함
+            const originalIdx = isEditing
+              ? editStudents.findIndex((s) => s.number === student.number && s.grade === student.grade && s.classNum === student.classNum)
+              : -1;
             const attendance = localAttendance.find((s) => studentKey(s) === studentKey(student));
             const status = attendance?.status ?? 'present';
             const config = STATUS_CONFIG[status];
 
             return (
               <div
-                key={`${studentKey(student)}-${idx}`}
+                key={studentKey(student)}
                 className={`grid items-center px-4 py-2 hover:bg-white/[0.02] transition-colors ${gridCols}`}
               >
                 {/* 소속 (학년-반) */}
@@ -544,8 +601,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                       <input
                         type="number"
                         value={student.grade ?? ''}
-                        onChange={(e) => updateStudentGrade(idx, e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                        className="w-8 bg-sp-bg border border-sp-border rounded px-1 py-1 text-xs text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                        onChange={(e) => updateStudentGrade(originalIdx, e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        className="w-11 bg-sp-bg border border-sp-border rounded px-1.5 py-1 text-xs text-sp-text text-center focus:outline-none focus:border-sp-accent"
                         placeholder="학년"
                         min={1}
                         max={6}
@@ -554,8 +611,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                       <input
                         type="number"
                         value={student.classNum ?? ''}
-                        onChange={(e) => updateStudentClassNum(idx, e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                        className="w-8 bg-sp-bg border border-sp-border rounded px-1 py-1 text-xs text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                        onChange={(e) => updateStudentClassNum(originalIdx, e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        className="w-11 bg-sp-bg border border-sp-border rounded px-1.5 py-1 text-xs text-sp-text text-center focus:outline-none focus:border-sp-accent"
                         placeholder="반"
                         min={1}
                         max={30}
@@ -569,34 +626,34 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 )}
 
                 {/* 번호 */}
-                <span className="text-sm text-sp-muted">{student.number}</span>
+                <span className={`text-sm ${student.isVacant ? 'text-sp-muted/40 line-through' : 'text-sp-muted'}`}>{student.number}</span>
 
                 {/* 이름 */}
                 {isEditing ? (
-                  <div className="pr-2">
-                    <input
-                      type="text"
-                      value={student.name}
-                      onChange={(e) => updateStudentName(idx, e.target.value)}
-                      className="w-full bg-sp-bg border border-sp-border rounded-lg px-2.5 py-1 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
-                      placeholder="이름 입력"
-                    />
-                  </div>
+                  student.isVacant ? (
+                    <span className="text-sm text-sp-muted/40 italic">결번</span>
+                  ) : (
+                    <div className="pr-2">
+                      <input
+                        type="text"
+                        value={student.name}
+                        onChange={(e) => updateStudentName(originalIdx, e.target.value)}
+                        className="w-full bg-sp-bg border border-sp-border rounded-lg px-2.5 py-1 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
+                        placeholder="이름 입력"
+                      />
+                    </div>
+                  )
                 ) : (
-                  <span className="text-sm text-sp-text">{student.name}</span>
+                  student.isVacant ? (
+                    <span className="text-sm text-sp-muted/40 italic">결번</span>
+                  ) : (
+                    <span className="text-sm text-sp-text">{student.name}</span>
+                  )
                 )}
 
-                {/* 메모 */}
+                {/* 메모 (보기 모드) / 빈 칸 (편집 모드) */}
                 {isEditing ? (
-                  <div className="pr-2">
-                    <input
-                      type="text"
-                      value={student.memo ?? ''}
-                      onChange={(e) => updateStudentMemoInEdit(idx, e.target.value)}
-                      className="w-full bg-sp-bg border border-sp-border rounded-lg px-2.5 py-1 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
-                      placeholder="메모 입력"
-                    />
-                  </div>
+                  <div />
                 ) : editingMemoKey === studentKey(student) ? (
                   <div className="pr-2">
                     <input
@@ -610,6 +667,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                       placeholder="메모 입력"
                     />
                   </div>
+                ) : student.isVacant ? (
+                  <div />
                 ) : (
                   <button
                     onClick={() => startMemoEdit(studentKey(student), student.memo ?? '')}
@@ -623,8 +682,25 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                   </button>
                 )}
 
-                {/* 출석 */}
-                {attendanceInitialized ? (
+                {/* 결번 토글 (편집 모드) / 출석 (보기 모드) */}
+                {isEditing ? (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => toggleVacant(originalIdx)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        student.isVacant
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'bg-sp-bg border border-sp-border text-sp-muted hover:border-sp-accent/50'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {student.isVacant ? 'person_off' : 'person'}
+                      </span>
+                    </button>
+                  </div>
+                ) : student.isVacant ? (
+                  <div />
+                ) : attendanceInitialized ? (
                   <div className="flex justify-center">
                     <button
                       onClick={() => toggleStatus(studentKey(student))}
@@ -647,7 +723,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 {isEditing && (
                   <div className="flex justify-center">
                     <button
-                      onClick={() => removeRow(idx)}
+                      onClick={() => removeRow(originalIdx)}
                       className="p-1 text-sp-muted hover:text-red-400 rounded transition-colors"
                     >
                       <span className="material-symbols-outlined text-sm">close</span>
@@ -665,15 +741,29 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           )}
         </div>
 
-        {/* 편집 모드: 행 추가 버튼 */}
+        {/* 편집 모드: 수강 인원 + 행 추가 */}
         {isEditing && (
-          <div className="border-t border-sp-border/50 p-2">
+          <div className="border-t border-sp-border/50 p-2 flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-sp-muted">수강 인원</span>
+              <input
+                type="number"
+                value={editStudents.length || ''}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v)) setStudentCount(v);
+                }}
+                className="w-16 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                min={1}
+              />
+              <span className="text-xs text-sp-muted">명</span>
+            </div>
             <button
               onClick={addRow}
-              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-sp-accent hover:bg-sp-accent/10 rounded-lg transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs text-sp-accent hover:bg-sp-accent/10 rounded-lg transition-colors"
             >
               <span className="material-symbols-outlined text-sm">add</span>
-              학생 추가
+              1명 추가
             </button>
           </div>
         )}

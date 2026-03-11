@@ -46,11 +46,12 @@ export function useStudentLists(): StudentListOption[] {
 
     // 2. 수업반 (수업 관리에서 등록한 반)
     for (const tc of teachingClasses) {
-      if (tc.students.length > 0) {
+      const activeStudentsInClass = tc.students.filter((s) => !s.isVacant);
+      if (activeStudentsInClass.length > 0) {
         lists.push({
           type: 'teaching',
           name: `${tc.name} (${tc.subject})`,
-          students: tc.students.map((s) => ({
+          students: activeStudentsInClass.map((s) => ({
             id: `tc-${tc.id}-${s.grade ?? 0}-${s.classNum ?? 0}-${s.number}`,
             number: s.number,
             name: s.name,

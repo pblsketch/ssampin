@@ -51,7 +51,8 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
   );
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
-  const students = cls?.students ?? [];
+  const allStudents = cls?.students ?? [];
+  const students = useMemo(() => allStudents.filter((s) => !s.isVacant), [allStudents]);
 
   const hasGradeInfo = useMemo(() => {
     return students.some((s) => s.grade != null || s.classNum != null);

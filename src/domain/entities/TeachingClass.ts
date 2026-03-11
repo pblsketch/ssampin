@@ -6,6 +6,8 @@ export interface TeachingClassStudent {
   readonly grade?: number;
   /** 반 (소속 반이 다른 학생이 섞인 수업반용) */
   readonly classNum?: number;
+  /** 결번 여부 */
+  readonly isVacant?: boolean;
 }
 
 /** 학생 복합 키 (학년-반-번호) — 같은 번호의 다른 반 학생 구분용 */
