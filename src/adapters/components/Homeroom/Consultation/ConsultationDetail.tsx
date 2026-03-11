@@ -170,6 +170,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     }
   });
   const [addingCalendarId, setAddingCalendarId] = useState<string | null>(null);
+  const [expandedSlotIds, setExpandedSlotIds] = useState<Set<string>>(new Set());
   const stopPollingRef = useRef<(() => void) | null>(null);
 
   const nonVacant = useMemo(() => students.filter((s) => !s.isVacant), [students]);
@@ -567,9 +568,23 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
 
                       {/* 내용 */}
                       <div className="flex-1 min-w-0">
-                        {isBooked && booking ? (
+                        {isBooked && booking ? (() => {
+                          const isExpanded = expandedSlotIds.has(slot.id);
+                          const toggleExpand = () => {
+                            setExpandedSlotIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(slot.id)) next.delete(slot.id);
+                              else next.add(slot.id);
+                              return next;
+                            });
+                          };
+                          const raw = decryptedInfoMap.get(booking.id);
+                          const parsed = raw ? parseBookerInfo(raw) : null;
+                          const memo = decryptedMemoMap.get(booking.id);
+                          const hasDetail = parsed || raw || memo;
+                          return (
                           <div>
-                            {/* 1줄: 학생 정보 + 액션 */}
+                            {/* 1줄: 학생 정보 + 상담 방식 + 상세 토글 + 액션 */}
                             <div className="flex items-center gap-2">
                               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-500/15 text-green-400 border border-green-500/25">
                                 <span className="material-symbols-outlined text-xs">check_circle</span>
@@ -578,6 +593,24 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                               <span className="text-sp-text text-xs font-medium">
                                 {booking.studentNumber}번 {getStudentName(booking.studentNumber)}
                               </span>
+                              <span className="text-sp-muted text-[11px] flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-xs">
+                                  {getMethodIcon(booking.method)}
+                                </span>
+                                {getMethodLabel(booking.method)}
+                              </span>
+                              {hasDetail && (
+                                <button
+                                  onClick={toggleExpand}
+                                  className="text-sp-muted hover:text-sp-accent transition-colors flex items-center gap-0.5"
+                                  title={isExpanded ? '상세 정보 접기' : '상세 정보 보기'}
+                                >
+                                  <span className="material-symbols-outlined text-sm">
+                                    {isExpanded ? 'expand_less' : 'expand_more'}
+                                  </span>
+                                  <span className="text-[11px]">{isExpanded ? '접기' : '상세'}</span>
+                                </button>
+                              )}
                               {/* 액션 버튼들 */}
                               <div className="ml-auto flex items-center gap-1 shrink-0">
                                 {addedToCalendarIds.has(booking.id) ? (
@@ -620,47 +653,46 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                 )}
                               </div>
                             </div>
-                            {/* 2줄: 보호자 정보 + 상담 방식 */}
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[11px] text-sp-muted">
-                              {(() => {
-                                const raw = decryptedInfoMap.get(booking.id);
-                                if (!raw) return null;
-                                const parsed = parseBookerInfo(raw);
-                                if (parsed) {
-                                  return (
-                                    <>
-                                      <span>{parsed.relation} {parsed.name}</span>
-                                      <span className="text-sp-border">·</span>
-                                      <span className="flex items-center gap-0.5">
-                                        <span className="material-symbols-outlined text-xs">call</span>
-                                        {parsed.contact}
-                                      </span>
-                                      <span className="text-sp-border">·</span>
-                                    </>
-                                  );
-                                }
-                                return <><span>({raw})</span><span className="text-sp-border">·</span></>;
-                              })()}
-                              <span className="flex items-center gap-0.5">
-                                <span className="material-symbols-outlined text-xs">
-                                  {getMethodIcon(booking.method)}
-                                </span>
-                                {getMethodLabel(booking.method)}
-                              </span>
-                              {decryptedMemoMap.get(booking.id) && (
-                                <>
-                                  <span className="text-sp-border">·</span>
-                                  <span className="flex items-center gap-0.5" title={decryptedMemoMap.get(booking.id)}>
-                                    <span className="material-symbols-outlined text-xs">chat</span>
-                                    {decryptedMemoMap.get(booking.id)!.length > 15
-                                      ? decryptedMemoMap.get(booking.id)!.slice(0, 15) + '…'
-                                      : decryptedMemoMap.get(booking.id)}
-                                  </span>
-                                </>
-                              )}
-                            </div>
+                            {/* 펼치기: 예약자 상세 정보 (개인정보) */}
+                            {isExpanded && (
+                              <div className="mt-2 ml-0.5 p-2.5 rounded-lg bg-sp-surface/60 border border-sp-border/40 text-[11px] text-sp-muted space-y-1.5">
+                                {parsed && (
+                                  <>
+                                    <div className="flex items-center gap-2">
+                                      <span className="material-symbols-outlined text-xs text-sp-muted/60">person</span>
+                                      <span className="text-sp-muted/60 w-12 shrink-0">관계</span>
+                                      <span className="text-sp-text">{parsed.relation}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="material-symbols-outlined text-xs text-sp-muted/60">badge</span>
+                                      <span className="text-sp-muted/60 w-12 shrink-0">이름</span>
+                                      <span className="text-sp-text">{parsed.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="material-symbols-outlined text-xs text-sp-muted/60">call</span>
+                                      <span className="text-sp-muted/60 w-12 shrink-0">연락처</span>
+                                      <span className="text-sp-text">{parsed.contact}</span>
+                                    </div>
+                                  </>
+                                )}
+                                {!parsed && raw && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-xs text-sp-muted/60">info</span>
+                                    <span className="text-sp-text">{raw}</span>
+                                  </div>
+                                )}
+                                {memo && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="material-symbols-outlined text-xs text-sp-muted/60 mt-0.5">chat</span>
+                                    <span className="text-sp-muted/60 w-12 shrink-0">메모</span>
+                                    <span className="text-sp-text">{memo}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        ) : isBlocked ? (
+                          );
+                        })() : isBlocked ? (
                           <div className="flex items-center gap-1.5">
                             <span className="text-red-400 text-xs">차단된 슬롯</span>
                           </div>
