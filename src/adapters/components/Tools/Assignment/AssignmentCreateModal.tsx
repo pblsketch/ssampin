@@ -182,13 +182,24 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
                   }}
                   className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
                 >
-                  <optgroup label="학급">
-                    {studentLists.map((sl) => (
-                      <option key={sl.name} value={sl.name}>
-                        {sl.name} ({sl.students.length}명)
-                      </option>
-                    ))}
-                  </optgroup>
+                  {studentLists.some((sl) => sl.type === 'class') && (
+                    <optgroup label="담임반">
+                      {studentLists.filter((sl) => sl.type === 'class').map((sl) => (
+                        <option key={sl.name} value={sl.name}>
+                          {sl.name} ({sl.students.length}명)
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {studentLists.some((sl) => sl.type === 'teaching') && (
+                    <optgroup label="수업반">
+                      {studentLists.filter((sl) => sl.type === 'teaching').map((sl) => (
+                        <option key={sl.name} value={sl.name}>
+                          {sl.name} ({sl.students.length}명)
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               )}
             </div>

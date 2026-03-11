@@ -1,41 +1,64 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import type { StudentInfo } from '@domain/entities/Assignment';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 
 export interface StudentListOption {
-  readonly type: 'class';
+  readonly type: 'class' | 'teaching';
   readonly name: string;
   readonly students: StudentInfo[];
 }
 
 /**
  * 과제 대상 선택용 학급 명단 훅
- * MVP: 학급 명단만 지원 (수업별 명단은 Phase 4)
+ * 담임반 + 수업반(수업 관리에서 등록한 반) 모두 지원
  */
 export function useStudentLists(): StudentListOption[] {
   const students = useStudentStore((s) => s.students);
   const className = useSettingsStore((s) => s.settings.className);
+  const teachingClasses = useTeachingClassStore((s) => s.classes);
+  const loadTeachingClasses = useTeachingClassStore((s) => s.load);
+
+  // 수업반 데이터 로드 보장
+  useEffect(() => {
+    void loadTeachingClasses();
+  }, [loadTeachingClasses]);
 
   return useMemo(() => {
-    // 학급 이름이 없으면 빈 배열
-    if (!className) return [];
+    const lists: StudentListOption[] = [];
 
-    // isVacant 제외, 배열 인덱스+1로 번호 부여
-    const activeStudents = students.filter((s) => !s.isVacant);
+    // 1. 담임반 (기존 로직)
+    if (className) {
+      const activeStudents = students.filter((s) => !s.isVacant);
+      if (activeStudents.length > 0) {
+        lists.push({
+          type: 'class',
+          name: className,
+          students: activeStudents.map((s, index) => ({
+            id: s.id,
+            number: index + 1,
+            name: s.name,
+          })),
+        });
+      }
+    }
 
-    if (activeStudents.length === 0) return [];
+    // 2. 수업반 (수업 관리에서 등록한 반)
+    for (const tc of teachingClasses) {
+      if (tc.students.length > 0) {
+        lists.push({
+          type: 'teaching',
+          name: `${tc.name} (${tc.subject})`,
+          students: tc.students.map((s) => ({
+            id: `tc-${tc.id}-${s.number}`,
+            number: s.number,
+            name: s.name,
+          })),
+        });
+      }
+    }
 
-    const studentInfos: StudentInfo[] = activeStudents.map((s, index) => ({
-      id: s.id,
-      number: index + 1,
-      name: s.name,
-    }));
-
-    return [{
-      type: 'class' as const,
-      name: className,
-      students: studentInfos,
-    }];
-  }, [students, className]);
+    return lists;
+  }, [students, className, teachingClasses]);
 }

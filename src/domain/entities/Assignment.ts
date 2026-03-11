@@ -6,8 +6,8 @@ export interface StudentInfo {
 }
 
 export interface AssignmentTarget {
-  readonly type: 'class';
-  /** 학급 이름 (예: "1학년 2반") */
+  readonly type: 'class' | 'teaching';
+  /** 학급 이름 (예: "1학년 2반") 또는 수업반 이름 */
   readonly name: string;
   readonly students: readonly StudentInfo[];
 }
