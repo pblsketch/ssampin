@@ -17,6 +17,7 @@ interface DateEntry {
   date: string;
   startTime: string;
   endTime: string;
+  presetId?: string;
 }
 
 /* ──────────────── 상수 ──────────────── */
@@ -145,36 +146,26 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     [settings.periodTimes],
   );
 
-  // 프리셋 토글 → dates 배열 자동 갱신
+  // 프리셋 토글 → dates 배열에 직접 추가/제거
   const togglePreset = useCallback((preset: BreakPreset) => {
     setSelectedPresets((prev) => {
       const next = new Set(prev);
       if (next.has(preset.id)) {
         next.delete(preset.id);
+        setDates((d) => d.filter((entry) => entry.presetId !== preset.id));
       } else {
         next.add(preset.id);
+        setDates((d) => [...d, { date: studentDate, startTime: preset.startTime, endTime: preset.endTime, presetId: preset.id }]);
       }
       return next;
     });
-  }, []);
+  }, [studentDate]);
 
-  // 학생 상담: 선택된 프리셋 → dates 동기화
+  // 학생 상담: 날짜 변경 시 프리셋 항목의 date 동기화
   useEffect(() => {
     if (type !== 'student' || !studentDate) return;
-    const presetDates: DateEntry[] = breakPresets
-      .filter((p) => selectedPresets.has(p.id))
-      .map((p) => ({ date: studentDate, startTime: p.startTime, endTime: p.endTime }));
-    // 수동 추가 항목 유지 (presetId가 없는 것)
-    const manualDates = dates.filter(
-      (d) => d.date !== studentDate || !breakPresets.some((p) => p.startTime === d.startTime && p.endTime === d.endTime && selectedPresets.has(p.id)),
-    );
-    // 수동 항목 중 프리셋과 동일하지 않은 것만 유지
-    const manualOnly = manualDates.filter(
-      (d) => !presetDates.some((pd) => pd.startTime === d.startTime && pd.endTime === d.endTime && pd.date === d.date),
-    );
-    setDates([...presetDates, ...manualOnly]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, studentDate, selectedPresets, breakPresets]);
+    setDates((prev) => prev.map((d) => d.presetId ? { ...d, date: studentDate } : d));
+  }, [type, studentDate]);
 
   // 유형 변경 시 dates 리셋
   useEffect(() => {
@@ -252,7 +243,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
         type,
         methods,
         slotMinutes,
-        dates: dates.filter((d) => d.date && d.startTime && d.endTime),
+        dates: dates.filter((d) => d.date && d.startTime && d.endTime).map(({ date, startTime, endTime }) => ({ date, startTime, endTime })),
         targetClassName: '',
         targetStudents: students.filter((s) => !s.isVacant).map((_, i) => ({ number: i + 1 })),
         message: message.trim() || undefined,
@@ -434,34 +425,59 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                     <div className="flex flex-col gap-1.5">
                       {breakPresets.map((preset) => {
                         const checked = selectedPresets.has(preset.id);
+                        const dateEntry = dates.find((d) => d.presetId === preset.id);
+                        const dateIdx = dateEntry ? dates.indexOf(dateEntry) : -1;
                         return (
-                          <button
-                            key={preset.id}
-                            onClick={() => togglePreset(preset)}
-                            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-sm transition-all text-left ${
-                              checked
-                                ? 'bg-sp-accent/15 border-sp-accent/50 text-sp-text'
-                                : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
-                            }`}
-                          >
-                            <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                              checked ? 'bg-sp-accent border-sp-accent' : 'border-sp-border'
-                            }`}>
-                              {checked && <span className="material-symbols-outlined text-white text-xs">check</span>}
-                            </span>
-                            <span className="flex-1">{preset.label}</span>
-                            <span className="text-xs text-sp-muted font-mono">{preset.startTime}~{preset.endTime}</span>
-                          </button>
+                          <div key={preset.id} className={`rounded-lg border transition-all ${
+                            checked
+                              ? 'bg-sp-accent/15 border-sp-accent/50'
+                              : 'bg-sp-surface border-sp-border'
+                          }`}>
+                            <button
+                              onClick={() => togglePreset(preset)}
+                              className={`flex items-center gap-2.5 px-3 py-2.5 text-sm text-left w-full ${
+                                checked ? 'text-sp-text' : 'text-sp-muted hover:text-sp-text'
+                              }`}
+                            >
+                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                checked ? 'bg-sp-accent border-sp-accent' : 'border-sp-border'
+                              }`}>
+                                {checked && <span className="material-symbols-outlined text-white text-xs">check</span>}
+                              </span>
+                              <span className="flex-1">{preset.label}</span>
+                              {!checked && (
+                                <span className="text-xs text-sp-muted font-mono">{preset.startTime}~{preset.endTime}</span>
+                              )}
+                            </button>
+                            {checked && dateEntry && (
+                              <div className="flex items-center gap-2 px-3 pb-2.5">
+                                <input
+                                  type="time"
+                                  value={dateEntry.startTime}
+                                  onChange={(e) => updateDate(dateIdx, 'startTime', e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                                />
+                                <span className="text-sp-muted text-xs">~</span>
+                                <input
+                                  type="time"
+                                  value={dateEntry.endTime}
+                                  onChange={(e) => updateDate(dateIdx, 'endTime', e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                                />
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
                   </div>
                 )}
 
-                {/* 수동 추가된 시간대 (프리셋에 해당하지 않는 것) */}
-                {dates.filter((d) => !breakPresets.some((p) => selectedPresets.has(p.id) && p.startTime === d.startTime && p.endTime === d.endTime && d.date === studentDate)).map((d) => {
+                {/* 수동 추가된 시간대 */}
+                {dates.filter((d) => !d.presetId).map((d) => {
                   const realIdx = dates.indexOf(d);
-                  const preview = slotPreview[realIdx];
                   const isInvalid = d.date !== '' && d.startTime >= d.endTime;
                   return (
                     <div key={`manual-${realIdx}`} className="bg-sp-surface rounded-lg p-3 border border-sp-border flex flex-col gap-2">
@@ -479,9 +495,6 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                           onChange={(e) => updateDate(realIdx, 'endTime', e.target.value)}
                           className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
                         />
-                        <span className="text-xs text-sp-muted shrink-0">
-                          → <span className={preview && preview.count > 0 ? 'text-sp-accent font-medium' : 'text-sp-muted'}>{preview?.count ?? 0}슬롯</span>
-                        </span>
                         <button
                           onClick={() => removeDate(realIdx)}
                           className="text-sp-muted hover:text-red-400 transition-colors shrink-0"
