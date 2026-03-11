@@ -248,6 +248,23 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     });
   }, []);
 
+  /* ── 학년/반 일괄 입력 ── */
+  const [bulkGrade, setBulkGrade] = useState('');
+  const [bulkClassNum, setBulkClassNum] = useState('');
+
+  const applyBulkGrade = useCallback(() => {
+    const g = bulkGrade ? parseInt(bulkGrade, 10) : undefined;
+    const c = bulkClassNum ? parseInt(bulkClassNum, 10) : undefined;
+    if (g == null && c == null) return;
+    setEditStudents((prev) =>
+      prev.map((s) => ({
+        ...s,
+        ...(g != null ? { grade: g } : {}),
+        ...(c != null ? { classNum: c } : {}),
+      })),
+    );
+  }, [bulkGrade, bulkClassNum]);
+
   const handlePasteImport = useCallback(() => {
     const lines = pasteText.trim().split('\n').filter((line) => line.trim());
     if (lines.length === 0) return;
@@ -357,9 +374,12 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const displayStudents = sortedStudents;
 
-  const gridCols = hasGradeInfo
+  // 편집 모드에서는 항상 소속 컬럼 표시 (직접 입력 가능하도록)
+  const showGradeCol = isEditing || hasGradeInfo;
+
+  const gridCols = showGradeCol
     ? (isEditing ? 'grid-cols-[4.5rem_3rem_1fr_1fr_8rem_2.5rem]' : 'grid-cols-[4.5rem_3rem_1fr_1fr_8rem]')
-    : (isEditing ? 'grid-cols-[3rem_1fr_1fr_8rem_2.5rem]' : 'grid-cols-[3rem_1fr_1fr_8rem]');
+    : 'grid-cols-[3rem_1fr_1fr_8rem]';
 
   return (
     <div className="space-y-4">
@@ -453,13 +473,51 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         </div>
       </div>
 
+      {/* ── 학년/반 일괄 입력 (편집 모드) ── */}
+      {isEditing && (
+        <div className="flex items-center gap-3 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5">
+          <span className="text-xs text-sp-muted whitespace-nowrap">소속 일괄 입력</span>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              value={bulkGrade}
+              onChange={(e) => setBulkGrade(e.target.value)}
+              className="w-14 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
+              placeholder="학년"
+              min={1}
+              max={6}
+            />
+            <span className="text-xs text-sp-muted">학년</span>
+            <input
+              type="number"
+              value={bulkClassNum}
+              onChange={(e) => setBulkClassNum(e.target.value)}
+              className="w-14 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
+              placeholder="반"
+              min={1}
+              max={30}
+            />
+            <span className="text-xs text-sp-muted">반</span>
+          </div>
+          <button
+            onClick={applyBulkGrade}
+            disabled={!bulkGrade && !bulkClassNum}
+            className="flex items-center gap-1 px-3 py-1 text-xs text-sp-accent bg-sp-accent/10 rounded-lg
+                       hover:bg-sp-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-sm">done_all</span>
+            전체 적용
+          </button>
+        </div>
+      )}
+
       {/* ── 통합 테이블 ── */}
       <div className="bg-sp-card border border-sp-border rounded-xl overflow-hidden">
         {/* 테이블 헤더 */}
         <div
           className={`grid items-center px-4 py-2.5 bg-sp-bg/50 text-xs font-medium text-sp-muted ${gridCols}`}
         >
-          {hasGradeInfo && <span>소속</span>}
+          {showGradeCol && <span>소속</span>}
           <span>번호</span>
           <span>이름</span>
           <span>메모</span>
@@ -479,8 +537,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 key={`${studentKey(student)}-${idx}`}
                 className={`grid items-center px-4 py-2 hover:bg-white/[0.02] transition-colors ${gridCols}`}
               >
-                {/* 소속 (학년-반, 혼합 학급일 때만) */}
-                {hasGradeInfo && (
+                {/* 소속 (학년-반) */}
+                {showGradeCol && (
                   isEditing ? (
                     <div className="flex gap-1 pr-1">
                       <input
