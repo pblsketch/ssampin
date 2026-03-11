@@ -25,6 +25,8 @@ import type { IAnalyticsPort } from '@domain/ports/IAnalyticsPort';
 import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepository';
 import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
 import type { IAssignmentServicePort } from '@domain/ports/IAssignmentServicePort';
+import type { IConsultationRepository } from '@domain/repositories/IConsultationRepository';
+import type { ISurveyRepository } from '@domain/repositories/ISurveyRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -51,6 +53,10 @@ import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeaching
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
 import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentRepository';
+import { JsonConsultationRepository } from '@adapters/repositories/JsonConsultationRepository';
+import { JsonSurveyRepository } from '@adapters/repositories/JsonSurveyRepository';
+import { ConsultationSupabaseClient } from '@infrastructure/supabase/ConsultationSupabaseClient';
+import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
 
 import { AuthenticateGoogle } from '@usecases/calendar/AuthenticateGoogle';
 import { SyncToGoogle } from '@usecases/calendar/SyncToGoogle';
@@ -172,6 +178,20 @@ export function getGoogleDriveClient(
   }
   return _driveClient;
 }
+
+// === 상담 예약 ===
+
+export const consultationRepository: IConsultationRepository =
+  new JsonConsultationRepository(storage);
+
+export const consultationSupabaseClient = new ConsultationSupabaseClient();
+
+// === 설문/체크리스트 ===
+
+export const surveyRepository: ISurveyRepository =
+  new JsonSurveyRepository(storage);
+
+export const surveySupabaseClient = new SurveySupabaseClient();
 
 export function resetGoogleDriveClient(): void {
   _driveClient = null;

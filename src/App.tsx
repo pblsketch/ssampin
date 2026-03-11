@@ -5,6 +5,7 @@ import { Dashboard } from '@adapters/components/Dashboard/Dashboard';
 import { Seating } from '@adapters/components/Seating/Seating';
 import { TimetablePage } from '@adapters/components/Timetable/TimetablePage';
 import { StudentRecords } from '@adapters/components/StudentRecords/StudentRecords';
+import { HomeroomPage } from '@adapters/components/Homeroom/HomeroomPage';
 import { Schedule } from '@adapters/components/Schedule/Schedule';
 import { Todo } from '@adapters/components/Todo/Todo';
 import { MemoPage } from '@adapters/components/Memo/MemoPage';
@@ -64,8 +65,11 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   if (page === 'timetable') {
     return <PinGuard feature="timetable"><TimetablePage /></PinGuard>;
   }
+  if (page === 'homeroom') {
+    return <PinGuard feature="studentRecords"><HomeroomPage /></PinGuard>;
+  }
   if (page === 'student-records') {
-    return <PinGuard feature="studentRecords"><StudentRecords /></PinGuard>;
+    return <PinGuard feature="studentRecords"><HomeroomPage /></PinGuard>;
   }
   if (page === 'schedule') {
     return <PinGuard feature="schedule"><Schedule /></PinGuard>;

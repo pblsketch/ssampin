@@ -5,6 +5,7 @@ export type PageId =
   | 'timetable'
   | 'seating'
   | 'schedule'
+  | 'homeroom'
   | 'student-records'
   | 'meal'
   | 'memo'
@@ -52,9 +53,8 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: '대시보드', icon: 'dashboard' },
   { id: 'timetable', label: '시간표', icon: 'calendar_view_day' },
-  { id: 'seating', label: '학급 자리 배치', icon: 'airline_seat_recline_normal' },
   { id: 'schedule', label: '일정', icon: 'event_note' },
-  { id: 'student-records', label: '담임메모', icon: 'school' },
+  { id: 'homeroom', label: '담임 업무', icon: 'school' },
   { id: 'memo', label: '메모', icon: 'sticky_note_2' },
   { id: 'todo', label: '할 일', icon: 'check_circle' },
   { id: 'class-management', label: '수업 관리', icon: 'menu_book' },
@@ -81,6 +81,7 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
   timetable: 'timetable',
   seating: 'seating',
   schedule: 'schedule',
+  homeroom: 'studentRecords',
   'student-records': 'studentRecords',
   meal: 'meal',
   memo: 'memo',

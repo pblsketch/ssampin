@@ -1,0 +1,333 @@
+import { useState, useMemo, useCallback, useRef } from 'react';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
+import type { StudentRecord } from '@domain/entities/StudentRecord';
+import {
+  filterByStudent,
+  filterByCategory,
+  filterBySubcategory,
+  filterByDateRange,
+  filterByKeyword,
+  getAttendanceStats,
+  sortByDateDesc,
+} from '@domain/rules/studentRecordRules';
+import { StudentTimelineView } from './StudentTimelineView';
+import { DefaultRecordListView } from './DefaultRecordListView';
+import {
+  type ModeProps,
+  COUNSELING_METHODS,
+  getWeekRange,
+  getMonthRange,
+} from './recordUtils';
+
+function SearchMode({ students, records, categories }: ModeProps) {
+  const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone } =
+    useStudentRecordsStore();
+  const [dismissedSearchGuide, setDismissedSearchGuide] = useState(
+    () => localStorage.getItem('ssampin:record-search-guide-dismissed') === 'true',
+  );
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
+  const [selectedMethod, setSelectedMethod] = useState<string>('');
+  const [keyword, setKeyword] = useState('');
+  const [debouncedKeyword, setDebouncedKeyword] = useState('');
+  const [followUpOnly, setFollowUpOnly] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editSubcategory, setEditSubcategory] = useState('');
+
+  // debounce keyword
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleKeywordChange = useCallback((val: string) => {
+    setKeyword(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setDebouncedKeyword(val), 300);
+  }, []);
+
+  const studentMap = useMemo(
+    () => new Map(students.map((s) => [s.id, s])),
+    [students],
+  );
+
+  // 선택된 카테고리의 서브카테고리 목록
+  const subcategoryOptions = useMemo(() => {
+    if (!selectedCategory) return [];
+    const cat = categories.find((c) => c.id === selectedCategory);
+    if (!cat) return [];
+    if (cat.id === 'attendance') {
+      const subs: string[] = [];
+      for (const t of ATTENDANCE_TYPES) {
+        for (const r of ATTENDANCE_REASONS) {
+          subs.push(`${t} (${r})`);
+        }
+      }
+      return subs;
+    }
+    return [...cat.subcategories];
+  }, [selectedCategory, categories]);
+
+  // 필터 적용 여부
+  const hasFilters = selectedStudentId || selectedCategory || selectedSubcategory ||
+    selectedMethod || debouncedKeyword || followUpOnly || periodFilter !== 'all';
+
+  const resetFilters = useCallback(() => {
+    setSelectedStudentId('');
+    setSelectedCategory('');
+    setSelectedSubcategory('');
+    setSelectedMethod('');
+    setKeyword('');
+    setDebouncedKeyword('');
+    setFollowUpOnly(false);
+    setPeriodFilter('all');
+  }, [setPeriodFilter]);
+
+  const filtered = useMemo(() => {
+    let result = [...records];
+
+    if (selectedStudentId) {
+      result = filterByStudent(result, selectedStudentId) as StudentRecord[];
+    }
+    if (selectedCategory) {
+      result = filterByCategory(result, selectedCategory) as StudentRecord[];
+    }
+    if (selectedSubcategory) {
+      result = filterBySubcategory(result, selectedSubcategory) as StudentRecord[];
+    }
+    if (selectedMethod) {
+      result = result.filter((r) => r.method === selectedMethod);
+    }
+    if (debouncedKeyword) {
+      result = filterByKeyword(result, debouncedKeyword) as StudentRecord[];
+    }
+    if (followUpOnly) {
+      result = result.filter((r) => r.followUp && !r.followUpDone);
+    }
+    if (periodFilter === 'week') {
+      const { start, end } = getWeekRange();
+      result = filterByDateRange(result, start, end) as StudentRecord[];
+    } else if (periodFilter === 'month') {
+      const { start, end } = getMonthRange();
+      result = filterByDateRange(result, start, end) as StudentRecord[];
+    }
+
+    return sortByDateDesc(result);
+  }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, periodFilter]);
+
+  // 날짜별 그룹핑
+  const grouped = useMemo(() => {
+    const map = new Map<string, StudentRecord[]>();
+    for (const record of filtered) {
+      const existing = map.get(record.date);
+      if (existing) existing.push(record);
+      else map.set(record.date, [record]);
+    }
+    return Array.from(map.entries());
+  }, [filtered]);
+
+  const handleEdit = useCallback((record: StudentRecord) => {
+    setEditingId(record.id);
+    setEditContent(record.content);
+    setEditCategory(record.category);
+    setEditSubcategory(record.subcategory);
+  }, []);
+
+  const handleEditSave = useCallback(async (record: StudentRecord) => {
+    await updateRecord({
+      ...record,
+      content: editContent,
+      category: editCategory,
+      subcategory: editSubcategory,
+    });
+    setEditingId(null);
+    setEditContent('');
+    setEditCategory('');
+    setEditSubcategory('');
+  }, [editContent, editCategory, editSubcategory, updateRecord]);
+
+  // 2-1: 타임라인 뷰 데이터 (학생 선택 시)
+  const selectedStudent = selectedStudentId ? students.find((s) => s.id === selectedStudentId) : null;
+  const studentStats = useMemo(() => {
+    if (!selectedStudentId) return null;
+    const stats = getAttendanceStats(records, selectedStudentId);
+    const studentRecs = filterByStudent(records, selectedStudentId);
+    const counseling = studentRecs.filter((r) => r.category === 'counseling').length;
+    return { ...stats, counseling, total: studentRecs.length };
+  }, [records, selectedStudentId]);
+
+  return (
+    <div className="flex-1 flex flex-col gap-4 min-h-0">
+      {/* 수정 안내 배너 (첫 방문 시) */}
+      {!dismissedSearchGuide && (
+        <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
+                        rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+          <span className="material-symbols-outlined text-base">tips_and_updates</span>
+          <span>각 기록의 <span className="inline-flex items-center gap-0.5 mx-0.5"><span className="material-symbols-outlined text-sm">edit</span></span> 버튼으로 내용을 수정하고, <span className="inline-flex items-center gap-0.5 mx-0.5"><span className="material-symbols-outlined text-sm">delete</span></span> 버튼으로 삭제할 수 있습니다.</span>
+          <button
+            onClick={() => {
+              setDismissedSearchGuide(true);
+              localStorage.setItem('ssampin:record-search-guide-dismissed', 'true');
+            }}
+            className="ml-auto text-sp-muted hover:text-sp-text transition-colors flex-shrink-0"
+            title="닫기"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      )}
+
+      {/* 2-4: 강화된 필터 바 */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* 키워드 검색 */}
+        <div className="relative">
+          <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-sp-muted text-base">
+            search
+          </span>
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => handleKeywordChange(e.target.value)}
+            placeholder="키워드 검색..."
+            className="bg-sp-surface border border-sp-border rounded-lg pl-8 pr-3 py-2 text-sm text-sp-text w-40 focus:outline-none focus:ring-1 focus:ring-sp-accent placeholder-sp-muted"
+          />
+        </div>
+
+        {/* 학생 선택 */}
+        <select
+          value={selectedStudentId}
+          onChange={(e) => setSelectedStudentId(e.target.value)}
+          className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+        >
+          <option value="">전체 학생</option>
+          {students.map((s, idx) => (
+            <option key={s.id} value={s.id}>{idx + 1} {s.name}</option>
+          ))}
+        </select>
+
+        {/* 카테고리 필터 */}
+        <select
+          value={selectedCategory}
+          onChange={(e) => { setSelectedCategory(e.target.value); setSelectedSubcategory(''); }}
+          className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+        >
+          <option value="">전체 카테고리</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
+          ))}
+        </select>
+
+        {/* 2-4: 서브카테고리 필터 */}
+        {subcategoryOptions.length > 0 && (
+          <select
+            value={selectedSubcategory}
+            onChange={(e) => setSelectedSubcategory(e.target.value)}
+            className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+          >
+            <option value="">전체 하위</option>
+            {subcategoryOptions.map((sub) => (
+              <option key={sub} value={sub}>{sub}</option>
+            ))}
+          </select>
+        )}
+
+        {/* 2-4: 상담 방법 필터 */}
+        <select
+          value={selectedMethod}
+          onChange={(e) => setSelectedMethod(e.target.value)}
+          className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+        >
+          <option value="">전체 방법</option>
+          {COUNSELING_METHODS.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
+
+        {/* 2-3: 미완료 후속조치 필터 */}
+        <button
+          onClick={() => setFollowUpOnly(!followUpOnly)}
+          className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+            followUpOnly
+              ? 'bg-sp-accent text-white'
+              : 'bg-sp-surface text-sp-muted hover:text-white border border-sp-border'
+          }`}
+        >
+          {'\uD83D\uDCCC'} 미완료만
+        </button>
+
+        {/* 기간 필터 */}
+        <div className="flex gap-1 bg-sp-surface rounded-lg p-1 ml-auto">
+          {([
+            { id: 'week', label: '이번 주' },
+            { id: 'month', label: '이번 달' },
+            { id: 'all', label: '전체' },
+          ] as const).map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setPeriodFilter(f.id)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${periodFilter === f.id
+                ? 'bg-sp-accent text-white'
+                : 'text-sp-muted hover:text-white'
+                }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 2-4: 필터 초기화 */}
+        {hasFilters && (
+          <button
+            onClick={resetFilters}
+            className="text-xs text-red-400 hover:text-red-300 transition-colors"
+          >
+            ✕ 필터 초기화
+          </button>
+        )}
+      </div>
+
+      {/* 2-1: 학생 선택 시 타임라인 뷰, 아니면 기존 뷰 */}
+      {selectedStudentId && selectedStudent ? (
+        <StudentTimelineView
+          student={selectedStudent}
+          records={filtered}
+          categories={categories}
+          studentMap={studentMap}
+          stats={studentStats}
+          onEdit={handleEdit}
+          onDelete={deleteRecord}
+          onToggleFollowUp={toggleFollowUpDone}
+          editingId={editingId}
+          editContent={editContent}
+          setEditContent={setEditContent}
+          editCategory={editCategory}
+          setEditCategory={setEditCategory}
+          editSubcategory={editSubcategory}
+          setEditSubcategory={setEditSubcategory}
+          onEditSave={handleEditSave}
+          onEditCancel={() => setEditingId(null)}
+        />
+      ) : (
+        <DefaultRecordListView
+          grouped={grouped}
+          categories={categories}
+          studentMap={studentMap}
+          onEdit={handleEdit}
+          onDelete={deleteRecord}
+          onToggleFollowUp={toggleFollowUpDone}
+          editingId={editingId}
+          editContent={editContent}
+          setEditContent={setEditContent}
+          editCategory={editCategory}
+          setEditCategory={setEditCategory}
+          editSubcategory={editSubcategory}
+          setEditSubcategory={setEditSubcategory}
+          onEditSave={handleEditSave}
+          onEditCancel={() => setEditingId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+export { SearchMode };

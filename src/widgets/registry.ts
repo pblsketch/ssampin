@@ -13,6 +13,8 @@ import { StudentRecords } from './items/StudentRecords';
 import { TodoWidget } from './items/TodoWidget';
 import { BookmarksWidget } from './items/Bookmarks';
 import { DDayCounter } from './items/DDayCounter';
+import { SurveyWidget } from './items/SurveyWidget';
+import { ConsultationWidget } from './items/ConsultationWidget';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -115,8 +117,8 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom'],
     },
     component: StudentRecords,
-    navigateTo: 'student-records',
-    navigateLabel: '담임 메모장 보기',
+    navigateTo: 'homeroom',
+    navigateLabel: '담임 업무 보기',
   },
 
   // ─── 정보 카테고리 ───
@@ -201,6 +203,42 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: DDayCounter,
+  },
+
+  // ─── 설문/체크리스트 ───
+  {
+    id: 'survey',
+    name: '설문/체크리스트',
+    icon: '📋',
+    description: '진행 중인 설문/체크리스트 현황을 확인합니다',
+    category: 'class',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high'],
+      role: ['homeroom'],
+    },
+    component: SurveyWidget,
+    navigateTo: 'homeroom',
+    navigateLabel: '설문 탭 보기',
+  },
+
+  // ─── 상담 예약 ───
+  {
+    id: 'consultation',
+    name: '상담 예약',
+    icon: '📅',
+    description: '진행 중인 상담 예약 현황을 확인합니다',
+    category: 'class',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high'],
+      role: ['homeroom'],
+    },
+    component: ConsultationWidget,
+    navigateTo: 'homeroom',
+    navigateLabel: '상담 예약 탭 보기',
   },
 
   // ─── 즐겨찾기 카테고리 ───

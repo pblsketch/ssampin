@@ -403,7 +403,7 @@ function RosterView({ isRosterEditing }: RosterViewProps) {
 
 /* ──────────────────────── 메인 Seating 페이지 ──────────────────────── */
 
-export function Seating() {
+export function Seating(_props?: { embedded?: boolean }) {
   const { track } = useAnalytics();
   const {
     seating,
