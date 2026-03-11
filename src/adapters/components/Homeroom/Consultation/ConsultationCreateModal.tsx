@@ -33,7 +33,7 @@ const METHOD_OPTIONS: { value: ConsultationMethod; label: string; icon: string }
   { value: 'video', label: '화상', icon: 'videocam' },
 ];
 
-const SLOT_PRESETS = [10, 15, 20, 30, 60];
+const SLOT_PRESETS = [10, 15, 20, 25, 30];
 
 /* ──────────────── 유틸 ──────────────── */
 
@@ -118,6 +118,19 @@ function computeBreakPresets(periodTimes: readonly PeriodTime[]): BreakPreset[] 
   return presets;
 }
 
+/** 시작시간부터 slotMinutes 간격으로 endTime까지 슬롯 시작시간 목록 생성 */
+function buildSlotChips(startTime: string, endTime: string, slotMinutes: number): string[] {
+  const start = parseTimeToMinutes(startTime);
+  const end = parseTimeToMinutes(endTime);
+  const chips: string[] = [];
+  let current = start;
+  while (current + slotMinutes <= end) {
+    chips.push(minutesToTime(current));
+    current += slotMinutes;
+  }
+  return chips;
+}
+
 /* ──────────────── 컴포넌트 ──────────────── */
 
 export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProps) {
@@ -146,8 +159,50 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     [settings.periodTimes],
   );
 
-  // 프리셋 토글 → dates 배열에 직접 추가/제거
-  const togglePreset = useCallback((preset: BreakPreset) => {
+  // slotMinutes 변경 시 불가 프리셋 해제 + 남은 프리셋 칩 재생성
+  useEffect(() => {
+    if (type !== 'student') return;
+    const toRemove = new Set<string>();
+    const newEntries: DateEntry[] = [];
+
+    for (const presetId of selectedPresets) {
+      const preset = breakPresets.find((p) => p.id === presetId);
+      if (!preset) continue;
+      const chips = buildSlotChips(preset.startTime, preset.endTime, slotMinutes);
+      if (chips.length === 0) {
+        toRemove.add(presetId);
+        continue;
+      }
+      // 모든 칩을 선택 상태로 재생성
+      for (const chip of chips) {
+        newEntries.push({
+          date: studentDate,
+          startTime: chip,
+          endTime: minutesToTime(parseTimeToMinutes(chip) + slotMinutes),
+          presetId,
+        });
+      }
+    }
+
+    if (toRemove.size > 0) {
+      setSelectedPresets((prev) => {
+        const next = new Set(prev);
+        for (const id of toRemove) next.delete(id);
+        return next;
+      });
+    }
+
+    // 수동 항목 유지 + 프리셋 항목 재생성
+    setDates((prev) => [
+      ...prev.filter((d) => !d.presetId),
+      ...newEntries,
+    ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotMinutes, type, breakPresets]);
+
+  // 프리셋 토글 → 개별 칩 DateEntry 일괄 추가/제거
+  const togglePreset = useCallback((preset: BreakPreset, disabled: boolean) => {
+    if (disabled) return;
     setSelectedPresets((prev) => {
       const next = new Set(prev);
       if (next.has(preset.id)) {
@@ -155,11 +210,44 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
         setDates((d) => d.filter((entry) => entry.presetId !== preset.id));
       } else {
         next.add(preset.id);
-        setDates((d) => [...d, { date: studentDate, startTime: preset.startTime, endTime: preset.endTime, presetId: preset.id }]);
+        const chips = buildSlotChips(preset.startTime, preset.endTime, slotMinutes);
+        const newEntries = chips.map((chip) => ({
+          date: studentDate,
+          startTime: chip,
+          endTime: minutesToTime(parseTimeToMinutes(chip) + slotMinutes),
+          presetId: preset.id,
+        }));
+        setDates((d) => [...d, ...newEntries]);
       }
       return next;
     });
-  }, [studentDate]);
+  }, [studentDate, slotMinutes]);
+
+  // 개별 칩 토글 (프리셋 내 특정 시간 선택/해제)
+  const toggleChip = useCallback((presetId: string, chipStart: string) => {
+    setDates((prev) => {
+      const exists = prev.some((d) => d.presetId === presetId && d.startTime === chipStart);
+      if (exists) {
+        const filtered = prev.filter((d) => !(d.presetId === presetId && d.startTime === chipStart));
+        // 프리셋의 모든 칩이 해제되면 프리셋 자체도 해제
+        if (!filtered.some((d) => d.presetId === presetId)) {
+          setSelectedPresets((p) => {
+            const next = new Set(p);
+            next.delete(presetId);
+            return next;
+          });
+        }
+        return filtered;
+      } else {
+        return [...prev, {
+          date: studentDate,
+          startTime: chipStart,
+          endTime: minutesToTime(parseTimeToMinutes(chipStart) + slotMinutes),
+          presetId,
+        }];
+      }
+    });
+  }, [studentDate, slotMinutes]);
 
   // 학생 상담: 날짜 변경 시 프리셋 항목의 date 동기화
   useEffect(() => {
@@ -214,11 +302,10 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
       if (!d.date || !d.startTime || !d.endTime) return { ...d, count: 0 };
       const start = parseTimeToMinutes(d.startTime);
       const end = parseTimeToMinutes(d.endTime);
-      // 학생 상담: 프리셋 1개 = 슬롯 1개
-      const count = start < end ? (type === 'student' ? 1 : Math.floor((end - start) / slotMinutes)) : 0;
+      const count = start < end ? Math.floor((end - start) / slotMinutes) : 0;
       return { ...d, count };
     });
-  }, [dates, slotMinutes, type]);
+  }, [dates, slotMinutes]);
 
   const totalSlots = slotPreview.reduce((sum, d) => sum + d.count, 0);
 
@@ -349,9 +436,11 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
             )}
           </div>
 
-          {/* 시간 단위 (학부모 상담만) */}
-          {type !== 'student' && <div>
-            <label className="text-xs font-medium text-sp-muted mb-1.5 block">슬롯 단위</label>
+          {/* 시간 단위 (학생/학부모 모두 표시) */}
+          <div>
+            <label className="text-xs font-medium text-sp-muted mb-1.5 block">
+              {type === 'student' ? '1인당 상담 시간' : '슬롯 단위'}
+            </label>
             <div className="flex flex-wrap gap-2">
               {SLOT_PRESETS.map((mins) => (
                 <button
@@ -396,7 +485,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                 <span className="text-xs text-sp-muted">분 (5~180)</span>
               </div>
             )}
-          </div>}
+          </div>
 
           {/* 상담 날짜 */}
           <div>
@@ -425,18 +514,30 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                     <div className="flex flex-col gap-1.5">
                       {breakPresets.map((preset) => {
                         const checked = selectedPresets.has(preset.id);
-                        const dateEntry = dates.find((d) => d.presetId === preset.id);
-                        const dateIdx = dateEntry ? dates.indexOf(dateEntry) : -1;
+                        const allChips = buildSlotChips(preset.startTime, preset.endTime, slotMinutes);
+                        const presetSlotCount = allChips.length;
+                        const selectedChipCount = dates.filter((d) => d.presetId === preset.id).length;
+                        const disabled = !checked && presetSlotCount === 0;
                         return (
-                          <div key={preset.id} className={`rounded-lg border transition-all ${
-                            checked
-                              ? 'bg-sp-accent/15 border-sp-accent/50'
-                              : 'bg-sp-surface border-sp-border'
-                          }`}>
+                          <div
+                            key={preset.id}
+                            className={`rounded-lg border transition-all ${
+                              disabled
+                                ? 'opacity-40 bg-sp-surface border-sp-border'
+                                : checked
+                                  ? 'bg-sp-accent/15 border-sp-accent/50'
+                                  : 'bg-sp-surface border-sp-border'
+                            }`}
+                          >
                             <button
-                              onClick={() => togglePreset(preset)}
+                              onClick={() => togglePreset(preset, disabled)}
+                              disabled={disabled}
                               className={`flex items-center gap-2.5 px-3 py-2.5 text-sm text-left w-full ${
-                                checked ? 'text-sp-text' : 'text-sp-muted hover:text-sp-text'
+                                disabled
+                                  ? 'cursor-not-allowed text-sp-muted'
+                                  : checked
+                                    ? 'text-sp-text'
+                                    : 'text-sp-muted hover:text-sp-text'
                               }`}
                             >
                               <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
@@ -448,24 +549,38 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                               {!checked && (
                                 <span className="text-xs text-sp-muted font-mono">{preset.startTime}~{preset.endTime}</span>
                               )}
+                              {/* N명 가능 / 불가 배지 (또는 선택 현황) */}
+                              <span className={`text-[10px] font-medium ml-1 shrink-0 ${
+                                disabled ? 'text-sp-muted/50'
+                                  : checked ? 'text-sp-accent'
+                                    : presetSlotCount >= 1 ? 'text-sp-accent' : 'text-sp-muted/50'
+                              }`}>
+                                {disabled ? '불가'
+                                  : checked ? `${selectedChipCount}/${presetSlotCount}명`
+                                    : `${presetSlotCount}명 가능`}
+                              </span>
                             </button>
-                            {checked && dateEntry && (
-                              <div className="flex items-center gap-2 px-3 pb-2.5">
-                                <input
-                                  type="time"
-                                  value={dateEntry.startTime}
-                                  onChange={(e) => updateDate(dateIdx, 'startTime', e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
-                                />
-                                <span className="text-sp-muted text-xs">~</span>
-                                <input
-                                  type="time"
-                                  value={dateEntry.endTime}
-                                  onChange={(e) => updateDate(dateIdx, 'endTime', e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
-                                />
+                            {/* 선택 가능한 시간 칩 */}
+                            {checked && allChips.length > 0 && (
+                              <div className="flex flex-wrap gap-1 px-3 pb-2.5">
+                                {allChips.map((chip) => {
+                                  const isSelected = dates.some(
+                                    (d) => d.presetId === preset.id && d.startTime === chip,
+                                  );
+                                  return (
+                                    <button
+                                      key={chip}
+                                      onClick={(e) => { e.stopPropagation(); toggleChip(preset.id, chip); }}
+                                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-mono border transition-all ${
+                                        isSelected
+                                          ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                                          : 'bg-sp-surface border-sp-border text-sp-muted/50 hover:text-sp-muted hover:border-sp-muted/50'
+                                      }`}
+                                    >
+                                      {chip}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -586,8 +701,30 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                   <span className={totalSlots > 0 ? 'text-sp-text font-medium' : 'text-amber-400'}>
                     {totalSlots}슬롯
                   </span>
-                  {type !== 'student' && ` (${slotMinutes}분 간격)`}
+                  {` (${slotMinutes}분 간격)`}
                 </span>
+                {/* 학생 상담: 프리셋별 내역 (그룹핑) */}
+                {type === 'student' && (() => {
+                  const groups = new Map<string, number>();
+                  for (const d of dates) {
+                    if (!d.presetId) continue;
+                    groups.set(d.presetId, (groups.get(d.presetId) ?? 0) + 1);
+                  }
+                  if (groups.size === 0) return null;
+                  return (
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                      {[...groups.entries()].map(([presetId, count]) => {
+                        const preset = breakPresets.find((p) => p.id === presetId);
+                        if (!preset) return null;
+                        return (
+                          <span key={presetId} className="text-[10px] text-sp-muted">
+                            {preset.label}: <span className="text-sp-accent">{count}슬롯</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
