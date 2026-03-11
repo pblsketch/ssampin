@@ -53,21 +53,18 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = cls?.students ?? [];
 
-  const hasMixedGrades = useMemo(() => {
-    const withGrade = students.filter((s) => s.grade != null && s.classNum != null);
-    if (withGrade.length === 0) return false;
-    const first = withGrade[0];
-    return withGrade.some((s) => s.grade !== first!.grade || s.classNum !== first!.classNum);
+  const hasGradeInfo = useMemo(() => {
+    return students.some((s) => s.grade != null || s.classNum != null);
   }, [students]);
 
   const sortedStudents = useMemo(() => {
-    if (!hasMixedGrades) return students;
+    if (!hasGradeInfo) return students;
     return [...students].sort((a, b) => {
       if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
       if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
       return a.number - b.number;
     });
-  }, [students, hasMixedGrades]);
+  }, [students, hasGradeInfo]);
 
   // 날짜/교시 변경 시 기존 기록 로드 또는 기본값 세팅
   const loadRecord = useCallback(
@@ -278,9 +275,9 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
       {initialized && (
         <div className="bg-sp-surface border border-sp-border rounded-xl overflow-hidden">
           {/* 헤더 */}
-          <div className={`grid ${hasMixedGrades ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} px-4 py-2 border-b border-sp-border
+          <div className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} px-4 py-2 border-b border-sp-border
                           text-xs text-sp-muted font-medium`}>
-            {hasMixedGrades && <span>소속</span>}
+            {hasGradeInfo && <span>소속</span>}
             <span>번호</span>
             <span>이름</span>
             <span className="text-center">출석상태</span>
@@ -296,10 +293,10 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
               return (
                 <div
                   key={studentKey(student)}
-                  className={`grid ${hasMixedGrades ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} items-center px-4 py-2.5
+                  className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} items-center px-4 py-2.5
                              hover:bg-sp-card/50 transition-colors`}
                 >
-                  {hasMixedGrades && (
+                  {hasGradeInfo && (
                     <span className="text-xs text-sp-muted">
                       {student.grade != null && student.classNum != null ? `${student.grade}-${student.classNum}` : ''}
                     </span>

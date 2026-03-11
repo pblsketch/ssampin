@@ -46,28 +46,27 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const cls = classes.find((c) => c.id === classId);
   const students = cls?.students ?? [];
 
-  const hasMixedGrades = useMemo(() => {
-    const withGrade = students.filter((s) => s.grade != null && s.classNum != null);
-    if (withGrade.length === 0) return false;
-    const first = withGrade[0];
-    return withGrade.some((s) => s.grade !== first!.grade || s.classNum !== first!.classNum);
-  }, [students]);
-
   /* ── 편집 모드 상태 ── */
   const [isEditing, setIsEditing] = useState(false);
   const [editStudents, setEditStudents] = useState<TeachingClassStudent[]>([]);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
 
+  const hasGradeInfo = useMemo(() => {
+    // 편집 중이면 editStudents도 체크
+    const list = isEditing ? editStudents : students;
+    return list.some((s) => s.grade != null || s.classNum != null);
+  }, [students, isEditing, editStudents]);
+
   const sortedStudents = useMemo(() => {
     const list = isEditing ? editStudents : cls?.students ?? [];
-    if (!hasMixedGrades) return list;
+    if (!hasGradeInfo) return list;
     return [...list].sort((a, b) => {
       if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
       if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
       return a.number - b.number;
     });
-  }, [isEditing, editStudents, cls?.students, hasMixedGrades]);
+  }, [isEditing, editStudents, cls?.students, hasGradeInfo]);
 
   /* ── 출석 상태 ── */
   const [date, setDate] = useState(todayString);
@@ -284,6 +283,33 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     if (!isEditing) setIsEditing(true);
   }, [pasteText, isEditing]);
 
+  /* ── 붙여넣기 미리보기 ── */
+  const parsedPreview = useMemo(() => {
+    if (!pasteText.trim()) return [];
+    const lines = pasteText.trim().split('\n').filter((line) => line.trim());
+    return lines.map((line, idx) => {
+      const parts = line.split('\t');
+      if (parts.length >= 4) {
+        const grade = parseInt(parts[0]!.trim(), 10);
+        const classNum = parseInt(parts[1]!.trim(), 10);
+        const num = parseInt(parts[2]!.trim(), 10);
+        const name = parts[3]!.trim();
+        return {
+          number: isNaN(num) ? idx + 1 : num,
+          name,
+          grade: isNaN(grade) ? undefined : grade,
+          classNum: isNaN(classNum) ? undefined : classNum,
+        };
+      }
+      if (parts.length >= 2) {
+        const num = parseInt(parts[0]!.trim(), 10);
+        const name = parts[1]!.trim();
+        return { number: isNaN(num) ? idx + 1 : num, name, grade: undefined, classNum: undefined };
+      }
+      return { number: idx + 1, name: line.trim(), grade: undefined, classNum: undefined };
+    });
+  }, [pasteText]);
+
   /* ──────────────────────── 인라인 메모 저장 ──────────────────────── */
 
   const startMemoEdit = useCallback((key: string, currentMemo: string) => {
@@ -331,7 +357,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const displayStudents = sortedStudents;
 
-  const gridCols = hasMixedGrades
+  const gridCols = hasGradeInfo
     ? (isEditing ? 'grid-cols-[4.5rem_3rem_1fr_1fr_8rem_2.5rem]' : 'grid-cols-[4.5rem_3rem_1fr_1fr_8rem]')
     : (isEditing ? 'grid-cols-[3rem_1fr_1fr_8rem_2.5rem]' : 'grid-cols-[3rem_1fr_1fr_8rem]');
 
@@ -433,7 +459,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         <div
           className={`grid items-center px-4 py-2.5 bg-sp-bg/50 text-xs font-medium text-sp-muted ${gridCols}`}
         >
-          {hasMixedGrades && <span>소속</span>}
+          {hasGradeInfo && <span>소속</span>}
           <span>번호</span>
           <span>이름</span>
           <span>메모</span>
@@ -454,7 +480,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 className={`grid items-center px-4 py-2 hover:bg-white/[0.02] transition-colors ${gridCols}`}
               >
                 {/* 소속 (학년-반, 혼합 학급일 때만) */}
-                {hasMixedGrades && (
+                {hasGradeInfo && (
                   isEditing ? (
                     <div className="flex gap-1 pr-1">
                       <input
@@ -642,7 +668,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       {/* ── 붙여넣기 모달 ── */}
       {showPasteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-sp-card border border-sp-border rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+          <div className="bg-sp-card border border-sp-border rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
             <h3 className="text-base font-bold text-sp-text mb-2">붙여넣기로 입력</h3>
             <p className="text-xs text-sp-muted mb-4">
               엑셀이나 한글에서 복사한 명렬표를 붙여넣으세요.<br />
@@ -652,9 +678,36 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               placeholder={'1\t2\t5\t김민수\n1\t2\t12\t이영희\n2\t3\t5\t박철수'}
-              rows={10}
+              rows={5}
               className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent resize-none font-mono"
             />
+            {parsedPreview.length > 0 && (
+              <>
+                <div className="mt-3 max-h-48 overflow-y-auto border border-sp-border rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-sp-bg/50 sticky top-0">
+                      <tr className="text-xs text-sp-muted">
+                        {parsedPreview.some((s) => s.grade != null) && <th className="px-3 py-1.5 text-left font-medium">학년</th>}
+                        {parsedPreview.some((s) => s.classNum != null) && <th className="px-3 py-1.5 text-left font-medium">반</th>}
+                        <th className="px-3 py-1.5 text-left font-medium">번호</th>
+                        <th className="px-3 py-1.5 text-left font-medium">이름</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-sp-border/50">
+                      {parsedPreview.map((s, i) => (
+                        <tr key={i} className="text-sp-text">
+                          {parsedPreview.some((ps) => ps.grade != null) && <td className="px-3 py-1.5">{s.grade ?? '-'}</td>}
+                          {parsedPreview.some((ps) => ps.classNum != null) && <td className="px-3 py-1.5">{s.classNum ?? '-'}</td>}
+                          <td className="px-3 py-1.5">{s.number}</td>
+                          <td className="px-3 py-1.5">{s.name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-sp-muted mt-2">{parsedPreview.length}명 인식됨</p>
+              </>
+            )}
             <div className="flex gap-2 mt-4">
               <button
                 onClick={handlePasteImport}
