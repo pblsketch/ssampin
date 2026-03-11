@@ -242,10 +242,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   }, []);
 
   const removeRow = useCallback((index: number) => {
-    setEditStudents((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      return next.map((s, i) => ({ ...s, number: i + 1 }));
-    });
+    setEditStudents((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   const updateStudentGrade = useCallback((index: number, grade: number | undefined) => {
@@ -262,6 +259,15 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       const next = [...prev];
       const existing = next[index];
       if (existing) next[index] = { ...existing, classNum };
+      return next;
+    });
+  }, []);
+
+  const updateStudentNumber = useCallback((index: number, num: number) => {
+    setEditStudents((prev) => {
+      const next = [...prev];
+      const existing = next[index];
+      if (existing) next[index] = { ...existing, number: num };
       return next;
     });
   }, []);
@@ -626,7 +632,20 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 )}
 
                 {/* 번호 */}
-                <span className={`text-sm ${student.isVacant ? 'text-sp-muted/40 line-through' : 'text-sp-muted'}`}>{student.number}</span>
+                {isEditing ? (
+                  <input
+                    type="number"
+                    value={student.number}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) updateStudentNumber(originalIdx, v);
+                    }}
+                    className="w-12 bg-sp-bg border border-sp-border rounded px-1.5 py-1 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
+                    min={1}
+                  />
+                ) : (
+                  <span className={`text-sm ${student.isVacant ? 'text-sp-muted/40 line-through' : 'text-sp-muted'}`}>{student.number}</span>
+                )}
 
                 {/* 이름 */}
                 {isEditing ? (
