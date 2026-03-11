@@ -3,7 +3,8 @@ import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { consultationSupabaseClient } from '@adapters/di/container';
+import { consultationSupabaseClient, shortLinkClient } from '@adapters/di/container';
+import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import type { ConsultationType, ConsultationMethod } from '@domain/entities/Consultation';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
@@ -149,6 +150,9 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [customLinkCode, setCustomLinkCode] = useState('');
+  const [linkCodeError, setLinkCodeError] = useState<string | null>(null);
+  const [isCheckingCode, setIsCheckingCode] = useState(false);
 
   // 학생 상담용: 날짜 + 프리셋 체크박스
   const [studentDate, setStudentDate] = useState('');
@@ -273,6 +277,32 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     };
   }, []);
 
+  // 커스텀 코드 실시간 검증 (디바운스 300ms)
+  useEffect(() => {
+    if (!customLinkCode) {
+      setLinkCodeError(null);
+      return;
+    }
+    const validation = validateCustomCode(customLinkCode);
+    if (!validation.valid) {
+      setLinkCodeError(validation.error ?? null);
+      return;
+    }
+    setIsCheckingCode(true);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const available = await shortLinkClient.isCodeAvailable(customLinkCode);
+          setLinkCodeError(available ? null : '이미 사용 중인 링크입니다');
+        } catch {
+          setLinkCodeError(null);
+        }
+        setIsCheckingCode(false);
+      })();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [customLinkCode]);
+
   /* ── 방식 토글 ── */
 
   const toggleMethod = useCallback((m: ConsultationMethod) => {
@@ -334,6 +364,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
         targetClassName: '',
         targetStudents: students.filter((s) => !s.isVacant).map((_, i) => ({ number: i + 1 })),
         message: message.trim() || undefined,
+        customLinkCode: customLinkCode.trim() || undefined,
       });
 
       await consultationSupabaseClient.createSchedule({
@@ -740,6 +771,34 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors resize-none"
               maxLength={300}
             />
+          </div>
+
+          {/* 커스텀 링크 */}
+          <div>
+            <label className="text-xs font-medium text-sp-muted mb-1.5 block">
+              커스텀 링크 (선택)
+            </label>
+            <div className="flex items-center gap-0">
+              <span className="px-2.5 py-2.5 bg-sp-surface/60 border border-r-0 border-sp-border rounded-l-lg text-sp-muted text-xs whitespace-nowrap">
+                ssampin.vercel.app/s/
+              </span>
+              <input
+                type="text"
+                value={customLinkCode}
+                onChange={(e) => setCustomLinkCode(e.target.value)}
+                placeholder="예: 3월상담예약"
+                className="flex-1 bg-sp-surface border border-sp-border rounded-r-lg px-3 py-2.5 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
+              />
+            </div>
+            {linkCodeError && (
+              <p className="text-[10px] text-red-400 mt-1">{linkCodeError}</p>
+            )}
+            {customLinkCode && !linkCodeError && !isCheckingCode && (
+              <p className="text-[10px] text-green-400 mt-1">사용 가능</p>
+            )}
+            <p className="text-[10px] text-sp-muted/50 mt-1">
+              비워두면 자동으로 생성됩니다. 한글, 영문, 숫자, -, _ 사용 가능
+            </p>
           </div>
 
           {/* 오프라인 경고 */}

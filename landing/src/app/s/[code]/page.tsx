@@ -15,18 +15,31 @@ export async function generateMetadata() {
 }
 
 export default async function ShortLinkRedirect({ params }: PageProps) {
-  const { code } = await params;
+  const { code: rawCode } = await params;
 
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/short_links?code=eq.${encodeURIComponent(code)}&select=target_path&limit=1`,
-    {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  // Next.js may pass URL-encoded params for non-ASCII characters (한글 등)
+  let code: string;
+  try {
+    code = decodeURIComponent(rawCode);
+  } catch {
+    code = rawCode;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `${SUPABASE_URL}/rest/v1/short_links?code=eq.${encodeURIComponent(code)}&select=target_path&limit=1`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        cache: 'no-store',
       },
-      cache: 'no-store',
-    },
-  );
+    );
+  } catch {
+    notFound();
+  }
 
   if (!res.ok) {
     notFound();
@@ -34,7 +47,7 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
 
   const data = (await res.json()) as Array<{ target_path: string }>;
 
-  if (!data || data.length === 0) {
+  if (!data || data.length === 0 || !data[0]) {
     notFound();
   }
 

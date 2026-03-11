@@ -15,7 +15,7 @@ interface SurveyState {
   loaded: boolean;
 
   load: () => Promise<void>;
-  createSurvey: (params: Omit<Survey, 'id' | 'createdAt'>) => Promise<Survey>;
+  createSurvey: (params: Omit<Survey, 'id' | 'createdAt'> & { customLinkCode?: string }) => Promise<Survey>;
   updateSurvey: (survey: Survey) => Promise<void>;
   deleteSurvey: (id: string) => Promise<void>;
   archiveSurvey: (id: string) => Promise<void>;
@@ -43,18 +43,19 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
   },
 
   createSurvey: async (params) => {
+    const { customLinkCode, ...surveyParams } = params;
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const shareUrl = params.mode === 'student' ? `${SHARE_BASE_URL}/${id}` : undefined;
+    const shareUrl = surveyParams.mode === 'student' ? `${SHARE_BASE_URL}/${id}` : undefined;
 
     // 학생 모드일 때 숏링크 생성
     let shortUrl: string | undefined;
     if (shareUrl) {
       try {
-        const expiresAt = params.dueDate
-          ? new Date(new Date(params.dueDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+        const expiresAt = surveyParams.dueDate
+          ? new Date(new Date(surveyParams.dueDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
           : undefined; // 기한 없으면 기본 90일
-        const result = await shortLinkClient.createShortLink(shareUrl, undefined, expiresAt);
+        const result = await shortLinkClient.createShortLink(shareUrl, customLinkCode, expiresAt);
         if (result !== shareUrl) shortUrl = result;
       } catch {
         // 숏링크 생성 실패는 무시
@@ -62,7 +63,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     }
 
     const survey: Survey = {
-      ...params,
+      ...surveyParams,
       id,
       createdAt,
       shareUrl,
