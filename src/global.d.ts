@@ -83,6 +83,8 @@ interface ElectronAPI {
   wordcloudTunnelAvailable: () => Promise<boolean>;
   wordcloudTunnelInstall: () => Promise<void>;
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
+  resizeWidget: (edge: string, dx: number, dy: number) => Promise<void>;
   // Widget 입력 검증 (WorkerW 연결 후 마우스 입력 확인)
   verifyWidgetInput: () => void;
   onVerifyInput: (callback: () => void) => void;

@@ -80,26 +80,47 @@ export function Widget() {
     };
   }, []);
 
-  // WorkerW 연결 후 입력 검증 (메인 프로세스가 요청 시 마우스 이벤트로 응답)
+  // WorkerW 연결 후 입력 검증 (메인 프로세스가 요청 시 마우스 이벤트 + RAF 폴백으로 응답)
   useEffect(() => {
+    let verified = false;
+
     const handler = () => {
+      if (verified) return;
+
+      // 방법1: 이벤트 감지 (기존)
       const onAnyInput = () => {
+        if (verified) return;
+        verified = true;
         window.electronAPI?.verifyWidgetInput();
+        console.log('[Widget] 입력 검증 성공 (이벤트 감지)');
         cleanup();
       };
 
       document.addEventListener('mousemove', onAnyInput, { once: true });
       document.addEventListener('pointerdown', onAnyInput, { once: true });
       document.addEventListener('pointermove', onAnyInput, { once: true });
+      document.addEventListener('touchstart', onAnyInput, { once: true });
+
+      // 방법2: 능동적 자가 검증 (1초 후 RAF 폴백)
+      const rafCheck = setTimeout(() => {
+        if (verified) return;
+        requestAnimationFrame(() => {
+          if (verified) return;
+          verified = true;
+          window.electronAPI?.verifyWidgetInput();
+          console.log('[Widget] 입력 검증 성공 (RAF 폴백)');
+        });
+      }, 1000);
 
       const cleanup = () => {
         document.removeEventListener('mousemove', onAnyInput);
         document.removeEventListener('pointerdown', onAnyInput);
         document.removeEventListener('pointermove', onAnyInput);
+        document.removeEventListener('touchstart', onAnyInput);
+        clearTimeout(rafCheck);
       };
 
-      // 2.5초 후 자동 정리 (메인에서 2초에 폴백하므로 여유)
-      setTimeout(cleanup, 2500);
+      setTimeout(cleanup, 4000);
     };
 
     window.electronAPI?.onVerifyInput(handler);
@@ -358,6 +379,46 @@ export function Widget() {
             <WidgetSettingsPanel onClose={() => setIsEditMode(false)} />
           )}
         </div>
+
+        {/* ── 리사이즈 핸들 (JS 기반, thickFrame: false 대응) ── */}
+        {['top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right'].map((edge) => (
+          <div
+            key={edge}
+            className="absolute"
+            style={{
+              ...(edge === 'right' ? { right: 0, top: 8, bottom: 8, width: 6, cursor: 'ew-resize' } : {}),
+              ...(edge === 'bottom' ? { bottom: 0, left: 8, right: 8, height: 6, cursor: 'ns-resize' } : {}),
+              ...(edge === 'left' ? { left: 0, top: 8, bottom: 8, width: 6, cursor: 'ew-resize' } : {}),
+              ...(edge === 'top' ? { top: 0, left: 8, right: 8, height: 6, cursor: 'ns-resize' } : {}),
+              ...(edge === 'bottom-right' ? { bottom: 0, right: 0, width: 12, height: 12, cursor: 'nwse-resize' } : {}),
+              ...(edge === 'bottom-left' ? { bottom: 0, left: 0, width: 12, height: 12, cursor: 'nesw-resize' } : {}),
+              ...(edge === 'top-right' ? { top: 0, right: 0, width: 12, height: 12, cursor: 'nesw-resize' } : {}),
+              ...(edge === 'top-left' ? { top: 0, left: 0, width: 12, height: 12, cursor: 'nwse-resize' } : {}),
+              WebkitAppRegion: 'no-drag',
+              zIndex: 50,
+            } as React.CSSProperties}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const startX = e.clientX;
+              const startY = e.clientY;
+
+              const onMove = (me: PointerEvent) => {
+                const dx = me.clientX - startX;
+                const dy = me.clientY - startY;
+                window.electronAPI?.resizeWidget(edge, dx, dy);
+              };
+
+              const onUp = () => {
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+              };
+
+              document.addEventListener('pointermove', onMove);
+              document.addEventListener('pointerup', onUp);
+            }}
+          />
+        ))}
       </div>
 
       {/* 레이아웃 선택 팝업 */}

@@ -266,6 +266,67 @@ function stopWidgetHeartbeat(): void {
   }
 }
 
+async function fallbackToFloating(): Promise<void> {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+
+  console.log('[widget] 플로팅 모드로 전환 중...');
+
+  try {
+    if (widgetAttachedToDesktop) {
+      const detached = await detachFromDesktopAsync(widgetWindow.getNativeWindowHandle());
+      if (!detached) {
+        console.error('[widget] WorkerW 분리 실패 — 창 재생성으로 폴백');
+        recreateWidgetAsFloating();
+        return;
+      }
+    }
+  } catch (err) {
+    console.error('[widget] detach 예외:', err);
+    recreateWidgetAsFloating();
+    return;
+  }
+
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+
+  widgetAttachedToDesktop = false;
+  widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
+  stopWidgetHeartbeat();
+  ensureWidgetOnScreen();
+
+  console.log('[widget] 플로팅 모드 전환 완료');
+}
+
+function recreateWidgetAsFloating(): void {
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.destroy();
+  }
+  widgetWindow = null;
+  widgetAttachedToDesktop = false;
+  stopWidgetHeartbeat();
+
+  const opts = readSettingsWidgetOptions();
+  createWidgetWindow({ ...opts, desktopMode: 'floating' });
+}
+
+function ensureWidgetOnScreen(): void {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  const bounds = widgetWindow.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  const workArea = display.workArea;
+
+  let x = bounds.x;
+  let y = bounds.y;
+
+  if (x + bounds.width < workArea.x + 50) x = workArea.x;
+  if (y + bounds.height < workArea.y + 50) y = workArea.y;
+  if (x > workArea.x + workArea.width - 50) x = workArea.x + workArea.width - bounds.width;
+  if (y > workArea.y + workArea.height - 50) y = workArea.y + workArea.height - bounds.height;
+
+  if (x !== bounds.x || y !== bounds.y) {
+    widgetWindow.setBounds({ ...bounds, x, y });
+  }
+}
+
 function createWidgetWindow(
   options: { width: number; height: number; alwaysOnTop: boolean; desktopMode?: string },
   onReady?: () => void,
@@ -297,7 +358,7 @@ function createWidgetWindow(
     transparent: true,
     thickFrame: false,
     alwaysOnTop: false,
-    resizable: true,
+    resizable: false,
     skipTaskbar: true,           // 작업표시줄에 나타나지 않음 (바탕화면 위젯)
     show: false,
     webPreferences: {
@@ -320,59 +381,56 @@ function createWidgetWindow(
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
     widgetWindow.show();
 
-    // WorkerW 바탕화면 레이어에 붙이기 (Windows 전용)
     if (process.platform === 'win32') {
       const desktopMode = options.desktopMode ?? 'auto';
 
       if (desktopMode === 'floating') {
-        // 사용자 설정: WorkerW 연결 안 함, 바로 플로팅 모드
         widgetAttachedToDesktop = false;
         widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
         console.log('[widget] 플로팅 모드 (사용자 설정)');
       } else {
-        // 렌더러가 안정화된 후 WorkerW에 붙이기 (200ms 딜레이)
+        // 렌더러가 안정화된 후 WorkerW에 붙이기 (500ms 딜레이)
         setTimeout(() => {
           if (!widgetWindow || widgetWindow.isDestroyed()) return;
           const hwndBuf = widgetWindow.getNativeWindowHandle();
           attachToDesktopAsync(hwndBuf).then((attached) => {
             if (!widgetWindow || widgetWindow.isDestroyed()) return;
             if (attached) {
-              // WorkerW에 붙으면 desktop 모드 (child window이므로 setAlwaysOnTop 불필요)
               widgetAttachedToDesktop = true;
               startWidgetHeartbeat();
               console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
 
-              // auto 모드: 입력 검증 (2초 타이머)
-              if (desktopMode === 'auto') {
-                const verifyTimeout = setTimeout(() => {
-                  console.warn('[widget] 입력 검증 실패 — WorkerW에서 분리하고 플로팅 모드로 전환');
-                  if (widgetWindow && !widgetWindow.isDestroyed()) {
-                    detachFromDesktopAsync(widgetWindow.getNativeWindowHandle()).then(() => {
-                      if (widgetWindow && !widgetWindow.isDestroyed()) {
-                        widgetAttachedToDesktop = false;
-                        widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
-                        stopWidgetHeartbeat();
-                      }
-                    });
-                  }
-                }, 2000);
+              // auto/desktop 모두 입력 검증 수행
+              const verifyTimeoutMs = desktopMode === 'desktop' ? 5000 : 3000;
 
-                ipcMain.once('widget:input-verified', () => {
-                  clearTimeout(verifyTimeout);
-                  console.log('[widget] 입력 검증 성공 — 바탕화면 모드 유지');
-                });
+              // 능동적 검증: 창 중앙에 마우스 이벤트 주입
+              const bounds = widgetWindow.getBounds();
+              const centerX = Math.round(bounds.width / 2);
+              const centerY = Math.round(bounds.height / 2);
+              widgetWindow.webContents.sendInputEvent({
+                type: 'mouseMove',
+                x: centerX,
+                y: centerY,
+              });
 
-                widgetWindow.webContents.send('widget:verify-input');
-              }
-              // desktop 모드: 검증 없이 강제 연결 유지
+              widgetWindow.webContents.send('widget:verify-input');
+
+              const verifyTimeout = setTimeout(() => {
+                console.warn('[widget] 입력 검증 실패 — 플로팅 모드로 전환');
+                void fallbackToFloating();
+              }, verifyTimeoutMs);
+
+              ipcMain.once('widget:input-verified', () => {
+                clearTimeout(verifyTimeout);
+                console.log('[widget] 입력 검증 성공 — 바탕화면 모드 유지');
+              });
             } else {
-              // 연결 실패 → 플로팅 모드: 사용자 설정에 따라 alwaysOnTop 적용
               widgetAttachedToDesktop = false;
               widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
               console.warn('[widget] WorkerW 연결 실패, alwaysOnTop =', widgetDesiredAlwaysOnTop);
             }
           });
-        }, 200);
+        }, 500);
       }
     }
 
@@ -647,6 +705,21 @@ function registerIpcHandlers(): void {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       widgetWindow.setOpacity(Math.max(0, Math.min(1, value)));
     }
+  });
+
+  // window:resizeWidget — 위젯 JS 리사이즈 (thickFrame: false 대응)
+  ipcMain.handle('window:resizeWidget', (_event, edge: string, dx: number, dy: number) => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    const bounds = widgetWindow.getBounds();
+
+    const newBounds = { ...bounds };
+    if (edge.includes('right'))  newBounds.width = Math.max(300, bounds.width + dx);
+    if (edge.includes('bottom')) newBounds.height = Math.max(200, bounds.height + dy);
+    if (edge.includes('left'))   { newBounds.x = bounds.x + dx; newBounds.width = Math.max(300, bounds.width - dx); }
+    if (edge.includes('top'))    { newBounds.y = bounds.y + dy; newBounds.height = Math.max(200, bounds.height - dy); }
+
+    widgetWindow.setBounds(newBounds);
+    scheduleWidgetBoundsSave();
   });
 
   // window:closeApp — 앱 완전 종료

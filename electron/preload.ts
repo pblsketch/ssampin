@@ -182,6 +182,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('live-wordcloud:tunnel-install'),
   wordcloudTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('live-wordcloud:tunnel-start'),
+  // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
+  resizeWidget: (edge: string, dx: number, dy: number): Promise<void> =>
+    ipcRenderer.invoke('window:resizeWidget', edge, dx, dy),
   // Widget 입력 검증 (WorkerW 연결 후 마우스 입력 확인)
   verifyWidgetInput: () => ipcRenderer.send('widget:input-verified'),
   onVerifyInput: (callback: () => void) => {
