@@ -104,8 +104,34 @@ async function fetchTotals(): Promise<{ totalEvents: number; totalUsers: number;
   return { totalEvents, totalUsers, todayUsers };
 }
 
+// 챗봇 대화 세션별 조회 (질문-답변 쌍)
+async function fetchChatConversations(): Promise<Array<{
+  session_id: string;
+  role: string;
+  content: string;
+  created_at: string;
+}>> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+
+  const res = await fetch(
+    `${url}/rest/v1/ssampin_conversations?select=session_id,role,content,created_at&order=created_at.desc&limit=200`,
+    {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      next: { revalidate: 300 },
+    }
+  );
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export default async function AdminAnalyticsPage() {
-  const [weekly, daily, tools, exports, sessions, recentEvents, totals, toolsWeekly, versions, retention, chatDaily, chatTopics, chatDepth, chatEscalations, chatConfidence] = await Promise.all([
+  const [weekly, daily, tools, exports, sessions, recentEvents, totals, toolsWeekly, versions, retention, chatDaily, chatTopics, chatDepth, chatEscalations, chatConfidence, chatConversations] = await Promise.all([
     fetchView<{
       week_start: string;
       weekly_active_users: number;
@@ -131,6 +157,7 @@ export default async function AdminAnalyticsPage() {
     fetchView<{ depth_bucket: string; session_count: number; pct: number }>('chatbot_depth_distribution'),
     fetchView<{ id: string; type: string; summary: string; user_message_preview: string; created_at_kst: string }>('chatbot_recent_escalations'),
     fetchView<{ confidence_level: string; response_count: number; pct: number }>('chatbot_confidence_stats'),
+    fetchChatConversations(),
   ]);
 
   const hasData = weekly.length > 0 || daily.length > 0;
@@ -555,6 +582,64 @@ export default async function AdminAnalyticsPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+            </Section>
+
+            {/* 챗봇 대화 원문 */}
+            <Section title="챗봇 대화 원문 (최근)">
+              {chatConversations.length === 0 ? (
+                <p className="text-gray-500 text-sm">데이터 없음</p>
+              ) : (
+                <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                  {(() => {
+                    // 세션별로 그룹핑
+                    const sessionMap = new Map<string, typeof chatConversations>();
+                    for (const msg of chatConversations) {
+                      const existing = sessionMap.get(msg.session_id) ?? [];
+                      existing.push(msg);
+                      sessionMap.set(msg.session_id, existing);
+                    }
+                    // 최신 세션 순 정렬, 각 세션 내부는 시간순
+                    const sessions = Array.from(sessionMap.entries())
+                      .sort((a, b) => {
+                        const aTime = a[1][a[1].length - 1]?.created_at ?? '';
+                        const bTime = b[1][b[1].length - 1]?.created_at ?? '';
+                        return bTime.localeCompare(aTime);
+                      })
+                      .slice(0, 30);
+
+                    return sessions.map(([sessionId, messages]) => {
+                      const sorted = [...messages].sort((a, b) => a.created_at.localeCompare(b.created_at));
+                      const firstTime = sorted[0]?.created_at ?? '';
+                      const dateStr = firstTime
+                        ? new Date(firstTime).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        : '';
+                      return (
+                        <details key={sessionId} className="bg-gray-800/50 rounded-lg">
+                          <summary className="px-4 py-2 cursor-pointer hover:bg-gray-800 rounded-lg flex items-center gap-3">
+                            <span className="text-xs text-gray-500">{dateStr}</span>
+                            <span className="text-sm text-gray-300 truncate flex-1">
+                              {sorted.find(m => m.role === 'user')?.content.slice(0, 80) ?? '(empty)'}
+                            </span>
+                            <span className="text-xs text-gray-500">{sorted.filter(m => m.role === 'user').length}턴</span>
+                          </summary>
+                          <div className="px-4 pb-3 pt-1 space-y-2">
+                            {sorted.map((msg, i) => (
+                              <div key={i} className={`text-sm ${msg.role === 'user' ? 'text-blue-300' : 'text-gray-400'}`}>
+                                <span className="text-xs font-medium mr-2">
+                                  {msg.role === 'user' ? 'Q' : 'A'}
+                                </span>
+                                <span className="whitespace-pre-wrap break-words">
+                                  {msg.role === 'assistant' ? msg.content.slice(0, 300) + (msg.content.length > 300 ? '...' : '') : msg.content}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </Section>
