@@ -105,7 +105,7 @@ async function fetchTotals(): Promise<{ totalEvents: number; totalUsers: number;
 }
 
 export default async function AdminAnalyticsPage() {
-  const [weekly, daily, tools, exports, sessions, recentEvents, totals, toolsWeekly, versions, retention] = await Promise.all([
+  const [weekly, daily, tools, exports, sessions, recentEvents, totals, toolsWeekly, versions, retention, chatDaily, chatTopics, chatDepth, chatEscalations, chatConfidence] = await Promise.all([
     fetchView<{
       week_start: string;
       weekly_active_users: number;
@@ -126,6 +126,11 @@ export default async function AdminAnalyticsPage() {
     fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking_weekly'),
     fetchView<{ app_version: string; users: number; last_seen: string }>('analytics_version_distribution'),
     fetchView<{ cohort_date: string; cohort_size: number; day1: number; day3: number; day7: number; day1_pct: number; day3_pct: number; day7_pct: number }>('analytics_retention'),
+    fetchView<{ date: string; user_messages: number; bot_responses: number; unique_sessions: number; avg_messages_per_session: number }>('chatbot_daily_stats'),
+    fetchView<{ keyword: string; mention_count: number; unique_sessions: number }>('chatbot_popular_topics'),
+    fetchView<{ depth_bucket: string; session_count: number; pct: number }>('chatbot_depth_distribution'),
+    fetchView<{ id: string; type: string; summary: string; user_message_preview: string; created_at_kst: string }>('chatbot_recent_escalations'),
+    fetchView<{ confidence_level: string; response_count: number; pct: number }>('chatbot_confidence_stats'),
   ]);
 
   const hasData = weekly.length > 0 || daily.length > 0;
@@ -417,6 +422,139 @@ export default async function AdminAnalyticsPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </Section>
+
+            {/* AI 챗봇 분석 */}
+            <Section title="AI 챗봇 분석">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <SummaryCard
+                  label="총 세션"
+                  value={chatDaily.reduce((s, d) => s + d.unique_sessions, 0).toLocaleString()}
+                />
+                <SummaryCard
+                  label="총 질문"
+                  value={chatDaily.reduce((s, d) => s + d.user_messages, 0).toLocaleString()}
+                />
+                <SummaryCard
+                  label="총 응답"
+                  value={chatDaily.reduce((s, d) => s + d.bot_responses, 0).toLocaleString()}
+                />
+                <SummaryCard
+                  label="평균 질문/세션"
+                  value={chatDaily[0]?.avg_messages_per_session?.toString() || '-'}
+                />
+              </div>
+
+              {/* 일별 챗봇 사용량 */}
+              {chatDaily.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm text-gray-400 mb-3">일별 사용량</h3>
+                  <BarChart
+                    data={chatDaily.slice(0, 14).reverse()}
+                    labelKey="date"
+                    valueKey="user_messages"
+                    formatLabel={(d: string) => d.slice(5)}
+                  />
+                </div>
+              )}
+
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* 인기 주제 */}
+                <div>
+                  <h3 className="text-sm text-gray-400 mb-3">자주 묻는 주제</h3>
+                  {chatTopics.length === 0 ? (
+                    <p className="text-gray-500 text-sm">데이터 없음</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {chatTopics.slice(0, 10).map((t) => (
+                        <div key={t.keyword} className="flex items-center gap-3">
+                          <span className="w-20 text-sm truncate">{t.keyword}</span>
+                          <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
+                            <div
+                              className="bg-purple-500 h-full rounded-full"
+                              style={{ width: `${(t.mention_count / Math.max(...chatTopics.map(x => x.mention_count))) * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-400 w-12 text-right">{t.mention_count}회</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 대화 깊이 + 답변 신뢰도 */}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-sm text-gray-400 mb-3">대화 깊이</h3>
+                    {chatDepth.length === 0 ? (
+                      <p className="text-gray-500 text-sm">데이터 없음</p>
+                    ) : (
+                      <div className="flex gap-4">
+                        {chatDepth.map((d) => (
+                          <div key={d.depth_bucket} className="text-center flex-1">
+                            <div className="text-lg font-bold">{d.session_count}</div>
+                            <div className="text-xs text-gray-400">{d.depth_bucket}</div>
+                            <div className="text-xs text-gray-500">{d.pct}%</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm text-gray-400 mb-3">답변 신뢰도 (소스 기반)</h3>
+                    {chatConfidence.length === 0 ? (
+                      <p className="text-gray-500 text-sm">데이터 없음</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {chatConfidence.map((c) => (
+                          <div key={c.confidence_level} className="flex items-center gap-3">
+                            <span className="w-36 text-xs truncate">{c.confidence_level}</span>
+                            <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  c.confidence_level.includes('높음') ? 'bg-green-500' :
+                                  c.confidence_level.includes('보통') ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${c.pct}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-400 w-16 text-right">{c.response_count}건 ({c.pct}%)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 최근 버그/기능 요청 */}
+              {chatEscalations.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm text-gray-400 mb-3">최근 버그/기능 요청</h3>
+                  <div className="space-y-2">
+                    {chatEscalations.slice(0, 5).map((e) => (
+                      <div key={e.id} className="bg-gray-800/50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            e.type === 'bug' ? 'bg-red-500/20 text-red-400' :
+                            e.type === 'feature' ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {e.type === 'bug' ? 'BUG' : e.type === 'feature' ? 'FEATURE' : e.type}
+                          </span>
+                          <span className="text-xs text-gray-500">{e.created_at_kst}</span>
+                        </div>
+                        <p className="text-sm text-gray-300">{e.summary}</p>
+                        {e.user_message_preview && (
+                          <p className="text-xs text-gray-500 mt-1">{e.user_message_preview}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </Section>
