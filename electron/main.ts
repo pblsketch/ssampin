@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeI
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
-// workerw 모듈은 더 이상 사용하지 않음 (behind/above PS 스크립트 기반 모드 제거)
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
@@ -20,6 +19,7 @@ let isQuitting = false;
 // 위젯 표시 모드 상태 추적: 'normal' | 'topmost'
 let currentDesktopMode: string = 'normal';
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
+let winDRecoveryDedup = false;  // minimize 핸들러와 폴링 중복 방지
 let widgetBoundsBeforeLayout: WidgetBounds | null = null;
 
 interface WidgetBounds {
@@ -218,24 +218,31 @@ function applySystemSettings(): void {
 
 // ─── Win+D 복원 폴링 (양쪽 모드 모두 동작) ───
 // Win+D는 모든 창을 최소화하는데, 위젯은 최소화되면 즉시 복원하여 바탕화면에 유지
+function recoverWidget(): void {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  if (winDRecoveryDedup) return;
+  winDRecoveryDedup = true;
+  setTimeout(() => { winDRecoveryDedup = false; }, 500);
+
+  widgetWindow.restore();
+  widgetWindow.showInactive();
+  if (currentDesktopMode === 'topmost') {
+    widgetWindow.setAlwaysOnTop(true);
+  }
+}
+
 function startWinDRecovery(): void {
   if (winDRecoveryTimer) return;
 
+  // 백업 폴링: minimize 이벤트가 발동하지 않는 경우 대비
   winDRecoveryTimer = setInterval(() => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
-
     const isHidden = widgetWindow.isMinimized() || !widgetWindow.isVisible();
     if (!isHidden) return;
 
-    console.log(`[widget] Win+D 감지 (${currentDesktopMode}) — 복원`);
-    widgetWindow.restore();
-    widgetWindow.showInactive();
-
-    // topmost 모드에서는 alwaysOnTop 재설정 (Win+D가 해제할 수 있음)
-    if (currentDesktopMode === 'topmost') {
-      widgetWindow.setAlwaysOnTop(true);
-    }
-  }, 500);
+    console.log(`[widget] Win+D 폴링 감지 (${currentDesktopMode}) — 복원`);
+    recoverWidget();
+  }, 1000);
 }
 
 function stopWinDRecovery(): void {
@@ -350,15 +357,11 @@ function createWidgetWindow(
   widgetWindow.on('move', scheduleWidgetBoundsSave);
   widgetWindow.on('resize', scheduleWidgetBoundsSave);
 
-  // Win+D minimize 차단: 즉시 복원
+  // Win+D minimize 차단: 즉시 복원 (primary)
   widgetWindow.on('minimize', () => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
     console.log(`[widget] minimize 감지 (${currentDesktopMode}) — 복원`);
-    widgetWindow.restore();
-    widgetWindow.showInactive();
-    if (currentDesktopMode === 'topmost') {
-      widgetWindow.setAlwaysOnTop(true);
-    }
+    recoverWidget();
   });
 
   widgetWindow.on('close', (e) => {

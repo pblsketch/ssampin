@@ -189,21 +189,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number): Promise<void> =>
     ipcRenderer.invoke('window:resizeWidget', edge, dx, dy),
-  // Widget 입력 검증 (WorkerW 연결 후 마우스 입력 확인)
-  verifyWidgetInput: () => ipcRenderer.send('widget:input-verified'),
-  onVerifyInput: (callback: () => void) => {
-    ipcRenderer.on('widget:verify-input', callback);
-  },
-  offVerifyInput: (callback: () => void) => {
-    ipcRenderer.removeListener('widget:verify-input', callback);
-  },
-  // Widget 플로팅 모드 폴백 알림
-  onFallbackNotice: (callback: () => void) => {
-    ipcRenderer.on('widget:fallback-notice', callback);
-  },
-  offFallbackNotice: (callback: () => void) => {
-    ipcRenderer.removeListener('widget:fallback-notice', callback);
-  },
   // Analytics flush
   onAnalyticsFlush: (callback: () => void): (() => void) => {
     const handler = () => callback();

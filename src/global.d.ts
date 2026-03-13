@@ -89,13 +89,6 @@ interface ElectronAPI {
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number) => Promise<void>;
-  // Widget 입력 검증 (WorkerW 연결 후 마우스 입력 확인)
-  verifyWidgetInput: () => void;
-  onVerifyInput: (callback: () => void) => void;
-  offVerifyInput: (callback: () => void) => void;
-  // Widget 플로팅 모드 폴백 알림
-  onFallbackNotice: (callback: () => void) => void;
-  offFallbackNotice: (callback: () => void) => void;
   // Analytics
   onAnalyticsFlush: (callback: () => void) => () => void;
 }

@@ -16,8 +16,6 @@ import { WidgetTabBar } from '@widgets/components/WidgetTabBar';
 import type { TabFilter } from '@widgets/components/WidgetTabBar';
 import { getSpanClass } from '@widgets/utils/getSpanClass';
 import { triggerRefreshAll } from '@widgets/hooks/useWidgetRefresh';
-import { useToastStore } from '@adapters/components/common/Toast';
-
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
 import type { WidgetLayoutMode } from '@domain/entities/Settings';
@@ -79,55 +77,6 @@ export function Widget() {
       document.documentElement.style.backgroundColor = '';
       document.body.style.backgroundColor = '';
     };
-  }, []);
-
-  // WorkerW 연결 후 입력 검증 — 실제 마우스 이벤트 도달 여부만 확인
-  useEffect(() => {
-    let verified = false;
-
-    const handler = () => {
-      if (verified) return;
-
-      const cleanup = () => {
-        document.removeEventListener('mousemove', onAnyInput);
-        document.removeEventListener('pointerdown', onAnyInput);
-        document.removeEventListener('pointermove', onAnyInput);
-        document.removeEventListener('touchstart', onAnyInput);
-        clearTimeout(cleanupTimer);
-      };
-
-      const onAnyInput = () => {
-        if (verified) return;
-        verified = true;
-        window.electronAPI?.verifyWidgetInput();
-        console.log('[Widget] 입력 검증 성공 (실제 이벤트 감지)');
-        cleanup();
-      };
-
-      // 실제 이벤트 리스너만 사용 (RAF 폴백 제거!)
-      document.addEventListener('mousemove', onAnyInput, { once: true });
-      document.addEventListener('pointerdown', onAnyInput, { once: true });
-      document.addEventListener('pointermove', onAnyInput, { once: true });
-      document.addEventListener('touchstart', onAnyInput, { once: true });
-
-      // 타임아웃 후 정리 (검증은 main.ts의 verifyTimeout이 담당)
-      const cleanupTimer = setTimeout(cleanup, 6000);
-    };
-
-    window.electronAPI?.onVerifyInput(handler);
-    return () => {
-      window.electronAPI?.offVerifyInput(handler);
-    };
-  }, []);
-
-  // 플로팅 모드 폴백 알림
-  useEffect(() => {
-    const handler = () => {
-      const { show } = useToastStore.getState();
-      show('바탕화면 고정 중 문제가 발생하여 플로팅 모드로 전환되었어요. 설정에서 모드를 변경할 수 있습니다.', 'info');
-    };
-    window.electronAPI?.onFallbackNotice(handler);
-    return () => window.electronAPI?.offFallbackNotice(handler);
   }, []);
 
   // 데이터 로드
