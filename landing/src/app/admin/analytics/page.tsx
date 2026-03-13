@@ -22,6 +22,7 @@ const TOOL_LABELS: Record<string, string> = {
   survey: '설문조사',
   wordcloud: '워드클라우드',
   seat_picker: '자리뽑기',
+  assignment: '과제수합',
 };
 
 // ── 유틸리티 함수 ──
@@ -87,21 +88,24 @@ async function fetchRecentEvents(): Promise<Array<{
 }
 
 // 총 이벤트 수 / 고유 사용자 수 조회 (daily 뷰에서 합산)
-async function fetchTotals(): Promise<{ totalEvents: number; uniqueDevices: number }> {
+async function fetchTotals(): Promise<{ totalEvents: number; totalUsers: number; todayUsers: number }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !key) return { totalEvents: 0, uniqueDevices: 0 };
+  if (!url || !key) return { totalEvents: 0, totalUsers: 0, todayUsers: 0 };
 
   const daily = await fetchView<{ dau: number; events: number }>('analytics_daily_active');
   const totalEvents = daily.reduce((sum, d) => sum + (d.events ?? 0), 0);
-  const uniqueDevices = daily.length > 0 ? Math.max(...daily.map(d => d.dau)) : 0;
 
-  return { totalEvents, uniqueDevices };
+  const totalsView = await fetchView<{ total_users: number; today_users: number }>('analytics_total_users');
+  const totalUsers = totalsView[0]?.total_users ?? 0;
+  const todayUsers = totalsView[0]?.today_users ?? 0;
+
+  return { totalEvents, totalUsers, todayUsers };
 }
 
 export default async function AdminAnalyticsPage() {
-  const [weekly, daily, tools, exports, sessions, recentEvents, totals] = await Promise.all([
+  const [weekly, daily, tools, exports, sessions, recentEvents, totals, toolsWeekly, versions, retention] = await Promise.all([
     fetchView<{
       week_start: string;
       weekly_active_users: number;
@@ -119,6 +123,9 @@ export default async function AdminAnalyticsPage() {
     fetchView<{ date: string; sessions: number; avg_seconds: number; max_seconds: number; median_seconds: number }>('analytics_session_duration'),
     fetchRecentEvents(),
     fetchTotals(),
+    fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking_weekly'),
+    fetchView<{ app_version: string; users: number; last_seen: string }>('analytics_version_distribution'),
+    fetchView<{ cohort_date: string; cohort_size: number; day1: number; day3: number; day7: number; day1_pct: number; day3_pct: number; day7_pct: number }>('analytics_retention'),
   ]);
 
   const hasData = weekly.length > 0 || daily.length > 0;
@@ -152,16 +159,25 @@ export default async function AdminAnalyticsPage() {
         ) : (
           <>
             {/* 요약 카드 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <SummaryCard label="총 이벤트" value={totals.totalEvents.toLocaleString()} />
+              <SummaryCard label="총 사용자" value={totals.totalUsers.toString()} />
               <SummaryCard label="오늘 DAU" value={daily[0]?.dau?.toString() || '0'} />
               <SummaryCard
                 label="주간 사용자"
                 value={weekly[0]?.weekly_active_users?.toString() || '0'}
               />
               <SummaryCard
-                label="평균 세션"
-                value={sessions[0] ? formatDuration(sessions[0].avg_seconds) : '-'}
+                label="평균 세션 (7일)"
+                value={sessions.length > 0
+                  ? formatDuration(
+                      Math.round(
+                        sessions.slice(0, 7).reduce((sum, s) => sum + (s.avg_seconds ?? 0) * (s.sessions ?? 1), 0) /
+                        Math.max(1, sessions.slice(0, 7).reduce((sum, s) => sum + (s.sessions ?? 1), 0))
+                      )
+                    )
+                  : '-'
+                }
               />
             </div>
 
@@ -211,14 +227,14 @@ export default async function AdminAnalyticsPage() {
               </div>
             </Section>
 
-            {/* 도구 사용 순위 + 내보내기 형식 */}
+            {/* 도구 사용 순위 (주간) + 내보내기 형식 */}
             <div className="grid md:grid-cols-2 gap-6">
-              <Section title="도구 사용 순위">
-                {tools.length === 0 ? (
+              <Section title="도구 사용 순위 (이번 주)">
+                {toolsWeekly.length === 0 ? (
                   <p className="text-gray-500 text-sm">데이터 없음</p>
                 ) : (
                   <div className="space-y-2">
-                    {tools.map((t) => (
+                    {toolsWeekly.map((t) => (
                       <div key={t.tool_name} className="flex items-center gap-3">
                         <span className="w-28 text-sm truncate" title={t.tool_name}>
                           {TOOL_LABELS[t.tool_name] || t.tool_name}
@@ -226,6 +242,34 @@ export default async function AdminAnalyticsPage() {
                         <div className="flex-1 bg-gray-800 rounded-full h-5 overflow-hidden">
                           <div
                             className="bg-blue-500 h-full rounded-full flex items-center justify-end pr-2 text-xs font-medium"
+                            style={{
+                              width: `${Math.min(100, (t.usage_count / Math.max(...toolsWeekly.map(x => x.usage_count))) * 100)}%`,
+                              minWidth: '2rem',
+                            }}
+                          >
+                            {t.usage_count}
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-400 w-16 text-right">
+                          {t.unique_users}명
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <details className="mt-4">
+                  <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-200">
+                    전체 기간 보기
+                  </summary>
+                  <div className="mt-3 space-y-2">
+                    {tools.map((t) => (
+                      <div key={t.tool_name} className="flex items-center gap-3">
+                        <span className="w-28 text-sm truncate" title={t.tool_name}>
+                          {TOOL_LABELS[t.tool_name] || t.tool_name}
+                        </span>
+                        <div className="flex-1 bg-gray-800 rounded-full h-5 overflow-hidden">
+                          <div
+                            className="bg-blue-500/60 h-full rounded-full flex items-center justify-end pr-2 text-xs font-medium"
                             style={{
                               width: `${Math.min(100, (t.usage_count / Math.max(...tools.map(x => x.usage_count))) * 100)}%`,
                               minWidth: '2rem',
@@ -240,7 +284,7 @@ export default async function AdminAnalyticsPage() {
                       </div>
                     ))}
                   </div>
-                )}
+                </details>
               </Section>
 
               <Section title="내보내기 형식">
@@ -298,6 +342,83 @@ export default async function AdminAnalyticsPage() {
                   </tbody>
                 </table>
               </div>
+            </Section>
+
+            {/* 버전 분포 */}
+            <Section title="버전 분포 (최근 30일)">
+              {versions.length === 0 ? (
+                <p className="text-gray-500 text-sm">데이터 없음</p>
+              ) : (
+                <div className="space-y-2">
+                  {versions.map((v) => (
+                    <div key={v.app_version} className="flex items-center gap-3">
+                      <span className={`w-16 text-sm font-mono ${v.app_version === versions[0]?.app_version ? 'text-green-400' : 'text-gray-400'}`}>
+                        v{v.app_version}
+                      </span>
+                      <div className="flex-1 bg-gray-800 rounded-full h-5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full flex items-center justify-end pr-2 text-xs font-medium ${
+                            v.app_version === versions[0]?.app_version ? 'bg-green-500' : 'bg-gray-600'
+                          }`}
+                          style={{
+                            width: `${Math.min(100, (v.users / Math.max(...versions.map(x => x.users))) * 100)}%`,
+                            minWidth: '2rem',
+                          }}
+                        >
+                          {v.users}명
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* 리텐션 (코호트 분석) */}
+            <Section title="리텐션 (코호트 분석)">
+              {retention.length === 0 ? (
+                <p className="text-gray-500 text-sm">데이터 없음 (코호트 최소 3명 필요)</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-gray-800">
+                        <th className="text-left py-2 px-3">코호트 날짜</th>
+                        <th className="text-right py-2 px-3">신규</th>
+                        <th className="text-right py-2 px-3">Day 1</th>
+                        <th className="text-right py-2 px-3">Day 3</th>
+                        <th className="text-right py-2 px-3">Day 7</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {retention.slice(0, 14).map((r) => (
+                        <tr key={r.cohort_date} className="border-b border-gray-800/50 hover:bg-gray-900/50">
+                          <td className="py-2 px-3">{r.cohort_date}</td>
+                          <td className="text-right py-2 px-3 font-medium">{r.cohort_size}명</td>
+                          <td className="text-right py-2 px-3">
+                            <span className={r.day1_pct > 50 ? 'text-green-400' : r.day1_pct > 20 ? 'text-yellow-400' : 'text-red-400'}>
+                              {r.day1_pct}%
+                            </span>
+                            <span className="text-gray-600 ml-1">({r.day1})</span>
+                          </td>
+                          <td className="text-right py-2 px-3">
+                            <span className={r.day3_pct > 30 ? 'text-green-400' : r.day3_pct > 10 ? 'text-yellow-400' : 'text-red-400'}>
+                              {r.day3_pct}%
+                            </span>
+                            <span className="text-gray-600 ml-1">({r.day3})</span>
+                          </td>
+                          <td className="text-right py-2 px-3">
+                            <span className={r.day7_pct > 20 ? 'text-green-400' : r.day7_pct > 5 ? 'text-yellow-400' : 'text-red-400'}>
+                              {r.day7_pct}%
+                            </span>
+                            <span className="text-gray-600 ml-1">({r.day7})</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </Section>
 
             {/* 최근 이벤트 로그 (Client Component) */}

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Bookmark } from '@domain/entities/Bookmark';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
@@ -37,6 +38,7 @@ export function BookmarkCard({
 }: BookmarkCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { track } = useAnalytics();
 
   useEffect(() => {
     if (!showMenu) return;
@@ -53,6 +55,7 @@ export function BookmarkCard({
     if (editMode) {
       onEdit(bookmark);
     } else {
+      track('bookmark_click', { url: bookmark.url });
       openExternal(bookmark.url);
     }
   };

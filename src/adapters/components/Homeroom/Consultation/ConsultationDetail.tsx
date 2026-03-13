@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -150,6 +151,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   const { archiveSchedule, deleteSchedule } = useConsultationStore();
   const { students } = useStudentStore();
   const showToast = useToastStore((s) => s.show);
+  const { track } = useAnalytics();
 
   const [slots, setSlots] = useState<SlotPublic[]>([]);
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
@@ -328,8 +330,9 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   const handleDelete = useCallback(async () => {
     await deleteSchedule(schedule.id);
     showToast('삭제되었습니다', 'success');
+    track('consultation_update', { action: 'delete' });
     onBack();
-  }, [deleteSchedule, schedule.id, showToast, onBack]);
+  }, [deleteSchedule, schedule.id, showToast, track, onBack]);
 
   const handleCopyLink = useCallback(async () => {
     const shareUrl = schedule.shortUrl ?? schedule.shareUrl;

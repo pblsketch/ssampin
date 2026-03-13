@@ -34,6 +34,7 @@ export function SettingsPage() {
     try {
       await update(draft);
       showToast('설정이 저장되었습니다.', 'success');
+      track('settings_change', { section: activeTab, key: 'save' });
 
       if (draft.schoolName !== settings.schoolName || draft.schoolLevel !== settings.schoolLevel) {
         const regionMatch = draft.neis.schoolName.match(/\(([^)]+)\)/);

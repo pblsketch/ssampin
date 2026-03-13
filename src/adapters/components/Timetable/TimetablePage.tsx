@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
@@ -49,6 +50,7 @@ export function TimetablePage() {
     load: loadSchedule,
   } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
+  const { track } = useAnalytics();
   const [tab, setTab] = useState<TabType>('teacher');
   const [isEditing, setIsEditing] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -226,8 +228,10 @@ export function TimetablePage() {
         },
       });
       showToast('시간표를 동기화했습니다!', 'success');
+      track('timetable_neis_sync', { success: true });
     } catch {
       showToast('동기화에 실패했습니다.', 'error');
+      track('timetable_neis_sync', { success: false });
     } finally {
       setSyncing(false);
     }

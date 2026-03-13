@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import QRCode from 'qrcode';
 import type { Assignment } from '@domain/entities/Assignment';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ShareLinkModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
   const showToast = useToastStore((s) => s.show);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const { track } = useAnalytics();
 
   // 숏링크가 있으면 우선 사용
   const displayUrl = assignment.shortUrl ?? assignment.shareUrl;
@@ -34,6 +36,7 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
       (err) => {
         if (!err) {
           setQrDataUrl(canvas.toDataURL('image/png'));
+          track('assignment_share', { method: 'qr' });
         }
       },
     );
@@ -42,6 +45,7 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
   async function handleCopyLink() {
     await navigator.clipboard.writeText(displayUrl);
     showToast('링크가 복사되었습니다', 'success');
+    track('assignment_share', { method: 'copy' });
   }
 
   function handleDownloadQR() {

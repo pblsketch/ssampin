@@ -148,9 +148,10 @@ export function Widget() {
 
   // 레이아웃 모드 변경 (설정 저장 + 창 크기 조절)
   const setLayoutMode = useCallback((mode: WidgetLayoutMode) => {
+    track('widget_layout_change', { from: layoutMode, to: mode });
     void update({ widget: { ...settings.widget, layoutMode: mode } });
     window.electronAPI?.setWidgetLayout(mode);
-  }, [settings.widget, update]);
+  }, [settings.widget, update, layoutMode, track]);
 
   // 키보드 단축키: Ctrl+1~4, Ctrl+0 순환
   useEffect(() => {

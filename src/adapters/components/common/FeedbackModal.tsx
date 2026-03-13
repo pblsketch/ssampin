@@ -1,3 +1,5 @@
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
+
 const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
 
 interface FeedbackModalProps {
@@ -5,17 +7,21 @@ interface FeedbackModalProps {
 }
 
 export function FeedbackModal({ onClose }: FeedbackModalProps) {
+  const { track } = useAnalytics();
+
   function handleOpenChat() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const openChat = (window as any).__ssampin_open_chat;
     if (typeof openChat === 'function') {
       openChat();
     }
+    track('feedback_submit');
     onClose();
   }
 
   function handleOpenForm() {
     window.open(FEEDBACK_FORM_URL, '_blank');
+    track('feedback_submit');
   }
 
   return (

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useOnlineStatus } from '@adapters/hooks/useOnlineStatus';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { AssignmentWithStatus } from '@usecases/assignment/GetAssignments';
 import { AssignmentCreateModal } from './AssignmentCreateModal';
@@ -19,6 +20,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AssignmentWithStatus | null>(null);
   const { isOnline, checkOnline } = useOnlineStatus();
+  const { track } = useAnalytics();
 
   async function handleGoogleConnect() {
     try {
@@ -36,6 +38,10 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
       loadAssignments();
     }
   }, [isOnline]);
+
+  useEffect(() => {
+    track('tool_use', { tool: 'assignment' });
+  }, []);
 
   function handleCopyLink(assignmentId: string) {
     const url = `https://ssampin.vercel.app/submit/${assignmentId}`;

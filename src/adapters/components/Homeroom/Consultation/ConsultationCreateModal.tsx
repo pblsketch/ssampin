@@ -7,6 +7,7 @@ import { consultationSupabaseClient, shortLinkClient } from '@adapters/di/contai
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import type { ConsultationType, ConsultationMethod } from '@domain/entities/Consultation';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 /* ──────────────── 타입 ──────────────── */
 
@@ -137,6 +138,7 @@ function buildSlotChips(startTime: string, endTime: string, slotMinutes: number)
 export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProps) {
   const { createSchedule } = useConsultationStore();
   const showToast = useToastStore((s) => s.show);
+  const { track } = useAnalytics();
   const { students } = useStudentStore();
   const { settings } = useSettingsStore();
 
@@ -381,6 +383,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
       });
 
       showToast('상담 일정이 생성되었습니다', 'success');
+      track('consultation_create', { type });
       onClose();
     } catch {
       showToast('상담 일정 생성에 실패했습니다', 'error');

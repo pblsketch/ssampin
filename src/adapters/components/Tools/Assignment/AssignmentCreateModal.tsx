@@ -7,6 +7,7 @@ import type { StudentListOption } from '@adapters/hooks/useStudentLists';
 import { DriveFolderInput } from './DriveFolderInput';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import { shortLinkClient } from '@adapters/di/container';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface AssignmentCreateModalProps {
   onClose: () => void;
@@ -28,6 +29,7 @@ const FILE_TYPE_OPTIONS: { value: FileTypeRestriction; label: string; descriptio
 export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateModalProps) {
   const { createAssignment, isLoading } = useAssignmentStore();
   const studentLists = useStudentLists();
+  const { track } = useAnalytics();
 
   // Form state
   const [title, setTitle] = useState('');
@@ -112,6 +114,7 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
         allowResubmit,
         customLinkCode: customLinkCode.trim() || undefined,
       });
+      track('assignment_create', { title: title.trim() || '무제' });
       onCreated(assignment.id);
     } catch (err) {
       setError((err as Error).message);

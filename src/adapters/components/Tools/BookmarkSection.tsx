@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Bookmark, BookmarkGroup } from '@domain/entities/Bookmark';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { sortGroupsByOrder } from '@domain/rules/bookmarkRules';
 import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
 import { BookmarkGroupCard } from './BookmarkGroupCard';
@@ -24,6 +25,7 @@ export function BookmarkSection() {
     toggleGroupCollapse,
   } = useBookmarkStore();
 
+  const { track } = useAnalytics();
   const [editMode, setEditMode] = useState(false);
   const [showBookmarkModal, setShowBookmarkModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -126,6 +128,7 @@ export function BookmarkSection() {
         ? Math.max(...groupBookmarks.map((b) => b.order)) + 1
         : 0;
       await addBookmark({ ...data, order: maxOrder });
+      track('bookmark_add', { url: data.url });
     }
     setShowBookmarkModal(false);
     setEditingBookmark(null);

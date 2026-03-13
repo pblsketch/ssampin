@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { useOnlineStatus } from '@adapters/hooks/useOnlineStatus';
+import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { SubmissionDetail } from '@usecases/assignment/GetSubmissions';
 import { ShareLinkModal } from './ShareLinkModal';
@@ -147,6 +148,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
     getMissingListText,
   } = useAssignmentStore();
   const showToast = useToastStore((s) => s.show);
+  const { track } = useAnalytics();
 
   const { isOnline, checkOnline } = useOnlineStatus();
   const [showMenu, setShowMenu] = useState(false);
@@ -176,6 +178,12 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
       }
     };
   }, [selectedAssignmentId, isOnline]);
+
+  useEffect(() => {
+    if (selectedAssignmentId) {
+      track('assignment_view', { assignmentId: selectedAssignmentId });
+    }
+  }, [selectedAssignmentId]);
 
   // Toast notification for new submissions
   useEffect(() => {

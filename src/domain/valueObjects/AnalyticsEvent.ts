@@ -22,7 +22,18 @@ export type AnalyticsEventName =
   | 'class_set'
   | 'error'
   | 'feature_discovery'
-  | 'session_start';
+  | 'session_start'
+  | 'assignment_create'
+  | 'assignment_share'
+  | 'assignment_view'
+  | 'consultation_create'
+  | 'consultation_update'
+  | 'bookmark_add'
+  | 'bookmark_click'
+  | 'feedback_submit'
+  | 'settings_change'
+  | 'timetable_neis_sync'
+  | 'widget_layout_change';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -38,7 +49,8 @@ export type ToolName =
   | 'vote'
   | 'survey'
   | 'wordcloud'
-  | 'seat_picker';
+  | 'seat_picker'
+  | 'assignment';
 
 /** 이벤트별 properties 타입 매핑 */
 export interface AnalyticsEventProperties {
@@ -65,4 +77,15 @@ export interface AnalyticsEventProperties {
   error: { message: string; component: string; stack?: string };
   feature_discovery: { feature: string; source: 'menu' | 'shortcut' | 'tooltip' | 'search' };
   session_start: { isReturning: boolean; launchCount: number };
+  assignment_create: { title: string };
+  assignment_share: { method: 'qr' | 'link' | 'copy' };
+  assignment_view: { assignmentId: string };
+  consultation_create: { type: string };
+  consultation_update: { action: 'edit' | 'delete' | 'status_change' };
+  bookmark_add: { url: string };
+  bookmark_click: { url: string };
+  feedback_submit: Record<string, never>;
+  settings_change: { section: string; key: string };
+  timetable_neis_sync: { success: boolean };
+  widget_layout_change: { from: string; to: string };
 }
