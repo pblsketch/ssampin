@@ -18,11 +18,21 @@ export function studentKey(s: { number: number; grade?: number; classNum?: numbe
   return String(s.number);
 }
 
+/** 수업반 전용 좌석 배치 데이터 */
+export interface TeachingClassSeating {
+  readonly rows: number;
+  readonly cols: number;
+  /** seats[row][col] = studentKey(학생) | null */
+  readonly seats: readonly (readonly (string | null)[])[];
+  readonly pairMode?: boolean;
+}
+
 export interface TeachingClass {
   readonly id: string;
   readonly name: string;
   readonly subject: string;
   readonly students: readonly TeachingClassStudent[];
+  readonly seating?: TeachingClassSeating;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

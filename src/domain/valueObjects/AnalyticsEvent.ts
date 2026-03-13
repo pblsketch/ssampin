@@ -50,7 +50,8 @@ export type ToolName =
   | 'survey'
   | 'wordcloud'
   | 'seat_picker'
-  | 'assignment';
+  | 'assignment'
+  | 'class_seating';
 
 /** 이벤트별 properties 타입 매핑 */
 export interface AnalyticsEventProperties {
