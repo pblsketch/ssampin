@@ -43,10 +43,6 @@ public static class SsamPinDesktop {
     public static extern int GetWindowLong(IntPtr hwnd, int nIndex);
     [DllImport("user32.dll")]
     public static extern int SetWindowLong(IntPtr hwnd, int nIndex, int dwNewLong);
-    [DllImport("user32.dll")]
-    public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-    [DllImport("user32.dll")]
-    public static extern IntPtr GetDesktopWindow();
     public delegate bool EnumProc(IntPtr hwnd, IntPtr lp);
 
     public static IntPtr FindWorkerW() {
@@ -65,21 +61,6 @@ public static class SsamPinDesktop {
         }, IntPtr.Zero);
         return ww;
     }
-
-    public static IntPtr FindShellView() {
-        var pm = FindWindow("Progman", null);
-        if (pm != IntPtr.Zero) {
-            var sv = FindWindowEx(pm, IntPtr.Zero, "SHELLDLL_DefView", null);
-            if (sv != IntPtr.Zero) return sv;
-        }
-        IntPtr result = IntPtr.Zero;
-        EnumWindows((h, lp) => {
-            var sv = FindWindowEx(h, IntPtr.Zero, "SHELLDLL_DefView", null);
-            if (sv != IntPtr.Zero) { result = sv; return false; }
-            return true;
-        }, IntPtr.Zero);
-        return result;
-    }
 }
 "@ 2>$null
 }
@@ -90,26 +71,35 @@ if ($ww -eq [IntPtr]::Zero) {
     exit 1
 }
 
-# 1. SetParent → WorkerW (rendering layer)
+# 1. WS_STYLE 변경: WS_CHILD 추가, WS_MINIMIZEBOX/WS_MAXIMIZEBOX/WS_CAPTION 제거
+$GWL_STYLE = -16
+$WS_CHILD = 0x40000000
+$WS_CAPTION = 0x00C00000
+$WS_THICKFRAME = 0x00040000
+$WS_SYSMENU = 0x00080000
+$WS_MINIMIZEBOX = 0x00020000
+$WS_MAXIMIZEBOX = 0x00010000
+
+$style = [SsamPinDesktop]::GetWindowLong([IntPtr]$hwnd, $GWL_STYLE)
+$style = $style -band (-bnot ($WS_CAPTION -bor $WS_THICKFRAME -bor $WS_SYSMENU -bor $WS_MINIMIZEBOX -bor $WS_MAXIMIZEBOX))
+$style = $style -bor $WS_CHILD
+[SsamPinDesktop]::SetWindowLong([IntPtr]$hwnd, $GWL_STYLE, $style)
+
+# 2. WS_EX_STYLE: APPWINDOW 제거, TOOLWINDOW + NOACTIVATE 추가
+$GWL_EXSTYLE = -20
+$WS_EX_APPWINDOW = 0x00040000
+$WS_EX_TOOLWINDOW = 0x80
+$WS_EX_NOACTIVATE = 0x08000000
+$exStyle = [SsamPinDesktop]::GetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE)
+$exStyle = $exStyle -band (-bnot ($WS_EX_APPWINDOW))
+$exStyle = $exStyle -bor $WS_EX_TOOLWINDOW -bor $WS_EX_NOACTIVATE
+[SsamPinDesktop]::SetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE, $exStyle)
+
+# 3. SetParent → WorkerW (rendering layer)
 $current = [SsamPinDesktop]::GetParent([IntPtr]$hwnd)
 if ($current -ne $ww) {
     [SsamPinDesktop]::SetParent([IntPtr]$hwnd, $ww)
 }
-
-# 2. Owner → SHELLDLL_DefView (Win+D protection)
-$GWLP_HWNDPARENT = -8
-$shellView = [SsamPinDesktop]::FindShellView()
-if ($shellView -ne [IntPtr]::Zero) {
-    [SsamPinDesktop]::SetWindowLongPtr([IntPtr]$hwnd, $GWLP_HWNDPARENT, $shellView)
-}
-
-# 3. WS_EX_TOOLWINDOW + WS_EX_NOACTIVATE (supplementary)
-$GWL_EXSTYLE = -20
-$WS_EX_TOOLWINDOW = 0x80
-$WS_EX_NOACTIVATE = 0x08000000
-$exStyle = [SsamPinDesktop]::GetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE)
-$exStyle = $exStyle -bor $WS_EX_TOOLWINDOW -bor $WS_EX_NOACTIVATE
-[SsamPinDesktop]::SetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE, $exStyle)
 
 [SsamPinDesktop]::ShowWindow([IntPtr]$hwnd, 5)
 if ($current -eq $ww) {
@@ -136,17 +126,23 @@ public static class SsamPinDesktop {
     public static extern int GetWindowLong(IntPtr hwnd, int nIndex);
     [DllImport("user32.dll")]
     public static extern int SetWindowLong(IntPtr hwnd, int nIndex, int dwNewLong);
-    [DllImport("user32.dll")]
-    public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 }
 "@ 2>$null
 }
 
-# Clear owner (GWLP_HWNDPARENT → 0)
-$GWLP_HWNDPARENT = -8
-[SsamPinDesktop]::SetWindowLongPtr([IntPtr]$hwnd, $GWLP_HWNDPARENT, [IntPtr]::Zero)
+# 1. Parent 분리 먼저
+[SsamPinDesktop]::SetParent([IntPtr]$hwnd, [IntPtr]::Zero)
 
-# Remove WS_EX_TOOLWINDOW + WS_EX_NOACTIVATE
+# 2. WS_CHILD 제거, WS_POPUP 복원 (Electron frameless 기본값)
+$GWL_STYLE = -16
+$WS_CHILD = 0x40000000
+$WS_POPUP = 0x80000000
+$style = [SsamPinDesktop]::GetWindowLong([IntPtr]$hwnd, $GWL_STYLE)
+$style = $style -band (-bnot $WS_CHILD)
+$style = $style -bor $WS_POPUP
+[SsamPinDesktop]::SetWindowLong([IntPtr]$hwnd, $GWL_STYLE, $style)
+
+# 3. WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE 제거
 $GWL_EXSTYLE = -20
 $WS_EX_TOOLWINDOW = 0x80
 $WS_EX_NOACTIVATE = 0x08000000
@@ -154,45 +150,13 @@ $exStyle = [SsamPinDesktop]::GetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE)
 $exStyle = $exStyle -band (-bnot ($WS_EX_TOOLWINDOW -bor $WS_EX_NOACTIVATE))
 [SsamPinDesktop]::SetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE, $exStyle)
 
-[SsamPinDesktop]::SetParent([IntPtr]$hwnd, [IntPtr]::Zero)
 [SsamPinDesktop]::ShowWindow([IntPtr]$hwnd, 5)
 Write-Output "DETACHED"
-`;
-
-// ─── Win+D 복원 스크립트 ──────────────────────────────────────────────────
-const PS_RESTORE_SCRIPT = `
-param([long]$hwnd)
-
-if (-not ([System.Management.Automation.PSTypeName]'SsamPinRestore').Type) {
-  Add-Type -Language CSharp -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public static class SsamPinRestore {
-    [DllImport("user32.dll")]
-    public static extern bool IsWindowVisible(IntPtr h);
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr h, int c);
-    [DllImport("user32.dll")]
-    public static extern IntPtr GetParent(IntPtr h);
-}
-"@ 2>$null
-}
-
-$v = [SsamPinRestore]::IsWindowVisible([IntPtr]$hwnd)
-if (-not $v) {
-    $p = [SsamPinRestore]::GetParent([IntPtr]$hwnd)
-    if ($p -ne [IntPtr]::Zero) { [SsamPinRestore]::ShowWindow($p, 5) }
-    [SsamPinRestore]::ShowWindow([IntPtr]$hwnd, 5)
-    Write-Output "RESTORED"
-} else {
-    Write-Output "VISIBLE"
-}
 `;
 
 // ─── 스크립트 파일 캐싱 ───────────────────────────────────────────────────
 let _scriptPath: string | null = null;
 let _detachScriptPath: string | null = null;
-let _restoreScriptPath: string | null = null;
 
 function getScriptPath(): string {
   if (_scriptPath && existsSync(_scriptPath)) return _scriptPath;
@@ -210,15 +174,6 @@ function getDetachScriptPath(): string {
   _detachScriptPath = join(dir, 'workerw-detach.ps1');
   writeFileSync(_detachScriptPath, PS_DETACH_SCRIPT, { encoding: 'utf8' });
   return _detachScriptPath;
-}
-
-function getRestoreScriptPath(): string {
-  if (_restoreScriptPath && existsSync(_restoreScriptPath)) return _restoreScriptPath;
-  const dir = join(tmpdir(), 'ssampin-widget');
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  _restoreScriptPath = join(dir, 'workerw-restore.ps1');
-  writeFileSync(_restoreScriptPath, PS_RESTORE_SCRIPT, { encoding: 'utf8' });
-  return _restoreScriptPath;
 }
 
 // ─── 공개 API ─────────────────────────────────────────────────────────────
@@ -370,47 +325,3 @@ export function attachToDesktop(hwndBuffer: Buffer): boolean {
   }
 }
 
-/**
- * Win+D로 숨겨진 위젯을 감지하고 복원한다.
- * main.ts의 폴링 타이머에서 주기적으로 호출.
- * @param hwndBuffer  BrowserWindow.getNativeWindowHandle() 반환값
- * @returns Promise<string> — 'RESTORED' | 'VISIBLE' | 'SKIP' | 'ERROR'
- */
-export function restoreDesktopVisibility(hwndBuffer: Buffer): Promise<string> {
-  return new Promise((resolve) => {
-    try {
-      const hwnd = readHwnd(hwndBuffer);
-      if (hwnd === 0) {
-        resolve('SKIP');
-        return;
-      }
-      const scriptFile = getRestoreScriptPath();
-      execFile(
-        'powershell.exe',
-        [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-NonInteractive',
-          '-File',
-          scriptFile,
-          String(hwnd),
-        ],
-        { timeout: 5000, windowsHide: true },
-        (err, stdout) => {
-          if (err) {
-            resolve('ERROR');
-            return;
-          }
-          const output = stdout.trim();
-          if (output === 'RESTORED') {
-            console.log('[workerw] Win+D 복원: 위젯 다시 표시');
-          }
-          resolve(output);
-        },
-      );
-    } catch {
-      resolve('ERROR');
-    }
-  });
-}

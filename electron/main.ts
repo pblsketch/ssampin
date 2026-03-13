@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeI
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
-import { attachToDesktopAsync, detachFromDesktopAsync, restoreDesktopVisibility } from './workerw';
+import { attachToDesktopAsync, detachFromDesktopAsync } from './workerw';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
@@ -291,27 +291,25 @@ function stopWidgetHeartbeat(): void {
 // ─── Win+D 복원 폴링 (WS_CHILD 창은 Electron 이벤트가 발생하지 않으므로 폴링 필요) ───
 function startWinDRecovery(): void {
   if (winDRecoveryTimer) return;
+
+  // 500ms 간격으로 빠르게 체크 (PowerShell보다 훨씬 가벼움)
   winDRecoveryTimer = setInterval(() => {
     if (!widgetWindow || widgetWindow.isDestroyed() || !widgetAttachedToDesktop) return;
 
-    // Layer 1: Electron 기반 감지 (isMinimized, isVisible)
-    if (widgetWindow.isMinimized()) {
-      console.log('[widget] Win+D 감지 (minimize) — 즉시 복원');
-      widgetWindow.restore();
-      widgetWindow.show();
-      return;
-    }
-
+    // Electron isVisible()이 false면 = 부모 WorkerW가 숨겨짐
     if (!widgetWindow.isVisible()) {
-      console.log('[widget] Win+D 감지 (hidden) — 즉시 복원');
-      widgetWindow.show();
+      console.log('[widget] Win+D 감지 (hidden) — show 복원');
+      widgetWindow.showInactive();
       return;
     }
 
-    // Layer 2: Win32 IsWindowVisible 기반 감지 (부모 WorkerW 숨김 대응)
-    // Electron의 isVisible()이 부모 상태를 반영하지 않을 수 있으므로 Win32 API로 확인
-    void restoreDesktopVisibility(widgetWindow.getNativeWindowHandle());
-  }, 1500);
+    // isMinimized() 체크 (일부 환경에서 minimize로 처리)
+    if (widgetWindow.isMinimized()) {
+      console.log('[widget] Win+D 감지 (minimized) — restore');
+      widgetWindow.restore();
+      return;
+    }
+  }, 500);
 }
 
 function stopWinDRecovery(): void {
