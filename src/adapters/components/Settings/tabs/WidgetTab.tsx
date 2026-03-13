@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Settings, WidgetSettings } from '@domain/entities/Settings';
+import type { Settings, WidgetSettings, WidgetDesktopMode } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
 
@@ -50,13 +50,6 @@ export function WidgetTab({ draft, patch }: Props) {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-sp-text">항상 위에 표시</span>
-            <span className="text-xs text-sp-muted">다른 창보다 항상 위에 고정합니다.</span>
-          </div>
-          <Toggle checked={draft.widget.alwaysOnTop} onChange={(v) => patchWidget({ alwaysOnTop: v })} />
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
             <span className="text-sm font-medium text-sp-text">닫기 시 위젯 전환</span>
             <span className="text-xs text-sp-muted">X 버튼을 누르면 위젯 모드로 전환합니다.</span>
           </div>
@@ -64,21 +57,19 @@ export function WidgetTab({ draft, patch }: Props) {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-sp-text">바탕화면 고정 모드</span>
+            <span className="text-sm font-medium text-sp-text">위젯 표시 모드</span>
             <span className="text-xs text-sp-muted">
-              {draft.widget.desktopMode === 'auto' && '자동: 바탕화면 고정을 시도하고, 실패 시 플로팅으로 전환합니다.'}
-              {draft.widget.desktopMode === 'desktop' && '바탕화면 고정: 항상 바탕화면 위에 고정합니다.'}
-              {draft.widget.desktopMode === 'floating' && '플로팅: 바탕화면 고정 없이 일반 창으로 표시합니다.'}
+              {draft.widget.desktopMode === 'normal' && '일반: 다른 창에 가려질 수 있습니다. Win+D를 눌러도 사라지지 않습니다.'}
+              {draft.widget.desktopMode === 'topmost' && '항상 위에: 항상 다른 창 위에 표시됩니다. Win+D를 눌러도 사라지지 않습니다.'}
             </span>
           </div>
           <select
             value={draft.widget.desktopMode}
-            onChange={(e) => patchWidget({ desktopMode: e.target.value as 'auto' | 'desktop' | 'floating' })}
+            onChange={(e) => patchWidget({ desktopMode: e.target.value as WidgetDesktopMode })}
             className="bg-sp-card border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
           >
-            <option value="auto">자동</option>
-            <option value="floating">플로팅</option>
-            <option value="desktop">바탕화면 고정</option>
+            <option value="normal">일반</option>
+            <option value="topmost">항상 위에</option>
           </select>
         </div>
         <div className="flex items-center justify-between pt-4 border-t border-sp-border">

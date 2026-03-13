@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS: Settings = {
     alwaysOnTop: true,
     closeToWidget: true,
     layoutMode: 'full',
-    desktopMode: 'auto',
+    desktopMode: 'normal',
     visibleSections: {
       dateTime: true,
       weather: true,
@@ -158,6 +158,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
                 delete migrated.timetable;
               }
               return { ...DEFAULT_SETTINGS.widget.visibleSections, ...migrated } as WidgetVisibleSections;
+            })(),
+            desktopMode: (() => {
+              // Migrate old values → 'normal' | 'topmost'
+              const rawMode = (saved.widget as unknown as { desktopMode?: string })?.desktopMode;
+              if (rawMode === 'floating') return 'topmost' as const;
+              if (rawMode === 'auto' || rawMode === 'desktop' || rawMode === 'behind' || rawMode === 'above') return 'normal' as const;
+              return (saved.widget?.desktopMode ?? DEFAULT_SETTINGS.widget.desktopMode);
             })(),
           },
           system: { ...DEFAULT_SETTINGS.system, ...((saved as unknown as { system?: Partial<Settings['system']> }).system ?? {}) },

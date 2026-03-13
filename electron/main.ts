@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeI
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
-import { attachToDesktopAsync, detachFromDesktopAsync } from './workerw';
+// workerw 모듈은 더 이상 사용하지 않음 (behind/above PS 스크립트 기반 모드 제거)
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
@@ -14,13 +14,11 @@ declare const __dirname: string;
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let savePositionTimer: ReturnType<typeof setTimeout> | null = null;
-let widgetHeartbeat: ReturnType<typeof setInterval> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
-// 위젯 alwaysOnTop 상태 추적 (WorkerW 연결 시 Win32 상태와 동기화 문제 방지)
-let widgetDesiredAlwaysOnTop = true;
-let widgetAttachedToDesktop = false;
+// 위젯 표시 모드 상태 추적: 'normal' | 'topmost'
+let currentDesktopMode: string = 'normal';
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 let widgetBoundsBeforeLayout: WidgetBounds | null = null;
 
@@ -173,21 +171,6 @@ function createTray(): void {
       },
       { type: 'separator' },
       {
-        label: '항상 위에 표시',
-        type: 'checkbox',
-        checked: false,
-        click: (menuItem) => {
-          mainWindow?.setAlwaysOnTop(menuItem.checked);
-          if (widgetWindow && !widgetWindow.isDestroyed()) {
-            widgetDesiredAlwaysOnTop = menuItem.checked;
-            if (!widgetAttachedToDesktop) {
-              widgetWindow.setAlwaysOnTop(menuItem.checked);
-            }
-          }
-        },
-      },
-      { type: 'separator' },
-      {
         label: '완전히 종료',
         click: () => {
           isQuitting = true;
@@ -233,81 +216,24 @@ function applySystemSettings(): void {
   }
 }
 
-let heartbeatCount = 0;
-
-function startWidgetHeartbeat(): void {
-  // 15초마다 WorkerW 연결 상태 재확인 (Explorer 재시작/바탕화면 슬라이드쇼 대비)
-  if (widgetHeartbeat) clearInterval(widgetHeartbeat);
-  heartbeatCount = 0;
-  widgetHeartbeat = setInterval(() => {
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-      heartbeatCount++;
-      const hwndBuf = widgetWindow.getNativeWindowHandle();
-      attachToDesktopAsync(hwndBuf).then((attached) => {
-        if (!widgetWindow || widgetWindow.isDestroyed()) return;
-        if (attached) {
-          widgetAttachedToDesktop = true;
-
-          // 3번째 하트비트(45초)마다 입력 재검증
-          if (heartbeatCount % 3 === 0 && widgetAttachedToDesktop) {
-            const bounds = widgetWindow.getBounds();
-            const cx = Math.round(bounds.width / 2);
-            const cy = Math.round(bounds.height / 2);
-            widgetWindow.webContents.sendInputEvent({ type: 'mouseMove', x: cx, y: cy });
-            widgetWindow.webContents.send('widget:verify-input');
-
-            const reVerifyTimeout = setTimeout(() => {
-              console.warn('[widget] 하트비트 입력 재검증 실패 — 플로팅 모드로 전환');
-              void fallbackToFloating();
-            }, 3000);
-
-            ipcMain.once('widget:input-verified', () => {
-              clearTimeout(reVerifyTimeout);
-            });
-          }
-        } else {
-          // WorkerW 연결 끊김 → 즉시 플로팅 모드로 전환
-          if (widgetAttachedToDesktop) {
-            console.log('[widget] WorkerW 연결 해제 감지, 플로팅 모드로 전환');
-            widgetAttachedToDesktop = false;
-            widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
-          }
-        }
-      }).catch(() => {/* ignore heartbeat errors */});
-    } else {
-      if (widgetHeartbeat) clearInterval(widgetHeartbeat);
-      widgetHeartbeat = null;
-    }
-  }, 15_000);
-}
-
-function stopWidgetHeartbeat(): void {
-  if (widgetHeartbeat) {
-    clearInterval(widgetHeartbeat);
-    widgetHeartbeat = null;
-  }
-}
-
-// ─── Win+D 복원 폴링 (WS_CHILD 창은 Electron 이벤트가 발생하지 않으므로 폴링 필요) ───
+// ─── Win+D 복원 폴링 (양쪽 모드 모두 동작) ───
+// Win+D는 모든 창을 최소화하는데, 위젯은 최소화되면 즉시 복원하여 바탕화면에 유지
 function startWinDRecovery(): void {
   if (winDRecoveryTimer) return;
 
-  // 500ms 간격으로 빠르게 체크 (PowerShell보다 훨씬 가벼움)
   winDRecoveryTimer = setInterval(() => {
-    if (!widgetWindow || widgetWindow.isDestroyed() || !widgetAttachedToDesktop) return;
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
-    // Electron isVisible()이 false면 = 부모 WorkerW가 숨겨짐
-    if (!widgetWindow.isVisible()) {
-      console.log('[widget] Win+D 감지 (hidden) — show 복원');
-      widgetWindow.showInactive();
-      return;
-    }
+    const isHidden = widgetWindow.isMinimized() || !widgetWindow.isVisible();
+    if (!isHidden) return;
 
-    // isMinimized() 체크 (일부 환경에서 minimize로 처리)
-    if (widgetWindow.isMinimized()) {
-      console.log('[widget] Win+D 감지 (minimized) — restore');
-      widgetWindow.restore();
-      return;
+    console.log(`[widget] Win+D 감지 (${currentDesktopMode}) — 복원`);
+    widgetWindow.restore();
+    widgetWindow.showInactive();
+
+    // topmost 모드에서는 alwaysOnTop 재설정 (Win+D가 해제할 수 있음)
+    if (currentDesktopMode === 'topmost') {
+      widgetWindow.setAlwaysOnTop(true);
     }
   }, 500);
 }
@@ -317,55 +243,6 @@ function stopWinDRecovery(): void {
     clearInterval(winDRecoveryTimer);
     winDRecoveryTimer = null;
   }
-}
-
-async function fallbackToFloating(): Promise<void> {
-  if (!widgetWindow || widgetWindow.isDestroyed()) return;
-
-  console.log('[widget] 플로팅 모드로 전환 중...');
-
-  try {
-    if (widgetAttachedToDesktop) {
-      const detached = await detachFromDesktopAsync(widgetWindow.getNativeWindowHandle());
-      if (!detached) {
-        console.error('[widget] WorkerW 분리 실패 — 창 재생성으로 폴백');
-        recreateWidgetAsFloating();
-        return;
-      }
-    }
-  } catch (err) {
-    console.error('[widget] detach 예외:', err);
-    recreateWidgetAsFloating();
-    return;
-  }
-
-  if (!widgetWindow || widgetWindow.isDestroyed()) return;
-
-  widgetAttachedToDesktop = false;
-  widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
-  stopWidgetHeartbeat();
-  stopWinDRecovery();
-  ensureWidgetOnScreen();
-
-  // 전환 완료 후 렌더러에 알림
-  if (widgetWindow && !widgetWindow.isDestroyed()) {
-    widgetWindow.webContents.send('widget:fallback-notice');
-  }
-
-  console.log('[widget] 플로팅 모드 전환 완료');
-}
-
-function recreateWidgetAsFloating(): void {
-  if (widgetWindow && !widgetWindow.isDestroyed()) {
-    widgetWindow.destroy();
-  }
-  widgetWindow = null;
-  widgetAttachedToDesktop = false;
-  stopWidgetHeartbeat();
-  stopWinDRecovery();
-
-  const opts = readSettingsWidgetOptions();
-  createWidgetWindow({ ...opts, desktopMode: 'floating' });
 }
 
 function ensureWidgetOnScreen(): void {
@@ -388,7 +265,7 @@ function ensureWidgetOnScreen(): void {
 }
 
 function createWidgetWindow(
-  options: { width: number; height: number; alwaysOnTop: boolean; desktopMode?: string },
+  options: { width: number; height: number; desktopMode?: string },
   onReady?: () => void,
 ): void {
   const savedBounds = readWidgetBounds();
@@ -399,14 +276,6 @@ function createWidgetWindow(
   const width = savedBounds?.width ?? options.width;
   const height = savedBounds?.height ?? options.height;
 
-  // 사용자 설정 추적 (WorkerW child window에서 setAlwaysOnTop이 무시되는 문제 방지)
-  widgetDesiredAlwaysOnTop = options.alwaysOnTop;
-  widgetAttachedToDesktop = false;
-
-  // BrowserWindow는 항상 alwaysOnTop: false로 생성
-  // → WorkerW 연결 실패 시에만 사용자 설정에 따라 true로 변경
-  // (이유: SetParent로 child window가 된 상태에서 HWND_NOTOPMOST가 무시되어
-  //  나중에 WorkerW에서 분리되면 topmost 플래그가 남는 버그 방지)
   widgetWindow = new BrowserWindow({
     x,
     y,
@@ -439,72 +308,28 @@ function createWidgetWindow(
   // 렌더러가 첫 프레임을 그린 뒤 표시
   const attachAndShow = () => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
-    widgetWindow.show();
 
     if (process.platform === 'win32') {
-      const desktopMode = options.desktopMode ?? 'auto';
+      const desktopMode = options.desktopMode ?? 'normal';
 
-      if (desktopMode === 'floating') {
-        widgetAttachedToDesktop = false;
-        widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
-        console.log('[widget] 플로팅 모드 (사용자 설정)');
+      if (desktopMode === 'topmost') {
+        // ── 항상 위에 모드 ──
+        currentDesktopMode = 'topmost';
+        widgetWindow.setAlwaysOnTop(true);
+        widgetWindow.show();
+        console.log('[widget] 항상 위에 모드');
       } else {
-        // 렌더러가 안정화된 후 WorkerW에 붙이기 (500ms 딜레이)
-        setTimeout(() => {
-          if (!widgetWindow || widgetWindow.isDestroyed()) return;
-          const hwndBuf = widgetWindow.getNativeWindowHandle();
-          attachToDesktopAsync(hwndBuf).then((attached) => {
-            if (!widgetWindow || widgetWindow.isDestroyed()) return;
-            if (attached) {
-              widgetAttachedToDesktop = true;
-              startWidgetHeartbeat();
-              startWinDRecovery();
-              console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
-
-              // 입력 검증: 타임아웃 통일 (3초), 다중 이벤트 주입
-              const VERIFY_TIMEOUT_MS = 3000;
-              const INJECT_INTERVAL_MS = 500;
-              const INJECT_COUNT = 4;
-
-              widgetWindow.webContents.send('widget:verify-input');
-
-              // 500ms 간격으로 마우스 이벤트 여러 번 주입
-              const bounds = widgetWindow.getBounds();
-              const centerX = Math.round(bounds.width / 2);
-              const centerY = Math.round(bounds.height / 2);
-              let injectCount = 0;
-              const injectInterval = setInterval(() => {
-                if (!widgetWindow || widgetWindow.isDestroyed() || injectCount >= INJECT_COUNT) {
-                  clearInterval(injectInterval);
-                  return;
-                }
-                widgetWindow.webContents.sendInputEvent({
-                  type: 'mouseMove',
-                  x: centerX + injectCount,  // 약간씩 다른 좌표로 이동
-                  y: centerY + injectCount,
-                });
-                injectCount++;
-              }, INJECT_INTERVAL_MS);
-
-              const verifyTimeout = setTimeout(() => {
-                clearInterval(injectInterval);
-                console.warn('[widget] 입력 검증 실패 — 플로팅 모드로 전환');
-                void fallbackToFloating();
-              }, VERIFY_TIMEOUT_MS);
-
-              ipcMain.once('widget:input-verified', () => {
-                clearInterval(injectInterval);
-                clearTimeout(verifyTimeout);
-                console.log('[widget] 입력 검증 성공 — 바탕화면 모드 유지');
-              });
-            } else {
-              widgetAttachedToDesktop = false;
-              widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
-              console.warn('[widget] WorkerW 연결 실패, alwaysOnTop =', widgetDesiredAlwaysOnTop);
-            }
-          });
-        }, 500);
+        // ── 일반 모드 (normal): 다른 창에 가려질 수 있음 ──
+        currentDesktopMode = 'normal';
+        widgetWindow.setAlwaysOnTop(false);
+        widgetWindow.show();
+        console.log('[widget] 일반 모드');
       }
+
+      // 양쪽 모드 모두 Win+D 복원 활성화
+      startWinDRecovery();
+    } else {
+      widgetWindow.show();
     }
 
     onReady?.();
@@ -525,54 +350,58 @@ function createWidgetWindow(
   widgetWindow.on('move', scheduleWidgetBoundsSave);
   widgetWindow.on('resize', scheduleWidgetBoundsSave);
 
-  // Win+D(바탕화면 보기) 방지: WorkerW에 붙어있을 때 minimize 차단
+  // Win+D minimize 차단: 즉시 복원
   widgetWindow.on('minimize', () => {
-    if (widgetAttachedToDesktop && widgetWindow && !widgetWindow.isDestroyed()) {
-      widgetWindow.restore();
-      widgetWindow.show();
-      console.log('[widget] Win+D minimize 차단 — restore 완료');
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    console.log(`[widget] minimize 감지 (${currentDesktopMode}) — 복원`);
+    widgetWindow.restore();
+    widgetWindow.showInactive();
+    if (currentDesktopMode === 'topmost') {
+      widgetWindow.setAlwaysOnTop(true);
     }
   });
 
   widgetWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
-      stopWidgetHeartbeat();
+      stopWinDRecovery();
       widgetWindow?.hide();
-      // 위젯 닫힐 때 메인 창 복원
       mainWindow?.show();
     }
   });
 
   widgetWindow.on('closed', () => {
-    stopWidgetHeartbeat();
     stopWinDRecovery();
     widgetWindow = null;
-    widgetAttachedToDesktop = false;
+    currentDesktopMode = 'normal';
   });
 }
 
-function readSettingsWidgetOptions(): { width: number; height: number; alwaysOnTop: boolean; startInWidgetMode: boolean; closeToWidget: boolean; desktopMode: string } {
+function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeToWidget: boolean; desktopMode: string } {
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const settings = JSON.parse(raw) as {
-        widget?: { width?: number; height?: number; alwaysOnTop?: boolean; transparent?: boolean; closeToWidget?: boolean; desktopMode?: string };
+        widget?: { width?: number; height?: number; transparent?: boolean; closeToWidget?: boolean; desktopMode?: string };
       };
+      const rawMode = settings.widget?.desktopMode ?? 'normal';
+      // 마이그레이션: 이전 모드 → normal/topmost
+      const desktopMode = rawMode === 'floating' ? 'topmost'
+        : (rawMode === 'auto' || rawMode === 'desktop' || rawMode === 'behind' || rawMode === 'above') ? 'normal'
+        : rawMode;
       return {
         width: settings.widget?.width ?? 920,
         height: settings.widget?.height ?? 700,
-        alwaysOnTop: settings.widget?.alwaysOnTop ?? true,
         startInWidgetMode: settings.widget?.transparent ?? false,
         closeToWidget: settings.widget?.closeToWidget ?? true,
-        desktopMode: settings.widget?.desktopMode ?? 'auto',
+        desktopMode,
       };
     }
   } catch {
     // fall through to defaults
   }
-  return { width: 920, height: 700, alwaysOnTop: true, startInWidgetMode: false, closeToWidget: true, desktopMode: 'auto' };
+  return { width: 920, height: 700, startInWidgetMode: false, closeToWidget: true, desktopMode: 'normal' };
 }
 
 function setupAutoUpdater(): void {
@@ -650,23 +479,9 @@ function registerIpcHandlers(): void {
     },
   );
 
-  // window:setAlwaysOnTop — 요청을 보낸 창(메인 또는 위젯)에 적용
-  ipcMain.handle('window:setAlwaysOnTop', (event, flag: boolean): void => {
-    const isWidget =
-      widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.webContents === event.sender;
-
-    if (isWidget) {
-      // 사용자 설정 추적 (WorkerW 연결/해제 시 올바른 값 복원용)
-      widgetDesiredAlwaysOnTop = flag;
-
-      // WorkerW에 붙어있으면 child window이므로 setAlwaysOnTop가 무의미 → 스킵
-      // (desktop 모드에서는 z-order가 WorkerW 부모에 의해 제어됨)
-      if (!widgetAttachedToDesktop) {
-        widgetWindow.setAlwaysOnTop(flag);
-      }
-    } else {
-      mainWindow?.setAlwaysOnTop(flag);
-    }
+  // window:setAlwaysOnTop — 메인 창에만 적용 (위젯은 모드별 자동 관리)
+  ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean): void => {
+    mainWindow?.setAlwaysOnTop(flag);
   });
 
   // window:setWidget (backward compat)
@@ -693,10 +508,10 @@ function registerIpcHandlers(): void {
   ipcMain.handle('window:toggleWidget', (): void => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       // 위젯이 열려있으면 닫고 메인창 복원
-      stopWidgetHeartbeat();
+      stopWinDRecovery();
       widgetWindow.destroy();
       widgetWindow = null;
-      widgetAttachedToDesktop = false;
+      currentDesktopMode = 'normal';
       mainWindow?.show();
     } else {
       // 위젯이 없으면 생성하고, 표시된 뒤 메인창 숨김
@@ -781,6 +596,30 @@ function registerIpcHandlers(): void {
     }
 
     widgetWindow.setBounds(bounds);
+  });
+
+  // window:applyWidgetSettings — 설정 페이지에서 위젯 설정 변경 시 실시간 적용
+  ipcMain.handle('window:applyWidgetSettings', (
+    _event,
+    widget: { opacity: number; desktopMode: string },
+  ): void => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+
+    // 투명도 직접 적용
+    widgetWindow.setOpacity(Math.max(0, Math.min(1, widget.opacity)));
+
+    // 데스크톱 모드 변경
+    const newMode = widget.desktopMode === 'topmost' ? 'topmost' : 'normal';
+    if (newMode !== currentDesktopMode) {
+      console.log(`[widget] 설정 변경: ${currentDesktopMode} → ${newMode}`);
+      currentDesktopMode = newMode;
+
+      if (newMode === 'topmost') {
+        widgetWindow.setAlwaysOnTop(true);
+      } else {
+        widgetWindow.setAlwaysOnTop(false);
+      }
+    }
   });
 
   // window:setOpacity — 위젯 투명도 설정

@@ -36,6 +36,17 @@ export function SettingsPage() {
       showToast('설정이 저장되었습니다.', 'success');
       track('settings_change', { section: activeTab, key: 'save' });
 
+      // 위젯 설정 변경 시 실행 중인 위젯에 실시간 적용
+      if (
+        draft.widget.opacity !== settings.widget.opacity ||
+        draft.widget.desktopMode !== settings.widget.desktopMode
+      ) {
+        window.electronAPI?.applyWidgetSettings({
+          opacity: draft.widget.opacity,
+          desktopMode: draft.widget.desktopMode,
+        });
+      }
+
       if (draft.schoolName !== settings.schoolName || draft.schoolLevel !== settings.schoolLevel) {
         const regionMatch = draft.neis.schoolName.match(/\(([^)]+)\)/);
         track('school_set', {

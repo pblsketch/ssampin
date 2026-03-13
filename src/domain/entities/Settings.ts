@@ -56,11 +56,10 @@ export interface AlarmSoundSettings {
 
 export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';
 
-// 바탕화면 고정 모드
-// - 'auto': WorkerW 연결 시도 + 입력 검증 + 실패 시 플로팅 폴백
-// - 'desktop': WorkerW 강제 연결 (검증 없음, 고급 사용자용)
-// - 'floating': WorkerW 연결 안 함, 항상 플로팅 모드
-export type WidgetDesktopMode = 'auto' | 'desktop' | 'floating';
+// 위젯 표시 모드
+// - 'normal': 일반 모드 — 다른 창에 가려질 수 있음, Win+D에 사라지지 않음
+// - 'topmost': 항상 위에 — 항상 다른 창 위에 표시, Win+D에 사라지지 않음
+export type WidgetDesktopMode = 'normal' | 'topmost';
 
 export interface WidgetVisibleSections {
   readonly dateTime: boolean;

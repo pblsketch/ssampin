@@ -13,7 +13,6 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
   const { settings, update } = useSettingsStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const alwaysOnTop = settings.widget.alwaysOnTop;
   const opacity = settings.widget.opacity;
 
   // 뷰포트 클램핑을 위한 위치 계산
@@ -51,12 +50,6 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleAlwaysOnTop = () => {
-    const next = !alwaysOnTop;
-    void update({ widget: { ...settings.widget, alwaysOnTop: next } });
-    window.electronAPI?.setAlwaysOnTop(next);
-  };
-
   const handleToggleWidget = () => {
     onClose();
     window.electronAPI?.toggleWidget();
@@ -91,34 +84,6 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
           SsamPin Menu
         </p>
       </div>
-
-      {/* 항상 위에 표시 */}
-      <button
-        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-white/[0.08] transition-colors text-left"
-        onClick={handleAlwaysOnTop}
-      >
-        <span
-          className={[
-            'material-symbols-outlined flex-shrink-0',
-            alwaysOnTop ? 'text-blue-400' : 'text-slate-400',
-          ].join(' ')}
-          style={{ fontSize: 20 }}
-        >
-          push_pin
-        </span>
-        <span className="flex-1 text-sm text-slate-200">항상 위에 표시</span>
-        {alwaysOnTop && (
-          <span
-            className="material-symbols-outlined text-blue-400 flex-shrink-0"
-            style={{ fontSize: 16 }}
-          >
-            check
-          </span>
-        )}
-      </button>
-
-      {/* 구분선 */}
-      <div className="h-px bg-white/10 mx-3 my-1" />
 
       {/* 레이아웃 선택 */}
       <div className="px-3 py-2">

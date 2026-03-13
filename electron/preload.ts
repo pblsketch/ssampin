@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleWidget: (): Promise<void> => ipcRenderer.invoke('window:toggleWidget'),
   setOpacity: (value: number): Promise<void> => ipcRenderer.invoke('window:setOpacity', value),
   setWidgetLayout: (mode: string): Promise<void> => ipcRenderer.invoke('window:setWidgetLayout', mode),
+  applyWidgetSettings: (widget: {
+    opacity: number;
+    desktopMode: string;
+  }): Promise<void> => ipcRenderer.invoke('window:applyWidgetSettings', widget),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:closeApp'),
   showSaveDialog: (options: {
     title: string;

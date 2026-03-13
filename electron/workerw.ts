@@ -85,13 +85,16 @@ $style = $style -band (-bnot ($WS_CAPTION -bor $WS_THICKFRAME -bor $WS_SYSMENU -
 $style = $style -bor $WS_CHILD
 [SsamPinDesktop]::SetWindowLong([IntPtr]$hwnd, $GWL_STYLE, $style)
 
-# 2. WS_EX_STYLE: APPWINDOW 제거, TOOLWINDOW + NOACTIVATE 추가
+# 2. WS_EX_STYLE: APPWINDOW + LAYERED 제거, TOOLWINDOW + NOACTIVATE 추가
+#    WS_EX_LAYERED (Electron transparent:true가 설정)를 제거해야
+#    DWM이 별도 레이어로 합성하지 않고 WorkerW 자식으로 정상 렌더링함
 $GWL_EXSTYLE = -20
 $WS_EX_APPWINDOW = 0x00040000
 $WS_EX_TOOLWINDOW = 0x80
 $WS_EX_NOACTIVATE = 0x08000000
+$WS_EX_LAYERED = 0x00080000
 $exStyle = [SsamPinDesktop]::GetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE)
-$exStyle = $exStyle -band (-bnot ($WS_EX_APPWINDOW))
+$exStyle = $exStyle -band (-bnot ($WS_EX_APPWINDOW -bor $WS_EX_LAYERED))
 $exStyle = $exStyle -bor $WS_EX_TOOLWINDOW -bor $WS_EX_NOACTIVATE
 [SsamPinDesktop]::SetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE, $exStyle)
 
@@ -101,7 +104,8 @@ if ($current -ne $ww) {
     [SsamPinDesktop]::SetParent([IntPtr]$hwnd, $ww)
 }
 
-[SsamPinDesktop]::ShowWindow([IntPtr]$hwnd, 5)
+# SW_SHOWNOACTIVATE(4): 포커스를 뺏지 않고 표시
+[SsamPinDesktop]::ShowWindow([IntPtr]$hwnd, 4)
 if ($current -eq $ww) {
     Write-Output "SUCCESS:reapplied"
 } else {
@@ -154,9 +158,77 @@ $exStyle = $exStyle -band (-bnot ($WS_EX_TOOLWINDOW -bor $WS_EX_NOACTIVATE))
 Write-Output "DETACHED"
 `;
 
+// ─── 바탕화면 위 모드: HWND_BOTTOM으로 z-order 배치 ──────────────────────
+const PS_ABOVE_SCRIPT = `
+param([long]$hwnd)
+
+if (-not ([System.Management.Automation.PSTypeName]'SsamPinAbove').Type) {
+  Add-Type -Language CSharp -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class SsamPinAbove {
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")]
+    public static extern int GetWindowLong(IntPtr hwnd, int nIndex);
+    [DllImport("user32.dll")]
+    public static extern int SetWindowLong(IntPtr hwnd, int nIndex, int dwNewLong);
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hwnd, int cmd);
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetParent(IntPtr child, IntPtr newParent);
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetParent(IntPtr hwnd);
+}
+"@ 2>$null
+}
+
+# behind → above 모드 전환 대비: WorkerW 부모에서 분리 + WS_CHILD 제거
+$GWL_STYLE = -16
+$WS_CHILD = 0x40000000
+$WS_POPUP = 0x80000000
+
+$parent = [SsamPinAbove]::GetParent([IntPtr]$hwnd)
+if ($parent -ne [IntPtr]::Zero) {
+    [SsamPinAbove]::SetParent([IntPtr]$hwnd, [IntPtr]::Zero)
+}
+
+$style = [SsamPinAbove]::GetWindowLong([IntPtr]$hwnd, $GWL_STYLE)
+if ($style -band $WS_CHILD) {
+    $style = $style -band (-bnot $WS_CHILD)
+    $style = $style -bor $WS_POPUP
+    [SsamPinAbove]::SetWindowLong([IntPtr]$hwnd, $GWL_STYLE, $style)
+}
+
+$HWND_BOTTOM = [IntPtr]::new(1)
+$SWP_NOMOVE = 0x0002
+$SWP_NOSIZE = 0x0001
+$SWP_NOACTIVATE = 0x0010
+$SWP_SHOWWINDOW = 0x0040
+
+# WS_EX_NOACTIVATE 적용 (클릭 시 다른 앱 포커스 안 뺏음)
+$GWL_EXSTYLE = -20
+$WS_EX_NOACTIVATE = 0x08000000
+$WS_EX_TOOLWINDOW = 0x80
+$WS_EX_APPWINDOW = 0x00040000
+$exStyle = [SsamPinAbove]::GetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE)
+$exStyle = $exStyle -bor $WS_EX_NOACTIVATE -bor $WS_EX_TOOLWINDOW
+$exStyle = $exStyle -band (-bnot $WS_EX_APPWINDOW)
+[SsamPinAbove]::SetWindowLong([IntPtr]$hwnd, $GWL_EXSTYLE, $exStyle)
+
+# 최소화 상태에서 복원 (SW_SHOWNOACTIVATE=4: 포커스 뺏지 않음)
+[SsamPinAbove]::ShowWindow([IntPtr]$hwnd, 4)
+
+# HWND_BOTTOM으로 z-order 배치 (바탕화면 아이콘 위, 일반 창 아래)
+[SsamPinAbove]::SetWindowPos([IntPtr]$hwnd, $HWND_BOTTOM, 0, 0, 0, 0, $SWP_NOMOVE -bor $SWP_NOSIZE -bor $SWP_NOACTIVATE -bor $SWP_SHOWWINDOW)
+
+Write-Output "ABOVE_OK"
+`;
+
 // ─── 스크립트 파일 캐싱 ───────────────────────────────────────────────────
 let _scriptPath: string | null = null;
 let _detachScriptPath: string | null = null;
+let _aboveScriptPath: string | null = null;
 
 function getScriptPath(): string {
   if (_scriptPath && existsSync(_scriptPath)) return _scriptPath;
@@ -174,6 +246,15 @@ function getDetachScriptPath(): string {
   _detachScriptPath = join(dir, 'workerw-detach.ps1');
   writeFileSync(_detachScriptPath, PS_DETACH_SCRIPT, { encoding: 'utf8' });
   return _detachScriptPath;
+}
+
+function getAboveScriptPath(): string {
+  if (_aboveScriptPath && existsSync(_aboveScriptPath)) return _aboveScriptPath;
+  const dir = join(tmpdir(), 'ssampin-widget');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  _aboveScriptPath = join(dir, 'workerw-above.ps1');
+  writeFileSync(_aboveScriptPath, PS_ABOVE_SCRIPT, { encoding: 'utf8' });
+  return _aboveScriptPath;
 }
 
 // ─── 공개 API ─────────────────────────────────────────────────────────────
@@ -284,6 +365,39 @@ export function detachFromDesktopAsync(hwndBuffer: Buffer): Promise<boolean> {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[workerw] detachFromDesktopAsync 예외:', msg.substring(0, 300));
+      resolve(false);
+    }
+  });
+}
+
+/**
+ * 위젯을 바탕화면 위 모드로 설정 (HWND_BOTTOM + WS_EX_NOACTIVATE).
+ * SetParent를 사용하지 않으므로 Win+D 영향 없음.
+ * @param hwndBuffer  BrowserWindow.getNativeWindowHandle() 반환값
+ * @returns Promise<boolean> — 성공 여부
+ */
+export function setAboveModeAsync(hwndBuffer: Buffer): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const hwnd = readHwnd(hwndBuffer);
+      if (hwnd === 0) { resolve(false); return; }
+      const scriptFile = getAboveScriptPath();
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-File', scriptFile, String(hwnd)],
+        { timeout: 10_000, windowsHide: true },
+        (err, stdout) => {
+          if (err) {
+            console.error('[workerw] above mode 오류:', String(err).substring(0, 300));
+            resolve(false);
+            return;
+          }
+          const ok = stdout.trim() === 'ABOVE_OK';
+          console.log('[workerw]', ok ? '바탕화면 위 모드 적용' : `above 실패: ${stdout.trim()}`);
+          resolve(ok);
+        },
+      );
+    } catch {
       resolve(false);
     }
   });

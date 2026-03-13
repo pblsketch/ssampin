@@ -12,6 +12,10 @@ interface ElectronAPI {
   toggleWidget: () => Promise<void>;
   setOpacity: (value: number) => Promise<void>;
   setWidgetLayout: (mode: string) => Promise<void>;
+  applyWidgetSettings: (widget: {
+    opacity: number;
+    desktopMode: string;
+  }) => Promise<void>;
   closeWindow: () => Promise<void>;
   showSaveDialog: (options: {
     title: string;
