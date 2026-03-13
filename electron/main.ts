@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeI
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
-import { attachToDesktopAsync, detachFromDesktopAsync } from './workerw';
+import { attachToDesktopAsync, detachFromDesktopAsync, restoreDesktopVisibility } from './workerw';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
@@ -21,6 +21,7 @@ let isQuitting = false;
 // 위젯 alwaysOnTop 상태 추적 (WorkerW 연결 시 Win32 상태와 동기화 문제 방지)
 let widgetDesiredAlwaysOnTop = true;
 let widgetAttachedToDesktop = false;
+let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 let widgetBoundsBeforeLayout: WidgetBounds | null = null;
 
 interface WidgetBounds {
@@ -287,6 +288,39 @@ function stopWidgetHeartbeat(): void {
   }
 }
 
+// ─── Win+D 복원 폴링 (WS_CHILD 창은 Electron 이벤트가 발생하지 않으므로 폴링 필요) ───
+function startWinDRecovery(): void {
+  if (winDRecoveryTimer) return;
+  winDRecoveryTimer = setInterval(() => {
+    if (!widgetWindow || widgetWindow.isDestroyed() || !widgetAttachedToDesktop) return;
+
+    // Layer 1: Electron 기반 감지 (isMinimized, isVisible)
+    if (widgetWindow.isMinimized()) {
+      console.log('[widget] Win+D 감지 (minimize) — 즉시 복원');
+      widgetWindow.restore();
+      widgetWindow.show();
+      return;
+    }
+
+    if (!widgetWindow.isVisible()) {
+      console.log('[widget] Win+D 감지 (hidden) — 즉시 복원');
+      widgetWindow.show();
+      return;
+    }
+
+    // Layer 2: Win32 IsWindowVisible 기반 감지 (부모 WorkerW 숨김 대응)
+    // Electron의 isVisible()이 부모 상태를 반영하지 않을 수 있으므로 Win32 API로 확인
+    void restoreDesktopVisibility(widgetWindow.getNativeWindowHandle());
+  }, 1500);
+}
+
+function stopWinDRecovery(): void {
+  if (winDRecoveryTimer) {
+    clearInterval(winDRecoveryTimer);
+    winDRecoveryTimer = null;
+  }
+}
+
 async function fallbackToFloating(): Promise<void> {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
@@ -312,6 +346,7 @@ async function fallbackToFloating(): Promise<void> {
   widgetAttachedToDesktop = false;
   widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
   stopWidgetHeartbeat();
+  stopWinDRecovery();
   ensureWidgetOnScreen();
 
   // 전환 완료 후 렌더러에 알림
@@ -329,6 +364,7 @@ function recreateWidgetAsFloating(): void {
   widgetWindow = null;
   widgetAttachedToDesktop = false;
   stopWidgetHeartbeat();
+  stopWinDRecovery();
 
   const opts = readSettingsWidgetOptions();
   createWidgetWindow({ ...opts, desktopMode: 'floating' });
@@ -424,6 +460,7 @@ function createWidgetWindow(
             if (attached) {
               widgetAttachedToDesktop = true;
               startWidgetHeartbeat();
+              startWinDRecovery();
               console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
 
               // 입력 검증: 타임아웃 통일 (3초), 다중 이벤트 주입
@@ -490,6 +527,15 @@ function createWidgetWindow(
   widgetWindow.on('move', scheduleWidgetBoundsSave);
   widgetWindow.on('resize', scheduleWidgetBoundsSave);
 
+  // Win+D(바탕화면 보기) 방지: WorkerW에 붙어있을 때 minimize 차단
+  widgetWindow.on('minimize', () => {
+    if (widgetAttachedToDesktop && widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.restore();
+      widgetWindow.show();
+      console.log('[widget] Win+D minimize 차단 — restore 완료');
+    }
+  });
+
   widgetWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
@@ -502,6 +548,7 @@ function createWidgetWindow(
 
   widgetWindow.on('closed', () => {
     stopWidgetHeartbeat();
+    stopWinDRecovery();
     widgetWindow = null;
     widgetAttachedToDesktop = false;
   });
