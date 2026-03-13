@@ -89,6 +89,9 @@ interface ElectronAPI {
   verifyWidgetInput: () => void;
   onVerifyInput: (callback: () => void) => void;
   offVerifyInput: (callback: () => void) => void;
+  // Widget 플로팅 모드 폴백 알림
+  onFallbackNotice: (callback: () => void) => void;
+  offFallbackNotice: (callback: () => void) => void;
   // Analytics
   onAnalyticsFlush: (callback: () => void) => () => void;
 }

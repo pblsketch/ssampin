@@ -232,17 +232,38 @@ function applySystemSettings(): void {
   }
 }
 
+let heartbeatCount = 0;
+
 function startWidgetHeartbeat(): void {
   // 15초마다 WorkerW 연결 상태 재확인 (Explorer 재시작/바탕화면 슬라이드쇼 대비)
   if (widgetHeartbeat) clearInterval(widgetHeartbeat);
+  heartbeatCount = 0;
   widgetHeartbeat = setInterval(() => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
+      heartbeatCount++;
       const hwndBuf = widgetWindow.getNativeWindowHandle();
       attachToDesktopAsync(hwndBuf).then((attached) => {
         if (!widgetWindow || widgetWindow.isDestroyed()) return;
         if (attached) {
-          // WorkerW 재연결 성공 → desktop 모드 유지 (alwaysOnTop 불필요)
           widgetAttachedToDesktop = true;
+
+          // 3번째 하트비트(45초)마다 입력 재검증
+          if (heartbeatCount % 3 === 0 && widgetAttachedToDesktop) {
+            const bounds = widgetWindow.getBounds();
+            const cx = Math.round(bounds.width / 2);
+            const cy = Math.round(bounds.height / 2);
+            widgetWindow.webContents.sendInputEvent({ type: 'mouseMove', x: cx, y: cy });
+            widgetWindow.webContents.send('widget:verify-input');
+
+            const reVerifyTimeout = setTimeout(() => {
+              console.warn('[widget] 하트비트 입력 재검증 실패 — 플로팅 모드로 전환');
+              void fallbackToFloating();
+            }, 3000);
+
+            ipcMain.once('widget:input-verified', () => {
+              clearTimeout(reVerifyTimeout);
+            });
+          }
         } else {
           // WorkerW 연결 끊김 → 즉시 플로팅 모드로 전환
           if (widgetAttachedToDesktop) {
@@ -292,6 +313,11 @@ async function fallbackToFloating(): Promise<void> {
   widgetWindow.setAlwaysOnTop(widgetDesiredAlwaysOnTop);
   stopWidgetHeartbeat();
   ensureWidgetOnScreen();
+
+  // 전환 완료 후 렌더러에 알림
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.webContents.send('widget:fallback-notice');
+  }
 
   console.log('[widget] 플로팅 모드 전환 완료');
 }
@@ -400,27 +426,39 @@ function createWidgetWindow(
               startWidgetHeartbeat();
               console.log('[widget] WorkerW 바탕화면 레이어에 연결 성공');
 
-              // auto/desktop 모두 입력 검증 수행
-              const verifyTimeoutMs = desktopMode === 'desktop' ? 5000 : 3000;
-
-              // 능동적 검증: 창 중앙에 마우스 이벤트 주입
-              const bounds = widgetWindow.getBounds();
-              const centerX = Math.round(bounds.width / 2);
-              const centerY = Math.round(bounds.height / 2);
-              widgetWindow.webContents.sendInputEvent({
-                type: 'mouseMove',
-                x: centerX,
-                y: centerY,
-              });
+              // 입력 검증: 타임아웃 통일 (3초), 다중 이벤트 주입
+              const VERIFY_TIMEOUT_MS = 3000;
+              const INJECT_INTERVAL_MS = 500;
+              const INJECT_COUNT = 4;
 
               widgetWindow.webContents.send('widget:verify-input');
 
+              // 500ms 간격으로 마우스 이벤트 여러 번 주입
+              const bounds = widgetWindow.getBounds();
+              const centerX = Math.round(bounds.width / 2);
+              const centerY = Math.round(bounds.height / 2);
+              let injectCount = 0;
+              const injectInterval = setInterval(() => {
+                if (!widgetWindow || widgetWindow.isDestroyed() || injectCount >= INJECT_COUNT) {
+                  clearInterval(injectInterval);
+                  return;
+                }
+                widgetWindow.webContents.sendInputEvent({
+                  type: 'mouseMove',
+                  x: centerX + injectCount,  // 약간씩 다른 좌표로 이동
+                  y: centerY + injectCount,
+                });
+                injectCount++;
+              }, INJECT_INTERVAL_MS);
+
               const verifyTimeout = setTimeout(() => {
+                clearInterval(injectInterval);
                 console.warn('[widget] 입력 검증 실패 — 플로팅 모드로 전환');
                 void fallbackToFloating();
-              }, verifyTimeoutMs);
+              }, VERIFY_TIMEOUT_MS);
 
               ipcMain.once('widget:input-verified', () => {
+                clearInterval(injectInterval);
                 clearTimeout(verifyTimeout);
                 console.log('[widget] 입력 검증 성공 — 바탕화면 모드 유지');
               });

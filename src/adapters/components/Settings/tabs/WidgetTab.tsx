@@ -62,6 +62,25 @@ export function WidgetTab({ draft, patch }: Props) {
           </div>
           <Toggle checked={draft.widget.closeToWidget} onChange={(v) => patchWidget({ closeToWidget: v })} />
         </div>
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-sp-text">바탕화면 고정 모드</span>
+            <span className="text-xs text-sp-muted">
+              {draft.widget.desktopMode === 'auto' && '자동: 바탕화면 고정을 시도하고, 실패 시 플로팅으로 전환합니다.'}
+              {draft.widget.desktopMode === 'desktop' && '바탕화면 고정: 항상 바탕화면 위에 고정합니다.'}
+              {draft.widget.desktopMode === 'floating' && '플로팅: 바탕화면 고정 없이 일반 창으로 표시합니다.'}
+            </span>
+          </div>
+          <select
+            value={draft.widget.desktopMode}
+            onChange={(e) => patchWidget({ desktopMode: e.target.value as 'auto' | 'desktop' | 'floating' })}
+            className="bg-sp-card border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+          >
+            <option value="auto">자동</option>
+            <option value="floating">플로팅</option>
+            <option value="desktop">바탕화면 고정</option>
+          </select>
+        </div>
         <div className="flex items-center justify-between pt-4 border-t border-sp-border">
           <div className="flex flex-col">
             <span className="text-sm font-medium text-sp-text">시작 시 위젯 모드</span>

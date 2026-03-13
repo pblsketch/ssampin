@@ -193,6 +193,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offVerifyInput: (callback: () => void) => {
     ipcRenderer.removeListener('widget:verify-input', callback);
   },
+  // Widget 플로팅 모드 폴백 알림
+  onFallbackNotice: (callback: () => void) => {
+    ipcRenderer.on('widget:fallback-notice', callback);
+  },
+  offFallbackNotice: (callback: () => void) => {
+    ipcRenderer.removeListener('widget:fallback-notice', callback);
+  },
   // Analytics flush
   onAnalyticsFlush: (callback: () => void): (() => void) => {
     const handler = () => callback();
