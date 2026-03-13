@@ -4,7 +4,7 @@ export interface FaqItem {
   readonly question: string;
   readonly answer: string;
   readonly keywords: readonly string[];
-  readonly category: 'general' | 'timetable' | 'seating' | 'tools' | 'settings' | 'troubleshoot';
+  readonly category: 'general' | 'timetable' | 'seating' | 'tools' | 'settings' | 'troubleshoot' | 'homeroom' | 'class-management' | 'schedule' | 'export' | 'bookmark';
 }
 
 export const OFFLINE_FAQ: readonly FaqItem[] = [
@@ -16,7 +16,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   },
   {
     question: '인터넷 없이도 되나요?',
-    answer: '날씨와 급식을 제외한 모든 기능이 오프라인에서 동작해요.',
+    answer: '날씨, 급식, 과제 수합을 제외한 모든 기능이 오프라인에서 동작해요.',
     keywords: ['인터넷', '오프라인', '와이파이', '네트워크'],
     category: 'general',
   },
@@ -58,7 +58,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   },
   {
     question: '쌤도구는 뭔가요?',
-    answer: '타이머, 랜덤 뽑기, 투표, 주관식 설문, 워드클라우드, 점수판, 룰렛, QR코드 등 수업에 바로 쓸 수 있는 15가지 교실 도구예요.',
+    answer: '타이머, 랜덤 뽑기, 투표, 주관식 설문, 워드클라우드, 점수판, 룰렛, QR코드 등 수업에 바로 쓸 수 있는 다양한 교실 도구예요.',
     keywords: ['쌤도구', '도구', '타이머', '뽑기', '점수판', '룰렛'],
     category: 'tools',
   },
@@ -100,9 +100,99 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   },
   {
     question: '수업 관리는 뭔가요?',
-    answer: '출석, 진도, 과제수합을 하나의 페이지에서 관리하는 기능이에요. 사이드바에서 수업 관리 메뉴를 선택하면 돼요.',
+    answer: '수업반을 만들어 명렬표, 좌석배치, 진도 관리, 출결을 하나의 페이지에서 관리하는 기능이에요. 과제 수합 도구도 여기서 연결돼요. 사이드바에서 수업 관리 메뉴를 선택하면 돼요.',
     keywords: ['수업', '관리', '출석', '진도', '과제'],
     category: 'tools',
+  },
+  {
+    question: '담임 업무 메뉴에는 뭐가 있나요?',
+    answer: '담임 업무는 4가지 탭으로 구성돼요: ① 학생 기록 (상담/행동/학업 기록), ② 설문/체크리스트 (교사용 체크 또는 학생 공유), ③ 상담 예약 (시간대 설정 → 학생/학부모 예약), ④ 자리배치예요.',
+    keywords: ['담임', '업무', '기록', '상담', '설문'],
+    category: 'homeroom',
+  },
+  {
+    question: '상담 예약은 어떻게 만드나요?',
+    answer: '담임 업무 → 상담 예약 탭에서 상담 유형(학부모/학생), 방법, 시간대를 설정하면 공유 URL이 생성돼요. QR코드나 링크를 보내면 학생/학부모가 직접 예약할 수 있어요.',
+    keywords: ['상담', '예약', '학부모', '시간대', 'QR'],
+    category: 'homeroom',
+  },
+  {
+    question: '설문이나 체크리스트는 어떻게 쓰나요?',
+    answer: '담임 업무 → 설문/체크리스트 탭에서 만들 수 있어요. 교사 모드(화면에서 직접 체크)와 학생 공유 모드(QR/URL로 학생이 직접 응답) 두 가지가 있어요.',
+    keywords: ['설문', '체크리스트', '체크', '응답', '공유'],
+    category: 'homeroom',
+  },
+  {
+    question: '수업반 좌석배치는 어떻게 하나요?',
+    answer: '수업 관리 → 해당 수업반 선택 → 좌석배치 탭에서 수업반 전용 좌석을 배치할 수 있어요. 담임 교실 좌석과는 별도로 관리돼요.',
+    keywords: ['수업반', '수업', '좌석', '배치', '관리'],
+    category: 'class-management',
+  },
+  {
+    question: '진도 관리는 어떻게 하나요?',
+    answer: '수업 관리 → 해당 수업반 → 진도 관리 탭에서 수업 날짜, 교시, 단원, 차시를 기록할 수 있어요. 완료/예정/건너뜀 상태로 관리해요.',
+    keywords: ['진도', '관리', '수업', '단원', '차시'],
+    category: 'class-management',
+  },
+  {
+    question: '자리 배치 조건(제약)은 뭔가요?',
+    answer: '랜덤 배치 시 조건을 설정할 수 있어요: ① 구역 지정 (특정 학생을 앞줄/뒷줄에), ② 분리 (사이 나쁜 학생 떨어뜨리기), ③ 인접 (함께 앉히기), ④ 고정 좌석 (특정 자리에 고정).',
+    keywords: ['조건', '제약', '구역', '분리', '인접', '고정', '랜덤'],
+    category: 'seating',
+  },
+  {
+    question: 'NEIS 학사일정 연동은 어떻게 하나요?',
+    answer: '설정 → 캘린더 → NEIS 학사일정에서 학교를 검색하고 연동을 활성화하면, 학교 행사/시험/방학 일정이 자동으로 캘린더에 표시돼요.',
+    keywords: ['NEIS', '학사일정', '학사', '일정', '연동', '캘린더'],
+    category: 'schedule',
+  },
+  {
+    question: 'D-Day는 어떻게 설정하나요?',
+    answer: '일정 관리 페이지에서 D-Day를 추가할 수 있어요. 제목, 날짜, 이모지를 설정하고 대시보드에 핀으로 고정하면 남은 일수가 표시돼요.',
+    keywords: ['디데이', 'D-Day', 'dday', '카운트다운', '남은'],
+    category: 'schedule',
+  },
+  {
+    question: '테마를 바꿀 수 있나요?',
+    answer: '설정 → 테마에서 7가지 프리셋(다크, 라이트, 파스텔, 네이비, 포레스트, 선셋, 모노) 중 선택하거나, 커스텀 테마로 직접 색상을 지정할 수 있어요.',
+    keywords: ['테마', '다크', '라이트', '색상', '모드', '배경'],
+    category: 'settings',
+  },
+  {
+    question: '폰트를 바꿀 수 있나요?',
+    answer: '설정 → 폰트에서 11가지 한글 폰트 중 선택할 수 있어요: Noto Sans KR, 프리텐다드, IBM Plex, 나눔고딕, 나눔스퀘어, 고운돋움, SUIT, 원티드, 페이퍼로지, 카카오큰글씨, 스포카.',
+    keywords: ['폰트', '글꼴', '글씨', '글자'],
+    category: 'settings',
+  },
+  {
+    question: '사이드바 메뉴를 바꿀 수 있나요?',
+    answer: '설정 → 메뉴 설정에서 사이드바 메뉴의 순서를 드래그로 바꾸거나, 사용하지 않는 메뉴를 숨길 수 있어요.',
+    keywords: ['사이드바', '메뉴', '순서', '숨기기', '정렬'],
+    category: 'settings',
+  },
+  {
+    question: '북마크는 어떻게 쓰나요?',
+    answer: '사이드바 → 북마크 메뉴에서 자주 쓰는 웹사이트 URL을 그룹별로 저장하고 관리할 수 있어요. 이모지 아이콘도 설정 가능해요.',
+    keywords: ['북마크', '즐겨찾기', '링크', 'URL', '웹사이트'],
+    category: 'bookmark',
+  },
+  {
+    question: '내보내기는 어떤 형식을 지원하나요?',
+    answer: '좌석배치표와 시간표를 Excel(.xlsx), PDF, HWPX(한글) 형식으로 내보낼 수 있어요. 사이드바 → 내보내기 메뉴에서 사용하세요.',
+    keywords: ['내보내기', '엑셀', 'Excel', 'PDF', '한글', 'HWPX', '출력', '인쇄'],
+    category: 'export',
+  },
+  {
+    question: '출결 관리는 어떻게 하나요?',
+    answer: '수업 관리 → 해당 수업반에서 교시별 출결(출석/결석/지각)을 기록할 수 있어요. 수업반별로 별도 관리돼요.',
+    keywords: ['출결', '출석', '결석', '지각', '관리'],
+    category: 'class-management',
+  },
+  {
+    question: '교사 시점 보기가 뭔가요?',
+    answer: '자리배치에서 "교사 시점" 버튼을 누르면, 교단에서 학생들을 바라보는 방향으로 좌석이 좌우 반전되어 표시돼요. 실제 교실에서 학생을 찾을 때 유용해요.',
+    keywords: ['교사', '시점', '보기', '반전', '교단'],
+    category: 'seating',
   },
 ];
 
