@@ -1,6 +1,33 @@
 {
   "versions": [
     {
+      "version": "0.4.0",
+      "date": "2026-03-15",
+      "highlights": "위젯 모드 전면 개선 — 안정적인 2모드 체계(일반/항상 위에)로 단순화",
+      "changes": [
+        {
+          "type": "improve",
+          "title": "위젯 표시 모드 단순화",
+          "description": "일반: 다른 창에 가려질 수 있음. 항상 위에: 항상 다른 창 위에 표시"
+        },
+        {
+          "type": "fix",
+          "title": "Win+D 바탕화면 보기 시 위젯 사라짐 방지",
+          "description": "두 모드 모두 Win+D를 눌러도 위젯이 사라지지 않습니다"
+        },
+        {
+          "type": "fix",
+          "title": "위젯모드 입력 불가 버그 수정",
+          "description": "클릭, 드래그, 크기 조절이 정상 동작합니다"
+        },
+        {
+          "type": "improve",
+          "title": "AI 챗봇 시스템 프롬프트 업데이트",
+          "description": "오프라인 FAQ 및 응답 품질 개선"
+        }
+      ]
+    },
+    {
       "version": "0.3.9",
       "date": "2026-03-13",
       "highlights": "수업반 좌석배치 기능 추가, 좌석배치 교사 시점 보기 모드, 분석 대시보드 개선",
