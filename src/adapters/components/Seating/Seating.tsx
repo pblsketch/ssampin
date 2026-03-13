@@ -436,6 +436,7 @@ export function Seating(_props?: { embedded?: boolean }) {
   const className = useSettingsStore((s) => s.settings.className);
 
   const [viewMode, setViewMode] = useState<ViewMode>('seating');
+  const [isTeacherView, setIsTeacherView] = useState(false);
   const [isRosterEditing, setIsRosterEditing] = useState(false);
   const [dragSource, setDragSource] = useState<{ row: number; col: number } | null>(null);
   const [dragTarget, setDragTarget] = useState<{ row: number; col: number } | null>(null);
@@ -724,6 +725,19 @@ export function Seating(_props?: { embedded?: boolean }) {
                 <span>짝꿍</span>
               </button>
               <button
+                onClick={() => setIsTeacherView((v) => !v)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isTeacherView
+                  ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
+                  : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
+                  }`}
+                title={isTeacherView ? '학생 시점으로 보기' : '교사 시점으로 보기'}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  {isTeacherView ? 'visibility' : 'swap_vert'}
+                </span>
+                <span>교사 시점</span>
+              </button>
+              <button
                 onClick={() => setEditing(!isEditing)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
                   ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
@@ -928,14 +942,16 @@ export function Seating(_props?: { embedded?: boolean }) {
       <div className="flex-1 overflow-y-auto flex flex-col items-center">
         {viewMode === 'seating' ? (
           <>
-            {/* 교탁 */}
-            <div className="w-full max-w-2xl mb-10 flex flex-col items-center">
-              <div className="w-64 h-12 bg-sp-card border border-sp-border rounded-b-xl flex items-center justify-center shadow-lg relative after:content-[''] after:absolute after:top-0 after:left-0 after:w-full after:h-1 after:bg-sp-accent/50">
-                <span className="text-sp-muted text-sm font-bold tracking-widest">
-                  [ 교 탁 ]
-                </span>
+            {/* 교탁 (학생 시점: 위, 교사 시점: 아래) */}
+            {!isTeacherView && (
+              <div className="w-full max-w-2xl mb-10 flex flex-col items-center">
+                <div className="w-64 h-12 bg-sp-card border border-sp-border rounded-b-xl flex items-center justify-center shadow-lg relative after:content-[''] after:absolute after:top-0 after:left-0 after:w-full after:h-1 after:bg-sp-accent/50">
+                  <span className="text-sp-muted text-sm font-bold tracking-widest">
+                    [ 교 탁 ]
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* 편집 모드 안내 배너 */}
             {isEditing && (
@@ -949,20 +965,28 @@ export function Seating(_props?: { embedded?: boolean }) {
             {seating.pairMode ? (
               /* ── 짝꿍 모드 그리드 ── */
               <div className="w-full max-w-6xl mx-auto pb-8 flex flex-col gap-5">
-                {seating.seats.map((row, ri) => {
+                {Array.from({ length: seating.rows }, (_, vi) => {
+                  // 교사 시점: 행 반전
+                  const ri = isTeacherView ? seating.rows - 1 - vi : vi;
+                  const row = seating.seats[ri]!;
                   // 열을 짝 그룹으로 묶기: (0,1), (2,3), (4,5)...
                   const pairs: { startCol: number; endCol: number }[] = [];
                   for (let c = 0; c < seating.cols; c += 2) {
                     pairs.push({ startCol: c, endCol: Math.min(c + 1, seating.cols - 1) });
                   }
+                  // 교사 시점: 짝 그룹 순서 반전
+                  const orderedPairs = isTeacherView ? [...pairs].reverse() : pairs;
 
                   return (
                     <div
                       key={ri}
                       className="flex items-stretch justify-center gap-6"
                     >
-                      {pairs.map((pair, pi) => {
+                      {orderedPairs.map((pair, pi) => {
                         const isSingleSeat = pair.startCol === pair.endCol;
+                        // 교사 시점: 짝꿍 내부 좌우도 반전
+                        const leftCol = isTeacherView ? pair.endCol : pair.startCol;
+                        const rightCol = isTeacherView ? pair.startCol : pair.endCol;
                         return (
                           <div
                             key={pi}
@@ -973,10 +997,10 @@ export function Seating(_props?: { embedded?: boolean }) {
                             <div className="flex-1">
                               <SeatCard
                                 row={ri}
-                                col={pair.startCol}
-                                studentId={row[pair.startCol] ?? null}
-                                isDragOver={dragTarget !== null && dragTarget.row === ri && dragTarget.col === pair.startCol}
-                                isDragSource={dragSource !== null && dragSource.row === ri && dragSource.col === pair.startCol}
+                                col={leftCol}
+                                studentId={row[leftCol] ?? null}
+                                isDragOver={dragTarget !== null && dragTarget.row === ri && dragTarget.col === leftCol}
+                                isDragSource={dragSource !== null && dragSource.row === ri && dragSource.col === leftCol}
                                 isEditing={isEditing}
                                 isLeftOfPair={!isSingleSeat}
                                 onDragStart={handleDragStart}
@@ -992,10 +1016,10 @@ export function Seating(_props?: { embedded?: boolean }) {
                               <div className="flex-1">
                                 <SeatCard
                                   row={ri}
-                                  col={pair.endCol}
-                                  studentId={row[pair.endCol] ?? null}
-                                  isDragOver={dragTarget !== null && dragTarget.row === ri && dragTarget.col === pair.endCol}
-                                  isDragSource={dragSource !== null && dragSource.row === ri && dragSource.col === pair.endCol}
+                                  col={rightCol}
+                                  studentId={row[rightCol] ?? null}
+                                  isDragOver={dragTarget !== null && dragTarget.row === ri && dragTarget.col === rightCol}
+                                  isDragSource={dragSource !== null && dragSource.row === ri && dragSource.col === rightCol}
                                   isEditing={isEditing}
                                   isRightOfPair
                                   onDragStart={handleDragStart}
@@ -1024,8 +1048,12 @@ export function Seating(_props?: { embedded?: boolean }) {
                   gap: '1.25rem',
                 }}
               >
-                {seating.seats.map((row, ri) =>
-                  row.map((studentId, ci) => {
+                {Array.from({ length: seating.rows }, (_, vi) =>
+                  Array.from({ length: seating.cols }, (_, vj) => {
+                    // 교사 시점: 상하좌우 반전 (180도 회전)
+                    const ri = isTeacherView ? seating.rows - 1 - vi : vi;
+                    const ci = isTeacherView ? seating.cols - 1 - vj : vj;
+                    const studentId = seating.seats[ri]?.[ci] ?? null;
                     const isDragOver =
                       dragTarget !== null &&
                       dragTarget.row === ri &&
@@ -1054,6 +1082,17 @@ export function Seating(_props?: { embedded?: boolean }) {
                     );
                   }),
                 )}
+              </div>
+            )}
+
+            {/* 교탁 (교사 시점: 아래) */}
+            {isTeacherView && (
+              <div className="w-full max-w-2xl mt-6 mb-4 flex flex-col items-center">
+                <div className="w-64 h-12 bg-sp-card border border-sp-border rounded-t-xl flex items-center justify-center shadow-lg relative after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-1 after:bg-sp-accent/50">
+                  <span className="text-sp-muted text-sm font-bold tracking-widest">
+                    [ 교 탁 ]
+                  </span>
+                </div>
               </div>
             )}
 
