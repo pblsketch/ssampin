@@ -16,14 +16,16 @@ export interface StudentListOption {
  */
 export function useStudentLists(): StudentListOption[] {
   const students = useStudentStore((s) => s.students);
+  const loadStudents = useStudentStore((s) => s.load);
   const className = useSettingsStore((s) => s.settings.className);
   const teachingClasses = useTeachingClassStore((s) => s.classes);
   const loadTeachingClasses = useTeachingClassStore((s) => s.load);
 
-  // 수업반 데이터 로드 보장
+  // 담임반 + 수업반 데이터 로드 보장
   useEffect(() => {
+    void loadStudents();
     void loadTeachingClasses();
-  }, [loadTeachingClasses]);
+  }, [loadStudents, loadTeachingClasses]);
 
   return useMemo(() => {
     const lists: StudentListOption[] = [];
