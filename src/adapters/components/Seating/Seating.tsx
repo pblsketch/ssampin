@@ -11,7 +11,7 @@ import { exportSeatingToHwpx } from '@infrastructure/export/HwpxExporter';
 import { ShuffleOverlay } from './ShuffleOverlay';
 import { SeatZoneModal } from './SeatZoneModal';
 import { ConstraintHintBadge } from './ConstraintHintBadge';
-import { buildPairGroups } from '@domain/rules/seatingLayoutRules';
+import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
 /* ──────────────────────── 좌석 카드 ──────────────────────── */
 
@@ -463,7 +463,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                 <span className="material-symbols-outlined text-lg">group</span>
                 <span>짝꿍</span>
               </button>
-              {seating.pairMode && seating.cols % 2 !== 0 && (
+              {seating.pairMode && (
                 <button
                   onClick={() => void toggleOddColumnMode()}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
@@ -598,8 +598,13 @@ export function Seating(_props?: { embedded?: boolean }) {
                   // 교사 시점: 행 반전
                   const ri = isTeacherView ? seating.rows - 1 - vi : vi;
                   const row = seating.seats[ri]!;
+                  const mode = seating.oddColumnMode ?? 'single';
                   // buildPairGroups로 짝 그룹 생성
-                  const pairs = buildPairGroups(seating.cols, seating.oddColumnMode ?? 'single');
+                  const basePairs = buildPairGroups(seating.cols, seating.cols % 2 !== 0 ? mode : 'single');
+                  // 짝수 열 + 3인짝 모드: 행별로 solo 학생을 이전 짝에 합류
+                  const pairs = (mode === 'triple' && seating.cols % 2 === 0)
+                    ? adjustPairGroupsForRow(basePairs, row)
+                    : basePairs;
                   // 교사 시점: 짝 그룹 순서 반전
                   const orderedPairs = isTeacherView ? [...pairs].reverse() : pairs;
 

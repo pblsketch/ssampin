@@ -6,6 +6,7 @@ import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { StudentRecord, AttendanceStats } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { getAttendanceStats } from '@domain/rules/studentRecordRules';
+import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectArgb } from '@domain/valueObjects/SubjectColor';
 
@@ -137,16 +138,29 @@ export async function exportSeatingToExcel(
   };
 
   const isPairMode = !!seating.pairMode;
+  const oddMode = seating.oddColumnMode ?? 'single';
 
   // 짝꿍 모드: 짝 그룹 사이에 빈 gap 열 삽입
   const colMap: Array<{ type: 'seat'; col: number } | { type: 'gap' }> = [];
-  for (let c = 0; c < seating.cols; c++) {
-    if (isPairMode && c > 0 && c % 2 === 0) {
-      colMap.push({ type: 'gap' });
+  if (isPairMode) {
+    const groups = buildPairGroups(seating.cols, oddMode);
+    for (let gi = 0; gi < groups.length; gi++) {
+      const g = groups[gi]!;
+      if (gi > 0) colMap.push({ type: 'gap' });
+      for (let c = g.startCol; c <= g.endCol; c++) {
+        colMap.push({ type: 'seat', col: c });
+      }
     }
-    colMap.push({ type: 'seat', col: c });
+  } else {
+    for (let c = 0; c < seating.cols; c++) {
+      colMap.push({ type: 'seat', col: c });
+    }
   }
   const totalExcelCols = colMap.length;
+
+  // 짝수 열 + triple 모드에서 행별 3인 조정 여부
+  const useRowAdjust = isPairMode && oddMode === 'triple' && seating.cols % 2 === 0;
+  const baseGroups = useRowAdjust ? buildPairGroups(seating.cols, 'single') : [];
 
   const rosterColStart = totalExcelCols + 2; // 1-indexed; +1 은 간격열
 
@@ -171,7 +185,8 @@ export async function exportSeatingToExcel(
       if (desc.type === 'gap') {
         rowData.push('');
       } else {
-        const studentId = seating.seats[actualR]?.[desc.col] ?? null;
+        const mirroredCol = seating.cols - 1 - desc.col;
+        const studentId = seating.seats[actualR]?.[mirroredCol] ?? null;
         const student = getStudent(studentId);
         rowData.push(student ? student.name : '');
       }
@@ -195,6 +210,56 @@ export async function exportSeatingToExcel(
       if (cell.value) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
         cell.font = { bold: true };
+      }
+    }
+
+    // 짝수 열 triple 모드: 행별로 3인 그룹이 형성되면 gap 및 인접 좌석 테두리 연결
+    if (useRowAdjust) {
+      const seatRowData = seating.seats[actualR] ?? [];
+      const adjustedGroups = adjustPairGroupsForRow(baseGroups, seatRowData);
+
+      if (adjustedGroups.length !== baseGroups.length) {
+        const thinBorder = { style: 'thin' as const, color: { argb: 'FFD1D5DB' } };
+        for (const adjGroup of adjustedGroups) {
+          if (adjGroup.size <= 2) continue;
+          // 학생이 있는 그룹만 처리
+          let hasStudents = false;
+          for (let c = adjGroup.startCol; c <= adjGroup.endCol; c++) {
+            if (seatRowData[c] != null) { hasStudents = true; break; }
+          }
+          if (!hasStudents) continue;
+          // 이 triple 그룹 범위 안에 있는 gap의 인접 좌석 테두리 연결
+          for (let ci = 0; ci < colMap.length; ci++) {
+            if (colMap[ci]!.type !== 'gap') continue;
+            let prevCol = -1;
+            let nextCol = -1;
+            let prevCi = -1;
+            let nextCi = -1;
+            for (let pi = ci - 1; pi >= 0; pi--) {
+              const d = colMap[pi]!;
+              if (d.type === 'seat') { prevCol = d.col; prevCi = pi; break; }
+            }
+            for (let ni = ci + 1; ni < colMap.length; ni++) {
+              const d = colMap[ni]!;
+              if (d.type === 'seat') { nextCol = d.col; nextCi = ni; break; }
+            }
+            if (prevCol < 0 || nextCol < 0) continue;
+            // 좌우 반전 적용: colMap 열 → 실제 데이터 열
+            const prevMirCol = seating.cols - 1 - prevCol;
+            const nextMirCol = seating.cols - 1 - nextCol;
+            if (
+              prevMirCol >= adjGroup.startCol && prevMirCol <= adjGroup.endCol &&
+              nextMirCol >= adjGroup.startCol && nextMirCol <= adjGroup.endCol
+            ) {
+              // 이전 좌석: 오른쪽 테두리 제거
+              const prevCell = ws.getCell(excelRow.number, prevCi + 1);
+              prevCell.border = { top: thinBorder, bottom: thinBorder, left: thinBorder };
+              // 다음 좌석: 왼쪽 테두리 제거
+              const nextCell = ws.getCell(excelRow.number, nextCi + 1);
+              nextCell.border = { top: thinBorder, bottom: thinBorder, right: thinBorder };
+            }
+          }
+        }
       }
     }
   }

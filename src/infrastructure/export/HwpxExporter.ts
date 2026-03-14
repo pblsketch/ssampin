@@ -11,6 +11,7 @@ import {
   filterByStudent,
   filterByCategory,
 } from '@domain/rules/studentRecordRules';
+import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -413,6 +414,22 @@ export async function exportSeatingToHwpx(
       bottom: { type: 'NONE', width: '0.12 mm', color: '#000000' },
     },
   });
+  const solidNoRight = doc.oxml.ensureBorderFillStyle({
+    sides: {
+      left: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
+      right: { type: 'NONE', width: '0.12 mm', color: '#000000' },
+      top: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
+      bottom: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
+    },
+  });
+  const solidNoLeft = doc.oxml.ensureBorderFillStyle({
+    sides: {
+      left: { type: 'NONE', width: '0.12 mm', color: '#000000' },
+      right: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
+      top: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
+      bottom: { type: 'SOLID', width: '0.12 mm', color: '#000000' },
+    },
+  });
   // ── Row-count-dependent sizing ──
   const seatGridRows = seating.rows;
   const seatCols = seating.cols;
@@ -480,12 +497,22 @@ export async function exportSeatingToHwpx(
   const isPairMode = !!seating.pairMode;
 
   // 짝꿍 모드: 좌우 반전(미러링)을 고려한 짝 그룹 정렬
-  // mirroredPairOf: 테이블 seatIdx → 미러링 후 UI 짝 그룹 번호
-  const mirroredPairOf = (idx: number) => Math.floor((seatCols - 1 - idx) / 2);
+  const oddMode = seating.oddColumnMode ?? 'single';
+  const pairGroupsDef = buildPairGroups(seatCols, oddMode);
+
+  // getMirroredGroupIdx: 테이블 seatIdx → 미러링 후 UI 짝 그룹 번호
+  function getMirroredGroupIdx(tableIdx: number): number {
+    const origCol = seatCols - 1 - tableIdx;
+    for (let g = 0; g < pairGroupsDef.length; g++) {
+      const gr = pairGroupsDef[g]!;
+      if (origCol >= gr.startCol && origCol <= gr.endCol) return g;
+    }
+    return -1;
+  }
 
   if (isPairMode && leftCols > 0 && leftCols < seatCols) {
     // 복도(aisle)가 미러링된 짝 그룹을 가르지 않도록 leftCols 조정
-    if (mirroredPairOf(leftCols - 1) === mirroredPairOf(leftCols)) {
+    if (getMirroredGroupIdx(leftCols - 1) === getMirroredGroupIdx(leftCols)) {
       const optionA = leftCols - 1;
       const optionB = leftCols + 1;
       const validA = optionA > 0;
@@ -507,7 +534,7 @@ export async function exportSeatingToHwpx(
     // 짝꿍 모드: 미러링된 짝 그룹 기준으로 gap 배치
     // Left half
     for (let i = 0; i < leftCols; i++) {
-      if (i > 0 && mirroredPairOf(i) !== mirroredPairOf(i - 1)) {
+      if (i > 0 && getMirroredGroupIdx(i) !== getMirroredGroupIdx(i - 1)) {
         colDescs.push({ type: 'gap' });
       }
       colDescs.push({ type: 'seat', seatIdx: i });
@@ -517,7 +544,7 @@ export async function exportSeatingToHwpx(
     // Right half
     for (let i = 0; i < rightCols; i++) {
       const seatIdx = leftCols + i;
-      if (i > 0 && mirroredPairOf(seatIdx) !== mirroredPairOf(seatIdx - 1)) {
+      if (i > 0 && getMirroredGroupIdx(seatIdx) !== getMirroredGroupIdx(seatIdx - 1)) {
         colDescs.push({ type: 'gap' });
       }
       colDescs.push({ type: 'seat', seatIdx });
@@ -679,6 +706,58 @@ export async function exportSeatingToHwpx(
     const aisleStart = colDescs.findIndex((d) => d.type === 'aisle');
     if (aisleStart >= 0) {
       seatTable.cell(displayRow, aisleStart).borderFillIDRef = gapBorder;
+    }
+
+    // Per-row triple adjustment: even cols with triple mode
+    // When a row has a solo student as the last occupied seat, that student merges
+    // with the previous pair to form a 3-person group — connect seats across the gap.
+    if (isPairMode && oddMode === 'triple' && seatCols % 2 === 0) {
+      const seatRowData = seating.seats[dataRow] ?? [];
+      const baseGroups = buildPairGroups(seatCols, 'single');
+      const adjustedGroups = adjustPairGroupsForRow(baseGroups, seatRowData);
+
+      if (adjustedGroups.length !== baseGroups.length) {
+        for (const adjGroup of adjustedGroups) {
+          if (adjGroup.size <= 2) continue;
+          // 학생이 있는 그룹만 처리
+          let hasStudents = false;
+          for (let c = adjGroup.startCol; c <= adjGroup.endCol; c++) {
+            if (seatRowData[c] != null) { hasStudents = true; break; }
+          }
+          if (!hasStudents) continue;
+          for (let ci = 0; ci < tableCols; ci++) {
+            if (colDescs[ci]!.type !== 'gap') continue;
+            let prevSeatIdx = -1;
+            let nextSeatIdx = -1;
+            let prevCi = -1;
+            let nextCi = -1;
+            for (let pi = ci - 1; pi >= 0; pi--) {
+              if (colDescs[pi]!.type === 'seat') { prevSeatIdx = colDescs[pi]!.seatIdx!; prevCi = pi; break; }
+            }
+            for (let ni = ci + 1; ni < tableCols; ni++) {
+              if (colDescs[ni]!.type === 'seat') { nextSeatIdx = colDescs[ni]!.seatIdx!; nextCi = ni; break; }
+            }
+            if (prevSeatIdx < 0 || nextSeatIdx < 0) continue;
+            const prevOrigCol = seatCols - 1 - prevSeatIdx;
+            const nextOrigCol = seatCols - 1 - nextSeatIdx;
+            if (
+              prevOrigCol >= adjGroup.startCol && prevOrigCol <= adjGroup.endCol &&
+              nextOrigCol >= adjGroup.startCol && nextOrigCol <= adjGroup.endCol
+            ) {
+              // gap 숨기고 인접 좌석 테두리 연결
+              seatTable.cell(displayRow, ci).borderFillIDRef = noBorder;
+              // 이전 좌석: 오른쪽 테두리 제거
+              if (prevCi >= 0) {
+                seatTable.cell(displayRow, prevCi).borderFillIDRef = solidNoRight;
+              }
+              // 다음 좌석: 왼쪽 테두리 제거
+              if (nextCi >= 0) {
+                seatTable.cell(displayRow, nextCi).borderFillIDRef = solidNoLeft;
+              }
+            }
+          }
+        }
+      }
     }
   }
 

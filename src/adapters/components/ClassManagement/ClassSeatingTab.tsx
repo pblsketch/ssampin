@@ -8,7 +8,7 @@ import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { exportSeatingToExcel, exportSeatingToHwpx } from '@infrastructure/export';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { buildPairGroups } from '@domain/rules/seatingLayoutRules';
+import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
 interface ClassSeatingTabProps {
   classId: string;
@@ -368,7 +368,7 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
           짝꿍
         </button>
 
-        {pairMode && cols % 2 !== 0 && (
+        {pairMode && (
           <button
             onClick={() => void handleToggleOddColumnMode()}
             className={
@@ -442,20 +442,22 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
 
       {/* 좌석 그리드 */}
       <div className="flex-1 overflow-auto pb-4">
-        <div
-          className="mx-auto w-fit"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: pairMode
-              ? buildPairGroups(cols, cls.seating?.oddColumnMode ?? 'single').map(() => 'auto').join(' ')
-              : `repeat(${cols}, 1fr)`,
-            gap: pairMode ? '16px' : '8px',
-          }}
-        >
-          {pairMode
-            ? renderPairGrid(displaySeats, rows, cols, studentMap, isEditing, dragSource, dragOver, handleDragStart, handleDragOver, handleDrop, handleDragEnd, isTeacherView, cls.seating?.oddColumnMode ?? 'single')
-            : renderNormalGrid(displaySeats, rows, cols, studentMap, isEditing, dragSource, dragOver, handleDragStart, handleDragOver, handleDrop, handleDragEnd, isTeacherView)}
-        </div>
+        {pairMode ? (
+          <div className="mx-auto w-fit flex flex-col gap-4">
+            {renderPairGrid(displaySeats, rows, cols, studentMap, isEditing, dragSource, dragOver, handleDragStart, handleDragOver, handleDrop, handleDragEnd, isTeacherView, cls.seating?.oddColumnMode ?? 'single')}
+          </div>
+        ) : (
+          <div
+            className="mx-auto w-fit"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${cols}, 1fr)`,
+              gap: '8px',
+            }}
+          >
+            {renderNormalGrid(displaySeats, rows, cols, studentMap, isEditing, dragSource, dragOver, handleDragStart, handleDragOver, handleDrop, handleDragEnd, isTeacherView)}
+          </div>
+        )}
       </div>
 
       {/* 교실 정면 레이블 (교사 시점: 아래) */}
@@ -533,24 +535,27 @@ function renderPairGrid(
   isTeacherView: boolean,
   oddColumnMode: 'single' | 'triple' = 'single',
 ) {
-  const pairGroups = buildPairGroups(cols, oddColumnMode);
-  const groupCount = pairGroups.length;
-  const groups: React.ReactNode[] = [];
+  const mode = oddColumnMode;
+  const basePairs = buildPairGroups(cols, cols % 2 !== 0 ? mode : 'single');
+  const useRowAdjust = mode === 'triple' && cols % 2 === 0;
+  const rowElements: React.ReactNode[] = [];
 
   for (let vi = 0; vi < rows; vi++) {
-    for (let vpIdx = 0; vpIdx < groupCount; vpIdx++) {
-      // 교사 시점: 상하좌우 반전
-      const r = isTeacherView ? rows - 1 - vi : vi;
-      const gIdx = isTeacherView ? groupCount - 1 - vpIdx : vpIdx;
-      const group = pairGroups[gIdx]!;
-      const cells: React.ReactNode[] = [];
+    const r = isTeacherView ? rows - 1 - vi : vi;
+    const rowData = seats[r] ?? [];
 
-      // 그룹 내 열 목록 생성
+    // 행별 그룹 조정 (짝수 열 + 3인짝 모드)
+    const rowPairs = useRowAdjust
+      ? adjustPairGroupsForRow(basePairs, rowData)
+      : basePairs;
+    const orderedPairs = isTeacherView ? [...rowPairs].reverse() : rowPairs;
+
+    const groupCells = orderedPairs.map((group, gIdx) => {
+      const cells: React.ReactNode[] = [];
       const groupCols: number[] = [];
       for (let c = group.startCol; c <= group.endCol; c++) {
         groupCols.push(c);
       }
-      // 교사 시점에서는 짝꿍 내부도 좌우 반전
       const colOrder = isTeacherView ? [...groupCols].reverse() : groupCols;
 
       for (const c of colOrder) {
@@ -576,17 +581,23 @@ function renderPairGrid(
         );
       }
 
-      groups.push(
+      return (
         <div
           key={`pair-${r}-${gIdx}`}
           className="flex gap-1 bg-sp-bg/30 rounded-xl p-1"
         >
           {cells}
-        </div>,
+        </div>
       );
-    }
+    });
+
+    rowElements.push(
+      <div key={`row-${r}`} className="flex items-stretch justify-center gap-4">
+        {groupCells}
+      </div>,
+    );
   }
-  return groups;
+  return rowElements;
 }
 
 /* ────── 좌석 카드 컴포넌트 ────── */
