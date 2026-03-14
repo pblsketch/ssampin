@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { TeachingClass, TeachingClassStudent, TeachingClassSeating } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
+import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
 import { teachingClassRepository } from '@adapters/di/container';
@@ -38,6 +39,7 @@ interface TeachingClassState {
   clearClassSeating: (classId: string) => Promise<void>;
   resizeClassGrid: (classId: string, rows: number, cols: number) => Promise<void>;
   toggleClassPairMode: (classId: string) => Promise<void>;
+  toggleClassOddColumnMode: (classId: string) => Promise<void>;
 }
 
 export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
@@ -274,6 +276,18 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       if (!cls?.seating) return;
 
       const seating: TeachingClassSeating = { ...cls.seating, pairMode: !cls.seating.pairMode };
+      const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
+      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
+      await manageClasses.update(updated);
+    },
+
+    toggleClassOddColumnMode: async (classId) => {
+      const cls = get().classes.find((c) => c.id === classId);
+      if (!cls?.seating) return;
+
+      const current = cls.seating.oddColumnMode ?? 'single';
+      const next: OddColumnMode = current === 'single' ? 'triple' : 'single';
+      const seating: TeachingClassSeating = { ...cls.seating, oddColumnMode: next };
       const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
       set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
       await manageClasses.update(updated);

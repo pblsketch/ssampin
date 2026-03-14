@@ -3,6 +3,7 @@ import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { countStudents, countEmptySeats } from '@domain/rules/seatRules';
 import type { ShuffleResult } from '@domain/rules/seatRules';
+import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import { seatingRepository, seatConstraintsRepository } from '@adapters/di/container';
 import { SwapSeats } from '@usecases/seating/SwapSeats';
 import { RandomizeSeats } from '@usecases/seating/RandomizeSeats';
@@ -114,6 +115,8 @@ interface SeatingState {
 
   /** 짝꿍 모드 토글 */
   togglePairMode: () => Promise<void>;
+  /** 홀수 열 처리 모드 토글 (single ↔ triple) */
+  toggleOddColumnMode: () => Promise<void>;
 
   /** 명렬표 변경 시 좌석 동기화 */
   syncFromRoster: (students: readonly Student[]) => Promise<void>;
@@ -262,6 +265,19 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       }
     },
 
+    toggleOddColumnMode: async () => {
+      const { seating } = get();
+      const current = seating.oddColumnMode ?? 'single';
+      const next: OddColumnMode = current === 'single' ? 'triple' : 'single';
+      const updated: SeatingData = { ...seating, oddColumnMode: next };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch {
+        // 무시
+      }
+    },
+
     resizeGrid: async (newRows, newCols) => {
       const clampedRows = Math.max(1, Math.min(10, newRows));
       const clampedCols = Math.max(1, Math.min(10, newCols));
@@ -281,7 +297,7 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         newSeats.push(newRow);
       }
 
-      let updated: SeatingData = { rows: clampedRows, cols: clampedCols, seats: newSeats, pairMode: seating.pairMode };
+      let updated: SeatingData = { rows: clampedRows, cols: clampedCols, seats: newSeats, pairMode: seating.pairMode, oddColumnMode: seating.oddColumnMode };
 
       // 잘려나간 영역의 학생을 빈 자리에 재배치
       const students = useStudentStore.getState().students;

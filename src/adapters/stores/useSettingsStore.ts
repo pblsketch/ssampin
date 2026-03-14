@@ -112,6 +112,7 @@ const DEFAULT_SETTINGS: Settings = {
     location: null,
     refreshIntervalMin: 30,
   },
+  seatingDefaultView: 'student',
   analytics: {
     enabled: true,
   },

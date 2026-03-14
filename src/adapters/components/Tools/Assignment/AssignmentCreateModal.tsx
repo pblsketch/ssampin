@@ -207,8 +207,8 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
               </label>
               {studentLists.length === 0 ? (
                 <div className="p-4 bg-sp-surface border border-sp-border/50 rounded-lg text-center">
-                  <p className="text-sp-muted text-sm">학급 명단을 먼저 설정해주세요</p>
-                  <p className="text-sp-muted/60 text-xs mt-1">설정 → 명렬표에서 학생을 등록하세요</p>
+                  <p className="text-sp-muted text-sm">학생 명단이 없습니다</p>
+                  <p className="text-sp-muted/60 text-xs mt-1">담임업무 → 명렬 관리, 또는 수업 관리에서 학생을 먼저 등록해주세요</p>
                 </div>
               ) : (
                 <select

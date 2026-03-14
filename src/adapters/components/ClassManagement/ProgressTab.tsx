@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 
@@ -49,6 +51,9 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     deleteProgressEntry,
   } = useTeachingClassStore();
 
+  const { classSchedule } = useScheduleStore();
+  const { settings } = useSettingsStore();
+
   const [showForm, setShowForm] = useState(false);
   const [formDate, setFormDate] = useState(todayString);
   const [formPeriod, setFormPeriod] = useState(1);
@@ -94,13 +99,49 @@ export function ProgressTab({ classId }: ProgressTabProps) {
 
   /* ── 폼 핸들러 ── */
 
+  // 날짜 → 요일 변환
+  const getDayOfWeek = useCallback((dateStr: string): string => {
+    const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+    const d = new Date(dateStr + 'T00:00:00');
+    return DAYS[d.getDay()] ?? '';
+  }, []);
+
+  // 해당 학급(과목)의 시간표 교시 추출
+  const getMatchingPeriods = useCallback((dateStr: string): number[] => {
+    if (!dateStr) return [];
+    const currentClass = classes.find((c: TeachingClass) => c.id === classId);
+    if (!currentClass) return [];
+    const subjectName = currentClass.subject;
+    const dayOfWeek = getDayOfWeek(dateStr);
+    const daySchedule = classSchedule[dayOfWeek];
+    if (!daySchedule) return [];
+    const periods: number[] = [];
+    daySchedule.forEach((slot, idx) => {
+      if (slot.subject && slot.subject.includes(subjectName)) {
+        periods.push(idx + 1);
+      }
+    });
+    return periods;
+  }, [classId, classes, classSchedule, getDayOfWeek]);
+
+  // 날짜 변경 핸들러 (교시 자동 선택 포함)
+  const handleDateChange = useCallback((newDate: string) => {
+    setFormDate(newDate);
+    const matching = getMatchingPeriods(newDate);
+    if (matching.length > 0 && matching[0] !== undefined) {
+      setFormPeriod(matching[0]);
+    }
+  }, [getMatchingPeriods]);
+
   const resetForm = useCallback(() => {
-    setFormDate(todayString());
-    setFormPeriod(1);
+    const today = todayString();
+    setFormDate(today);
+    const matching = getMatchingPeriods(today);
+    setFormPeriod(matching[0] ?? 1);
     setFormUnit('');
     setFormLesson('');
     setFormNote('');
-  }, []);
+  }, [getMatchingPeriods]);
 
   const handleAdd = useCallback(async () => {
     if (!formUnit.trim() || !formLesson.trim()) return;
@@ -307,6 +348,33 @@ export function ProgressTab({ classId }: ProgressTabProps) {
             <span className="material-symbols-outlined text-lg">content_copy</span>
             다른 반에서 불러오기
           </button>
+          {getMatchingPeriods(todayString()).length > 0 && (
+            <button
+              onClick={() => {
+                const today = todayString();
+                const periods = getMatchingPeriods(today);
+                const existingPeriods = new Set(
+                  entries
+                    .filter((e) => e.date === today)
+                    .map((e) => e.period),
+                );
+                const unlogged = periods.filter((p) => !existingPeriods.has(p));
+                if (unlogged.length === 0) return;
+                setFormDate(today);
+                setFormPeriod(unlogged[0]!);
+                setFormUnit('');
+                setFormLesson('');
+                setFormNote('');
+                setShowForm(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/20 text-green-400
+                         rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium"
+              title="오늘 시간표에서 이 과목이 배정된 교시에 빠르게 진도를 추가합니다"
+            >
+              <span className="material-symbols-outlined text-lg">today</span>
+              오늘 수업
+            </button>
+          )}
           <button
             onClick={() => {
               if (!showForm) resetForm();
@@ -332,7 +400,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
               <input
                 type="date"
                 value={formDate}
-                onChange={(e) => setFormDate(e.target.value)}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className="w-full px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
                            text-sp-text text-sm focus:outline-none focus:border-sp-accent"
               />
@@ -345,9 +413,15 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                 className="w-full px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
                            text-sp-text text-sm focus:outline-none focus:border-sp-accent"
               >
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
-                  <option key={p} value={p}>{p}교시</option>
-                ))}
+                {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map((p) => {
+                  const matching = getMatchingPeriods(formDate);
+                  const isMatch = matching.includes(p);
+                  return (
+                    <option key={p} value={p}>
+                      {p}교시{isMatch ? ' ✦' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
@@ -441,9 +515,15 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                       className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
                                  text-sp-text text-sm focus:outline-none focus:border-sp-accent"
                     >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
-                        <option key={p} value={p}>{p}교시</option>
-                      ))}
+                      {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map((p) => {
+                        const matching = getMatchingPeriods(editDate);
+                        const isMatch = matching.includes(p);
+                        return (
+                          <option key={p} value={p}>
+                            {p}교시{isMatch ? ' ✦' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                   <input

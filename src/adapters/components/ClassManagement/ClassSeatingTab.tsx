@@ -7,6 +7,8 @@ import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { exportSeatingToExcel, exportSeatingToHwpx } from '@infrastructure/export';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { buildPairGroups } from '@domain/rules/seatingLayoutRules';
 
 interface ClassSeatingTabProps {
   classId: string;
@@ -20,12 +22,15 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   const clearClassSeating = useTeachingClassStore((s) => s.clearClassSeating);
   const resizeClassGrid = useTeachingClassStore((s) => s.resizeClassGrid);
   const toggleClassPairMode = useTeachingClassStore((s) => s.toggleClassPairMode);
+  const toggleClassOddColumnMode = useTeachingClassStore((s) => s.toggleClassOddColumnMode);
 
   const { track } = useAnalytics();
   const showToast = useToastStore((s) => s.show);
 
+  const seatingDefaultView = useSettingsStore((s) => s.settings.seatingDefaultView);
+
   const [isEditing, setIsEditing] = useState(false);
-  const [isTeacherView, setIsTeacherView] = useState(false);
+  const [isTeacherView, setIsTeacherView] = useState(seatingDefaultView === 'teacher');
   const [dragSource, setDragSource] = useState<{ row: number; col: number } | null>(null);
   const [dragOver, setDragOver] = useState<{ row: number; col: number } | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -97,6 +102,10 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   const handleTogglePairMode = useCallback(async () => {
     await toggleClassPairMode(classId);
   }, [classId, toggleClassPairMode]);
+
+  const handleToggleOddColumnMode = useCallback(async () => {
+    await toggleClassOddColumnMode(classId);
+  }, [classId, toggleClassOddColumnMode]);
 
   const handlePlaceUnseated = useCallback(async () => {
     if (!cls?.seating) return;
@@ -359,6 +368,21 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
           짝꿍
         </button>
 
+        {pairMode && cols % 2 !== 0 && (
+          <button
+            onClick={() => void handleToggleOddColumnMode()}
+            className={
+              (cls.seating?.oddColumnMode ?? 'single') === 'triple'
+                ? 'flex items-center gap-1.5 px-3 py-1.5 bg-sp-highlight/20 border border-sp-highlight/40 rounded-lg text-sp-highlight text-sm'
+                : toolBtnClass
+            }
+            title="홀수 열 처리: 3명 함께 앉기 / 1명 따로 앉기"
+          >
+            <span className="material-symbols-outlined text-lg">group_add</span>
+            {(cls.seating?.oddColumnMode ?? 'single') === 'triple' ? '3인 짝' : '1인 따로'}
+          </button>
+        )}
+
         <button
           onClick={() => setIsTeacherView((v) => !v)}
           className={isTeacherView ? activeBtnClass : toolBtnClass}
@@ -423,13 +447,13 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
           style={{
             display: 'grid',
             gridTemplateColumns: pairMode
-              ? Array.from({ length: Math.ceil(cols / 2) }, () => 'auto').join(' ')
+              ? buildPairGroups(cols, cls.seating?.oddColumnMode ?? 'single').map(() => 'auto').join(' ')
               : `repeat(${cols}, 1fr)`,
             gap: pairMode ? '16px' : '8px',
           }}
         >
           {pairMode
-            ? renderPairGrid(displaySeats, rows, cols, studentMap, isEditing, dragSource, dragOver, handleDragStart, handleDragOver, handleDrop, handleDragEnd, isTeacherView)
+            ? renderPairGrid(displaySeats, rows, cols, studentMap, isEditing, dragSource, dragOver, handleDragStart, handleDragOver, handleDrop, handleDragEnd, isTeacherView, cls.seating?.oddColumnMode ?? 'single')
             : renderNormalGrid(displaySeats, rows, cols, studentMap, isEditing, dragSource, dragOver, handleDragStart, handleDragOver, handleDrop, handleDragEnd, isTeacherView)}
         </div>
       </div>
@@ -507,20 +531,28 @@ function renderPairGrid(
   onDrop: (r: number, c: number) => Promise<void>,
   onDragEnd: () => void,
   isTeacherView: boolean,
+  oddColumnMode: 'single' | 'triple' = 'single',
 ) {
-  const pairCount = Math.ceil(cols / 2);
+  const pairGroups = buildPairGroups(cols, oddColumnMode);
+  const groupCount = pairGroups.length;
   const groups: React.ReactNode[] = [];
+
   for (let vi = 0; vi < rows; vi++) {
-    for (let vpIdx = 0; vpIdx < pairCount; vpIdx++) {
+    for (let vpIdx = 0; vpIdx < groupCount; vpIdx++) {
       // 교사 시점: 상하좌우 반전
       const r = isTeacherView ? rows - 1 - vi : vi;
-      const pairIdx = isTeacherView ? pairCount - 1 - vpIdx : vpIdx;
-      const c1 = pairIdx * 2;
-      const c2 = c1 + 1;
+      const gIdx = isTeacherView ? groupCount - 1 - vpIdx : vpIdx;
+      const group = pairGroups[gIdx]!;
       const cells: React.ReactNode[] = [];
 
+      // 그룹 내 열 목록 생성
+      const groupCols: number[] = [];
+      for (let c = group.startCol; c <= group.endCol; c++) {
+        groupCols.push(c);
+      }
       // 교사 시점에서는 짝꿍 내부도 좌우 반전
-      const colOrder = isTeacherView ? [c2, c1] : [c1, c2];
+      const colOrder = isTeacherView ? [...groupCols].reverse() : groupCols;
+
       for (const c of colOrder) {
         if (c >= cols) continue;
         const key = seats[r]?.[c] ?? null;
@@ -546,7 +578,7 @@ function renderPairGrid(
 
       groups.push(
         <div
-          key={`pair-${r}-${pairIdx}`}
+          key={`pair-${r}-${gIdx}`}
           className="flex gap-1 bg-sp-bg/30 rounded-xl p-1"
         >
           {cells}

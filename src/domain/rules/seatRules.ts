@@ -6,6 +6,12 @@ import type {
   FixedSeatConstraint,
   ZoneConstraint,
 } from '../entities/SeatConstraints';
+import type { OddColumnMode } from './seatingLayoutRules';
+import {
+  buildPairGroups,
+} from './seatingLayoutRules';
+export type { OddColumnMode, PairGroup } from './seatingLayoutRules';
+export { buildPairGroups } from './seatingLayoutRules';
 
 /**
  * 좌석 위치가 유효한지 검증
@@ -33,6 +39,65 @@ export function swapSeatIds(
   copy[r1]![c1] = copy[r2]![c2]!;
   copy[r2]![c2] = temp;
   return copy;
+}
+
+/**
+ * Fisher-Yates 셔플 (내부 헬퍼)
+ */
+function fisherYatesShuffle<T>(
+  arr: T[],
+  random: () => number,
+): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    const temp = a[i]!;
+    a[i] = a[j]!;
+    a[j] = temp;
+  }
+  return a;
+}
+
+/**
+ * 짝꿍 그룹 구조를 유지한 채 학생만 셔플.
+ * 그룹 내 학생 + 그룹 위치를 모두 랜덤화하되
+ * 각 그룹의 크기(2명/3명/1명)는 보존.
+ */
+export function shuffleSeatsPreservingGroups(
+  seats: readonly (readonly (string | null)[])[],
+  cols: number,
+  oddColumnMode: OddColumnMode,
+  random: () => number = Math.random,
+): (string | null)[][] {
+  const rows = seats.length;
+
+  // 1. 짝꿍 그룹 정의
+  const groups = buildPairGroups(cols, oddColumnMode);
+
+  // 2. 모든 학생 ID 추출 (빈 자리 제외)
+  const allStudentIds = seats.flat().filter((id): id is string => id !== null);
+
+  // 3. Fisher-Yates로 학생 셔플
+  const shuffled = fisherYatesShuffle(allStudentIds, random);
+
+  // 4. 새 그리드 생성 — 그룹 구조에 맞게 학생 배치
+  const grid: (string | null)[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => null),
+  );
+
+  let studentIdx = 0;
+  for (let r = 0; r < rows; r++) {
+    for (const group of groups) {
+      for (let c = group.startCol; c <= group.endCol; c++) {
+        if (studentIdx < shuffled.length) {
+          grid[r]![c] = shuffled[studentIdx]!;
+          studentIdx++;
+        }
+      }
+    }
+  }
+
+  return grid;
 }
 
 /**
@@ -251,23 +316,6 @@ export function validateConstraints(
 }
 
 /**
- * Fisher-Yates 셔플 (내부 헬퍼)
- */
-function fisherYatesShuffle<T>(
-  arr: T[],
-  random: () => number,
-): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    const temp = a[i]!;
-    a[i] = a[j]!;
-    a[j] = temp;
-  }
-  return a;
-}
-
-/**
  * 조건 반영 좌석 셔플
  * 1. 고정좌석 배치 → 셔플 제외
  * 2. 영역고정 학생 → 해당 영역 내 빈 자리에 랜덤 배치
@@ -282,6 +330,7 @@ export function shuffleSeatsWithConstraints(
   rows: number,
   cols: number,
   random: () => number = Math.random,
+  options?: { pairMode?: boolean; oddColumnMode?: OddColumnMode },
 ): ShuffleResult {
   // 조건이 없으면 기존 셔플과 동일
   if (
@@ -290,6 +339,15 @@ export function shuffleSeatsWithConstraints(
     constraints.separations.length === 0 &&
     constraints.adjacencies.length === 0
   ) {
+    if (options?.pairMode) {
+      return {
+        seats: shuffleSeatsPreservingGroups(seats, cols, options.oddColumnMode ?? 'single', random),
+        success: true,
+        attempts: 1,
+        relaxed: false,
+        violations: [],
+      };
+    }
     return {
       seats: shuffleSeats(seats, random),
       success: true,
@@ -379,10 +437,24 @@ export function shuffleSeatsWithConstraints(
 
       // 3단계: 나머지 학생 → 남은 빈 자리에 배치
       const freeSlots: { row: number; col: number }[] = [];
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          if (!occupied.has(`${r},${c}`)) {
-            freeSlots.push({ row: r, col: c });
+      if (options?.pairMode) {
+        // 짝꿍 모드: 그룹 구조 순서로 빈 자리 나열
+        const groups = buildPairGroups(cols, options.oddColumnMode ?? 'single');
+        for (let r = 0; r < rows; r++) {
+          for (const group of groups) {
+            for (let c = group.startCol; c <= group.endCol; c++) {
+              if (!occupied.has(`${r},${c}`)) {
+                freeSlots.push({ row: r, col: c });
+              }
+            }
+          }
+        }
+      } else {
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (!occupied.has(`${r},${c}`)) {
+              freeSlots.push({ row: r, col: c });
+            }
           }
         }
       }

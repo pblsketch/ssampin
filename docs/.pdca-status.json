@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-10T15:41:37.472Z",
+  "lastUpdated": "2026-03-14T14:47:27.907Z",
   "activeFeatures": [
     "ssampin",
     "electron",
@@ -65,7 +65,14 @@
     "Assignment",
     "create-assignment",
     "get-assignment-public",
-    "timetable"
+    "timetable",
+    "Consultation",
+    "Survey",
+    "booking",
+    "[code]",
+    "docs",
+    "tabs",
+    "Homeroom"
   ],
   "primaryFeature": "ssampin",
   "features": {
@@ -78,9 +85,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:41:40.105Z",
-        "lastUpdated": "2026-03-10T15:20:22.238Z"
+        "lastUpdated": "2026-03-13T16:37:52.980Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\App.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\global.d.ts"
     },
     "electron": {
       "phase": "do",
@@ -91,9 +98,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:08.474Z",
-        "lastUpdated": "2026-03-07T16:43:35.441Z"
+        "lastUpdated": "2026-03-13T16:40:35.995Z"
       },
-      "lastFile": "e:/github/ssampin/electron/main.ts"
+      "lastFile": "e:\\github\\ssampin\\electron\\main.ts"
     },
     "entities": {
       "phase": "do",
@@ -104,9 +111,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:29.011Z",
-        "lastUpdated": "2026-03-10T15:14:59.299Z"
+        "lastUpdated": "2026-03-14T14:37:50.916Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\entities\\Settings.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\entities\\TeachingClass.ts"
     },
     "valueObjects": {
       "phase": "do",
@@ -117,7 +124,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:33.723Z",
-        "lastUpdated": "2026-03-10T15:35:30.911Z"
+        "lastUpdated": "2026-03-14T14:13:13.449Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\domain\\valueObjects\\SubjectColor.ts"
     },
@@ -130,9 +137,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:38.490Z",
-        "lastUpdated": "2026-03-10T15:15:21.148Z"
+        "lastUpdated": "2026-03-14T14:39:25.152Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\rules\\subjectColorRules.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\rules\\seatRules.ts"
     },
     "ports": {
       "phase": "do",
@@ -143,9 +150,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:43.401Z",
-        "lastUpdated": "2026-03-09T16:10:37.895Z"
+        "lastUpdated": "2026-03-11T15:44:30.024Z"
       },
-      "lastFile": "e:/github/ssampin/src/domain/ports/IAssignmentServicePort.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\ports\\IAssignmentServicePort.ts"
     },
     "repositories": {
       "phase": "do",
@@ -182,7 +189,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:58.962Z",
-        "lastUpdated": "2026-03-06T13:51:01.946Z"
+        "lastUpdated": "2026-03-14T14:47:27.907Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\usecases\\seating\\RandomizeSeats.ts"
     },
@@ -247,9 +254,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:22.830Z",
-        "lastUpdated": "2026-03-10T15:16:32.806Z"
+        "lastUpdated": "2026-03-14T14:38:37.306Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\stores\\useSettingsStore.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\stores\\useTeachingClassStore.ts"
     },
     "adapters": {
       "phase": "do",
@@ -260,9 +267,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:26.955Z",
-        "lastUpdated": "2026-03-10T15:16:12.863Z"
+        "lastUpdated": "2026-03-13T02:44:49.917Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\hooks\\useNeisAutoSync.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\common\\FeedbackModal.tsx"
     },
     "presenters": {
       "phase": "do",
@@ -286,7 +293,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:39.637Z",
-        "lastUpdated": "2026-03-10T15:10:46.507Z"
+        "lastUpdated": "2026-03-11T16:13:00.122Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\adapters\\di\\container.ts"
     },
@@ -338,7 +345,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T01:04:54.193Z",
-        "lastUpdated": "2026-03-10T07:51:01.683Z"
+        "lastUpdated": "2026-03-13T16:32:08.511Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Layout\\Sidebar.tsx"
     },
@@ -364,7 +371,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T02:27:08.138Z",
-        "lastUpdated": "2026-03-10T02:55:53.091Z"
+        "lastUpdated": "2026-03-14T14:41:48.827Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Seating\\Seating.tsx"
     },
@@ -377,7 +384,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T02:28:24.487Z",
-        "lastUpdated": "2026-03-10T15:40:03.938Z"
+        "lastUpdated": "2026-03-14T14:13:53.998Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Timetable\\TimetablePage.tsx"
     },
@@ -442,9 +449,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T02:55:40.654Z",
-        "lastUpdated": "2026-03-10T15:41:37.472Z"
+        "lastUpdated": "2026-03-13T15:55:28.093Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Settings\\shared\\constants.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Settings\\SettingsPage.tsx"
     },
     "Widget": {
       "phase": "do",
@@ -455,9 +462,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T02:56:44.211Z",
-        "lastUpdated": "2026-03-07T16:52:06.384Z"
+        "lastUpdated": "2026-03-13T16:40:02.085Z"
       },
-      "lastFile": "E:\\github\\ssampin\\src\\adapters\\components\\Widget\\Widget.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Widget\\Widget.tsx"
     },
     "Export": {
       "phase": "do",
@@ -481,9 +488,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T06:53:28.915Z",
-        "lastUpdated": "2026-03-10T14:55:54.895Z"
+        "lastUpdated": "2026-03-13T16:32:07.173Z"
       },
-      "lastFile": "e:/github/ssampin/landing/src/app/layout.tsx"
+      "lastFile": "e:\\github\\ssampin\\landing\\src\\app\\layout.tsx"
     },
     "meal": {
       "phase": "do",
@@ -559,9 +566,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T13:36:33.469Z",
-        "lastUpdated": "2026-03-10T14:35:23.130Z"
+        "lastUpdated": "2026-03-13T02:44:32.404Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\ToolTimer.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\BookmarkSection.tsx"
     },
     "widgets": {
       "phase": "do",
@@ -572,9 +579,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-02T14:19:22.706Z",
-        "lastUpdated": "2026-03-10T15:12:58.644Z"
+        "lastUpdated": "2026-03-11T06:34:06.131Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\widgets\\presets.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\widgets\\registry.ts"
     },
     "items": {
       "phase": "do",
@@ -611,7 +618,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T15:48:18.784Z",
-        "lastUpdated": "2026-03-08T12:53:55.727Z"
+        "lastUpdated": "2026-03-11T12:20:16.788Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Onboarding\\Onboarding.tsx"
     },
@@ -689,9 +696,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T14:40:44.570Z",
-        "lastUpdated": "2026-03-10T07:15:17.305Z"
+        "lastUpdated": "2026-03-14T14:44:08.247Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\ClassManagement\\ClassList.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\ClassManagement\\ClassSeatingTab.tsx"
     },
     "bookmark": {
       "phase": "do",
@@ -728,9 +735,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-07T08:16:18.806Z",
-        "lastUpdated": "2026-03-07T08:31:27.157Z"
+        "lastUpdated": "2026-03-13T13:34:41.720Z"
       },
-      "lastFile": "e:\\github\\ssampin\\supabase\\functions\\ssampin-chat\\index.ts"
+      "lastFile": "e:/github/ssampin/supabase/functions/ssampin-chat/index.ts"
     },
     "ssampin-escalate": {
       "phase": "do",
@@ -780,7 +787,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-07T09:10:17.209Z",
-        "lastUpdated": "2026-03-10T14:55:24.519Z"
+        "lastUpdated": "2026-03-13T13:36:05.564Z"
       },
       "lastFile": "e:/github/ssampin/src/adapters/components/HelpChat/offlineFaq.ts"
     },
@@ -793,9 +800,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-07T16:41:51.914Z",
-        "lastUpdated": "2026-03-07T17:02:17.430Z"
+        "lastUpdated": "2026-03-13T03:34:09.025Z"
       },
-      "lastFile": "e:/github/ssampin/src/infrastructure/analytics/SupabaseAnalyticsAdapter.ts"
+      "lastFile": "e:\\github\\ssampin\\landing\\src\\app\\admin\\analytics\\page.tsx"
     },
     "submit": {
       "phase": "do",
@@ -806,9 +813,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-09T16:00:56.451Z",
-        "lastUpdated": "2026-03-09T16:16:24.652Z"
+        "lastUpdated": "2026-03-11T15:43:35.656Z"
       },
-      "lastFile": "e:/github/ssampin/landing/src/components/submit/SubmitForm.tsx"
+      "lastFile": "e:\\github\\ssampin\\landing\\src\\components\\submit\\SubmitForm.tsx"
     },
     "submit-assignment": {
       "phase": "do",
@@ -819,9 +826,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-09T16:07:20.205Z",
-        "lastUpdated": "2026-03-09T16:14:20.608Z"
+        "lastUpdated": "2026-03-11T13:55:02.363Z"
       },
-      "lastFile": "e:/github/ssampin/supabase/functions/submit-assignment/index.ts"
+      "lastFile": "e:\\github\\ssampin\\supabase\\functions\\submit-assignment\\index.ts"
     },
     "assignment": {
       "phase": "do",
@@ -832,9 +839,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-09T16:11:00.635Z",
-        "lastUpdated": "2026-03-09T16:11:11.931Z"
+        "lastUpdated": "2026-03-11T15:44:12.168Z"
       },
-      "lastFile": "e:/github/ssampin/src/usecases/assignment/CreateAssignment.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\usecases\\assignment\\CopyMissingList.ts"
     },
     "supabase": {
       "phase": "do",
@@ -845,9 +852,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-09T16:11:24.804Z",
-        "lastUpdated": "2026-03-09T16:15:06.122Z"
+        "lastUpdated": "2026-03-11T16:22:09.500Z"
       },
-      "lastFile": "e:/github/ssampin/src/infrastructure/supabase/AssignmentSupabaseClient.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\infrastructure\\supabase\\ShortLinkClient.ts"
     },
     "Assignment": {
       "phase": "do",
@@ -858,9 +865,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-09T16:12:08.628Z",
-        "lastUpdated": "2026-03-09T16:38:50.407Z"
+        "lastUpdated": "2026-03-14T14:17:28.317Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\Assignment\\AssignmentDetail.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\Assignment\\AssignmentCreateModal.tsx"
     },
     "create-assignment": {
       "phase": "do",
@@ -884,9 +891,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-09T16:13:28.243Z",
-        "lastUpdated": "2026-03-09T16:13:28.243Z"
+        "lastUpdated": "2026-03-11T15:43:07.982Z"
       },
-      "lastFile": "e:/github/ssampin/supabase/functions/get-assignment-public/index.ts"
+      "lastFile": "e:\\github\\ssampin\\supabase\\functions\\get-assignment-public\\index.ts"
     },
     "timetable": {
       "phase": "do",
@@ -900,6 +907,97 @@
         "lastUpdated": "2026-03-10T15:15:44.336Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\usecases\\timetable\\AutoSyncNeisTimetable.ts"
+    },
+    "Consultation": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-11T06:52:29.660Z",
+        "lastUpdated": "2026-03-13T02:43:48.578Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Homeroom\\Consultation\\ConsultationDetail.tsx"
+    },
+    "Survey": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-11T06:55:28.734Z",
+        "lastUpdated": "2026-03-11T16:56:21.037Z"
+      },
+      "lastFile": "e:/github/ssampin/src/adapters/components/Homeroom/Survey/SurveyCreateModal.tsx"
+    },
+    "booking": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-11T07:49:42.943Z",
+        "lastUpdated": "2026-03-11T08:13:22.017Z"
+      },
+      "lastFile": "e:/github/ssampin/landing/src/components/booking/BookingPageContent.tsx"
+    },
+    "[code]": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-11T16:15:38.670Z",
+        "lastUpdated": "2026-03-11T16:40:13.941Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\landing\\src\\app\\s\\[code]\\page.tsx"
+    },
+    "docs": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-12T23:25:57.177Z",
+        "lastUpdated": "2026-03-13T01:35:17.589Z"
+      },
+      "lastFile": "e:/github/ssampin/docs/create_notion_guide_v2.py"
+    },
+    "tabs": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-13T12:44:51.578Z",
+        "lastUpdated": "2026-03-14T14:38:39.094Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Settings\\tabs\\SeatTab.tsx"
+    },
+    "Homeroom": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-14T14:16:52.455Z",
+        "lastUpdated": "2026-03-14T14:17:23.863Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Homeroom\\HomeroomPage.tsx"
     }
   },
   "pipeline": {
@@ -910,7 +1008,7 @@
   "session": {
     "startedAt": "2026-03-01T00:40:27.620Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-03-10T15:41:37.472Z"
+    "lastActivity": "2026-03-14T14:47:27.907Z"
   },
   "history": [
     {
@@ -17026,6 +17124,3576 @@
     {
       "timestamp": "2026-03-10T15:41:37.472Z",
       "feature": "Settings",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:21:04.612Z",
+      "feature": "widgets",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:21:22.870Z",
+      "feature": "widgets",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:21:28.784Z",
+      "feature": "widgets",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:21:34.412Z",
+      "feature": "widgets",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:21:39.631Z",
+      "feature": "widgets",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:23:05.302Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:23:12.297Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:23:18.801Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:24:49.853Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:33:03.446Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:33:11.984Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:33:18.395Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:33:26.964Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:33:41.144Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:34:06.131Z",
+      "feature": "widgets",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:36:35.936Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:49:32.159Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:49:37.661Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:49:41.398Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:52:29.660Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:52:35.408Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:52:47.362Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:53:14.588Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:55:28.734Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:55:37.824Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:55:45.125Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:56:08.521Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:56:16.395Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:59:14.462Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T06:59:30.446Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:00:38.979Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:04:53.849Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:05:00.002Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:05:11.565Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:05:17.069Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:06:18.831Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:38:23.115Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:43:53.147Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:43:57.714Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:49:01.500Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:49:05.785Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:49:11.139Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:49:30.058Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:49:42.943Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:49:47.113Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:49:57.994Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:50:00.890Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:50:06.847Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:50:09.859Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:50:12.661Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:50:20.462Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:50:28.680Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:50:40.300Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:50:48.283Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:51:50.679Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:52:10.000Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:52:15.442Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:52:22.351Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:52:33.007Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:52:38.997Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:52:45.021Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T07:53:01.308Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:01:17.362Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:11:44.007Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:11:55.538Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:11:56.640Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:11:59.410Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:06.658Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:07.972Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:11.683Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:15.699Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:20.024Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:29.916Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:30.363Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:42.685Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:50.508Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:53.848Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:12:58.528Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:13:09.969Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:13:16.453Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:13:16.861Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:13:22.017Z",
+      "feature": "booking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:15:05.491Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:15:34.423Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:19:58.243Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:24:11.365Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:24:34.335Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:24:42.802Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:24:52.760Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:25:01.821Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:28:56.049Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:29:09.457Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:29:26.942Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:29:58.677Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:30:09.443Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:49:18.398Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:49:19.930Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T08:49:21.415Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T09:15:43.582Z",
+      "feature": "Onboarding",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T11:59:20.745Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T11:59:40.443Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T11:59:54.762Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:15:47.903Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:16:25.640Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:16:32.667Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:16:50.265Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:17:04.236Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:20:16.788Z",
+      "feature": "Onboarding",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:24:46.611Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:26:55.507Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:27:05.546Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:27:15.115Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:47:03.319Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:47:06.827Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:47:20.295Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:47:34.642Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:47:47.276Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:47:57.599Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:48:09.520Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:48:23.833Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:48:40.798Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:48:56.076Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:51:13.190Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:51:39.151Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:54:47.161Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:55:00.750Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T12:56:25.908Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:06:51.804Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:07:28.147Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:07:44.893Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:13:47.682Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:13:59.532Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:17:18.358Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:17:24.662Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:17:32.314Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:30:42.654Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:32:45.131Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:37:31.532Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:37:53.423Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:38:06.585Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:40:58.800Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:41:36.134Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:41:47.159Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:54:39.691Z",
+      "feature": "submit-assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:54:47.095Z",
+      "feature": "submit-assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:54:53.313Z",
+      "feature": "submit-assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:55:02.363Z",
+      "feature": "submit-assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:55:20.272Z",
+      "feature": "get-assignment-public",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:55:36.547Z",
+      "feature": "submit",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:55:44.420Z",
+      "feature": "submit",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:57:33.164Z",
+      "feature": "submit",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:58:04.621Z",
+      "feature": "submit",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:58:10.567Z",
+      "feature": "submit",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T13:59:11.600Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:01:59.624Z",
+      "feature": "assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:02:10.274Z",
+      "feature": "assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:02:19.301Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:02:27.244Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:02:33.752Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:02:45.811Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:16:55.097Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:17:04.516Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:18:30.616Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:18:33.392Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:18:41.989Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:18:44.790Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:18:55.269Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:18:56.881Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:19:04.612Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:19:07.183Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:19:15.913Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:19:18.410Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:19:27.628Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:19:36.580Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:19:42.209Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:19:51.487Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:20:07.582Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:20:22.562Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:20:45.033Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:20:52.285Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:21:32.490Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:21:49.578Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:21:55.629Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:22:53.269Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:39:38.062Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:39:48.532Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:39:53.699Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:40:05.106Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:40:09.076Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:40:22.070Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:40:43.802Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:41:13.659Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:44:48.108Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:44:53.308Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:44:58.932Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:45:18.986Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T14:45:34.108Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:04:06.593Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:04:16.239Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:05:04.925Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:05:16.649Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:05:28.162Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:05:44.915Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:05:54.644Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:06:18.252Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:06:31.408Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:06:46.728Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:06:57.842Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:07:29.309Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:07:42.985Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:08:12.129Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:10:51.756Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:11:01.023Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:11:11.298Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:11:50.626Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:12:08.644Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:12:14.014Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:12:18.888Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:12:23.252Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:12:27.346Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:12:34.986Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:41:27.692Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:42:51.860Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:43:01.342Z",
+      "feature": "assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:43:07.982Z",
+      "feature": "get-assignment-public",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:43:13.430Z",
+      "feature": "submit",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:43:26.959Z",
+      "feature": "submit",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:43:35.656Z",
+      "feature": "submit",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:43:49.681Z",
+      "feature": "assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:44:12.168Z",
+      "feature": "assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:44:19.079Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:44:30.024Z",
+      "feature": "ports",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:54:27.129Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:54:35.455Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T15:54:46.153Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:00:06.085Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:00:26.541Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:02:15.411Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:02:25.766Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:12:31.825Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:12:45.828Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:12:54.496Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:13:00.122Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:13:23.328Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:13:28.961Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:13:44.082Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:14:00.145Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:14:08.879Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:14:17.308Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:14:32.959Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:14:53.471Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:15:00.465Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:15:38.670Z",
+      "feature": "[code]",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:15:46.464Z",
+      "feature": "[code]",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:16:18.429Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:21:57.026Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:22:04.126Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:22:09.500Z",
+      "feature": "supabase",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:22:33.351Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:22:49.239Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:23:11.017Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:23:17.319Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:23:28.883Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:23:37.943Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:23:47.950Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:24:16.228Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:24:26.365Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:24:36.608Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:24:46.739Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:30:10.816Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:30:18.249Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:30:24.813Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:30:35.537Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:30:41.075Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:30:55.227Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:31:01.446Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:31:11.602Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:31:20.322Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:31:35.569Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:31:46.956Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:31:53.509Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:32:00.858Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:32:07.265Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:32:20.688Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:40:13.941Z",
+      "feature": "[code]",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:42:13.459Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:42:18.302Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:42:25.033Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:50:47.648Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:50:59.674Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:54:01.612Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:54:07.736Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:54:19.555Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T16:56:21.037Z",
+      "feature": "Survey",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:02:05.216Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:02:15.078Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:02:21.408Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:02:27.522Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:02:32.341Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:02:51.511Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:03:25.318Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:04:37.376Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:04:39.102Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T17:04:40.579Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-12T23:25:57.178Z",
+      "feature": "docs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:26:56.204Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:27:09.214Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:27:09.241Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:27:18.679Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:27:38.115Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:27:39.414Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:27:56.781Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:28:00.544Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:35:17.589Z",
+      "feature": "docs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:42:13.462Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:42:14.905Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:42:16.226Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:50:13.710Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:50:24.027Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T01:50:33.529Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:40:02.333Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:40:14.309Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:40:23.353Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:40:33.712Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:41:40.422Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:41:49.467Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:01.071Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:06.256Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:11.791Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:22.963Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:27.688Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:32.141Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:45.024Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:50.146Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:42:55.180Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:43:01.416Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:43:15.971Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:43:20.411Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:43:25.188Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:43:37.518Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:43:42.821Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:43:48.578Z",
+      "feature": "Consultation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:44:01.502Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:44:05.857Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:44:10.311Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:44:22.330Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:44:27.342Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:44:32.404Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:44:44.722Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:44:49.917Z",
+      "feature": "adapters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:45:01.930Z",
+      "feature": "Settings",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:45:13.828Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:45:18.938Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:45:26.028Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:45:40.560Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:47:44.246Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:47:56.537Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:48:11.486Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:48:24.737Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:48:43.432Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T02:49:08.996Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:03:18.780Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:03:44.975Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:33:32.215Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:33:42.520Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:33:51.631Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:34:09.025Z",
+      "feature": "analytics",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:38:27.485Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:38:40.069Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:38:47.061Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:39:11.151Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:40:36.870Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:40:46.556Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:40:53.603Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:41:00.373Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T03:41:19.025Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:31:52.234Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:32:04.549Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:32:21.952Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:32:23.612Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:32:34.716Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:33:16.367Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:33:24.897Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:33:37.042Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:33:49.837Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:34:06.346Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:36:49.222Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:36:59.983Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:37:09.901Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:37:24.065Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:37:49.120Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T04:38:03.244Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:43:27.321Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:43:41.764Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:44:08.957Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:44:17.161Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:44:32.693Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:44:51.578Z",
+      "feature": "tabs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:45:11.026Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:45:13.034Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T12:45:50.129Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:34:41.720Z",
+      "feature": "ssampin-chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:34:55.948Z",
+      "feature": "HelpChat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:35:06.007Z",
+      "feature": "HelpChat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:35:11.460Z",
+      "feature": "HelpChat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:35:17.471Z",
+      "feature": "HelpChat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:36:05.564Z",
+      "feature": "HelpChat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:40:27.464Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:40:47.816Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:41:01.593Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:59:41.252Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:59:54.624Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T13:59:59.497Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:00:14.512Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:00:22.227Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:00:37.858Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:01:34.756Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:01:44.614Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:01:56.925Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:02:04.619Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:02:11.185Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:02:16.880Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:02:23.094Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:14:29.069Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:14:42.650Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:15:03.593Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:26:57.705Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:27:18.534Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:41:56.627Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:42:06.098Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:42:10.077Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:42:23.766Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:42:46.497Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:43:01.981Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:43:08.053Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:43:16.947Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:54:12.837Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:54:24.542Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:54:34.315Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:54:37.408Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:54:43.741Z",
+      "feature": "tabs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:54:50.103Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:54:56.575Z",
+      "feature": "tabs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:55:03.810Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:55:24.588Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:55:30.271Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:55:37.374Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:56:02.628Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:56:11.992Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:56:18.146Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:56:24.272Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:56:30.098Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T14:56:34.719Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:05:56.013Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:06:14.899Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:06:25.205Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:06:34.411Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:06:43.201Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:06:49.188Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:07:00.834Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:07:05.607Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:07:11.335Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:35:30.693Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:35:59.098Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:36:11.039Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:36:43.094Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:36:51.801Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:36:59.933Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:37:20.489Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:37:26.870Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:37:41.043Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:37:50.579Z",
+      "feature": "Settings",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:51:46.802Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:51:55.700Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:52:04.384Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:52:18.000Z",
+      "feature": "tabs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:52:27.497Z",
+      "feature": "tabs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:52:39.237Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:52:47.039Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:53:04.967Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:53:11.057Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:53:22.137Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:53:30.233Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:53:36.201Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:53:46.998Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:53:56.403Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:54:03.941Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:54:10.654Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:54:21.334Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:54:29.114Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:54:45.040Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:54:57.026Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:55:10.191Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:55:15.696Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T15:55:28.093Z",
+      "feature": "Settings",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:10:26.990Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:10:34.520Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:10:48.807Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:11:09.631Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:11:17.485Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:11:27.865Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:11:36.019Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:11:45.073Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:12:01.910Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:18:11.463Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:18:32.698Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:18:43.416Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:19:03.791Z",
+      "feature": "tabs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:20:01.072Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:20:11.080Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:20:59.993Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:21:37.729Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:21:53.584Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:22:03.329Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:22:18.017Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:22:23.729Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:22:42.685Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:32:05.849Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:32:07.173Z",
+      "feature": "landing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:32:08.511Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:37:42.756Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:37:51.201Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:37:52.980Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:39:51.759Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:40:02.085Z",
+      "feature": "Widget",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:40:20.798Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:40:30.020Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-13T16:40:35.995Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:13:10.648Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:13:13.449Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:13:38.710Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:13:53.998Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:14:08.744Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:14:23.648Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:14:40.705Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:14:50.132Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:15:01.907Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:15:13.988Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:15:32.349Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:16:52.455Z",
+      "feature": "Homeroom",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:17:20.516Z",
+      "feature": "Homeroom",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:17:22.038Z",
+      "feature": "Homeroom",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:17:23.863Z",
+      "feature": "Homeroom",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:17:28.317Z",
+      "feature": "Assignment",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:17:36.093Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:18:12.253Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:18:28.781Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:18:34.992Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:18:43.022Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:18:56.654Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:19:20.850Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:19:35.017Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:19:50.765Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:20:00.227Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:20:12.837Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:20:22.752Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:20:28.962Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:21:05.056Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:29.699Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:35.094Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:37.361Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:39.108Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:40.883Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:45.341Z",
+      "feature": "tabs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:46.673Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:47.895Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:37:50.916Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:06.969Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:08.555Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:10.553Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:15.395Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:18.469Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:22.309Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:23.848Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:31.552Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:32.482Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:37.306Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:39.094Z",
+      "feature": "tabs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:46.405Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:38:52.633Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:39:02.998Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:39:07.141Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:39:14.763Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:39:16.815Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:39:25.152Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:39:36.017Z",
+      "feature": "seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:39:46.311Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:41:48.827Z",
+      "feature": "Seating",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:42:12.766Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:42:27.483Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:42:39.153Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:42:56.684Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:43:27.312Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:44:08.247Z",
+      "feature": "ClassManagement",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-14T14:47:27.907Z",
+      "feature": "seating",
       "phase": "do",
       "action": "updated"
     }

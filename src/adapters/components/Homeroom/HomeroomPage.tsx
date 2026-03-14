@@ -5,6 +5,7 @@ import { RecordsTab } from './Records/RecordsTab';
 import { SurveyTab } from './Survey/SurveyTab';
 import { ConsultationTab } from './Consultation/ConsultationTab';
 import { Seating } from '@adapters/components/Seating/Seating';
+import { RosterManagementTab } from './RosterManagementTab';
 
 export interface RecordPrefill {
   studentId: string;
@@ -35,6 +36,7 @@ export function HomeroomPage() {
       </div>
 
       {/* 탭 콘텐츠 */}
+      {activeTab === 'roster' && <RosterManagementTab />}
       {activeTab === 'records' && <RecordsTab prefill={prefillRecord} onPrefillConsumed={() => setPrefillRecord(null)} />}
       {activeTab === 'survey' && <SurveyTab />}
       {activeTab === 'consultation' && <ConsultationTab onWriteRecord={handleWriteRecord} />}

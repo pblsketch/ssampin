@@ -60,6 +60,19 @@ export function TimetablePage() {
     void loadSettings();
   }, [loadSchedule, loadSettings]);
 
+  // 기존 사용자 마이그레이션: 색상 미배정 과목 자동 배정
+  useEffect(() => {
+    const currentColors = settings.subjectColors ?? {};
+    const allSubjects = extractSubjectsFromSchedule(classSchedule);
+    const uncolored = allSubjects.filter(
+      (s) => !(s in currentColors) && !(s in DEFAULT_SUBJECT_COLORS),
+    );
+    if (uncolored.length > 0) {
+      const updated = smartAutoAssignColors(currentColors, uncolored);
+      void updateSettings({ subjectColors: updated });
+    }
+  }, [classSchedule]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 1분마다 현재 시각 갱신
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);

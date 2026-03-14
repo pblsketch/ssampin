@@ -27,6 +27,21 @@ export function SeatTab({ draft, patch }: Props) {
             <NumberStepper value={draft.seatingCols} onChange={(v) => patch({ seatingCols: v })} />
           </div>
         </div>
+
+        <div className="flex items-center justify-between mt-6 pt-6 border-t border-sp-border/30">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-sp-text">기본 시점</span>
+            <span className="text-xs text-sp-muted">좌석배치 화면을 열 때의 기본 시점을 설정합니다.</span>
+          </div>
+          <select
+            value={draft.seatingDefaultView ?? 'student'}
+            onChange={(e) => patch({ seatingDefaultView: e.target.value as 'student' | 'teacher' })}
+            className="bg-sp-card border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+          >
+            <option value="student">학생 시점</option>
+            <option value="teacher">교사 시점</option>
+          </select>
+        </div>
       </SettingsSection>
 
       <SeatRelationSection />

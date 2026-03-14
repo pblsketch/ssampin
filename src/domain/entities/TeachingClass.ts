@@ -18,6 +18,8 @@ export function studentKey(s: { number: number; grade?: number; classNum?: numbe
   return String(s.number);
 }
 
+import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
+
 /** 수업반 전용 좌석 배치 데이터 */
 export interface TeachingClassSeating {
   readonly rows: number;
@@ -25,6 +27,8 @@ export interface TeachingClassSeating {
   /** seats[row][col] = studentKey(학생) | null */
   readonly seats: readonly (readonly (string | null)[])[];
   readonly pairMode?: boolean;
+  /** 짝꿍 모드에서 홀수 열 처리: 'single'=1명 따로 (기본), 'triple'=3명 함께 */
+  readonly oddColumnMode?: OddColumnMode;
 }
 
 export interface TeachingClass {

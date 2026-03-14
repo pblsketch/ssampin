@@ -134,6 +134,10 @@ export const DEFAULT_SUBJECT_COLORS: SubjectColorMap = {
   '음악': 'pink',
   '미술': 'indigo',
   '창체': 'teal',
+  '기술': 'emerald',
+  '제2외국어': 'cyan',
+  '한문': 'amber',
+  '교양': 'violet',
 };
 
 /** 프리셋 ID로 프리셋 객체 조회 (없으면 cyan 폴백) */

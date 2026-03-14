@@ -22,6 +22,8 @@ export class RandomizeSeats {
       constraints,
       current.rows,
       current.cols,
+      Math.random,
+      { pairMode: current.pairMode, oddColumnMode: current.oddColumnMode },
     );
 
     const updated: SeatingData = { ...current, seats: result.seats };

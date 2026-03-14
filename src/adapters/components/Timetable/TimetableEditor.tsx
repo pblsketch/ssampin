@@ -297,6 +297,17 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
           }));
         }
         await updateClassSchedule(data as ClassScheduleData);
+
+        // 수동 편집 시에도 새 과목에 자동 색상 배정
+        const currentColors = settings.subjectColors ?? {};
+        const allSubjects = extractSubjectsFromSchedule(data as ClassScheduleData);
+        const newSubjects = allSubjects.filter(
+          (s) => !(s in currentColors) && !(s in DEFAULT_SUBJECT_COLORS),
+        );
+        if (newSubjects.length > 0) {
+          const updatedColors = smartAutoAssignColors(currentColors, newSubjects);
+          await updateSettings({ subjectColors: updatedColors });
+        }
       } else {
         const data: Record<string, (TeacherPeriod | null)[]> = {};
         for (let d = 0; d < DAYS_OF_WEEK.length; d++) {
@@ -309,6 +320,22 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
           });
         }
         await updateTeacherSchedule(data as TeacherScheduleData);
+
+        // 교사 시간표에서도 과목 추출 → 색상 배정
+        const currentColors = settings.subjectColors ?? {};
+        const teacherSubjects = new Set<string>();
+        for (const periods of Object.values(data)) {
+          for (const p of periods) {
+            if (p && p.subject.trim()) teacherSubjects.add(p.subject.trim());
+          }
+        }
+        const newSubjects = [...teacherSubjects].filter(
+          (s) => !(s in currentColors) && !(s in DEFAULT_SUBJECT_COLORS),
+        );
+        if (newSubjects.length > 0) {
+          const updatedColors = smartAutoAssignColors(currentColors, newSubjects);
+          await updateSettings({ subjectColors: updatedColors });
+        }
       }
 
       // 교시 수가 변경된 경우 설정도 업데이트

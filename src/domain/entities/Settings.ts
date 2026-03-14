@@ -158,4 +158,6 @@ export interface Settings {
   readonly neisSchedule?: NeisScheduleSettings;
   readonly dashboardTheme?: DashboardThemeSettings;
   readonly subjectColors?: SubjectColorMap;
+  /** 좌석배치 기본 시점: 'student' | 'teacher' */
+  readonly seatingDefaultView?: 'student' | 'teacher';
 }
