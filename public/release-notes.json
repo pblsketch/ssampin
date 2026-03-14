@@ -1,6 +1,38 @@
 {
   "versions": [
     {
+      "version": "0.4.1",
+      "date": "2026-03-15",
+      "highlights": "좌석배치 기능 강화 — 3인짝 모드, 짝꿍 셔플, Excel 좌우 반전 지원",
+      "changes": [
+        {
+          "type": "new",
+          "title": "3인짝 모드 지원",
+          "description": "좌석배치에서 3인 1조 짝꿍 모드를 사용할 수 있습니다"
+        },
+        {
+          "type": "new",
+          "title": "짝꿍 그룹 유지 셔플",
+          "description": "짝꿍 조를 유지한 채 좌석 위치만 셔플합니다"
+        },
+        {
+          "type": "improve",
+          "title": "Excel 내보내기 좌우 반전 옵션",
+          "description": "교탁 기준 좌우 반전된 좌석표를 내보낼 수 있습니다"
+        },
+        {
+          "type": "improve",
+          "title": "내보내기 테두리 연결 개선",
+          "description": "Excel/한글 내보내기 시 테두리가 깔끔하게 연결됩니다"
+        },
+        {
+          "type": "fix",
+          "title": "과제수합 담임반 미표시 버그 수정",
+          "description": "과제수합에서 담임반이 정상적으로 표시됩니다"
+        }
+      ]
+    },
+    {
       "version": "0.4.0",
       "date": "2026-03-15",
       "highlights": "위젯 모드 전면 개선 — 안정적인 2모드 체계(일반/항상 위에)로 단순화",
