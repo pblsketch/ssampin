@@ -1,5 +1,8 @@
 export type SurveyMode = 'teacher' | 'student';
 
+/** 학생 번호(1-indexed) → 4자리 PIN 매핑 */
+export type StudentPinMap = Readonly<Record<number, string>>;
+
 export type QuestionType = 'yesno' | 'choice' | 'text';
 
 export interface SurveyQuestion {
@@ -23,6 +26,8 @@ export interface Survey {
   readonly isArchived: boolean;
   readonly targetCount?: number;
   readonly adminKey?: string;
+  readonly pinProtection?: boolean;
+  readonly studentPins?: StudentPinMap;
   readonly createdAt: string;
 }
 

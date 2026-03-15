@@ -80,6 +80,8 @@ export class SurveySupabaseClient {
     dueDate?: string;
     adminKey: string;
     targetCount: number;
+    pinProtection?: boolean;
+    studentPinHashes?: Record<string, string>;
   }): Promise<void> {
     const res = await fetch(`${this.baseUrl}/rest/v1/surveys`, {
       method: 'POST',
@@ -96,6 +98,8 @@ export class SurveySupabaseClient {
         due_date: params.dueDate ?? null,
         admin_key: params.adminKey,
         target_count: params.targetCount,
+        pin_protection: params.pinProtection ?? false,
+        pin_hashes: params.studentPinHashes ?? null,
       }),
     });
 

@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { SurveyPublic } from './checkApi';
-import { getSurveyPublic, checkAlreadyResponded, submitSurveyResponse } from './checkApi';
+import { getSurveyPublic, checkAlreadyResponded, submitSurveyResponse, verifyPin } from './checkApi';
 
 interface CheckPageContentProps {
   surveyId: string;
 }
 
-type ViewState = 'loading' | 'notFound' | 'expired' | 'numberSelect' | 'alreadyResponded' | 'form' | 'confirm' | 'success';
+type ViewState = 'loading' | 'notFound' | 'expired' | 'numberSelect' | 'pinInput' | 'alreadyResponded' | 'form' | 'confirm' | 'success';
 
 export function CheckPageContent({ surveyId }: CheckPageContentProps) {
   const [survey, setSurvey] = useState<SurveyPublic | null>(null);
@@ -17,6 +17,8 @@ export function CheckPageContent({ surveyId }: CheckPageContentProps) {
   const [answers, setAnswers] = useState<Map<string, string | boolean>>(new Map());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState(false);
 
   /* ── 설문 로드 ── */
   useEffect(() => {
@@ -51,13 +53,26 @@ export function CheckPageContent({ surveyId }: CheckPageContentProps) {
   /* ── 번호 선택 후 중복 확인 ── */
   const handleNumberSelect = useCallback(async (num: number) => {
     setStudentNumber(num);
-    const already = await checkAlreadyResponded(surveyId, num);
-    if (already) {
-      setView('alreadyResponded');
+    if (survey?.pinProtection) {
+      setView('pinInput');
     } else {
-      setView('form');
+      const already = await checkAlreadyResponded(surveyId, num);
+      setView(already ? 'alreadyResponded' : 'form');
     }
-  }, [surveyId]);
+  }, [surveyId, survey?.pinProtection]);
+
+  /* ── PIN 검증 ── */
+  const handlePinVerify = useCallback(async () => {
+    if (!survey || studentNumber === null || pin.length !== 4) return;
+    const valid = await verifyPin(surveyId, studentNumber, pin);
+    if (valid) {
+      setPinError(false);
+      const already = await checkAlreadyResponded(surveyId, studentNumber);
+      setView(already ? 'alreadyResponded' : 'form');
+    } else {
+      setPinError(true);
+    }
+  }, [survey, studentNumber, pin, surveyId]);
 
   /* ── 답변 업데이트 ── */
   const updateAnswer = useCallback((questionId: string, value: string | boolean) => {
@@ -121,6 +136,16 @@ export function CheckPageContent({ surveyId }: CheckPageContentProps) {
           <NumberSelectView
             survey={survey}
             onSelect={handleNumberSelect}
+          />
+        )}
+        {view === 'pinInput' && studentNumber !== null && (
+          <PinInputView
+            studentNumber={studentNumber}
+            pin={pin}
+            pinError={pinError}
+            onPinChange={setPin}
+            onVerify={handlePinVerify}
+            onBack={() => { setView('numberSelect'); setStudentNumber(null); setPin(''); setPinError(false); }}
           />
         )}
         {view === 'form' && survey && studentNumber !== null && (
@@ -274,6 +299,107 @@ function NumberSelectView({
           className="w-full min-h-12 rounded-xl bg-blue-500 text-white font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
         >
           {checking ? '확인 중...' : '다음'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── PIN 입력 ── */
+
+function PinInputView({
+  studentNumber,
+  pin,
+  pinError,
+  onPinChange,
+  onVerify,
+  onBack,
+}: {
+  studentNumber: number;
+  pin: string;
+  pinError: boolean;
+  onPinChange: (v: string) => void;
+  onVerify: () => void;
+  onBack: () => void;
+}) {
+  const [verifying, setVerifying] = useState(false);
+  const inputRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+  ];
+
+  const handleDigitChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const newPin = pin.split('');
+    while (newPin.length < 4) newPin.push('');
+    newPin[index] = digit;
+    onPinChange(newPin.join(''));
+
+    if (digit && index < 3) {
+      inputRefs[index + 1]?.current?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !pin[index] && index > 0) {
+      inputRefs[index - 1]?.current?.focus();
+    }
+  };
+
+  const handleVerify = async () => {
+    setVerifying(true);
+    await onVerify();
+    setVerifying(false);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={onBack} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="text-sm text-gray-500">{studentNumber}번 학생</span>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 text-center">
+        <div className="text-4xl mb-4">🔒</div>
+        <h3 className="text-lg font-bold text-gray-900 mb-2">PIN 코드 입력</h3>
+        <p className="text-sm text-gray-500 mb-6">
+          선생님에게 받은 4자리 PIN 코드를 입력하세요
+        </p>
+
+        <div className="flex justify-center gap-3 mb-4">
+          {[0, 1, 2, 3].map((i) => (
+            <input
+              key={i}
+              ref={inputRefs[i]}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={pin[i] ?? ''}
+              onChange={(e) => handleDigitChange(i, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(i, e)}
+              className={`w-14 h-14 text-center text-2xl font-bold rounded-xl border-2 ${
+                pinError ? 'border-red-400 text-red-500' : 'border-gray-300 text-gray-900'
+              } focus:border-blue-500 focus:outline-none transition-colors`}
+            />
+          ))}
+        </div>
+
+        {pinError && (
+          <p className="text-sm text-red-500 mb-4">PIN이 올바르지 않습니다</p>
+        )}
+
+        <button
+          onClick={() => void handleVerify()}
+          disabled={pin.replace(/\s/g, '').length !== 4 || verifying}
+          className="w-full min-h-12 rounded-xl bg-blue-500 text-white font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+        >
+          {verifying ? '확인 중...' : '확인'}
         </button>
       </div>
     </div>

@@ -23,6 +23,7 @@ export interface SurveyPublic {
   dueDate?: string;
   targetCount: number;
   isClosed: boolean;
+  pinProtection: boolean;
 }
 
 interface SurveyRow {
@@ -33,12 +34,14 @@ interface SurveyRow {
   due_date: string | null;
   target_count: number;
   is_closed: boolean;
+  pin_protection: boolean;
+  pin_hashes: Record<string, string> | null;
 }
 
 export async function getSurveyPublic(surveyId: string): Promise<SurveyPublic | null> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=id,title,description,questions,due_date,target_count,is_closed`,
+      `${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=id,title,description,questions,due_date,target_count,is_closed,pin_protection`,
       { headers: headers() },
     );
 
@@ -55,6 +58,7 @@ export async function getSurveyPublic(surveyId: string): Promise<SurveyPublic | 
       dueDate: row.due_date ?? undefined,
       targetCount: row.target_count,
       isClosed: row.is_closed,
+      pinProtection: row.pin_protection ?? false,
     };
   } catch {
     return null;
@@ -81,6 +85,42 @@ export async function checkAlreadyResponded(
 export interface SubmitResult {
   success: boolean;
   message: string;
+}
+
+async function hashPin(pin: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export async function verifyPin(
+  surveyId: string,
+  studentNumber: number,
+  pin: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=pin_hashes`,
+      { headers: headers() },
+    );
+    if (!res.ok) return false;
+    const rows = (await res.json()) as Array<{ pin_hashes: Record<string, string> | null }>;
+    if (rows.length === 0) return false;
+
+    const hashes = rows[0]!.pin_hashes;
+    if (!hashes) return true; // PIN 없으면 통과
+
+    const expectedHash = hashes[String(studentNumber)];
+    if (!expectedHash) return false;
+
+    const inputHash = await hashPin(pin);
+    return inputHash === expectedHash;
+  } catch {
+    return false;
+  }
 }
 
 export async function submitSurveyResponse(data: {

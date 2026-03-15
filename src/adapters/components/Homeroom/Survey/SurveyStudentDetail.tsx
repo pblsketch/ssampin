@@ -6,7 +6,8 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { StudentGrid } from '@adapters/components/Homeroom/shared/StudentGrid';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import type { ReadonlyModeProps } from '@adapters/components/Homeroom/shared/StudentGrid';
-import type { Survey, SurveyResponse } from '@domain/entities/Survey';
+import type { Survey, SurveyResponse, StudentPinMap } from '@domain/entities/Survey';
+import { hashPin } from '@infrastructure/crypto/pinHash';
 import { getStudentResponseProgress } from '@domain/rules/surveyRules';
 import type { SurveySupabaseClient, SurveyResponsePublic } from '@infrastructure/supabase/SurveySupabaseClient';
 import { shortLinkClient } from '@adapters/di/container';
@@ -30,6 +31,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
   const [showExport, setShowExport] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const stopPollingRef = useRef<(() => void) | null>(null);
 
@@ -58,6 +60,15 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
       try {
         const existing = await supabaseClient.getSurvey(survey.id);
         if (!existing) {
+          // PIN 해시 생성
+          let studentPinHashes: Record<string, string> | undefined;
+          if (survey.pinProtection && survey.studentPins) {
+            const entries = await Promise.all(
+              Object.entries(survey.studentPins).map(async ([num, pin]) => [num, await hashPin(pin)] as const)
+            );
+            studentPinHashes = Object.fromEntries(entries);
+          }
+
           await supabaseClient.createSurvey({
             id: survey.id,
             title: survey.title,
@@ -67,6 +78,8 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
             dueDate: survey.dueDate,
             adminKey: survey.adminKey!,
             targetCount: survey.targetCount ?? 30,
+            pinProtection: survey.pinProtection,
+            studentPinHashes,
           });
         }
       } catch {
@@ -205,6 +218,15 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {survey.pinProtection && survey.studentPins && (
+            <button
+              onClick={() => setShowPinModal(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">pin</span>
+              PIN 확인
+            </button>
+          )}
           {survey.shareUrl && (
             <button
               onClick={() => setShowShareModal(true)}
@@ -291,6 +313,16 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
         <span>미응답: <strong>{progress.total - progress.completed}명</strong></span>
       </div>
 
+      {/* PIN 확인/인쇄 모달 */}
+      {showPinModal && survey.pinProtection && survey.studentPins && (
+        <PinListModal
+          studentPins={survey.studentPins}
+          students={students}
+          surveyTitle={survey.title}
+          onClose={() => setShowPinModal(false)}
+        />
+      )}
+
       {/* 공유 모달 (QR + 링크) */}
       {showShareModal && survey.shareUrl && (
         <ShareModal
@@ -311,6 +343,106 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveySt
           fileName={survey.title}
         />
       )}
+    </div>
+  );
+}
+
+/* ──────────────── PinListModal ──────────────── */
+
+function PinListModal({
+  studentPins,
+  students,
+  surveyTitle,
+  onClose,
+}: {
+  studentPins: StudentPinMap;
+  students: readonly import('@domain/entities/Student').Student[];
+  surveyTitle: string;
+  onClose: () => void;
+}) {
+  const nonVacant = students.filter((s) => !s.isVacant);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-4 border-b border-sp-border shrink-0">
+          <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+            <span className="material-symbols-outlined text-amber-400 text-base">pin</span>
+            PIN 목록
+          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">print</span>
+              인쇄
+            </button>
+            <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 테이블 (스크린 표시) */}
+        <div className="flex-1 overflow-y-auto p-4 print:hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-sp-muted text-xs">
+                <th className="text-left pb-2 font-medium">번호</th>
+                <th className="text-left pb-2 font-medium">이름</th>
+                <th className="text-center pb-2 font-medium">PIN</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nonVacant.map((student, idx) => {
+                const num = idx + 1;
+                const pin = studentPins[num] ?? '-';
+                return (
+                  <tr key={student.id} className="border-t border-sp-border/50">
+                    <td className="py-2 text-sp-muted">{num}</td>
+                    <td className="py-2 text-sp-text">{student.name}</td>
+                    <td className="py-2 text-center font-mono text-sp-accent font-bold tracking-widest">{pin}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 인쇄용 레이아웃 (화면에서는 숨김) */}
+        <div className="hidden print:block p-4">
+          <h2 className="text-base font-bold text-center mb-4">{surveyTitle} — PIN 코드</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {nonVacant.map((student, idx) => {
+              const num = idx + 1;
+              const pin = studentPins[num] ?? '-';
+              return (
+                <div key={student.id} className="border border-gray-300 rounded-lg p-3 text-center">
+                  <p className="text-sm font-bold">{num}번 {student.name}</p>
+                  <p className="text-2xl font-mono font-bold mt-1 tracking-widest">{pin}</p>
+                  <p className="text-xs text-gray-400 mt-1">설문 PIN 코드</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 안내 */}
+        <div className="p-3 border-t border-sp-border text-center shrink-0 print:hidden">
+          <p className="text-[10px] text-sp-muted/60">
+            인쇄 후 잘라서 학생들에게 개별 배부하세요. PIN은 이 설문에서만 유효합니다.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

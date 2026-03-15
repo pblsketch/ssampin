@@ -1,4 +1,5 @@
 import type {
+  StudentPinMap,
   Survey,
   SurveyLocalData,
   SurveyLocalEntry,
@@ -90,8 +91,8 @@ export function formatSurveyForClipboard(
     const qEntries = entries.filter((e) => e.questionId === q.id);
 
     if (q.type === 'yesno') {
-      const yes = qEntries.filter((e) => e.value === '○' || e.value === true);
-      const no = qEntries.filter((e) => e.value === '×' || e.value === false);
+      const yes = qEntries.filter((e) => e.value === 'yes');
+      const no = qEntries.filter((e) => e.value === 'no');
       const answered = new Set(qEntries.map((e) => e.studentId));
       const unanswered = students.filter((s) => !s.isVacant && !answered.has(s.id));
 
@@ -171,4 +172,38 @@ export function getActiveSurveys(surveys: readonly Survey[]): Survey[] {
 
 export function getArchivedSurveys(surveys: readonly Survey[]): Survey[] {
   return surveys.filter((s) => s.isArchived);
+}
+
+/* ──────────────── PIN 코드 (사칭 방지) ──────────────── */
+
+/**
+ * 학생 수만큼 중복 없는 4자리 PIN 생성
+ * @param count 학생 수 (1~50)
+ * @returns Record<studentNumber, pin> (1-indexed)
+ */
+export function generateStudentPins(count: number): StudentPinMap {
+  const pins = new Set<string>();
+  while (pins.size < count) {
+    const pin = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    pins.add(pin);
+  }
+  const result: Record<number, string> = {};
+  const pinArray = [...pins];
+  for (let i = 0; i < count; i++) {
+    result[i + 1] = pinArray[i]!;
+  }
+  return result;
+}
+
+/**
+ * PIN 검증
+ * @returns true if PIN matches
+ */
+export function verifyStudentPin(
+  pins: StudentPinMap | undefined,
+  studentNumber: number,
+  inputPin: string,
+): boolean {
+  if (!pins) return true;
+  return pins[studentNumber] === inputPin;
 }
