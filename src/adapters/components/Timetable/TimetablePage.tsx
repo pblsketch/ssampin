@@ -12,6 +12,7 @@ import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
 import {
   getSubjectStyle,
+  getCellStyle,
   getLunchBreakIndex,
   formatLunchBreakTime,
 } from '@adapters/presenters/timetablePresenter';
@@ -27,7 +28,7 @@ import {
   transformToClassSchedule,
   getMaxPeriod,
 } from '@domain/rules/neisTransformRules';
-import { smartAutoAssignColors, extractSubjectsFromSchedule } from '@domain/rules/subjectColorRules';
+import { smartAutoAssignColors, extractSubjectsFromSchedule, extractClassroomsFromSchedule, autoAssignClassroomColors } from '@domain/rules/subjectColorRules';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 import { TimetableEditor } from './TimetableEditor';
 /* eslint-disable no-restricted-imports */
@@ -60,6 +61,10 @@ export function TimetablePage() {
     void loadSettings();
   }, [loadSchedule, loadSettings]);
 
+  // 색상 모드: schoolLevel 기반 기본값
+  const colorBy = settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
+  const classroomColors = settings.classroomColors;
+
   // 기존 사용자 마이그레이션: 색상 미배정 과목 자동 배정
   useEffect(() => {
     const currentColors = settings.subjectColors ?? {};
@@ -72,6 +77,18 @@ export function TimetablePage() {
       void updateSettings({ subjectColors: updated });
     }
   }, [classSchedule]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 학반 색상 자동 배정
+  useEffect(() => {
+    if (colorBy !== 'classroom') return;
+    const currentColors = settings.classroomColors ?? {};
+    const allClassrooms = extractClassroomsFromSchedule(teacherSchedule);
+    const uncolored = allClassrooms.filter((c) => !(c in currentColors));
+    if (uncolored.length > 0) {
+      const updated = autoAssignClassroomColors(currentColors, uncolored);
+      void updateSettings({ classroomColors: updated });
+    }
+  }, [teacherSchedule, colorBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 1분마다 현재 시각 갱신
   useEffect(() => {
@@ -122,7 +139,7 @@ export function TimetablePage() {
           data = await exportClassScheduleToExcel(classSchedule, settings.maxPeriods, settings.subjectColors);
           defaultFileName = '학급시간표.xlsx';
         } else {
-          data = await exportTeacherScheduleToExcel(teacherSchedule, settings.maxPeriods, settings.subjectColors);
+          data = await exportTeacherScheduleToExcel(teacherSchedule, settings.maxPeriods, settings.subjectColors, colorBy, classroomColors);
           defaultFileName = '교사시간표.xlsx';
         }
       } else {
@@ -309,6 +326,29 @@ export function TimetablePage() {
             </div>
           )}
 
+          {/* 색상 모드 토글 (교사 시간표에서만 표시) */}
+          {tab === 'teacher' && (
+            <div className="flex items-center gap-1 bg-sp-surface rounded-xl p-1 border border-sp-border">
+              <button
+                onClick={() => void updateSettings({ timetableColorBy: 'subject' })}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  colorBy === 'subject' ? 'bg-sp-accent text-white shadow-md' : 'text-sp-muted hover:text-sp-text'
+                }`}
+                title="과목별 색상"
+              >
+                과목색
+              </button>
+              <button
+                onClick={() => void updateSettings({ timetableColorBy: 'classroom' })}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  colorBy === 'classroom' ? 'bg-sp-accent text-white shadow-md' : 'text-sp-muted hover:text-sp-text'
+                }`}
+                title="학반별 색상"
+              >
+                학반색
+              </button>
+            </div>
+          )}
           {/* 탭 토글 */}
           <div className="flex rounded-xl bg-sp-surface p-1 border border-sp-border">
             <TabButton active={tab === 'teacher'} onClick={() => setTab('teacher')} label="교사 시간표" />
@@ -381,6 +421,8 @@ export function TimetablePage() {
                         lunchBefore={lunchIndex === idx}
                         lunchTimeStr={lunchTimeStr}
                         subjectColors={settings.subjectColors}
+                        classroomColors={classroomColors}
+                        colorBy={colorBy}
                       />
                     );
                   })}
@@ -471,6 +513,8 @@ interface PeriodRowProps {
   lunchBefore: boolean;
   lunchTimeStr: string;
   subjectColors?: SubjectColorMap;
+  classroomColors?: SubjectColorMap;
+  colorBy: 'subject' | 'classroom';
 }
 
 function PeriodRow({
@@ -483,6 +527,8 @@ function PeriodRow({
   lunchBefore,
   lunchTimeStr,
   subjectColors,
+  classroomColors,
+  colorBy,
 }: PeriodRowProps) {
   return (
     <>
@@ -560,6 +606,8 @@ function PeriodRow({
               isCurrent={isCurrent && isToday}
               isLastCol={dayIdx === DAYS_OF_WEEK.length - 1}
               subjectColors={subjectColors}
+              classroomColors={classroomColors}
+              colorBy={colorBy}
             />
           );
         })}
@@ -640,9 +688,11 @@ interface TeacherCellProps {
   isCurrent: boolean;
   isLastCol: boolean;
   subjectColors?: SubjectColorMap;
+  classroomColors?: SubjectColorMap;
+  colorBy: 'subject' | 'classroom';
 }
 
-function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors }: TeacherCellProps) {
+function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, classroomColors, colorBy }: TeacherCellProps) {
   if (!period) {
     return (
       <td
@@ -657,7 +707,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors }: T
     );
   }
 
-  const style = getSubjectStyle(period.subject, subjectColors);
+  const style = getCellStyle(period.subject, period.classroom, colorBy, subjectColors, classroomColors);
 
   const cellContent = (
     <div className="flex flex-col items-center justify-center gap-0.5">

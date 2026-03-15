@@ -5,7 +5,7 @@ import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
-import { getSubjectTextColor, getSubjectDotColor } from '@adapters/presenters/timetablePresenter';
+import { getSubjectTextColor, getSubjectDotColor, getCellStyle, getCellDotColor } from '@adapters/presenters/timetablePresenter';
 
 type TabType = 'class' | 'teacher';
 
@@ -33,6 +33,8 @@ export function DashboardTimetable() {
     [dayOfWeek, settings.periodTimes, now],
   );
 
+  const colorBy = settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
+  const classroomColors = settings.classroomColors;
   const isWeekend = dayOfWeek === null;
 
   // 교시 시간 맵 (period → PeriodTime)
@@ -96,6 +98,8 @@ export function DashboardTimetable() {
             currentPeriod={currentPeriod}
             maxPeriods={settings.maxPeriods}
             subjectColors={settings.subjectColors}
+            classroomColors={classroomColors}
+            colorBy={colorBy}
           />
         )}
       </div>
@@ -207,6 +211,8 @@ interface TeacherTimetableListProps {
   currentPeriod: number | null;
   maxPeriods: number;
   subjectColors?: SubjectColorMap;
+  classroomColors?: SubjectColorMap;
+  colorBy: 'subject' | 'classroom';
 }
 
 function TeacherTimetableList({
@@ -215,6 +221,8 @@ function TeacherTimetableList({
   currentPeriod,
   maxPeriods,
   subjectColors,
+  classroomColors,
+  colorBy,
 }: TeacherTimetableListProps) {
   if (periods.length === 0) {
     return (
@@ -231,8 +239,8 @@ function TeacherTimetableList({
         const pt = periodTimeMap.get(period);
         const isCurrent = currentPeriod === period;
         const subject = tp?.subject ?? '';
-        const colorClass = getSubjectTextColor(subject, subjectColors) ?? 'text-sp-text';
-        const dotClass = getSubjectDotColor(subject, subjectColors) ?? 'bg-sp-muted';
+        const cellStyle = tp ? getCellStyle(subject, tp.classroom, colorBy, subjectColors, classroomColors) : null;
+        const dotClass = tp ? getCellDotColor(subject, tp.classroom, colorBy, subjectColors, classroomColors) : 'bg-sp-muted';
 
         return (
           <div
@@ -249,7 +257,7 @@ function TeacherTimetableList({
             {tp ? (
               <>
                 <span className={`mr-1.5 h-2 w-2 rounded-full ${dotClass}`} />
-                <span className={`flex-1 text-sm font-medium ${colorClass}`}>
+                <span className={`flex-1 text-sm font-medium ${cellStyle?.text ?? 'text-sp-text'}`}>
                   {tp.subject}
                 </span>
                 <span className="text-xs text-sp-muted">

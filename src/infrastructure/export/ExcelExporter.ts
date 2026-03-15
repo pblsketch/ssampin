@@ -8,7 +8,7 @@ import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { getAttendanceStats } from '@domain/rules/studentRecordRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
-import { getSubjectArgb } from '@domain/valueObjects/SubjectColor';
+import { getSubjectArgb, getClassroomArgb } from '@domain/valueObjects/SubjectColor';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -80,6 +80,8 @@ export async function exportTeacherScheduleToExcel(
   schedule: TeacherScheduleData,
   maxPeriods: number,
   subjectColors?: SubjectColorMap,
+  colorBy?: 'subject' | 'classroom',
+  classroomColors?: SubjectColorMap,
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('교사 시간표');
@@ -90,10 +92,10 @@ export async function exportTeacherScheduleToExcel(
   DAYS.forEach((_, i) => { ws.getColumn(i + 2).width = 18; });
 
   for (let p = 0; p < maxPeriods; p++) {
+    const periods = DAYS.map((day) => schedule[day]?.[p] ?? null);
     const row = ws.addRow([
       `${p + 1}교시`,
-      ...DAYS.map((day) => {
-        const period = schedule[day]?.[p];
+      ...periods.map((period) => {
         if (!period) return '';
         return `${period.subject} (${period.classroom})`;
       }),
@@ -102,9 +104,15 @@ export async function exportTeacherScheduleToExcel(
       if (colNum === 1) {
         applyHeaderStyle(cell);
       } else {
-        const val = cell.value as string;
-        const subject = val.split(' (')[0] ?? '';
-        applyCellStyle(cell, getSubjectArgb(subject, subjectColors));
+        const period = periods[colNum - 2] ?? null;
+        if (!period) {
+          applyCellStyle(cell);
+          return;
+        }
+        const argb = colorBy === 'classroom'
+          ? getClassroomArgb(period.classroom, classroomColors) ?? getSubjectArgb(period.subject, subjectColors)
+          : getSubjectArgb(period.subject, subjectColors);
+        applyCellStyle(cell, argb);
       }
     });
   }

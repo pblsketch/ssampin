@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { getSubjectWidgetStyle } from '@adapters/presenters/timetablePresenter';
+import { getCellWidgetStyle } from '@adapters/presenters/timetablePresenter';
 import { useWidgetRefresh } from '../hooks/useWidgetRefresh';
 import type { TeacherPeriod } from '@domain/entities/Timetable';
 
@@ -31,6 +31,8 @@ export function WeeklyTimetable() {
 
   useWidgetRefresh(loadSchedule, { intervalMs: 60 * 60 * 1000 });
 
+  const colorBy = settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
+  const classroomColors = settings.classroomColors;
   const maxPeriods = settings.maxPeriods;
 
   const periods = useMemo(() => {
@@ -76,7 +78,7 @@ export function WeeklyTimetable() {
                 const dayData = teacherSchedule[key] as readonly (TeacherPeriod | null)[] | undefined;
                 const tp = dayData?.[period - 1] ?? null;
                 const subject = tp?.subject ?? '';
-                const colorClass = subject ? getSubjectWidgetStyle(subject, settings.subjectColors) : 'bg-sp-surface/50 text-sp-muted';
+                const colorClass = subject ? getCellWidgetStyle(subject, tp?.classroom, colorBy, settings.subjectColors, classroomColors) : 'bg-sp-surface/50 text-sp-muted';
 
                 return (
                   <td key={key} className="p-0.5 border-b border-l">

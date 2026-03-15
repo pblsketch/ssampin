@@ -169,5 +169,27 @@ export function getSubjectArgb(
   return getColorPreset(colorId).argb;
 }
 
+/**
+ * 학반명으로 프리셋을 해석한다.
+ * classroomColors → cyan 순서로 폴백.
+ */
+export function resolveClassroomPreset(
+  classroom: string,
+  classroomColors?: SubjectColorMap,
+): SubjectColorPreset {
+  const colorId = classroomColors?.[classroom] ?? ('cyan' as SubjectColorId);
+  return getColorPreset(colorId);
+}
+
+/** 학반의 Excel ARGB 헥스 반환 */
+export function getClassroomArgb(
+  classroom: string,
+  classroomColors?: SubjectColorMap,
+): string | undefined {
+  const colorId = classroomColors?.[classroom];
+  if (!colorId) return undefined;
+  return getColorPreset(colorId).argb;
+}
+
 /** 과목의 프리셋 전체 반환 (내부 헬퍼) */
 export { resolvePreset };

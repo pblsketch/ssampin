@@ -104,3 +104,47 @@ export function extractSubjectsFromSchedule(
   }
   return [...subjects];
 }
+
+/**
+ * 교사 시간표 데이터에서 모든 학반명 추출
+ */
+export function extractClassroomsFromSchedule(
+  scheduleData: Record<string, readonly ({ classroom?: string } | null)[]>,
+): string[] {
+  const classrooms = new Set<string>();
+  for (const periods of Object.values(scheduleData)) {
+    for (const p of periods) {
+      if (p && 'classroom' in p && p.classroom && p.classroom.trim() !== '') {
+        classrooms.add(p.classroom.trim());
+      }
+    }
+  }
+  return [...classrooms];
+}
+
+/**
+ * 학반용 자동 색상 배정
+ * (키워드 추론 없이 미사용 색상부터 순서대로 배정)
+ */
+export function autoAssignClassroomColors(
+  existingColors: SubjectColorMap,
+  newClassrooms: readonly string[],
+): SubjectColorMap {
+  const result: Record<string, SubjectColorId> = { ...existingColors };
+  const usedColorIds = new Set(Object.values(result));
+  const allColorIds = COLOR_PRESETS.map((p) => p.id);
+  const unusedColors = allColorIds.filter((id) => !usedColorIds.has(id));
+  let unusedIdx = 0;
+
+  for (const classroom of newClassrooms) {
+    if (classroom in result) continue;
+    if (unusedIdx < unusedColors.length) {
+      result[classroom] = unusedColors[unusedIdx]!;
+      unusedIdx++;
+    } else {
+      result[classroom] = allColorIds[unusedIdx % allColorIds.length]!;
+      unusedIdx++;
+    }
+  }
+  return result;
+}

@@ -1,6 +1,6 @@
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
-import { resolvePreset } from '@domain/valueObjects/SubjectColor';
+import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 
 /**
  * 과목별 셀 스타일 (bg / border / text Tailwind 클래스)
@@ -46,6 +46,58 @@ export function getSubjectWidgetStyle(
 ): string {
   const p = resolvePreset(subject, userColors);
   return `${p.tw.bg} ${p.tw.textLight}`;
+}
+
+/**
+ * 색상 모드에 따라 적절한 셀 스타일을 반환한다.
+ * - 'subject': 과목 기반 색상 (기존 동작)
+ * - 'classroom': 학반 기반 색상
+ */
+export function getCellStyle(
+  subject: string,
+  classroom: string | undefined,
+  colorBy: 'subject' | 'classroom',
+  userSubjectColors?: SubjectColorMap,
+  userClassroomColors?: SubjectColorMap,
+): SubjectStyle {
+  if (colorBy === 'classroom' && classroom) {
+    const p = resolveClassroomPreset(classroom, userClassroomColors);
+    return { bg: p.tw.bg, border: p.tw.border, text: p.tw.text };
+  }
+  return getSubjectStyle(subject, userSubjectColors);
+}
+
+/**
+ * 색상 모드에 따른 도트 색상
+ */
+export function getCellDotColor(
+  subject: string,
+  classroom: string | undefined,
+  colorBy: 'subject' | 'classroom',
+  userSubjectColors?: SubjectColorMap,
+  userClassroomColors?: SubjectColorMap,
+): string {
+  if (colorBy === 'classroom' && classroom) {
+    return resolveClassroomPreset(classroom, userClassroomColors).tw.bgSolid;
+  }
+  return getSubjectDotColor(subject, userSubjectColors);
+}
+
+/**
+ * 색상 모드에 따른 위젯 스타일
+ */
+export function getCellWidgetStyle(
+  subject: string,
+  classroom: string | undefined,
+  colorBy: 'subject' | 'classroom',
+  userSubjectColors?: SubjectColorMap,
+  userClassroomColors?: SubjectColorMap,
+): string {
+  if (colorBy === 'classroom' && classroom) {
+    const p = resolveClassroomPreset(classroom, userClassroomColors);
+    return `${p.tw.bg} ${p.tw.textLight}`;
+  }
+  return getSubjectWidgetStyle(subject, userSubjectColors);
 }
 
 /**

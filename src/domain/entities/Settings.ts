@@ -129,6 +129,16 @@ export interface FeedbackConfig {
   readonly email: string;
 }
 
+export interface SyncSettings {
+  readonly enabled: boolean;
+  readonly autoSyncOnStart: boolean;
+  readonly autoSyncOnSave: boolean;
+  readonly autoSyncIntervalMin: number; // 0=비활성
+  readonly conflictPolicy: 'latest' | 'ask';
+  readonly lastSyncedAt: string | null;
+  readonly deviceId: string;
+}
+
 export interface Settings {
   readonly schoolName: string;
   readonly className: string;
@@ -158,6 +168,12 @@ export interface Settings {
   readonly neisSchedule?: NeisScheduleSettings;
   readonly dashboardTheme?: DashboardThemeSettings;
   readonly subjectColors?: SubjectColorMap;
+  /** 시간표 셀 색상 기준: 'subject'(과목별) | 'classroom'(학반별) */
+  readonly timetableColorBy?: 'subject' | 'classroom';
+  /** 학반별 색상 매핑 (classroom → SubjectColorId) */
+  readonly classroomColors?: SubjectColorMap;
   /** 좌석배치 기본 시점: 'student' | 'teacher' */
   readonly seatingDefaultView?: 'student' | 'teacher';
+  /** Google Drive 동기화 설정 */
+  readonly sync?: SyncSettings;
 }
