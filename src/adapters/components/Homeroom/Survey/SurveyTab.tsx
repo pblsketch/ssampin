@@ -167,7 +167,9 @@ function SurveyCard({ survey, totalStudents, onSelect, onShare }: SurveyCardProp
     ? getTeacherCheckProgress(survey, localData, totalStudents)
     : getStudentResponseProgress([], totalStudents);
 
-  const modeLabel = survey.mode === 'teacher' ? '✏️ 교사 체크' : '📱 학생 응답';
+  const modeIcon = survey.mode === 'teacher' ? '✏️' : '📱';
+  const modeLabelText = survey.mode === 'teacher' ? '교사 체크' : '학생 응답';
+  const modeLabel = `${modeIcon} ${modeLabelText}`;
   const questionTypes = survey.questions
     .map((q) => {
       if (q.type === 'yesno') return '○/×';
@@ -255,8 +257,14 @@ export function SurveyTab() {
     if (!studentsLoaded) void loadStudents();
   }, [loaded, load, studentsLoaded, loadStudents]);
 
-  const activeSurveys = useMemo(() => getActiveSurveys(surveys), [surveys]);
-  const archivedSurveys = useMemo(() => getArchivedSurveys(surveys), [surveys]);
+  const activeSurveys = useMemo(
+    () => getActiveSurveys(surveys).filter((s) => !s.classId),
+    [surveys],
+  );
+  const archivedSurveys = useMemo(
+    () => getArchivedSurveys(surveys).filter((s) => !s.classId),
+    [surveys],
+  );
 
   const totalStudents = useMemo(
     () => students.filter((s) => !s.isVacant).length,

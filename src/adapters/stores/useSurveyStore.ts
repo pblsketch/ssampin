@@ -25,6 +25,11 @@ interface SurveyState {
     questionId: string,
     value: string | boolean,
   ) => Promise<void>;
+  setStudentMemo: (
+    surveyId: string,
+    studentId: string,
+    memo: string,
+  ) => Promise<void>;
   getLocalData: (surveyId: string) => SurveyLocalData | undefined;
 }
 
@@ -142,6 +147,30 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
             : d,
         )
       : [...localData, { surveyId, entries: updatedEntries }];
+
+    const next: SurveysData = { surveys, localData: updatedLocalData };
+    await surveyRepository.save(next);
+    set({ localData: updatedLocalData });
+  },
+
+  setStudentMemo: async (surveyId, studentId, memo) => {
+    const { surveys, localData } = get();
+    const existing = localData.find((d) => d.surveyId === surveyId);
+
+    const updatedMemos = {
+      ...(existing?.studentMemos ?? {}),
+      [studentId]: memo,
+    };
+    // 빈 메모는 제거
+    if (!memo) delete updatedMemos[studentId];
+
+    const updatedLocalData: readonly SurveyLocalData[] = existing
+      ? localData.map((d) =>
+          d.surveyId === surveyId
+            ? { ...d, studentMemos: updatedMemos }
+            : d,
+        )
+      : [...localData, { surveyId, entries: [], studentMemos: updatedMemos }];
 
     const next: SurveysData = { surveys, localData: updatedLocalData };
     await surveyRepository.save(next);

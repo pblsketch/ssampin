@@ -3,8 +3,8 @@ import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { surveySupabaseClient, shortLinkClient } from '@adapters/di/container';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
-import type { SurveyMode, QuestionType, SurveyPresetType } from '@domain/entities/Survey';
-import { createWorksheetPresetQuestions, createAssessmentPresetQuestions, generateStudentPins } from '@domain/rules/surveyRules';
+import type { SurveyMode, QuestionType } from '@domain/entities/Survey';
+import { generateStudentPins } from '@domain/rules/surveyRules';
 import { hashPin } from '@infrastructure/crypto/pinHash';
 
 /* ──────────────── 타입 ──────────────── */
@@ -19,6 +19,7 @@ interface QuestionDraft {
 
 interface SurveyCreateModalProps {
   onClose: () => void;
+  classId?: string;
 }
 
 /* ──────────────── 상수 ──────────────── */
@@ -44,15 +45,9 @@ function newQuestion(): QuestionDraft {
   return { id: crypto.randomUUID(), type: 'yesno', label: '', options: [], required: true };
 }
 
-const PRESETS: { type: SurveyPresetType; icon: string; label: string; desc: string }[] = [
-  { type: 'custom', icon: '📋', label: '직접 만들기', desc: '질문을 자유롭게 구성' },
-  { type: 'worksheet', icon: '📄', label: '학습지 배부/회수', desc: '배부 + 회수 여부 체크' },
-  { type: 'assessment', icon: '📊', label: '수행평가 체크', desc: '평가 기준별 달성 여부' },
-];
-
 /* ──────────────── 컴포넌트 ──────────────── */
 
-export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
+export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) {
   const { createSurvey } = useSurveyStore();
   const showToast = useToastStore((s) => s.show);
 
@@ -64,9 +59,6 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
   const [color, setColor] = useState('blue');
   const [saving, setSaving] = useState(false);
   const [customLinkCode, setCustomLinkCode] = useState('');
-  const [presetType, setPresetType] = useState<SurveyPresetType>('custom');
-  const [worksheetName, setWorksheetName] = useState('');
-  const [criteria, setCriteria] = useState<string[]>(['']);
   const [linkCodeError, setLinkCodeError] = useState<string | null>(null);
   const [isCheckingCode, setIsCheckingCode] = useState(false);
   const [pinProtection, setPinProtection] = useState(false);
@@ -96,15 +88,6 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
     }, 300);
     return () => clearTimeout(timer);
   }, [customLinkCode]);
-
-  /* ── 프리셋 ── */
-
-  const handlePresetChange = useCallback((type: SurveyPresetType) => {
-    setPresetType(type);
-    if (type !== 'custom') {
-      setMode('teacher');
-    }
-  }, []);
 
   /* ── 질문 조작 ── */
 
@@ -157,18 +140,11 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
   const canSubmit = useMemo(() => {
     if (saving) return false;
     if (title.trim().length === 0) return false;
-    if (presetType === 'worksheet') {
-      return worksheetName.trim().length > 0;
-    }
-    if (presetType === 'assessment') {
-      return criteria.some((c) => c.trim().length > 0);
-    }
-    // custom
     return (
       questions.every((q) => q.label.trim().length > 0) &&
       questions.every((q) => q.type !== 'choice' || q.options.length >= 2)
     );
-  }, [saving, title, presetType, worksheetName, criteria, questions]);
+  }, [saving, title, questions]);
 
   /* ── 생성 ── */
 
@@ -176,21 +152,13 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
     if (!canSubmit) return;
     setSaving(true);
     try {
-      let mappedQuestions;
-      if (presetType === 'worksheet') {
-        mappedQuestions = createWorksheetPresetQuestions(worksheetName.trim());
-      } else if (presetType === 'assessment') {
-        const validCriteria = criteria.filter((c) => c.trim().length > 0).map((c) => c.trim());
-        mappedQuestions = createAssessmentPresetQuestions(validCriteria);
-      } else {
-        mappedQuestions = questions.map((q) => ({
-          id: q.id,
-          type: q.type,
-          label: q.label.trim(),
-          options: q.type === 'choice' ? q.options.filter((o) => o.trim()) : undefined,
-          required: q.required,
-        }));
-      }
+      const mappedQuestions = questions.map((q) => ({
+        id: q.id,
+        type: q.type,
+        label: q.label.trim(),
+        options: q.type === 'choice' ? q.options.filter((o) => o.trim()) : undefined,
+        required: q.required,
+      }));
 
       // PIN 생성 (사칭 방지 모드 + 학생 응답 모드일 때)
       let studentPins: Record<number, string> | undefined;
@@ -202,12 +170,12 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
       const survey = await createSurvey({
         title: title.trim(),
         description: description.trim() || undefined,
-        mode,
+        mode: classId ? 'teacher' : mode,
         questions: mappedQuestions,
         dueDate: dueDate || undefined,
         categoryColor: color,
-        presetType,
         isArchived: false,
+        classId,
         customLinkCode: mode === 'student' && customLinkCode.trim() ? customLinkCode.trim() : undefined,
         pinProtection: mode === 'student' ? pinProtection : undefined,
         studentPins: studentPins,
@@ -251,7 +219,7 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
     } finally {
       setSaving(false);
     }
-  }, [canSubmit, title, description, mode, questions, dueDate, color, presetType, worksheetName, criteria, customLinkCode, pinProtection, createSurvey, showToast, onClose]);
+  }, [canSubmit, title, description, mode, questions, dueDate, color, classId, customLinkCode, pinProtection, createSurvey, showToast, onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -269,28 +237,6 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
 
         {/* 본문 (스크롤) */}
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
-          {/* 프리셋 선택 */}
-          <div>
-            <label className="text-xs font-medium text-sp-muted mb-1.5 block">유형</label>
-            <div className="grid grid-cols-3 gap-2">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.type}
-                  onClick={() => handlePresetChange(p.type)}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-center transition-all ${
-                    presetType === p.type
-                      ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                      : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
-                  }`}
-                >
-                  <span className="text-lg">{p.icon}</span>
-                  <span className="text-xs font-medium">{p.label}</span>
-                  <span className="text-[10px] opacity-70">{p.desc}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* 제목 */}
           <div>
             <label className="text-xs font-medium text-sp-muted mb-1.5 block">제목 *</label>
@@ -317,68 +263,8 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
             />
           </div>
 
-          {/* 학습지 프리셋 — 학습지 이름 */}
-          {presetType === 'worksheet' && (
-            <div>
-              <label className="text-xs font-medium text-sp-muted mb-1.5 block">학습지 이름 *</label>
-              <input
-                type="text"
-                value={worksheetName}
-                onChange={(e) => setWorksheetName(e.target.value)}
-                placeholder="예: 수학 학습지 3-4"
-                className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
-                maxLength={60}
-              />
-              <p className="text-[10px] text-sp-muted/50 mt-1">
-                &quot;{worksheetName || '학습지'} 배부&quot;와 &quot;{worksheetName || '학습지'} 회수&quot; 질문이 자동 생성됩니다
-              </p>
-            </div>
-          )}
-
-          {/* 수행평가 프리셋 — 평가 기준 */}
-          {presetType === 'assessment' && (
-            <div>
-              <label className="text-xs font-medium text-sp-muted mb-1.5 block">평가 기준 *</label>
-              <div className="flex flex-col gap-2">
-                {criteria.map((c, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-xs text-sp-muted w-5 text-right">{i + 1}.</span>
-                    <input
-                      type="text"
-                      value={c}
-                      onChange={(e) => {
-                        const next = [...criteria];
-                        next[i] = e.target.value;
-                        setCriteria(next);
-                      }}
-                      placeholder="평가 기준 입력"
-                      className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
-                      maxLength={60}
-                    />
-                    {criteria.length > 1 && (
-                      <button
-                        onClick={() => setCriteria(criteria.filter((_, idx) => idx !== i))}
-                        className="text-sp-muted hover:text-red-400 transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-base">close</span>
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  onClick={() => setCriteria([...criteria, ''])}
-                  className="flex items-center justify-center gap-1 py-2 rounded-lg border border-dashed border-sp-border text-xs text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
-                >
-                  <span className="material-symbols-outlined text-sm">add</span>
-                  기준 추가
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 응답 방식 + 질문 목록 (custom 프리셋만) */}
-          {presetType === 'custom' && (
-            <>
+          {/* 응답 방식 (수업 관리에서는 교사 체크만 지원) */}
+          {!classId && (
             <div>
               <label className="text-xs font-medium text-sp-muted mb-1.5 block">응답 방식</label>
               <div className="grid grid-cols-2 gap-2">
@@ -406,6 +292,7 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
                 </button>
               </div>
             </div>
+          )}
 
             {/* 질문 목록 */}
             <div>
@@ -510,8 +397,6 @@ export function SurveyCreateModal({ onClose }: SurveyCreateModalProps) {
               </button>
             </div>
           </div>
-            </>
-          )}
 
           {/* 마감일 */}
           <div>

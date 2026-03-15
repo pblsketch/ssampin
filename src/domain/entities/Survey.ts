@@ -23,6 +23,7 @@ export interface Survey {
   readonly shortUrl?: string;
   readonly dueDate?: string;
   readonly categoryColor: string;
+  readonly classId?: string;
   readonly isArchived: boolean;
   readonly targetCount?: number;
   readonly adminKey?: string;
@@ -49,6 +50,7 @@ export interface SurveyLocalEntry {
 export interface SurveyLocalData {
   readonly surveyId: string;
   readonly entries: readonly SurveyLocalEntry[];
+  readonly studentMemos?: Readonly<Record<string, string>>;
 }
 
 export type SurveysData = {

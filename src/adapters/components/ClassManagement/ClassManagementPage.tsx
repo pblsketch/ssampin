@@ -4,8 +4,9 @@ import { ClassList } from './ClassList';
 import { ClassRosterTab } from './ClassRosterTab';
 import { ClassSeatingTab } from './ClassSeatingTab';
 import { ProgressTab } from './ProgressTab';
+import { ClassSurveyTab } from './ClassSurveyTab';
 
-type TabId = 'roster' | 'seating' | 'progress';
+type TabId = 'roster' | 'seating' | 'progress' | 'survey';
 
 interface TabConfig {
   id: TabId;
@@ -17,6 +18,7 @@ const TABS: readonly TabConfig[] = [
   { id: 'roster', label: '명렬표', icon: 'people' },
   { id: 'seating', label: '좌석배치', icon: 'grid_view' },
   { id: 'progress', label: '진도 관리', icon: 'trending_up' },
+  { id: 'survey', label: '설문/체크', icon: 'checklist' },
 ] as const;
 
 export function ClassManagementPage() {
@@ -81,6 +83,7 @@ export function ClassManagementPage() {
                 {activeTab === 'roster' && <ClassRosterTab classId={selectedClassId} />}
                 {activeTab === 'seating' && <ClassSeatingTab classId={selectedClassId} />}
                 {activeTab === 'progress' && <ProgressTab classId={selectedClassId} />}
+                {activeTab === 'survey' && <ClassSurveyTab classId={selectedClassId} />}
               </div>
             </>
           ) : (

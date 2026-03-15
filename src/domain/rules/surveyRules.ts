@@ -82,6 +82,7 @@ export function formatSurveyForClipboard(
   survey: Survey,
   entries: readonly SurveyLocalEntry[],
   students: readonly Student[],
+  studentMemos?: Readonly<Record<string, string>>,
 ): string {
   const studentMap = new Map(students.map((s) => [s.id, s]));
   const lines: string[] = [`[${survey.title}]`];
@@ -127,6 +128,20 @@ export function formatSurveyForClipboard(
     lines.push('');
   }
 
+  if (studentMemos) {
+    const memoLines = students
+      .filter((s) => !s.isVacant && studentMemos[s.id])
+      .map((s, _i) => {
+        const idx = students.filter((st) => !st.isVacant).indexOf(s);
+        return `${idx + 1}${s.name}: ${studentMemos[s.id]}`;
+      });
+    if (memoLines.length > 0) {
+      lines.push('[메모]');
+      lines.push(...memoLines);
+      lines.push('');
+    }
+  }
+
   return lines.join('\n');
 }
 
@@ -135,6 +150,7 @@ export function formatSurveyForCSV(
   survey: Survey,
   entries: readonly SurveyLocalEntry[],
   students: readonly Student[],
+  studentMemos?: Readonly<Record<string, string>>,
 ): { columns: { key: string; label: string }[]; rows: Record<string, string>[] } {
   const columns = [
     { key: 'number', label: '번호' },
@@ -143,6 +159,7 @@ export function formatSurveyForCSV(
       key: `q${i}`,
       label: `Q${i + 1}.${q.label}`,
     })),
+    { key: 'memo', label: '메모' },
   ];
 
   const rows = students
@@ -158,6 +175,7 @@ export function formatSurveyForCSV(
         );
         row[`q${i}`] = entry ? String(entry.value) : '-';
       });
+      row['memo'] = studentMemos?.[s.id] ?? '';
       return row;
     });
 

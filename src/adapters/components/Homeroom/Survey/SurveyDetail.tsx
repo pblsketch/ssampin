@@ -12,11 +12,16 @@ import {
   getTeacherCheckProgress,
 } from '@domain/rules/surveyRules';
 
+/* ──────────────── 타입 ──────────────── */
+
+type StudentLike = { readonly id: string; readonly name: string; readonly isVacant?: boolean };
+
 /* ──────────────── Props ──────────────── */
 
 interface SurveyDetailProps {
   survey: Survey;
   onBack: () => void;
+  students?: readonly StudentLike[];
 }
 
 /* ──────────────── 색상 팔레트 (옵션 인덱스별) ──────────────── */
@@ -34,14 +39,16 @@ const OPTION_COLORS = [
 
 /* ──────────────── 컴포넌트 ──────────────── */
 
-export function SurveyDetail({ survey, onBack }: SurveyDetailProps) {
-  const { students } = useStudentStore();
-  const { setLocalEntry, archiveSurvey, deleteSurvey } = useSurveyStore();
+export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyDetailProps) {
+  const storeStudents = useStudentStore((s) => s.students);
+  const students = (studentsProp ?? storeStudents) as readonly StudentLike[];
+  const { setLocalEntry, archiveSurvey, deleteSurvey, setStudentMemo } = useSurveyStore();
   const showToast = useToastStore((s) => s.show);
 
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [showExport, setShowExport] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showMemos, setShowMemos] = useState(false);
 
   const localData = useSurveyStore((s) => s.getLocalData(survey.id));
   const totalStudents = useMemo(
@@ -90,7 +97,12 @@ export function SurveyDetail({ survey, onBack }: SurveyDetailProps) {
   /* ── 내보내기 데이터 ── */
 
   const exportData = useMemo(() => {
-    return formatSurveyForCSV(survey, localData?.entries ?? [], students);
+    return formatSurveyForCSV(
+      survey,
+      localData?.entries ?? [],
+      students as readonly import('@domain/entities/Student').Student[],
+      localData?.studentMemos,
+    );
   }, [survey, localData, students]);
 
   /* ── 메뉴 핸들러 ── */
@@ -215,6 +227,39 @@ export function SurveyDetail({ survey, onBack }: SurveyDetailProps) {
         ) : null}
       </div>
 
+      {/* 메모 섹션 */}
+      <div className="mt-3">
+        <button
+          onClick={() => setShowMemos((v) => !v)}
+          className="flex items-center gap-1.5 text-xs text-sp-muted hover:text-sp-text transition-colors w-full"
+        >
+          <span className="material-symbols-outlined text-sm">
+            {showMemos ? 'expand_less' : 'expand_more'}
+          </span>
+          메모
+        </button>
+        {showMemos && (
+          <div className="mt-2 bg-sp-surface rounded-lg border border-sp-border p-2 flex flex-col gap-1.5">
+            {students.filter((s) => !s.isVacant).map((s, idx) => (
+              <div key={s.id} className="flex items-center gap-2">
+                <span className="text-xs text-sp-muted w-14 shrink-0">
+                  {idx + 1} {s.name}
+                </span>
+                <input
+                  type="text"
+                  defaultValue={localData?.studentMemos?.[s.id] ?? ''}
+                  onBlur={(e) => {
+                    void setStudentMemo(survey.id, s.id, e.target.value);
+                  }}
+                  placeholder="메모 입력"
+                  className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* 하단 통계 */}
       {stats && activeQuestion && (
         <div className="mt-3 pt-3 border-t border-sp-border flex flex-wrap gap-3 text-xs text-sp-muted">
@@ -253,7 +298,7 @@ export function SurveyDetail({ survey, onBack }: SurveyDetailProps) {
 
 interface QuestionGridProps {
   question: SurveyQuestion;
-  students: readonly import('@domain/entities/Student').Student[];
+  students: readonly StudentLike[];
   valuesMap: ReadonlyMap<string, string>;
   onCycle: (studentId: string, next: string) => void;
 }
@@ -298,7 +343,7 @@ function QuestionGrid({ question, students, valuesMap, onCycle }: QuestionGridPr
 
   return (
     <StudentGrid
-      students={students}
+      students={students as readonly import('@domain/entities/Student').Student[]}
       gridMode={cycleConfig}
       columns={5}
       hideVacant
@@ -311,7 +356,7 @@ function QuestionGrid({ question, students, valuesMap, onCycle }: QuestionGridPr
 interface TextQuestionListProps {
   survey: Survey;
   question: SurveyQuestion;
-  students: readonly import('@domain/entities/Student').Student[];
+  students: readonly StudentLike[];
   localData: import('@domain/entities/Survey').SurveyLocalData | undefined;
 }
 
