@@ -170,7 +170,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
       const survey = await createSurvey({
         title: title.trim(),
         description: description.trim() || undefined,
-        mode: classId ? 'teacher' : mode,
+        mode,
         questions: mappedQuestions,
         dueDate: dueDate || undefined,
         categoryColor: color,
@@ -244,7 +244,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="예: 우유 급식 신청 (3월)"
+              placeholder={classId ? "예: 수행평가 체크 (1차)" : "예: 우유 급식 신청 (3월)"}
               className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
               maxLength={60}
             />
@@ -263,8 +263,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
             />
           </div>
 
-          {/* 응답 방식 (수업 관리에서는 교사 체크만 지원) */}
-          {!classId && (
+          {/* 응답 방식 */}
             <div>
               <label className="text-xs font-medium text-sp-muted mb-1.5 block">응답 방식</label>
               <div className="grid grid-cols-2 gap-2">
@@ -292,7 +291,6 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
                 </button>
               </div>
             </div>
-          )}
 
             {/* 질문 목록 */}
             <div>
