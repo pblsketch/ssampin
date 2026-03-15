@@ -12,6 +12,7 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 interface AssignmentCreateModalProps {
   onClose: () => void;
   onCreated: (assignmentId: string) => void;
+  defaultTarget?: StudentListOption;
 }
 
 const SUBMIT_TYPE_OPTIONS: { value: SubmitType; label: string; icon: string }[] = [
@@ -26,7 +27,7 @@ const FILE_TYPE_OPTIONS: { value: FileTypeRestriction; label: string; descriptio
   { value: 'document', label: '문서만', description: 'pdf, hwp, hwpx, docx, pptx, xlsx, txt' },
 ];
 
-export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateModalProps) {
+export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: AssignmentCreateModalProps) {
   const { createAssignment, isLoading } = useAssignmentStore();
   const studentLists = useStudentLists();
   const { track } = useAnalytics();
@@ -37,7 +38,7 @@ export function AssignmentCreateModal({ onClose, onCreated }: AssignmentCreateMo
   const [deadlineDate, setDeadlineDate] = useState('');
   const [deadlineTime, setDeadlineTime] = useState('23:59');
   const [selectedTarget, setSelectedTarget] = useState<StudentListOption | null>(
-    studentLists[0] ?? null,
+    defaultTarget ?? studentLists[0] ?? null,
   );
   const [folderName, setFolderName] = useState('');
   const [submitType, setSubmitType] = useState<SubmitType>('file');

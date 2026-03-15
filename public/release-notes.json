@@ -1,6 +1,48 @@
 {
   "versions": [
     {
+      "version": "0.4.2",
+      "date": "2026-03-16",
+      "highlights": "설문 PIN 인증, 시간표 색상 모드, Google Drive 동기화, 과제 수합 통합",
+      "changes": [
+        {
+          "type": "new",
+          "title": "설문 사칭 방지 PIN 코드 인증",
+          "description": "학생이 설문 응답 시 PIN 코드로 본인 인증을 거쳐 사칭을 방지합니다"
+        },
+        {
+          "type": "new",
+          "title": "시간표 색상 모드 추가",
+          "description": "과목별 색상과 학반별 색상 모드를 선택할 수 있습니다"
+        },
+        {
+          "type": "new",
+          "title": "Google Drive 동기화",
+          "description": "데이터를 Google Drive에 백업하고 복원할 수 있습니다"
+        },
+        {
+          "type": "new",
+          "title": "수업 관리 학생 응답 모드",
+          "description": "수업 관리에서 학생이 직접 응답할 수 있는 모드가 추가되었습니다"
+        },
+        {
+          "type": "new",
+          "title": "과제 수합 탭 통합",
+          "description": "담임 업무와 수업 관리 페이지에서 과제 수합을 바로 사용할 수 있습니다"
+        },
+        {
+          "type": "improve",
+          "title": "학생 메모 기능 확장",
+          "description": "설문/체크리스트에서 학생별 메모를 작성하고 관리할 수 있습니다"
+        },
+        {
+          "type": "improve",
+          "title": "설문 제목 placeholder 개선",
+          "description": "설문 생성 시 제목 입력란에 안내 텍스트가 표시됩니다"
+        }
+      ]
+    },
+    {
       "version": "0.4.1",
       "date": "2026-03-15",
       "highlights": "좌석배치 기능 강화 — 3인짝 모드, 짝꿍 셔플, Excel 좌우 반전 지원",

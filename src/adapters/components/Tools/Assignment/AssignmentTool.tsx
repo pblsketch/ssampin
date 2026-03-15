@@ -270,7 +270,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
 }
 
 /** Single assignment card */
-function AssignmentCard({
+export function AssignmentCard({
   assignment,
   onClick,
   onDelete,

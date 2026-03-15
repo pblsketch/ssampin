@@ -3,6 +3,7 @@ import type { CounselingMethod } from '@domain/entities/StudentRecord';
 import { HomeroomTabBar, type HomeroomTab } from './HomeroomTabBar';
 import { RecordsTab } from './Records/RecordsTab';
 import { SurveyTab } from './Survey/SurveyTab';
+import { AssignmentTab } from './Assignment/AssignmentTab';
 import { ConsultationTab } from './Consultation/ConsultationTab';
 import { Seating } from '@adapters/components/Seating/Seating';
 import { RosterManagementTab } from './RosterManagementTab';
@@ -39,6 +40,7 @@ export function HomeroomPage() {
       {activeTab === 'roster' && <RosterManagementTab />}
       {activeTab === 'records' && <RecordsTab prefill={prefillRecord} onPrefillConsumed={() => setPrefillRecord(null)} />}
       {activeTab === 'survey' && <SurveyTab />}
+      {activeTab === 'assignment' && <AssignmentTab />}
       {activeTab === 'consultation' && <ConsultationTab onWriteRecord={handleWriteRecord} />}
       {activeTab === 'seating' && <Seating embedded />}
     </div>
