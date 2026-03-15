@@ -27,6 +27,8 @@ import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
 import type { IAssignmentServicePort } from '@domain/ports/IAssignmentServicePort';
 import type { IConsultationRepository } from '@domain/repositories/IConsultationRepository';
 import type { ISurveyRepository } from '@domain/repositories/ISurveyRepository';
+import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
+import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -56,6 +58,8 @@ import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentRepository';
 import { JsonConsultationRepository } from '@adapters/repositories/JsonConsultationRepository';
 import { JsonSurveyRepository } from '@adapters/repositories/JsonSurveyRepository';
+import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
+import { DriveSyncAdapter } from '@infrastructure/google/DriveSyncAdapter';
 import { ConsultationSupabaseClient } from '@infrastructure/supabase/ConsultationSupabaseClient';
 import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
 
@@ -72,7 +76,7 @@ import { CopyMissingList } from '@usecases/assignment/CopyMissingList';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI != null;
 
-const storage: IStoragePort = isElectron
+export const storage: IStoragePort = isElectron
   ? new ElectronStorageAdapter()
   : new LocalStorageAdapter();
 
@@ -200,6 +204,27 @@ export const surveySupabaseClient = new SurveySupabaseClient();
 
 export function resetGoogleDriveClient(): void {
   _driveClient = null;
+}
+
+// === Google Drive 동기화 ===
+
+export const driveSyncRepository: IDriveSyncRepository =
+  new JsonDriveSyncRepository(storage);
+
+// DriveSyncAdapter는 토큰 getter가 필요 → lazy 초기화
+let _driveSyncAdapter: DriveSyncAdapter | null = null;
+
+export function getDriveSyncAdapter(
+  getAccessToken: () => Promise<string>,
+): IDriveSyncPort {
+  if (!_driveSyncAdapter) {
+    _driveSyncAdapter = new DriveSyncAdapter(getAccessToken);
+  }
+  return _driveSyncAdapter;
+}
+
+export function resetDriveSyncAdapter(): void {
+  _driveSyncAdapter = null;
 }
 
 // UseCase 팩토리 (Drive 클라이언트가 lazy이므로 팩토리 패턴)

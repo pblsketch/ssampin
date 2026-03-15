@@ -14,6 +14,7 @@ import { WeatherTab } from './tabs/WeatherTab';
 import { DisplayTab } from './tabs/DisplayTab';
 import { SystemTab } from './tabs/SystemTab';
 import { AboutTab } from './tabs/AboutTab';
+import { SyncTab } from './tabs/SyncTab';
 
 interface Props {
   activeTab: SettingsTabId;
@@ -135,6 +136,7 @@ function TabContent({ activeTab, draft, patch, setDraft }: {
     case 'weather':   return <WeatherTab draft={draft} patch={patch} />;
     case 'display':   return <DisplayTab draft={draft} patch={patch} />;
     case 'sidebar':   return <SidebarTab draft={draft} patch={patch} />;
+    case 'sync':      return <SyncTab />;
     case 'system':    return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
     case 'about':     return <AboutTab />;
     default:          return null;

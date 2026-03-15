@@ -39,9 +39,17 @@ import { HelpChatPanel } from '@adapters/components/HelpChat';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
+import { useSeatingStore } from '@adapters/stores/useSeatingStore';
+import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useNeisAutoSync } from '@adapters/hooks/useNeisAutoSync';
+import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
+import { DriveSyncConflictModal } from '@adapters/components/common/DriveSyncConflictModal';
+import { reloadStores } from '@adapters/hooks/useDriveSync';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
@@ -254,6 +262,95 @@ export function App() {
   // 구글 캘린더 자동 동기화
   useAutoSync();
 
+  // Google Drive 자동 동기화 (앱 시작 시)
+  useEffect(() => {
+    const initDriveSync = async () => {
+      const syncSettings = useSettingsStore.getState().settings.sync;
+      if (!syncSettings?.enabled || !syncSettings.autoSyncOnStart) return;
+
+      // Google 인증 상태 확인
+      const calState = useCalendarSyncStore.getState();
+      if (!calState.isConnected) return;
+
+      // 첫 동기화 시 확인 다이얼로그
+      if (!syncSettings.lastSyncedAt) {
+        const ok = window.confirm(
+          '클라우드 동기화를 시작합니다.\n' +
+          '클라우드에 기존 데이터가 있으면 다운로드되고,\n' +
+          '로컬 데이터는 클라우드에 업로드됩니다.\n\n' +
+          '지금 동기화를 시작하시겠습니까?',
+        );
+        if (!ok) return;
+      }
+
+      const { syncFromCloud, syncToCloud } = useDriveSyncStore.getState();
+      const result = await syncFromCloud();
+
+      // 다운로드된 파일이 있으면 스토어 리로드
+      if (result.downloaded.length > 0) {
+        await reloadStores(result.downloaded);
+      }
+
+      // 다운로드 후 로컬 변경사항도 업로드
+      await syncToCloud();
+    };
+    // 2초 딜레이 (캘린더 초기화 완료 대기)
+    const timer = setTimeout(() => { void initDriveSync(); }, 2000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Google Drive 주기적 동기화
+  useEffect(() => {
+    const syncSettings = useSettingsStore.getState().settings.sync;
+    if (!syncSettings?.enabled || !syncSettings.autoSyncIntervalMin) return;
+
+    const intervalMs = syncSettings.autoSyncIntervalMin * 60 * 1000;
+    const timer = setInterval(async () => {
+      const calState = useCalendarSyncStore.getState();
+      if (!calState.isConnected) return;
+
+      const { syncFromCloud, syncToCloud } = useDriveSyncStore.getState();
+      const result = await syncFromCloud();
+      if (result.downloaded.length > 0) {
+        await reloadStores(result.downloaded);
+      }
+      await syncToCloud();
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.sync?.autoSyncIntervalMin, settings.sync?.enabled]);
+
+  // autoSyncOnSave: 스토어 변경 시 자동 업로드
+  useEffect(() => {
+    const syncSettings = useSettingsStore.getState().settings.sync;
+    if (!syncSettings?.enabled || !syncSettings.autoSyncOnSave) return;
+
+    const calState = useCalendarSyncStore.getState();
+    if (!calState.isConnected) return;
+
+    const { triggerSaveSync } = useDriveSyncStore.getState();
+
+    // 주요 스토어들의 변경을 구독
+    const unsubscribers = [
+      useScheduleStore.subscribe(() => triggerSaveSync()),
+      useSeatingStore.subscribe(() => triggerSaveSync()),
+      useEventsStore.subscribe(() => triggerSaveSync()),
+      useMemoStore.subscribe(() => triggerSaveSync()),
+      useTodoStore.subscribe(() => triggerSaveSync()),
+      useStudentRecordsStore.subscribe(() => triggerSaveSync()),
+    ];
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.sync?.enabled, settings.sync?.autoSyncOnSave]);
+
+  // Google Drive 충돌 상태 구독
+  const driveConflicts = useDriveSyncStore((s) => s.conflicts);
+
   // NEIS 시간표 자동 동기화 (앱 시작 시)
   useNeisAutoSync();
 
@@ -336,6 +433,19 @@ export function App() {
       <EventPopup />
       <ToastContainer />
       <Onboarding />
+      {driveConflicts.length > 0 && (
+        <DriveSyncConflictModal
+          conflicts={driveConflicts}
+          onResolve={async (conflict, resolution) => {
+            await useDriveSyncStore.getState().resolveConflict(conflict, resolution);
+            // 'remote' 해결 시 스토어 리로드
+            if (resolution === 'remote') {
+              await reloadStores([conflict.filename]);
+            }
+          }}
+          onClose={() => useDriveSyncStore.getState().resetStatus()}
+        />
+      )}
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
       <HelpChatPanel />
     </div>

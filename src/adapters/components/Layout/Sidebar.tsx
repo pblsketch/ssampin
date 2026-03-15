@@ -37,6 +37,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { SyncStatusBar } from '@adapters/components/Calendar/SyncStatusBar';
+import { DriveSyncIndicator } from '@adapters/components/common/DriveSyncIndicator';
 
 interface SidebarProps {
   currentPage: PageId;
@@ -228,6 +229,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
       {/* 하단: 설정 + 프로필 + 버전 */}
       <div className="p-4 border-t border-sp-border">
         <SyncStatusBar />
+        <DriveSyncIndicator />
         <button
           onClick={() => {
             track('feature_discovery', { feature: 'settings', source: 'menu' });

@@ -43,3 +43,12 @@ export type {
   Submission,
   AssignmentsData,
 } from './Assignment';
+
+export type {
+  DriveSyncFileInfo,
+  DriveSyncManifest,
+  DriveSyncStatus,
+  DriveSyncConflict,
+} from './DriveSyncState';
+
+export type { SyncSettings } from './Settings';
