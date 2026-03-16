@@ -165,6 +165,36 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   );
 }
 
+function WidgetUpdateBanner() {
+  const [status, setStatus] = useState<'idle' | 'downloaded'>('idle');
+  const [version, setVersion] = useState('');
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) return;
+
+    const cleanups: (() => void)[] = [];
+    cleanups.push(api.onUpdateDownloaded(() => {
+      setStatus('downloaded');
+    }));
+    cleanups.push(api.onUpdateAvailable((info) => {
+      setVersion(info.version);
+    }));
+    return () => { cleanups.forEach((fn) => fn()); };
+  }, []);
+
+  if (status !== 'downloaded') return null;
+
+  return (
+    <div
+      className="fixed bottom-0 left-0 right-0 bg-green-600 text-white text-xs text-center py-2 cursor-pointer z-50 hover:bg-green-500 transition-colors"
+      onClick={() => window.electronAPI?.installUpdate()}
+    >
+      🎉 v{version} 업데이트 준비 완료 — 클릭하여 재시작
+    </div>
+  );
+}
+
 export function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -417,6 +447,7 @@ export function App() {
     return (
       <div className="h-screen w-screen bg-transparent">
         <Widget />
+        <WidgetUpdateBanner />
       </div>
     );
   }

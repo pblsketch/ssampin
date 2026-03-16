@@ -1,6 +1,8 @@
 import { Metadata } from 'next';
 import EventLog from './EventLog';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: '쌤핀 Analytics',
   robots: 'noindex, nofollow',
@@ -50,7 +52,7 @@ async function fetchView<T>(viewName: string): Promise<T[]> {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
-      next: { revalidate: 300 }, // 5분 캐시
+      cache: 'no-store',
     }
   );
 
@@ -79,7 +81,7 @@ async function fetchRecentEvents(): Promise<Array<{
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
-      next: { revalidate: 60 }, // 1분 캐시
+      cache: 'no-store',
     }
   );
 
@@ -123,7 +125,7 @@ async function fetchChatConversations(): Promise<Array<{
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
-      next: { revalidate: 300 },
+      cache: 'no-store',
     }
   );
   if (!res.ok) return [];

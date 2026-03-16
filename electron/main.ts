@@ -169,6 +169,17 @@ function createTray(): void {
           }
         },
       },
+      {
+        label: '위젯 위치 초기화',
+        click: () => {
+          if (widgetWindow && !widgetWindow.isDestroyed()) {
+            const defaultPos = getDefaultWidgetBounds(widgetWindow.getBounds().width);
+            const bounds = { x: defaultPos.x, y: defaultPos.y, width: 920, height: 700 };
+            widgetWindow.setBounds(bounds);
+            saveWidgetBounds(bounds);
+          }
+        },
+      },
       { type: 'separator' },
       {
         label: '완전히 종료',
@@ -255,19 +266,45 @@ function stopWinDRecovery(): void {
 function ensureWidgetOnScreen(): void {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
   const bounds = widgetWindow.getBounds();
-  const display = screen.getDisplayMatching(bounds);
+
+  // 위젯이 속한 디스플레이 찾기 (화면 밖이면 primary로 폴백)
+  let display: Electron.Display;
+  try {
+    display = screen.getDisplayMatching(bounds);
+  } catch {
+    display = screen.getPrimaryDisplay();
+  }
   const workArea = display.workArea;
 
-  let x = bounds.x;
-  let y = bounds.y;
+  let { x, y, width, height } = bounds;
 
-  if (x + bounds.width < workArea.x + 50) x = workArea.x;
-  if (y + bounds.height < workArea.y + 50) y = workArea.y;
-  if (x > workArea.x + workArea.width - 50) x = workArea.x + workArea.width - bounds.width;
-  if (y > workArea.y + workArea.height - 50) y = workArea.y + workArea.height - bounds.height;
+  // 크기가 화면보다 크면 축소
+  if (width > workArea.width) width = workArea.width;
+  if (height > workArea.height) height = workArea.height;
 
-  if (x !== bounds.x || y !== bounds.y) {
-    widgetWindow.setBounds({ ...bounds, x, y });
+  // 완전히 화면 밖이면 기본 위치로 리셋
+  const isCompletelyOutside =
+    x + width < workArea.x ||
+    y + height < workArea.y ||
+    x > workArea.x + workArea.width ||
+    y > workArea.y + workArea.height;
+
+  if (isCompletelyOutside) {
+    const defaultPos = getDefaultWidgetBounds(width);
+    x = defaultPos.x;
+    y = defaultPos.y;
+    console.log('[widget] 화면 밖 감지 — 기본 위치로 리셋');
+  } else {
+    // 부분적으로 밖이면 안쪽으로 밀기
+    if (x < workArea.x) x = workArea.x;
+    if (y < workArea.y) y = workArea.y;
+    if (x + width > workArea.x + workArea.width) x = workArea.x + workArea.width - width;
+    if (y + height > workArea.y + workArea.height) y = workArea.y + workArea.height - height;
+  }
+
+  if (x !== bounds.x || y !== bounds.y || width !== bounds.width || height !== bounds.height) {
+    widgetWindow.setBounds({ x, y, width, height });
+    saveWidgetBounds({ x, y, width, height });
   }
 }
 
@@ -278,10 +315,29 @@ function createWidgetWindow(
   const savedBounds = readWidgetBounds();
   const defaultPos = getDefaultWidgetBounds(options.width);
 
-  const x = savedBounds?.x ?? defaultPos.x;
-  const y = savedBounds?.y ?? defaultPos.y;
-  const width = savedBounds?.width ?? options.width;
-  const height = savedBounds?.height ?? options.height;
+  // 저장된 bounds가 현재 화면 안에 있는지 검증
+  let validBounds = savedBounds;
+  if (savedBounds) {
+    const displays = screen.getAllDisplays();
+    const isOnAnyDisplay = displays.some((d) => {
+      const wa = d.workArea;
+      return (
+        savedBounds.x < wa.x + wa.width &&
+        savedBounds.x + (savedBounds.width ?? options.width) > wa.x &&
+        savedBounds.y < wa.y + wa.height &&
+        savedBounds.y + (savedBounds.height ?? options.height) > wa.y
+      );
+    });
+    if (!isOnAnyDisplay) {
+      console.log('[widget] 저장된 위치가 모든 디스플레이 밖 — 기본 위치 사용');
+      validBounds = null;
+    }
+  }
+
+  const x = validBounds?.x ?? defaultPos.x;
+  const y = validBounds?.y ?? defaultPos.y;
+  const width = validBounds?.width ?? options.width;
+  const height = validBounds?.height ?? options.height;
 
   widgetWindow = new BrowserWindow({
     x,
@@ -408,11 +464,17 @@ function readSettingsWidgetOptions(): { width: number; height: number; startInWi
 }
 
 function setupAutoUpdater(): void {
-  autoUpdater.autoDownload = false;
+  autoUpdater.autoDownload = true;
 
   autoUpdater.on('update-available', (info: { version: string; releaseNotes?: string | null }) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update:available', {
+        version: info.version,
+        releaseNotes: info.releaseNotes ?? undefined,
+      });
+    }
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.webContents.send('update:available', {
         version: info.version,
         releaseNotes: info.releaseNotes ?? undefined,
       });
@@ -423,17 +485,26 @@ function setupAutoUpdater(): void {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update:not-available');
     }
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.webContents.send('update:not-available');
+    }
   });
 
   autoUpdater.on('download-progress', (progress: { percent: number }) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update:download-progress', { percent: progress.percent });
     }
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.webContents.send('update:download-progress', { percent: progress.percent });
+    }
   });
 
   autoUpdater.on('update-downloaded', (info: { version: string }) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update:update-downloaded', { version: info.version });
+    }
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.webContents.send('update:update-downloaded', { version: info.version });
     }
   });
 
@@ -599,6 +670,8 @@ function registerIpcHandlers(): void {
     }
 
     widgetWindow.setBounds(bounds);
+    // 레이아웃 변경 후 화면 밖 검증
+    ensureWidgetOnScreen();
   });
 
   // window:applyWidgetSettings — 설정 페이지에서 위젯 설정 변경 시 실시간 적용
@@ -862,7 +935,19 @@ if (!gotTheLock) {
       setTimeout(() => {
         autoUpdater.checkForUpdates().catch(() => {});
       }, 5000);
+
+      // 4시간마다 재체크
+      setInterval(() => {
+        autoUpdater.checkForUpdates().catch(() => {});
+      }, 4 * 60 * 60 * 1000);
     }
+
+    // 모니터 연결/해제/배율 변경 시 위젯 위치 보정
+    screen.on('display-added', () => ensureWidgetOnScreen());
+    screen.on('display-removed', () => ensureWidgetOnScreen());
+    screen.on('display-metrics-changed', () => {
+      setTimeout(() => ensureWidgetOnScreen(), 500);
+    });
 
     // Start in widget mode if the setting is enabled
     const widgetOptions = readSettingsWidgetOptions();
