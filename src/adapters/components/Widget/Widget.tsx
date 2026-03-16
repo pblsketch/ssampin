@@ -351,12 +351,14 @@ export function Widget() {
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              const startX = e.clientX;
-              const startY = e.clientY;
+              let lastX = e.clientX;
+              let lastY = e.clientY;
 
               const onMove = (me: PointerEvent) => {
-                const dx = me.clientX - startX;
-                const dy = me.clientY - startY;
+                const dx = me.clientX - lastX;
+                const dy = me.clientY - lastY;
+                lastX = me.clientX;
+                lastY = me.clientY;
                 window.electronAPI?.resizeWidget(edge, dx, dy);
               };
 
