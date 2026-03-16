@@ -81,7 +81,7 @@ function getAppIcon(): Electron.NativeImage {
   const candidates = [
     path.join(__dirname, '../build/icon.ico'),
     path.join(__dirname, '../public/favicon.ico'),
-    path.join(process.resourcesPath || '', 'build/icon.ico'),
+    path.join(process.resourcesPath || '', 'icon.ico'),
   ];
   const found = candidates.find((p) => fs.existsSync(p));
   return found ? nativeImage.createFromPath(found) : nativeImage.createEmpty();

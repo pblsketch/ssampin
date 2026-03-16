@@ -5,6 +5,9 @@ productName: 쌤핀
 directories:
   buildResources: build
   output: release
+extraResources:
+  - from: "build/icon.ico"
+    to: "icon.ico"
 files:
   - from: "."
     to: "."
