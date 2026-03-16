@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "0.4.3",
+      "date": "2026-03-16",
+      "highlights": "자동 업데이트 안정성 대폭 개선, 위젯 위치 보정 강화",
+      "changes": [
+        {
+          "type": "improve",
+          "title": "자동 업데이트 주기적 체크",
+          "description": "앱 실행 중 4시간마다 자동으로 업데이트를 확인합니다 (재시작 불필요)"
+        },
+        {
+          "type": "improve",
+          "title": "업데이트 자동 다운로드",
+          "description": "새 버전이 감지되면 백그라운드에서 자동으로 다운로드 후 설치를 안내합니다"
+        },
+        {
+          "type": "improve",
+          "title": "위젯 화면 밖 자동 보정",
+          "description": "모니터 변경, 해상도 변경 시 위젯이 화면 밖으로 벗어나면 자동으로 위치를 보정합니다"
+        },
+        {
+          "type": "new",
+          "title": "위젯 위치 초기화 메뉴",
+          "description": "트레이 아이콘 메뉴에서 위젯 위치를 기본값으로 초기화할 수 있습니다"
+        },
+        {
+          "type": "improve",
+          "title": "위젯 윈도우 업데이트 알림 연동",
+          "description": "위젯 모드에서도 업데이트 알림을 받을 수 있습니다"
+        },
+        {
+          "type": "fix",
+          "title": "AI 챗봇 시스템 프롬프트 최신화",
+          "description": "v0.4.2 기능이 반영된 최신 응답을 제공합니다"
+        }
+      ]
+    },
+    {
       "version": "0.4.2",
       "date": "2026-03-16",
       "highlights": "설문 PIN 인증, 시간표 색상 모드, Google Drive 동기화, 과제 수합 통합",
