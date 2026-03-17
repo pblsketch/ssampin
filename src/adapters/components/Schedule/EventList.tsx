@@ -235,7 +235,7 @@ export function EventList({ events, categories, holidays, hideTitle, onEdit, onD
     <div className="flex flex-col gap-4 overflow-y-auto pr-2 pb-10 h-full">
       {!hideTitle && (
         <div className="flex items-center justify-between mb-2 px-2">
-          <h3 className="text-lg font-bold text-sp-text">다가오는 일정</h3>
+          <h3 className="text-lg font-bold text-sp-text">이번 달 일정</h3>
         </div>
       )}
 
