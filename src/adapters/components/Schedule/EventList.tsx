@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import { sortByDate } from '@domain/rules/eventRules';
 import { calculateDDay } from '@domain/rules/ddayRules';
@@ -208,7 +208,11 @@ function HolidayCard({ holiday }: { holiday: HolidayInfo }) {
   );
 }
 
-export function EventList({ events, categories, holidays, hideTitle, onEdit, onDelete }: EventListProps) {
+export function EventList({ events, categories, holidays, allEvents, allHolidays, hideTitle, onEdit, onDelete }: EventListProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isSearching = searchQuery.trim().length > 0;
+
   // 숨긴 NEIS 일정 필터링
   const visibleEvents = useMemo(() => events.filter((e) => !e.isHidden), [events]);
   const sortedEvents = useMemo(() => sortByDate(visibleEvents), [visibleEvents]);
@@ -221,7 +225,6 @@ export function EventList({ events, categories, holidays, hideTitle, onEdit, onD
       items.push({ type: 'event', data: e });
     }
 
-    // NEIS 공휴일이 이미 이벤트에 있으면 하드코딩 공휴일은 제외
     const neisHolidayDates = new Set(
       sortedEvents
         .filter((e) => e.source === 'neis' && e.neis?.subtractDayType === '공휴일')
@@ -242,21 +245,93 @@ export function EventList({ events, categories, holidays, hideTitle, onEdit, onD
     return items;
   }, [sortedEvents, holidays]);
 
+  // 검색 결과 (전체 이벤트 + 공휴일에서 검색)
+  const searchResults = useMemo(() => {
+    if (!isSearching) return null;
+    const query = searchQuery.trim().toLowerCase();
+
+    const sourceEvents = allEvents ?? events;
+    const sourceHolidays = allHolidays ?? holidays;
+
+    const items: Array<{ type: 'event'; data: SchoolEvent } | { type: 'holiday'; data: HolidayInfo }> = [];
+
+    const matchedEvents = sourceEvents.filter(
+      (e) => !e.isHidden && e.title.toLowerCase().includes(query),
+    );
+    const sortedMatched = sortByDate(matchedEvents);
+    for (const e of sortedMatched) {
+      items.push({ type: 'event', data: e });
+    }
+
+    const neisHolidayDates = new Set(
+      sortedMatched
+        .filter((e) => e.source === 'neis' && e.neis?.subtractDayType === '공휴일')
+        .map((e) => e.date),
+    );
+    for (const h of sourceHolidays) {
+      if (h.name.toLowerCase().includes(query) && !neisHolidayDates.has(h.date)) {
+        items.push({ type: 'holiday', data: h });
+      }
+    }
+
+    items.sort((a, b) => {
+      const dateA = a.type === 'event' ? a.data.date : a.data.date;
+      const dateB = b.type === 'event' ? b.data.date : b.data.date;
+      return dateA.localeCompare(dateB);
+    });
+
+    return items;
+  }, [isSearching, searchQuery, allEvents, events, allHolidays, holidays]);
+
+  const displayItems = searchResults ?? mergedItems;
+
   return (
     <div className="flex flex-col gap-4 overflow-y-auto pr-2 pb-10 h-full">
       {!hideTitle && (
-        <div className="flex items-center justify-between mb-2 px-2">
-          <h3 className="text-lg font-bold text-sp-text">이번 달 일정</h3>
+        <div className="flex flex-col gap-2 mb-2 px-2">
+          <h3 className="text-lg font-bold text-sp-text">
+            {isSearching ? `검색 결과 (${displayItems.length}건)` : '이번 달 일정'}
+          </h3>
+          {/* 검색 입력 */}
+          <div className="relative">
+            <span className="material-symbols-outlined text-[18px] text-sp-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              search
+            </span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="일정 검색 (예: 재량 휴업일)"
+              className="w-full bg-sp-surface border border-sp-border rounded-xl pl-9 pr-8 py-2 text-sm text-sp-text placeholder:text-sp-muted/60 focus:outline-none focus:ring-1 focus:ring-sp-accent/50 focus:border-sp-accent/50 transition-colors"
+            />
+            {isSearching && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  inputRef.current?.focus();
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-sp-border/50 text-sp-muted hover:text-sp-text transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {mergedItems.length === 0 ? (
+      {displayItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
-          <span className="material-symbols-outlined text-[48px] mb-4">event_busy</span>
-          <p className="text-sm">등록된 일정이 없습니다</p>
+          <span className="material-symbols-outlined text-[48px] mb-4">
+            {isSearching ? 'search_off' : 'event_busy'}
+          </span>
+          <p className="text-sm">
+            {isSearching ? `'${searchQuery}'에 대한 검색 결과가 없습니다` : '등록된 일정이 없습니다'}
+          </p>
         </div>
       ) : (
-        mergedItems.map((item) =>
+        displayItems.map((item) =>
           item.type === 'event' ? (
             <EventCard
               key={item.data.id}
