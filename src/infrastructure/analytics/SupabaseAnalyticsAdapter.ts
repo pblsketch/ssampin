@@ -71,7 +71,33 @@ export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
 
   async flush(): Promise<void> {
     this.stopTimer();
-    await this.sendBatch();
+    const offlineQueue = this.loadOfflineQueue();
+    const toSend = [...offlineQueue, ...this.buffer];
+    this.buffer = [];
+
+    if (toSend.length === 0) return;
+
+    // keepalive: true 로 beforeunload/페이지 종료 시에도 전송 보장
+    try {
+      fetch(`${SUPABASE_URL}/rest/v1/app_analytics?on_conflict=event_id`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=ignore-duplicates',
+        },
+        body: JSON.stringify(toSend),
+        keepalive: true,
+      }).then((res) => {
+        if (res.ok) this.clearOfflineQueue();
+        else this.saveToOfflineQueue(toSend);
+      }).catch(() => {
+        this.saveToOfflineQueue(toSend);
+      });
+    } catch {
+      this.saveToOfflineQueue(toSend);
+    }
   }
 
   // ── private ──

@@ -38,25 +38,31 @@ function formatDuration(seconds: number): string {
 }
 
 // Supabase REST API 직접 호출 (서버 사이드)
-async function fetchView<T>(viewName: string): Promise<T[]> {
+async function fetchView<T>(viewName: string, options?: { order?: string; limit?: number }): Promise<T[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) return [];
 
-  const res = await fetch(
-    `${url}/rest/v1/${viewName}?select=*&limit=30`,
-    {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-    }
-  );
+  const limit = options?.limit ?? 60;
+  let queryUrl = `${url}/rest/v1/${viewName}?select=*&limit=${limit}`;
+  if (options?.order) {
+    queryUrl += `&order=${options.order}`;
+  }
 
-  if (!res.ok) return [];
+  const res = await fetch(queryUrl, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    console.error(`[Analytics] View "${viewName}" fetch failed: ${res.status}`);
+    return [];
+  }
   return res.json();
 }
 
@@ -144,20 +150,20 @@ export default async function AdminAnalyticsPage() {
       exports: number;
       onboarding_completions: number;
       errors: number;
-    }>('analytics_weekly_summary'),
-    fetchView<{ date: string; dau: number; events: number }>('analytics_daily_active'),
-    fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking'),
-    fetchView<{ format: string; count: number; unique_users: number }>('analytics_export_formats'),
-    fetchView<{ date: string; sessions: number; avg_seconds: number; max_seconds: number; median_seconds: number }>('analytics_session_duration'),
+    }>('analytics_weekly_summary', { order: 'week_start.desc' }),
+    fetchView<{ date: string; dau: number; events: number }>('analytics_daily_active', { order: 'date.desc' }),
+    fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking', { order: 'usage_count.desc' }),
+    fetchView<{ format: string; count: number; unique_users: number }>('analytics_export_formats', { order: 'count.desc' }),
+    fetchView<{ date: string; sessions: number; avg_seconds: number; max_seconds: number; median_seconds: number }>('analytics_session_duration', { order: 'date.desc' }),
     fetchRecentEvents(),
     fetchTotals(),
-    fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking_weekly'),
-    fetchView<{ app_version: string; users: number; last_seen: string }>('analytics_version_distribution'),
-    fetchView<{ cohort_date: string; cohort_size: number; day1: number; day3: number; day7: number; day1_pct: number; day3_pct: number; day7_pct: number }>('analytics_retention'),
-    fetchView<{ date: string; user_messages: number; bot_responses: number; unique_sessions: number; avg_messages_per_session: number }>('chatbot_daily_stats'),
-    fetchView<{ keyword: string; mention_count: number; unique_sessions: number }>('chatbot_popular_topics'),
+    fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking_weekly', { order: 'usage_count.desc' }),
+    fetchView<{ app_version: string; users: number; last_seen: string }>('analytics_version_distribution', { order: 'users.desc', limit: 50 }),
+    fetchView<{ cohort_date: string; cohort_size: number; day1: number; day3: number; day7: number; day1_pct: number; day3_pct: number; day7_pct: number }>('analytics_retention', { order: 'cohort_date.desc' }),
+    fetchView<{ date: string; user_messages: number; bot_responses: number; unique_sessions: number; avg_messages_per_session: number }>('chatbot_daily_stats', { order: 'date.desc' }),
+    fetchView<{ keyword: string; mention_count: number; unique_sessions: number }>('chatbot_popular_topics', { order: 'mention_count.desc' }),
     fetchView<{ depth_bucket: string; session_count: number; pct: number }>('chatbot_depth_distribution'),
-    fetchView<{ id: string; type: string; summary: string; user_message_preview: string; created_at_kst: string }>('chatbot_recent_escalations'),
+    fetchView<{ id: string; type: string; summary: string; user_message_preview: string; created_at_kst: string }>('chatbot_recent_escalations', { order: 'created_at_kst.desc' }),
     fetchView<{ confidence_level: string; response_count: number; pct: number }>('chatbot_confidence_stats'),
     fetchChatConversations(),
   ]);
@@ -410,8 +416,12 @@ export default async function AdminAnalyticsPage() {
 
             {/* 리텐션 (코호트 분석) */}
             <Section title="리텐션 (코호트 분석)">
+              <p className="text-gray-400 text-xs mb-4">
+                특정 날짜에 처음 앱을 사용한 사용자(코호트)가 이후에도 다시 사용하는지 추적합니다.
+                Day 1 = 첫 사용 다음날 재방문율, Day 3 = 3일 후, Day 7 = 7일 후 재방문율.
+              </p>
               {retention.length === 0 ? (
-                <p className="text-gray-500 text-sm">데이터 없음 (코호트 최소 3명 필요)</p>
+                <p className="text-gray-500 text-sm">데이터 없음</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -698,13 +708,13 @@ function BarChart<T extends Record<string, unknown>>({
 
   return (
     <div className={`relative ${data.length <= 5 ? 'max-w-lg' : 'w-full'}`}>
-      {/* 그리드 라인 (수평 가이드라인) */}
-      <div className="absolute inset-0 flex flex-col justify-end pointer-events-none" style={{ bottom: '1.5rem' }}>
+      {/* 그리드 라인 — bar 영역에 맞춰 위치 */}
+      <div className="absolute left-0 right-0 pointer-events-none" style={{ top: '1.5rem', bottom: '1.25rem' }}>
         {gridLines.map((val, i) => (
           <div
             key={i}
             className="absolute left-0 right-0 border-t border-gray-700/40"
-            style={{ bottom: `calc(${((i + 1) / 4) * 100}% + 1.5rem)` }}
+            style={{ bottom: `${((i + 1) / 4) * 100}%` }}
           >
             <span className="absolute -top-3 -left-1 text-[10px] text-gray-600">
               {val}
@@ -712,26 +722,31 @@ function BarChart<T extends Record<string, unknown>>({
           </div>
         ))}
       </div>
-      <div className="flex items-end gap-2 h-48 relative z-10">
+      {/* items-stretch(기본값)로 자식이 h-48 전체를 차지 → bar height % 가 정상 동작 */}
+      <div className="flex gap-2 h-48 relative z-10">
         {data.map((d, i) => {
           const val = Number(d[valueKey]) || 0;
           const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
           const label = String(d[labelKey]);
           return (
             <div key={i} className="flex-1 min-w-[2.5rem] flex flex-col items-center gap-1 group">
-              {/* 호버 시 상세 정보 */}
-              <div className="relative">
+              {/* 값 라벨 */}
+              <div className="relative shrink-0">
                 <span className="text-xs text-gray-300 group-hover:hidden">{val}</span>
                 <span className="text-xs text-blue-300 font-medium hidden group-hover:inline">
                   {val}
                 </span>
               </div>
-              <div
-                className="w-full bg-blue-500 rounded-t transition-all group-hover:bg-blue-400 cursor-default"
-                style={{ height: `${Math.max(pct, 3)}%` }}
-                title={`${formatLabel ? formatLabel(label) : label}: ${val}`}
-              />
-              <span className="text-[10px] text-gray-500 group-hover:text-gray-300 truncate w-full text-center transition-colors">
+              {/* 바 영역 — flex-1로 남은 공간을 차지하여 height %의 기준이 됨 */}
+              <div className="w-full flex-1 flex items-end">
+                <div
+                  className="w-full bg-blue-500 rounded-t transition-all group-hover:bg-blue-400 cursor-default"
+                  style={{ height: `${Math.max(pct, 3)}%` }}
+                  title={`${formatLabel ? formatLabel(label) : label}: ${val}`}
+                />
+              </div>
+              {/* 날짜 라벨 */}
+              <span className="text-[10px] text-gray-500 group-hover:text-gray-300 truncate w-full text-center transition-colors shrink-0">
                 {formatLabel ? formatLabel(label) : label}
               </span>
             </div>
