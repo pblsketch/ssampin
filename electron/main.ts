@@ -464,6 +464,13 @@ function readSettingsWidgetOptions(): { width: number; height: number; startInWi
 }
 
 function setupAutoUpdater(): void {
+  // GitHub API rate limit (60 req/hr/IP) 회피를 위해 generic provider 사용
+  // github provider는 api.github.com을 호출하여 rate limit에 걸릴 수 있음
+  // generic provider는 CDN redirect URL을 직접 사용하므로 rate limit 없음
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: 'https://github.com/pblsketch/ssampin/releases/latest/download',
+  });
   autoUpdater.autoDownload = true;
 
   autoUpdater.on('update-available', (info: { version: string; releaseNotes?: string | null }) => {
@@ -509,10 +516,9 @@ function setupAutoUpdater(): void {
   });
 
   autoUpdater.on('error', (err: Error) => {
-    console.error('[autoUpdater] error:', err);
-    // 404 (latest.yml 미존재), 네트워크 오류 등은 사용자에게 표시하지 않음
-    // 업데이트 확인은 백그라운드 작업이므로 조용히 실패해도 무방
-    const silentErrors = ['404', 'net::ERR_', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNREFUSED', 'HttpError'];
+    console.error('[autoUpdater] error:', err.message);
+    // 네트워크 오류는 사용자에게 표시하지 않음 (백그라운드 체크이므로)
+    const silentErrors = ['net::ERR_', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET'];
     const isSilent = silentErrors.some(keyword => err.message.includes(keyword));
     if (!isSilent && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update:error', err.message);
@@ -933,12 +939,16 @@ if (!gotTheLock) {
     // Auto-check for updates 5 seconds after app start (only in production)
     if (!process.env['VITE_DEV_SERVER_URL']) {
       setTimeout(() => {
-        autoUpdater.checkForUpdates().catch(() => {});
+        autoUpdater.checkForUpdates().catch((e: Error) => {
+          console.error('[autoUpdater] check failed:', e.message);
+        });
       }, 5000);
 
       // 4시간마다 재체크
       setInterval(() => {
-        autoUpdater.checkForUpdates().catch(() => {});
+        autoUpdater.checkForUpdates().catch((e: Error) => {
+          console.error('[autoUpdater] periodic check failed:', e.message);
+        });
       }, 4 * 60 * 60 * 1000);
     }
 
