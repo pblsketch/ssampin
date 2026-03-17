@@ -3,6 +3,8 @@ export {
   exportTeacherScheduleToExcel,
   exportSeatingToExcel,
   exportEventsToExcel,
+  exportStudentRecordsToExcel,
+  exportRecordsForSchoolReport,
   exportRosterToExcel,
   parseRosterFromExcel,
   generateEventsTemplateExcel,
@@ -16,4 +18,5 @@ export {
   exportClassScheduleToHwpx,
   exportTeacherScheduleToHwpx,
   exportSeatingToHwpx,
+  exportStudentRecordsToHwpx,
 } from './HwpxExporter';

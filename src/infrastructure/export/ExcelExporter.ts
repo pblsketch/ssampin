@@ -5,7 +5,7 @@ import type { Student } from '@domain/entities/Student';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { StudentRecord, AttendanceStats } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
-import { getAttendanceStats } from '@domain/rules/studentRecordRules';
+import { getAttendanceStats, filterByStudent, filterByCategory, sortByDateDesc } from '@domain/rules/studentRecordRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectArgb, getClassroomArgb } from '@domain/valueObjects/SubjectColor';
@@ -775,4 +775,140 @@ export async function exportEventsToExcel(
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
+}
+
+/**
+ * 학생별 기록 정리 — 학생별 시트 Excel
+ */
+export async function exportRecordsForSchoolReport(
+  records: readonly StudentRecord[],
+  students: readonly Student[],
+  categories: readonly RecordCategoryItem[],
+  options?: {
+    period?: { start: string; end: string };
+    categoryIds?: string[];
+  },
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+
+  // 기간 필터
+  let filteredRecords: readonly StudentRecord[] = options?.period
+    ? records.filter((r) => r.date >= options.period!.start && r.date <= options.period!.end)
+    : records;
+
+  // 카테고리 필터
+  if (options?.categoryIds && options.categoryIds.length > 0) {
+    const catSet = new Set(options.categoryIds);
+    filteredRecords = filteredRecords.filter((r) => catSet.has(r.category));
+  }
+
+  const categoryMap = new Map<string, string>(categories.map((c) => [c.id, c.name]));
+
+  const activeStudents = [...students]
+    .filter((s) => !s.isVacant)
+    .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
+
+  for (const student of activeStudents) {
+    const numStr = String(student.studentNumber ?? '').padStart(2, '0');
+    // Excel 시트명 제한: 31자, []:/*? 불가
+    const sheetName = `${numStr}_${student.name}`.replace(/[[\]:/*?\\]/g, '').slice(0, 31);
+    const ws = workbook.addWorksheet(sheetName);
+
+    ws.getColumn(1).width = 14;
+    ws.getColumn(2).width = 14;
+    ws.getColumn(3).width = 14;
+    ws.getColumn(4).width = 40;
+    ws.getColumn(5).width = 20;
+
+    // 학생 정보
+    const infoRow1 = ws.addRow(['학생 정보', `${numStr}번 ${student.name}`]);
+    infoRow1.getCell(1).font = { bold: true, size: 11 };
+    infoRow1.getCell(2).font = { size: 11 };
+
+    ws.addRow([]);
+
+    // 출결 현황
+    const attendanceHeaderRow = ws.addRow(['[출결 현황]']);
+    attendanceHeaderRow.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF3B82F6' } };
+
+    const attHeaders = ws.addRow(['결석', '지각', '조퇴', '결과', '합계']);
+    attHeaders.eachCell((cell) => applyHeaderStyle(cell));
+
+    const stats: AttendanceStats = getAttendanceStats(filteredRecords, student.id);
+    const attSum = stats.absent + stats.late + stats.earlyLeave + stats.resultAbsent;
+    const attDataRow = ws.addRow([stats.absent, stats.late, stats.earlyLeave, stats.resultAbsent, attSum]);
+    attDataRow.eachCell((cell) => applyCellStyle(cell));
+
+    ws.addRow([]);
+
+    // 상담 기록
+    const counselingRecords = sortByDateDesc(
+      filterByCategory(filterByStudent(filteredRecords, student.id), 'counseling'),
+    );
+    const counselingHeaderRow = ws.addRow(['[상담 기록]']);
+    counselingHeaderRow.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF3B82F6' } };
+
+    if (counselingRecords.length > 0) {
+      const cHeaders = ws.addRow(['날짜', '구분', '상담방법', '내용', '후속조치']);
+      cHeaders.eachCell((cell) => applyHeaderStyle(cell));
+
+      for (const rec of counselingRecords) {
+        const method = rec.method ? (COUNSELING_METHOD_MAP[rec.method] ?? '') : '';
+        const cRow = ws.addRow([rec.date, rec.subcategory, method, rec.content, '']);
+        cRow.eachCell((cell) => applyCellStyle(cell, CATEGORY_ROW_COLORS['counseling']));
+        ws.getCell(cRow.number, 4).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+      }
+    } else {
+      ws.addRow(['기록 없음']);
+    }
+
+    ws.addRow([]);
+
+    // 생활/관찰 기록
+    const lifeRecords = sortByDateDesc(
+      filterByCategory(filterByStudent(filteredRecords, student.id), 'life'),
+    );
+    const lifeHeaderRow = ws.addRow(['[생활/관찰]']);
+    lifeHeaderRow.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF3B82F6' } };
+
+    if (lifeRecords.length > 0) {
+      const lHeaders = ws.addRow(['날짜', '구분', '내용']);
+      lHeaders.eachCell((cell) => applyHeaderStyle(cell));
+
+      for (const rec of lifeRecords) {
+        const lRow = ws.addRow([rec.date, rec.subcategory, rec.content]);
+        lRow.eachCell((cell) => applyCellStyle(cell, CATEGORY_ROW_COLORS['life']));
+        ws.getCell(lRow.number, 3).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+      }
+    } else {
+      ws.addRow(['기록 없음']);
+    }
+
+    ws.addRow([]);
+
+    // 기타 기록 (출결, 상담, 생활 이외)
+    const otherRecords = sortByDateDesc(
+      filterByStudent(filteredRecords, student.id).filter(
+        (r) => r.category !== 'attendance' && r.category !== 'counseling' && r.category !== 'life',
+      ),
+    );
+
+    if (otherRecords.length > 0) {
+      const etcHeaderRow = ws.addRow(['[기타 기록]']);
+      etcHeaderRow.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF3B82F6' } };
+
+      const eHeaders = ws.addRow(['날짜', '구분', '내용']);
+      eHeaders.eachCell((cell) => applyHeaderStyle(cell));
+
+      for (const rec of otherRecords) {
+        const catName = categoryMap.get(rec.category) ?? rec.category;
+        const eRow = ws.addRow([rec.date, `${catName} - ${rec.subcategory}`, rec.content]);
+        eRow.eachCell((cell) => applyCellStyle(cell, 'FFF3F4F6'));
+        ws.getCell(eRow.number, 3).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+      }
+    }
+  }
+
+  const reportBuffer = await workbook.xlsx.writeBuffer();
+  return reportBuffer as ArrayBuffer;
 }

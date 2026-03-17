@@ -6,6 +6,7 @@ import { DateNavigator } from '@adapters/components/StudentRecords/DateNavigator
 import { InputMode } from './InputMode';
 import { ProgressMode } from './ProgressMode';
 import { SearchMode } from './SearchMode';
+import { RecordsExportModal } from './RecordsExportModal';
 import { todayString } from './recordUtils';
 import type { RecordPrefill } from '../HomeroomPage';
 
@@ -28,6 +29,7 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
   const { students, load: loadStudents, loaded: studentsLoaded } =
     useStudentStore();
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayString());
 
   useEffect(() => {
@@ -79,14 +81,24 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowCategoryModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-sp-surface transition-all"
-          title="카테고리 관리"
-        >
-          <span className="material-symbols-outlined text-base">tune</span>
-          <span className="text-xs">카테고리 관리</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-sp-surface transition-all"
+            title="내보내기"
+          >
+            <span className="material-symbols-outlined text-base">download</span>
+            <span className="text-xs">내보내기</span>
+          </button>
+          <button
+            onClick={() => setShowCategoryModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-sp-surface transition-all"
+            title="카테고리 관리"
+          >
+            <span className="material-symbols-outlined text-base">tune</span>
+            <span className="text-xs">카테고리 관리</span>
+          </button>
+        </div>
       </div>
 
       {viewMode === 'input' && (
@@ -105,6 +117,14 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
 
       {showCategoryModal && (
         <RecordCategoryManagementModal onClose={() => setShowCategoryModal(false)} />
+      )}
+      {showExportModal && (
+        <RecordsExportModal
+          records={filteredRecords}
+          students={students}
+          categories={categories}
+          onClose={() => setShowExportModal(false)}
+        />
       )}
     </div>
   );

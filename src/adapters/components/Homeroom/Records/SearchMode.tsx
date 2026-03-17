@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import {
@@ -11,6 +12,9 @@ import {
   getAttendanceStats,
   sortByDateDesc,
 } from '@domain/rules/studentRecordRules';
+/* eslint-disable no-restricted-imports */
+import { exportStudentRecordsToExcel } from '@infrastructure/export/ExcelExporter';
+/* eslint-enable no-restricted-imports */
 import { StudentTimelineView } from './StudentTimelineView';
 import { DefaultRecordListView } from './DefaultRecordListView';
 import {
@@ -23,6 +27,7 @@ import {
 function SearchMode({ students, records, categories }: ModeProps) {
   const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone } =
     useStudentRecordsStore();
+  const showToast = useToastStore((s) => s.show);
   const [dismissedSearchGuide, setDismissedSearchGuide] = useState(
     () => localStorage.getItem('ssampin:record-search-guide-dismissed') === 'true',
   );
@@ -145,6 +150,42 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setEditCategory('');
     setEditSubcategory('');
   }, [editContent, editCategory, editSubcategory, updateRecord]);
+
+  const handleExportFiltered = useCallback(async () => {
+    const targetStudents = selectedStudentId
+      ? students.filter((s) => s.id === selectedStudentId)
+      : students;
+
+    try {
+      const buffer = await exportStudentRecordsToExcel(filtered, targetStudents, categories);
+
+      if (window.electronAPI) {
+        const filePath = await window.electronAPI.showSaveDialog({
+          title: '내보내기',
+          defaultPath: '담임메모_조회결과.xlsx',
+          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+        });
+        if (filePath) {
+          await window.electronAPI.writeFile(filePath, buffer);
+          showToast('파일이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(filePath),
+          });
+        }
+      } else {
+        const blob = new Blob([buffer], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '담임메모_조회결과.xlsx';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Excel 파일을 다운로드했습니다', 'success');
+      }
+    } catch {
+      showToast('내보내기 중 오류가 발생했습니다', 'error');
+    }
+  }, [filtered, students, categories, selectedStudentId, showToast]);
 
   // 2-1: 타임라인 뷰 데이터 (학생 선택 시)
   const selectedStudent = selectedStudentId ? students.find((s) => s.id === selectedStudentId) : null;
@@ -275,7 +316,18 @@ function SearchMode({ students, records, categories }: ModeProps) {
           ))}
         </div>
 
-        {/* 2-4: 필터 초기화 */}
+        {/* 내보내기 + 필터 초기화 */}
+        {filtered.length > 0 && (
+          <button
+            onClick={() => void handleExportFiltered()}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs
+                       text-sp-muted hover:text-white hover:bg-sp-surface
+                       border border-sp-border transition-all"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            Excel 내보내기
+          </button>
+        )}
         {hasFilters && (
           <button
             onClick={resetFilters}
