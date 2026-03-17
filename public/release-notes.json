@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "0.4.5",
+      "date": "2026-03-17",
+      "highlights": "행사 알림 설정 추가, NEIS 일정 중복 제거, 자동 업데이트 안정성 개선",
+      "changes": [
+        {
+          "type": "new",
+          "title": "행사 알림 팝업 on/off 설정",
+          "description": "설정에서 행사 알림 팝업을 켜거나 끌 수 있습니다"
+        },
+        {
+          "type": "fix",
+          "title": "NEIS 공휴일 중복 표시 제거",
+          "description": "NEIS에서 동기화한 공휴일과 기본 공휴일이 중복 표시되는 문제를 수정했습니다"
+        },
+        {
+          "type": "fix",
+          "title": "NEIS 학사일정 '토요휴업일' 제외",
+          "description": "NEIS 학사일정 동기화 시 불필요한 '토요휴업일'이 추가되지 않습니다"
+        },
+        {
+          "type": "fix",
+          "title": "위젯 리사이즈 드래그 시 창 떨림 수정",
+          "description": "위젯 창 크기를 드래그로 조정할 때 떨리는 현상을 수정했습니다"
+        },
+        {
+          "type": "improve",
+          "title": "일정 관리 제목 '이번 달 일정'으로 변경",
+          "description": "일정 관리 페이지 제목이 '다가오는 일정'에서 '이번 달 일정'으로 변경되었습니다"
+        },
+        {
+          "type": "improve",
+          "title": "자동 업데이트 안정성 개선",
+          "description": "GitHub API rate limit 문제를 회피하여 업데이트 확인이 더 안정적입니다"
+        }
+      ]
+    },
+    {
       "version": "0.4.4",
       "date": "2026-03-17",
       "highlights": "위젯 창 크기 조정 버그 수정, 작업 표시줄 아이콘 표시 수정",
