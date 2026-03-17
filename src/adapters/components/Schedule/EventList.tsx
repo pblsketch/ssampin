@@ -14,6 +14,8 @@ interface EventListProps {
   events: readonly SchoolEvent[];
   categories: readonly CategoryItem[];
   holidays: readonly HolidayInfo[];
+  allEvents?: readonly SchoolEvent[];
+  allHolidays?: readonly HolidayInfo[];
   hideTitle?: boolean;
   onEdit: (event: SchoolEvent) => void;
   onDelete: (id: string) => void;
