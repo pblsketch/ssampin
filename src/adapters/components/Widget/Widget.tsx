@@ -351,18 +351,38 @@ export function Widget() {
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              let lastX = e.clientX;
-              let lastY = e.clientY;
+              // screenX/Y 사용: setBounds()로 윈도우가 이동해도 좌표계가 변하지 않음
+              let lastX = e.screenX;
+              let lastY = e.screenY;
+              let rafId: number | null = null;
+              let pendingDx = 0;
+              let pendingDy = 0;
+
+              const flush = () => {
+                if (pendingDx !== 0 || pendingDy !== 0) {
+                  window.electronAPI?.resizeWidget(edge, pendingDx, pendingDy);
+                  pendingDx = 0;
+                  pendingDy = 0;
+                }
+              };
 
               const onMove = (me: PointerEvent) => {
-                const dx = me.clientX - lastX;
-                const dy = me.clientY - lastY;
-                lastX = me.clientX;
-                lastY = me.clientY;
-                window.electronAPI?.resizeWidget(edge, dx, dy);
+                pendingDx += me.screenX - lastX;
+                pendingDy += me.screenY - lastY;
+                lastX = me.screenX;
+                lastY = me.screenY;
+                // RAF로 프레임당 1회만 IPC 호출
+                if (rafId === null) {
+                  rafId = requestAnimationFrame(() => {
+                    rafId = null;
+                    flush();
+                  });
+                }
               };
 
               const onUp = () => {
+                if (rafId !== null) cancelAnimationFrame(rafId);
+                flush(); // 남은 delta 즉시 반영
                 document.removeEventListener('pointermove', onMove);
                 document.removeEventListener('pointerup', onUp);
               };
