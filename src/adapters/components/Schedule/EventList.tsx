@@ -3,7 +3,7 @@ import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import { sortByDate } from '@domain/rules/eventRules';
 import { calculateDDay } from '@domain/rules/ddayRules';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
-import type { HolidayInfo } from '@domain/rules/holidayRules';
+import { type HolidayInfo, getKoreanHolidays } from '@domain/rules/holidayRules';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { getGradeBadgeText } from '@domain/entities/NeisSchedule';
 import { periodToLabel } from '@adapters/presenters/periodPresenter';
@@ -16,29 +16,34 @@ interface EventListProps {
   holidays: readonly HolidayInfo[];
   allEvents?: readonly SchoolEvent[];
   allHolidays?: readonly HolidayInfo[];
+  year?: number;
   hideTitle?: boolean;
   onEdit: (event: SchoolEvent) => void;
   onDelete: (id: string) => void;
 }
 
-function formatEventDate(dateStr: string): string {
+function formatEventDate(dateStr: string, showYear?: boolean): string {
   const parts = dateStr.split('-');
   const y = parseInt(parts[0] ?? '0', 10);
   const m = parseInt(parts[1] ?? '1', 10);
   const d = parseInt(parts[2] ?? '1', 10);
   const date = new Date(y, m - 1, d);
   const dayName = DAY_NAMES[date.getDay()];
+  if (showYear) {
+    return `${y}년 ${m}월 ${d}일 (${dayName})`;
+  }
   return `${m}월 ${d}일 (${dayName})`;
 }
 
 interface EventCardProps {
   event: SchoolEvent;
   categories: readonly CategoryItem[];
+  showYear?: boolean;
   onEdit: (event: SchoolEvent) => void;
   onDelete: (id: string) => void;
 }
 
-function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
+function EventCard({ event, categories, showYear, onEdit, onDelete }: EventCardProps) {
   const isExternal = event.id.startsWith('ext:');
   const isNeis = event.source === 'neis';
   const isNeisHoliday = isNeis && event.neis?.subtractDayType === '공휴일';
@@ -82,7 +87,7 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
       <div className="flex items-start justify-between mb-2">
         <div className="flex flex-col">
           <span className={`text-xs font-semibold ${colors.text} mb-0.5`}>
-            {formatEventDate(event.date)}
+            {formatEventDate(event.date, showYear)}
           </span>
           <h4 className={`text-base font-bold transition-colors ${
             isNeisHoliday ? 'text-red-400' : 'text-sp-text'
@@ -181,7 +186,7 @@ function EventCard({ event, categories, onEdit, onDelete }: EventCardProps) {
   );
 }
 
-function HolidayCard({ holiday }: { holiday: HolidayInfo }) {
+function HolidayCard({ holiday, showYear }: { holiday: HolidayInfo; showYear?: boolean }) {
   const parts = holiday.date.split('-');
   const m = parseInt(parts[1] ?? '1', 10);
   const d = parseInt(parts[2] ?? '1', 10);
@@ -194,7 +199,7 @@ function HolidayCard({ holiday }: { holiday: HolidayInfo }) {
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-xs font-semibold text-red-400/80 mb-0.5">
-            {m}월 {d}일 ({dayName})
+            {showYear ? `${y}년 ` : ''}{m}월 {d}일 ({dayName})
           </span>
           <h4 className="text-sm font-bold text-red-300">
             {holiday.name}
@@ -208,10 +213,14 @@ function HolidayCard({ holiday }: { holiday: HolidayInfo }) {
   );
 }
 
-export function EventList({ events, categories, holidays, allEvents, allHolidays, hideTitle, onEdit, onDelete }: EventListProps) {
+export function EventList({ events, categories, holidays, allEvents, allHolidays, year, hideTitle, onEdit, onDelete }: EventListProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchYear, setSearchYear] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isSearching = searchQuery.trim().length > 0;
+
+  const currentYear = year ?? new Date().getFullYear();
+  const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
 
   // 숨긴 NEIS 일정 필터링
   const visibleEvents = useMemo(() => events.filter((e) => !e.isHidden), [events]);
@@ -245,18 +254,24 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
     return items;
   }, [sortedEvents, holidays]);
 
-  // 검색 결과 (전체 이벤트 + 공휴일에서 검색)
+  // 검색 결과 (전체 이벤트 + 공휴일에서 검색, 연도 필터 적용)
   const searchResults = useMemo(() => {
     if (!isSearching) return null;
     const query = searchQuery.trim().toLowerCase();
+    const filterYear = searchYear !== null ? String(searchYear) : null;
 
     const sourceEvents = allEvents ?? events;
-    const sourceHolidays = allHolidays ?? holidays;
+    // 연도 필터가 있으면 해당 연도의 공휴일 생성, 없으면 전달받은 공휴일 사용
+    const sourceHolidays = filterYear
+      ? getKoreanHolidays(parseInt(filterYear, 10))
+      : (allHolidays ?? holidays);
 
     const items: Array<{ type: 'event'; data: SchoolEvent } | { type: 'holiday'; data: HolidayInfo }> = [];
 
     const matchedEvents = sourceEvents.filter(
-      (e) => !e.isHidden && e.title.toLowerCase().includes(query),
+      (e) => !e.isHidden
+        && e.title.toLowerCase().includes(query)
+        && (!filterYear || e.date.startsWith(filterYear)),
     );
     const sortedMatched = sortByDate(matchedEvents);
     for (const e of sortedMatched) {
@@ -281,7 +296,7 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
     });
 
     return items;
-  }, [isSearching, searchQuery, allEvents, events, allHolidays, holidays]);
+  }, [isSearching, searchQuery, searchYear, allEvents, events, allHolidays, holidays]);
 
   const displayItems = searchResults ?? mergedItems;
 
@@ -318,6 +333,36 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
               </button>
             )}
           </div>
+          {/* 연도 필터 (검색 시 표시) */}
+          {isSearching && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSearchYear(null)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  searchYear === null
+                    ? 'bg-sp-accent text-white'
+                    : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
+                }`}
+              >
+                전체
+              </button>
+              {yearOptions.map((y) => (
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => setSearchYear(y)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    searchYear === y
+                      ? 'bg-sp-accent text-white'
+                      : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
+                  }`}
+                >
+                  {y}년
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -337,11 +382,12 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
               key={item.data.id}
               event={item.data}
               categories={categories}
+              showYear={isSearching}
               onEdit={onEdit}
               onDelete={onDelete}
             />
           ) : (
-            <HolidayCard key={`holiday-${item.data.date}`} holiday={item.data} />
+            <HolidayCard key={`holiday-${item.data.date}`} holiday={item.data} showYear={isSearching} />
           ),
         )
       )}

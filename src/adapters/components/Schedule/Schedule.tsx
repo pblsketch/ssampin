@@ -154,15 +154,20 @@ export function Schedule() {
     return result;
   }, [events, year, month, selectedCategory, sourceFilter]);
 
+  // 해당 연도 전체 공휴일
+  const yearHolidays = useMemo(() => getKoreanHolidays(year), [year]);
+
   // 해당 월의 공휴일
   const monthHolidays = useMemo(() => {
-    const allHolidays = getKoreanHolidays(year);
     const mm = month + 1;
-    return allHolidays.filter((h) => {
+    return yearHolidays.filter((h) => {
       const hMonth = parseInt(h.date.split('-')[1]!, 10);
       return hMonth === mm;
     });
-  }, [year, month]);
+  }, [yearHolidays, month]);
+
+  // 검색용 전체 이벤트 (숨긴 일정 제외)
+  const allVisibleEvents = useMemo(() => events.filter((e) => !e.isHidden), [events]);
 
   // 이벤트 추가/수정 핸들러
   function handleEventSubmit(event: SchoolEvent) {
@@ -477,6 +482,9 @@ export function Schedule() {
                     events={filteredEvents}
                     categories={categories}
                     holidays={monthHolidays}
+                    allEvents={allVisibleEvents}
+                    allHolidays={yearHolidays}
+                    year={year}
                     onEdit={handleEditEvent}
                     onDelete={handleDeleteEvent}
                   />
