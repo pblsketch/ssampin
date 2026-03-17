@@ -189,6 +189,12 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
     category: 'class-management',
   },
   {
+    question: '행사 알림을 끌 수 있나요?',
+    answer: '설정 → 일반 탭에서 "행사 알림 팝업"을 끌 수 있어요. 꺼두면 앱 시작 시 다가오는 행사 알림 팝업이 뜨지 않아요.',
+    keywords: ['행사', '알림', '팝업', '끄기', '알림 끄기'],
+    category: 'settings',
+  },
+  {
     question: '교사 시점 보기가 뭔가요?',
     answer: '자리배치에서 "교사 시점" 버튼을 누르면, 교단에서 학생들을 바라보는 방향으로 좌석이 좌우 반전되어 표시돼요. 실제 교실에서 학생을 찾을 때 유용해요.',
     keywords: ['교사', '시점', '보기', '반전', '교단'],
