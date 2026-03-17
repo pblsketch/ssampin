@@ -103,6 +103,13 @@ export function parseNeisScheduleRow(row: NeisScheduleRow): NeisScheduleEvent {
   };
 }
 
+/** 불필요한 NEIS 일정 필터링 (토요휴업일 등) */
+const EXCLUDED_EVENT_NAMES = ['토요휴업일'] as const;
+
+export function filterExcludedNeisEvents(events: readonly NeisScheduleEvent[]): readonly NeisScheduleEvent[] {
+  return events.filter((e) => !EXCLUDED_EVENT_NAMES.includes(e.title as typeof EXCLUDED_EVENT_NAMES[number]));
+}
+
 /** 같은 날짜 + 같은 제목 중복 제거 */
 export function deduplicateNeisEvents(events: readonly NeisScheduleEvent[]): readonly NeisScheduleEvent[] {
   const seen = new Set<string>();

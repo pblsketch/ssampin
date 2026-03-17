@@ -6,6 +6,7 @@ import { DEFAULT_CATEGORIES } from '@domain/entities/SchoolEvent';
 import {
   parseNeisScheduleRow,
   deduplicateNeisEvents,
+  filterExcludedNeisEvents,
   getAcademicYearRange,
   NEIS_SCHEDULE_CATEGORY,
 } from '@domain/entities/NeisSchedule';
@@ -50,9 +51,9 @@ export class SyncNeisSchedule {
       toDate,
     });
 
-    // 2. 파싱 & 중복 제거
+    // 2. 파싱 → 불필요 일정 제외 → 중복 제거
     const parsedEvents = deduplicateNeisEvents(
-      rawRows.map(parseNeisScheduleRow),
+      filterExcludedNeisEvents(rawRows.map(parseNeisScheduleRow)),
     );
 
     // 3. 기존 데이터 로드
