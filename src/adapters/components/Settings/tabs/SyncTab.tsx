@@ -73,7 +73,7 @@ export function SyncTab() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (window.confirm('Google 계정 연결을 해제하시겠습니까?')) {
+                    if (window.confirm('Google 계정 연결을 해제하시겠습니까?\n구글에서 가져온 일정이 모두 제거됩니다.')) {
                       void disconnect();
                     }
                   }}

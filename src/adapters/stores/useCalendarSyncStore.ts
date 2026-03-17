@@ -154,8 +154,33 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   disconnect: async () => {
     set({ isLoading: true });
     try {
-      const { authenticateGoogle } = await import('@adapters/di/container');
+      const { authenticateGoogle, eventsRepository } = await import('@adapters/di/container');
+
+      // 1. 토큰 폐기 + 삭제
       await authenticateGoogle.disconnect();
+
+      // 2. 구글에서 동기화된 일정 삭제
+      const evData = await eventsRepository.getEvents();
+      if (evData) {
+        const cleanedEvents = evData.events.filter(
+          (e) => e.source !== 'google' && !e.googleEventId,
+        );
+        // 매핑에서 생성된 구글 캘린더 전용 카테고리도 정리
+        const googleCalendarIds = new Set(
+          get().mappings
+            .filter((m) => m.googleCalendarId)
+            .map((m) => m.categoryId),
+        );
+        const cleanedCategories = (evData.categories ?? []).filter(
+          (c) => !googleCalendarIds.has(c.id),
+        );
+        await eventsRepository.saveEvents({
+          events: cleanedEvents,
+          categories: cleanedCategories,
+        });
+      }
+
+      // 3. 상태 초기화
       set({
         isConnected: false,
         email: null,
