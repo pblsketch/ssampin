@@ -132,7 +132,7 @@ function TabContent({ activeTab, draft, patch, setDraft }: {
     case 'widget':    return <WidgetTab draft={draft} patch={patch} />;
     case 'seat':      return <SeatTab draft={draft} patch={patch} />;
     case 'security':  return <SecurityTab draft={draft} patch={patch} />;
-    case 'calendar':  return <CalendarTab />;
+    case 'calendar':  return <CalendarTab draft={draft} patch={patch} />;
     case 'weather':   return <WeatherTab draft={draft} patch={patch} />;
     case 'display':   return <DisplayTab draft={draft} patch={patch} />;
     case 'sidebar':   return <SidebarTab draft={draft} patch={patch} />;

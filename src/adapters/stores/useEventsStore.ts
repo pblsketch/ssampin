@@ -292,6 +292,13 @@ export const useEventsStore = create<EventsState>((set) => {
     },
 
     checkAlerts: async () => {
+      // 설정에서 행사 알림이 꺼져 있으면 팝업 표시 안 함
+      const settings = await settingsRepository.getSettings();
+      if (settings?.eventAlertEnabled === false) {
+        set({ alertResult: null, showPopup: false });
+        return;
+      }
+
       const today = new Date();
       const result = await checkEventAlerts.execute(today);
 

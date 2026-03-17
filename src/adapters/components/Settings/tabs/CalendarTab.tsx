@@ -1,14 +1,21 @@
 import { useState } from 'react';
+import type { Settings } from '@domain/entities/Settings';
 import type { CategoryItem } from '@domain/entities/SchoolEvent';
 import { CATEGORY_COLOR_PRESETS } from '@domain/entities/SchoolEvent';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { SettingsSection } from '../shared/SettingsSection';
+import { Toggle } from '../shared/Toggle';
 import { COLOR_MAP, colorDot, DEFAULT_CAT_IDS } from '../shared/constants';
 import { NeisScheduleSection } from '../NeisScheduleSection';
 import { NeisTimetableAutoSyncSection } from '../NeisTimetableAutoSyncSection';
 import { CalendarSettings } from '../CalendarSettings';
 
-export function CalendarTab() {
+interface Props {
+  draft: Settings;
+  patch: (p: Partial<Settings>) => void;
+}
+
+export function CalendarTab({ draft, patch }: Props) {
   const { categories, addCategory, deleteCategory } = useEventsStore();
   const [showCatForm, setShowCatForm] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -24,6 +31,24 @@ export function CalendarTab() {
 
   return (
     <div>
+      {/* 행사 알림 설정 */}
+      <SettingsSection
+        icon="notifications"
+        iconColor="bg-amber-500/10 text-amber-400"
+        title="행사 알림"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-sp-text">행사 알림 팝업</span>
+            <span className="text-xs text-sp-muted">앱 실행 시 오늘/다가오는 행사를 알림으로 표시합니다.</span>
+          </div>
+          <Toggle
+            checked={draft.eventAlertEnabled !== false}
+            onChange={(v) => patch({ eventAlertEnabled: v })}
+          />
+        </div>
+      </SettingsSection>
+
       {/* 일정 카테고리 관리 */}
       <SettingsSection
         icon="category"

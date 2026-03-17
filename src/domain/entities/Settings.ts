@@ -176,4 +176,6 @@ export interface Settings {
   readonly seatingDefaultView?: 'student' | 'teacher';
   /** Google Drive 동기화 설정 */
   readonly sync?: SyncSettings;
+  /** 행사 알림 팝업 활성화 여부 (기본: true) */
+  readonly eventAlertEnabled?: boolean;
 }

@@ -113,6 +113,7 @@ const DEFAULT_SETTINGS: Settings = {
     refreshIntervalMin: 30,
   },
   seatingDefaultView: 'student',
+  eventAlertEnabled: true,
   analytics: {
     enabled: true,
   },
