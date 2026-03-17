@@ -141,6 +141,12 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
     category: 'seating',
   },
   {
+    question: '일정을 검색할 수 있나요?',
+    answer: '일정 관리 페이지 오른쪽 패널에서 검색 입력란에 키워드를 입력하면 전체 일정에서 검색할 수 있어요. 연도 버튼으로 특정 연도의 일정만 필터링할 수도 있어요.',
+    keywords: ['검색', '일정 검색', '찾기', '일정 찾기', '연도'],
+    category: 'schedule',
+  },
+  {
     question: 'NEIS 학사일정 연동은 어떻게 하나요?',
     answer: '설정 → 캘린더 → NEIS 학사일정에서 학교를 검색하고 연동을 활성화하면, 학교 행사/시험/방학 일정이 자동으로 캘린더에 표시돼요.',
     keywords: ['NEIS', '학사일정', '학사', '일정', '연동', '캘린더'],
