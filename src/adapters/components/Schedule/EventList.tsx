@@ -211,15 +211,24 @@ export function EventList({ events, categories, holidays, hideTitle, onEdit, onD
   const visibleEvents = useMemo(() => events.filter((e) => !e.isHidden), [events]);
   const sortedEvents = useMemo(() => sortByDate(visibleEvents), [visibleEvents]);
 
-  // 이벤트와 공휴일을 날짜순으로 통합
+  // 이벤트와 공휴일을 날짜순으로 통합 (NEIS 공휴일과 하드코딩 공휴일 중복 제거)
   const mergedItems = useMemo(() => {
     const items: Array<{ type: 'event'; data: SchoolEvent } | { type: 'holiday'; data: HolidayInfo }> = [];
 
     for (const e of sortedEvents) {
       items.push({ type: 'event', data: e });
     }
+
+    // NEIS 공휴일이 이미 이벤트에 있으면 하드코딩 공휴일은 제외
+    const neisHolidayDates = new Set(
+      sortedEvents
+        .filter((e) => e.source === 'neis' && e.neis?.subtractDayType === '공휴일')
+        .map((e) => e.date),
+    );
     for (const h of holidays) {
-      items.push({ type: 'holiday', data: h });
+      if (!neisHolidayDates.has(h.date)) {
+        items.push({ type: 'holiday', data: h });
+      }
     }
 
     items.sort((a, b) => {
