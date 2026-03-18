@@ -1,18 +1,31 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useMealStore } from '@adapters/stores/useMealStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
-import type { Settings, SchoolLevel } from '@domain/entities/Settings';
+import type { Settings, SchoolLevel, NeisSettings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import type { SchoolSearchResult } from '@domain/entities/Meal';
 import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
 import { NAV_ITEMS } from '@adapters/components/Layout/Sidebar';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { ROLE_MENU_MAP, MENU_DESCRIPTIONS, type TeacherRoleId } from './menuRecommendations';
 import { getPresetKey } from '@widgets/presets';
 
+/** NEIS schoolType → SchoolLevel 매핑 */
+function detectSchoolLevel(schoolType: string): SchoolLevel | null {
+    if (schoolType.includes('초등')) return 'elementary';
+    if (schoolType.includes('중학')) return 'middle';
+    if (schoolType.includes('고등')) return 'high';
+    return null;
+}
+
 export function Onboarding() {
     const { track } = useAnalytics();
     const { isFirstRun, completeOnboarding } = useSettingsStore();
+    const { searchResults, searching, searchError, searchSchools, clearSearch } = useMealStore();
     const [step, setStep] = useState(1);
+    const [schoolQuery, setSchoolQuery] = useState('');
+    const [manualSchoolInput, setManualSchoolInput] = useState(false);
 
     // Local state for settings to be configured
     const [draft, setDraft] = useState<Partial<Settings>>({
@@ -135,6 +148,44 @@ export function Onboarding() {
         setDraft((prev) => ({ ...prev, ...patch }));
     };
 
+    const handleSchoolSearch = useCallback(() => {
+        if (!schoolQuery.trim()) return;
+        void searchSchools(schoolQuery.trim());
+    }, [schoolQuery, searchSchools]);
+
+    const handleSelectSchool = useCallback((school: SchoolSearchResult) => {
+        // neis 설정 저장
+        const neisUpdate: Partial<NeisSettings> = {
+            schoolCode: school.schoolCode,
+            atptCode: school.atptCode,
+            schoolName: `${school.schoolName} (${school.address.split(' ').slice(0, 2).join(' ')})`,
+        };
+
+        // 학교급 자동 감지 → 교시 프리셋도 자동 전환
+        const detected = detectSchoolLevel(school.schoolType);
+        let levelUpdate: Pick<Settings, 'schoolLevel' | 'maxPeriods' | 'periodTimes'> | Record<string, never> = {};
+        if (detected) {
+            const p = getDefaultPreset(detected);
+            const times = generatePeriodTimes(p);
+            levelUpdate = { schoolLevel: detected, maxPeriods: times.length, periodTimes: times };
+        }
+
+        setDraft((prev) => ({
+            ...prev,
+            schoolName: school.schoolName,
+            neis: {
+                schoolCode: '',
+                atptCode: '',
+                schoolName: '',
+                ...(prev.neis ?? {}),
+                ...neisUpdate,
+            },
+            ...levelUpdate,
+        }));
+        setSchoolQuery('');
+        clearSearch();
+    }, [clearSearch]);
+
     const setPresetByLevel = (level: SchoolLevel) => {
         if (level === 'custom') {
             setDraft((prev) => ({ ...prev, schoolLevel: level, customPeriodDuration: 50, maxPeriods: 6 }));
@@ -228,16 +279,94 @@ export function Onboarding() {
                             <p className="text-sp-muted text-center mb-8">대시보드와 출력물에 사용될 기본 정보입니다.</p>
 
                             <div className="grid grid-cols-2 gap-6 max-w-lg mx-auto">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">학교명</label>
-                                    <input
-                                        type="text"
-                                        value={draft.schoolName}
-                                        onChange={(e) => patch({ schoolName: e.target.value })}
-                                        placeholder="예: 서울미래초등학교"
-                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
-                                    />
+                                {/* 학교명 — NEIS 검색 또는 직접 입력 */}
+                                <div className="space-y-2 col-span-2 relative">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">학교명</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setManualSchoolInput(!manualSchoolInput); clearSearch(); setSchoolQuery(''); }}
+                                            className="text-[10px] text-sp-muted hover:text-sp-accent transition-colors"
+                                        >
+                                            {manualSchoolInput ? '학교 검색으로 전환' : '직접 입력'}
+                                        </button>
+                                    </div>
+
+                                    {/* 선택된 학교 표시 */}
+                                    {!manualSchoolInput && draft.schoolName && !schoolQuery ? (
+                                        <div className="flex items-center gap-3 bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3">
+                                            <span className="material-symbols-outlined text-teal-400 text-[18px]">school</span>
+                                            <span className="text-sm text-[#e2e8f0] flex-1 truncate">{draft.schoolName}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSchoolQuery(draft.schoolName ?? ''); patch({ schoolName: '' }); }}
+                                                className="text-xs text-sp-accent hover:text-blue-400 font-medium shrink-0"
+                                            >
+                                                변경
+                                            </button>
+                                        </div>
+                                    ) : manualSchoolInput ? (
+                                        <input
+                                            type="text"
+                                            value={draft.schoolName}
+                                            onChange={(e) => patch({ schoolName: e.target.value })}
+                                            placeholder="예: 서울미래초등학교"
+                                            className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        />
+                                    ) : (
+                                        <>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={schoolQuery}
+                                                    onChange={(e) => { setSchoolQuery(e.target.value); clearSearch(); }}
+                                                    onKeyDown={(e) => e.key === 'Enter' && handleSchoolSearch()}
+                                                    placeholder="학교명을 검색하세요"
+                                                    className="flex-1 bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSchoolSearch}
+                                                    disabled={searching || !schoolQuery.trim()}
+                                                    className="px-4 py-3 rounded-lg bg-sp-accent hover:bg-blue-600 text-white font-medium text-sm transition-all flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+                                                >
+                                                    {searching ? (
+                                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    ) : (
+                                                        <span className="material-symbols-outlined text-[18px]">search</span>
+                                                    )}
+                                                    검색
+                                                </button>
+                                            </div>
+
+                                            {searchError && searchResults.length === 0 && (
+                                                <p className="text-xs text-sp-muted mt-1">{searchError}</p>
+                                            )}
+
+                                            {searchResults.length > 0 && (
+                                                <div className="absolute z-20 top-full left-0 mt-1 w-full bg-sp-card rounded-lg border border-sp-border shadow-2xl max-h-48 overflow-y-auto">
+                                                    {searchResults.map((school) => (
+                                                        <button
+                                                            key={`${school.atptCode}-${school.schoolCode}`}
+                                                            type="button"
+                                                            onClick={() => handleSelectSchool(school)}
+                                                            className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-slate-700/50 last:border-0"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm font-medium text-sp-text">{school.schoolName}</span>
+                                                                <span className="text-[10px] text-sp-muted bg-slate-700/50 px-1.5 py-0.5 rounded">
+                                                                    {school.schoolType}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-sp-muted mt-0.5">{school.address}</p>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
+
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">학년/반</label>
                                     <input
