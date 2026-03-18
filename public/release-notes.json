@@ -1,6 +1,48 @@
 {
   "versions": [
     {
+      "version": "0.4.9",
+      "date": "2026-03-19",
+      "highlights": "온보딩 NEIS 학교 검색 통합, 교시 설정 UX 개선, 업데이트 안내 버그 수정",
+      "changes": [
+        {
+          "type": "new",
+          "title": "온보딩 NEIS 학교 검색 통합",
+          "description": "첫 실행 시 NEIS 학교 검색으로 학교를 쉽게 찾을 수 있습니다. 학년/반 선택은 선택사항임을 안내합니다"
+        },
+        {
+          "type": "new",
+          "title": "'직접 설정' 학교급 추가",
+          "description": "학원, 유치원, 대안학교 등 NEIS에 없는 기관도 직접 설정할 수 있습니다"
+        },
+        {
+          "type": "improve",
+          "title": "교시 설정 점심시간 편집 UX 개선",
+          "description": "점심시간 행의 텍스트 색상 가독성이 개선되고 편집이 더 편리해졌습니다"
+        },
+        {
+          "type": "improve",
+          "title": "분석 대시보드 버전 분포 정렬 토글",
+          "description": "사용자순/버전순으로 버전 분포를 정렬할 수 있습니다"
+        },
+        {
+          "type": "fix",
+          "title": "업데이트 안내 창이 바로 사라지는 버그 수정",
+          "description": "업데이트 후 변경사항 안내 모달이 정상적으로 표시됩니다"
+        },
+        {
+          "type": "fix",
+          "title": "온보딩 하드코딩된 샘플 시간표 제거",
+          "description": "온보딩에서 NEIS 학년/반 선택과 연동된 실제 시간표를 불러옵니다"
+        },
+        {
+          "type": "fix",
+          "title": "Supabase 뷰 보안 강화",
+          "description": "19개 뷰의 보안 정책이 SECURITY INVOKER로 전환되었습니다"
+        }
+      ]
+    },
+    {
       "version": "0.4.8",
       "date": "2026-03-19",
       "highlights": "구글 캘린더 동기화 안정성 대폭 개선",
