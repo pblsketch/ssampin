@@ -42,9 +42,9 @@ export function BookmarksWidget() {
   }
 
   return (
-    <div className="space-y-3 overflow-auto">
+    <div className="flex gap-6 overflow-auto">
       {groupedBookmarks.map(({ group, items }) => (
-        <div key={group.id}>
+        <div key={group.id} className="min-w-0 flex-shrink-0">
           {/* 그룹 헤더 */}
           {groupedBookmarks.length > 1 && (
             <div className="flex items-center gap-1.5 px-1 mb-1">
@@ -70,7 +70,7 @@ export function BookmarksWidget() {
                     bookmark.iconValue
                   )}
                 </span>
-                <span className="text-sm text-sp-text truncate group-hover:text-sp-accent transition-colors">
+                <span className="text-sm text-sp-text truncate group-hover:text-sp-accent transition-colors whitespace-nowrap">
                   {bookmark.name}
                 </span>
                 <span className="material-symbols-outlined text-[12px] text-sp-muted ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">

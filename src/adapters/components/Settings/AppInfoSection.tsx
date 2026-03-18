@@ -41,6 +41,14 @@ const CHANGE_TYPE_CONFIG: Record<ChangeType, { icon: string; label: string; badg
 };
 
 async function fetchReleaseNotes(version: string): Promise<VersionNote | null> {
+  const data = await fetchAllReleaseNotes();
+  if (data) {
+    return data.find((v) => v.version === version) ?? null;
+  }
+  return null;
+}
+
+async function fetchAllReleaseNotes(): Promise<VersionNote[] | null> {
   try {
     const res = await fetch(
       'https://raw.githubusercontent.com/pblsketch/ssampin/main/public/release-notes.json',
@@ -48,8 +56,7 @@ async function fetchReleaseNotes(version: string): Promise<VersionNote | null> {
     );
     if (res.ok) {
       const data: ReleaseNotesData = await res.json();
-      const found = data.versions.find((v) => v.version === version);
-      if (found) return found;
+      return data.versions;
     }
   } catch {
     // GitHub fetch failed
@@ -59,7 +66,7 @@ async function fetchReleaseNotes(version: string): Promise<VersionNote | null> {
     const res = await fetch('/release-notes.json');
     if (res.ok) {
       const data: ReleaseNotesData = await res.json();
-      return data.versions.find((v) => v.version === version) ?? null;
+      return data.versions;
     }
   } catch {
     // local fallback also failed
@@ -77,6 +84,14 @@ export function AppInfoSection() {
   const [releaseNote, setReleaseNote] = useState<VersionNote | null>(null);
   const [noteLoading, setNoteLoading] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 변경 내역
+  const [allNotes, setAllNotes] = useState<VersionNote[]>([]);
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [changelogLoading, setChangelogLoading] = useState(false);
+  const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
+  const INITIAL_SHOW_COUNT = 3;
+  const [showAllVersions, setShowAllVersions] = useState(false);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -163,6 +178,137 @@ export function AppInfoSection() {
       <div className="space-y-1 mb-5">
         <p className="text-sm font-semibold text-sp-text">쌤핀 (SsamPin)</p>
         <p className="text-xs text-sp-muted">버전 v{__APP_VERSION__}</p>
+      </div>
+
+      {/* 변경 내역 */}
+      <div className="mb-5">
+        <button
+          type="button"
+          onClick={() => {
+            if (!showChangelog && allNotes.length === 0 && !changelogLoading) {
+              setChangelogLoading(true);
+              fetchAllReleaseNotes().then((notes) => {
+                if (notes) {
+                  setAllNotes(notes);
+                  // 현재 버전은 기본 펼침
+                  setExpandedVersions(new Set([__APP_VERSION__]));
+                }
+                setChangelogLoading(false);
+              });
+            }
+            setShowChangelog((v) => !v);
+          }}
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-sp-surface hover:bg-sp-surface/80 transition-colors"
+        >
+          <span className="flex items-center gap-2 text-sm text-sp-text font-medium">
+            <span className="material-symbols-outlined text-[18px] text-sp-accent">history</span>
+            업데이트 내역
+          </span>
+          <span
+            className="material-symbols-outlined text-[18px] text-sp-muted transition-transform duration-200"
+            style={{ transform: showChangelog ? 'rotate(180deg)' : 'rotate(0deg)' }}
+          >
+            expand_more
+          </span>
+        </button>
+
+        {showChangelog && (
+          <div className="mt-2 space-y-2">
+            {changelogLoading ? (
+              <div className="flex items-center gap-2 text-sp-muted text-xs px-3 py-2">
+                <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                변경사항 불러오는 중...
+              </div>
+            ) : allNotes.length === 0 ? (
+              <p className="text-sp-muted text-xs px-3 py-2">변경 내역을 불러올 수 없습니다.</p>
+            ) : (
+              <>
+                {(showAllVersions ? allNotes : allNotes.slice(0, INITIAL_SHOW_COUNT)).map((ver) => {
+                  const isExpanded = expandedVersions.has(ver.version);
+                  const isCurrent = ver.version === __APP_VERSION__;
+                  return (
+                    <div key={ver.version} className="rounded-lg bg-sp-surface overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedVersions((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(ver.version)) next.delete(ver.version);
+                            else next.add(ver.version);
+                            return next;
+                          });
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-sp-card/50 transition-colors text-left"
+                      >
+                        <span
+                          className="material-symbols-outlined text-[14px] text-sp-muted transition-transform duration-200"
+                          style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                        >
+                          chevron_right
+                        </span>
+                        <span className="text-xs font-bold text-sp-text">
+                          v{ver.version}
+                        </span>
+                        {isCurrent && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-sp-accent/20 text-sp-accent">
+                            현재
+                          </span>
+                        )}
+                        <span className="text-[11px] text-sp-muted ml-auto">{ver.date}</span>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-3 pb-3 space-y-1.5">
+                          {ver.highlights && (
+                            <p className="text-sp-text/80 text-xs leading-relaxed mb-1 pl-5">{ver.highlights}</p>
+                          )}
+                          {ver.changes.map((c, i) => {
+                            const cfg = CHANGE_TYPE_CONFIG[c.type];
+                            return (
+                              <div key={i} className="flex items-start gap-2 pl-5">
+                                {cfg && (
+                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.badge} shrink-0`}>
+                                    <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>{cfg.icon}</span>
+                                    {cfg.label}
+                                  </span>
+                                )}
+                                <div className="min-w-0">
+                                  <span className="text-sp-text text-xs leading-relaxed">{c.title}</span>
+                                  {c.description && (
+                                    <p className="text-sp-muted text-[11px] leading-relaxed mt-0.5">{c.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {!showAllVersions && allNotes.length > INITIAL_SHOW_COUNT && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllVersions(true)}
+                    className="w-full text-center py-2 text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
+                  >
+                    이전 버전 {allNotes.length - INITIAL_SHOW_COUNT}개 더 보기
+                  </button>
+                )}
+                {showAllVersions && allNotes.length > INITIAL_SHOW_COUNT && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllVersions(false)}
+                    className="w-full text-center py-2 text-xs text-sp-muted hover:text-sp-text transition-colors"
+                  >
+                    접기
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Update section */}
