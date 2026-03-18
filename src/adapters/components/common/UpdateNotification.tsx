@@ -93,6 +93,7 @@ export function UpdateNotification() {
   const [dismissed, setDismissed] = useState(false);
   const [releaseNotes, setReleaseNotes] = useState<VersionNote[]>([]);
   const [noteLoading, setNoteLoading] = useState(false);
+  const [, setUserInitiatedDownload] = useState(false);
 
   // Electron update events
   useEffect(() => {
@@ -109,11 +110,19 @@ export function UpdateNotification() {
 
     cleanups.push(api.onUpdateDownloadProgress((p) => {
       setProgress(Math.round(p.percent));
-      setStatus('downloading');
+      // 사용자가 다운로드를 명시적으로 클릭한 경우에만 downloading 상태로 전환
+      setUserInitiatedDownload((initiated) => {
+        if (initiated) setStatus('downloading');
+        return initiated;
+      });
     }));
 
     cleanups.push(api.onUpdateDownloaded(() => {
-      setStatus('downloaded');
+      // 사용자가 다운로드를 시작한 경우에만 downloaded 상태로 전환
+      setUserInitiatedDownload((initiated) => {
+        if (initiated) setStatus('downloaded');
+        return initiated;
+      });
     }));
 
     cleanups.push(api.onUpdateError((error) => {
@@ -146,9 +155,10 @@ export function UpdateNotification() {
   }, [info?.version]);
 
   const handleDownload = useCallback(() => {
-    window.electronAPI?.downloadUpdate();
+    setUserInitiatedDownload(true);
     setStatus('downloading');
     setProgress(0);
+    window.electronAPI?.downloadUpdate();
   }, []);
 
   const handleInstall = useCallback(() => {
