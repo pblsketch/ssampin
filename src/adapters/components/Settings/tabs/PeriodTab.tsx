@@ -273,14 +273,14 @@ export function PeriodTab({ draft, patch }: Props) {
                         <span className="text-sp-text font-mono text-[11px]">{pt.end}</span>
                       </div>
                       {isBeforeLunch && (
-                        <div className="flex items-center gap-3 py-0.5 text-amber-400/70">
+                        <div className="flex items-center gap-3 py-0.5 text-amber-700">
                           <span className="w-10 text-center">🍱</span>
                           <span className="font-mono text-[11px]">{pt.end}</span>
-                          <span className="text-sp-muted">~</span>
+                          <span className="text-amber-600">~</span>
                           <span className="font-mono text-[11px]">
                             {formatTime(parseMinutes(pt.end) + preset.lunchDuration)}
                           </span>
-                          <span className="text-[10px] text-amber-400/50">
+                          <span className="text-[10px] text-amber-600">
                             ({preset.lunchDuration}분)
                           </span>
                         </div>
@@ -371,8 +371,8 @@ function PeriodRows({
   return (
     <>
       {showLunchBefore && (
-        <tr className="bg-amber-500/5 border-y-2 border-amber-500/20">
-          <td className="px-4 py-2 font-medium text-amber-400 flex items-center gap-1.5">
+        <tr className="bg-amber-100 border-y-2 border-amber-300">
+          <td className="px-4 py-2 font-medium text-amber-700 flex items-center gap-1.5">
             <span className="material-symbols-outlined text-[16px]">restaurant</span>
             점심
           </td>
@@ -382,10 +382,10 @@ function PeriodRows({
                 type="time"
                 value={lunchTimeStr.split(' ~ ')[0] || ''}
                 onChange={(e) => onChangeLunchStart(e.target.value)}
-                className="bg-transparent text-amber-400 focus:outline-none border-none p-0 w-full [color-scheme:dark]"
+                className="bg-transparent text-amber-700 focus:outline-none border-none p-0 w-full"
               />
             ) : (
-              <span className="text-sp-muted">{lunchTimeStr.split(' ~ ')[0] || ''}</span>
+              <span className="text-amber-700">{lunchTimeStr.split(' ~ ')[0] || ''}</span>
             )}
           </td>
           <td className="px-4 py-2">
@@ -394,14 +394,14 @@ function PeriodRows({
                 type="time"
                 value={lunchTimeStr.split(' ~ ')[1] || ''}
                 onChange={(e) => onChangeLunchEnd(e.target.value)}
-                className="bg-transparent text-amber-400 focus:outline-none border-none p-0 w-full [color-scheme:dark]"
+                className="bg-transparent text-amber-700 focus:outline-none border-none p-0 w-full"
               />
             ) : (
-              <span className="text-sp-muted">{lunchTimeStr.split(' ~ ')[1] || ''}</span>
+              <span className="text-amber-700">{lunchTimeStr.split(' ~ ')[1] || ''}</span>
             )}
           </td>
           <td className="px-4 py-2 text-center">
-            <span className="text-[10px] text-amber-400/60">
+            <span className="text-[10px] text-amber-600 font-medium">
               {(() => {
                 const parts = lunchTimeStr.split(' ~ ');
                 if (parts.length === 2 && parts[0] && parts[1]) {
