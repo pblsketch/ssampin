@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { Settings, SchoolLevel } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { PeriodPreset } from '@domain/rules/periodRules';
-import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
+import { getDefaultPreset, generatePeriodTimes, parseMinutes, formatTime, PERIOD_DURATION } from '@domain/rules/periodRules';
 import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { SettingsSection } from '../shared/SettingsSection';
 import { SCHOOL_LEVEL_OPTIONS } from '../shared/constants';
@@ -53,6 +53,45 @@ export function PeriodTab({ draft, patch }: Props) {
     patch({ periodTimes: renumbered, maxPeriods: renumbered.length });
   }, [draft.periodTimes, patch]);
 
+  const lunchIndex = getLunchBreakIndex(draft.periodTimes);
+
+  const updateLunchTime = useCallback(
+    (field: 'start' | 'end', value: string) => {
+      if (lunchIndex < 0) return;
+      const arr = [...draft.periodTimes] as PeriodTime[];
+
+      const prevPeriod = arr[lunchIndex - 1];
+      const nextPeriod = arr[lunchIndex];
+      if (!prevPeriod || !nextPeriod) return;
+
+      if (field === 'end') {
+        const newLunchEnd = parseMinutes(value);
+        const oldNextStart = parseMinutes(nextPeriod.start);
+        const diff = newLunchEnd - oldNextStart;
+
+        for (let i = lunchIndex; i < arr.length; i++) {
+          const p = arr[i]!;
+          const newStart = parseMinutes(p.start) + diff;
+          const newEnd = parseMinutes(p.end) + diff;
+          arr[i] = {
+            period: p.period,
+            start: formatTime(newStart),
+            end: formatTime(newEnd),
+          };
+        }
+        patch({ periodTimes: arr });
+      } else if (field === 'start') {
+        const newLunchStart = parseMinutes(value);
+        arr[lunchIndex - 1] = {
+          ...prevPeriod,
+          end: formatTime(newLunchStart),
+        };
+        patch({ periodTimes: arr });
+      }
+    },
+    [draft.periodTimes, lunchIndex, patch],
+  );
+
   const handleApplyPreset = useCallback(() => {
     const generated = generatePeriodTimes(preset);
     patch({
@@ -67,8 +106,6 @@ export function PeriodTab({ draft, patch }: Props) {
     const newPreset = getDefaultPreset(level);
     setPreset(newPreset);
   }, []);
-
-  const lunchIndex = getLunchBreakIndex(draft.periodTimes);
 
   return (
     <SettingsSection
@@ -170,6 +207,49 @@ export function PeriodTab({ draft, patch }: Props) {
                 onChange={(e) => setPreset((p) => ({ ...p, lunchDuration: Number(e.target.value) }))}
                 className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               />
+              <p className="text-[10px] text-sp-muted/70 leading-relaxed">
+                쉬는 시간({preset.breakDuration}분)이 별도로 추가됩니다.
+                실제 점심 간격: {preset.lunchDuration + preset.breakDuration}분
+              </p>
+            </div>
+          </div>
+
+          {/* 미리보기 */}
+          <div className="mt-1 p-3 rounded-lg bg-sp-bg/50 border border-sp-border/50">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="material-symbols-outlined text-[14px] text-sp-muted">preview</span>
+              <span className="text-[10px] font-medium text-sp-muted uppercase tracking-wider">미리보기</span>
+            </div>
+            <div className="space-y-0.5 text-xs">
+              {(() => {
+                const preview = generatePeriodTimes(preset);
+                return preview.map((pt) => {
+                  const isBeforeLunch = pt.period === preset.lunchAfterPeriod;
+                  return (
+                    <div key={pt.period}>
+                      <div className="flex items-center gap-3 py-0.5">
+                        <span className="w-10 text-sp-muted">{pt.period}교시</span>
+                        <span className="text-sp-text font-mono text-[11px]">{pt.start}</span>
+                        <span className="text-sp-muted">~</span>
+                        <span className="text-sp-text font-mono text-[11px]">{pt.end}</span>
+                      </div>
+                      {isBeforeLunch && (
+                        <div className="flex items-center gap-3 py-0.5 text-amber-400/70">
+                          <span className="w-10 text-center">🍱</span>
+                          <span className="font-mono text-[11px]">{pt.end}</span>
+                          <span className="text-sp-muted">~</span>
+                          <span className="font-mono text-[11px]">
+                            {formatTime(parseMinutes(pt.end) + preset.lunchDuration)}
+                          </span>
+                          <span className="text-[10px] text-amber-400/50">
+                            ({preset.lunchDuration}분)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 
@@ -212,6 +292,8 @@ export function PeriodTab({ draft, patch }: Props) {
                   lunchTimeStr={lunchTimeStr}
                   onChangeStart={(v) => updatePeriod(i, 'start', v)}
                   onChangeEnd={(v) => updatePeriod(i, 'end', v)}
+                  onChangeLunchStart={isAfterLunch ? (v) => updateLunchTime('start', v) : undefined}
+                  onChangeLunchEnd={isAfterLunch ? (v) => updateLunchTime('end', v) : undefined}
                   onDelete={() => deletePeriod(i)}
                   canDelete={draft.periodTimes.length > 1}
                 />
@@ -231,6 +313,8 @@ function PeriodRows({
   lunchTimeStr,
   onChangeStart,
   onChangeEnd,
+  onChangeLunchStart,
+  onChangeLunchEnd,
   onDelete,
   canDelete,
 }: {
@@ -240,17 +324,55 @@ function PeriodRows({
   lunchTimeStr: string;
   onChangeStart: (v: string) => void;
   onChangeEnd: (v: string) => void;
+  onChangeLunchStart?: (v: string) => void;
+  onChangeLunchEnd?: (v: string) => void;
   onDelete: () => void;
   canDelete: boolean;
 }) {
   return (
     <>
       {showLunchBefore && (
-        <tr className="bg-sp-surface/80 border-y-2 border-sp-border">
-          <td className="px-4 py-3 font-medium text-sp-muted italic">점심</td>
-          <td className="px-4 py-3 text-sp-muted">{lunchTimeStr.split(' ~ ')[0] || ''}</td>
-          <td className="px-4 py-3 text-sp-muted">{lunchTimeStr.split(' ~ ')[1] || ''}</td>
-          <td className="px-4 py-3" />
+        <tr className="bg-amber-500/5 border-y-2 border-amber-500/20">
+          <td className="px-4 py-2 font-medium text-amber-400 flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[16px]">restaurant</span>
+            점심
+          </td>
+          <td className="px-4 py-2">
+            {onChangeLunchStart ? (
+              <input
+                type="time"
+                value={lunchTimeStr.split(' ~ ')[0] || ''}
+                onChange={(e) => onChangeLunchStart(e.target.value)}
+                className="bg-transparent text-amber-400 focus:outline-none border-none p-0 w-full [color-scheme:dark]"
+              />
+            ) : (
+              <span className="text-sp-muted">{lunchTimeStr.split(' ~ ')[0] || ''}</span>
+            )}
+          </td>
+          <td className="px-4 py-2">
+            {onChangeLunchEnd ? (
+              <input
+                type="time"
+                value={lunchTimeStr.split(' ~ ')[1] || ''}
+                onChange={(e) => onChangeLunchEnd(e.target.value)}
+                className="bg-transparent text-amber-400 focus:outline-none border-none p-0 w-full [color-scheme:dark]"
+              />
+            ) : (
+              <span className="text-sp-muted">{lunchTimeStr.split(' ~ ')[1] || ''}</span>
+            )}
+          </td>
+          <td className="px-4 py-2 text-center">
+            <span className="text-[10px] text-amber-400/60">
+              {(() => {
+                const parts = lunchTimeStr.split(' ~ ');
+                if (parts.length === 2 && parts[0] && parts[1]) {
+                  const diff = parseMinutes(parts[1]) - parseMinutes(parts[0]);
+                  return `${diff}분`;
+                }
+                return '';
+              })()}
+            </span>
+          </td>
         </tr>
       )}
       <tr className="bg-sp-card hover:bg-sp-text/5 transition-colors">
