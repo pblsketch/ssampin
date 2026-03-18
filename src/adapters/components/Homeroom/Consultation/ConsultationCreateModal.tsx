@@ -35,7 +35,8 @@ const METHOD_OPTIONS: { value: ConsultationMethod; label: string; icon: string }
   { value: 'video', label: '화상', icon: 'videocam' },
 ];
 
-const SLOT_PRESETS = [10, 15, 20, 25, 30];
+const PARENT_SLOT_PRESETS = [15, 20, 30, 45, 55];
+const STUDENT_SLOT_PRESETS = [10, 15, 20, 25, 30];
 
 /* ──────────────── 유틸 ──────────────── */
 
@@ -133,6 +134,39 @@ function buildSlotChips(startTime: string, endTime: string, slotMinutes: number)
   return chips;
 }
 
+/** 전체 시간 범위에서 제외 구간을 빼고 남은 연속 구간 목록 반환 */
+function computeAvailableRanges(
+  rangeStart: string,
+  rangeEnd: string,
+  excludedTimes: { startTime: string; endTime: string }[],
+): { startTime: string; endTime: string }[] {
+  const startMins = parseTimeToMinutes(rangeStart);
+  const endMins = parseTimeToMinutes(rangeEnd);
+  if (startMins >= endMins) return [];
+
+  // 분 단위 가용 배열 (true = 사용 가능)
+  const available = new Array(endMins - startMins).fill(true) as boolean[];
+  for (const ex of excludedTimes) {
+    const exStart = Math.max(parseTimeToMinutes(ex.startTime) - startMins, 0);
+    const exEnd = Math.min(parseTimeToMinutes(ex.endTime) - startMins, available.length);
+    for (let i = exStart; i < exEnd; i++) available[i] = false;
+  }
+
+  // 연속 구간 추출
+  const ranges: { startTime: string; endTime: string }[] = [];
+  let i = 0;
+  while (i < available.length) {
+    if (!available[i]) { i++; continue; }
+    const segStart = i;
+    while (i < available.length && available[i]) i++;
+    ranges.push({
+      startTime: minutesToTime(startMins + segStart),
+      endTime: minutesToTime(startMins + i),
+    });
+  }
+  return ranges;
+}
+
 /* ──────────────── 컴포넌트 ──────────────── */
 
 export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProps) {
@@ -160,10 +194,53 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   const [studentDate, setStudentDate] = useState('');
   const [selectedPresets, setSelectedPresets] = useState<Set<string>>(new Set());
 
+  // 학부모 상담용: 수업 시간 제외
+  const [excludeClassTime, setExcludeClassTime] = useState(false);
+  const [excludedPeriodIds, setExcludedPeriodIds] = useState<Set<string>>(new Set());
+  const [customExclusions, setCustomExclusions] = useState<{ startTime: string; endTime: string; label: string }[]>([]);
+
+  // 사전 차단 슬롯 (date_startTime 키 기준)
+  const [blockedSlotKeys, setBlockedSlotKeys] = useState<Set<string>>(new Set());
+
+  // 스텝 위저드
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+
   const breakPresets = useMemo(
     () => computeBreakPresets(settings.periodTimes),
     [settings.periodTimes],
   );
+
+  // 학부모: 제외할 시간대 목록 (수업 교시 + 커스텀)
+  const excludedTimes = useMemo(() => {
+    if (!excludeClassTime || type !== 'parent') return [];
+    const fromPresets = breakPresets
+      .filter((p) => excludedPeriodIds.has(p.id))
+      .map((p) => ({ startTime: p.startTime, endTime: p.endTime }));
+    const fromCustom = customExclusions.map((c) => ({ startTime: c.startTime, endTime: c.endTime }));
+    return [...fromPresets, ...fromCustom];
+  }, [excludeClassTime, type, breakPresets, excludedPeriodIds, customExclusions]);
+
+  // 수업 시간 제외 토글 시 교시 자동 선택
+  useEffect(() => {
+    if (excludeClassTime && type === 'parent') {
+      const classPeriodIds = breakPresets
+        .filter((p) => p.id.startsWith('period-'))
+        .map((p) => p.id);
+      setExcludedPeriodIds(new Set(classPeriodIds));
+    } else if (!excludeClassTime) {
+      setExcludedPeriodIds(new Set());
+      setCustomExclusions([]);
+    }
+  }, [excludeClassTime, type, breakPresets]);
+
+  const toggleExcludedPeriod = useCallback((periodId: string) => {
+    setExcludedPeriodIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(periodId)) next.delete(periodId);
+      else next.add(periodId);
+      return next;
+    });
+  }, []);
 
   // slotMinutes 변경 시 불가 프리셋 해제 + 남은 프리셋 칩 재생성
   useEffect(() => {
@@ -266,6 +343,12 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     setDates([]);
     setSelectedPresets(new Set());
     setStudentDate('');
+    setSlotMinutes(type === 'parent' ? 30 : 15);
+    setCustomSlot(false);
+    setExcludeClassTime(false);
+    setExcludedPeriodIds(new Set());
+    setCustomExclusions([]);
+    setBlockedSlotKeys(new Set());
   }, [type]);
 
   useEffect(() => {
@@ -332,14 +415,69 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   const slotPreview = useMemo(() => {
     return dates.map((d) => {
       if (!d.date || !d.startTime || !d.endTime) return { ...d, count: 0 };
+      if (type === 'parent' && excludeClassTime && excludedTimes.length > 0) {
+        const ranges = computeAvailableRanges(d.startTime, d.endTime, excludedTimes);
+        const count = ranges.reduce((sum, r) => {
+          const s = parseTimeToMinutes(r.startTime);
+          const e = parseTimeToMinutes(r.endTime);
+          return sum + Math.floor((e - s) / slotMinutes);
+        }, 0);
+        return { ...d, count };
+      }
       const start = parseTimeToMinutes(d.startTime);
       const end = parseTimeToMinutes(d.endTime);
       const count = start < end ? Math.floor((end - start) / slotMinutes) : 0;
       return { ...d, count };
     });
-  }, [dates, slotMinutes]);
+  }, [dates, slotMinutes, type, excludeClassTime, excludedTimes]);
 
   const totalSlots = slotPreview.reduce((sum, d) => sum + d.count, 0);
+
+  // 생성될 슬롯 미리보기 계산
+  const generatedSlots = useMemo(() => {
+    const result: { date: string; startTime: string; endTime: string }[] = [];
+    const validDates = dates.filter((d) => d.date && d.startTime && d.endTime);
+
+    for (const d of validDates) {
+      if (type === 'parent' && excludeClassTime && excludedTimes.length > 0) {
+        const ranges = computeAvailableRanges(d.startTime, d.endTime, excludedTimes);
+        for (const r of ranges) {
+          let current = parseTimeToMinutes(r.startTime);
+          const end = parseTimeToMinutes(r.endTime);
+          while (current + slotMinutes <= end) {
+            result.push({
+              date: d.date,
+              startTime: minutesToTime(current),
+              endTime: minutesToTime(current + slotMinutes),
+            });
+            current += slotMinutes;
+          }
+        }
+      } else {
+        let current = parseTimeToMinutes(d.startTime);
+        const end = parseTimeToMinutes(d.endTime);
+        while (current + slotMinutes <= end) {
+          result.push({
+            date: d.date,
+            startTime: minutesToTime(current),
+            endTime: minutesToTime(current + slotMinutes),
+          });
+          current += slotMinutes;
+        }
+      }
+    }
+    return result;
+  }, [dates, slotMinutes, type, excludeClassTime, excludedTimes]);
+
+  const toggleBlockSlot = useCallback((date: string, startTime: string) => {
+    const key = `${date}_${startTime}`;
+    setBlockedSlotKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   /* ── 유효성 ── */
 
@@ -350,6 +488,9 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     totalSlots > 0 &&
     isOnline &&
     !saving;
+
+  const canGoStep2 = title.trim().length > 0 && methods.length > 0;
+  const canGoStep3 = dates.length > 0 && totalSlots > 0;
 
   /* ── 생성 ── */
 
@@ -362,7 +503,15 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
         type,
         methods,
         slotMinutes,
-        dates: dates.filter((d) => d.date && d.startTime && d.endTime).map(({ date, startTime, endTime }) => ({ date, startTime, endTime })),
+        dates: dates
+          .filter((d) => d.date && d.startTime && d.endTime)
+          .flatMap(({ date, startTime, endTime }) => {
+            if (type === 'parent' && excludeClassTime && excludedTimes.length > 0) {
+              return computeAvailableRanges(startTime, endTime, excludedTimes)
+                .map((r) => ({ date, startTime: r.startTime, endTime: r.endTime }));
+            }
+            return [{ date, startTime, endTime }];
+          }),
         targetClassName: '',
         targetStudents: students.filter((s) => !s.isVacant).map((_, i) => ({ number: i + 1 })),
         message: message.trim() || undefined,
@@ -380,6 +529,10 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
         targetStudents: schedule.targetStudents,
         message: schedule.message,
         adminKey: schedule.adminKey,
+        blockedSlots: [...blockedSlotKeys].map((key) => {
+          const [date, startTime] = key.split('_');
+          return { date: date!, startTime: startTime! };
+        }),
       });
 
       showToast('상담 일정이 생성되었습니다', 'success');
@@ -390,7 +543,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     } finally {
       setSaving(false);
     }
-  }, [canSubmit, title, type, methods, slotMinutes, dates, message, createSchedule, showToast, onClose]);
+  }, [canSubmit, title, type, methods, slotMinutes, dates, message, createSchedule, showToast, onClose, excludeClassTime, excludedTimes, blockedSlotKeys]);
 
   return (
     <div
@@ -401,17 +554,62 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
         className="bg-sp-card rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 헤더 */}
-        <div className="flex items-center justify-between p-5 border-b border-sp-border shrink-0">
-          <h3 className="text-lg font-bold text-sp-text">새 상담 일정</h3>
-          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
-            <span className="material-symbols-outlined">close</span>
-          </button>
+        {/* 헤더 + 스텝 인디케이터 */}
+        <div className="p-5 border-b border-sp-border shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-bold text-sp-text">새 상담 일정</h3>
+            <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            {([
+              { step: 1 as const, label: '기본 설정' },
+              { step: 2 as const, label: '시간 설정' },
+              { step: 3 as const, label: '슬롯 확인' },
+            ]).map(({ step, label }, idx) => (
+              <div key={step} className="flex items-center flex-1">
+                <button
+                  onClick={() => {
+                    if (step < currentStep) setCurrentStep(step);
+                    else if (step === 2 && canGoStep2) setCurrentStep(2);
+                    else if (step === 3 && canGoStep2 && canGoStep3) setCurrentStep(3);
+                  }}
+                  className={`flex items-center gap-1.5 text-xs transition-colors ${
+                    step === currentStep
+                      ? 'text-sp-accent font-medium'
+                      : step < currentStep
+                        ? 'text-sp-text cursor-pointer hover:text-sp-accent'
+                        : 'text-sp-muted/50'
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    step === currentStep
+                      ? 'bg-sp-accent text-white'
+                      : step < currentStep
+                        ? 'bg-sp-accent/30 text-sp-accent'
+                        : 'bg-sp-surface text-sp-muted/50'
+                  }`}>
+                    {step < currentStep ? (
+                      <span className="material-symbols-outlined text-xs">check</span>
+                    ) : step}
+                  </span>
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+                {idx < 2 && (
+                  <div className={`flex-1 h-px mx-2 ${
+                    step < currentStep ? 'bg-sp-accent/30' : 'bg-sp-border'
+                  }`} />
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* 본문 (스크롤) */}
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
 
+          {currentStep === 1 && (<>
           {/* 제목 */}
           <div>
             <label className="text-xs font-medium text-sp-muted mb-1.5 block">제목 *</label>
@@ -476,7 +674,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               {type === 'student' ? '1인당 상담 시간' : '슬롯 단위'}
             </label>
             <div className="flex flex-wrap gap-2">
-              {SLOT_PRESETS.map((mins) => (
+              {(type === 'parent' ? PARENT_SLOT_PRESETS : STUDENT_SLOT_PRESETS).map((mins) => (
                 <button
                   key={mins}
                   onClick={() => { setSlotMinutes(mins); setCustomSlot(false); }}
@@ -519,8 +717,15 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                 <span className="text-xs text-sp-muted">분 (5~180)</span>
               </div>
             )}
+            {type === 'parent' && !customSlot && (
+              <p className="text-[10px] text-sp-muted/70 mt-1.5">
+                💡 학부모 상담은 보통 45~55분으로 설정합니다
+              </p>
+            )}
           </div>
+          </>)}
 
+          {currentStep === 2 && (<>
           {/* 상담 날짜 */}
           <div>
             <label className="text-xs font-medium text-sp-muted mb-1.5 block">
@@ -724,6 +929,131 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                   <span className="material-symbols-outlined text-sm">add</span>
                   날짜 추가
                 </button>
+
+                {/* 수업 시간 제외 */}
+                {breakPresets.length > 0 ? (
+                  <div className="mt-1">
+                    <button
+                      onClick={() => setExcludeClassTime((v) => !v)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all w-full ${
+                        excludeClassTime
+                          ? 'bg-sp-accent/10 border-sp-accent/40 text-sp-accent'
+                          : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        {excludeClassTime ? 'toggle_on' : 'toggle_off'}
+                      </span>
+                      <span className="flex-1 text-left">수업 시간 제외</span>
+                      <span className="text-[10px] text-sp-muted">시간표 연동</span>
+                    </button>
+
+                    {excludeClassTime && (
+                      <div className="mt-2 rounded-lg border border-sp-border bg-sp-surface/50 p-3 flex flex-col gap-2">
+                        <label className="text-[10px] font-medium text-sp-muted">시간표 기반 제외 시간</label>
+                        <div className="flex flex-col gap-1">
+                          {breakPresets.map((preset) => {
+                            const isClass = preset.id.startsWith('period-');
+                            const isExcluded = excludedPeriodIds.has(preset.id);
+                            return (
+                              <button
+                                key={preset.id}
+                                onClick={() => toggleExcludedPeriod(preset.id)}
+                                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs transition-all ${
+                                  isExcluded
+                                    ? 'bg-red-500/10 text-red-400'
+                                    : 'text-sp-muted hover:text-sp-text'
+                                }`}
+                              >
+                                <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                  isExcluded ? 'bg-red-500 border-red-500' : 'border-sp-border'
+                                }`}>
+                                  {isExcluded && <span className="material-symbols-outlined text-white" style={{ fontSize: '10px' }}>close</span>}
+                                </span>
+                                <span className="flex-1 text-left">{preset.label}</span>
+                                <span className="text-[10px] font-mono text-sp-muted">{preset.startTime}~{preset.endTime}</span>
+                                {isClass && !isExcluded && (
+                                  <span className="text-[9px] text-green-400">상담가능</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* 커스텀 제외 */}
+                        {customExclusions.length > 0 && (
+                          <div className="flex flex-col gap-1 mt-1">
+                            <label className="text-[10px] font-medium text-sp-muted">추가 제외 시간</label>
+                            {customExclusions.map((ex, idx) => (
+                              <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 bg-red-500/10 rounded-md">
+                                <span className="text-[10px] font-mono text-red-400">{ex.startTime}~{ex.endTime}</span>
+                                {ex.label && <span className="text-[10px] text-sp-muted">({ex.label})</span>}
+                                <button
+                                  onClick={() => setCustomExclusions((prev) => prev.filter((_, i) => i !== idx))}
+                                  className="ml-auto text-sp-muted hover:text-red-400"
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <button
+                          onClick={() => setCustomExclusions((prev) => [...prev, { startTime: '12:00', endTime: '13:00', label: '' }])}
+                          className="flex items-center justify-center gap-1 py-1.5 rounded-md border border-dashed border-sp-border text-[10px] text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
+                          제외 시간 추가
+                        </button>
+
+                        {/* 상담 가능 시간 요약 */}
+                        {dates.length > 0 && (() => {
+                          const firstDate = dates[0];
+                          if (!firstDate || !firstDate.startTime || !firstDate.endTime) return null;
+                          const ranges = computeAvailableRanges(firstDate.startTime, firstDate.endTime, excludedTimes);
+                          if (ranges.length === 0) return null;
+                          const hasShortGap = ranges.some((r) => {
+                            const dur = parseTimeToMinutes(r.endTime) - parseTimeToMinutes(r.startTime);
+                            return dur > 0 && dur < slotMinutes;
+                          });
+                          return (
+                            <div className="mt-1 p-2 rounded-md bg-sp-card border border-sp-border">
+                              <p className="text-[10px] font-medium text-sp-muted mb-1">상담 가능 시간</p>
+                              <div className="flex flex-wrap gap-1">
+                                {ranges.map((r, i) => {
+                                  const dur = parseTimeToMinutes(r.endTime) - parseTimeToMinutes(r.startTime);
+                                  const slots = Math.floor(dur / slotMinutes);
+                                  return (
+                                    <span
+                                      key={i}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono ${
+                                        slots > 0 ? 'bg-sp-accent/10 text-sp-accent' : 'bg-sp-surface text-sp-muted/50'
+                                      }`}
+                                    >
+                                      {r.startTime}~{r.endTime}
+                                      <span className="text-[9px]">({dur}분{slots > 0 ? ` / ${slots}슬롯` : ''})</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              {hasShortGap && (
+                                <p className="text-[10px] text-amber-400 mt-1.5 flex items-center gap-1">
+                                  <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>warning</span>
+                                  일부 시간대가 {slotMinutes}분보다 짧아 슬롯이 생성되지 않습니다
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-sp-muted/50 mt-1">
+                    설정 → 교시 시간 등록 후 수업 시간 제외 기능을 사용할 수 있습니다
+                  </p>
+                )}
               </div>
             )}
 
@@ -761,8 +1091,11 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                 })()}
               </div>
             )}
-          </div>
 
+          </div>
+          </>)}
+
+          {currentStep === 1 && (<>
           {/* 안내 메시지 */}
           <div>
             <label className="text-xs font-medium text-sp-muted mb-1.5 block">안내 메시지 (선택)</label>
@@ -803,38 +1136,153 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               비워두면 자동으로 생성됩니다. 한글, 영문, 숫자, -, _ 사용 가능
             </p>
           </div>
+          </>)}
 
-          {/* 오프라인 경고 */}
-          {!isOnline && (
-            <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-400/10 border border-amber-400/30 rounded-lg">
-              <span className="material-symbols-outlined text-base text-amber-400">wifi_off</span>
-              <span className="text-xs text-amber-400">인터넷 연결이 필요합니다.</span>
-            </div>
-          )}
+          {currentStep === 3 && (<>
+            {/* 슬롯 확인 및 차단 */}
+            {generatedSlots.length > 0 ? (
+              <div>
+                <label className="text-xs font-medium text-sp-muted mb-1.5 block">
+                  생성될 슬롯 ({generatedSlots.length}개)
+                  {blockedSlotKeys.size > 0 && (
+                    <span className="text-red-400 ml-1">· {blockedSlotKeys.size}개 차단</span>
+                  )}
+                </label>
+                <p className="text-[10px] text-sp-muted/70 mb-2">클릭하여 개별 슬롯을 차단/해제할 수 있습니다</p>
+                <div className="rounded-lg border border-sp-border bg-sp-surface/50 p-3 max-h-72 overflow-y-auto">
+                  {/* 날짜별 그룹 */}
+                  {(() => {
+                    const byDate = new Map<string, typeof generatedSlots>();
+                    for (const slot of generatedSlots) {
+                      const arr = byDate.get(slot.date) ?? [];
+                      arr.push(slot);
+                      byDate.set(slot.date, arr);
+                    }
+                    return [...byDate.entries()].map(([date, daySlots]) => (
+                      <div key={date} className="mb-3 last:mb-0">
+                        <p className="text-[10px] font-medium text-sp-muted mb-1.5">{date}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {daySlots.map((slot) => {
+                            const key = `${slot.date}_${slot.startTime}`;
+                            const isBlocked = blockedSlotKeys.has(key);
+                            return (
+                              <button
+                                key={key}
+                                onClick={() => toggleBlockSlot(slot.date, slot.startTime)}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono border transition-all ${
+                                  isBlocked
+                                    ? 'bg-red-500/15 border-red-500/40 text-red-400 line-through'
+                                    : 'bg-sp-card border-sp-border text-sp-text hover:border-sp-accent/50'
+                                }`}
+                                title={isBlocked ? '클릭하여 차단 해제' : '클릭하여 차단'}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: '10px' }}>
+                                  {isBlocked ? 'block' : 'check_circle'}
+                                </span>
+                                {slot.startTime}~{slot.endTime}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+
+                  {/* 요약 */}
+                  <div className="mt-2 pt-2 border-t border-sp-border flex items-center gap-3 text-[10px]">
+                    <span className="text-sp-accent font-medium">
+                      예약 가능: {generatedSlots.length - blockedSlotKeys.size}개
+                    </span>
+                    {blockedSlotKeys.size > 0 && (
+                      <span className="text-red-400">
+                        차단: {blockedSlotKeys.size}개
+                      </span>
+                    )}
+                    {blockedSlotKeys.size > 0 && (
+                      <button
+                        onClick={() => setBlockedSlotKeys(new Set())}
+                        className="text-sp-muted hover:text-sp-text ml-auto"
+                      >
+                        전체 해제
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-sp-muted">
+                <span className="material-symbols-outlined text-3xl mb-2">event_busy</span>
+                <p className="text-sm">생성될 슬롯이 없습니다</p>
+                <p className="text-[10px] mt-1">이전 단계에서 날짜와 시간을 설정하세요</p>
+              </div>
+            )}
+
+            {/* 오프라인 경고 */}
+            {!isOnline && (
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-400/10 border border-amber-400/30 rounded-lg">
+                <span className="material-symbols-outlined text-base text-amber-400">wifi_off</span>
+                <span className="text-xs text-amber-400">인터넷 연결이 필요합니다.</span>
+              </div>
+            )}
+          </>)}
         </div>
 
-        {/* 하단 버튼 */}
-        <div className="p-5 border-t border-sp-border flex justify-end gap-2 shrink-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text transition-colors"
-          >
-            취소
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={!canSubmit}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
-          >
-            {saving ? (
-              <span className="text-xs">생성 중...</span>
-            ) : (
-              <>
-                <span className="material-symbols-outlined text-base">add</span>
-                만들기
-              </>
-            )}
-          </button>
+        {/* 하단 버튼 (스텝별) */}
+        <div className="p-5 border-t border-sp-border flex items-center shrink-0">
+          {currentStep > 1 && (
+            <button
+              onClick={() => setCurrentStep((s) => Math.max(1, s - 1) as 1 | 2 | 3)}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text transition-colors"
+            >
+              <span className="material-symbols-outlined text-base">chevron_left</span>
+              이전
+            </button>
+          )}
+          <div className="flex-1" />
+          {currentStep === 1 && (
+            <>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text transition-colors mr-2"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => setCurrentStep(2)}
+                disabled={!canGoStep2}
+                className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                다음
+                <span className="material-symbols-outlined text-base">chevron_right</span>
+              </button>
+            </>
+          )}
+          {currentStep === 2 && (
+            <button
+              onClick={() => setCurrentStep(3)}
+              disabled={!canGoStep3}
+              className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              다음
+              <span className="material-symbols-outlined text-base">chevron_right</span>
+            </button>
+          )}
+          {currentStep === 3 && (
+            <button
+              onClick={handleCreate}
+              disabled={!canSubmit}
+              className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {saving ? (
+                <span className="text-xs">생성 중...</span>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-base">add</span>
+                  만들기
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

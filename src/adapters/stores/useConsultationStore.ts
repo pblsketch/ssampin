@@ -36,7 +36,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     const { customLinkCode, ...scheduleParams } = params;
     const id = crypto.randomUUID();
     const adminKey = crypto.randomUUID().slice(0, 8);
-    const shareUrl = `${SHARE_BASE_URL}/${id}`;
+    const shareUrl = `${SHARE_BASE_URL}/${id}#key=${encodeURIComponent(adminKey)}`;
     const createdAt = new Date().toISOString();
 
     // 상담 날짜 중 가장 마지막 날짜 + 30일을 만료일로 설정

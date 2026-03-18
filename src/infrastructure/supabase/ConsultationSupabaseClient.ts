@@ -127,6 +127,7 @@ export class ConsultationSupabaseClient {
     targetStudents: ReadonlyArray<{ number: number }>;
     message?: string;
     adminKey: string;
+    blockedSlots?: ReadonlyArray<{ date: string; startTime: string }>;
   }): Promise<void> {
     const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules`, {
       method: 'POST',
@@ -164,16 +165,20 @@ export class ConsultationSupabaseClient {
     }> = [];
 
     // slotMinutes 단위로 분할 (학생/학부모 동일)
+    const blockedSet = new Set(
+      (params.blockedSlots ?? []).map((b) => `${b.date}_${b.startTime}`),
+    );
     for (const d of params.dates) {
       let current = parseTime(d.startTime);
       const end = parseTime(d.endTime);
       while (current + params.slotMinutes <= end) {
+        const startTimeStr = formatTime(current);
         slots.push({
           schedule_id: params.id,
           date: d.date,
-          start_time: formatTime(current),
+          start_time: startTimeStr,
           end_time: formatTime(current + params.slotMinutes),
-          status: 'available',
+          status: blockedSet.has(`${d.date}_${startTimeStr}`) ? 'blocked' : 'available',
         });
         current += params.slotMinutes;
       }

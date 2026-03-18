@@ -63,7 +63,8 @@ interface ConsultationShareModalProps {
 function ConsultationShareModal({ schedule, onClose, onCopyLink }: ConsultationShareModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const showToast = useToastStore((s) => s.show);
-  const url = schedule.shortUrl ?? schedule.shareUrl;
+  const rawUrl = schedule.shortUrl ?? schedule.shareUrl;
+  const url = rawUrl.includes('#key=') ? rawUrl : `${rawUrl}#key=${encodeURIComponent(schedule.adminKey)}`;
 
   useEffect(() => {
     if (!canvasRef.current || !url) return;
@@ -334,11 +335,17 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     onBack();
   }, [deleteSchedule, schedule.id, showToast, track, onBack]);
 
+  /** shareUrl/shortUrl에 #key= 가 없으면 자동으로 추가 */
+  const ensureKeyHash = useCallback((url: string) => {
+    if (url.includes('#key=')) return url;
+    return `${url}#key=${encodeURIComponent(schedule.adminKey)}`;
+  }, [schedule.adminKey]);
+
   const handleCopyLink = useCallback(async () => {
-    const shareUrl = schedule.shortUrl ?? schedule.shareUrl;
-    await navigator.clipboard.writeText(shareUrl);
+    const url = ensureKeyHash(schedule.shortUrl ?? schedule.shareUrl);
+    await navigator.clipboard.writeText(url);
     showToast('링크가 복사되었습니다', 'success');
-  }, [schedule.shortUrl, schedule.shareUrl, showToast]);
+  }, [schedule.shortUrl, schedule.shareUrl, showToast, ensureKeyHash]);
 
   const handleAddToCalendar = useCallback(async (
     booking: BookingPublic,

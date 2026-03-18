@@ -31,6 +31,13 @@
   }
 }
 
+/* Light theme: native date/time picker icons should be dark */
+.theme-light input[type='date'],
+.theme-light input[type='time'],
+.theme-light input[type='datetime-local'] {
+  color-scheme: light;
+}
+
 :root {
   font-family:
     'Noto Sans KR',
