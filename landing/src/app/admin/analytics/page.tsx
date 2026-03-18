@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import EventLog from './EventLog';
+import VersionDistribution from './VersionDistribution';
 
 export const dynamic = 'force-dynamic';
 
@@ -386,32 +387,7 @@ export default async function AdminAnalyticsPage() {
 
             {/* 버전 분포 */}
             <Section title="버전 분포 (최근 90일)">
-              {versions.length === 0 ? (
-                <p className="text-gray-500 text-sm">데이터 없음</p>
-              ) : (
-                <div className="space-y-2">
-                  {versions.map((v) => (
-                    <div key={v.app_version} className="flex items-center gap-3">
-                      <span className={`w-16 text-sm font-mono ${v.app_version === versions[0]?.app_version ? 'text-green-400' : 'text-gray-400'}`}>
-                        v{v.app_version}
-                      </span>
-                      <div className="flex-1 bg-gray-800 rounded-full h-5 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full flex items-center justify-end pr-2 text-xs font-medium ${
-                            v.app_version === versions[0]?.app_version ? 'bg-green-500' : 'bg-gray-600'
-                          }`}
-                          style={{
-                            width: `${Math.min(100, (v.users / Math.max(...versions.map(x => x.users))) * 100)}%`,
-                            minWidth: '2rem',
-                          }}
-                        >
-                          {v.users}명
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <VersionDistribution versions={versions} />
             </Section>
 
             {/* 리텐션 (코호트 분석) */}
