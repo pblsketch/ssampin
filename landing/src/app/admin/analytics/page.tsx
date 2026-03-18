@@ -385,7 +385,7 @@ export default async function AdminAnalyticsPage() {
             </Section>
 
             {/* 버전 분포 */}
-            <Section title="버전 분포 (최근 30일)">
+            <Section title="버전 분포 (최근 90일)">
               {versions.length === 0 ? (
                 <p className="text-gray-500 text-sm">데이터 없음</p>
               ) : (
