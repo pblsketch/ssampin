@@ -57,6 +57,7 @@ export const SCHOOL_LEVEL_OPTIONS: { value: SchoolLevel; label: string; desc: st
   { value: 'elementary', label: '초등학교', desc: '40분 수업 · 6교시' },
   { value: 'middle', label: '중학교', desc: '45분 수업 · 7교시' },
   { value: 'high', label: '고등학교', desc: '50분 수업 · 7교시' },
+  { value: 'custom', label: '직접 설정', desc: '수업 시간·교시 수 자유 설정' },
 ];
 
 export const AUTO_LOCK_OPTIONS = [

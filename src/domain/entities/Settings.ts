@@ -9,7 +9,7 @@ export interface DashboardThemeSettings {
   readonly customColors?: ThemeColors;
 }
 
-export type SchoolLevel = 'elementary' | 'middle' | 'high';
+export type SchoolLevel = 'elementary' | 'middle' | 'high' | 'custom';
 
 export type FontFamily =
   | 'noto-sans'
@@ -145,6 +145,8 @@ export interface Settings {
   readonly teacherName: string;
   readonly subject: string;
   readonly schoolLevel: SchoolLevel;
+  /** 직접 설정 시 수업 시간(분). schoolLevel이 'custom'일 때 사용 */
+  readonly customPeriodDuration?: number;
   readonly maxPeriods: number;
   readonly periodTimes: readonly PeriodTime[];
   readonly seatingRows: number;
@@ -178,4 +180,6 @@ export interface Settings {
   readonly sync?: SyncSettings;
   /** 행사 알림 팝업 활성화 여부 (기본: true) */
   readonly eventAlertEnabled?: boolean;
+  /** 온보딩에서 선택한 교사 역할 (복수) */
+  readonly teacherRoles?: readonly ('homeroom' | 'subject' | 'admin')[];
 }

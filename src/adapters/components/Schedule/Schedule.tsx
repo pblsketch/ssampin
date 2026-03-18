@@ -18,6 +18,7 @@ import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { NeisSchedulePanel } from './NeisSchedulePanel';
 
 type ScheduleView = 'month' | 'semester' | 'year';
@@ -75,6 +76,8 @@ export function Schedule() {
 
   // 구글 캘린더 연결 상태
   const { isConnected: googleConnected, syncState, syncNow: googleSyncNow, startAuth, isLoading: googleLoading, error: googleError } = useCalendarSyncStore();
+  // 학교급 (custom이면 NEIS 숨김)
+  const schoolLevel = useSettingsStore((s) => s.settings.schoolLevel);
   // NEIS 학사일정 상태
   const neisEnabled = useNeisScheduleStore((s) => s.settings.enabled);
   const neisSyncStatus = useNeisScheduleStore((s) => s.syncStatus);
@@ -258,29 +261,31 @@ export function Schedule() {
         </div>
 
         <div className="flex items-center gap-1.5 xl:gap-2 flex-wrap">
-          {/* NEIS 학사일정 버튼 */}
-          <button
-            type="button"
-            onClick={() => setShowNeisPanel(true)}
-            className={`flex items-center gap-1.5 border px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all ${
-              neisEnabled
-                ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10'
-                : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-            }`}
-            title="NEIS 학사일정 설정"
-          >
-            {neisSyncStatus === 'syncing' ? (
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-400/30 border-t-purple-400" />
-            ) : (
-              <span className="material-symbols-outlined text-[16px]">school</span>
-            )}
-            <span className="hidden sm:inline">NEIS</span>
-            {neisEnabled && neisSyncedCount > 0 && (
-              <span className="text-purple-300 text-[10px] bg-purple-500/15 px-1.5 py-0.5 rounded">
-                {neisSyncedCount}
-              </span>
-            )}
-          </button>
+          {/* NEIS 학사일정 버튼 — custom(직접 설정)일 때 숨김 */}
+          {schoolLevel !== 'custom' && (
+            <button
+              type="button"
+              onClick={() => setShowNeisPanel(true)}
+              className={`flex items-center gap-1.5 border px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all ${
+                neisEnabled
+                  ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10'
+                  : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+              }`}
+              title="NEIS 학사일정 설정"
+            >
+              {neisSyncStatus === 'syncing' ? (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-400/30 border-t-purple-400" />
+              ) : (
+                <span className="material-symbols-outlined text-[16px]">school</span>
+              )}
+              <span className="hidden sm:inline">NEIS</span>
+              {neisEnabled && neisSyncedCount > 0 && (
+                <span className="text-purple-300 text-[10px] bg-purple-500/15 px-1.5 py-0.5 rounded">
+                  {neisSyncedCount}
+                </span>
+              )}
+            </button>
+          )}
           {/* 구글 캘린더 버튼 */}
           {googleConnected ? (
             <button

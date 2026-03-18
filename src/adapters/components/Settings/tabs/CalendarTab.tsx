@@ -116,11 +116,11 @@ export function CalendarTab({ draft, patch }: Props) {
         </div>
       </SettingsSection>
 
-      {/* NEIS 학사일정 */}
-      <NeisScheduleSection />
+      {/* NEIS 학사일정 — custom(직접 설정)일 때 숨김 */}
+      {draft.schoolLevel !== 'custom' && <NeisScheduleSection />}
 
-      {/* NEIS 시간표 자동 동기화 */}
-      <NeisTimetableAutoSyncSection />
+      {/* NEIS 시간표 자동 동기화 — custom(직접 설정)일 때 숨김 */}
+      {draft.schoolLevel !== 'custom' && <NeisTimetableAutoSyncSection />}
 
       {/* 구글 캘린더 연동 */}
       <SettingsSection

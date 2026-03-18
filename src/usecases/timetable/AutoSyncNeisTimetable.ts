@@ -48,7 +48,7 @@ export async function autoSyncNeisTimetable(
   apiKey: string,
   neisSettings: { schoolCode: string; atptCode: string },
   autoSync: NeisAutoSyncSettings,
-  schoolLevel: 'elementary' | 'middle' | 'high',
+  schoolLevel: 'elementary' | 'middle' | 'high' | 'custom',
   existingSubjectColors: SubjectColorMap,
 ): Promise<AutoSyncResult> {
   // 비활성화 또는 설정 불완전

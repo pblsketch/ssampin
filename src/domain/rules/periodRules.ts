@@ -53,6 +53,7 @@ export const PERIOD_DURATION: Record<SchoolLevel, number> = {
   elementary: 40,
   middle: 45,
   high: 50,
+  custom: 50,
 };
 
 /** 학교급별 기본 교시 수 */
@@ -60,6 +61,7 @@ const DEFAULT_TOTAL_PERIODS: Record<SchoolLevel, number> = {
   elementary: 6,
   middle: 7,
   high: 7,
+  custom: 6,
 };
 
 /** 학교급별 기본 1교시 시작 시간(분) */
@@ -67,6 +69,7 @@ const DEFAULT_FIRST_START: Record<SchoolLevel, number> = {
   elementary: 9 * 60,       // 09:00
   middle: 8 * 60 + 50,      // 08:50
   high: 8 * 60 + 50,        // 08:50
+  custom: 9 * 60,            // 09:00
 };
 
 /** 학교급별 기본 점심 시간(분) */
@@ -74,6 +77,7 @@ const DEFAULT_LUNCH_DURATION: Record<SchoolLevel, number> = {
   elementary: 50,
   middle: 50,
   high: 60,
+  custom: 60,
 };
 
 export function formatTime(totalMinutes: number): string {
@@ -89,6 +93,7 @@ export interface PeriodPreset {
   lunchAfterPeriod: number; // 점심 시작 교시 (이 교시 직후 점심)
   lunchDuration: number;    // 분
   totalPeriods: number;
+  customPeriodDuration?: number;
 }
 
 /** 학교급별 기본 프리셋 값 */
@@ -100,6 +105,7 @@ export function getDefaultPreset(level: SchoolLevel): PeriodPreset {
     lunchAfterPeriod: 4,
     lunchDuration: DEFAULT_LUNCH_DURATION[level],
     totalPeriods: DEFAULT_TOTAL_PERIODS[level],
+    customPeriodDuration: level === 'custom' ? 50 : undefined,
   };
 }
 
@@ -107,7 +113,9 @@ export function getDefaultPreset(level: SchoolLevel): PeriodPreset {
  * 프리셋 기반으로 교시 시간표 자동 생성
  */
 export function generatePeriodTimes(preset: PeriodPreset): PeriodTime[] {
-  const classDuration = PERIOD_DURATION[preset.schoolLevel];
+  const classDuration = preset.schoolLevel === 'custom' && preset.customPeriodDuration
+    ? preset.customPeriodDuration
+    : PERIOD_DURATION[preset.schoolLevel];
   const result: PeriodTime[] = [];
   let cursor = parseMinutes(preset.firstPeriodStart);
 

@@ -23,7 +23,9 @@ export function PeriodTab({ draft, patch }: Props) {
       if (!existing) return;
 
       if (field === 'start' && draft.schoolLevel) {
-        const duration = PERIOD_DURATION[draft.schoolLevel];
+        const duration = draft.schoolLevel === 'custom' && draft.customPeriodDuration
+          ? draft.customPeriodDuration
+          : PERIOD_DURATION[draft.schoolLevel];
         const startMin = parseMinutes(value);
         const endH = Math.floor((startMin + duration) / 60);
         const endM = (startMin + duration) % 60;
@@ -98,6 +100,7 @@ export function PeriodTab({ draft, patch }: Props) {
       schoolLevel: preset.schoolLevel,
       periodTimes: generated,
       maxPeriods: generated.length,
+      customPeriodDuration: preset.schoolLevel === 'custom' ? preset.customPeriodDuration : undefined,
     });
     setShowPreset(false);
   }, [preset, patch]);
@@ -145,7 +148,7 @@ export function PeriodTab({ draft, patch }: Props) {
             <span className="text-xs text-sp-muted ml-auto">학교급에 맞게 교시 시간을 자동으로 생성합니다</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {SCHOOL_LEVEL_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -213,6 +216,42 @@ export function PeriodTab({ draft, patch }: Props) {
               </p>
             </div>
           </div>
+
+          {/* custom일 때 수업 시간/교시 수 입력 */}
+          {preset.schoolLevel === 'custom' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-sp-muted">수업 시간 (분)</label>
+                <input
+                  type="number"
+                  min={20}
+                  max={120}
+                  value={preset.customPeriodDuration ?? 50}
+                  onChange={(e) => setPreset((p) => ({
+                    ...p,
+                    customPeriodDuration: Math.max(20, Math.min(120, Number(e.target.value))),
+                  }))}
+                  className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+                <p className="text-[10px] text-sp-muted/70">20~120분</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-sp-muted">총 교시 수</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={preset.totalPeriods}
+                  onChange={(e) => setPreset((p) => ({
+                    ...p,
+                    totalPeriods: Math.max(1, Math.min(12, Number(e.target.value))),
+                  }))}
+                  className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+                <p className="text-[10px] text-sp-muted/70">1~12교시</p>
+              </div>
+            </div>
+          )}
 
           {/* 미리보기 */}
           <div className="mt-1 p-3 rounded-lg bg-sp-bg/50 border border-sp-border/50">

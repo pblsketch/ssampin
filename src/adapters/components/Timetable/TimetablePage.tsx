@@ -298,8 +298,8 @@ export function TimetablePage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* 자동 동기화 상태 (학급 시간표 탭에서만 표시) */}
-          {tab === 'class' && hasSchoolInfo && (
+          {/* 자동 동기화 상태 (학급 시간표 탭 + 비-custom 학교급에서만 표시) */}
+          {tab === 'class' && hasSchoolInfo && settings.schoolLevel !== 'custom' && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => void handleToggleAutoSync()}

@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Settings, SchoolLevel } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
+import { NAV_ITEMS } from '@adapters/components/Layout/Sidebar';
+import type { PageId } from '@adapters/components/Layout/Sidebar';
+import { ROLE_MENU_MAP, MENU_DESCRIPTIONS, type TeacherRoleId } from './menuRecommendations';
+import { getPresetKey } from '@widgets/presets';
 
 export function Onboarding() {
     const { track } = useAnalytics();
@@ -19,27 +23,104 @@ export function Onboarding() {
         schoolLevel: 'middle',
         maxPeriods: generatePeriodTimes(getDefaultPreset('middle')).length,
         periodTimes: generatePeriodTimes(getDefaultPreset('middle')),
+        hiddenMenus: [],
     });
 
-    const nextStep = () => setStep((s) => Math.min(4, s + 1));
+    const [selectedRoles, setSelectedRoles] = useState<TeacherRoleId[]>([]);
+
+    // 역할 선택에 따른 추천 메뉴 계산
+    const recommendedMenuIds = useMemo(() => {
+        if (selectedRoles.length === 0) {
+            return NAV_ITEMS.map((item) => item.id);
+        }
+        const menuSet = new Set<PageId>();
+        menuSet.add('dashboard');
+        for (const role of selectedRoles) {
+            for (const menuId of ROLE_MENU_MAP[role]) {
+                menuSet.add(menuId);
+            }
+        }
+        return Array.from(menuSet);
+    }, [selectedRoles]);
+
+    // 개별 메뉴 토글 상태 (추천 기반 초기화 + 사용자 오버라이드)
+    const [menuOverrides, setMenuOverrides] = useState<Record<string, boolean>>({});
+
+    // 최종 메뉴 표시 상태 계산
+    const menuVisibility = useMemo(() => {
+        const result: Record<string, boolean> = {};
+        for (const item of NAV_ITEMS) {
+            const recommended = recommendedMenuIds.includes(item.id);
+            result[item.id] = menuOverrides[item.id] ?? recommended;
+        }
+        result['dashboard'] = true;
+        return result;
+    }, [recommendedMenuIds, menuOverrides]);
+
+    // 역할 변경
+    const toggleRole = useCallback((roleId: TeacherRoleId) => {
+        setSelectedRoles((prev) =>
+            prev.includes(roleId)
+                ? prev.filter((r) => r !== roleId)
+                : [...prev, roleId],
+        );
+        setMenuOverrides({});
+    }, []);
+
+    // 개별 메뉴 토글
+    const toggleMenu = useCallback((menuId: string) => {
+        if (menuId === 'dashboard') return;
+        setMenuOverrides((prev) => ({
+            ...prev,
+            [menuId]: !(prev[menuId] ?? recommendedMenuIds.includes(menuId as PageId)),
+        }));
+    }, [recommendedMenuIds]);
+
+    const nextStep = () => setStep((s) => Math.min(5, s + 1));
     const prevStep = () => setStep((s) => Math.max(1, s - 1));
 
     const handleFinish = async () => {
-        track('onboarding_complete', { step: 4 });
+        track('onboarding_complete', { step: 5 });
+
+        // hiddenMenus 계산
+        const hiddenMenus = NAV_ITEMS
+            .filter((item) => !menuVisibility[item.id])
+            .map((item) => item.id);
+
+        const finalDraft: Partial<Settings> = {
+            ...draft,
+            hiddenMenus,
+            teacherRoles: selectedRoles.length > 0 ? selectedRoles : undefined,
+        };
+
+        // 역할 선택 이벤트
+        track('onboarding_roles_selected', {
+            roles: selectedRoles,
+            hiddenMenuCount: hiddenMenus.length,
+            visibleMenuCount: NAV_ITEMS.length - hiddenMenus.length,
+        });
+
+        // 위젯 프리셋 결정
+        const presetKey = getPresetKey(
+            (finalDraft.schoolLevel ?? 'middle') as 'elementary' | 'middle' | 'high' | 'custom',
+            selectedRoles.includes('homeroom'),
+            selectedRoles,
+        );
+        track('onboarding_widget_preset', { presetKey, roles: selectedRoles });
 
         // school_set 이벤트
-        if (draft.schoolName) {
+        if (finalDraft.schoolName) {
             track('school_set', {
-                school: draft.schoolName,
-                level: draft.schoolLevel ?? 'middle',
+                school: finalDraft.schoolName,
+                level: finalDraft.schoolLevel ?? 'middle',
                 region: 'unknown',
             });
         }
 
         // class_set 이벤트
-        if (draft.className) {
-            const gradeMatch = draft.className.match(/(\d+)학년/);
-            const classMatch = draft.className.match(/(\d+)반/);
+        if (finalDraft.className) {
+            const gradeMatch = finalDraft.className.match(/(\d+)학년/);
+            const classMatch = finalDraft.className.match(/(\d+)반/);
             track('class_set', {
                 grade: gradeMatch ? parseInt(gradeMatch[1] ?? '0', 10) : 0,
                 classNum: classMatch ? parseInt(classMatch[1] ?? '0', 10) : 0,
@@ -47,7 +128,7 @@ export function Onboarding() {
             });
         }
 
-        await completeOnboarding(draft);
+        await completeOnboarding(finalDraft);
     };
 
     const patch = (patch: Partial<Settings>) => {
@@ -55,6 +136,10 @@ export function Onboarding() {
     };
 
     const setPresetByLevel = (level: SchoolLevel) => {
+        if (level === 'custom') {
+            setDraft((prev) => ({ ...prev, schoolLevel: level, customPeriodDuration: 50, maxPeriods: 6 }));
+            return;
+        }
         const p = getDefaultPreset(level);
         const times = generatePeriodTimes(p);
         setDraft((prev) => ({ ...prev, schoolLevel: level, maxPeriods: times.length, periodTimes: times }));
@@ -73,7 +158,9 @@ export function Onboarding() {
             if (!existing) return prev;
 
             if (field === 'start' && prev.schoolLevel) {
-                const duration = PERIOD_DURATION[prev.schoolLevel];
+                const duration = prev.schoolLevel === 'custom' && prev.customPeriodDuration
+                    ? prev.customPeriodDuration
+                    : PERIOD_DURATION[prev.schoolLevel];
                 const delta = parseMinutes(value) - parseMinutes(existing.start);
 
                 // 현재 교시: 시작 시간 변경 + 종료 시간 자동 계산
@@ -104,7 +191,7 @@ export function Onboarding() {
             <div className="bg-sp-card w-full max-w-2xl rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden flex flex-col min-h-[500px]">
                 {/* Indicators */}
                 <div className="flex justify-center gap-2 pt-8 pb-4">
-                    {[1, 2, 3, 4].map((i) => (
+                    {[1, 2, 3, 4, 5].map((i) => (
                         <div
                             key={i}
                             className={`w-2.5 h-2.5 rounded-full transition-all ${i === step ? 'bg-sp-accent w-6' : i < step ? 'bg-sp-accent/50' : 'bg-slate-700'
@@ -195,6 +282,7 @@ export function Onboarding() {
                                     { id: 'elementary', label: '초등학교 (6교시)' },
                                     { id: 'middle', label: '중학교 (7교시)' },
                                     { id: 'high', label: '고등학교 (7교시)' },
+                                    { id: 'custom', label: '직접 설정' },
                                 ].map((l) => (
                                     <button
                                         key={l.id}
@@ -209,6 +297,54 @@ export function Onboarding() {
                                     </button>
                                 ))}
                             </div>
+
+                            {draft.schoolLevel === 'custom' && (
+                                <div className="flex gap-4 w-full max-w-lg mb-4">
+                                    <div className="flex-1 space-y-1">
+                                        <label className="text-xs text-sp-muted block">수업 시간 (분)</label>
+                                        <input
+                                            type="number"
+                                            min={20}
+                                            max={120}
+                                            value={draft.customPeriodDuration ?? 50}
+                                            onChange={(e) => {
+                                                const dur = Math.max(20, Math.min(120, Number(e.target.value)));
+                                                setDraft((prev) => ({ ...prev, customPeriodDuration: dur }));
+                                            }}
+                                            className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent"
+                                        />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <label className="text-xs text-sp-muted block">총 교시 수</label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={12}
+                                            value={draft.maxPeriods ?? 6}
+                                            onChange={(e) => {
+                                                const total = Math.max(1, Math.min(12, Number(e.target.value)));
+                                                setDraft((prev) => ({ ...prev, maxPeriods: total }));
+                                            }}
+                                            className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent"
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const preset = {
+                                                ...getDefaultPreset('custom'),
+                                                totalPeriods: draft.maxPeriods ?? 6,
+                                                customPeriodDuration: draft.customPeriodDuration ?? 50,
+                                            };
+                                            const times = generatePeriodTimes(preset);
+                                            setDraft((prev) => ({ ...prev, periodTimes: times, maxPeriods: times.length }));
+                                        }}
+                                        className="self-end px-4 py-2 bg-sp-accent hover:bg-blue-600 rounded-lg text-sm text-white font-medium transition-colors"
+                                    >
+                                        생성
+                                    </button>
+                                </div>
+                            )}
 
                             <div className="w-full max-w-lg bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
                                 <div className="max-h-[240px] overflow-y-auto">
@@ -251,6 +387,109 @@ export function Onboarding() {
                     )}
 
                     {step === 4 && (
+                        <div className="animate-in fade-in slide-in-from-right-8 duration-300 flex flex-col">
+                            <h2 className="text-2xl font-bold text-white mb-2 text-center">나에게 맞는 메뉴 설정</h2>
+                            <p className="text-sp-muted text-center mb-6">역할을 선택하면 맞춤 메뉴를 추천해 드려요.</p>
+
+                            {/* 역할 선택 */}
+                            <div className="mb-6">
+                                <p className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-3 text-center">나의 역할 (복수 선택 가능)</p>
+                                <div className="flex justify-center gap-3">
+                                    {([
+                                        { id: 'homeroom' as TeacherRoleId, label: '담임교사', icon: 'school', desc: '학급 담임을 맡고 있어요' },
+                                        { id: 'subject' as TeacherRoleId, label: '교과교사', icon: 'menu_book', desc: '교과 수업을 담당해요' },
+                                        { id: 'admin' as TeacherRoleId, label: '관리자/부장', icon: 'admin_panel_settings', desc: '부장 또는 관리 업무를 해요' },
+                                    ]).map((role) => {
+                                        const isSelected = selectedRoles.includes(role.id);
+                                        return (
+                                            <button
+                                                key={role.id}
+                                                type="button"
+                                                onClick={() => toggleRole(role.id)}
+                                                className={`flex flex-col items-center gap-2 px-6 py-4 rounded-xl border-2 transition-all ${
+                                                    isSelected
+                                                        ? 'bg-sp-accent/20 border-sp-accent text-white ring-1 ring-sp-accent shadow-lg shadow-sp-accent/10'
+                                                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
+                                                }`}
+                                            >
+                                                <span className="material-symbols-outlined text-2xl">{role.icon}</span>
+                                                <span className="font-bold text-sm">{role.label}</span>
+                                                <span className="text-xs text-sp-muted">{role.desc}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* 메뉴 토글 */}
+                            {selectedRoles.length > 0 && (
+                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                    <p className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-3">추천 메뉴</p>
+                                    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden max-h-[240px] overflow-y-auto">
+                                        {NAV_ITEMS.map((item) => {
+                                            const isAlwaysVisible = item.id === 'dashboard';
+                                            const isVisible = menuVisibility[item.id] ?? true;
+
+                                            return (
+                                                <div
+                                                    key={item.id}
+                                                    className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50 last:border-b-0 hover:bg-slate-700/30 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`material-symbols-outlined text-lg ${isVisible ? 'text-sp-muted' : 'text-sp-muted/30'}`}>
+                                                            {item.icon}
+                                                        </span>
+                                                        <div>
+                                                            <span className={`text-sm font-medium ${isVisible ? 'text-sp-text' : 'text-sp-muted/40'}`}>
+                                                                {item.label}
+                                                            </span>
+                                                            {MENU_DESCRIPTIONS[item.id] && (
+                                                                <p className={`text-xs ${isVisible ? 'text-sp-muted' : 'text-sp-muted/30'}`}>
+                                                                    {MENU_DESCRIPTIONS[item.id]}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        {isAlwaysVisible && (
+                                                            <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded ml-1">항상 표시</span>
+                                                        )}
+                                                    </div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isAlwaysVisible || isVisible}
+                                                            onChange={() => toggleMenu(item.id)}
+                                                            disabled={isAlwaysVisible}
+                                                            className="sr-only peer"
+                                                        />
+                                                        <div className={`w-9 h-5 rounded-full transition-colors ${
+                                                            isAlwaysVisible
+                                                                ? 'bg-sp-accent/50 cursor-not-allowed'
+                                                                : isVisible
+                                                                    ? 'bg-sp-accent'
+                                                                    : 'bg-slate-600'
+                                                        } after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all ${
+                                                            (isAlwaysVisible || isVisible) ? 'after:translate-x-4' : ''
+                                                        }`} />
+                                                    </label>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-3 text-center">
+                                        나중에 <span className="text-sp-accent">설정 &gt; 사이드바</span>에서 언제든 변경할 수 있어요
+                                    </p>
+                                </div>
+                            )}
+
+                            {selectedRoles.length === 0 && (
+                                <p className="text-sm text-slate-500 text-center mt-4">
+                                    역할을 선택하면 맞춤 메뉴가 추천됩니다
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {step === 5 && (
                         <div className="text-center animate-in zoom-in-95 duration-500">
                             <div className="mx-auto w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6">
                                 <span className="material-symbols-outlined text-6xl text-emerald-400">check_circle</span>
@@ -271,7 +510,7 @@ export function Onboarding() {
                 </div>
 
                 {/* Action Bar */}
-                {step > 1 && step < 4 && (
+                {step > 1 && step < 5 && (
                     <div className="bg-slate-900/50 p-6 flex justify-between border-t border-slate-800">
                         <button
                             type="button"

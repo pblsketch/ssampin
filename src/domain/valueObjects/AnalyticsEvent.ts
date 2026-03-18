@@ -33,7 +33,9 @@ export type AnalyticsEventName =
   | 'feedback_submit'
   | 'settings_change'
   | 'timetable_neis_sync'
-  | 'widget_layout_change';
+  | 'widget_layout_change'
+  | 'onboarding_roles_selected'
+  | 'onboarding_widget_preset';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -89,4 +91,6 @@ export interface AnalyticsEventProperties {
   settings_change: { section: string; key: string };
   timetable_neis_sync: { success: boolean };
   widget_layout_change: { from: string; to: string };
+  onboarding_roles_selected: { roles: string[]; hiddenMenuCount: number; visibleMenuCount: number };
+  onboarding_widget_preset: { presetKey: string; roles: string[] };
 }

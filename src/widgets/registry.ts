@@ -32,7 +32,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 2, h: 5 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['middle', 'high'],
+      schoolLevel: ['middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: WeeklyTimetable,
@@ -48,7 +48,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 4 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: TodayClass,
@@ -64,7 +64,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 2, h: 5 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary'],
+      schoolLevel: ['elementary', 'custom'],
       role: ['homeroom'],
     },
     component: ClassTimetable,
@@ -82,7 +82,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 4 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom'],
     },
     component: Seating,
@@ -98,7 +98,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 4 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['middle', 'high'],
+      schoolLevel: ['middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: TodayProgress,
@@ -114,7 +114,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 4 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom'],
     },
     component: StudentRecords,
@@ -132,7 +132,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 3, h: 3 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: Meal,
@@ -148,7 +148,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 3 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: Events,
@@ -164,7 +164,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 5 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: Memo,
@@ -180,7 +180,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 4, h: 6 },
     minSize: { w: 2, h: 3 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: MemoFocus,
@@ -198,7 +198,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 3 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: TodoWidget,
@@ -216,7 +216,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 3 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: DDayCounter,
@@ -232,7 +232,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 3 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom'],
     },
     component: SurveyWidget,
@@ -250,7 +250,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 3 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom'],
     },
     component: ConsultationWidget,
@@ -268,7 +268,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     defaultSize: { w: 1, h: 3 },
     minSize: { w: 1, h: 2 },
     availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high'],
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
       role: ['homeroom', 'subject', 'admin'],
     },
     component: BookmarksWidget,

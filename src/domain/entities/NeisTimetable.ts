@@ -77,11 +77,12 @@ export function getSchoolLevel(schoolKind: string): SchoolLevel | null {
 }
 
 /** Settings schoolLevel → SchoolLevel 변환 */
-export function settingsLevelToNeisLevel(level: 'elementary' | 'middle' | 'high'): SchoolLevel {
+export function settingsLevelToNeisLevel(level: 'elementary' | 'middle' | 'high' | 'custom'): SchoolLevel {
   switch (level) {
     case 'elementary': return 'els';
     case 'middle': return 'mis';
     case 'high': return 'his';
+    case 'custom': return 'his';
   }
 }
 

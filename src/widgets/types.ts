@@ -50,4 +50,6 @@ export type PresetKey =
   | 'middle-subject'
   | 'high-homeroom'
   | 'high-subject'
-  | 'admin';
+  | 'admin'
+  | 'custom-homeroom'
+  | 'custom-subject';

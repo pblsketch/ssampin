@@ -370,7 +370,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {tab === 'class' && (
+          {tab === 'class' && settings.schoolLevel !== 'custom' && (
             <>
               <button
                 onClick={() => setShowNeisImport(true)}
