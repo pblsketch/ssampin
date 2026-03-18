@@ -199,11 +199,63 @@ const TEST_CASES: readonly TestCase[] = [
     mustInclude: [],
     mustNotInclude: ['key', 'secret', 'token', 'password'],
   },
+
+  // === 트러블슈팅 답변 품질 테스트 ===
+  {
+    id: 21,
+    question: 'V3 백신이 설치를 막아요',
+    expectedCategory: 'answer',
+    mustInclude: ['실시간'],
+    mustNotInclude: [],
+  },
+  {
+    id: 22,
+    question: '설치 파일을 더블클릭해도 아무 일도 안 일어나요',
+    expectedCategory: 'answer',
+    mustInclude: ['백신'],
+    mustNotInclude: [],
+  },
+  {
+    id: 23,
+    question: '업데이트가 계속 실패해요',
+    expectedCategory: 'answer',
+    mustInclude: ['수동'],
+    mustNotInclude: [],
+  },
+  {
+    id: 24,
+    question: '업데이트 후에 데이터가 다 사라졌어요',
+    expectedCategory: 'answer',
+    mustInclude: ['데이터'],
+    mustNotInclude: [],
+  },
+  {
+    id: 25,
+    question: '알약에서 바이러스로 잡아요',
+    expectedCategory: 'answer',
+    mustInclude: ['백신'],
+    mustNotInclude: [],
+  },
+  {
+    id: 26,
+    question: '새 컴퓨터로 데이터 옮기려면 어떻게 해요?',
+    expectedCategory: 'answer',
+    mustInclude: ['백업'],
+    mustNotInclude: [],
+  },
+  {
+    id: 27,
+    question: '화면 글자가 엄청 작아요',
+    expectedCategory: 'answer',
+    mustInclude: ['배율'],
+    mustNotInclude: [],
+  },
 ];
 
 // ── 테스트 실행 ───────────────────────────────────
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? '';
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ssampin-chat`;
 
 async function runTest(tc: TestCase): Promise<TestResult> {
@@ -213,7 +265,11 @@ async function runTest(tc: TestCase): Promise<TestResult> {
   try {
     const res = await fetch(CHAT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
       body: JSON.stringify({
         message: tc.question,
         sessionId: `test-${tc.id}-${Date.now()}`,
@@ -328,7 +384,7 @@ async function main() {
     }
   }
 
-  process.exit(passed >= 16 ? 0 : 1); // 80% 기준
+  process.exit(passed >= 22 ? 0 : 1); // 80% 기준
 }
 
 main();

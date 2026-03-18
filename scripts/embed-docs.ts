@@ -78,7 +78,7 @@ const EMBEDDING_MODEL = 'gemini-embedding-001';
 const MAX_CHARS_PER_CHUNK = 1500;
 const BATCH_SIZE = 100;
 const INSERT_BATCH = 50;
-const APP_VERSION = '0.3.4';
+const APP_VERSION = '0.4.7';
 
 // ── 청킹 함수 ────────────────────────────────────────────
 
@@ -409,6 +409,7 @@ async function main(): Promise<void> {
   // 임베딩 대상 파일 목록
   const targets: EmbedTarget[] = [
     { file: 'docs/user-guide.md', category: 'guide', parser: 'markdown' },
+    { file: 'docs/troubleshoot-guide.md', category: 'troubleshoot', parser: 'markdown' },
     { file: 'README.md', category: 'guide', parser: 'markdown' },
     { file: 'landing/src/components/FAQ.tsx', category: 'faq', parser: 'faq' },
   ];

@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'docs/user-guide.md'
+      - 'docs/troubleshoot-guide.md'
       - 'landing/src/components/FAQ.tsx'
       - 'README.md'
       - 'CHANGELOG.md'
