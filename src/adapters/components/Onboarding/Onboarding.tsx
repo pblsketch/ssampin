@@ -426,8 +426,14 @@ export function Onboarding() {
                                 {/* 학년/반 — NEIS 연동 또는 직접 입력 */}
                                 {hasNeisSchool ? (
                                     <>
+                                        <div className="col-span-2 flex items-start gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
+                                            <span className="material-symbols-outlined text-blue-400 text-[16px] mt-0.5">info</span>
+                                            <p className="text-[11px] text-blue-200/70">
+                                                학년/반을 선택하면 NEIS 시간표가 자동으로 연동됩니다. 건너뛰어도 나중에 설정할 수 있어요.
+                                            </p>
+                                        </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">학년</label>
+                                            <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">학년 <span className="text-sp-muted/50 normal-case">(선택)</span></label>
                                             <select
                                                 value={neisGrade}
                                                 onChange={(e) => {
@@ -443,7 +449,7 @@ export function Onboarding() {
                                             </select>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">반</label>
+                                            <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">반 <span className="text-sp-muted/50 normal-case">(선택)</span></label>
                                             {classListLoading ? (
                                                 <div className="flex items-center gap-2 bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-slate-400 text-sm">
                                                     <div className="w-4 h-4 border-2 border-sp-accent/30 border-t-sp-accent rounded-full animate-spin" />
