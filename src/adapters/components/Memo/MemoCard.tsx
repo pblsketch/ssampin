@@ -302,22 +302,26 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
         )}
       </div>
 
-      {/* Resize handle (우하단) */}
+      {/* Resize handle (우하단) — 더블클릭으로 기본 크기 복원 */}
       <div
         onMouseDown={handleResizeMouseDown}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          void updateSize(memo.id, MEMO_SIZE.DEFAULT_WIDTH, MEMO_SIZE.DEFAULT_HEIGHT);
+        }}
         className={`absolute bottom-1 right-5 z-10 cursor-se-resize
           opacity-0 group-hover:opacity-100 transition-opacity
           ${resizing ? '!opacity-100' : ''}`}
-        title="드래그하여 크기 조절"
+        title="드래그: 크기 조절 / 더블클릭: 기본 크기로"
       >
         <span className="material-symbols-outlined text-[16px] text-slate-400 hover:text-slate-600">
           drag_indicator
         </span>
       </div>
 
-      {/* 리사이즈 중 크기 표시 */}
+      {/* 리사이즈 중 크기 표시 — 카드 위에 띄움 */}
       {resizing && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 bg-slate-800 text-white text-xs px-2 py-0.5 rounded shadow-lg">
+        <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-30 bg-slate-800 text-white text-xs px-2.5 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none">
           {Math.round(resizeSize.width)} &times; {Math.round(resizeSize.height)}
         </div>
       )}
