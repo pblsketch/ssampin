@@ -1,0 +1,22 @@
+/* Mobile PWA 전용 스타일 */
+:root {
+  --tab-bar-height: calc(56px + env(safe-area-inset-bottom));
+  --header-height: calc(48px + env(safe-area-inset-top));
+}
+
+.tab-bar {
+  height: var(--tab-bar-height);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab-content {
+  height: calc(100dvh - var(--header-height) - var(--tab-bar-height));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 터치 타겟 최소 48px */
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}

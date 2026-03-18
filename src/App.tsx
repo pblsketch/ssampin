@@ -44,6 +44,7 @@ import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useNeisAutoSync } from '@adapters/hooks/useNeisAutoSync';
@@ -370,6 +371,7 @@ export function App() {
       useMemoStore.subscribe(() => triggerSaveSync()),
       useTodoStore.subscribe(() => triggerSaveSync()),
       useStudentRecordsStore.subscribe(() => triggerSaveSync()),
+      useTeachingClassStore.subscribe(() => triggerSaveSync()),
     ];
 
     return () => {
