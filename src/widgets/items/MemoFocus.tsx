@@ -36,12 +36,31 @@ export function MemoFocus() {
     [memos],
   );
 
-  const activeMemo = useMemo(() => {
+  const activeIndex = useMemo(() => {
     if (selectedId) {
-      return memos.find((m) => m.id === selectedId) ?? sortedMemos[0] ?? null;
+      const idx = sortedMemos.findIndex((m) => m.id === selectedId);
+      return idx >= 0 ? idx : 0;
     }
-    return sortedMemos[0] ?? null;
-  }, [memos, selectedId, sortedMemos]);
+    return 0;
+  }, [selectedId, sortedMemos]);
+
+  const activeMemo = sortedMemos[activeIndex] ?? null;
+
+  const goToPrev = useCallback(() => {
+    const prev = sortedMemos[activeIndex - 1];
+    if (prev) {
+      setSelectedId(prev.id);
+      setIsEditing(false);
+    }
+  }, [activeIndex, sortedMemos]);
+
+  const goToNext = useCallback(() => {
+    const next = sortedMemos[activeIndex + 1];
+    if (next) {
+      setSelectedId(next.id);
+      setIsEditing(false);
+    }
+  }, [activeIndex, sortedMemos]);
 
   // Sync edit content when active memo changes
   useEffect(() => {
@@ -121,25 +140,32 @@ export function MemoFocus() {
     <div className={`rounded-xl bg-sp-card p-4 h-full flex flex-col border ${
       activeMemo ? BORDER_COLOR[activeMemo.color] : ''
     }`}>
-      {/* 헤더: 메모 선택 드롭다운 + 편집 토글 */}
+      {/* 헤더: 이전/다음 네비게이션 + 편집 토글 */}
       <div className="mb-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-bold text-sp-text">메모</h3>
           {sortedMemos.length > 1 && (
-            <select
-              value={activeMemo?.id ?? ''}
-              onChange={(e) => {
-                setSelectedId(e.target.value);
-                setIsEditing(false);
-              }}
-              className="rounded-md border border-sp-border bg-sp-surface px-2 py-1 text-xs text-sp-text max-w-[200px] truncate"
-            >
-              {sortedMemos.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.content ? m.content.slice(0, 40).replace(/\n/g, ' ') : '(빈 메모)'}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={goToPrev}
+                disabled={activeIndex === 0}
+                className="rounded-md p-0.5 text-sp-muted hover:text-sp-text disabled:opacity-30 disabled:cursor-default transition-colors"
+                title="이전 메모"
+              >
+                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+              </button>
+              <span className="text-xs text-sp-muted tabular-nums min-w-[36px] text-center">
+                {activeIndex + 1} / {sortedMemos.length}
+              </span>
+              <button
+                onClick={goToNext}
+                disabled={activeIndex === sortedMemos.length - 1}
+                className="rounded-md p-0.5 text-sp-muted hover:text-sp-text disabled:opacity-30 disabled:cursor-default transition-colors"
+                title="다음 메모"
+              >
+                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+              </button>
+            </div>
           )}
         </div>
 
