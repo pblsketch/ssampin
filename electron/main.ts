@@ -471,7 +471,7 @@ function setupAutoUpdater(): void {
     provider: 'generic',
     url: 'https://github.com/pblsketch/ssampin/releases/latest/download',
   });
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
 
   autoUpdater.on('update-available', (info: { version: string; releaseNotes?: string | null }) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
