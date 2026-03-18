@@ -101,6 +101,7 @@ export function DashboardEvents() {
     const limitMs = todayMs + 14 * 24 * 60 * 60 * 1000; // today + 14일
 
     return [...events]
+      .filter((event) => !event.isHidden)
       .filter((event) => {
         const eventMs = parseDate(event.date).getTime();
         // 멀티데이 이벤트는 endDate 기준으로도 포함

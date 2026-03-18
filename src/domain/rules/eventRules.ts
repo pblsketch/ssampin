@@ -43,6 +43,13 @@ export function parseLocalDate(dateStr: string): Date {
 }
 
 /**
+ * 숨기지 않은(visible) 이벤트만 필터링
+ */
+export function getVisibleEvents(events: readonly SchoolEvent[]): readonly SchoolEvent[] {
+  return events.filter((e) => !e.isHidden);
+}
+
+/**
  * 카테고리별 필터링
  */
 export function filterByCategory(

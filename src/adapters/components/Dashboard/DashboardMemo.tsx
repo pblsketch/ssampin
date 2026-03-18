@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { MemoDetailPopup } from '@adapters/components/Memo/MemoDetailPopup';
 import { MemoFormattedText } from '@adapters/components/Memo/MemoFormattedText';
@@ -26,35 +26,74 @@ const MEMO_TEXT: Record<MemoColor, string> = {
   blue: 'text-sp-text',
 };
 
+type LayoutMode = 'compact' | 'medium' | 'large' | 'full';
+
+function getLayoutMode(width: number, height: number): LayoutMode {
+  if (width >= 600 && height >= 500) return 'full';
+  if (width >= 400 && height >= 350) return 'large';
+  if (width >= 300 || height >= 250) return 'medium';
+  return 'compact';
+}
+
+function getLayoutConfig(mode: LayoutMode) {
+  switch (mode) {
+    case 'full':
+      return { count: 9, columns: 3, clamp: 6 };
+    case 'large':
+      return { count: 6, columns: 2, clamp: 4 };
+    case 'medium':
+      return { count: 4, columns: 2, clamp: 3 };
+    case 'compact':
+    default:
+      return { count: 3, columns: 3, clamp: 2 };
+  }
+}
+
 export function DashboardMemo() {
   const { memos, load, updateMemo, deleteMemo, updateColor } = useMemoStore();
   const [selectedMemo, setSelectedMemo] = useState<Memo | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('compact');
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // Sync selectedMemo when memos change (e.g. color/content update from Zustand)
+  // ResizeObserver로 위젯 크기 감지
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setLayoutMode(getLayoutMode(width, height));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Sync selectedMemo when memos change
   useEffect(() => {
     if (selectedMemo) {
       const updated = memos.find((m) => m.id === selectedMemo.id);
       if (updated) {
         setSelectedMemo(updated);
       } else {
-        // memo was deleted
         setSelectedMemo(null);
       }
     }
-    // Only depend on selectedMemo?.id to avoid infinite loop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memos, selectedMemo?.id]);
+
+  const config = getLayoutConfig(layoutMode);
 
   const recentMemos = useMemo(
     () =>
       [...memos]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, 3),
-    [memos],
+        .slice(0, config.count),
+    [memos, config.count],
   );
 
   const handleClosePopup = useCallback(() => {
@@ -83,29 +122,39 @@ export function DashboardMemo() {
     [updateColor],
   );
 
+  const isGrid = layoutMode !== 'compact';
+
   return (
-    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+    <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text">메모</h3>
+        {layoutMode !== 'compact' && (
+          <span className="text-xs text-sp-muted">{memos.length}개</span>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto">
         {recentMemos.length === 0 ? (
           <p className="py-4 text-center text-sm text-sp-muted">메모가 없습니다</p>
         ) : (
-          <div className="flex gap-2">
+          <div
+            className={isGrid ? 'grid gap-3' : 'flex gap-2'}
+            style={isGrid ? { gridTemplateColumns: `repeat(${config.columns}, 1fr)` } : undefined}
+          >
             {recentMemos.map((memo) => (
               <div
                 key={memo.id}
                 onClick={(e) => { e.stopPropagation(); setSelectedMemo(memo); }}
-                className={`rounded-lg border p-3 flex-1 min-w-0 cursor-pointer transition-colors ${MEMO_BG[memo.color]} ${MEMO_HOVER[memo.color]}`}
+                className={`rounded-lg border p-3 cursor-pointer transition-colors ${
+                  isGrid ? 'min-h-[60px]' : 'flex-1 min-w-0'
+                } ${MEMO_BG[memo.color]} ${MEMO_HOVER[memo.color]}`}
               >
                 <MemoFormattedText
                   content={memo.content}
                   className={`text-xs overflow-hidden ${MEMO_TEXT[memo.color]}`}
                   style={{
                     display: '-webkit-box',
-                    WebkitLineClamp: 2,
+                    WebkitLineClamp: config.clamp,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}

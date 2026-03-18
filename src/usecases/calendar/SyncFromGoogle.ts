@@ -86,15 +86,29 @@ export class SyncFromGoogle {
 
         if (existingIdx !== -1) {
           const existing = events[existingIdx]!;
+
+          // 사용자가 숨긴 일정은 구글 동기화로 복원하지 않음
+          if (existing.isHidden) continue;
+
           if (detectConflict(existing, gEvent)) {
             // 자동 해결: 최근 수정 우선
             const resolution = resolveConflictByLatest(existing, gEvent);
             if (resolution === 'remote') {
-              events[existingIdx] = { ...newEvent, id: existing.id };
+              events[existingIdx] = {
+                ...newEvent,
+                id: existing.id,
+                isHidden: existing.isHidden,
+                isModified: existing.isModified,
+              };
             }
             // 'local' → 로컬 유지, 다음 push에서 구글에 반영
           } else {
-            events[existingIdx] = { ...newEvent, id: existing.id };
+            events[existingIdx] = {
+              ...newEvent,
+              id: existing.id,
+              isHidden: existing.isHidden,
+              isModified: existing.isModified,
+            };
           }
         } else {
           events.push(newEvent);

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, type RefObject } from 'react'
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
+import { MEMO_SIZE } from '@domain/rules/memoRules';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { MemoFormattedText } from './MemoFormattedText';
 import { MemoRichEditor } from './MemoRichEditor';
@@ -44,10 +45,12 @@ interface MemoCardProps {
 }
 
 export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, canvasRef }: MemoCardProps) {
-  const { updateMemo, updatePosition, updateColor } = useMemoStore();
+  const { updateMemo, updatePosition, updateColor, updateSize } = useMemoStore();
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(memo.content);
   const [dragging, setDragging] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  const [resizeSize, setResizeSize] = useState({ width: memo.width ?? MEMO_SIZE.DEFAULT_WIDTH, height: memo.height ?? MEMO_SIZE.DEFAULT_HEIGHT });
   const cardRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const mouseDownPos = useRef({ x: 0, y: 0 });
@@ -56,6 +59,10 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
   useEffect(() => {
     setContent(memo.content);
   }, [memo.content]);
+
+  useEffect(() => {
+    setResizeSize({ width: memo.width ?? MEMO_SIZE.DEFAULT_WIDTH, height: memo.height ?? MEMO_SIZE.DEFAULT_HEIGHT });
+  }, [memo.width, memo.height]);
 
   const handleDoubleClick = useCallback(() => {
     // Cancel pending single-click timer (prevents popup from opening)
@@ -172,6 +179,40 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
     };
   }, [dragging, memo.id, updatePosition, canvasRef]);
 
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startWidth = memo.width ?? MEMO_SIZE.DEFAULT_WIDTH;
+      const startHeight = memo.height ?? MEMO_SIZE.DEFAULT_HEIGHT;
+
+      setResizing(true);
+
+      const handleMouseMove = (ev: MouseEvent) => {
+        const newWidth = Math.max(MEMO_SIZE.MIN_WIDTH, Math.min(MEMO_SIZE.MAX_WIDTH, startWidth + (ev.clientX - startX)));
+        const newHeight = Math.max(MEMO_SIZE.MIN_HEIGHT, Math.min(MEMO_SIZE.MAX_HEIGHT, startHeight + (ev.clientY - startY)));
+        setResizeSize({ width: newWidth, height: newHeight });
+      };
+
+      const handleMouseUp = (ev: MouseEvent) => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+        setResizing(false);
+
+        const finalWidth = Math.max(MEMO_SIZE.MIN_WIDTH, Math.min(MEMO_SIZE.MAX_WIDTH, startWidth + (ev.clientX - startX)));
+        const finalHeight = Math.max(MEMO_SIZE.MIN_HEIGHT, Math.min(MEMO_SIZE.MAX_HEIGHT, startHeight + (ev.clientY - startY)));
+        void updateSize(memo.id, finalWidth, finalHeight);
+      };
+
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    },
+    [memo.id, memo.width, memo.height, updateSize],
+  );
+
   const handleColorChange = useCallback(
     (color: MemoColor) => {
       void updateColor(memo.id, color);
@@ -190,11 +231,13 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
   return (
     <div
       ref={cardRef}
-      className={`group absolute w-[280px] min-h-[220px] ${NOTE_BG[memo.color]} rounded-sm text-slate-800 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_2px_4px_-1px_rgba(0,0,0,0.06),0_10px_15px_-3px_rgba(0,0,0,0.1)] transition-transform duration-300 ${dragging ? 'scale-105 !rotate-0 cursor-grabbing' : 'cursor-move hover:rotate-0 hover:scale-105'
+      className={`group absolute ${NOTE_BG[memo.color]} rounded-sm text-slate-800 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_2px_4px_-1px_rgba(0,0,0,0.06),0_10px_15px_-3px_rgba(0,0,0,0.1)] transition-transform duration-300 ${dragging ? 'scale-105 !rotate-0 cursor-grabbing' : 'cursor-move hover:rotate-0 hover:scale-105'
         }`}
       style={{
         left: memo.x,
         top: memo.y,
+        width: resizing ? resizeSize.width : (memo.width ?? MEMO_SIZE.DEFAULT_WIDTH),
+        minHeight: resizing ? resizeSize.height : (memo.height ?? MEMO_SIZE.DEFAULT_HEIGHT),
         transform: dragging ? 'scale(1.05) rotate(0deg)' : `rotate(${memo.rotation}deg)`,
         zIndex: isTop ? 20 : 10,
       }}
@@ -235,29 +278,49 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
       </div>
 
       {/* Content */}
-      <div className="flex h-full flex-col gap-2 p-5 pt-1">
+      <div className="flex flex-1 flex-col gap-2 p-5 pt-1">
         {editing ? (
           <MemoRichEditor
             initialContent={content}
             onContentChange={setContent}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
-            className="min-h-[140px] w-full text-sm leading-relaxed text-slate-700 outline-none"
+            className="flex-1 w-full text-sm leading-relaxed text-slate-700 outline-none"
             autoFocus
           />
         ) : (
           memo.content ? (
             <MemoFormattedText
               content={memo.content}
-              className="min-h-[140px] text-sm leading-relaxed text-slate-700"
+              className="flex-1 text-sm leading-relaxed text-slate-700"
             />
           ) : (
-            <div className="min-h-[140px] text-sm leading-relaxed text-slate-700">
+            <div className="flex-1 text-sm leading-relaxed text-slate-700">
               <span className="text-slate-400">더블 클릭하여 메모를 작성하세요</span>
             </div>
           )
         )}
       </div>
+
+      {/* Resize handle (우하단) */}
+      <div
+        onMouseDown={handleResizeMouseDown}
+        className={`absolute bottom-1 right-5 z-10 cursor-se-resize
+          opacity-0 group-hover:opacity-100 transition-opacity
+          ${resizing ? '!opacity-100' : ''}`}
+        title="드래그하여 크기 조절"
+      >
+        <span className="material-symbols-outlined text-[16px] text-slate-400 hover:text-slate-600">
+          drag_indicator
+        </span>
+      </div>
+
+      {/* 리사이즈 중 크기 표시 */}
+      {resizing && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 bg-slate-800 text-white text-xs px-2 py-0.5 rounded shadow-lg">
+          {Math.round(resizeSize.width)} &times; {Math.round(resizeSize.height)}
+        </div>
+      )}
 
       {/* Fold effect (bottom-right corner) */}
       <div

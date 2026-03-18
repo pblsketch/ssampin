@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
+import { MEMO_SIZE } from '@domain/rules/memoRules';
 import { memoRepository } from '@adapters/di/container';
 import { ManageMemos } from '@usecases/memo/ManageMemos';
 
@@ -12,6 +13,7 @@ interface MemoState {
   updateMemo: (id: string, content: string) => Promise<void>;
   updatePosition: (id: string, x: number, y: number) => Promise<void>;
   updateColor: (id: string, color: MemoColor) => Promise<void>;
+  updateSize: (id: string, width: number, height: number) => Promise<void>;
   deleteMemo: (id: string) => Promise<void>;
   bringToFront: (id: string) => void;
   arrangeInGrid: (canvasWidth: number) => Promise<void>;
@@ -32,11 +34,14 @@ export const useMemoStore = create<MemoState>((set, get) => {
       if (get().loaded) return;
       try {
         const memos = await manageMemos.getAll();
-        const migrated = memos.map((m) =>
-          m.x === undefined || m.y === undefined
-            ? { ...m, x: m.x ?? 40 + Math.random() * 200, y: m.y ?? 40 + Math.random() * 200, rotation: m.rotation ?? randomRotation() }
-            : m,
-        );
+        const migrated = memos.map((m) => ({
+          ...m,
+          x: m.x ?? 40 + Math.random() * 200,
+          y: m.y ?? 40 + Math.random() * 200,
+          width: m.width ?? MEMO_SIZE.DEFAULT_WIDTH,
+          height: m.height ?? MEMO_SIZE.DEFAULT_HEIGHT,
+          rotation: m.rotation ?? randomRotation(),
+        }));
         set({ memos: migrated, loaded: true });
       } catch {
         set({ loaded: true });
@@ -54,6 +59,8 @@ export const useMemoStore = create<MemoState>((set, get) => {
         color,
         x,
         y,
+        width: MEMO_SIZE.DEFAULT_WIDTH,
+        height: MEMO_SIZE.DEFAULT_HEIGHT,
         rotation: randomRotation(),
         createdAt: now,
         updatedAt: now,
@@ -101,6 +108,19 @@ export const useMemoStore = create<MemoState>((set, get) => {
       }
     },
 
+    updateSize: async (id, width, height) => {
+      const updatedAt = new Date().toISOString();
+      set((state) => ({
+        memos: state.memos.map((memo) =>
+          memo.id === id ? { ...memo, width, height, updatedAt } : memo,
+        ),
+      }));
+      const existing = get().memos.find((memo) => memo.id === id);
+      if (existing !== undefined) {
+        await manageMemos.update({ ...existing, width, height, updatedAt });
+      }
+    },
+
     deleteMemo: async (id) => {
       await manageMemos.delete(id);
       set((state) => ({
@@ -125,24 +145,40 @@ export const useMemoStore = create<MemoState>((set, get) => {
       const state = get();
       if (state.memos.length === 0) return;
 
-      const CARD_WIDTH = 220; // assumed avg card width + gap
-      const CARD_HEIGHT = 200; // avg card height + gap
+      const GAP = 40;
       const START_X = 40;
       const START_Y = 40;
 
-      const cols = Math.max(1, Math.floor((canvasWidth - START_X) / CARD_WIDTH));
+      // 평균 카드 너비 기반으로 열 수 계산
+      const avgWidth = state.memos.reduce((sum, m) => sum + (m.width ?? MEMO_SIZE.DEFAULT_WIDTH), 0) / state.memos.length;
+      const cols = Math.max(1, Math.floor((canvasWidth - START_X) / (avgWidth + GAP)));
+
+      // 행별로 메모 분배
+      const rows: Memo[][] = [];
+      state.memos.forEach((memo, index) => {
+        const rowIdx = Math.floor(index / cols);
+        if (!rows[rowIdx]) rows[rowIdx] = [];
+        rows[rowIdx]!.push(memo);
+      });
 
       const updatedMemos = state.memos.map((memo, index) => {
         const col = index % cols;
-        const row = Math.floor(index / cols);
-        const newX = START_X + col * CARD_WIDTH;
-        const newY = START_Y + row * CARD_HEIGHT;
+        const rowIdx = Math.floor(index / cols);
+
+        const newX = START_X + col * (avgWidth + GAP);
+        // 이전 행들의 최대 높이 합산
+        let newY = START_Y;
+        for (let r = 0; r < rowIdx; r++) {
+          const rowMemos = rows[r] ?? [];
+          const maxHeight = Math.max(...rowMemos.map(m => m.height ?? MEMO_SIZE.DEFAULT_HEIGHT));
+          newY += maxHeight + GAP;
+        }
+
         return { ...memo, x: newX, y: newY, rotation: 0 };
       });
 
       set({ memos: updatedMemos });
 
-      // Save all updated
       const now = new Date().toISOString();
       for (const memo of updatedMemos) {
         await manageMemos.update({ ...memo, updatedAt: now });

@@ -33,7 +33,7 @@ export interface WidgetInstance {
   visible: boolean;
   order: number;
   colSpan: 1 | 2 | 3 | 4;
-  rowSpan: number;  // 세로 크기 (행 단위, 1~8)
+  rowSpan: number;  // 세로 크기 (행 단위, 1~12)
 }
 
 /** 사용자 대시보드 설정 (저장용) */

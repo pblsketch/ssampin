@@ -1,3 +1,12 @@
+export const MEMO_SIZE = {
+  DEFAULT_WIDTH: 280,
+  DEFAULT_HEIGHT: 220,
+  MIN_WIDTH: 180,
+  MIN_HEIGHT: 150,
+  MAX_WIDTH: 600,
+  MAX_HEIGHT: 500,
+} as const;
+
 export interface FormattedSegment {
   readonly text: string;
   readonly bold: boolean;

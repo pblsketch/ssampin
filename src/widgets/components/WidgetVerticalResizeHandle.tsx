@@ -35,7 +35,7 @@ export function WidgetVerticalResizeHandle({ currentRowSpan, minRowSpan, onResiz
       const deltaY = ev.clientY - startY;
       const deltaSpans = Math.round(deltaY / (ROW_HEIGHT + GAP));
       const raw = startSpan + deltaSpans;
-      const clamped = Math.max(minRowSpan, Math.min(8, raw));
+      const clamped = Math.max(minRowSpan, Math.min(12, raw));
       previewRef.current = clamped;
       setPreviewSpan(clamped);
     };

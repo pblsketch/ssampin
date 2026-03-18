@@ -468,7 +468,7 @@ export function Schedule() {
                   <CalendarView
                     year={year}
                     month={month}
-                    events={events}
+                    events={allVisibleEvents}
                     categories={categories}
                     selectedDate={selectedDate}
                     onSelectDate={handleDateSelect}
@@ -564,7 +564,7 @@ export function Schedule() {
       {selectedDate && (
         <DayScheduleModal
           date={selectedDate}
-          events={events}
+          events={allVisibleEvents}
           categories={categories}
           onClose={() => setSelectedDate(null)}
           onAddEvent={() => {

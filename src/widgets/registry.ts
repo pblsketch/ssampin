@@ -15,6 +15,7 @@ import { BookmarksWidget } from './items/Bookmarks';
 import { DDayCounter } from './items/DDayCounter';
 import { SurveyWidget } from './items/SurveyWidget';
 import { ConsultationWidget } from './items/ConsultationWidget';
+import { MemoFocus } from './items/MemoFocus';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -169,6 +170,22 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: Memo,
     navigateTo: 'memo',
     navigateLabel: '메모 전체 보기',
+  },
+  {
+    id: 'memo-focus',
+    name: '메모 (전체 보기)',
+    icon: '📄',
+    description: '메모 하나를 대시보드 전체에 펼쳐 봅니다',
+    category: 'info',
+    defaultSize: { w: 4, h: 6 },
+    minSize: { w: 2, h: 3 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: MemoFocus,
+    navigateTo: 'memo',
+    navigateLabel: '메모장 전체 보기',
   },
 
   // ─── 관리 카테고리 ───

@@ -189,7 +189,7 @@ export const useDashboardConfig = create<DashboardConfigState>((set, get) => ({
 
     const def = WIDGET_DEFINITIONS.find((d) => d.id === widgetId);
     const minH = def?.minSize.h ?? 2;
-    const clamped = Math.max(minH, Math.min(8, rowSpan));
+    const clamped = Math.max(minH, Math.min(12, rowSpan));
 
     const updated: DashboardConfig = {
       ...config,
