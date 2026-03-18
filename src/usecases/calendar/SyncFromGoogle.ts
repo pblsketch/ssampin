@@ -18,23 +18,48 @@ export class SyncFromGoogle {
     const mappings = await this.syncRepo.getMappings();
     const enabledMappings = mappings.filter(m => m.syncEnabled && m.googleCalendarId);
 
+    const errors: string[] = [];
     for (const mapping of enabledMappings) {
-      await this.syncCalendar(mapping.googleCalendarId!, mapping.categoryId);
+      try {
+        await this.syncCalendar(mapping.googleCalendarId!, mapping.categoryId);
+      } catch (err) {
+        const msg = `${mapping.googleCalendarName ?? mapping.googleCalendarId}: ${err instanceof Error ? err.message : String(err)}`;
+        errors.push(msg);
+        console.error(`[SyncFromGoogle] Failed to sync calendar ${mapping.googleCalendarId}:`, err);
+      }
     }
 
     const syncTokens = await this.getAllSyncTokens();
+    const hasErrors = errors.length > 0;
     await this.syncRepo.saveSyncState({
-      status: 'synced',
+      status: hasErrors ? 'error' : 'synced',
       lastSyncedAt: new Date().toISOString(),
+      lastError: hasErrors ? errors.join('; ') : undefined,
       pendingChanges: 0,
       syncTokens,
     });
+
+    if (hasErrors) {
+      throw new Error(`일부 캘린더 동기화 실패: ${errors.join('; ')}`);
+    }
   }
 
   private async syncCalendar(calendarId: string, categoryId: string): Promise<void> {
     const accessToken = await this.getAccessToken();
     const syncState = await this.syncRepo.getSyncState();
-    const existingSyncToken = syncState.syncTokens[calendarId];
+    let existingSyncToken = syncState.syncTokens[calendarId];
+
+    // syncToken이 있지만 해당 캘린더의 로컬 이벤트가 없으면 → full sync 강제
+    if (existingSyncToken) {
+      const evData = await this.eventsRepo.getEvents();
+      const hasEventsForCalendar = (evData?.events ?? []).some(
+        (e) => e.googleCalendarId === calendarId,
+      );
+      if (!hasEventsForCalendar) {
+        console.warn(`[SyncFromGoogle] syncToken exists but no local events for ${calendarId}, forcing full sync`);
+        existingSyncToken = undefined;
+      }
+    }
 
     try {
       let result;
@@ -126,7 +151,8 @@ export class SyncFromGoogle {
         });
       }
     } catch (err) {
-      console.error(`[SyncFromGoogle] Failed to sync calendar ${calendarId}:`, err);
+      // execute()에서 개별 캘린더 에러를 수집하므로 re-throw
+      throw err;
     }
   }
 

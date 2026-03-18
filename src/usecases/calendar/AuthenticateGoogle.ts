@@ -77,7 +77,8 @@ export class AuthenticateGoogle {
     const tokens = await this.syncRepo.getAuthTokens();
     if (tokens) {
       try {
-        await this.authPort.revokeTokens(tokens.accessToken);
+        // refreshToken을 폐기하면 연관된 모든 accessToken도 무효화됨
+        await this.authPort.revokeTokens(tokens.refreshToken);
       } catch {
         // 폐기 실패해도 로컬은 삭제
       }

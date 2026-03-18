@@ -128,7 +128,8 @@ export const neisPort: INeisPort = new NeisApiClient();
 
 export const googleAuthPort: IGoogleAuthPort = new GoogleOAuthClient();
 
-export const googleCalendarPort: IGoogleCalendarPort = new GoogleCalendarApiClient();
+const googleCalendarApiClient = new GoogleCalendarApiClient();
+export const googleCalendarPort: IGoogleCalendarPort = googleCalendarApiClient;
 
 export const calendarSyncRepo: ICalendarSyncRepository =
   new GoogleCalendarSyncRepository(storage);
@@ -136,6 +137,11 @@ export const calendarSyncRepo: ICalendarSyncRepository =
 export const authenticateGoogle = new AuthenticateGoogle(
   googleAuthPort,
   calendarSyncRepo,
+);
+
+// 401 재시도를 위한 토큰 갱신 콜백 등록
+googleCalendarApiClient.setTokenRefreshCallback(
+  () => authenticateGoogle.getValidAccessToken(),
 );
 
 export const syncToGoogle = new SyncToGoogle(

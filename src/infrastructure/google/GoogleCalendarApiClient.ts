@@ -31,16 +31,26 @@ interface ApiError extends Error {
 }
 
 export class GoogleCalendarApiClient implements IGoogleCalendarPort {
+  /** 토큰 갱신 콜백 (DI로 주입, 401 재시도 시 사용) */
+  private onTokenRefresh: (() => Promise<string>) | null = null;
+
+  /** 401 재시도를 위한 토큰 갱신 콜백 등록 */
+  setTokenRefreshCallback(callback: () => Promise<string>): void {
+    this.onTokenRefresh = callback;
+  }
+
   /**
    * Google Calendar API 요청 헬퍼
    * @param accessToken OAuth 액세스 토큰
    * @param path API 경로 (/calendars/... 등)
    * @param options fetch 옵션
+   * @param isRetry 재시도 여부 (무한 재시도 방지)
    */
   private async request<T>(
     accessToken: string,
     path: string,
     options?: RequestInit,
+    isRetry = false,
   ): Promise<T> {
     const res = await fetch(`${BASE_URL}${path}`, {
       ...options,
@@ -52,6 +62,16 @@ export class GoogleCalendarApiClient implements IGoogleCalendarPort {
     });
 
     if (!res.ok) {
+      // 401 Unauthorized: 토큰 갱신 후 1회 재시도
+      if (res.status === 401 && !isRetry && this.onTokenRefresh) {
+        try {
+          const newToken = await this.onTokenRefresh();
+          return this.request<T>(newToken, path, options, true);
+        } catch {
+          // 갱신 실패 시 원래 에러 throw
+        }
+      }
+
       const err = await res.text();
       const error = new Error(
         `Google Calendar API error: ${res.status} ${err}`,

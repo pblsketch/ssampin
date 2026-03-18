@@ -79,6 +79,12 @@ export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
         }
       });
 
+      // 서버 에러 핸들러 (포트 바인딩 실패 등)
+      server.on('error', (err) => {
+        oauthServer = null;
+        reject(new Error(`OAuth 로컬 서버 시작 실패: ${err.message}`));
+      });
+
       // 임의 포트로 서버 시작
       server.listen(0, '127.0.0.1', () => {
         const address = server.address();

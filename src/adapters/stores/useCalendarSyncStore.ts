@@ -51,6 +51,9 @@ interface CalendarSyncState {
   resolveConflict: (index: number, resolution: 'local' | 'remote') => Promise<void>;
 }
 
+// syncNow 동시 실행 방지 뮤텍스
+let syncPromise: Promise<void> | null = null;
+
 export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   isConnected: false,
   email: null,
@@ -227,18 +230,38 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
 
   syncNow: async () => {
     const state = get();
-    if (!state.isConnected || state.syncState.status === 'syncing') return;
+    if (!state.isConnected) return;
+
+    // 이미 진행 중인 동기화가 있으면 그 Promise를 기다림 (중복 실행 방지)
+    if (syncPromise) {
+      await syncPromise;
+      return;
+    }
+
     set((s) => ({ syncState: { ...s.syncState, status: 'syncing' } }));
+
+    syncPromise = (async () => {
+      try {
+        const { syncFromGoogle, calendarSyncRepo } = await import('@adapters/di/container');
+        await syncFromGoogle.execute();
+        const syncState = await calendarSyncRepo.getSyncState();
+        set({ syncState });
+
+        // 동기화 후 이벤트 스토어 갱신 (UI에 반영)
+        const { useEventsStore } = await import('./useEventsStore');
+        await useEventsStore.getState().reload();
+      } catch (err) {
+        console.error('[CalendarSync] syncNow error:', err);
+        set((s) => ({
+          syncState: { ...s.syncState, status: 'error', lastError: err instanceof Error ? err.message : 'Sync failed' },
+        }));
+      }
+    })();
+
     try {
-      const { syncFromGoogle, calendarSyncRepo } = await import('@adapters/di/container');
-      await syncFromGoogle.execute();
-      const syncState = await calendarSyncRepo.getSyncState();
-      set({ syncState: { ...syncState, status: 'synced' } });
-    } catch (err) {
-      console.error('[CalendarSync] syncNow error:', err);
-      set((s) => ({
-        syncState: { ...s.syncState, status: 'error', lastError: err instanceof Error ? err.message : 'Sync failed' },
-      }));
+      await syncPromise;
+    } finally {
+      syncPromise = null;
     }
   },
 

@@ -51,6 +51,7 @@ interface EventsState {
 
   // 액션
   load: () => Promise<void>;
+  reload: () => Promise<void>;
   addEvent: (params: AddEventParams) => Promise<void>;
   updateEvent: (event: SchoolEvent) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
@@ -225,6 +226,12 @@ export const useEventsStore = create<EventsState>((set) => {
     load: async () => {
       const state = useEventsStore.getState();
       if (state.loaded) return;
+      const events = await manageEvents.getAll();
+      const categories = await manageEvents.getCategories();
+      set({ events, categories, loaded: true });
+    },
+
+    reload: async () => {
       const events = await manageEvents.getAll();
       const categories = await manageEvents.getCategories();
       set({ events, categories, loaded: true });
