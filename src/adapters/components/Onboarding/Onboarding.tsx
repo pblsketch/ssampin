@@ -1,11 +1,15 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Settings, SchoolLevel, NeisSettings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import type { SchoolSearchResult } from '@domain/entities/Meal';
+import type { SchoolSearchResult, NEIS_API_KEY as _ApiKeyType } from '@domain/entities/Meal';
+import { NEIS_API_KEY } from '@domain/entities/Meal';
 import { getDefaultPreset, generatePeriodTimes, parseMinutes, PERIOD_DURATION } from '@domain/rules/periodRules';
+import { settingsLevelToNeisLevel, getGradeRange, getCurrentAcademicYear } from '@domain/entities/NeisTimetable';
+import type { NeisClassInfo } from '@domain/entities/NeisTimetable';
+import { neisPort } from '@adapters/di/container';
 import { NAV_ITEMS } from '@adapters/components/Layout/Sidebar';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { ROLE_MENU_MAP, MENU_DESCRIPTIONS, type TeacherRoleId } from './menuRecommendations';
@@ -40,6 +44,42 @@ export function Onboarding() {
     });
 
     const [selectedRoles, setSelectedRoles] = useState<TeacherRoleId[]>([]);
+
+    // NEIS 학년/반 선택 상태
+    const [neisGrade, setNeisGrade] = useState('');
+    const [neisClass, setNeisClass] = useState('');
+    const [classList, setClassList] = useState<readonly NeisClassInfo[]>([]);
+    const [classListLoading, setClassListLoading] = useState(false);
+
+    // NEIS 학교가 선택된 상태인지
+    const hasNeisSchool = Boolean(draft.neis?.schoolCode && draft.neis?.atptCode);
+
+    // 학교급에 따른 학년 범위
+    const gradeRange = useMemo(() => {
+        const level = draft.schoolLevel ?? 'middle';
+        return getGradeRange(settingsLevelToNeisLevel(level));
+    }, [draft.schoolLevel]);
+
+    // 학년 변경 시 반 목록 자동 로드
+    useEffect(() => {
+        if (!hasNeisSchool || !neisGrade || !draft.neis?.atptCode || !draft.neis?.schoolCode) {
+            setClassList([]);
+            return;
+        }
+        setClassListLoading(true);
+        setNeisClass('');
+        void neisPort
+            .getClassList({
+                apiKey: NEIS_API_KEY,
+                officeCode: draft.neis.atptCode,
+                schoolCode: draft.neis.schoolCode,
+                academicYear: getCurrentAcademicYear(),
+                grade: neisGrade,
+            })
+            .then(setClassList)
+            .catch(() => setClassList([]))
+            .finally(() => setClassListLoading(false));
+    }, [hasNeisSchool, neisGrade, draft.neis?.atptCode, draft.neis?.schoolCode]);
 
     // 역할 선택에 따른 추천 메뉴 계산
     const recommendedMenuIds = useMemo(() => {
@@ -100,8 +140,24 @@ export function Onboarding() {
             .filter((item) => !menuVisibility[item.id])
             .map((item) => item.id);
 
+        // NEIS 자동 동기화 설정 (학교+학년+반이 모두 설정된 경우)
+        const neisWithAutoSync = hasNeisSchool && neisGrade && neisClass
+            ? {
+                ...draft.neis!,
+                autoSync: {
+                    enabled: true,
+                    grade: neisGrade,
+                    className: neisClass,
+                    lastSyncDate: '',
+                    lastSyncWeek: '',
+                    syncTarget: 'class' as const,
+                },
+            }
+            : draft.neis;
+
         const finalDraft: Partial<Settings> = {
             ...draft,
+            neis: neisWithAutoSync,
             hiddenMenus,
             teacherRoles: selectedRoles.length > 0 ? selectedRoles : undefined,
         };
@@ -367,16 +423,73 @@ export function Onboarding() {
                                     )}
                                 </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">학년/반</label>
-                                    <input
-                                        type="text"
-                                        value={draft.className}
-                                        onChange={(e) => patch({ className: e.target.value })}
-                                        placeholder="예: 6학년 3반"
-                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
-                                    />
-                                </div>
+                                {/* 학년/반 — NEIS 연동 또는 직접 입력 */}
+                                {hasNeisSchool ? (
+                                    <>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">학년</label>
+                                            <select
+                                                value={neisGrade}
+                                                onChange={(e) => {
+                                                    setNeisGrade(e.target.value);
+                                                    patch({ className: e.target.value ? `${e.target.value}학년` : '' });
+                                                }}
+                                                className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                            >
+                                                <option value="">선택</option>
+                                                {gradeRange.map((g) => (
+                                                    <option key={g} value={String(g)}>{g}학년</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">반</label>
+                                            {classListLoading ? (
+                                                <div className="flex items-center gap-2 bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-slate-400 text-sm">
+                                                    <div className="w-4 h-4 border-2 border-sp-accent/30 border-t-sp-accent rounded-full animate-spin" />
+                                                    반 목록 로딩 중...
+                                                </div>
+                                            ) : (
+                                                <select
+                                                    value={neisClass}
+                                                    onChange={(e) => {
+                                                        setNeisClass(e.target.value);
+                                                        if (neisGrade && e.target.value) {
+                                                            patch({ className: `${neisGrade}학년 ${e.target.value}반` });
+                                                        }
+                                                    }}
+                                                    disabled={!neisGrade || classList.length === 0}
+                                                    className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all disabled:opacity-40"
+                                                >
+                                                    <option value="">{!neisGrade ? '학년 먼저 선택' : classList.length === 0 ? '반 정보 없음' : '선택'}</option>
+                                                    {classList.map((c) => (
+                                                        <option key={c.CLASS_NM} value={c.CLASS_NM}>{c.CLASS_NM}반</option>
+                                                    ))}
+                                                </select>
+                                            )}
+                                        </div>
+                                        {/* NEIS 시간표 자동 연동 안내 */}
+                                        {neisGrade && neisClass && (
+                                            <div className="col-span-2 flex items-start gap-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 animate-in fade-in duration-300">
+                                                <span className="material-symbols-outlined text-emerald-400 text-[18px] mt-0.5">auto_awesome</span>
+                                                <p className="text-xs text-emerald-200/80">
+                                                    NEIS에 등록된 {neisGrade}학년 {neisClass}반 시간표가 대시보드에 자동으로 표시됩니다.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">학년/반</label>
+                                        <input
+                                            type="text"
+                                            value={draft.className}
+                                            onChange={(e) => patch({ className: e.target.value })}
+                                            placeholder="예: 6학년 3반"
+                                            className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        />
+                                    </div>
+                                )}
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">교사명</label>
                                     <input

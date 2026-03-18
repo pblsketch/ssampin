@@ -3,63 +3,9 @@ import type { ClassScheduleData, TeacherScheduleData, ClassPeriod } from '@domai
 import { createEmptyClassSchedule, createEmptyTeacherSchedule, migrateClassScheduleData } from '@domain/rules/timetableRules';
 import { scheduleRepository } from '@adapters/di/container';
 
-/** 과목+교사 헬퍼 */
-function cp(subject: string, teacher: string = ''): ClassPeriod {
-  return { subject, teacher };
-}
-
-/** 샘플 학급 시간표 (월~금, 6교시) */
-const SAMPLE_CLASS_SCHEDULE: ClassScheduleData = {
-  '월': [cp('국어'), cp('수학'), cp('영어'), cp('과학'), cp('사회'), cp('창체')],
-  '화': [cp('수학'), cp('영어'), cp('국어'), cp('체육'), cp('음악'), cp('미술')],
-  '수': [cp('영어'), cp('과학'), cp('수학'), cp('사회'), cp('국어'), cp('체육')],
-  '목': [cp('과학'), cp('국어'), cp('사회'), cp('수학'), cp('영어'), cp('음악')],
-  '금': [cp('사회'), cp('체육'), cp('미술'), cp('영어'), cp('국어'), cp('자율')],
-};
-
-/** 샘플 교사 시간표 (월~금, 6교시) */
-const SAMPLE_TEACHER_SCHEDULE: TeacherScheduleData = {
-  '월': [
-    { subject: '수학', classroom: '2-3' },
-    { subject: '수학', classroom: '2-1' },
-    null,
-    { subject: '수학', classroom: '1-2' },
-    null,
-    null,
-  ],
-  '화': [
-    null,
-    { subject: '수학', classroom: '2-3' },
-    { subject: '수학', classroom: '3-1' },
-    null,
-    { subject: '수학', classroom: '1-1' },
-    null,
-  ],
-  '수': [
-    { subject: '수학', classroom: '1-2' },
-    null,
-    { subject: '수학', classroom: '2-3' },
-    { subject: '수학', classroom: '3-2' },
-    null,
-    null,
-  ],
-  '목': [
-    null,
-    null,
-    { subject: '수학', classroom: '2-3' },
-    { subject: '수학', classroom: '1-1' },
-    { subject: '수학', classroom: '3-1' },
-    null,
-  ],
-  '금': [
-    { subject: '수학', classroom: '2-1' },
-    { subject: '수학', classroom: '2-3' },
-    null,
-    null,
-    null,
-    null,
-  ],
-};
+/** 초기 빈 시간표 (저장된 데이터가 없을 때 사용) */
+const EMPTY_CLASS_SCHEDULE: ClassScheduleData = createEmptyClassSchedule(7);
+const EMPTY_TEACHER_SCHEDULE: TeacherScheduleData = createEmptyTeacherSchedule(7);
 
 /** Undo/Redo를 위한 스냅샷 타입 */
 interface ScheduleSnapshot {
@@ -94,8 +40,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
   };
 
   return {
-    classSchedule: SAMPLE_CLASS_SCHEDULE,
-    teacherSchedule: SAMPLE_TEACHER_SCHEDULE,
+    classSchedule: EMPTY_CLASS_SCHEDULE,
+    teacherSchedule: EMPTY_TEACHER_SCHEDULE,
     loaded: false,
     past: [],
     future: [],
@@ -112,8 +58,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
           ? migrateClassScheduleData(classRaw as Record<string, readonly (string | ClassPeriod)[]>)
           : null;
         set({
-          classSchedule: classSch ?? SAMPLE_CLASS_SCHEDULE,
-          teacherSchedule: teacherSch ?? SAMPLE_TEACHER_SCHEDULE,
+          classSchedule: classSch ?? EMPTY_CLASS_SCHEDULE,
+          teacherSchedule: teacherSch ?? EMPTY_TEACHER_SCHEDULE,
           loaded: true,
         });
       } catch {
