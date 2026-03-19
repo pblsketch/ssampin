@@ -32,7 +32,7 @@ export function BookmarksWidget() {
 
   if (groupedBookmarks.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center py-4">
+      <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col items-center justify-center text-center">
         <span className="text-3xl mb-2">🔗</span>
         <p className="text-sm text-sp-muted">
           쌤도구에서 즐겨찾기를 추가해보세요
@@ -42,7 +42,7 @@ export function BookmarksWidget() {
   }
 
   return (
-    <div className="flex gap-6 overflow-auto">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex gap-6 overflow-auto">
       {groupedBookmarks.map(({ group, items }) => (
         <div key={group.id} className="min-w-0 flex-shrink-0">
           {/* 그룹 헤더 */}
