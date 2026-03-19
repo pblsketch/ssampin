@@ -1,0 +1,172 @@
+/* ═══════════════════════════════════════════════
+   쌤핀 모바일 — Glassmorphism 디자인 시스템
+   ═══════════════════════════════════════════════ */
+
+/* ── 라이트 모드 sp-* 오버라이드 ── */
+:root {
+  --sp-bg: #f1f5f9;
+  --sp-surface: rgba(255, 255, 255, 0.95);
+  --sp-card-base: rgba(255, 255, 255, 0.7);
+  --sp-card: var(--sp-card-base);
+  --sp-border: rgba(0, 0, 0, 0.08);
+  --sp-accent: #3b82f6;
+  --sp-accent-fg: #ffffff;
+  --sp-highlight: #f59e0b;
+  --sp-text: #0f172a;
+  --sp-muted: #64748b;
+
+  --tab-bar-height: calc(56px + env(safe-area-inset-bottom));
+  --header-height: calc(48px + env(safe-area-inset-top));
+}
+
+/* ── 다크 모드 sp-* 오버라이드 ── */
+.dark {
+  --sp-bg: #0f172a;
+  --sp-surface: rgba(30, 41, 59, 0.95);
+  --sp-card-base: rgba(30, 41, 59, 0.7);
+  --sp-card: var(--sp-card-base);
+  --sp-border: rgba(255, 255, 255, 0.08);
+  --sp-accent: #3b82f6;
+  --sp-accent-fg: #ffffff;
+  --sp-highlight: #f59e0b;
+  --sp-text: #f1f5f9;
+  --sp-muted: #94a3b8;
+}
+
+/* 다크모드 date/time 위젯 */
+.dark input[type='date'],
+.dark input[type='time'],
+.dark input[type='datetime-local'] {
+  color-scheme: dark;
+}
+
+input[type='date'],
+input[type='time'],
+input[type='datetime-local'] {
+  color-scheme: light;
+}
+
+/* ── Glass 카드 ── */
+.glass-card {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.dark .glass-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  background: rgba(30, 41, 59, 0.7);
+}
+
+/* Glass 카드 — 강조 (현재 수업) */
+.glass-card-accent {
+  border-radius: 20px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.dark .glass-card-accent {
+  border-color: rgba(59, 130, 246, 0.25);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.12);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+/* ── Glass 탭바 ── */
+.glass-tabbar {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.dark .glass-tabbar {
+  border-top-color: rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+/* ── Glass 헤더 ── */
+.glass-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.dark .glass-header {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+/* ── Glass 입력 필드 ── */
+.glass-input {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.dark .glass-input {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ── 배경 그라데이션 ── */
+.mobile-bg {
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+}
+
+.dark .mobile-bg {
+  background: linear-gradient(to bottom, #0f172a, #020617);
+}
+
+/* ── 유틸리티 ── */
+.tab-bar {
+  height: var(--tab-bar-height);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab-content {
+  height: calc(100dvh - var(--header-height) - var(--tab-bar-height));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.pill-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* ── 스크롤바 숨김 ── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Safe area ── */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}

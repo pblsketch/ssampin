@@ -37,7 +37,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
   constructor(private readonly getAccessToken: () => Promise<string>) {}
 
   /** JSON 응답용 API 요청 헬퍼 */
-  private async request<T>(path: string, options?: RequestInit): Promise<T> {
+  private async request<T>(path: string, options?: RequestInit, isRetry = false): Promise<T> {
     const accessToken = await this.getAccessToken();
     const res = await fetch(`${DRIVE_API_URL}${path}`, {
       ...options,
@@ -48,6 +48,10 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       },
     });
     if (!res.ok) {
+      // 401 Unauthorized: 토큰 갱신 후 1회 재시도
+      if (res.status === 401 && !isRetry) {
+        return this.request<T>(path, options, true);
+      }
       const err = await res.text();
       throw new Error(`Drive Sync API error: ${res.status} ${err}`);
     }
@@ -56,12 +60,15 @@ export class DriveSyncAdapter implements IDriveSyncPort {
   }
 
   /** 텍스트 콘텐츠 다운로드 (alt=media) */
-  private async downloadText(fileId: string): Promise<string> {
+  private async downloadText(fileId: string, isRetry = false): Promise<string> {
     const accessToken = await this.getAccessToken();
     const res = await fetch(`${DRIVE_API_URL}/files/${fileId}?alt=media`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) {
+      if (res.status === 401 && !isRetry) {
+        return this.downloadText(fileId, true);
+      }
       const err = await res.text();
       throw new Error(`Drive Sync 다운로드 오류: ${res.status} ${err}`);
     }
@@ -74,6 +81,7 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     content: string,
     method: 'POST' | 'PATCH' = 'POST',
     fileId?: string,
+    isRetry = false,
   ): Promise<FileResponse> {
     const accessToken = await this.getAccessToken();
     const boundary = '-------ssampin_sync_boundary';
@@ -103,6 +111,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
     });
 
     if (!res.ok) {
+      if (res.status === 401 && !isRetry) {
+        return this.uploadText(metadata, content, method, fileId, true);
+      }
       const err = await res.text();
       throw new Error(`Drive Sync 업로드 오류: ${res.status} ${err}`);
     }

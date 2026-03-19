@@ -15,18 +15,24 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; bad
   present: { label: '출석', icon: 'check_circle', badge: 'bg-green-500/20 text-green-400' },
   absent: { label: '결석', icon: 'cancel', badge: 'bg-red-500/20 text-red-400' },
   late: { label: '지각', icon: 'schedule', badge: 'bg-amber-500/20 text-amber-400' },
+  earlyLeave: { label: '조퇴', icon: 'exit_to_app', badge: 'bg-orange-500/20 text-orange-400' },
+  classAbsence: { label: '결과', icon: 'event_busy', badge: 'bg-purple-500/20 text-purple-400' },
 };
 
 const STATUS_CYCLE: Record<AttendanceStatus, AttendanceStatus> = {
   present: 'absent',
   absent: 'late',
-  late: 'present',
+  late: 'earlyLeave',
+  earlyLeave: 'classAbsence',
+  classAbsence: 'present',
 };
 
 const STAT_COLORS: Record<AttendanceStatus, string> = {
   present: 'text-green-400',
   absent: 'text-red-400',
   late: 'text-amber-400',
+  earlyLeave: 'text-orange-400',
+  classAbsence: 'text-purple-400',
 };
 
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -181,6 +187,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       present: 0,
       absent: 0,
       late: 0,
+      earlyLeave: 0,
+      classAbsence: 0,
     };
     for (const s of localAttendance) {
       counts[s.status]++;

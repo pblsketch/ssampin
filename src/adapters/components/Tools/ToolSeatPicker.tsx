@@ -45,6 +45,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const seating = useSeatingStore((s) => s.seating);
   const loaded = useSeatingStore((s) => s.loaded);
   const loadSeating = useSeatingStore((s) => s.load);
+  const resizeGrid = useSeatingStore((s) => s.resizeGrid);
 
   /* ─── Setup state ─── */
   const [phase, setPhase] = useState<Phase>('setup');
@@ -413,6 +414,49 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       {totalSeats - activeStudents.length}개 좌석이 비게 됩니다
                     </div>
                   )}
+                </div>
+
+                {/* Row/Col adjustment */}
+                <div className="bg-sp-card border border-sp-border rounded-xl p-5">
+                  <p className="text-white font-medium mb-3">좌석 행/열 조절</p>
+                  <div className="flex items-center justify-center gap-8">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-sp-muted">행</span>
+                      <button
+                        onClick={() => void resizeGrid(seating.rows - 1, seating.cols)}
+                        disabled={seating.rows <= 1}
+                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center text-white font-bold">{seating.rows}</span>
+                      <button
+                        onClick={() => void resizeGrid(seating.rows + 1, seating.cols)}
+                        disabled={seating.rows >= 10}
+                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-sp-muted">열</span>
+                      <button
+                        onClick={() => void resizeGrid(seating.rows, seating.cols - 1)}
+                        disabled={seating.cols <= 1}
+                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center text-white font-bold">{seating.cols}</span>
+                      <button
+                        onClick={() => void resizeGrid(seating.rows, seating.cols + 1)}
+                        disabled={seating.cols >= 10}
+                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Student order */}

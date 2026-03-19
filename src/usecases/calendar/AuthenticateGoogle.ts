@@ -40,9 +40,18 @@ export class AuthenticateGoogle {
     }
 
     if (isTokenExpired(tokens.expiresAt)) {
-      const refreshed = await this.authPort.refreshTokens(tokens.refreshToken);
-      await this.syncRepo.saveAuthTokens(refreshed);
-      return refreshed.accessToken;
+      try {
+        const refreshed = await this.authPort.refreshTokens(tokens.refreshToken);
+        await this.syncRepo.saveAuthTokens(refreshed);
+        return refreshed.accessToken;
+      } catch (err) {
+        // invalid_grant: 다른 기기에서 재인증하여 토큰이 무효화된 경우
+        if (err instanceof Error && err.message.includes('INVALID_GRANT')) {
+          await this.syncRepo.deleteAuthTokens();
+          throw new Error('INVALID_GRANT: Google 인증이 만료되었습니다. 설정에서 다시 연결해주세요.');
+        }
+        throw err;
+      }
     }
 
     return tokens.accessToken;

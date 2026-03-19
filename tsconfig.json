@@ -23,7 +23,8 @@
       "@usecases/*": ["src/usecases/*"],
       "@adapters/*": ["src/adapters/*"],
       "@infrastructure/*": ["src/infrastructure/*"],
-      "@widgets/*": ["src/widgets/*"]
+      "@widgets/*": ["src/widgets/*"],
+      "@mobile/*": ["src/mobile/*"]
     }
   },
   "include": ["src"],

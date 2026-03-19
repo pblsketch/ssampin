@@ -68,11 +68,28 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       }, 3000);
     } catch (err) {
       console.error('[DriveSync] syncToCloud error:', err);
-      set({
-        status: 'error',
-        error: err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.',
-        progress: null,
-      });
+      const msg = err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.';
+      if (msg.includes('INVALID_GRANT')) {
+        // 토큰이 무효화됨 → 동기화 비활성화, 재연결 안내
+        const { useSettingsStore } = await import('./useSettingsStore');
+        const sync = useSettingsStore.getState().settings.sync;
+        if (sync) {
+          await useSettingsStore.getState().update({
+            sync: { ...sync, enabled: false },
+          });
+        }
+        set({
+          status: 'error',
+          error: 'Google 인증이 만료되었습니다. 설정에서 Google 계정을 다시 연결해주세요.',
+          progress: null,
+        });
+      } else {
+        set({
+          status: 'error',
+          error: msg,
+          progress: null,
+        });
+      }
     }
   },
 
@@ -106,6 +123,12 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const result = await useCase.execute((p) => set({ progress: p }));
       const now = new Date().toISOString();
 
+      // 다운로드된 파일에 해당하는 스토어들을 리로드
+      if (result.downloaded.length > 0) {
+        const { reloadStores } = await import('@adapters/hooks/useDriveSync');
+        await reloadStores(result.downloaded);
+      }
+
       if (result.conflicts.length > 0) {
         set({ status: 'conflict', conflicts: result.conflicts, lastSyncedAt: now, progress: null });
       } else {
@@ -123,11 +146,27 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       return { downloaded: result.downloaded, conflicts: result.conflicts };
     } catch (err) {
       console.error('[DriveSync] syncFromCloud error:', err);
-      set({
-        status: 'error',
-        error: err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.',
-        progress: null,
-      });
+      const msg = err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.';
+      if (msg.includes('INVALID_GRANT')) {
+        const { useSettingsStore } = await import('./useSettingsStore');
+        const sync = useSettingsStore.getState().settings.sync;
+        if (sync) {
+          await useSettingsStore.getState().update({
+            sync: { ...sync, enabled: false },
+          });
+        }
+        set({
+          status: 'error',
+          error: 'Google 인증이 만료되었습니다. 설정에서 Google 계정을 다시 연결해주세요.',
+          progress: null,
+        });
+      } else {
+        set({
+          status: 'error',
+          error: msg,
+          progress: null,
+        });
+      }
       return { downloaded: [], conflicts: [] };
     }
   },

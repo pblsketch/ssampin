@@ -99,6 +99,46 @@ function getCategoryDotColor(categoryId: string, categories: readonly RecordCate
   return colorMap[cat?.color ?? 'gray'] ?? 'bg-gray-400';
 }
 
+/** 출결 유형별 태그 색상 (subcategory 파싱) */
+const ATTENDANCE_TAG_COLORS: Record<string, string> = {
+  '결석': 'bg-red-500/15 text-red-400',
+  '지각': 'bg-yellow-500/15 text-yellow-400',
+  '조퇴': 'bg-orange-500/15 text-orange-400',
+  '결과': 'bg-purple-500/15 text-purple-400',
+};
+
+function getAttendanceTypeFromSubcategory(subcategory: string): string | null {
+  const match = subcategory.match(/^(결석|지각|조퇴|결과)/);
+  return match ? match[1]! : null;
+}
+
+/** 출결 레코드면 유형별 색상, 아니면 기존 카테고리 색상 */
+function getSmartTagClass(record: { category: string; subcategory: string }, categories: readonly RecordCategoryItem[]): string {
+  if (record.category === 'attendance') {
+    const attType = getAttendanceTypeFromSubcategory(record.subcategory);
+    if (attType && ATTENDANCE_TAG_COLORS[attType]) {
+      return `px-2 py-0.5 rounded text-xs font-medium ${ATTENDANCE_TAG_COLORS[attType]}`;
+    }
+  }
+  return getRecordTagClass(record.category, categories);
+}
+
+/** 출결 유형 정렬 우선순위 */
+const ATTENDANCE_SORT_ORDER: Record<string, number> = {
+  '결석': 0,
+  '지각': 1,
+  '조퇴': 2,
+  '결과': 3,
+};
+
+type RecordSortMode = 'time' | 'type' | 'studentNumber';
+
+const RECORD_SORT_OPTIONS: { mode: RecordSortMode; label: string; icon: string }[] = [
+  { mode: 'time', label: '입력 시간', icon: 'schedule' },
+  { mode: 'type', label: '유형별', icon: 'filter_list' },
+  { mode: 'studentNumber', label: '학번순', icon: 'format_list_numbered' },
+];
+
 /* ──────────────────────── 메인 컴포넌트 ──────────────────────── */
 
 type ViewMode = 'input' | 'progress' | 'search';
@@ -981,6 +1021,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [editContent, setEditContent] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editSubcategory, setEditSubcategory] = useState('');
+  const [sortMode, setSortMode] = useState<RecordSortMode>('time');
 
   // debounce keyword
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1059,7 +1100,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     return sortByDateDesc(result);
   }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, periodFilter]);
 
-  // 날짜별 그룹핑
+  // 날짜별 그룹핑 + 그룹 내 정렬
   const grouped = useMemo(() => {
     const map = new Map<string, StudentRecord[]>();
     for (const record of filtered) {
@@ -1067,8 +1108,36 @@ function SearchMode({ students, records, categories }: ModeProps) {
       if (existing) existing.push(record);
       else map.set(record.date, [record]);
     }
-    return Array.from(map.entries());
-  }, [filtered]);
+    const entries = Array.from(map.entries());
+
+    // 그룹 내 정렬
+    if (sortMode === 'type') {
+      for (const [, recs] of entries) {
+        recs.sort((a, b) => {
+          const ta = getAttendanceTypeFromSubcategory(a.subcategory);
+          const tb = getAttendanceTypeFromSubcategory(b.subcategory);
+          const oa = ta ? (ATTENDANCE_SORT_ORDER[ta] ?? 99) : 99;
+          const ob = tb ? (ATTENDANCE_SORT_ORDER[tb] ?? 99) : 99;
+          if (oa !== ob) return oa - ob;
+          // 같은 유형이면 학번순
+          const sa = studentMap.get(a.studentId)?.studentNumber ?? 0;
+          const sb = studentMap.get(b.studentId)?.studentNumber ?? 0;
+          return sa - sb;
+        });
+      }
+    } else if (sortMode === 'studentNumber') {
+      for (const [, recs] of entries) {
+        recs.sort((a, b) => {
+          const sa = studentMap.get(a.studentId)?.studentNumber ?? 0;
+          const sb = studentMap.get(b.studentId)?.studentNumber ?? 0;
+          return sa - sb;
+        });
+      }
+    }
+    // 'time' → 기본 정렬 유지 (sortByDateDesc)
+
+    return entries;
+  }, [filtered, sortMode, studentMap]);
 
   const handleEdit = useCallback((record: StudentRecord) => {
     setEditingId(record.id);
@@ -1230,6 +1299,27 @@ function SearchMode({ students, records, categories }: ModeProps) {
         )}
       </div>
 
+      {/* 정렬 컨트롤 */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-sp-muted">정렬:</span>
+        <div className="flex gap-1 bg-sp-surface rounded-lg p-1">
+          {RECORD_SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.mode}
+              onClick={() => setSortMode(opt.mode)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                sortMode === opt.mode
+                  ? 'bg-sp-accent text-white'
+                  : 'text-sp-muted hover:text-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">{opt.icon}</span>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 2-1: 학생 선택 시 타임라인 뷰, 아니면 기존 뷰 */}
       {selectedStudentId && selectedStudent ? (
         <StudentTimelineView
@@ -1365,7 +1455,7 @@ function StudentTimelineView({
                           isEditing ? 'ring-1 ring-sp-accent/40' : editingId ? 'opacity-60' : ''
                         }`}>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={getRecordTagClass(record.category, categories)}>
+                            <span className={getSmartTagClass(record, categories)}>
                               {record.subcategory}
                             </span>
                             {record.method && (
@@ -1511,7 +1601,7 @@ function DefaultRecordListView({
                     >
                       {formatTimeKR(record.createdAt)}
                     </span>
-                    <span className={getRecordTagClass(record.category, categories)}>
+                    <span className={getSmartTagClass(record, categories)}>
                       {record.subcategory}
                     </span>
                     {record.method && (
@@ -1528,7 +1618,12 @@ function DefaultRecordListView({
                         {record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}
                       </button>
                     )}
-                    <span className="text-sm text-sp-text font-medium min-w-[60px]">
+                    <span className="text-sm text-sp-text font-medium min-w-[60px] flex items-center gap-1.5">
+                      {student?.studentNumber != null && (
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-sp-surface border border-sp-border text-[11px] font-bold text-sp-muted tabular-nums flex-shrink-0">
+                          {student.studentNumber}
+                        </span>
+                      )}
                       {student?.name ?? '?'}
                     </span>
                     {isEditing ? (
