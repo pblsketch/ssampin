@@ -373,17 +373,43 @@ export async function parseRosterFromExcel(
 
   if (!ws) return result;
 
+  // ── 헤더 자동 감지 ──
+  let numCol = 1;
+  let nameCol = 2;
+  let phoneCol = 3;
+  let parentPhoneCol = 4;
+  let remarksCol = 5;
+
+  const headerRow = ws.getRow(1);
+  if (headerRow) {
+    headerRow.eachCell((cell, colNumber) => {
+      const val = String(cell.value ?? '').trim().replace(/\s/g, '');
+      if (/^(번호|No|no|#|학번)$/i.test(val)) numCol = colNumber;
+      else if (/^(이름|성명|학생명|name)$/i.test(val)) nameCol = colNumber;
+      else if (/^(전화|연락처|학생연락처|학생전화|phone)$/i.test(val)) phoneCol = colNumber;
+      else if (/^(학부모|보호자|학부모연락처|보호자연락처|parentPhone)$/i.test(val)) parentPhoneCol = colNumber;
+      else if (/^(비고|remarks|메모|결번)$/i.test(val)) remarksCol = colNumber;
+    });
+  }
+
+  // ── 헤더 유무 판단 ──
+  const firstCellValue = String(headerRow?.getCell(numCol).value ?? '');
+  const hasHeader = isNaN(parseInt(firstCellValue, 10));
+  const startRow = hasHeader ? 2 : 1;
+
   ws.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return; // skip header
+    if (rowNumber < startRow) return;
 
-    const numRaw = row.getCell(1).value;
+    const numRaw = row.getCell(numCol).value;
     const studentNumber = parseInt(String(numRaw ?? ''), 10);
-    if (isNaN(studentNumber)) return;
+    if (isNaN(studentNumber) || studentNumber <= 0) return;
 
-    const name = String(row.getCell(2).value ?? '');
-    const phone = String(row.getCell(3).value ?? '');
-    const parentPhone = String(row.getCell(4).value ?? '');
-    const remarks = String(row.getCell(5).value ?? '');
+    const name = String(row.getCell(nameCol).value ?? '').trim();
+    if (!name) return;
+
+    const phone = String(row.getCell(phoneCol).value ?? '').trim();
+    const parentPhone = String(row.getCell(parentPhoneCol).value ?? '').trim();
+    const remarks = String(row.getCell(remarksCol).value ?? '').trim();
     const isVacant = remarks.includes('결번');
 
     result.push({ name, studentNumber, phone, parentPhone, isVacant });

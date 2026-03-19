@@ -20,6 +20,7 @@ export function RosterManagementTab() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const rosterFileRef = useRef<HTMLInputElement>(null);
+  const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; isVacant: boolean }> | null>(null);
   const showToast = useToastStore((s) => s.show);
 
   useEffect(() => {
@@ -161,25 +162,39 @@ export function RosterManagementTab() {
             onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
+
+              // .xls 파일 감지
+              if (file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
+                showToast(
+                  '구형 엑셀(.xls) 파일은 지원되지 않습니다. Excel에서 .xlsx로 다시 저장해주세요.',
+                  'error',
+                );
+                e.target.value = '';
+                return;
+              }
+
               try {
                 const buffer = await file.arrayBuffer();
                 const parsed = await parseRosterFromExcel(buffer);
                 if (parsed.length === 0) {
-                  showToast('엑셀에서 학생 데이터를 찾을 수 없습니다', 'error');
+                  showToast(
+                    '엑셀에서 학생 데이터를 찾을 수 없습니다. 1열=번호, 2열=이름 순서인지 확인해주세요.',
+                    'error',
+                  );
+                  e.target.value = '';
                   return;
                 }
-                const newStudents = parsed.map((p, idx) => ({
-                  id: `s${Date.now()}_${idx}`,
-                  name: p.name,
-                  studentNumber: p.studentNumber,
-                  phone: p.phone,
-                  parentPhone: p.parentPhone,
-                  isVacant: p.isVacant,
-                }));
-                await updateStudents(newStudents);
-                showToast(`${parsed.length}명의 학생을 가져왔습니다`, 'success');
-              } catch {
-                showToast('엑셀 파일을 읽는 중 오류가 발생했습니다', 'error');
+                setPreviewStudents(parsed);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : '';
+                if (msg.includes('End of data reached') || msg.includes('Unexpected')) {
+                  showToast(
+                    '파일 형식을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.',
+                    'error',
+                  );
+                } else {
+                  showToast('엑셀 파일을 읽는 중 오류가 발생했습니다', 'error');
+                }
               }
               e.target.value = '';
             }}
@@ -344,6 +359,67 @@ export function RosterManagementTab() {
           <span className="material-symbols-outlined text-sm text-sp-accent">info</span>
           <span>여기서 등록한 명렬은 자리배치, 과제수합, 학생기록 등 모든 기능에서 사용됩니다. 자리배치를 따로 설정하지 않아도 명렬만 등록하면 다른 기능을 이용할 수 있어요.</span>
         </div>
+
+        {/* 엑셀 가져오기 미리보기 */}
+        {previewStudents && (
+          <div className="max-w-5xl mx-auto mt-4 p-4 rounded-lg bg-sp-surface border border-sp-border">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-bold text-sp-text flex items-center gap-2">
+                <span className="material-symbols-outlined text-sp-accent" style={{ fontSize: '18px' }}>preview</span>
+                가져올 학생 미리보기 ({previewStudents.length}명)
+              </h4>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPreviewStudents(null)}
+                  className="px-3 py-1.5 text-xs text-sp-muted border border-sp-border rounded-lg hover:bg-sp-card transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={async () => {
+                    const newStudents = previewStudents.map((p, idx) => ({
+                      id: `s${Date.now()}_${idx}`,
+                      name: p.name,
+                      studentNumber: p.studentNumber,
+                      phone: p.phone,
+                      parentPhone: p.parentPhone,
+                      isVacant: p.isVacant,
+                    }));
+                    await updateStudents(newStudents);
+                    showToast(`${previewStudents.length}명의 학생을 가져왔습니다`, 'success');
+                    setPreviewStudents(null);
+                  }}
+                  className="px-3 py-1.5 text-xs text-white bg-sp-accent hover:bg-blue-600 rounded-lg font-medium transition-colors"
+                >
+                  적용하기
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-red-400 mb-3">주의: 적용 시 기존 명단이 모두 교체됩니다.</p>
+            <div className="max-h-[200px] overflow-y-auto text-xs">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-sp-muted border-b border-sp-border">
+                    <th className="py-1.5 text-left w-16">번호</th>
+                    <th className="py-1.5 text-left">이름</th>
+                    <th className="py-1.5 text-left">연락처</th>
+                    <th className="py-1.5 text-left">학부모</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewStudents.map((s) => (
+                    <tr key={s.studentNumber} className="border-b border-sp-border/30">
+                      <td className="py-1.5 text-sp-text font-mono">{s.studentNumber}</td>
+                      <td className="py-1.5 text-sp-text">{s.isVacant ? <span className="text-red-400 italic">결번</span> : s.name}</td>
+                      <td className="py-1.5 text-sp-muted">{s.phone || '-'}</td>
+                      <td className="py-1.5 text-sp-muted">{s.parentPhone || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 일괄 입력 모달 */}

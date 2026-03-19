@@ -308,6 +308,12 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
     keywords: ['내보내기', '인쇄', '출력', '엑셀', '한글', '파일', '안 열'],
     category: 'troubleshoot',
   },
+  {
+    question: '엑셀 파일 업로드가 안 돼요',
+    answer: '엑셀 파일 업로드 시 오류가 발생하면 다음을 확인해주세요:\n\n1. 파일 형식: .xlsx 파일만 지원돼요. .xls(구형 엑셀)인 경우 Excel에서 "다른 이름으로 저장" → .xlsx로 저장해주세요.\n2. 열 순서: 1열=번호, 2열=이름 순서를 권장해요. 다른 순서여도 헤더에 "번호", "이름"이 있으면 자동 감지돼요.\n3. NEIS에서 다운받은 파일: .xls 형식일 수 있어요. Excel이나 한컴오피스에서 열고 .xlsx로 다시 저장해주세요.',
+    keywords: ['엑셀', '업로드', '가져오기', '명렬', 'Excel', 'xls', 'xlsx', '파싱', '오류', '에러', '학생'],
+    category: 'troubleshoot',
+  },
 ];
 
 /**
