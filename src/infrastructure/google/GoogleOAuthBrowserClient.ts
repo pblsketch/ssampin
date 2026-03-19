@@ -34,8 +34,8 @@ export class GoogleOAuthBrowserClient implements IGoogleAuthPort {
   private readonly clientSecret: string;
 
   constructor() {
-    this.clientId = import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_ID ?? '';
-    this.clientSecret = import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_SECRET ?? '';
+    this.clientId = (import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_ID ?? '').trim();
+    this.clientSecret = (import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_SECRET ?? '').trim();
   }
 
   getAuthUrl(redirectUri: string, codeChallenge?: string): string {
