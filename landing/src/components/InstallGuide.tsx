@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import FadeIn from './FadeIn';
 
 const steps = [
@@ -74,6 +74,11 @@ const troubleshootCases = [
 
 export default function InstallGuide() {
   const [openCase, setOpenCase] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+  }, []);
 
   const toggleCase = (id: string) => {
     setOpenCase((prev) => (prev === id ? null : id));
@@ -88,6 +93,19 @@ export default function InstallGuide() {
           </h2>
           <p className="mt-3 text-base text-sp-muted">다운로드부터 실행까지 1분 이내</p>
         </FadeIn>
+
+        {isMobile && (
+          <FadeIn className="mt-6" delay={0.05}>
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-center">
+              <p className="text-sm font-medium text-blue-300">
+                아래 안내는 PC(Windows) 전용이에요
+              </p>
+              <p className="mt-1 text-xs text-sp-muted">
+                교무실 PC에서 이 페이지를 열어 설치를 진행하세요
+              </p>
+            </div>
+          </FadeIn>
+        )}
 
         <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
           {steps.map((step, i) => (

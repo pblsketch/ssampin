@@ -84,17 +84,45 @@ export default function MobileApp() {
               {/* 오른쪽: QR코드(PC) 또는 설치 버튼(모바일) */}
               <div className="flex flex-col items-center justify-center">
                 {isMobile ? (
-                  /* 모바일 방문자: 바로가기 버튼 */
+                  /* 모바일 방문자: PC→모바일 순서 안내 + 설치 버튼 */
                   <div className="flex flex-col items-center gap-4 text-center">
-                    <div className="rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-8">
-                      <span className="text-5xl">📱</span>
+                    {/* 사용 순서 안내 */}
+                    <div className="w-full space-y-2.5">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                        이렇게 시작하세요
+                      </p>
+                      <div className="flex items-start gap-3 rounded-lg bg-sp-surface/50 px-4 py-3 text-left">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-400">
+                          1
+                        </span>
+                        <div>
+                          <p className="text-sm font-medium text-sp-text">PC 앱 설치</p>
+                          <p className="text-xs text-sp-muted">교무실 PC에서 ssampin.vercel.app 접속</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3 rounded-lg bg-sp-surface/50 px-4 py-3 text-left">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-400">
+                          2
+                        </span>
+                        <div>
+                          <p className="text-sm font-medium text-sp-text">데이터 입력</p>
+                          <p className="text-xs text-sp-muted">시간표, 학생, 일정 등을 PC에서 입력</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3 rounded-lg bg-sp-surface/50 px-4 py-3 text-left">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-400">
+                          3
+                        </span>
+                        <div>
+                          <p className="text-sm font-medium text-sp-text">모바일 동기화</p>
+                          <p className="text-xs text-sp-muted">Google Drive로 교실에서 확인</p>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-sm text-sp-muted">
-                      지금 바로 모바일 앱을 설치해 보세요!
-                    </p>
+
                     <a
                       href={MOBILE_URL}
-                      className="inline-flex items-center gap-2 rounded-xl bg-sp-accent px-8 py-4 text-lg font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-blue-500/30"
+                      className="mt-2 inline-flex items-center gap-2 rounded-xl bg-sp-accent px-8 py-4 text-lg font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-blue-500/30"
                     >
                       <span>📱</span>
                       모바일 앱 설치하기

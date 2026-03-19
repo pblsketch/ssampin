@@ -10,26 +10,80 @@ interface DownloadButtonProps {
 
 export default function DownloadButton({ variant = 'primary', showSmartScreenFaq = false }: DownloadButtonProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [showMobileInstall, setShowMobileInstall] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
   }, []);
 
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText('https://ssampin.vercel.app');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback: do nothing
+    }
+  };
+
   if (isMobile) {
     return (
-      <div className="flex flex-col items-center gap-3">
-        <a
-          href={MOBILE_URL}
-          className="inline-flex items-center gap-2 rounded-xl bg-sp-accent px-8 py-4 text-lg font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-blue-500/30"
-        >
-          <span>📱</span>
-          <span>모바일 앱 설치하기</span>
-        </a>
-        <p className="text-sm text-sp-muted">무료 · 앱 설치 불필요 · 홈 화면에 추가</p>
+      <div className="flex flex-col items-center gap-4">
+        {!showMobileInstall ? (
+          <>
+            {/* PC 우선 설치 안내 */}
+            <div className="w-full max-w-md rounded-xl border border-blue-500/20 bg-blue-500/5 p-5 text-center">
+              <p className="text-sm font-bold text-blue-300">
+                PC 앱을 먼저 설치해 주세요
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-sp-muted">
+                쌤핀 모바일은 교무실 PC의 데이터를 교실에서 확인하는
+                <br className="hidden sm:inline" />
+                {' '}보조 앱이에요. PC에서 먼저 데이터를 입력해야 해요.
+              </p>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <span className="rounded-lg bg-sp-surface px-3 py-1.5 font-mono text-xs text-sp-muted">
+                  ssampin.vercel.app
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyUrl}
+                  className="rounded-lg bg-sp-accent/20 px-3 py-1.5 text-xs font-medium text-blue-300 transition-colors hover:bg-sp-accent/30"
+                >
+                  {copied ? '복사됨!' : '복사'}
+                </button>
+              </div>
+              <p className="mt-2 text-[0.7rem] text-sp-muted/60">
+                교무실 PC에서 위 주소로 접속하세요
+              </p>
+            </div>
+
+            {/* 이미 PC에 설치한 사용자용 */}
+            <button
+              type="button"
+              onClick={() => setShowMobileInstall(true)}
+              className="text-sm text-sp-muted underline underline-offset-2 transition-colors hover:text-sp-text"
+            >
+              이미 PC에 설치했어요 →
+            </button>
+          </>
+        ) : (
+          <>
+            <a
+              href={MOBILE_URL}
+              className="inline-flex items-center gap-2 rounded-xl bg-sp-accent px-8 py-4 text-lg font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-blue-500/30"
+            >
+              <span>📱</span>
+              <span>모바일 앱 설치하기</span>
+            </a>
+            <p className="text-sm text-sp-muted">무료 · 앱 설치 불필요 · 홈 화면에 추가</p>
+          </>
+        )}
         <button
           type="button"
           onClick={() => document.getElementById('mobile')?.scrollIntoView({ behavior: 'smooth' })}
-          className="mt-1 text-xs text-sp-muted/70 underline underline-offset-2 transition-colors hover:text-sp-muted"
+          className="text-xs text-sp-muted/70 underline underline-offset-2 transition-colors hover:text-sp-muted"
         >
           자세히 알아보기 ↓
         </button>
