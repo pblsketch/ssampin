@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { Settings, WeatherSettings } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { KOREAN_CITIES } from '../shared/constants';
@@ -12,6 +12,16 @@ export function WeatherTab({ draft, patch }: Props) {
   const patchWeather = useCallback((p: Partial<WeatherSettings>) => {
     patch({ weather: { ...draft.weather, ...p } });
   }, [draft.weather, patch]);
+
+  const regionGroups = useMemo(() => {
+    const groups = new Map<string, typeof KOREAN_CITIES>();
+    for (const city of KOREAN_CITIES) {
+      const list = groups.get(city.region) ?? [];
+      list.push(city);
+      groups.set(city.region, list);
+    }
+    return groups;
+  }, []);
 
   return (
     <SettingsSection
@@ -40,10 +50,14 @@ export function WeatherTab({ draft, patch }: Props) {
             className="w-full px-4 py-3 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:ring-2 focus:ring-sp-accent focus:border-transparent outline-none"
           >
             <option value="">지역을 선택하세요</option>
-            {KOREAN_CITIES.map((city) => (
-              <option key={`${city.lat},${city.lon}`} value={`${city.lat},${city.lon}`}>
-                {city.name}
-              </option>
+            {Array.from(regionGroups.entries()).map(([region, cities]) => (
+              <optgroup key={region} label={region}>
+                {cities.map((city) => (
+                  <option key={`${city.lat},${city.lon}`} value={`${city.lat},${city.lon}`}>
+                    {city.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
