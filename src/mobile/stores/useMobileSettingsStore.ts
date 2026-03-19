@@ -33,6 +33,24 @@ const DEFAULT_MOBILE_SETTINGS: MobileSettings = {
   sync: { deviceId: '', autoSyncInterval: 0 },
 };
 
+// autoSyncInterval은 모바일 전용 설정 — Drive sync로 덮어써지지 않도록 localStorage에 독립 저장
+const AUTO_SYNC_KEY = 'ssampin-mobile-auto-sync-interval';
+
+function readAutoSyncInterval(): number {
+  try {
+    const v = localStorage.getItem(AUTO_SYNC_KEY);
+    return v ? Number(v) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeAutoSyncInterval(interval: number): void {
+  try {
+    localStorage.setItem(AUTO_SYNC_KEY, String(interval));
+  } catch { /* ignore */ }
+}
+
 interface MobileSettingsState {
   settings: MobileSettings;
   loaded: boolean;
@@ -72,7 +90,7 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
             },
             sync: {
               deviceId: syncDeviceId,
-              autoSyncInterval: typeof savedSync?.autoSyncInterval === 'number' ? savedSync.autoSyncInterval : 0,
+              autoSyncInterval: readAutoSyncInterval(),
             },
           },
           loaded: true,
@@ -97,16 +115,6 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
       sync: { ...current.sync, autoSyncInterval: interval },
     };
     set({ settings: updated });
-    try {
-      const saved = await settingsRepository.getSettings();
-      const base = (saved ?? {}) as Record<string, unknown>;
-      const patched = {
-        ...base,
-        sync: { ...(base.sync as Record<string, unknown> | undefined), autoSyncInterval: interval },
-      };
-      await settingsRepository.saveSettings(patched as unknown as Settings);
-    } catch {
-      // 저장 실패 시 무시
-    }
+    writeAutoSyncInterval(interval);
   },
 }));

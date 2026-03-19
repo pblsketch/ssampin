@@ -48,12 +48,15 @@ function epaIndexToGrade(epaIndex: number): AirQualityGrade {
 }
 
 const WEATHER_API_KEY = '183106431a614a27bfb220356260103';
+const isElectron = typeof window !== 'undefined' && window.electronAPI != null;
 
 export async function fetchWeather(
   lat: number,
   lon: number,
 ): Promise<WeatherData> {
-  const url = `https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(WEATHER_API_KEY)}&q=${lat},${lon}&days=1&aqi=yes&lang=ko`;
+  // Electron → 직접 호출, 브라우저 → 프록시 경유 (CORS 우회)
+  const base = isElectron ? 'https://api.weatherapi.com' : '/weather-api';
+  const url = `${base}/v1/forecast.json?key=${encodeURIComponent(WEATHER_API_KEY)}&q=${lat},${lon}&days=1&aqi=yes&lang=ko`;
 
   const res = await fetch(url);
   if (!res.ok) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DOWNLOAD_URL, VERSION, FILE_SIZE, FALLBACK_DOWNLOAD_URL } from '@/config';
+import { DOWNLOAD_URL, VERSION, FILE_SIZE, FALLBACK_DOWNLOAD_URL, MOBILE_URL } from '@/config';
 
 interface DownloadButtonProps {
   variant?: 'primary' | 'white';
@@ -17,13 +17,22 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
 
   if (isMobile) {
     return (
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-6 py-4 text-center">
-        <p className="text-base font-medium text-amber-200">
-          📱 쌤핀은 Windows PC 전용 앱이에요.
-        </p>
-        <p className="mt-1 text-sm text-amber-200/70">
-          PC에서 이 페이지를 열어주세요!
-        </p>
+      <div className="flex flex-col items-center gap-3">
+        <a
+          href={MOBILE_URL}
+          className="inline-flex items-center gap-2 rounded-xl bg-sp-accent px-8 py-4 text-lg font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-blue-500/30"
+        >
+          <span>📱</span>
+          <span>모바일 앱 설치하기</span>
+        </a>
+        <p className="text-sm text-sp-muted">무료 · 앱 설치 불필요 · 홈 화면에 추가</p>
+        <button
+          type="button"
+          onClick={() => document.getElementById('mobile')?.scrollIntoView({ behavior: 'smooth' })}
+          className="mt-1 text-xs text-sp-muted/70 underline underline-offset-2 transition-colors hover:text-sp-muted"
+        >
+          자세히 알아보기 ↓
+        </button>
       </div>
     );
   }

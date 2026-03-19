@@ -1,0 +1,22 @@
+{
+  "rewrites": [
+    { "source": "/neis-api/:path*", "destination": "https://open.neis.go.kr/:path*" },
+    { "source": "/weather-api/:path*", "destination": "https://api.weatherapi.com/:path*" },
+    { "source": "/(.*)", "destination": "/mobile.html" }
+  ],
+  "headers": [
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "Content-Type", "value": "application/manifest+json" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    }
+  ]
+}

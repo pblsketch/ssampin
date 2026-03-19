@@ -7,6 +7,7 @@ import WidgetMode from '@/components/WidgetMode';
 import PinGuard from '@/components/PinGuard';
 import ShareSchedule from '@/components/ShareSchedule';
 import ExportFormats from '@/components/ExportFormats';
+import MobileApp from '@/components/MobileApp';
 import InstallGuide from '@/components/InstallGuide';
 import FAQ from '@/components/FAQ';
 import Feedback from '@/components/Feedback';
@@ -25,6 +26,7 @@ export default function Home() {
       <PinGuard />
       <ShareSchedule />
       <ExportFormats />
+      <MobileApp />
       <InstallGuide />
       <FAQ />
       <Feedback />

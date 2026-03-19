@@ -13,6 +13,8 @@ import { TodoPage } from './pages/TodoPage';
 import { MorePage } from './pages/MorePage';
 import { MemoPage } from './pages/MemoPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
+import { InstallGuide } from './components/Onboarding/InstallGuide';
 
 type MobileTab = 'today' | 'schedule' | 'students' | 'todo' | 'memo' | 'more';
 
@@ -43,6 +45,9 @@ export function App() {
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
   const [attendanceNav, setAttendanceNav] = useState<AttendanceNav | null>(null);
   const [moreSub, setMoreSub] = useState<'settings' | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem('onboarding-completed');
+  });
   const auth = useGoogleAuth();
   const setTokenGetter = useMobileDriveSyncStore((s) => s.setTokenGetter);
 
@@ -176,6 +181,23 @@ export function App() {
     touchStartY.current = null;
   }, [activeTab]);
 
+  // 온보딩 (첫 방문)
+  if (showOnboarding) {
+    return (
+      <OnboardingFlow
+        onComplete={() => {
+          localStorage.setItem('onboarding-completed', 'true');
+          setShowOnboarding(false);
+        }}
+        onLogin={() => {
+          localStorage.setItem('onboarding-completed', 'true');
+          setShowOnboarding(false);
+          auth.startLogin();
+        }}
+      />
+    );
+  }
+
   if (auth.isLoading || isProcessingCallback) {
     return (
       <div className="flex items-center justify-center h-dvh mobile-bg">
@@ -251,6 +273,9 @@ export function App() {
           )
         )}
       </main>
+
+      {/* 설치 가이드 (PWA 미설치 시) */}
+      <InstallGuide />
 
       {/* Tab Bar */}
       <nav className="tab-bar flex items-center justify-around glass-tabbar shrink-0">

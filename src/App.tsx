@@ -55,6 +55,7 @@ import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
+import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -455,7 +456,9 @@ export function App() {
   }
 
   return (
-    <div className="flex h-screen bg-sp-bg">
+    <div className="flex flex-col h-screen bg-sp-bg">
+      <MobileAnnouncementBanner />
+      <div className="flex flex-1 min-h-0">
       {!isFullscreen && (
         <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} onFeedback={() => setShowFeedback(true)} />
       )}
@@ -481,6 +484,7 @@ export function App() {
       )}
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
       <HelpChatPanel />
+      </div>
     </div>
   );
 }
