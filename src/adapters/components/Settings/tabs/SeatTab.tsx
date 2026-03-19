@@ -1,4 +1,6 @@
+import { useCallback } from 'react';
 import type { Settings } from '@domain/entities/Settings';
+import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { SettingsSection } from '../shared/SettingsSection';
 import { NumberStepper } from '../shared/NumberStepper';
 import { SeatRelationSection } from '../SeatRelationSection';
@@ -9,6 +11,18 @@ interface Props {
 }
 
 export function SeatTab({ draft, patch }: Props) {
+  const resizeGrid = useSeatingStore((s) => s.resizeGrid);
+
+  const handleRowChange = useCallback((v: number) => {
+    patch({ seatingRows: v });
+    void resizeGrid(v, draft.seatingCols);
+  }, [draft.seatingCols, patch, resizeGrid]);
+
+  const handleColChange = useCallback((v: number) => {
+    patch({ seatingCols: v });
+    void resizeGrid(draft.seatingRows, v);
+  }, [draft.seatingRows, patch, resizeGrid]);
+
   return (
     <div>
       <SettingsSection
@@ -20,11 +34,11 @@ export function SeatTab({ draft, patch }: Props) {
         <div className="flex items-center justify-between gap-8">
           <div className="flex-1 space-y-2">
             <label className="text-sm font-medium text-sp-muted">행 수 (Rows)</label>
-            <NumberStepper value={draft.seatingRows} onChange={(v) => patch({ seatingRows: v })} />
+            <NumberStepper value={draft.seatingRows} onChange={handleRowChange} />
           </div>
           <div className="flex-1 space-y-2">
             <label className="text-sm font-medium text-sp-muted">열 수 (Columns)</label>
-            <NumberStepper value={draft.seatingCols} onChange={(v) => patch({ seatingCols: v })} />
+            <NumberStepper value={draft.seatingCols} onChange={handleColChange} />
           </div>
         </div>
 
