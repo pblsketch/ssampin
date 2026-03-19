@@ -15,39 +15,37 @@ export function ClassAttendanceCard({ period, classInfo, attendanceRecord, onChe
   const checked = attendanceRecord != null;
 
   return (
-    <div className="bg-sp-card rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-sp-accent">fact_check</span>
-          <span className="text-sp-text font-bold">
-            {period}교시 출결 · {classInfo.classroom}
-          </span>
-        </div>
-        <button
-          onClick={onCheckAttendance}
-          className="text-xs text-sp-accent font-medium px-3 py-1.5 rounded-lg border border-sp-accent/30 hover:bg-sp-accent/10 transition-colors touch-target"
-        >
-          체크하기
-        </button>
+    <div className="glass-card p-4 h-full flex flex-col">
+      <div className="flex items-center gap-1.5 mb-3">
+        <span className="material-symbols-outlined text-blue-500 text-[20px]">fact_check</span>
+        <span className="text-sp-text font-bold text-sm">
+          {period}교시 · {classInfo.classroom}
+        </span>
       </div>
       {checked ? (
-        <div className="flex gap-4">
+        <div className="flex gap-3 flex-1 items-center">
           <div className="text-center">
-            <p className="text-green-400 font-bold text-lg">{present}</p>
-            <p className="text-sp-muted text-xs">출석</p>
+            <p className="text-green-500 font-bold text-lg">{present}</p>
+            <p className="text-sp-muted text-[10px]">출석</p>
           </div>
           <div className="text-center">
-            <p className="text-red-400 font-bold text-lg">{absent}</p>
-            <p className="text-sp-muted text-xs">결석</p>
+            <p className="text-red-500 font-bold text-lg">{absent}</p>
+            <p className="text-sp-muted text-[10px]">결석</p>
           </div>
           <div className="text-center">
-            <p className="text-yellow-400 font-bold text-lg">{late}</p>
-            <p className="text-sp-muted text-xs">지각</p>
+            <p className="text-yellow-500 font-bold text-lg">{late}</p>
+            <p className="text-sp-muted text-[10px]">지각</p>
           </div>
         </div>
       ) : (
-        <p className="text-sp-muted text-sm">아직 출결 확인을 하지 않았습니다.</p>
+        <p className="text-sp-muted text-xs flex-1">미확인</p>
       )}
+      <button
+        onClick={onCheckAttendance}
+        className="mt-2 w-full text-xs text-blue-500 font-medium py-2 rounded-xl bg-blue-500/10 active:scale-[0.98] transition-all touch-target"
+      >
+        체크하기
+      </button>
     </div>
   );
 }

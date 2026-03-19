@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { SyncStatus } from '@mobile/components/More/SyncStatus';
 
@@ -14,7 +14,7 @@ interface InfoRowProps {
 
 function InfoRow({ label, value, icon }: InfoRowProps) {
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-sp-border last:border-b-0">
+    <div className="flex items-center gap-3 py-3 border-b border-black/5 dark:border-white/5 last:border-b-0">
       <span className="material-symbols-outlined text-sp-muted text-[20px] shrink-0">{icon}</span>
       <div className="flex-1 min-w-0">
         <p className="text-sp-muted text-xs mb-0.5">{label}</p>
@@ -26,17 +26,34 @@ function InfoRow({ label, value, icon }: InfoRowProps) {
   );
 }
 
+type ThemeValue = 'system' | 'light' | 'dark';
+
+const themeOptions: { value: ThemeValue; label: string; icon: string }[] = [
+  { value: 'system', label: '시스템 설정', icon: 'brightness_auto' },
+  { value: 'light', label: '라이트', icon: 'light_mode' },
+  { value: 'dark', label: '다크', icon: 'dark_mode' },
+];
+
 export function SettingsPage({ onBack }: Props) {
   const { settings, loaded, load } = useMobileSettingsStore();
+  const [theme, setTheme] = useState<ThemeValue>(
+    () => (localStorage.getItem('ssampin-mobile-theme') as ThemeValue | null) ?? 'system'
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  const handleThemeChange = (value: ThemeValue) => {
+    setTheme(value);
+    localStorage.setItem('ssampin-mobile-theme', value);
+    window.dispatchEvent(new Event('theme-changed'));
+  };
+
   return (
-    <div className="flex flex-col h-full bg-sp-bg">
+    <div className="flex flex-col h-full">
       {/* 헤더 */}
-      <header className="flex items-center gap-3 px-4 py-3 bg-sp-surface border-b border-sp-border shrink-0">
+      <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
         <button
           onClick={onBack}
           className="flex items-center justify-center w-10 h-10"
@@ -53,7 +70,7 @@ export function SettingsPage({ onBack }: Props) {
           <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
             기본 정보
           </h3>
-          <div className="bg-sp-card rounded-xl px-4">
+          <div className="glass-card px-4">
             {!loaded ? (
               <div className="flex items-center justify-center py-8">
                 <span className="material-symbols-outlined text-sp-muted text-2xl animate-spin">
@@ -82,6 +99,34 @@ export function SettingsPage({ onBack }: Props) {
           </div>
         </section>
 
+        {/* 테마 */}
+        <section>
+          <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
+            테마
+          </h3>
+          <div className="glass-card px-4 py-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              {themeOptions.map((option) => {
+                const isSelected = theme === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => handleThemeChange(option.value)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors ${
+                      isSelected
+                        ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                        : 'bg-transparent border-black/10 dark:border-white/10 text-sp-muted'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">{option.icon}</span>
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
         {/* 동기화 */}
         <section>
           <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
@@ -95,8 +140,8 @@ export function SettingsPage({ onBack }: Props) {
           <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
             앱 정보
           </h3>
-          <div className="bg-sp-card rounded-xl px-4">
-            <div className="flex items-center gap-3 py-3 border-b border-sp-border">
+          <div className="glass-card px-4">
+            <div className="flex items-center gap-3 py-3 border-b border-black/5 dark:border-white/5">
               <span className="material-symbols-outlined text-sp-muted text-[20px]">info</span>
               <div className="flex-1">
                 <p className="text-sp-muted text-xs mb-0.5">버전</p>

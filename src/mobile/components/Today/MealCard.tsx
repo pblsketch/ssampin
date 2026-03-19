@@ -21,10 +21,7 @@ interface Props {
 }
 
 export function MealCard({ meals, loading }: Props) {
-  // Find which meal types exist
   const availableMeals = meals.filter((m) => m.dishes.length > 0);
-
-  // Default to 중식 if exists, otherwise first available
   const defaultIdx = Math.max(0, availableMeals.findIndex((m) => m.mealType === '중식'));
   const [currentIdx, setCurrentIdx] = useState(defaultIdx);
 
@@ -49,22 +46,21 @@ export function MealCard({ meals, loading }: Props) {
   const currentMeal = availableMeals[currentIdx];
 
   return (
-    <div className="bg-sp-card rounded-xl p-4">
+    <div className="glass-card p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-orange-400">restaurant</span>
+          <span className="material-symbols-outlined text-orange-500">restaurant</span>
           <span className="text-sp-text font-bold">오늘 급식</span>
         </div>
-        {/* Meal type tabs */}
         {availableMeals.length > 1 && (
           <div className="flex items-center gap-1">
             {availableMeals.map((meal, idx) => (
               <button
                 key={meal.mealType}
                 onClick={() => setCurrentIdx(idx)}
-                className={`px-2 py-0.5 rounded-md text-xs font-medium transition-colors ${
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                   idx === currentIdx
-                    ? 'bg-orange-400/20 text-orange-400'
+                    ? 'bg-orange-500/15 text-orange-500'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -93,14 +89,13 @@ export function MealCard({ meals, loading }: Props) {
           {currentMeal.calorie && (
             <p className="text-sp-muted text-xs mt-2">{currentMeal.calorie}</p>
           )}
-          {/* Dots indicator */}
           {availableMeals.length > 1 && (
             <div className="flex items-center justify-center gap-1.5 mt-3">
               {availableMeals.map((_, idx) => (
                 <div
                   key={idx}
                   className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    idx === currentIdx ? 'bg-orange-400' : 'bg-sp-border'
+                    idx === currentIdx ? 'bg-orange-500' : 'bg-black/10 dark:bg-white/10'
                   }`}
                 />
               ))}

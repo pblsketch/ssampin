@@ -58,10 +58,20 @@ export function useGoogleAuth(): GoogleAuthState {
 
     // 만료 5분 전이면 갱신
     if (Date.now() > tokens.expiresAt - 5 * 60 * 1000) {
-      const refreshed = await googleAuthPort.refreshTokens(tokens.refreshToken);
-      await writeAuth(AUTH_KEY, refreshed);
-      setTokens(refreshed);
-      return refreshed.accessToken;
+      try {
+        const refreshed = await googleAuthPort.refreshTokens(tokens.refreshToken);
+        await writeAuth(AUTH_KEY, refreshed);
+        setTokens(refreshed);
+        return refreshed.accessToken;
+      } catch (err) {
+        // invalid_grant: 다른 기기에서 재인증하여 토큰이 무효화됨
+        if (err instanceof Error && err.message.includes('INVALID_GRANT')) {
+          await deleteAuth(AUTH_KEY);
+          setTokens(null);
+          throw new Error('INVALID_GRANT: Google 인증이 만료되었습니다. 다시 로그인해주세요.');
+        }
+        throw err;
+      }
     }
     return tokens.accessToken;
   }, [tokens]);

@@ -66,8 +66,8 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60">
-      <div className="w-full max-w-lg bg-sp-card rounded-t-2xl border border-sp-border border-b-0 p-5 pb-8">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-lg glass-card rounded-t-2xl p-5 pb-8">
         <h3 className="text-sp-text font-bold text-lg mb-4">할 일 추가</h3>
 
         {/* 제목 입력 */}
@@ -82,7 +82,7 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
             }}
             placeholder="할 일을 입력하세요"
             autoFocus
-            className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-3 text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent text-sm"
+            className="w-full glass-input text-sm"
           />
         </div>
 
@@ -94,9 +94,9 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
               <button
                 key={opt.value}
                 onClick={() => setPriority(opt.value)}
-                className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
                   priority === opt.value
-                    ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                    ? 'bg-blue-500/20 border-blue-500 text-blue-500'
                     : 'border-sp-border text-sp-muted hover:border-sp-text/30'
                 }`}
               >
@@ -116,7 +116,7 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-3 text-sp-text focus:outline-none focus:border-sp-accent text-sm"
+            className="w-full glass-input text-sm"
           />
         </div>
 
@@ -131,7 +131,7 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
           <button
             onClick={handleAdd}
             disabled={!text.trim()}
-            className="flex-1 py-3 rounded-xl bg-sp-accent text-white text-sm font-bold disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-blue-500 text-white text-sm font-bold disabled:opacity-40"
           >
             추가
           </button>
@@ -154,8 +154,8 @@ function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
 
   return (
     <li
-      className={`flex items-center gap-3 px-4 py-3 border-b border-sp-border transition-opacity ${
-        todo.completed ? 'opacity-50' : ''
+      className={`flex items-center gap-3 px-4 py-3 border-b border-black/5 dark:border-white/5 transition-opacity ${
+        todo.completed ? 'opacity-40' : ''
       }`}
     >
       {/* 체크박스 */}
@@ -168,8 +168,8 @@ function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
         <div
           className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
             todo.completed
-              ? 'bg-sp-accent border-sp-accent'
-              : 'border-sp-border hover:border-sp-accent'
+              ? 'bg-blue-500 border-blue-500'
+              : 'border-sp-border hover:border-blue-500'
           }`}
         >
           {todo.completed && (
@@ -280,13 +280,13 @@ export function TodoPage() {
   const sorted = [...incomplete, ...completed];
 
   return (
-    <div className="flex flex-col h-full bg-sp-bg">
+    <div className="flex flex-col h-full">
       {/* 헤더 */}
-      <header className="flex items-center justify-between px-4 py-3 bg-sp-surface border-b border-sp-border shrink-0">
+      <header className="glass-header flex items-center justify-between px-4 py-3 shrink-0">
         <h1 className="text-sp-text font-bold text-lg">할 일</h1>
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center justify-center w-9 h-9 rounded-lg bg-sp-accent text-white font-bold text-xl leading-none"
+          className="flex items-center justify-center w-9 h-9 rounded-full bg-blue-500 text-white font-bold text-xl leading-none active:scale-95 transition-transform"
           aria-label="할 일 추가"
           style={{ minWidth: 44, minHeight: 44 }}
         >

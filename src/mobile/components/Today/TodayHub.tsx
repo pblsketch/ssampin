@@ -65,54 +65,71 @@ export function TodayHub({ onNavigateAttendance }: Props) {
   const dateStr = format(today, 'M\uC6D4 d\uC77C (EEEE)', { locale: ko });
 
   return (
-    <div className="tab-content p-4 space-y-4">
+    <div className="tab-content px-4 pt-4 pb-6 space-y-4">
       {/* 날짜 헤더 */}
-      <div>
-        <h2 className="text-xl font-bold text-sp-text">{dateStr}</h2>
-        {settings.schoolName && (
-          <p className="text-xs text-sp-muted mt-0.5">
-            {settings.schoolName} &middot; {settings.teacherName}
-          </p>
-        )}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-sp-text">{dateStr}</h2>
+          {settings.schoolName && (
+            <p className="text-xs text-sp-muted mt-0.5">
+              {settings.schoolName} &middot; {settings.teacherName}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* 날씨 */}
-      <WeatherCard />
+      {/* Bento Grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* 현재 교시 — 풀 너비 */}
+        <div className="col-span-2">
+          <CurrentClassCard periodInfo={periodInfo} teacherSchedule={teacherSchedule} />
+        </div>
 
-      {/* 현재 교시 카드 */}
-      <CurrentClassCard periodInfo={periodInfo} teacherSchedule={teacherSchedule} />
+        {/* 담임 출결 + 수업 출결 — 반 너비 */}
+        {isHomeroom && (
+          <div className="col-span-1">
+            <HomeroomAttendanceCard
+              todayRecord={homeroomRecord}
+              totalStudents={totalStudents}
+              onCheckAttendance={() => onNavigateAttendance({
+                classId: settings.className,
+                className: settings.className,
+                period: 0,
+                type: 'homeroom',
+              })}
+            />
+          </div>
+        )}
 
-      {/* 담임 출결 (담임 역할일 때만) */}
-      {isHomeroom && (
-        <HomeroomAttendanceCard
-          todayRecord={homeroomRecord}
-          totalStudents={totalStudents}
-          onCheckAttendance={() => onNavigateAttendance({
-            classId: settings.className,
-            className: settings.className,
-            period: 0,
-            type: 'homeroom',
-          })}
-        />
-      )}
+        {periodInfo.currentPeriod && currentClass ? (
+          <div className={isHomeroom ? 'col-span-1' : 'col-span-2'}>
+            <ClassAttendanceCard
+              period={periodInfo.currentPeriod}
+              classInfo={currentClass}
+              attendanceRecord={getTodayRecord(currentClass.classroom, periodInfo.currentPeriod)}
+              onCheckAttendance={() => onNavigateAttendance({
+                classId: currentClass.classroom,
+                className: currentClass.classroom,
+                period: periodInfo.currentPeriod!,
+                type: 'class',
+              })}
+            />
+          </div>
+        ) : isHomeroom ? (
+          /* 수업이 없는데 담임 출결만 있으면 나머지 반 너비 채우기 */
+          <div className="col-span-1" />
+        ) : null}
 
-      {/* 수업 출결 (현재 교시에 수업이 있을 때) */}
-      {periodInfo.currentPeriod && currentClass && (
-        <ClassAttendanceCard
-          period={periodInfo.currentPeriod}
-          classInfo={currentClass}
-          attendanceRecord={getTodayRecord(currentClass.classroom, periodInfo.currentPeriod)}
-          onCheckAttendance={() => onNavigateAttendance({
-            classId: currentClass.classroom,
-            className: currentClass.classroom,
-            period: periodInfo.currentPeriod!,
-            type: 'class',
-          })}
-        />
-      )}
+        {/* 날씨 — 풀 너비 */}
+        <div className="col-span-2">
+          <WeatherCard />
+        </div>
 
-      {/* 급식 */}
-      <MealCard meals={todayMeals} loading={mealLoading} />
+        {/* 급식 — 풀 너비 */}
+        <div className="col-span-2">
+          <MealCard meals={todayMeals} loading={mealLoading} />
+        </div>
+      </div>
     </div>
   );
 }

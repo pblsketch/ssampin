@@ -134,6 +134,10 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
 
     if (!res.ok) {
       const err = await res.text();
+      // invalid_grant = 다른 기기에서 재인증하여 토큰이 무효화됨
+      if (res.status === 400 && err.includes('invalid_grant')) {
+        throw new Error('INVALID_GRANT: Google 인증이 만료되었습니다. 다시 로그인해주세요.');
+      }
       throw new Error(`Token refresh failed: ${res.status} ${err}`);
     }
 

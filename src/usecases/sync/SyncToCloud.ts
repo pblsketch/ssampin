@@ -47,12 +47,21 @@ export class SyncToCloud {
   async execute(
     onProgress?: (progress: SyncProgress) => void,
   ): Promise<SyncToCloudResult> {
+    console.log(`[SyncToCloud] ▶ 시작 | deviceId=${this.deviceId} | deviceName=${this.deviceName}`);
     const folder = await this.drivePort.getOrCreateSyncFolder();
     const localManifest = await this.syncRepo.getLocalManifest();
     const uploaded: string[] = [];
     const skipped: string[] = [];
     const total = SYNC_FILES.length;
-    const updatedFiles: Record<string, DriveSyncFileInfo> = { ...(localManifest?.files ?? {}) };
+
+    // 리모트 매니페스트를 먼저 읽어 다른 기기가 올린 파일 엔트리를 보존
+    const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
+    console.log(`[SyncToCloud] 리모트 매니페스트 deviceId=${remoteManifest?.deviceId ?? 'NONE'}`);
+    console.log(`[SyncToCloud] 로컬 매니페스트 deviceId=${localManifest?.deviceId ?? 'NONE'}`);
+    const updatedFiles: Record<string, DriveSyncFileInfo> = {
+      ...(remoteManifest?.files ?? {}),
+      ...(localManifest?.files ?? {}),
+    };
 
     let index = 0;
     for (const filename of SYNC_FILES) {
@@ -62,18 +71,21 @@ export class SyncToCloud {
       const data = await this.storage.read<unknown>(filename);
       if (data === null) {
         skipped.push(filename);
+        console.log(`[SyncToCloud]   ${filename}: SKIP (데이터 없음)`);
         continue;
       }
 
       const content = JSON.stringify(data);
       const checksum = await computeChecksum(content);
+      const manifestChecksum = localManifest?.files[filename]?.checksum;
 
       // 체크섬이 같으면 스킵
-      if (localManifest?.files[filename]?.checksum === checksum) {
+      if (manifestChecksum === checksum) {
         skipped.push(filename);
         continue;
       }
 
+      console.log(`[SyncToCloud]   ${filename}: UPLOAD (checksum ${manifestChecksum?.slice(0, 8) ?? 'NONE'} → ${checksum.slice(0, 8)})`);
       const result = await this.drivePort.uploadSyncFile(folder.id, `${filename}.json`, content);
       updatedFiles[filename] = {
         lastModified: result.modifiedTime,
@@ -95,6 +107,7 @@ export class SyncToCloud {
     await this.drivePort.updateSyncManifest(folder.id, newManifest);
     await this.syncRepo.saveLocalManifest(newManifest);
 
+    console.log(`[SyncToCloud] ✅ 완료 | uploaded=${uploaded.length} skipped=${skipped.length} | uploaded=[${uploaded.join(', ')}]`);
     return { uploaded, skipped };
   }
 }

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { format, addDays } from 'date-fns';
+import { ko } from 'date-fns/locale';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { TeachingClassStudent, TeachingClass } from '@domain/entities/TeachingClass';
 import type { AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
@@ -9,6 +11,9 @@ import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
 import { seatingRepository } from '@mobile/di/container';
+import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
+import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
+import type { StudentRecord } from '@domain/entities/StudentRecord';
 
 type ViewMode = 'seating' | 'list';
 type ClassSelection = 'homeroom' | string; // 'homeroom' 또는 teachingClass.id
@@ -18,11 +23,11 @@ type ClassSelection = 'homeroom' | string; // 'homeroom' 또는 teachingClass.id
 // ============================================================
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; activeColor: string }> = {
-  present: { label: '출석', icon: 'check_circle', activeColor: 'text-green-400 bg-green-400/10 border-green-400/40' },
-  late: { label: '지각', icon: 'schedule', activeColor: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/40' },
-  absent: { label: '결석', icon: 'cancel', activeColor: 'text-red-400 bg-red-400/10 border-red-400/40' },
-  earlyLeave: { label: '조퇴', icon: 'exit_to_app', activeColor: 'text-orange-400 bg-orange-400/10 border-orange-400/40' },
-  classAbsence: { label: '결과', icon: 'event_busy', activeColor: 'text-purple-400 bg-purple-400/10 border-purple-400/40' },
+  present: { label: '출석', icon: 'check_circle', activeColor: 'text-green-500 bg-green-500/10 border-green-500/40' },
+  late: { label: '지각', icon: 'schedule', activeColor: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/40' },
+  absent: { label: '결석', icon: 'cancel', activeColor: 'text-red-500 bg-red-500/10 border-red-500/40' },
+  earlyLeave: { label: '조퇴', icon: 'exit_to_app', activeColor: 'text-orange-500 bg-orange-500/10 border-orange-500/40' },
+  classAbsence: { label: '결과', icon: 'event_busy', activeColor: 'text-purple-500 bg-purple-500/10 border-purple-500/40' },
 };
 
 // ============================================================
@@ -33,6 +38,7 @@ export function StudentsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('seating');
   const [selectedClass, setSelectedClass] = useState<ClassSelection>('homeroom');
   const [seatingData, setSeatingData] = useState<SeatingData | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // 바텀시트 상태
   const [sheetStudent, setSheetStudent] = useState<SheetStudentInfo | null>(null);
@@ -49,16 +55,32 @@ export function StudentsPage() {
   const loadTeachingClasses = useMobileTeachingClassStore((s) => s.load);
 
   const loadAttendance = useMobileAttendanceStore((s) => s.load);
+  const records = useMobileAttendanceStore((s) => s.records);
+
+  const loadRecords = useMobileStudentRecordsStore((s) => s.load);
+  const loadProgress = useMobileProgressStore((s) => s.load);
+
+  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const isToday = selectedDateStr === todayStr;
+
+  const getRecordForDate = useCallback((classId: string, period: number, dateStr: string) => {
+    return records.find(
+      (r) => r.date === dateStr && r.classId === classId && r.period === period,
+    ) ?? null;
+  }, [records]);
 
   useEffect(() => {
     void loadSettings();
     void loadStudents();
     void loadTeachingClasses();
     void loadAttendance();
+    void loadRecords();
+    void loadProgress();
     void seatingRepository.getSeating().then((data) => {
       setSeatingData(data);
     });
-  }, [loadSettings, loadStudents, loadTeachingClasses, loadAttendance]);
+  }, [loadSettings, loadStudents, loadTeachingClasses, loadAttendance, loadRecords, loadProgress]);
 
   // 담임반이 선택되었는데 수업반 뷰로 전환되면 좌석 뷰 기본값 유지
   // 수업반 선택 시 명단 뷰로 자동 전환 (좌석은 별도 지원)
@@ -104,11 +126,13 @@ export function StudentsPage() {
       number: s.studentNumber ?? 0,
       name: s.name,
       sKey: String(s.studentNumber ?? s.id),
+      studentId: s.id,
       classId: settings.className || 'homeroom',
       period: 0,
       type: 'homeroom',
+      date: selectedDateStr,
     });
-  }, [students, settings.className]);
+  }, [students, settings.className, selectedDateStr]);
 
   // 수업반 학생을 바텀시트 형식으로 변환
   const openTeachingStudentSheet = useCallback((student: TeachingClassStudent, classId: string) => {
@@ -119,16 +143,18 @@ export function StudentsPage() {
       grade: student.grade,
       classNum: student.classNum,
       sKey: studentKey(student),
+      studentId: studentKey(student),
       classId,
-      period: 0, // 수업반은 period 별도 관리 — 여기서는 즉석 출결 기록용으로 0 사용
+      period: 0,
       type: 'class',
+      date: selectedDateStr,
     });
-  }, []);
+  }, [selectedDateStr]);
 
   return (
-    <div className="flex flex-col h-full bg-sp-bg">
+    <div className="flex flex-col h-full">
       {/* 헤더 */}
-      <header className="flex flex-col gap-0 bg-sp-surface border-b border-sp-border shrink-0">
+      <header className="flex flex-col gap-0 glass-header shrink-0">
         {/* 상단 행: 제목 + 뷰 토글 */}
         <div className="flex items-center justify-between px-4 py-3">
           <h2 className="text-sp-text font-bold text-base">
@@ -139,12 +165,12 @@ export function StudentsPage() {
 
           {/* 담임반일 때만 뷰 토글 표시 */}
           {selectedClass === 'homeroom' && (
-            <div className="flex items-center gap-1 bg-sp-card rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('seating')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'seating'
-                    ? 'bg-sp-accent text-white'
+                    ? 'bg-blue-500 text-white'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -154,7 +180,7 @@ export function StudentsPage() {
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-sp-accent text-white'
+                    ? 'bg-blue-500 text-white'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -165,12 +191,12 @@ export function StudentsPage() {
 
           {/* 수업반일 때 뷰 토글 (명단/좌석, 좌석이 있을 때) */}
           {selectedClass !== 'homeroom' && selectedTeachingClass?.seating && (
-            <div className="flex items-center gap-1 bg-sp-card rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-sp-accent text-white'
+                    ? 'bg-blue-500 text-white'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -180,7 +206,7 @@ export function StudentsPage() {
                 onClick={() => setViewMode('seating')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'seating'
-                    ? 'bg-sp-accent text-white'
+                    ? 'bg-blue-500 text-white'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -198,8 +224,8 @@ export function StudentsPage() {
               onClick={() => setSelectedClass('homeroom')}
               className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                 selectedClass === 'homeroom'
-                  ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
-                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'
+                  ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                  : 'glass-card border-transparent text-sp-muted hover:text-sp-text'
               }`}
             >
               담임반
@@ -212,8 +238,8 @@ export function StudentsPage() {
                 onClick={() => setSelectedClass(tc.id)}
                 className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   selectedClass === tc.id
-                    ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
-                    : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'
+                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                    : 'glass-card border-transparent text-sp-muted hover:text-sp-text'
                 }`}
               >
                 {tc.name}
@@ -221,6 +247,37 @@ export function StudentsPage() {
             ))}
           </div>
         )}
+
+        {/* 날짜 선택기 */}
+        <div className="flex items-center justify-between px-4 pb-3 gap-2">
+          <button
+            onClick={() => setSelectedDate((d) => addDays(d, -1))}
+            className="p-1 rounded-lg text-sp-muted hover:text-sp-text transition-colors active:bg-sp-surface"
+          >
+            <span className="material-symbols-outlined text-xl">chevron_left</span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sp-text text-sm font-medium">
+              {format(selectedDate, 'M월 d일 (EEEE)', { locale: ko })}
+            </span>
+            {!isToday && (
+              <button
+                onClick={() => setSelectedDate(new Date())}
+                className="px-2 py-0.5 rounded-full bg-blue-500 text-white text-xs font-medium"
+              >
+                오늘로 가기
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setSelectedDate((d) => addDays(d, 1))}
+            className="p-1 rounded-lg text-sp-muted hover:text-sp-text transition-colors active:bg-sp-surface"
+          >
+            <span className="material-symbols-outlined text-xl">chevron_right</span>
+          </button>
+        </div>
       </header>
 
       {/* 컨텐츠 */}
@@ -235,11 +292,15 @@ export function StudentsPage() {
               seatingData={seatingData}
               studentMap={studentMap}
               onStudentTap={openHomeroomStudentSheet}
+              dateStr={selectedDateStr}
+              getRecordForDate={getRecordForDate}
             />
           ) : (
             <HomeroomListView
               students={sortedStudents}
               onStudentTap={openHomeroomStudentSheet}
+              dateStr={selectedDateStr}
+              getRecordForDate={getRecordForDate}
             />
           )
         ) : selectedTeachingClass ? (
@@ -247,11 +308,15 @@ export function StudentsPage() {
             <TeachingSeatingView
               teachingClass={selectedTeachingClass}
               onStudentTap={(s) => openTeachingStudentSheet(s, selectedTeachingClass.id)}
+              dateStr={selectedDateStr}
+              getRecordForDate={getRecordForDate}
             />
           ) : (
             <TeachingListView
               teachingClass={selectedTeachingClass}
               onStudentTap={(s) => openTeachingStudentSheet(s, selectedTeachingClass.id)}
+              dateStr={selectedDateStr}
+              getRecordForDate={getRecordForDate}
             />
           )
         ) : (
@@ -266,6 +331,7 @@ export function StudentsPage() {
         <StudentQuickActionSheet
           info={sheetStudent}
           onClose={() => setSheetStudent(null)}
+          getRecordForDate={getRecordForDate}
         />
       )}
     </div>
@@ -280,21 +346,18 @@ interface SeatingViewProps {
   seatingData: SeatingData | null;
   studentMap: Map<string, { name: string; number?: number; isVacant?: boolean }>;
   onStudentTap: (studentId: string) => void;
+  dateStr: string;
+  getRecordForDate: (classId: string, period: number, dateStr: string) => import('@domain/entities/Attendance').AttendanceRecord | null;
 }
 
-function SeatingView({ seatingData, studentMap, onStudentTap }: SeatingViewProps) {
+function SeatingView({ seatingData, studentMap, onStudentTap, dateStr, getRecordForDate }: SeatingViewProps) {
   const [isTeacherView, setIsTeacherView] = useState(true);
   const settings = useMobileSettingsStore((s) => s.settings);
-  const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
-  const records = useMobileAttendanceStore((s) => s.records); // for reactivity
-  const todayRecord = getTodayRecord(settings.className || 'homeroom', 0);
-
-  // Suppress unused-var lint — `records` is read only for Zustand reactivity
-  void records;
+  const record = getRecordForDate(settings.className || 'homeroom', 0, dateStr);
 
   const getStudentStatus = (studentNumber: number | undefined): AttendanceStatus | null => {
-    if (!todayRecord || studentNumber === undefined) return null;
-    const found = todayRecord.students.find((sa) => sa.number === studentNumber);
+    if (!record || studentNumber === undefined) return null;
+    const found = record.students.find((sa) => sa.number === studentNumber);
     return found?.status ?? null;
   };
 
@@ -438,16 +501,13 @@ function SeatingView({ seatingData, studentMap, onStudentTap }: SeatingViewProps
 interface TeachingSeatingViewProps {
   teachingClass: TeachingClass;
   onStudentTap: (student: TeachingClassStudent) => void;
+  dateStr: string;
+  getRecordForDate: (classId: string, period: number, dateStr: string) => import('@domain/entities/Attendance').AttendanceRecord | null;
 }
 
-function TeachingSeatingView({ teachingClass, onStudentTap }: TeachingSeatingViewProps) {
+function TeachingSeatingView({ teachingClass, onStudentTap, dateStr, getRecordForDate }: TeachingSeatingViewProps) {
   const [isTeacherView, setIsTeacherView] = useState(true);
-  const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
-  const records = useMobileAttendanceStore((s) => s.records); // for reactivity
-  const todayRecord = getTodayRecord(teachingClass.id, 0);
-
-  // Suppress unused-var lint — `records` is read only for Zustand reactivity
-  void records;
+  const record = getRecordForDate(teachingClass.id, 0, dateStr);
 
   const seating = teachingClass.seating;
 
@@ -461,9 +521,9 @@ function TeachingSeatingView({ teachingClass, onStudentTap }: TeachingSeatingVie
   }, [teachingClass.students]);
 
   const getStudentStatus = (student: TeachingClassStudent | null | undefined): AttendanceStatus | null => {
-    if (!todayRecord || !student) return null;
+    if (!record || !student) return null;
     const sKey = studentKey(student);
-    const found = todayRecord.students.find((sa) => {
+    const found = record.students.find((sa) => {
       const saKey = sa.grade != null && sa.classNum != null
         ? `${sa.grade}-${sa.classNum}-${sa.number}`
         : String(sa.number);
@@ -617,19 +677,17 @@ interface HomeroomStudent {
 interface HomeroomListViewProps {
   students: readonly HomeroomStudent[];
   onStudentTap: (studentId: string) => void;
+  dateStr: string;
+  getRecordForDate: (classId: string, period: number, dateStr: string) => import('@domain/entities/Attendance').AttendanceRecord | null;
 }
 
-function HomeroomListView({ students, onStudentTap }: HomeroomListViewProps) {
+function HomeroomListView({ students, onStudentTap, dateStr, getRecordForDate }: HomeroomListViewProps) {
   const settings = useMobileSettingsStore((s) => s.settings);
-  const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
-  const records = useMobileAttendanceStore((s) => s.records); // for reactivity
-  const todayRecord = getTodayRecord(settings.className || 'homeroom', 0);
-
-  void records;
+  const record = getRecordForDate(settings.className || 'homeroom', 0, dateStr);
 
   const getStudentStatus = (studentNumber: number | undefined): AttendanceStatus | null => {
-    if (!todayRecord || studentNumber === undefined) return null;
-    const found = todayRecord.students.find((sa) => sa.number === studentNumber);
+    if (!record || studentNumber === undefined) return null;
+    const found = record.students.find((sa) => sa.number === studentNumber);
     return found?.status ?? null;
   };
 
@@ -713,19 +771,17 @@ function HomeroomListView({ students, onStudentTap }: HomeroomListViewProps) {
 interface TeachingListViewProps {
   teachingClass: TeachingClass;
   onStudentTap: (student: TeachingClassStudent) => void;
+  dateStr: string;
+  getRecordForDate: (classId: string, period: number, dateStr: string) => import('@domain/entities/Attendance').AttendanceRecord | null;
 }
 
-function TeachingListView({ teachingClass, onStudentTap }: TeachingListViewProps) {
-  const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
-  const records = useMobileAttendanceStore((s) => s.records); // for reactivity
-  const todayRecord = getTodayRecord(teachingClass.id, 0);
-
-  void records;
+function TeachingListView({ teachingClass, onStudentTap, dateStr, getRecordForDate }: TeachingListViewProps) {
+  const record = getRecordForDate(teachingClass.id, 0, dateStr);
 
   const getStudentStatus = (student: TeachingClassStudent): AttendanceStatus | null => {
-    if (!todayRecord) return null;
+    if (!record) return null;
     const sKey = studentKey(student);
-    const found = todayRecord.students.find((sa) => {
+    const found = record.students.find((sa) => {
       const saKey = sa.grade != null && sa.classNum != null
         ? `${sa.grade}-${sa.classNum}-${sa.number}`
         : String(sa.number);
@@ -829,37 +885,129 @@ interface SheetStudentInfo {
   name: string;
   grade?: number;
   classNum?: number;
-  sKey: string; // studentKey 결과
+  sKey: string;
+  studentId: string;
   classId: string;
   period: number;
   type: 'homeroom' | 'class';
+  date: string;
 }
 
 interface StudentQuickActionSheetProps {
   info: SheetStudentInfo;
   onClose: () => void;
+  getRecordForDate: (classId: string, period: number, dateStr: string) => import('@domain/entities/Attendance').AttendanceRecord | null;
 }
 
-function todayString(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+type SheetSubTab = 'attendance' | 'records';
+
+function StudentQuickActionSheet({ info, onClose, getRecordForDate }: StudentQuickActionSheetProps) {
+  const [subTab, setSubTab] = useState<SheetSubTab>('attendance');
+
+  // 배경 터치로 닫기
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end"
+      onClick={handleBackdropClick}
+    >
+      {/* 반투명 배경 */}
+      <div className="absolute inset-0 bg-black/50" />
+
+      {/* 시트 */}
+      <div className="relative w-full glass-card rounded-t-2xl pb-safe pt-1">
+        {/* 핸들 바 */}
+        <div className="flex justify-center pt-2 pb-1">
+          <div className="w-10 h-1 rounded-full bg-sp-border" />
+        </div>
+
+        {/* 학생 정보 */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-sp-border">
+          <div className="w-12 h-12 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
+            <span className="text-blue-500 font-bold text-lg">{info.name.charAt(0)}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sp-muted text-sm">{info.number}번</span>
+              <span className="text-sp-text font-bold text-base">{info.name}</span>
+            </div>
+            {info.grade != null && info.classNum != null && (
+              <p className="text-sp-muted text-xs mt-0.5">
+                {info.grade}학년 {info.classNum}반
+              </p>
+            )}
+            <p className="text-sp-muted text-xs mt-0.5">
+              {info.date} · {info.type === 'homeroom' ? '담임 출결' : '수업 출결'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-sp-card transition-colors"
+          >
+            <span className="material-symbols-outlined text-sp-muted">close</span>
+          </button>
+        </div>
+
+        {/* 서브탭 pill */}
+        <div className="flex gap-1 mx-5 my-3 p-1 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10">
+          <button
+            onClick={() => setSubTab('attendance')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+              subTab === 'attendance'
+                ? 'bg-sp-accent text-white shadow-sm'
+                : 'text-sp-muted'
+            }`}
+          >
+            출결
+          </button>
+          <button
+            onClick={() => setSubTab('records')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+              subTab === 'records'
+                ? 'bg-sp-accent text-white shadow-sm'
+                : 'text-sp-muted'
+            }`}
+          >
+            기록
+          </button>
+        </div>
+
+        {/* 서브탭 내용 */}
+        {subTab === 'attendance' ? (
+          <AttendanceSubTab info={info} getRecordForDate={getRecordForDate} onClose={onClose} />
+        ) : (
+          <RecordsSubTab studentId={info.studentId} studentName={info.name} />
+        )}
+      </div>
+    </div>
+  );
 }
 
-function StudentQuickActionSheet({ info, onClose }: StudentQuickActionSheetProps) {
-  const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
+// ============================================================
+// 출결 서브탭 (기존 출결 UI 추출)
+// ============================================================
+
+function AttendanceSubTab({
+  info,
+  getRecordForDate,
+  onClose,
+}: {
+  info: SheetStudentInfo;
+  getRecordForDate: (classId: string, period: number, dateStr: string) => import('@domain/entities/Attendance').AttendanceRecord | null;
+  onClose: () => void;
+}) {
   const saveRecord = useMobileAttendanceStore((s) => s.saveRecord);
   const records = useMobileAttendanceStore((s) => s.records);
 
-  // 현재 상태 및 사유/메모 계산
   const { currentStatus, currentReason, currentMemo } = React.useMemo((): {
     currentStatus: AttendanceStatus;
     currentReason: AttendanceReason | undefined;
     currentMemo: string;
   } => {
-    const record = getTodayRecord(info.classId, info.period);
+    const record = getRecordForDate(info.classId, info.period, info.date);
     if (!record) return { currentStatus: 'present', currentReason: undefined, currentMemo: '' };
     const found = record.students.find((sa) => {
       const saKey = sa.grade != null && sa.classNum != null
@@ -872,13 +1020,12 @@ function StudentQuickActionSheet({ info, onClose }: StudentQuickActionSheetProps
       currentReason: found?.reason as AttendanceReason | undefined,
       currentMemo: found?.memo ?? '',
     };
-  }, [getTodayRecord, info.classId, info.period, info.sKey, records]); // records 의존성으로 리렌더 유발
+  }, [getRecordForDate, info.classId, info.period, info.date, info.sKey, records]);
 
   const [reason, setReason] = useState<AttendanceReason | undefined>(currentReason);
   const [memo, setMemo] = useState(currentMemo);
   const [saving, setSaving] = useState(false);
 
-  // currentReason/currentMemo가 변경되면 로컬 state도 동기화
   useEffect(() => {
     setReason(currentReason);
   }, [currentReason]);
@@ -887,22 +1034,15 @@ function StudentQuickActionSheet({ info, onClose }: StudentQuickActionSheetProps
     setMemo(currentMemo);
   }, [currentMemo]);
 
-  // 상태 변경 핸들러
   const handleStatusChange = useCallback(async (newStatus: AttendanceStatus) => {
     setSaving(true);
-
-    // 기존 출결 기록 가져오기
-    const existing = getTodayRecord(info.classId, info.period);
-
-    // 이 학생 제외한 기존 학생들
+    const existing = getRecordForDate(info.classId, info.period, info.date);
     const otherStudents = (existing?.students ?? []).filter((sa) => {
       const saKey = sa.grade != null && sa.classNum != null
         ? `${sa.grade}-${sa.classNum}-${sa.number}`
         : String(sa.number);
       return saKey !== info.sKey;
     });
-
-    // 이 학생의 새 출결 항목 (출석이면 사유/메모 제거)
     const thisEntry = {
       number: info.number,
       status: newStatus,
@@ -911,21 +1051,28 @@ function StudentQuickActionSheet({ info, onClose }: StudentQuickActionSheetProps
       ...(info.grade != null ? { grade: info.grade } : {}),
       ...(info.classNum != null ? { classNum: info.classNum } : {}),
     };
-
     await saveRecord({
       classId: info.classId,
-      date: todayString(),
+      date: info.date,
       period: info.period,
       students: [...otherStudents, thisEntry],
     });
-
+    if (info.type === 'homeroom') {
+      const { bridgeAttendanceRecord } = useMobileStudentRecordsStore.getState();
+      await bridgeAttendanceRecord({
+        studentId: info.studentId,
+        date: info.date,
+        status: newStatus,
+        reason: newStatus !== 'present' ? (reason || undefined) : undefined,
+        memo: newStatus !== 'present' ? (memo || undefined) : undefined,
+      });
+    }
     setSaving(false);
-  }, [getTodayRecord, info, saveRecord, reason, memo]);
+  }, [getRecordForDate, info, saveRecord, reason, memo]);
 
-  // 저장 핸들러 (상태 변경 없이 현재 상태 + 사유 + 메모 저장)
   const handleSave = useCallback(async () => {
     setSaving(true);
-    const existing = getTodayRecord(info.classId, info.period);
+    const existing = getRecordForDate(info.classId, info.period, info.date);
     const otherStudents = (existing?.students ?? []).filter((sa) => {
       const saKey = sa.grade != null && sa.classNum != null
         ? `${sa.grade}-${sa.classNum}-${sa.number}`
@@ -942,132 +1089,260 @@ function StudentQuickActionSheet({ info, onClose }: StudentQuickActionSheetProps
     };
     await saveRecord({
       classId: info.classId,
-      date: todayString(),
+      date: info.date,
       period: info.period,
       students: [...otherStudents, thisEntry],
     });
+    if (info.type === 'homeroom') {
+      const { bridgeAttendanceRecord } = useMobileStudentRecordsStore.getState();
+      await bridgeAttendanceRecord({
+        studentId: info.studentId,
+        date: info.date,
+        status: currentStatus,
+        reason: currentStatus !== 'present' ? (reason || undefined) : undefined,
+        memo: currentStatus !== 'present' ? (memo || undefined) : undefined,
+      });
+    }
     setSaving(false);
     onClose();
-  }, [getTodayRecord, info, saveRecord, onClose, currentStatus, reason, memo]);
+  }, [getRecordForDate, info, saveRecord, onClose, currentStatus, reason, memo]);
 
-  // 배경 터치로 닫기
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
+  return (
+    <div className="px-5 py-5">
+      <p className="text-sp-muted text-xs font-medium mb-3">출결 상태</p>
+      <div className="flex flex-wrap gap-2">
+        {(Object.entries(STATUS_CONFIG) as [AttendanceStatus, typeof STATUS_CONFIG['present']][]).map(
+          ([status, config]) => {
+            const isActive = currentStatus === status;
+            return (
+              <button
+                key={status}
+                onClick={() => void handleStatusChange(status)}
+                disabled={saving}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                  isActive
+                    ? config.activeColor + ' border-2'
+                    : 'border-sp-border text-sp-muted hover:border-sp-text/30'
+                } ${saving ? 'opacity-50' : ''}`}
+              >
+                <span className={`material-symbols-outlined text-lg ${isActive ? '' : 'text-sp-muted'}`}>
+                  {config.icon}
+                </span>
+                {config.label}
+              </button>
+            );
+          },
+        )}
+      </div>
+
+      {currentStatus !== 'present' && (
+        <div className="mt-4 space-y-3">
+          <div>
+            <p className="text-sp-muted text-xs font-medium mb-2">사유</p>
+            <div className="flex flex-wrap gap-1.5">
+              {ATTENDANCE_REASONS.map((r) => {
+                const isSelected = reason === r;
+                return (
+                  <button
+                    key={r}
+                    onClick={() => setReason(isSelected ? undefined : r)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                      isSelected
+                        ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                        : 'border-sp-border text-sp-muted hover:text-sp-text'
+                    }`}
+                  >
+                    {isSelected && <span className="mr-0.5">&#10003;</span>}{r}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <input
+            type="text"
+            placeholder="메모 (선택)"
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            className="w-full px-3 py-1.5 glass-input text-xs"
+          />
+          <button
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="w-full mt-4 py-3 bg-blue-500 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-all active:scale-[0.98]"
+          >
+            {saving ? '저장 중...' : '저장'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// 기록 서브탭 (Phase A 신규)
+// ============================================================
+
+const CATEGORY_COLORS: Record<string, string> = {
+  red: 'bg-red-400',
+  blue: 'bg-blue-400',
+  green: 'bg-green-400',
+  yellow: 'bg-yellow-400',
+  purple: 'bg-purple-400',
+  gray: 'bg-gray-400',
+};
+
+function todayString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function RecordsSubTab({ studentId }: { studentId: string; studentName: string }) {
+  const loadRecords = useMobileStudentRecordsStore((s) => s.load);
+  const getRecords = useMobileStudentRecordsStore((s) => s.getRecordsByStudentId);
+  const addRecord = useMobileStudentRecordsStore((s) => s.addRecord);
+  const categories = useMobileStudentRecordsStore((s) => s.categories);
+
+  const [showForm, setShowForm] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
+  const [content, setContent] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { void loadRecords(); }, [loadRecords]);
+
+  // 출결(attendance) 카테고리 제외
+  const mobileCategories = categories.filter((c) => c.id !== 'attendance');
+  const selectedCategory = mobileCategories.find((c) => c.id === selectedCategoryId);
+  const recentRecords = getRecords(studentId, 3);
+
+  const handleSubmit = async () => {
+    if (!selectedCategoryId || !content.trim()) return;
+    setSaving(true);
+    const now = new Date();
+    const record: StudentRecord = {
+      id: crypto.randomUUID(),
+      studentId,
+      category: selectedCategoryId,
+      subcategory: selectedSubcategory,
+      content: content.trim(),
+      date: todayString(),
+      createdAt: now.toISOString(),
+    };
+    await addRecord(record);
+    setContent('');
+    setSelectedCategoryId('');
+    setSelectedSubcategory('');
+    setShowForm(false);
+    setSaving(false);
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end"
-      onClick={handleBackdropClick}
-    >
-      {/* 반투명 배경 */}
-      <div className="absolute inset-0 bg-black/50" />
-
-      {/* 시트 */}
-      <div className="relative w-full bg-sp-surface rounded-t-2xl border-t border-sp-border pb-safe pt-1">
-        {/* 핸들 바 */}
-        <div className="flex justify-center pt-2 pb-1">
-          <div className="w-10 h-1 rounded-full bg-sp-border" />
-        </div>
-
-        {/* 학생 정보 */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-sp-border">
-          {/* 아바타 */}
-          <div className="w-12 h-12 rounded-full bg-sp-accent/15 flex items-center justify-center shrink-0">
-            <span className="text-sp-accent font-bold text-lg">{info.name.charAt(0)}</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sp-muted text-sm">{info.number}번</span>
-              <span className="text-sp-text font-bold text-base">{info.name}</span>
-            </div>
-            {info.grade != null && info.classNum != null && (
-              <p className="text-sp-muted text-xs mt-0.5">
-                {info.grade}학년 {info.classNum}반
-              </p>
-            )}
-            <p className="text-sp-muted text-xs mt-0.5">
-              {todayString()} · {info.type === 'homeroom' ? '담임 출결' : '수업 출결'}
-            </p>
-          </div>
+    <div className="px-5 py-4 space-y-4 max-h-[50vh] overflow-y-auto">
+      {/* 최근 기록 */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sp-muted text-xs font-medium">최근 기록</p>
           <button
-            onClick={onClose}
-            className="p-2 rounded-full hover:bg-sp-card transition-colors"
+            onClick={() => setShowForm(!showForm)}
+            className="text-sp-accent text-xs font-medium"
           >
-            <span className="material-symbols-outlined text-sp-muted">close</span>
+            {showForm ? '취소' : '+ 새 기록'}
           </button>
         </div>
 
-        {/* 출결 상태 버튼 */}
-        <div className="px-5 py-5">
-          <p className="text-sp-muted text-xs font-medium mb-3">출결 상태</p>
-          <div className="flex flex-wrap gap-2">
-            {(Object.entries(STATUS_CONFIG) as [AttendanceStatus, typeof STATUS_CONFIG['present']][]).map(
-              ([status, config]) => {
-                const isActive = currentStatus === status;
-                return (
-                  <button
-                    key={status}
-                    onClick={() => void handleStatusChange(status)}
-                    disabled={saving}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
-                      isActive
-                        ? config.activeColor + ' border-2'
-                        : 'border-sp-border text-sp-muted hover:border-sp-text/30'
-                    } ${saving ? 'opacity-50' : ''}`}
-                  >
-                    <span className={`material-symbols-outlined text-lg ${isActive ? '' : 'text-sp-muted'}`}>
-                      {config.icon}
-                    </span>
-                    {config.label}
-                  </button>
-                );
-              },
-            )}
+        {recentRecords.length === 0 ? (
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
+            <p className="text-sp-muted text-sm">기록이 없습니다</p>
           </div>
-
-          {/* 사유 선택 (출석이 아닐 때만 표시) */}
-          {currentStatus !== 'present' && (
-            <div className="mt-4 space-y-3">
-              <div>
-                <p className="text-sp-muted text-xs font-medium mb-2">사유</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {ATTENDANCE_REASONS.map((r) => {
-                    const isSelected = reason === r;
-                    return (
-                      <button
-                        key={r}
-                        onClick={() => setReason(isSelected ? undefined : r)}
-                        className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
-                          isSelected
-                            ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
-                            : 'border-sp-border text-sp-muted hover:text-sp-text'
-                        }`}
-                      >
-                        {isSelected && <span className="mr-0.5">&#10003;</span>}{r}
-                      </button>
-                    );
-                  })}
+        ) : (
+          recentRecords.map((rec) => {
+            const cat = categories.find((c) => c.id === rec.category);
+            const colorClass = CATEGORY_COLORS[cat?.color ?? 'gray'] ?? 'bg-gray-400';
+            return (
+              <div key={rec.id} className="bg-white/5 backdrop-blur-sm border border-white/10 flex rounded-xl overflow-hidden mb-2">
+                <div className={`w-1 shrink-0 ${colorClass}`} />
+                <div className="flex-1 p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs text-sp-muted">{rec.date}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/5 text-sp-muted">
+                      {cat?.name.split('(')[0]?.trim() ?? rec.category}
+                    </span>
+                    {rec.subcategory && (
+                      <span className="text-xs text-sp-muted/70">{rec.subcategory}</span>
+                    )}
+                  </div>
+                  <p className="text-sp-text text-sm">{rec.content}</p>
                 </div>
               </div>
-              <input
-                type="text"
-                placeholder="메모 (선택)"
-                value={memo}
-                onChange={(e) => setMemo(e.target.value)}
-                className="w-full px-3 py-1.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text text-xs placeholder:text-sp-muted/50"
-              />
-              <button
-                onClick={() => void handleSave()}
-                disabled={saving}
-                className="w-full mt-4 py-3 bg-sp-accent text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors active:bg-sp-accent/80"
-              >
-                {saving ? '저장 중...' : '저장'}
-              </button>
+            );
+          })
+        )}
+      </div>
+
+      {/* 기록 추가 폼 */}
+      {showForm && (
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3">
+          {/* 카테고리 선택 */}
+          <div>
+            <p className="text-sp-muted text-xs mb-2">카테고리</p>
+            <div className="flex flex-wrap gap-1.5">
+              {mobileCategories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => { setSelectedCategoryId(cat.id); setSelectedSubcategory(''); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors min-h-[36px] ${
+                    selectedCategoryId === cat.id
+                      ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
+                      : 'border-sp-border text-sp-muted'
+                  }`}
+                >
+                  {cat.name.split('(')[0]?.trim()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 서브카테고리 */}
+          {selectedCategory && selectedCategory.subcategories.length > 0 && (
+            <div>
+              <p className="text-sp-muted text-xs mb-2">세부</p>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedCategory.subcategories.map((sub) => (
+                  <button
+                    key={sub}
+                    onClick={() => setSelectedSubcategory(sub === selectedSubcategory ? '' : sub)}
+                    className={`px-2.5 py-1 rounded-md text-xs border transition-colors min-h-[32px] ${
+                      selectedSubcategory === sub
+                        ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
+                        : 'border-sp-border text-sp-muted'
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* 기록 내용 */}
+          <textarea
+            placeholder="기록 내용을 입력하세요"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 bg-sp-surface border border-sp-border rounded-xl text-sp-text text-sm placeholder:text-sp-muted/50 resize-none"
+          />
+
+          {/* 저장 버튼 */}
+          <button
+            onClick={() => void handleSubmit()}
+            disabled={!selectedCategoryId || !content.trim() || saving}
+            className="w-full py-3 bg-sp-accent text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors active:bg-sp-accent/80"
+          >
+            {saving ? '저장 중...' : '기록 저장'}
+          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

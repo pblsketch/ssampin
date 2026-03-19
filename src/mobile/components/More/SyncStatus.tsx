@@ -19,10 +19,10 @@ export function SyncStatus() {
   };
 
   return (
-    <div className="bg-sp-card rounded-xl p-4 space-y-3">
+    <div className="glass-card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-sp-accent">cloud_sync</span>
+          <span className="material-symbols-outlined text-blue-500">cloud_sync</span>
           <span className="text-sp-text font-bold">Google Drive 동기화</span>
         </div>
         {isAuthenticated && (
@@ -33,15 +33,19 @@ export function SyncStatus() {
         )}
       </div>
 
-      {!isAuthenticated && (
+      {!isAuthenticated && !error && (
         <p className="text-sp-muted text-sm">로그인이 필요합니다. Google 계정으로 로그인해 주세요.</p>
+      )}
+
+      {!isAuthenticated && error && (
+        <p className="text-red-400 text-sm">{error}</p>
       )}
 
       {isAuthenticated && state === 'syncing' && (
         <div>
-          <div className="h-1.5 bg-sp-border rounded-full overflow-hidden">
+          <div className="h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
             <div
-              className="h-full bg-sp-accent rounded-full transition-all"
+              className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -59,13 +63,13 @@ export function SyncStatus() {
           <div className="flex gap-2">
             <button
               onClick={() => resolveConflict('local')}
-              className="flex-1 py-2 text-sm rounded-lg bg-sp-accent/20 text-sp-accent"
+              className="flex-1 py-2 text-sm rounded-lg bg-blue-500/20 text-blue-500"
             >
               로컬 유지
             </button>
             <button
               onClick={() => resolveConflict('remote')}
-              className="flex-1 py-2 text-sm rounded-lg bg-sp-accent/20 text-sp-accent"
+              className="flex-1 py-2 text-sm rounded-lg bg-blue-500/20 text-blue-500"
             >
               클라우드 유지
             </button>
@@ -84,14 +88,14 @@ export function SyncStatus() {
           <button
             onClick={() => void syncToCloud()}
             disabled={state === 'syncing'}
-            className="flex-1 py-2 text-sm rounded-lg bg-sp-surface border border-sp-border text-sp-text disabled:opacity-50"
+            className="flex-1 py-2 text-sm rounded-xl border border-sp-border text-sp-text disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             업로드
           </button>
           <button
             onClick={() => void syncFromCloud()}
             disabled={state === 'syncing'}
-            className="flex-1 py-2 text-sm rounded-lg bg-sp-surface border border-sp-border text-sp-text disabled:opacity-50"
+            className="flex-1 py-2 text-sm rounded-xl border border-sp-border text-sp-text disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             다운로드
           </button>
@@ -106,9 +110,9 @@ export function SyncStatus() {
               <button
                 key={opt.value}
                 onClick={() => handleAutoSyncChange(opt.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                   currentInterval === opt.value
-                    ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
+                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
                     : 'border-sp-border text-sp-muted hover:text-sp-text'
                 }`}
               >

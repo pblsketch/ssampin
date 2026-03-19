@@ -4,6 +4,26 @@ import { SyncToCloud } from '@usecases/sync/SyncToCloud';
 import { SyncFromCloud } from '@usecases/sync/SyncFromCloud';
 import { getDriveSyncAdapter, driveSyncRepository, storage } from '@mobile/di/container';
 
+/** 모바일 전용 고유 device ID (synced settings와 독립적으로 관리) */
+function getMobileDeviceId(): string {
+  const KEY = 'ssampin-mobile-device-id';
+  let id: string | null = null;
+  try {
+    id = localStorage.getItem(KEY);
+  } catch {
+    // localStorage unavailable
+  }
+  if (!id) {
+    id = `mobile-${crypto.randomUUID()}`;
+    try {
+      localStorage.setItem(KEY, id);
+    } catch {
+      // fallback - still use the generated id for this session
+    }
+  }
+  return id;
+}
+
 // 순환 의존 방지: 런타임에 동적으로 import
 async function reloadAllStores(): Promise<void> {
   const [
@@ -16,6 +36,8 @@ async function reloadAllStores(): Promise<void> {
     { useMobileTodoStore },
     { useMobileAttendanceStore },
     { useMobileTeachingClassStore },
+    { useMobileStudentRecordsStore },
+    { useMobileProgressStore },
   ] = await Promise.all([
     import('@mobile/stores/useMobileSettingsStore'),
     import('@mobile/stores/useMobileScheduleStore'),
@@ -26,6 +48,8 @@ async function reloadAllStores(): Promise<void> {
     import('@mobile/stores/useMobileTodoStore'),
     import('@mobile/stores/useMobileAttendanceStore'),
     import('@mobile/stores/useMobileTeachingClassStore'),
+    import('@mobile/stores/useMobileStudentRecordsStore'),
+    import('@mobile/stores/useMobileProgressStore'),
   ]);
 
   await Promise.all([
@@ -38,6 +62,8 @@ async function reloadAllStores(): Promise<void> {
     useMobileTodoStore.getState().reload(),
     useMobileAttendanceStore.getState().reload(),
     useMobileTeachingClassStore.getState().reload(),
+    useMobileStudentRecordsStore.getState().reload(),
+    useMobileProgressStore.getState().reload(),
   ]);
 }
 
@@ -63,6 +89,8 @@ interface MobileDriveSyncState {
   resolveConflict: (choice: 'local' | 'remote') => Promise<void>;
   deleteCloudData: () => Promise<void>;
   triggerSaveSync: () => void;
+  /** debounce 무시하고 즉시 업로드 (앱 백그라운드 전환 시 사용) */
+  flushSync: () => Promise<void>;
 }
 
 let tokenGetter: (() => Promise<string>) | null = null;
@@ -103,13 +131,26 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       const { useMobileSettingsStore } = await import('@mobile/stores/useMobileSettingsStore');
       const settingsState = useMobileSettingsStore.getState();
       if (!settingsState.loaded) await settingsState.load();
-      const deviceId = settingsState.settings.sync.deviceId || 'mobile-unknown';
+      const deviceId = getMobileDeviceId();
       const deviceName = settingsState.settings.teacherName || 'Mobile PWA';
       const syncTo = new SyncToCloud(storage, getAdapter(), driveSyncRepository, deviceId, deviceName);
-      await syncTo.execute();
+      await syncTo.execute(({ current, total }) => {
+        set({ progress: Math.round((current / total) * 100) });
+      });
       set({ state: 'idle', progress: 100, lastSyncedAt: new Date().toISOString() });
     } catch (e) {
-      set({ state: 'error', error: e instanceof Error ? e.message : '동기화 실패' });
+      const msg = e instanceof Error ? e.message : '동기화 실패';
+      if (msg.includes('INVALID_GRANT')) {
+        tokenGetter = null;
+        adapter = null;
+        set({
+          state: 'error',
+          isAuthenticated: false,
+          error: 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
+        });
+      } else {
+        set({ state: 'error', error: msg });
+      }
     }
   },
 
@@ -124,14 +165,27 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       const { useMobileSettingsStore } = await import('@mobile/stores/useMobileSettingsStore');
       const settingsState = useMobileSettingsStore.getState();
       if (!settingsState.loaded) await settingsState.load();
-      const deviceId = settingsState.settings.sync.deviceId || 'mobile-unknown';
+      const deviceId = getMobileDeviceId();
       const deviceName = settingsState.settings.teacherName || 'Mobile PWA';
       const syncFrom = new SyncFromCloud(storage, getAdapter(), driveSyncRepository, deviceId, deviceName, 'latest');
-      await syncFrom.execute();
+      await syncFrom.execute(({ current, total }) => {
+        set({ progress: Math.round((current / total) * 100) });
+      });
       set({ state: 'idle', progress: 100, lastSyncedAt: new Date().toISOString() });
       await reloadAllStores();
     } catch (e) {
-      set({ state: 'error', error: e instanceof Error ? e.message : '동기화 실패' });
+      const msg = e instanceof Error ? e.message : '동기화 실패';
+      if (msg.includes('INVALID_GRANT')) {
+        tokenGetter = null;
+        adapter = null;
+        set({
+          state: 'error',
+          isAuthenticated: false,
+          error: 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
+        });
+      } else {
+        set({ state: 'error', error: msg });
+      }
     }
   },
 
@@ -161,5 +215,14 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
     saveDebounce = setTimeout(() => {
       void get().syncToCloud();
     }, 5000);
+  },
+
+  flushSync: async () => {
+    if (saveDebounce) {
+      clearTimeout(saveDebounce);
+      saveDebounce = null;
+    }
+    if (!tokenGetter || get().state === 'syncing') return;
+    await get().syncToCloud();
   },
 }));

@@ -58,12 +58,12 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
-      <div className="w-full max-w-md bg-sp-card rounded-t-2xl sm:rounded-2xl p-5 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md glass-card rounded-t-2xl sm:rounded-2xl p-5 space-y-4">
         <h3 className="text-sp-text font-bold text-base">메모 추가</h3>
 
         <textarea
-          className="w-full h-32 bg-sp-surface border border-sp-border rounded-xl p-3 text-sp-text text-sm resize-none placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
+          className="w-full h-32 glass-input rounded-xl p-3 text-sm resize-none"
           placeholder="메모 내용을 입력하세요..."
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -80,7 +80,7 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
                 onClick={() => setColor(c)}
                 title={COLOR_LABEL[c]}
                 className={`w-7 h-7 rounded-full ${COLOR_DOT[c]} transition-transform ${
-                  color === c ? 'ring-2 ring-offset-2 ring-offset-sp-card ring-white scale-110' : 'opacity-70'
+                  color === c ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-blue-500 scale-110' : 'opacity-70'
                 }`}
               />
             ))}
@@ -98,7 +98,7 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
           <button
             onClick={handleAdd}
             disabled={!content.trim()}
-            className="flex-1 py-3 rounded-xl bg-sp-accent text-white text-sm font-medium disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-40"
           >
             추가
           </button>
@@ -137,8 +137,8 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
-      <div className="w-full max-w-md bg-sp-card rounded-t-2xl sm:rounded-2xl p-5 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md glass-card rounded-t-2xl sm:rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sp-text font-bold text-base">메모 편집</h3>
           <button
@@ -155,7 +155,7 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
         </div>
 
         <textarea
-          className="w-full h-32 bg-sp-surface border border-sp-border rounded-xl p-3 text-sp-text text-sm resize-none placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
+          className="w-full h-32 glass-input rounded-xl p-3 text-sm resize-none"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           autoFocus
@@ -171,7 +171,7 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
                 onClick={() => setColor(c)}
                 title={COLOR_LABEL[c]}
                 className={`w-7 h-7 rounded-full ${COLOR_DOT[c]} transition-transform ${
-                  color === c ? 'ring-2 ring-offset-2 ring-offset-sp-card ring-white scale-110' : 'opacity-70'
+                  color === c ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-blue-500 scale-110' : 'opacity-70'
                 }`}
               />
             ))}
@@ -189,7 +189,7 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
           <button
             onClick={handleSave}
             disabled={!content.trim()}
-            className="flex-1 py-3 rounded-xl bg-sp-accent text-white text-sm font-medium disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-40"
           >
             저장
           </button>
@@ -247,9 +247,9 @@ export function MemoPage({ onBack = undefined }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-sp-bg">
+    <div className="flex flex-col h-full">
       {/* 헤더 */}
-      <header className="flex items-center gap-3 px-4 py-3 bg-sp-surface border-b border-sp-border shrink-0">
+      <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
         {onBack && (
           <button
             onClick={onBack}
@@ -261,7 +261,7 @@ export function MemoPage({ onBack = undefined }: Props) {
         <h2 className="flex-1 text-sp-text font-bold text-base">메모</h2>
         <button
           onClick={() => setShowAdd(true)}
-          className="flex items-center justify-center w-10 h-10 rounded-full bg-sp-accent/10 text-sp-accent"
+          className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500/10 text-blue-500"
         >
           <span className="material-symbols-outlined text-[22px]">add</span>
         </button>
@@ -281,7 +281,7 @@ export function MemoPage({ onBack = undefined }: Props) {
             <p className="text-sp-muted text-sm">메모가 없습니다.</p>
             <button
               onClick={() => setShowAdd(true)}
-              className="px-4 py-2 rounded-xl bg-sp-accent text-white text-sm font-medium"
+              className="px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium active:scale-95 transition-transform"
             >
               첫 메모 작성
             </button>

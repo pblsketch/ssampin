@@ -15,10 +15,10 @@ function MenuItem({ icon, label, description, onClick }: MenuItemProps) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-4 w-full px-4 py-4 bg-sp-card rounded-xl border border-sp-border active:scale-[0.98] transition-transform text-left"
+      className="flex items-center gap-4 w-full px-4 py-4 glass-card active:scale-[0.98] transition-transform text-left"
     >
-      <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-sp-surface shrink-0">
-        <span className="material-symbols-outlined text-sp-accent text-[24px]">{icon}</span>
+      <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-blue-500/10 shrink-0">
+        <span className="material-symbols-outlined text-blue-500 text-[24px]">{icon}</span>
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sp-text font-semibold text-sm">{label}</p>
@@ -33,7 +33,7 @@ function MenuItem({ icon, label, description, onClick }: MenuItemProps) {
 
 export function MorePage({ onNavigate }: Props) {
   return (
-    <div className="flex flex-col h-full bg-sp-bg">
+    <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* 메뉴 항목 */}
         <section>

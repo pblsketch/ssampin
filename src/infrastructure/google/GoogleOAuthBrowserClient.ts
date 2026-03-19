@@ -103,6 +103,9 @@ export class GoogleOAuthBrowserClient implements IGoogleAuthPort {
     });
     if (!res.ok) {
       const err = await res.text();
+      if (res.status === 400 && err.includes('invalid_grant')) {
+        throw new Error('INVALID_GRANT: Google 인증이 만료되었습니다. 다시 로그인해주세요.');
+      }
       throw new Error(`Token refresh failed: ${res.status} ${err}`);
     }
     const data = (await res.json()) as RefreshTokenResponse;

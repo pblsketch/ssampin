@@ -51,11 +51,11 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
       const saved = await settingsRepository.getSettings();
       if (saved) {
         const s = saved as Settings;
-        const syncDeviceId = (s as unknown as { sync?: { deviceId?: string } }).sync?.deviceId ?? '';
-        if (!syncDeviceId) {
-          // deviceId 자동 생성
-          const newId = crypto.randomUUID();
-          const patched = { ...s, sync: { ...(s as unknown as { sync?: Record<string, unknown> }).sync, deviceId: newId } };
+        let syncDeviceId = (s as unknown as { sync?: { deviceId?: string } }).sync?.deviceId ?? '';
+        // 모바일은 항상 mobile- 접두사 deviceId를 사용 (PC settings 다운로드로 인한 오염 방지)
+        if (!syncDeviceId || !syncDeviceId.startsWith('mobile-')) {
+          syncDeviceId = `mobile-${crypto.randomUUID()}`;
+          const patched = { ...s, sync: { ...(s as unknown as { sync?: Record<string, unknown> }).sync, deviceId: syncDeviceId } };
           await settingsRepository.saveSettings(patched as Settings);
         }
         const savedSync = (s as unknown as { sync?: Record<string, unknown> }).sync;
@@ -71,7 +71,7 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
               schoolCode: (s.neis as { schoolCode?: string })?.schoolCode ?? '',
             },
             sync: {
-              deviceId: syncDeviceId || crypto.randomUUID(),
+              deviceId: syncDeviceId,
               autoSyncInterval: typeof savedSync?.autoSyncInterval === 'number' ? savedSync.autoSyncInterval : 0,
             },
           },

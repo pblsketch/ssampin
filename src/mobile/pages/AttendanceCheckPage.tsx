@@ -5,6 +5,8 @@ import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
+import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
+import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
 
 interface Props {
   classId: string;
@@ -15,11 +17,11 @@ interface Props {
 }
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; activeColor: string }> = {
-  present: { label: '출석', icon: 'check_circle', activeColor: 'text-green-400 bg-green-400/10 border-green-400/40' },
-  late: { label: '지각', icon: 'schedule', activeColor: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/40' },
-  absent: { label: '결석', icon: 'cancel', activeColor: 'text-red-400 bg-red-400/10 border-red-400/40' },
-  earlyLeave: { label: '조퇴', icon: 'exit_to_app', activeColor: 'text-orange-400 bg-orange-400/10 border-orange-400/40' },
-  classAbsence: { label: '결과', icon: 'event_busy', activeColor: 'text-purple-400 bg-purple-400/10 border-purple-400/40' },
+  present: { label: '출석', icon: 'check_circle', activeColor: 'text-green-500 bg-green-500/10 border-green-500/40' },
+  late: { label: '지각', icon: 'schedule', activeColor: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/40' },
+  absent: { label: '결석', icon: 'cancel', activeColor: 'text-red-500 bg-red-500/10 border-red-500/40' },
+  earlyLeave: { label: '조퇴', icon: 'exit_to_app', activeColor: 'text-orange-500 bg-orange-500/10 border-orange-500/40' },
+  classAbsence: { label: '결과', icon: 'event_busy', activeColor: 'text-purple-500 bg-purple-500/10 border-purple-500/40' },
 };
 
 function todayString(): string {
@@ -111,7 +113,27 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
     };
 
     await saveRecord(record);
-  }, [students, studentStatuses, studentReasons, studentMemos, classId, period, saveRecord]);
+
+    // 담임반 출결 → student-records에 bridge 레코드 생성 (PC 담임 업무 통계 연동)
+    if (type === 'homeroom') {
+      const allStudents = useMobileStudentStore.getState().students;
+      const { bridgeAttendanceRecord } = useMobileStudentRecordsStore.getState();
+      const date = todayString();
+
+      for (const sa of studentAttendances) {
+        // TeachingClassStudent.number → Student.studentNumber 매핑
+        const student = allStudents.find((st) => st.studentNumber === sa.number);
+        if (!student) continue;
+        await bridgeAttendanceRecord({
+          studentId: student.id,
+          date,
+          status: sa.status,
+          reason: sa.reason,
+          memo: sa.memo,
+        });
+      }
+    }
+  }, [students, studentStatuses, studentReasons, studentMemos, classId, period, saveRecord, type]);
 
   // 상태 변경 핸들러
   const setStatus = useCallback((sKey: string, status: AttendanceStatus) => {
@@ -148,7 +170,7 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
   return (
     <div className="flex flex-col h-full bg-sp-bg">
       {/* 헤더 */}
-      <header className="flex items-center gap-3 px-4 py-3 bg-sp-surface border-b border-sp-border shrink-0">
+      <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
         <button onClick={onBack} className="touch-target flex items-center justify-center">
           <span className="material-symbols-outlined text-sp-text">arrow_back</span>
         </button>
@@ -161,32 +183,32 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
         <button
           onClick={() => void handleComplete()}
           disabled={saving}
-          className="px-4 py-2 bg-sp-accent text-white text-sm font-medium rounded-lg disabled:opacity-50 touch-target"
+          className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-xl disabled:opacity-50 touch-target active:scale-[0.98] transition-all"
         >
           {saving ? '저장 중...' : '완료'}
         </button>
       </header>
 
       {/* 실시간 카운터 */}
-      <div className="flex items-center justify-around px-4 py-3 bg-sp-surface/50 border-b border-sp-border shrink-0">
+      <div className="glass-card flex items-center justify-around mx-4 mt-3 px-4 py-3 rounded-xl shrink-0">
         <div className="text-center">
-          <p className="text-green-400 font-bold text-lg">{presentCount}</p>
+          <p className="text-green-500 font-bold text-lg">{presentCount}</p>
           <p className="text-sp-muted text-xs">출석</p>
         </div>
         <div className="text-center">
-          <p className="text-yellow-400 font-bold text-lg">{lateCount}</p>
+          <p className="text-yellow-500 font-bold text-lg">{lateCount}</p>
           <p className="text-sp-muted text-xs">지각</p>
         </div>
         <div className="text-center">
-          <p className="text-red-400 font-bold text-lg">{absentCount}</p>
+          <p className="text-red-500 font-bold text-lg">{absentCount}</p>
           <p className="text-sp-muted text-xs">결석</p>
         </div>
         <div className="text-center">
-          <p className="text-orange-400 font-bold text-lg">{earlyLeaveCount}</p>
+          <p className="text-orange-500 font-bold text-lg">{earlyLeaveCount}</p>
           <p className="text-sp-muted text-xs">조퇴</p>
         </div>
         <div className="text-center">
-          <p className="text-purple-400 font-bold text-lg">{classAbsenceCount}</p>
+          <p className="text-purple-500 font-bold text-lg">{classAbsenceCount}</p>
           <p className="text-sp-muted text-xs">결과</p>
         </div>
         <div className="text-center">
@@ -268,9 +290,9 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
                                 if (debounceRef.current) clearTimeout(debounceRef.current);
                                 debounceRef.current = setTimeout(() => { void doSave(); }, 2000);
                               }}
-                              className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                                 isSelected
-                                  ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
+                                  ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
                                   : 'border-sp-border text-sp-muted hover:text-sp-text'
                               }`}
                             >
@@ -293,7 +315,7 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
                           if (debounceRef.current) clearTimeout(debounceRef.current);
                           debounceRef.current = setTimeout(() => { void doSave(); }, 2000);
                         }}
-                        className="w-full px-3 py-1.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text text-xs placeholder:text-sp-muted/50"
+                        className="w-full px-3 py-1.5 glass-input text-xs"
                       />
                     </div>
                   )}

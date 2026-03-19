@@ -169,14 +169,14 @@ export function SchedulePage() {
     : '다가오는 일정';
 
   return (
-    <div className="flex flex-col h-full bg-sp-bg overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Mini Calendar */}
-      <div className="bg-sp-card border-b border-sp-border shrink-0">
+      <div className="glass-card mx-3 mt-3 rounded-xl shrink-0">
         {/* Month Header */}
         <div className="flex items-center justify-between px-4 py-3">
           <button
             onClick={handlePrevMonth}
-            className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-sp-surface active:bg-sp-surface transition-colors"
+            className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/5 dark:active:bg-white/10 transition-colors"
             aria-label="이전 달"
           >
             <span className="material-symbols-outlined text-sp-text text-xl">chevron_left</span>
@@ -186,7 +186,7 @@ export function SchedulePage() {
           </h2>
           <button
             onClick={handleNextMonth}
-            className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-sp-surface active:bg-sp-surface transition-colors"
+            className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/5 dark:active:bg-white/10 transition-colors"
             aria-label="다음 달"
           >
             <span className="material-symbols-outlined text-sp-text text-xl">chevron_right</span>
@@ -222,16 +222,16 @@ export function SchedulePage() {
                 onClick={() => handleDayClick(day)}
                 className={`flex flex-col items-center py-1 rounded-lg min-h-[44px] transition-colors ${
                   isSelected && !isToday
-                    ? 'ring-2 ring-sp-accent'
+                    ? 'ring-2 ring-blue-500'
                     : ''
                 } ${isCurrentMonth ? '' : 'opacity-30'}`}
               >
                 <span
                   className={`w-8 h-8 flex items-center justify-center rounded-full text-sm ${
                     isToday
-                      ? 'bg-sp-accent text-white font-bold'
+                      ? 'bg-blue-500 text-white font-bold'
                       : isSelected
-                      ? 'ring-2 ring-sp-accent text-sp-text font-medium'
+                      ? 'ring-2 ring-blue-500 text-sp-text font-medium'
                       : colIndex === 0
                       ? 'text-red-400'
                       : colIndex === 6
@@ -291,8 +291,8 @@ export function SchedulePage() {
                     <span
                       className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${
                         dday === 'D-Day'
-                          ? 'bg-sp-accent text-white'
-                          : 'bg-sp-surface text-sp-accent border border-sp-accent/40'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-blue-500/10 text-blue-500 border border-blue-500/40'
                       }`}
                     >
                       {dday}
@@ -308,7 +308,7 @@ export function SchedulePage() {
       {/* FAB */}
       <button
         onClick={openAddModal}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-sp-accent text-white rounded-full shadow-lg flex items-center justify-center z-10 active:opacity-80 transition-opacity"
+        className="fixed bottom-20 right-4 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center z-10 active:scale-95 transition-transform"
         aria-label="일정 추가"
       >
         <span className="material-symbols-outlined text-2xl">add</span>
@@ -317,11 +317,11 @@ export function SchedulePage() {
       {/* Add Event Modal */}
       {showAddModal && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-end justify-center z-50"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end justify-center z-50"
           onClick={() => setShowAddModal(false)}
         >
           <div
-            className="w-full max-w-lg bg-sp-card rounded-t-2xl p-6 space-y-4"
+            className="w-full max-w-lg glass-card rounded-t-2xl p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sp-text font-bold text-base">일정 추가</h3>
@@ -334,7 +334,7 @@ export function SchedulePage() {
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="일정 제목을 입력하세요"
-                className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sp-text text-sm placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
+                className="w-full glass-input text-sm"
                 autoFocus
               />
             </div>
@@ -346,7 +346,7 @@ export function SchedulePage() {
                 type="date"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
-                className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+                className="w-full glass-input text-sm"
               />
             </div>
 
@@ -356,7 +356,7 @@ export function SchedulePage() {
               <select
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value)}
-                className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+                className="w-full glass-input text-sm"
               >
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
@@ -370,14 +370,14 @@ export function SchedulePage() {
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="flex-1 h-11 rounded-lg border border-sp-border text-sp-muted text-sm font-medium active:bg-sp-surface transition-colors"
+                className="flex-1 h-11 rounded-xl border border-sp-border text-sp-muted text-sm font-medium active:scale-[0.98] transition-all"
               >
                 취소
               </button>
               <button
                 onClick={() => void handleAdd()}
                 disabled={!newTitle.trim() || !newDate}
-                className="flex-1 h-11 rounded-lg bg-sp-accent text-white text-sm font-medium disabled:opacity-40 active:opacity-80 transition-opacity"
+                className="flex-1 h-11 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-40 active:scale-[0.98] transition-all"
               >
                 추가
               </button>
