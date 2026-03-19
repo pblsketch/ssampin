@@ -19,7 +19,11 @@ import { StudentTimelineView } from './StudentTimelineView';
 import { DefaultRecordListView } from './DefaultRecordListView';
 import {
   type ModeProps,
+  type RecordSortMode,
   COUNSELING_METHODS,
+  RECORD_SORT_OPTIONS,
+  ATTENDANCE_SORT_ORDER,
+  getAttendanceTypeFromSubcategory,
   getWeekRange,
   getMonthRange,
 } from './recordUtils';
@@ -42,6 +46,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [editContent, setEditContent] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editSubcategory, setEditSubcategory] = useState('');
+  const [sortMode, setSortMode] = useState<RecordSortMode>('time');
 
   // debounce keyword
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,7 +125,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     return sortByDateDesc(result);
   }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, periodFilter]);
 
-  // 날짜별 그룹핑
+  // 날짜별 그룹핑 + 정렬
   const grouped = useMemo(() => {
     const map = new Map<string, StudentRecord[]>();
     for (const record of filtered) {
@@ -128,8 +133,25 @@ function SearchMode({ students, records, categories }: ModeProps) {
       if (existing) existing.push(record);
       else map.set(record.date, [record]);
     }
+    if (sortMode !== 'time') {
+      for (const [, recs] of map) {
+        recs.sort((a, b) => {
+          if (sortMode === 'type') {
+            const aType = getAttendanceTypeFromSubcategory(a.subcategory);
+            const bType = getAttendanceTypeFromSubcategory(b.subcategory);
+            const aOrder = aType ? (ATTENDANCE_SORT_ORDER[aType] ?? 99) : 99;
+            const bOrder = bType ? (ATTENDANCE_SORT_ORDER[bType] ?? 99) : 99;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.subcategory.localeCompare(b.subcategory);
+          }
+          const aNum = studentMap.get(a.studentId)?.studentNumber ?? 9999;
+          const bNum = studentMap.get(b.studentId)?.studentNumber ?? 9999;
+          return aNum - bNum;
+        });
+      }
+    }
     return Array.from(map.entries());
-  }, [filtered]);
+  }, [filtered, sortMode, studentMap]);
 
   const handleEdit = useCallback((record: StudentRecord) => {
     setEditingId(record.id);
@@ -336,6 +358,28 @@ function SearchMode({ students, records, categories }: ModeProps) {
             ✕ 필터 초기화
           </button>
         )}
+      </div>
+
+      {/* 정렬 컨트롤 */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-sp-muted">정렬:</span>
+        <div className="flex gap-1 bg-sp-surface rounded-lg p-1">
+          {RECORD_SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.mode}
+              onClick={() => setSortMode(opt.mode)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                sortMode === opt.mode
+                  ? 'bg-sp-accent text-white'
+                  : 'text-sp-muted hover:text-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">{opt.icon}</span>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-sp-muted ml-auto">{filtered.length}건</span>
       </div>
 
       {/* 2-1: 학생 선택 시 타임라인 뷰, 아니면 기존 뷰 */}

@@ -7,7 +7,7 @@ import {
   formatDateKR,
   formatTimeKR,
   getMethodIcon,
-  getRecordTagClass,
+  getSmartTagClass,
   METHOD_OPTIONS,
 } from './recordUtils';
 
@@ -56,7 +56,7 @@ function DefaultRecordListView({
                     >
                       {formatTimeKR(record.createdAt)}
                     </span>
-                    <span className={getRecordTagClass(record.category, categories)}>
+                    <span className={getSmartTagClass(record, categories)}>
                       {record.subcategory}
                     </span>
                     {record.method && (
@@ -73,7 +73,12 @@ function DefaultRecordListView({
                         {record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}
                       </button>
                     )}
-                    <span className="text-sm text-sp-text font-medium min-w-[60px]">
+                    <span className="text-sm text-sp-text font-medium min-w-[60px] flex items-center gap-1.5">
+                      {student?.studentNumber != null && (
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-sp-surface border border-sp-border text-[11px] font-bold text-sp-muted tabular-nums flex-shrink-0">
+                          {student.studentNumber}
+                        </span>
+                      )}
                       {student?.name ?? '?'}
                     </span>
                     {isEditing ? (

@@ -104,6 +104,47 @@ export function getCategoryDotColor(categoryId: string, categories: readonly Rec
   return colorMap[cat?.color ?? 'gray'] ?? 'bg-gray-400';
 }
 
+/* ──────────────────────── 출결 유형별 태그 색상 ──────────────────────── */
+
+const ATTENDANCE_TAG_COLORS: Record<string, string> = {
+  '결석': 'bg-red-500/15 text-red-400',
+  '지각': 'bg-yellow-500/15 text-yellow-400',
+  '조퇴': 'bg-orange-500/15 text-orange-400',
+  '결과': 'bg-purple-500/15 text-purple-400',
+};
+
+export function getAttendanceTypeFromSubcategory(subcategory: string): string | null {
+  const match = subcategory.match(/^(결석|지각|조퇴|결과)/);
+  return match ? match[1]! : null;
+}
+
+/** 출결 레코드면 유형별 색상, 아니면 기존 카테고리 색상 */
+export function getSmartTagClass(record: { category: string; subcategory: string }, categories: readonly RecordCategoryItem[]): string {
+  if (record.category === 'attendance') {
+    const attType = getAttendanceTypeFromSubcategory(record.subcategory);
+    if (attType && ATTENDANCE_TAG_COLORS[attType]) {
+      return `px-2 py-0.5 rounded text-xs font-medium ${ATTENDANCE_TAG_COLORS[attType]}`;
+    }
+  }
+  return getRecordTagClass(record.category, categories);
+}
+
+/** 출결 유형 정렬 우선순위 */
+export const ATTENDANCE_SORT_ORDER: Record<string, number> = {
+  '결석': 0,
+  '지각': 1,
+  '조퇴': 2,
+  '결과': 3,
+};
+
+export type RecordSortMode = 'time' | 'type' | 'studentNumber';
+
+export const RECORD_SORT_OPTIONS: { mode: RecordSortMode; label: string; icon: string }[] = [
+  { mode: 'time', label: '입력 시간', icon: 'schedule' },
+  { mode: 'type', label: '유형별', icon: 'filter_list' },
+  { mode: 'studentNumber', label: '학번순', icon: 'format_list_numbered' },
+];
+
 /* ──────────────────────── 상담 방법 ──────────────────────── */
 
 export const METHOD_OPTIONS: { value: CounselingMethod; icon: string; label: string }[] = [
