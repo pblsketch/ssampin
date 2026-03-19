@@ -41,8 +41,8 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
 
   constructor() {
     // Vite define은 dot 표기만 치환하므로 dot 표기 사용
-    this.clientId = process.env.GOOGLE_CLIENT_ID ?? '';
-    this.clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+    this.clientId = (process.env.GOOGLE_CLIENT_ID ?? '').trim();
+    this.clientSecret = (process.env.GOOGLE_CLIENT_SECRET ?? '').trim();
   }
 
   /**

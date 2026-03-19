@@ -21,8 +21,8 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
     },
     define: {
-      'process.env.GOOGLE_CLIENT_ID': JSON.stringify(env.VITE_GOOGLE_CLIENT_ID || ''),
-      'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify(env.VITE_GOOGLE_CLIENT_SECRET || ''),
+      'process.env.GOOGLE_CLIENT_ID': JSON.stringify((env.VITE_GOOGLE_CLIENT_ID || '').trim()),
+      'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify((env.VITE_GOOGLE_CLIENT_SECRET || '').trim()),
       '__APP_VERSION__': JSON.stringify(pkg.version),
     },
     server: {
