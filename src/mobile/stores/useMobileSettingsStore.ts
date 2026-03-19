@@ -76,7 +76,6 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
           const patched = { ...s, sync: { ...(s as unknown as { sync?: Record<string, unknown> }).sync, deviceId: syncDeviceId } };
           await settingsRepository.saveSettings(patched as Settings);
         }
-        const savedSync = (s as unknown as { sync?: Record<string, unknown> }).sync;
         set({
           settings: {
             schoolName: s.schoolName ?? '',
