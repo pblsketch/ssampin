@@ -1,7 +1,8 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import pkg from './package.json';
 
 // dev 서버에서 index.html 대신 mobile.html을 서빙
 function serveMobileHtml(): Plugin {
@@ -19,7 +20,9 @@ function serveMobileHtml(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
   plugins: [
     serveMobileHtml(),
     react(),
@@ -98,10 +101,13 @@ export default defineConfig({
     },
   },
   define: {
-    __APP_VERSION__: JSON.stringify('mobile-dev'),
+    'process.env.GOOGLE_CLIENT_ID': JSON.stringify(env.VITE_GOOGLE_CLIENT_ID || ''),
+    'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify(env.VITE_GOOGLE_CLIENT_SECRET || ''),
+    '__APP_VERSION__': JSON.stringify(pkg.version),
   },
   // Electron 전용 패키지를 외부로 처리
   optimizeDeps: {
     exclude: ['electron'],
   },
+};
 });
