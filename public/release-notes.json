@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "1.0.0",
+      "date": "2026-03-20",
+      "highlights": "쌤핀 v1.0 정식 출시! 자체 도메인(ssampin.com)으로 이전했어요",
+      "changes": [
+        {
+          "type": "new",
+          "title": "쌤핀 v1.0 정식 출시",
+          "description": "베타를 졸업하고 정식 버전으로 출시합니다. 그동안 보내주신 피드백 감사합니다!"
+        },
+        {
+          "type": "change",
+          "title": "도메인 변경: ssampin.com",
+          "description": "쌤핀 홈페이지가 ssampin.com으로 변경되었습니다. 기존 주소로 접속하셔도 자동으로 이동됩니다."
+        },
+        {
+          "type": "change",
+          "title": "모바일 앱 주소 변경: m.ssampin.com",
+          "description": "모바일 앱 주소가 m.ssampin.com으로 변경되었습니다. 홈 화면에 추가하신 분은 기존 아이콘을 삭제하고 m.ssampin.com에서 다시 추가해주세요. 데이터는 Google Drive 동기화로 그대로 유지됩니다."
+        }
+      ]
+    },
+    {
       "version": "0.5.0",
       "date": "2026-03-20",
       "highlights": "쌤핀 모바일 출시! 시간표·출결·메모를 모바일에서도 확인하세요",

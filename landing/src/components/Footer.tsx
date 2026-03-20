@@ -55,7 +55,7 @@ export default function Footer() {
           </p>
           <nav aria-label="푸터 링크" className="mt-3 flex items-center justify-center gap-4 text-sm text-sp-muted/60">
             <a
-              href="https://supsori.notion.site/SsamPin-v0-3-7-32176e6c2ab781dc905ce780e03c5be4"
+              href="https://supsori.notion.site/SsamPin-32176e6c2ab781dc905ce780e03c5be4"
               target="_blank"
               rel="noopener noreferrer"
               className="transition-colors hover:text-sp-text"

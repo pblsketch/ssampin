@@ -54,7 +54,7 @@ export default function Hero() {
               <DownloadButton showSmartScreenFaq />
               <div className="mt-5 flex items-center gap-4">
                 <a
-                  href="https://supsori.notion.site/SsamPin-v0-3-7-32176e6c2ab781dc905ce780e03c5be4"
+                  href="https://supsori.notion.site/SsamPin-32176e6c2ab781dc905ce780e03c5be4"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-sm font-medium text-sp-muted transition-colors hover:text-sp-text"

@@ -1,3 +1,4 @@
+import MigrationBanner from '@/components/MigrationBanner';
 import Hero from '@/components/Hero';
 import Screenshot from '@/components/Screenshot';
 import Features from '@/components/Features';
@@ -12,6 +13,7 @@ import Footer from '@/components/Footer';
 export default function Home() {
   return (
     <main>
+      <MigrationBanner />
       <Hero />
       <Screenshot />
       <Features />
