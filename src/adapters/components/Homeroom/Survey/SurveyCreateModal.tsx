@@ -3,6 +3,7 @@ import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { surveySupabaseClient, shortLinkClient } from '@adapters/di/container';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
+import { SITE_DISPLAY } from '@config/siteUrl';
 import type { SurveyMode, QuestionType } from '@domain/entities/Survey';
 import { generateStudentPins } from '@domain/rules/surveyRules';
 import { hashPin } from '@infrastructure/crypto/pinHash';
@@ -453,7 +454,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
               </label>
               <div className="flex items-center gap-0">
                 <span className="px-2.5 py-2.5 bg-sp-surface/60 border border-r-0 border-sp-border rounded-l-lg text-sp-muted text-xs whitespace-nowrap">
-                  ssampin.com/s/
+                  {SITE_DISPLAY}/s/
                 </span>
                 <input
                   type="text"

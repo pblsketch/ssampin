@@ -19,6 +19,7 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
+      "@config/*": ["src/config/*"],
       "@domain/*": ["src/domain/*"],
       "@usecases/*": ["src/usecases/*"],
       "@adapters/*": ["src/adapters/*"],

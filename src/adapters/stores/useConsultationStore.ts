@@ -4,8 +4,9 @@ import type {
   ConsultationsData,
 } from '@domain/entities/Consultation';
 import { consultationRepository, shortLinkClient } from '@adapters/di/container';
+import { SITE_URL } from '@config/siteUrl';
 
-const SHARE_BASE_URL = 'https://ssampin.com/booking';
+const SHARE_BASE_URL = `${SITE_URL}/booking`;
 
 interface ConsultationState {
   schedules: readonly ConsultationSchedule[];

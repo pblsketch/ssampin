@@ -13,3 +13,7 @@ landing/.next
 NUL
 .vercel
 .env*.local
+
+# 개발 도구 상태 파일
+.claude/
+.omc/

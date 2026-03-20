@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-
-const MOBILE_URL = 'https://m.ssampin.com';
+import { MOBILE_URL } from '@config/siteUrl';
 const DISMISS_KEY = 'mobile-banner-dismissed';
 
 export function MobileAnnouncementBanner() {

@@ -82,6 +82,7 @@ export default defineConfig(({ mode }) => {
   },
   resolve: {
     alias: {
+      '@config': path.resolve(__dirname, 'src/config'),
       '@domain': path.resolve(__dirname, 'src/domain'),
       '@usecases': path.resolve(__dirname, 'src/usecases'),
       '@adapters': path.resolve(__dirname, 'src/adapters'),

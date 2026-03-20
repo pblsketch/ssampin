@@ -8,6 +8,7 @@ import { DriveFolderInput } from './DriveFolderInput';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import { shortLinkClient } from '@adapters/di/container';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { SITE_DISPLAY } from '@config/siteUrl';
 
 interface AssignmentCreateModalProps {
   onClose: () => void;
@@ -344,7 +345,7 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
                 </label>
                 <div className="flex items-center gap-0">
                   <span className="px-3 py-2.5 bg-sp-surface/60 border border-r-0 border-sp-border rounded-l-lg text-sp-muted text-sm whitespace-nowrap">
-                    ssampin.com/s/
+                    {SITE_DISPLAY}/s/
                   </span>
                   <input
                     type="text"

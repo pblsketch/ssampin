@@ -6,8 +6,9 @@ import type {
   SurveysData,
 } from '@domain/entities/Survey';
 import { surveyRepository, shortLinkClient } from '@adapters/di/container';
+import { SITE_URL } from '@config/siteUrl';
 
-const SHARE_BASE_URL = 'https://ssampin.com/check';
+const SHARE_BASE_URL = `${SITE_URL}/check`;
 
 interface SurveyState {
   surveys: readonly Survey[];

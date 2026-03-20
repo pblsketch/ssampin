@@ -5,7 +5,9 @@
  * 자동 생성(6자리 영숫자) 또는 커스텀 코드(한글 포함) 지원.
  */
 
-const BASE_URL = 'https://ssampin.com';
+import { SITE_URL } from '@config/siteUrl';
+
+const BASE_URL = SITE_URL;
 const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const CODE_LENGTH = 6;
 

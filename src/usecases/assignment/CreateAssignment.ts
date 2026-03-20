@@ -8,6 +8,7 @@ import type { FileTypeRestriction } from '@domain/valueObjects/FileTypeRestricti
 import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepository';
 import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
 import type { IAssignmentServicePort } from '@domain/ports/IAssignmentServicePort';
+import { SITE_URL } from '@config/siteUrl';
 
 export interface CreateAssignmentParams {
   readonly title: string;
@@ -77,7 +78,7 @@ export class CreateAssignment {
       fileTypeRestriction: params.fileTypeRestriction,
       allowLate: params.allowLate,
       allowResubmit: params.allowResubmit,
-      shareUrl: `https://ssampin.com/submit/${result.id}`,
+      shareUrl: `${SITE_URL}/submit/${result.id}`,
       adminKey: result.adminKey,
       createdAt: new Date().toISOString(),
     };

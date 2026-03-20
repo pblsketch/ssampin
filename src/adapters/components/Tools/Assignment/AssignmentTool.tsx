@@ -3,6 +3,7 @@ import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useOnlineStatus } from '@adapters/hooks/useOnlineStatus';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { SITE_URL } from '@config/siteUrl';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { AssignmentWithStatus } from '@usecases/assignment/GetAssignments';
 import { AssignmentCreateModal } from './AssignmentCreateModal';
@@ -44,7 +45,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
   }, []);
 
   function handleCopyLink(assignmentId: string) {
-    const url = `https://ssampin.com/submit/${assignmentId}`;
+    const url = `${SITE_URL}/submit/${assignmentId}`;
     navigator.clipboard.writeText(url);
     showToast('제출 링크가 복사되었습니다', 'success');
   }
