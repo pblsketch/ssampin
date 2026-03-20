@@ -72,7 +72,7 @@ export function AssignmentTab() {
   }
 
   function handleCopyLink(assignmentId: string) {
-    const url = `https://ssampin.vercel.app/submit/${assignmentId}`;
+    const url = `https://ssampin.com/submit/${assignmentId}`;
     void navigator.clipboard.writeText(url);
     showToast('제출 링크가 복사되었습니다', 'success');
   }

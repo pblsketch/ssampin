@@ -97,7 +97,7 @@ export default function MobileApp() {
                         </span>
                         <div>
                           <p className="text-sm font-medium text-sp-text">PC 앱 설치</p>
-                          <p className="text-xs text-sp-muted">교무실 PC에서 ssampin.vercel.app 접속</p>
+                          <p className="text-xs text-sp-muted">교무실 PC에서 ssampin.com 접속</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3 rounded-lg bg-sp-surface/50 px-4 py-3 text-left">

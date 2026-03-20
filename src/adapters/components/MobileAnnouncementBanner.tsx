@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 
-const MOBILE_URL = 'https://ssampin-mobile.vercel.app';
+const MOBILE_URL = 'https://m.ssampin.com';
 const DISMISS_KEY = 'mobile-banner-dismissed';
 
 export function MobileAnnouncementBanner() {

@@ -5,7 +5,7 @@ import type {
 } from '@domain/entities/Consultation';
 import { consultationRepository, shortLinkClient } from '@adapters/di/container';
 
-const SHARE_BASE_URL = 'https://ssampin.vercel.app/booking';
+const SHARE_BASE_URL = 'https://ssampin.com/booking';
 
 interface ConsultationState {
   schedules: readonly ConsultationSchedule[];

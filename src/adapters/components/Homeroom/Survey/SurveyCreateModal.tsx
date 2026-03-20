@@ -453,7 +453,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
               </label>
               <div className="flex items-center gap-0">
                 <span className="px-2.5 py-2.5 bg-sp-surface/60 border border-r-0 border-sp-border rounded-l-lg text-sp-muted text-xs whitespace-nowrap">
-                  ssampin.vercel.app/s/
+                  ssampin.com/s/
                 </span>
                 <input
                   type="text"

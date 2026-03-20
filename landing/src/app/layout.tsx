@@ -11,7 +11,7 @@ const notoSansKR = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://ssampin.vercel.app'),
+  metadataBase: new URL('https://ssampin.com'),
   title: '쌤핀 (SsamPin) — 선생님의 대시보드',
   description:
     '시간표, 학급 자리 배치, 일정, 급식, 날씨, 쌤도구까지 한 화면에서 관리하세요. 무료 Windows 앱.',
@@ -27,9 +27,9 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: 'https://ssampin.vercel.app',
+    canonical: 'https://ssampin.com',
     languages: {
-      'ko-KR': 'https://ssampin.vercel.app',
+      'ko-KR': 'https://ssampin.com',
     },
   },
   openGraph: {
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
         alt: '쌤핀 대시보드 - 교사용 올인원 교실 관리 앱',
       },
     ],
-    url: 'https://ssampin.vercel.app',
+    url: 'https://ssampin.com',
     siteName: '쌤핀 (SsamPin)',
     type: 'website',
     locale: 'ko_KR',
@@ -110,7 +110,7 @@ const softwareJsonLd = {
   },
   downloadUrl:
     'https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-Setup.exe',
-  screenshot: 'https://ssampin.vercel.app/images/dashboard.png',
+  screenshot: 'https://ssampin.com/images/dashboard.png',
   inLanguage: 'ko-KR',
   featureList: '시간표 관리, 좌석 배치, 일정 관리, 급식 정보, 날씨, 쌤도구, PIN 잠금, 위젯 모드',
   releaseNotes: 'https://github.com/pblsketch/ssampin/releases',
@@ -215,7 +215,7 @@ const websiteJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
   name: '쌤핀 (SsamPin)',
-  url: 'https://ssampin.vercel.app',
+  url: 'https://ssampin.com',
   inLanguage: 'ko-KR',
   description: '교사를 위한 올인원 교실 관리 대시보드 앱',
   publisher: {
@@ -233,7 +233,7 @@ const breadcrumbJsonLd = {
       '@type': 'ListItem',
       position: 1,
       name: '쌤핀 홈',
-      item: 'https://ssampin.vercel.app',
+      item: 'https://ssampin.com',
     },
   ],
 };

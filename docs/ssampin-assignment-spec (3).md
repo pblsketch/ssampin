@@ -59,7 +59,7 @@
 ### 2.2 학생 흐름 (모바일/PC 브라우저)
 
 ```
-QR 스캔 or 링크 접속 (https://ssampin.vercel.app/submit/{id})
+QR 스캔 or 링크 접속 (https://ssampin.com/submit/{id})
   → 과제 정보 표시 (제목, 설명, 마감일)
   → 이름 입력 (자동완성 지원: 명단 기반)
   → 번호 입력
@@ -330,7 +330,7 @@ src/
 
 ### 4.3 학생 제출 페이지 (Next.js 랜딩 프로젝트)
 
-기존 쌤핀 랜딩 페이지 프로젝트(`ssampin.vercel.app`)에 `/submit` 경로를 추가한다.
+기존 쌤핀 랜딩 페이지 프로젝트(`ssampin.com`)에 `/submit` 경로를 추가한다.
 Next.js App Router 구조를 따른다.
 
 ```
@@ -349,7 +349,7 @@ landing/
 │           └── submitApi.ts          # Supabase Edge Function 호출
 ```
 
-**URL 구조**: `https://ssampin.vercel.app/submit/{assignment_id}`
+**URL 구조**: `https://ssampin.com/submit/{assignment_id}`
 
 ### 4.4 Supabase 구성
 
@@ -617,7 +617,7 @@ interface Assignment {
   fileTypeRestriction: 'all' | 'image' | 'document';
   allowLate: boolean;
   allowResubmit: boolean;
-  shareUrl: string;                     // https://ssampin.vercel.app/submit/{id}
+  shareUrl: string;                     // https://ssampin.com/submit/{id}
   adminKey: string;                     // 교사 조회용 랜덤 키
   createdAt: string;
 }
@@ -672,7 +672,7 @@ type SubmissionStatus = 'submitted' | 'late' | 'missing';
       "fileTypeRestriction": "document",
       "allowLate": true,
       "allowResubmit": true,
-      "shareUrl": "https://ssampin.vercel.app/submit/uuid-1",
+      "shareUrl": "https://ssampin.com/submit/uuid-1",
       "adminKey": "rnd-admin-key-abc123",
       "createdAt": "2026-03-09T14:00:00+09:00"
     }

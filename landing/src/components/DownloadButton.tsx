@@ -19,7 +19,7 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
 
   const handleCopyUrl = async () => {
     try {
-      await navigator.clipboard.writeText('https://ssampin.vercel.app');
+      await navigator.clipboard.writeText('https://ssampin.com');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -44,7 +44,7 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
               </p>
               <div className="mt-3 flex items-center justify-center gap-2">
                 <span className="rounded-lg bg-sp-surface px-3 py-1.5 font-mono text-xs text-sp-muted">
-                  ssampin.vercel.app
+                  ssampin.com
                 </span>
                 <button
                   type="button"

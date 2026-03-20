@@ -7,7 +7,7 @@ import type {
 } from '@domain/entities/Survey';
 import { surveyRepository, shortLinkClient } from '@adapters/di/container';
 
-const SHARE_BASE_URL = 'https://ssampin.vercel.app/check';
+const SHARE_BASE_URL = 'https://ssampin.com/check';
 
 interface SurveyState {
   surveys: readonly Survey[];

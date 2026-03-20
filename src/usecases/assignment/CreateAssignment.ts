@@ -77,7 +77,7 @@ export class CreateAssignment {
       fileTypeRestriction: params.fileTypeRestriction,
       allowLate: params.allowLate,
       allowResubmit: params.allowResubmit,
-      shareUrl: `https://ssampin.vercel.app/submit/${result.id}`,
+      shareUrl: `https://ssampin.com/submit/${result.id}`,
       adminKey: result.adminKey,
       createdAt: new Date().toISOString(),
     };

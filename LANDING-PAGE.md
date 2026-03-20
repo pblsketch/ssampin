@@ -9,7 +9,7 @@
 | 항목 | 내용 |
 |------|------|
 | **용도** | 쌤핀 앱 소개 + 다운로드 원페이지 사이트 |
-| **URL** | ssampin.vercel.app (또는 ssampin.kr) |
+| **URL** | ssampin.com (또는 ssampin.kr) |
 | **기술** | Next.js 14 (App Router) + Tailwind CSS |
 | **배포** | Vercel (무료 Hobby 플랜) |
 | **페이지 수** | 1페이지 (스크롤) |
@@ -442,7 +442,7 @@ export const metadata = {
     title: '📌 쌤핀 — 선생님의 대시보드',
     description: '바탕화면에 항상 띄워두는 교사용 대시보드. 시간표, 좌석배치, 일정 관리를 한 화면에.',
     images: ['/images/og-image.png'],
-    url: 'https://ssampin.vercel.app',
+    url: 'https://ssampin.com',
   },
 };
 ```

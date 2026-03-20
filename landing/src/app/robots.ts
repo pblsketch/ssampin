@@ -24,6 +24,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: '/',
       },
     ],
-    sitemap: 'https://ssampin.vercel.app/sitemap.xml',
+    sitemap: 'https://ssampin.com/sitemap.xml',
   };
 }

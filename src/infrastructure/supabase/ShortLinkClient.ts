@@ -5,7 +5,7 @@
  * 자동 생성(6자리 영숫자) 또는 커스텀 코드(한글 포함) 지원.
  */
 
-const BASE_URL = 'https://ssampin.vercel.app';
+const BASE_URL = 'https://ssampin.com';
 const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const CODE_LENGTH = 6;
 
@@ -100,7 +100,7 @@ export class ShortLinkClient {
    * @param fullUrl 원본 전체 URL
    * @param customCode 사용자 지정 코드 (선택)
    * @param expiresAt 만료일시 ISO 8601 (선택, 기본 90일)
-   * @returns 축약된 URL (예: "https://ssampin.vercel.app/s/Xk3mP9")
+   * @returns 축약된 URL (예: "https://ssampin.com/s/Xk3mP9")
    */
   async createShortLink(fullUrl: string, customCode?: string, expiresAt?: string): Promise<string> {
     const expires = expiresAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();

@@ -232,19 +232,19 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   },
   {
     question: '자동 업데이트가 안 돼요',
-    answer: '인터넷 연결을 확인해보세요. 방화벽이 차단할 수도 있어요. 수동으로 업데이트하려면 ssampin.vercel.app에서 최신 설치 파일을 다운로드해서 실행하세요. 기존 데이터는 유지돼요.',
+    answer: '인터넷 연결을 확인해보세요. 방화벽이 차단할 수도 있어요. 수동으로 업데이트하려면 ssampin.com에서 최신 설치 파일을 다운로드해서 실행하세요. 기존 데이터는 유지돼요.',
     keywords: ['업데이트', '실패', '안 됨', '안됨', '자동'],
     category: 'troubleshoot',
   },
   {
     question: '업데이트 후 앱이 안 켜져요',
-    answer: '작업 관리자(Ctrl+Shift+Esc)에서 "ssampin" 프로세스가 남아있다면 종료 후 다시 실행해보세요. 그래도 안 되면 ssampin.vercel.app에서 최신 버전을 다운로드해서 재설치하세요. 데이터는 별도 폴더에 안전하게 보관돼요.',
+    answer: '작업 관리자(Ctrl+Shift+Esc)에서 "ssampin" 프로세스가 남아있다면 종료 후 다시 실행해보세요. 그래도 안 되면 ssampin.com에서 최신 버전을 다운로드해서 재설치하세요. 데이터는 별도 폴더에 안전하게 보관돼요.',
     keywords: ['업데이트', '시작', '안 켜', '실행', '안됨'],
     category: 'troubleshoot',
   },
   {
     question: '수동으로 업데이트하는 방법이 있나요?',
-    answer: 'ssampin.vercel.app에서 최신 설치 파일(ssampin-Setup.exe)을 다운로드하세요. 기존 앱이 실행 중이면 종료한 후 설치 파일을 실행하면 자동으로 업데이트돼요. 데이터는 그대로 유지돼요.',
+    answer: 'ssampin.com에서 최신 설치 파일(ssampin-Setup.exe)을 다운로드하세요. 기존 앱이 실행 중이면 종료한 후 설치 파일을 실행하면 자동으로 업데이트돼요. 데이터는 그대로 유지돼요.',
     keywords: ['수동', '업데이트', '다운로드', '재설치', '최신'],
     category: 'troubleshoot',
   },

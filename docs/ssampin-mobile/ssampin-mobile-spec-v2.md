@@ -1009,7 +1009,7 @@ function OfflineBanner() {
 }
 ```
 
-**URL**: `m.ssampin.vercel.app` (별도 Vercel 프로젝트)
+**URL**: `m.ssampin.com` (별도 Vercel 프로젝트)
 
 ### 8-4. 앱 아이콘 생성
 
@@ -1025,7 +1025,7 @@ npx pwa-asset-generator public/icon_new.svg public/pwa --background "#3b82f6" --
 - [ ] Service Worker 캐싱 전략 설정
 - [ ] 오프라인 배너 컴포넌트
 - [ ] PWA 아이콘 생성 (192x192, 512x512)
-- [ ] Vercel 프로젝트 생성 (m.ssampin.vercel.app)
+- [ ] Vercel 프로젝트 생성 (m.ssampin.com)
 - [ ] vercel.json SPA 라우팅 설정
 - [ ] 빌드 + 배포 테스트
 - [ ] iOS Safari "홈 화면에 추가" 테스트
