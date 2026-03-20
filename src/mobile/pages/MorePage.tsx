@@ -1,4 +1,6 @@
+import { useState, useCallback } from 'react';
 import { SyncStatus } from '@mobile/components/More/SyncStatus';
+import { MobileShareModal } from '@mobile/components/Share/MobileShareModal';
 
 interface Props {
   onNavigate: (page: 'settings') => void;
@@ -6,19 +8,20 @@ interface Props {
 
 interface MenuItemProps {
   icon: string;
+  iconColor?: string;
   label: string;
   description: string;
   onClick: () => void;
 }
 
-function MenuItem({ icon, label, description, onClick }: MenuItemProps) {
+function MenuItem({ icon, iconColor = 'text-blue-500 bg-blue-500/10', label, description, onClick }: MenuItemProps) {
   return (
     <button
       onClick={onClick}
       className="flex items-center gap-4 w-full px-4 py-4 glass-card active:scale-[0.98] transition-transform text-left"
     >
-      <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-blue-500/10 shrink-0">
-        <span className="material-symbols-outlined text-blue-500 text-[24px]">{icon}</span>
+      <div className={`flex items-center justify-center w-11 h-11 rounded-xl shrink-0 ${iconColor.includes('bg-') ? iconColor.split(' ').find((c) => c.startsWith('bg-')) : 'bg-blue-500/10'}`}>
+        <span className={`material-symbols-outlined text-[24px] ${iconColor.includes('text-') ? iconColor.split(' ').find((c) => c.startsWith('text-')) : 'text-blue-500'}`}>{icon}</span>
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sp-text font-semibold text-sm">{label}</p>
@@ -32,6 +35,13 @@ function MenuItem({ icon, label, description, onClick }: MenuItemProps) {
 }
 
 export function MorePage({ onNavigate }: Props) {
+  const [showShare, setShowShare] = useState(false);
+
+  const handleShared = useCallback(() => {
+    // 분석은 MobileShareModal 내부에서 처리 가능하지만
+    // 여기서는 간단히 모달 닫기만 처리
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -46,6 +56,13 @@ export function MorePage({ onNavigate }: Props) {
               label="설정"
               description="학교, 교사, 학급 정보 확인"
               onClick={() => onNavigate('settings')}
+            />
+            <MenuItem
+              icon="mail"
+              iconColor="text-amber-500 bg-amber-500/10"
+              label="동료에게 추천"
+              description="동료 선생님께 쌤핀을 알려주세요"
+              onClick={() => setShowShare(true)}
             />
           </div>
         </section>
@@ -63,6 +80,13 @@ export function MorePage({ onNavigate }: Props) {
           <p className="text-sp-muted text-xs">쌤핀 모바일 v0.5.0</p>
         </div>
       </div>
+
+      {/* 공유 모달 */}
+      <MobileShareModal
+        isOpen={showShare}
+        onClose={() => setShowShare(false)}
+        onShared={handleShared}
+      />
     </div>
   );
 }

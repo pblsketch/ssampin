@@ -36,6 +36,7 @@ export type PageId =
 import { useState, useMemo, useCallback } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useShareStore } from '@adapters/stores/useShareStore';
 import { SyncStatusBar } from '@adapters/components/Calendar/SyncStatusBar';
 import { DriveSyncIndicator } from '@adapters/components/common/DriveSyncIndicator';
 
@@ -259,6 +260,17 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
             </p>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            useShareStore.getState().openModal('manual');
+          }}
+          className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-accent/80 hover:text-sp-accent hover:bg-sp-accent/5 mt-1"
+        >
+          <span className="material-symbols-outlined text-[18px]">mail</span>
+          <span className="text-xs font-medium">동료에게 추천</span>
+        </button>
 
         <button
           type="button"

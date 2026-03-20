@@ -57,6 +57,9 @@ import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
 import { DomainMigrationBanner } from '@adapters/components/DomainMigrationBanner';
+import { ShareModal } from '@adapters/components/Share/ShareModal';
+import { SharePromptOverlay } from '@adapters/components/Share/SharePromptOverlay';
+import { recordActiveDay } from '@adapters/stores/useShareStore';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -207,9 +210,10 @@ export function App() {
   useAnalyticsLifecycle();
   const { track } = useAnalytics();
 
-  // Analytics: 앱 시작 이벤트
+  // Analytics: 앱 시작 이벤트 + 활성일 기록
   useEffect(() => {
     track('app_open', { launchMode: isWidgetMode() ? 'widget' : 'normal' });
+    recordActiveDay();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -485,6 +489,8 @@ export function App() {
         />
       )}
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+      <ShareModal />
+      <SharePromptOverlay />
       <HelpChatPanel />
       </div>
     </div>
