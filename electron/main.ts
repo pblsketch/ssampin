@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
 import { registerOAuthHandlers } from './ipc/oauth';
+import { registerPKCEFallbackHandlers } from './ipc/oauthPKCEFallback';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
 import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
@@ -930,6 +931,7 @@ if (!gotTheLock) {
     registerSecureStorageHandlers();
     createWindow();
     registerOAuthHandlers(mainWindow!);
+    registerPKCEFallbackHandlers();
     registerLiveVoteHandlers(mainWindow!);
     registerLiveSurveyHandlers(mainWindow!);
     registerLiveWordCloudHandlers(mainWindow!);

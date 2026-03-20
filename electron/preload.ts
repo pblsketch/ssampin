@@ -94,6 +94,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('oauth:redirect-uri', handler);
     return () => { ipcRenderer.removeListener('oauth:redirect-uri', handler); };
   },
+  onOAuthError: (callback: (error: { code: string; message: string }) => void): (() => void) => {
+    const handler = (_event: unknown, error: { code: string; message: string }) => callback(error);
+    ipcRenderer.on('oauth:error', handler);
+    return () => { ipcRenderer.removeListener('oauth:error', handler); };
+  },
+  // Google OAuth PKCE 폴백 (로컬 서버 실패 시)
+  startPKCEAuth: (authUrl: string): Promise<{ verifier: string }> =>
+    ipcRenderer.invoke('oauth:pkce-start', authUrl),
+  exchangePKCECode: (): Promise<string> =>
+    ipcRenderer.invoke('oauth:pkce-exchange'),
   // Secure Storage
   secureWrite: (key: string, value: string): Promise<void> =>
     ipcRenderer.invoke('secure:write', key, value),

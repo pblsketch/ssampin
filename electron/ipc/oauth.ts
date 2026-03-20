@@ -12,6 +12,31 @@ import url from 'url';
 let oauthServer: http.Server | null = null;
 
 /**
+ * 포트 바인딩 가능 여부 사전 확인 (500ms 타임아웃)
+ * 학교 보안 프로그램이 localhost를 차단하는지 빠르게 검출한다.
+ */
+async function canBindLocalhost(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const testServer = http.createServer();
+    const timeout = setTimeout(() => {
+      testServer.close();
+      resolve(false);
+    }, 500);
+
+    testServer.on('error', () => {
+      clearTimeout(timeout);
+      resolve(false);
+    });
+
+    testServer.listen(0, '127.0.0.1', () => {
+      clearTimeout(timeout);
+      testServer.close();
+      resolve(true);
+    });
+  });
+}
+
+/**
  * OAuth IPC 핸들러 등록
  * @param mainWindow 렌더러에 이벤트를 전달할 메인 윈도우
  */
@@ -26,6 +51,16 @@ export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
    * @returns 인증 코드(code) 문자열
    */
   ipcMain.handle('oauth:start', async (_event, authUrl: string): Promise<string> => {
+    // 로컬 서버 바인딩 가능 여부 사전 확인
+    const canBind = await canBindLocalhost();
+    if (!canBind) {
+      mainWindow.webContents.send('oauth:error', {
+        code: 'LOCALHOST_BLOCKED',
+        message: '보안 프로그램이 로컬 연결을 차단하고 있습니다.',
+      });
+      throw new Error('Cannot bind to localhost — security software may be blocking');
+    }
+
     return new Promise<string>((resolve, reject) => {
       // 기존 서버 정리
       if (oauthServer) {
@@ -82,6 +117,11 @@ export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
       // 서버 에러 핸들러 (포트 바인딩 실패 등)
       server.on('error', (err) => {
         oauthServer = null;
+        // 렌더러에 에러 전달 → UI에서 안내 표시
+        mainWindow.webContents.send('oauth:error', {
+          code: 'SERVER_START_FAILED',
+          message: err.message,
+        });
         reject(new Error(`OAuth 로컬 서버 시작 실패: ${err.message}`));
       });
 
@@ -110,14 +150,18 @@ export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
         mainWindow.webContents.send('oauth:redirect-uri', redirectUri);
       });
 
-      // 5분 타임아웃
+      // 10분 타임아웃 (학교 Google Workspace 계정의 추가 인증 단계 고려)
       setTimeout(() => {
         if (oauthServer) {
           oauthServer.close();
           oauthServer = null;
-          reject(new Error('OAuth timeout (5 minutes)'));
+          mainWindow.webContents.send('oauth:error', {
+            code: 'TIMEOUT',
+            message: '인증 시간이 초과되었습니다.',
+          });
+          reject(new Error('OAuth timeout (10 minutes)'));
         }
-      }, 5 * 60 * 1000);
+      }, 10 * 60 * 1000);
     });
   });
 

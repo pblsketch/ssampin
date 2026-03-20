@@ -17,6 +17,10 @@ interface Props {
   onCancelEscalation: () => void;
   onClear: () => void;
   onClose: () => void;
+  onFeedbackResolved?: (messageId: string) => void;
+  onFeedbackUnresolved?: (messageId: string) => void;
+  onFeedbackAskMore?: () => void;
+  onFeedbackEscalate?: (messageId: string) => void;
 }
 
 export default function ChatWindow({
@@ -28,6 +32,10 @@ export default function ChatWindow({
   onCancelEscalation,
   onClear,
   onClose,
+  onFeedbackResolved,
+  onFeedbackUnresolved,
+  onFeedbackAskMore,
+  onFeedbackEscalate,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -78,7 +86,14 @@ export default function ChatWindow({
       {/* 메시지 목록 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3">
         {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
+          <ChatMessage
+            key={msg.id}
+            message={msg}
+            onFeedbackResolved={onFeedbackResolved}
+            onFeedbackUnresolved={onFeedbackUnresolved}
+            onFeedbackAskMore={onFeedbackAskMore}
+            onFeedbackEscalate={onFeedbackEscalate}
+          />
         ))}
         {status === 'loading' && <TypingIndicator />}
       </div>

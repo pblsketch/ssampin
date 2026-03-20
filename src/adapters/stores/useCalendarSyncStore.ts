@@ -6,12 +6,23 @@ import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { GoogleCalendarEvent } from '@domain/ports/IGoogleCalendarPort';
 // DI container에서 use case와 repository를 가져올 것 (dynamic import로 순환 참조 방지)
 
+/** OAuth 에러 정보 (에러 모달 표시용) */
+interface OAuthError {
+  code: string;
+  message: string;
+}
+
 interface CalendarSyncState {
   // 연결 상태
   isConnected: boolean;
   email: string | null;
   isLoading: boolean;
   error: string | null;
+
+  // OAuth 에러 (모달 표시용)
+  oauthError: OAuthError | null;
+  // PKCE 폴백 모달 표시
+  showPKCEFallback: boolean;
 
   // 동기화 상태
   syncState: SyncState;
@@ -34,8 +45,12 @@ interface CalendarSyncState {
   initialize: () => Promise<void>;
   startAuth: () => Promise<void>;
   completeAuth: (code: string, redirectUri: string) => Promise<void>;
+  startPKCEFallback: () => Promise<void>;
+  completePKCEAuth: (code: string) => Promise<void>;
   disconnect: () => Promise<void>;
   setError: (error: string | null) => void;
+  setOAuthError: (error: OAuthError | null) => void;
+  setShowPKCEFallback: (show: boolean) => void;
   setSyncStatus: (status: SyncStatus) => void;
   setMappings: (mappings: readonly CalendarMapping[]) => void;
   setSyncInterval: (minutes: number) => void;
@@ -59,6 +74,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   email: null,
   isLoading: false,
   error: null,
+  oauthError: null,
+  showPKCEFallback: false,
   syncState: {
     status: 'idle',
     pendingChanges: 0,
@@ -154,6 +171,70 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     }
   },
 
+  startPKCEFallback: async () => {
+    set({ isLoading: true, error: null, oauthError: null });
+    try {
+      const api = window.electronAPI;
+      if (!api?.startPKCEAuth) {
+        throw new Error('PKCE 인증은 데스크톱 앱에서만 가능합니다.');
+      }
+
+      const { authenticateGoogle } = await import('@adapters/di/container');
+      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback');
+
+      // PKCE 시작: 브라우저에서 인증 URL 열기
+      await api.startPKCEAuth(authUrl);
+
+      // 수동 인증 코드 입력 모달 표시
+      set({ isLoading: false, showPKCEFallback: true });
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'PKCE 인증 시작 중 오류가 발생했습니다.',
+        isLoading: false,
+      });
+    }
+  },
+
+  completePKCEAuth: async (code: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const api = window.electronAPI;
+      if (!api?.exchangePKCECode) {
+        throw new Error('PKCE 인증은 데스크톱 앱에서만 가능합니다.');
+      }
+
+      // verifier 가져오기
+      const verifier = await api.exchangePKCECode();
+
+      const { authenticateGoogle } = await import('@adapters/di/container');
+      const redirectUri = 'urn:ietf:wg:oauth:2.0:oob';
+      const tokens = await authenticateGoogle.authenticate(code, redirectUri, verifier);
+
+      // 인증 완료 후: 구글 캘린더 목록 미리 조회
+      try {
+        const { manageCalendarMapping } = await import('@adapters/di/container');
+        const calendars = await manageCalendarMapping.listGoogleCalendars();
+        set({ googleCalendars: calendars });
+      } catch (fetchErr) {
+        console.error('[CalendarSync] post-PKCE-auth calendar fetch error:', fetchErr);
+      }
+
+      set({
+        isConnected: true,
+        email: tokens.email,
+        isLoading: false,
+        error: null,
+        showPKCEFallback: false,
+        showCalendarPicker: true,
+      });
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'PKCE 인증 완료 중 오류가 발생했습니다.',
+        isLoading: false,
+      });
+    }
+  },
+
   disconnect: async () => {
     set({ isLoading: true });
     try {
@@ -202,6 +283,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   },
 
   setError: (error) => set({ error }),
+  setOAuthError: (oauthError) => set({ oauthError }),
+  setShowPKCEFallback: (showPKCEFallback) => set({ showPKCEFallback }),
   setSyncStatus: (status) => set((state) => ({
     syncState: { ...state.syncState, status },
   })),

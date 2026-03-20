@@ -15,8 +15,8 @@ export class AuthenticateGoogle {
   }
 
   /** 인증 코드를 토큰으로 교환하고 저장 */
-  async authenticate(code: string, redirectUri: string): Promise<GoogleAuthTokens> {
-    const tokens = await this.authPort.exchangeCode(code, redirectUri);
+  async authenticate(code: string, redirectUri: string, codeVerifier?: string): Promise<GoogleAuthTokens> {
+    const tokens = await this.authPort.exchangeCode(code, redirectUri, codeVerifier);
     await this.syncRepo.saveAuthTokens(tokens);
     return tokens;
   }

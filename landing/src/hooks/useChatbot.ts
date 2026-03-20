@@ -9,6 +9,7 @@ import type {
   ChatStatus,
   EscalationData,
   EscalationResponse,
+  FeedbackState,
 } from '../types/chat';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -54,15 +55,59 @@ export function useChatbot() {
     return sessionIdRef.current;
   }, []);
 
-  function addAssistantMessage(content: string) {
+  function addAssistantMessage(content: string, extra?: Partial<ChatMessage>) {
     const msg: ChatMessage = {
       id: generateId(),
       role: 'assistant',
       content,
       timestamp: new Date(),
+      feedbackState: 'pending',
+      ...extra,
     };
     setMessages((prev) => [...prev, msg]);
   }
+
+  /** 메시지의 피드백 상태 변경 */
+  const setMessageFeedback = useCallback((messageId: string, state: FeedbackState) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, feedbackState: state } : m)),
+    );
+  }, []);
+
+  /** 모든 pending 피드백을 hidden으로 변경 */
+  const hideAllPendingFeedback = useCallback(() => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.feedbackState === 'pending' ? { ...m, feedbackState: 'hidden' as FeedbackState } : m,
+      ),
+    );
+  }, []);
+
+  /** 피드백에서 "개발자에게 전달" */
+  const escalateFromFeedback = useCallback(async () => {
+    if (!ESCALATE_ENDPOINT || !SUPABASE_ANON_KEY) return;
+
+    const lastUser = messages.filter((m) => m.role === 'user').pop();
+    const lastBot = messages.filter((m) => m.role === 'assistant').pop();
+
+    try {
+      await fetch(ESCALATE_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          type: 'other',
+          message: `[챗봇 미해결 피드백]\nQ: ${lastUser?.content ?? '(없음)'}\nA: ${lastBot?.content?.slice(0, 500) ?? '(없음)'}`,
+          sessionId: getSession(),
+        }),
+      });
+    } catch {
+      // 전송 실패는 무시
+    }
+  }, [messages, getSession]);
 
   /** File[] → ChatImage[] 변환 */
   const convertFilesToChatImages = useCallback(async (files: File[]): Promise<ChatImage[]> => {
@@ -87,6 +132,9 @@ export function useChatbot() {
       const trimmed = text.trim();
       if (!trimmed && (!imageFiles || imageFiles.length === 0)) return;
       if (status === 'loading') return;
+
+      // 이전 pending 피드백 숨기기
+      hideAllPendingFeedback();
 
       // 이미지 변환
       let chatImages: ChatImage[] | undefined;
@@ -162,6 +210,7 @@ export function useChatbot() {
             timestamp: new Date(),
             sources: data.sources,
             confidence: data.confidence,
+            feedbackState: 'pending',
           };
           setMessages((prev) => [...prev, assistantMsg]);
           setStatus('idle');
@@ -171,7 +220,7 @@ export function useChatbot() {
         setStatus('error');
       }
     },
-    [messages, status, getSession, convertFilesToChatImages]
+    [messages, status, getSession, convertFilesToChatImages, hideAllPendingFeedback]
   );
 
   /** 에스컬레이션 제출 */
@@ -246,5 +295,8 @@ export function useChatbot() {
     submitEscalation,
     cancelEscalation,
     clearChat,
+    setMessageFeedback,
+    hideAllPendingFeedback,
+    escalateFromFeedback,
   };
 }

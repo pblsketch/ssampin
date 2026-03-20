@@ -8,6 +8,7 @@ import type {
   ChatImage,
   EscalationPayload,
   EscalationApiResponse,
+  FeedbackState,
 } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -61,17 +62,62 @@ export function useHelpChat() {
     };
   }, []);
 
-  /** 어시스턴트 메시지 추가 */
+  /** 어시스턴트 메시지 추가 (피드백 상태 포함) */
   const addAssistantMessage = useCallback((content: string, extra?: Partial<HelpChatMessage>) => {
     const msg: HelpChatMessage = {
       id: generateId(),
       role: 'assistant',
       content,
       timestamp: Date.now(),
+      feedbackState: 'pending',
       ...extra,
     };
     setMessages((prev) => [...prev, msg]);
   }, []);
+
+  /** 메시지의 피드백 상태 변경 */
+  const setMessageFeedback = useCallback((messageId: string, state: FeedbackState) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, feedbackState: state } : m)),
+    );
+  }, []);
+
+  /** 모든 pending 피드백을 hidden으로 변경 */
+  const hideAllPendingFeedback = useCallback(() => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.feedbackState === 'pending' ? { ...m, feedbackState: 'hidden' as FeedbackState } : m,
+      ),
+    );
+  }, []);
+
+  /** 피드백에서 "개발자에게 전달" — 최근 대화를 에스컬레이션 */
+  const escalateFromFeedback = useCallback(async () => {
+    if (!isOnline || !ESCALATE_ENDPOINT || !SUPABASE_ANON_KEY) return;
+
+    const lastUser = messages.filter((m) => m.role === 'user').pop();
+    const lastBot = messages.filter((m) => m.role === 'assistant').pop();
+
+    try {
+      await fetch(ESCALATE_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          type: 'other',
+          message: `[챗봇 미해결 피드백]\nQ: ${lastUser?.content ?? '(없음)'}\nA: ${lastBot?.content?.slice(0, 500) ?? '(없음)'}`,
+          sessionId: sessionIdRef.current,
+          appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
+          appSettings: getAppContext(),
+        }),
+      });
+    } catch {
+      // 전송 실패는 무시 — 사용자에게 이미 UI로 안내
+    }
+  }, [messages, isOnline]);
 
   /** 오프라인 FAQ 응답 */
   const handleOfflineResponse = useCallback((query: string) => {
@@ -121,6 +167,9 @@ export function useHelpChat() {
         // 이미지 변환 실패 시 텍스트만 전송
       }
     }
+
+    // 이전 pending 피드백 숨기기
+    hideAllPendingFeedback();
 
     // 유저 메시지 추가
     const userMsg: HelpChatMessage = {
@@ -211,7 +260,7 @@ export function useHelpChat() {
       }
       setStatus('error');
     }
-  }, [messages, status, isOnline, handleOfflineResponse, addAssistantMessage, convertFilesToChatImages]);
+  }, [messages, status, isOnline, handleOfflineResponse, addAssistantMessage, convertFilesToChatImages, hideAllPendingFeedback]);
 
   /** 에스컬레이션 제출 */
   const submitEscalation = useCallback(async (data: EscalationPayload, imageFiles?: File[]) => {
@@ -292,5 +341,8 @@ export function useHelpChat() {
     submitEscalation,
     cancelEscalation,
     clearChat,
+    setMessageFeedback,
+    hideAllPendingFeedback,
+    escalateFromFeedback,
   };
 }

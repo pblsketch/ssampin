@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useChatbot } from '../../hooks/useChatbot';
 import ChatWindow from './ChatWindow';
+import type { FeedbackState } from '../../types/chat';
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,8 +24,31 @@ export default function ChatWidget() {
   };
 
   const handleClose = () => {
+    // pending 피드백이 있으면 no_response로 처리
+    const hasPending = chat.messages.some(
+      (m) => m.role === 'assistant' && m.feedbackState === 'pending',
+    );
+    if (hasPending) {
+      chat.hideAllPendingFeedback();
+    }
     setIsOpen(false);
   };
+
+  const handleFeedbackResolved = useCallback((messageId: string) => {
+    chat.setMessageFeedback(messageId, 'resolved' as FeedbackState);
+  }, [chat]);
+
+  const handleFeedbackUnresolved = useCallback((messageId: string) => {
+    chat.setMessageFeedback(messageId, 'unresolved' as FeedbackState);
+  }, [chat]);
+
+  const handleFeedbackAskMore = useCallback(() => {
+    // 랜딩은 inputRef 없이 동작 — 별도 처리 불필요
+  }, []);
+
+  const handleFeedbackEscalate = useCallback(() => {
+    chat.escalateFromFeedback();
+  }, [chat]);
 
   // Feedback 섹션에서 호출할 수 있도록 전역 함수 등록
   useEffect(() => {
@@ -50,6 +74,10 @@ export default function ChatWidget() {
             onCancelEscalation={chat.cancelEscalation}
             onClear={chat.clearChat}
             onClose={handleClose}
+            onFeedbackResolved={handleFeedbackResolved}
+            onFeedbackUnresolved={handleFeedbackUnresolved}
+            onFeedbackAskMore={handleFeedbackAskMore}
+            onFeedbackEscalate={handleFeedbackEscalate}
           />
         </div>
       )}

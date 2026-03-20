@@ -6,10 +6,11 @@ const MAX_IMAGES = 3;
 interface Props {
   readonly onSend: (message: string, images?: File[]) => void;
   readonly disabled?: boolean;
+  readonly onInputRef?: (el: HTMLTextAreaElement | null) => void;
 }
 
 /** 채팅 입력 컴포넌트 (이미지 첨부 지원) */
-export function HelpChatInput({ onSend, disabled }: Props) {
+export function HelpChatInput({ onSend, disabled, onInputRef }: Props) {
   const [value, setValue] = useState('');
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -17,6 +18,11 @@ export function HelpChatInput({ onSend, disabled }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  // 부모에 textarea ref 전달
+  useEffect(() => {
+    onInputRef?.(textareaRef.current);
+  }, [onInputRef]);
 
   // 미리보기 URL 생성/해제
   useEffect(() => {

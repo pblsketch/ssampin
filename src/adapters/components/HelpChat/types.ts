@@ -19,6 +19,7 @@ export interface HelpChatMessage {
   readonly responseType?: 'answer' | 'escalation';
   readonly escalationType?: 'bug' | 'feature' | 'other';
   readonly images?: readonly ChatImage[];
+  readonly feedbackState?: FeedbackState;
 }
 
 export interface ChatApiResponse {
@@ -41,5 +42,7 @@ export interface EscalationApiResponse {
   readonly ok: boolean;
   readonly message: string;
 }
+
+export type FeedbackState = 'pending' | 'resolved' | 'unresolved' | 'hidden';
 
 export type HelpChatStatus = 'idle' | 'loading' | 'error' | 'escalation';

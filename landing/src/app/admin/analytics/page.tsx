@@ -140,7 +140,7 @@ async function fetchChatConversations(): Promise<Array<{
 }
 
 export default async function AdminAnalyticsPage() {
-  const [weekly, daily, tools, exports, sessions, recentEvents, totals, toolsWeekly, versions, retention, chatDaily, chatTopics, chatDepth, chatEscalations, chatConfidence, chatConversations] = await Promise.all([
+  const [weekly, daily, tools, exports, sessions, recentEvents, totals, toolsWeekly, versions, retention, chatDaily, chatTopics, chatDepth, chatEscalations, chatConfidence, chatConversations, chatFeedbackStats, chatFeedbackEscalations] = await Promise.all([
     fetchView<{
       week_start: string;
       weekly_active_users: number;
@@ -167,6 +167,8 @@ export default async function AdminAnalyticsPage() {
     fetchView<{ id: string; type: string; summary: string; user_message_preview: string; created_at_kst: string }>('chatbot_recent_escalations', { order: 'created_at_kst.desc' }),
     fetchView<{ confidence_level: string; response_count: number; pct: number }>('chatbot_confidence_stats'),
     fetchChatConversations(),
+    fetchView<{ resolved_count: number; unresolved_count: number; no_response_count: number; total_count: number; resolution_rate: number; responded_total: number }>('chatbot_feedback_stats'),
+    fetchView<{ escalation_count: number }>('chatbot_feedback_escalations'),
   ]);
 
   const hasData = weekly.length > 0 || daily.length > 0;
@@ -461,6 +463,41 @@ export default async function AdminAnalyticsPage() {
                   value={chatDaily[0]?.avg_messages_per_session?.toString() || '-'}
                 />
               </div>
+
+              {/* 피드백 해결률 */}
+              {chatFeedbackStats.length > 0 && chatFeedbackStats[0].total_count > 0 && (() => {
+                const fb = chatFeedbackStats[0];
+                const esc = chatFeedbackEscalations[0]?.escalation_count ?? 0;
+                return (
+                  <div className="mb-6 rounded-lg bg-gray-800/50 p-4">
+                    <h3 className="text-sm text-gray-400 mb-3">피드백 해결률</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-emerald-400">{fb.resolution_rate}%</div>
+                        <div className="text-xs text-gray-400">해결률</div>
+                        <div className="text-xs text-gray-500">({fb.resolved_count}/{fb.responded_total})</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-emerald-400">{fb.resolved_count}</div>
+                        <div className="text-xs text-gray-400">해결됨</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-red-400">{fb.unresolved_count}</div>
+                        <div className="text-xs text-gray-400">미해결</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-amber-400">{esc}</div>
+                        <div className="text-xs text-gray-400">에스컬레이션</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-gray-400">{fb.no_response_count}</div>
+                        <div className="text-xs text-gray-400">미응답</div>
+                        <div className="text-xs text-gray-500">({fb.total_count > 0 ? Math.round(fb.no_response_count / fb.total_count * 100) : 0}%)</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 일별 챗봇 사용량 */}
               {chatDaily.length > 0 && (

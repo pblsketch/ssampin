@@ -35,7 +35,13 @@ export type AnalyticsEventName =
   | 'timetable_neis_sync'
   | 'widget_layout_change'
   | 'onboarding_roles_selected'
-  | 'onboarding_widget_preset';
+  | 'onboarding_widget_preset'
+  | 'chatbot_feedback'
+  | 'chatbot_escalate'
+  | 'share_modal_open'
+  | 'share_click'
+  | 'share_prompt_shown'
+  | 'share_prompt_action';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -93,4 +99,10 @@ export interface AnalyticsEventProperties {
   widget_layout_change: { from: string; to: string };
   onboarding_roles_selected: { roles: string[]; hiddenMenuCount: number; visibleMenuCount: number };
   onboarding_widget_preset: { presetKey: string; roles: string[] };
+  chatbot_feedback: { result: 'resolved' | 'unresolved' | 'no_response'; topic?: string };
+  chatbot_escalate: { questionText: string };
+  share_modal_open: { trigger: 'manual' | 'prompt' };
+  share_click: { method: 'kakao' | 'clipboard' | 'qr' };
+  share_prompt_shown: Record<string, never>;
+  share_prompt_action: { action: 'share' | 'later' | 'never' };
 }

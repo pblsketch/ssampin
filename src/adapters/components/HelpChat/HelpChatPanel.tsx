@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useHelpChat } from './useHelpChat';
 import { HelpChatWindow } from './HelpChatWindow';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -9,6 +9,7 @@ export function HelpChatPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const chat = useHelpChat();
+  const inputElRef = useRef<HTMLTextAreaElement | null>(null);
 
   // 3초 후 알림 뱃지 표시
   useEffect(() => {
@@ -38,6 +39,14 @@ export function HelpChatPanel() {
   };
 
   const handleClose = () => {
+    // pending 피드백이 있으면 no_response로 기록
+    const hasPending = chat.messages.some(
+      (m) => m.role === 'assistant' && m.feedbackState === 'pending',
+    );
+    if (hasPending) {
+      track('chatbot_feedback', { result: 'no_response' });
+      chat.hideAllPendingFeedback();
+    }
     setIsOpen(false);
   };
 
@@ -45,6 +54,38 @@ export function HelpChatPanel() {
     track('chatbot_message');
     chat.sendMessage(message, images);
   };
+
+  /** 피드백: 해결됨 */
+  const handleFeedbackResolved = useCallback((messageId: string) => {
+    chat.setMessageFeedback(messageId, 'resolved');
+    track('chatbot_feedback', { result: 'resolved' });
+  }, [chat, track]);
+
+  /** 피드백: 미해결 */
+  const handleFeedbackUnresolved = useCallback((messageId: string) => {
+    chat.setMessageFeedback(messageId, 'unresolved');
+    track('chatbot_feedback', { result: 'unresolved' });
+  }, [chat, track]);
+
+  /** 피드백: 더 질문하기 → 입력창 포커스 */
+  const handleFeedbackAskMore = useCallback(() => {
+    inputElRef.current?.focus();
+  }, []);
+
+  /** 입력 컴포넌트에서 textarea ref 수신 */
+  const handleInputRef = useCallback((el: HTMLTextAreaElement | null) => {
+    inputElRef.current = el;
+  }, []);
+
+  /** 피드백: 개발자에게 전달 */
+  const handleFeedbackEscalate = useCallback((messageId: string) => {
+    const msg = chat.messages.find((m) => m.id === messageId);
+    const lastUser = chat.messages.filter((m) => m.role === 'user').pop();
+    track('chatbot_escalate', { questionText: lastUser?.content?.slice(0, 200) ?? '' });
+    chat.escalateFromFeedback();
+    // 피드백 상태는 ChatFeedback 컴포넌트 내에서 escalated 상태로 관리됨
+    void msg; // unused but kept for clarity
+  }, [chat, track]);
 
   return (
     <>
@@ -67,6 +108,11 @@ export function HelpChatPanel() {
             onCancelEscalation={chat.cancelEscalation}
             onClear={chat.clearChat}
             onClose={handleClose}
+            onFeedbackResolved={handleFeedbackResolved}
+            onFeedbackUnresolved={handleFeedbackUnresolved}
+            onFeedbackAskMore={handleFeedbackAskMore}
+            onFeedbackEscalate={handleFeedbackEscalate}
+            onInputRef={handleInputRef}
           />
         </div>
       )}

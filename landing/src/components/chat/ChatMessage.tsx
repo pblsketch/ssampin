@@ -2,12 +2,23 @@
 
 import { useState } from 'react';
 import type { ChatMessage as ChatMessageType } from '../../types/chat';
+import ChatFeedback from './ChatFeedback';
 
 interface Props {
   message: ChatMessageType;
+  onFeedbackResolved?: (messageId: string) => void;
+  onFeedbackUnresolved?: (messageId: string) => void;
+  onFeedbackAskMore?: () => void;
+  onFeedbackEscalate?: (messageId: string) => void;
 }
 
-export default function ChatMessage({ message }: Props) {
+export default function ChatMessage({
+  message,
+  onFeedbackResolved,
+  onFeedbackUnresolved,
+  onFeedbackAskMore,
+  onFeedbackEscalate,
+}: Props) {
   const isUser = message.role === 'user';
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
@@ -66,6 +77,18 @@ export default function ChatMessage({ message }: Props) {
                 📚 참고: {message.sources.join(', ')}
               </p>
             </div>
+          )}
+
+          {/* 피드백 버튼 (어시스턴트 답변에만, welcome 제외) */}
+          {!isUser && message.id !== 'welcome' && message.feedbackState && onFeedbackResolved && onFeedbackUnresolved && onFeedbackAskMore && onFeedbackEscalate && (
+            <ChatFeedback
+              messageId={message.id}
+              feedbackState={message.feedbackState}
+              onResolved={onFeedbackResolved}
+              onUnresolved={onFeedbackUnresolved}
+              onAskMore={onFeedbackAskMore}
+              onEscalate={onFeedbackEscalate}
+            />
           )}
         </div>
       </div>

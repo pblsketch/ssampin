@@ -16,7 +16,10 @@ export interface ChatMessage {
   sources?: string[];
   confidence?: number;
   images?: ChatImage[];
+  feedbackState?: FeedbackState;
 }
+
+export type FeedbackState = 'pending' | 'resolved' | 'unresolved' | 'hidden';
 
 export interface ChatResponseAnswer {
   type: 'answer';

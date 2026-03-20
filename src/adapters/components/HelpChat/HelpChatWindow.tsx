@@ -15,6 +15,11 @@ interface Props {
   readonly onCancelEscalation: () => void;
   readonly onClear: () => void;
   readonly onClose: () => void;
+  readonly onFeedbackResolved?: (messageId: string) => void;
+  readonly onFeedbackUnresolved?: (messageId: string) => void;
+  readonly onFeedbackAskMore?: () => void;
+  readonly onFeedbackEscalate?: (messageId: string) => void;
+  readonly onInputRef?: (el: HTMLTextAreaElement | null) => void;
 }
 
 /** 채팅 윈도우 — 헤더 + 메시지 목록 + 입력 */
@@ -28,6 +33,11 @@ export function HelpChatWindow({
   onCancelEscalation,
   onClear,
   onClose,
+  onFeedbackResolved,
+  onFeedbackUnresolved,
+  onFeedbackAskMore,
+  onFeedbackEscalate,
+  onInputRef,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -90,7 +100,14 @@ export function HelpChatWindow({
       {/* 메시지 목록 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3">
         {messages.map((msg) => (
-          <HelpChatMessage key={msg.id} message={msg} />
+          <HelpChatMessage
+            key={msg.id}
+            message={msg}
+            onFeedbackResolved={onFeedbackResolved}
+            onFeedbackUnresolved={onFeedbackUnresolved}
+            onFeedbackAskMore={onFeedbackAskMore}
+            onFeedbackEscalate={onFeedbackEscalate}
+          />
         ))}
         {status === 'loading' && <HelpTypingIndicator />}
       </div>
@@ -104,7 +121,7 @@ export function HelpChatWindow({
           disabled={status === 'loading'}
         />
       ) : (
-        <HelpChatInput onSend={onSend} disabled={status === 'loading'} />
+        <HelpChatInput onSend={onSend} disabled={status === 'loading'} onInputRef={onInputRef} />
       )}
     </div>
   );

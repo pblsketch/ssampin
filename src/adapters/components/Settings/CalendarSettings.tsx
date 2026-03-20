@@ -1,5 +1,172 @@
+import { useState, useEffect, useCallback } from 'react';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { CalendarMappingModal } from '../Calendar/CalendarMappingModal';
+import { SITE_URL } from '@config/siteUrl';
+
+/** OAuth 에러 모달: 로컬 서버 실패 시 해결 안내 + 수동 인증 폴백 */
+function OAuthErrorModal({
+  error,
+  onClose,
+  onStartPKCE,
+}: {
+  error: { code: string; message: string };
+  onClose: () => void;
+  onStartPKCE: () => void;
+}) {
+  const isServerBlocked = error.code === 'SERVER_START_FAILED' || error.code === 'LOCALHOST_BLOCKED';
+  const isTimeout = error.code === 'TIMEOUT';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-red-500/10">
+            <span className="material-symbols-outlined text-red-400">error</span>
+          </div>
+          <h3 className="text-lg font-bold text-sp-text">
+            {isTimeout ? '인증 시간 초과' : 'Google 로그인 연결 실패'}
+          </h3>
+        </div>
+
+        {/* 본문 */}
+        {isServerBlocked && (
+          <div className="space-y-3">
+            <p className="text-sm text-sp-muted">
+              보안 프로그램이 로그인 과정을 차단하고 있을 수 있어요.
+            </p>
+            <div className="rounded-lg bg-sp-surface p-4 space-y-2">
+              <p className="text-sm font-medium text-sp-text">해결 방법:</p>
+              <ol className="list-decimal list-inside space-y-1.5 text-sm text-sp-muted">
+                <li>V3이나 알약 실시간 감시를 잠시 끄고 다시 시도해보세요.</li>
+                <li>쌤핀을 완전히 종료 후 재실행해보세요.</li>
+                <li>학교 Wi-Fi 대신 핸드폰 핫스팟으로 연결 후 시도해보세요.</li>
+              </ol>
+            </div>
+          </div>
+        )}
+
+        {isTimeout && (
+          <p className="text-sm text-sp-muted">
+            10분 안에 Google 로그인을 완료하지 못했어요. 다시 시도해주세요.
+          </p>
+        )}
+
+        {!isServerBlocked && !isTimeout && (
+          <p className="text-sm text-sp-muted">{error.message}</p>
+        )}
+
+        {/* 액션 버튼 */}
+        <div className="flex items-center justify-end gap-2 mt-6">
+          {isServerBlocked && (
+            <button
+              onClick={() => {
+                onClose();
+                onStartPKCE();
+              }}
+              className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80"
+            >
+              수동 인증으로 시도
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** PKCE 수동 인증 코드 입력 모달 */
+function PKCEFallbackModal({
+  isLoading,
+  error,
+  onSubmit,
+  onClose,
+}: {
+  isLoading: boolean;
+  error: string | null;
+  onSubmit: (code: string) => void;
+  onClose: () => void;
+}) {
+  const [code, setCode] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-blue-500/10">
+            <span className="material-symbols-outlined text-blue-400">key</span>
+          </div>
+          <h3 className="text-lg font-bold text-sp-text">수동 인증</h3>
+        </div>
+
+        {/* 안내 */}
+        <div className="space-y-3 mb-4">
+          <p className="text-sm text-sp-muted">
+            브라우저에서 Google 로그인 후 표시된 인증 코드를 아래에 붙여넣어 주세요.
+          </p>
+
+          {error && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-400">
+              {error}
+            </div>
+          )}
+
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="인증 코드 입력..."
+            className="w-full rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && code.trim()) {
+                onSubmit(code.trim());
+              }
+            }}
+          />
+        </div>
+
+        {/* 액션 버튼 */}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={() => code.trim() && onSubmit(code.trim())}
+            disabled={isLoading || !code.trim()}
+            className="flex items-center gap-2 rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80 disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                인증 중...
+              </>
+            ) : (
+              '인증 완료'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function CalendarSettings() {
   const {
@@ -7,6 +174,8 @@ export function CalendarSettings() {
     email,
     isLoading,
     error,
+    oauthError,
+    showPKCEFallback,
     syncState,
     mappings,
     syncInterval,
@@ -15,7 +184,11 @@ export function CalendarSettings() {
     autoResolveConflicts,
     showCalendarPicker,
     startAuth,
+    startPKCEFallback,
+    completePKCEAuth,
     disconnect,
+    setOAuthError,
+    setShowPKCEFallback,
     setSyncInterval,
     setSyncOnStart,
     setSyncOnFocus,
@@ -24,11 +197,21 @@ export function CalendarSettings() {
     syncNow,
   } = useCalendarSyncStore();
 
-  const handleDisconnect = () => {
+  // OAuth 에러 이벤트 수신 (Electron IPC)
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onOAuthError) return;
+    const cleanup = api.onOAuthError((err) => {
+      setOAuthError(err);
+    });
+    return cleanup;
+  }, [setOAuthError]);
+
+  const handleDisconnect = useCallback(() => {
     if (window.confirm('구글 계정 연결을 해제하시겠습니까?\n구글에서 가져온 일정이 모두 제거됩니다.')) {
       disconnect();
     }
-  };
+  }, [disconnect]);
 
   const enabledCount = mappings.filter(m => m.syncEnabled).length;
 
@@ -213,9 +396,9 @@ export function CalendarSettings() {
           onClick={() => {
             const api = window.electronAPI;
             if (api?.openExternal) {
-              api.openExternal('https://ssampin.com/privacy');
+              api.openExternal(`${SITE_URL}/privacy`);
             } else {
-              window.open('https://ssampin.com/privacy', '_blank');
+              window.open(`${SITE_URL}/privacy`, '_blank');
             }
           }}
           className="text-xs text-sp-muted hover:text-sp-accent transition-colors flex items-center gap-1"
@@ -231,6 +414,25 @@ export function CalendarSettings() {
         onClose={() => setShowCalendarPicker(false)}
         isInitialSetup={mappings.length === 0}
       />
+
+      {/* OAuth 에러 모달 */}
+      {oauthError && (
+        <OAuthErrorModal
+          error={oauthError}
+          onClose={() => setOAuthError(null)}
+          onStartPKCE={startPKCEFallback}
+        />
+      )}
+
+      {/* PKCE 수동 인증 코드 입력 모달 */}
+      {showPKCEFallback && (
+        <PKCEFallbackModal
+          isLoading={isLoading}
+          error={error}
+          onSubmit={completePKCEAuth}
+          onClose={() => setShowPKCEFallback(false)}
+        />
+      )}
     </div>
   );
 }

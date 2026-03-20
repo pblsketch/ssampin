@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import type { HelpChatMessage as MessageType } from './types';
+import { ChatFeedback } from './ChatFeedback';
 
 interface Props {
   readonly message: MessageType;
+  readonly onFeedbackResolved?: (messageId: string) => void;
+  readonly onFeedbackUnresolved?: (messageId: string) => void;
+  readonly onFeedbackAskMore?: () => void;
+  readonly onFeedbackEscalate?: (messageId: string) => void;
 }
 
 /** 간단한 마크다운 → HTML 변환 (XSS 방지 포함) */
@@ -39,7 +44,13 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
 }
 
 /** 메시지 버블 컴포넌트 */
-export function HelpChatMessage({ message }: Props) {
+export function HelpChatMessage({
+  message,
+  onFeedbackResolved,
+  onFeedbackUnresolved,
+  onFeedbackAskMore,
+  onFeedbackEscalate,
+}: Props) {
   const isUser = message.role === 'user';
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
@@ -103,6 +114,18 @@ export function HelpChatMessage({ message }: Props) {
                 📚 참고: {message.sources.join(', ')}
               </p>
             </div>
+          )}
+
+          {/* 피드백 버튼 (어시스턴트 답변에만, welcome 제외) */}
+          {!isUser && message.id !== 'welcome' && message.feedbackState && onFeedbackResolved && onFeedbackUnresolved && onFeedbackAskMore && onFeedbackEscalate && (
+            <ChatFeedback
+              messageId={message.id}
+              feedbackState={message.feedbackState}
+              onResolved={onFeedbackResolved}
+              onUnresolved={onFeedbackUnresolved}
+              onAskMore={onFeedbackAskMore}
+              onEscalate={onFeedbackEscalate}
+            />
           )}
         </div>
       </div>
