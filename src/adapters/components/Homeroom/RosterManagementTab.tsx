@@ -20,12 +20,23 @@ export function RosterManagementTab() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const rosterFileRef = useRef<HTMLInputElement>(null);
-  const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; isVacant: boolean }> | null>(null);
+  const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhone2?: string; isVacant: boolean }> | null>(null);
+  // 보호자2 필드가 열려있는 학생 ID 세트
+  const [showParent2, setShowParent2] = useState<Set<string>>(new Set());
   const showToast = useToastStore((s) => s.show);
 
   useEffect(() => {
     void loadStudents();
   }, [loadStudents]);
+
+  // 보호자2가 이미 입력된 학생은 자동으로 보호자2 필드를 열어둔다
+  useEffect(() => {
+    const ids = new Set<string>();
+    for (const s of students) {
+      if (s.parentPhone2) ids.add(s.id);
+    }
+    if (ids.size > 0) setShowParent2((prev) => new Set([...prev, ...ids]));
+  }, [students]);
 
   const sortedStudents = useMemo(
     () => [...students].sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0)),
@@ -228,12 +239,15 @@ export function RosterManagementTab() {
       <div className="flex-1 overflow-y-auto">
         <div className="w-full max-w-5xl mx-auto">
           {/* 테이블 헤더 */}
-          <div className="grid grid-cols-[50px_50px_1fr_160px_160px_80px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
+          <div className="grid grid-cols-[50px_50px_1fr_160px_80px_160px_80px_160px_80px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
             <span>번호</span>
             <span>학번</span>
             <span>이름</span>
             <span>학생 연락처</span>
-            <span>학부모 연락처</span>
+            <span>관계1</span>
+            <span>보호자1 연락처</span>
+            <span>관계2</span>
+            <span>보호자2 연락처</span>
             <span className="text-center">결번</span>
           </div>
 
@@ -241,10 +255,11 @@ export function RosterManagementTab() {
           <div className="divide-y divide-sp-border/50">
             {sortedStudents.map((student, idx) => {
               const isVacant = !!student.isVacant;
+              const hasParent2 = showParent2.has(student.id);
               return (
                 <div
                   key={student.id}
-                  className={`grid grid-cols-[50px_50px_1fr_160px_160px_80px] gap-2 px-4 py-3 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
+                  className={`grid grid-cols-[50px_50px_1fr_160px_80px_160px_80px_160px_80px] gap-2 px-4 py-3 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
                 >
                   {/* 번호 */}
                   <span className="text-sm text-sp-muted font-mono">{idx + 1}</span>
@@ -300,7 +315,26 @@ export function RosterManagementTab() {
                     <span className="text-sm text-sp-muted">{student.phone || '-'}</span>
                   )}
 
-                  {/* 학부모 연락처 */}
+                  {/* 보호자1 관계 라벨 */}
+                  {isEditing && !isVacant ? (
+                    <select
+                      className="rounded bg-sp-bg border border-sp-border px-1 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                      defaultValue={student.parentPhoneLabel ?? ''}
+                      onChange={(e) => {
+                        void updateStudentField(student.id, 'parentPhoneLabel', e.target.value);
+                      }}
+                    >
+                      <option value="">선택</option>
+                      <option value="아버지">아버지</option>
+                      <option value="어머니">어머니</option>
+                      <option value="조부모">조부모</option>
+                      <option value="기타">기타</option>
+                    </select>
+                  ) : (
+                    <span className="text-xs text-sp-muted">{student.parentPhoneLabel || '-'}</span>
+                  )}
+
+                  {/* 보호자1 연락처 */}
                   {isEditing && !isVacant ? (
                     <input
                       type="tel"
@@ -319,6 +353,76 @@ export function RosterManagementTab() {
                     />
                   ) : (
                     <span className="text-sm text-sp-muted">{student.parentPhone || '-'}</span>
+                  )}
+
+                  {/* 보호자2 관계 라벨 */}
+                  {isEditing && !isVacant ? (
+                    hasParent2 ? (
+                      <select
+                        className="rounded bg-sp-bg border border-sp-border px-1 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                        defaultValue={student.parentPhone2Label ?? ''}
+                        onChange={(e) => {
+                          void updateStudentField(student.id, 'parentPhone2Label', e.target.value);
+                        }}
+                      >
+                        <option value="">선택</option>
+                        <option value="아버지">아버지</option>
+                        <option value="어머니">어머니</option>
+                        <option value="조부모">조부모</option>
+                        <option value="기타">기타</option>
+                      </select>
+                    ) : (
+                      <span className="text-xs text-sp-muted">-</span>
+                    )
+                  ) : (
+                    <span className="text-xs text-sp-muted">{student.parentPhone2Label || '-'}</span>
+                  )}
+
+                  {/* 보호자2 연락처 */}
+                  {isEditing && !isVacant ? (
+                    hasParent2 ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="tel"
+                          className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none flex-1 min-w-0"
+                          defaultValue={student.parentPhone2 ?? ''}
+                          placeholder="010-0000-0000"
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (val !== (student.parentPhone2 ?? '')) {
+                              void updateStudentField(student.id, 'parentPhone2', val);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            void updateStudentField(student.id, 'parentPhone2', '');
+                            void updateStudentField(student.id, 'parentPhone2Label', '');
+                            setShowParent2((prev) => {
+                              const next = new Set(prev);
+                              next.delete(student.id);
+                              return next;
+                            });
+                          }}
+                          className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="보호자2 삭제"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowParent2((prev) => new Set([...prev, student.id]))}
+                        className="text-xs text-sp-accent hover:text-blue-400 transition-colors"
+                      >
+                        + 추가
+                      </button>
+                    )
+                  ) : (
+                    <span className="text-sm text-sp-muted">{student.parentPhone2 || '-'}</span>
                   )}
 
                   {/* 결번 토글 */}
@@ -383,6 +487,7 @@ export function RosterManagementTab() {
                       studentNumber: p.studentNumber,
                       phone: p.phone,
                       parentPhone: p.parentPhone,
+                      parentPhone2: p.parentPhone2 ?? '',
                       isVacant: p.isVacant,
                     }));
                     await updateStudents(newStudents);
@@ -403,7 +508,8 @@ export function RosterManagementTab() {
                     <th className="py-1.5 text-left w-16">번호</th>
                     <th className="py-1.5 text-left">이름</th>
                     <th className="py-1.5 text-left">연락처</th>
-                    <th className="py-1.5 text-left">학부모</th>
+                    <th className="py-1.5 text-left">보호자1</th>
+                    <th className="py-1.5 text-left">보호자2</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -413,6 +519,7 @@ export function RosterManagementTab() {
                       <td className="py-1.5 text-sp-text">{s.isVacant ? <span className="text-red-400 italic">결번</span> : s.name}</td>
                       <td className="py-1.5 text-sp-muted">{s.phone || '-'}</td>
                       <td className="py-1.5 text-sp-muted">{s.parentPhone || '-'}</td>
+                      <td className="py-1.5 text-sp-muted">{s.parentPhone2 || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -332,14 +332,17 @@ export async function exportRosterToExcel(students: readonly Student[]): Promise
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('명렬표');
 
-  const headerRow = ws.addRow(['번호', '이름', '학생 연락처', '학부모 연락처', '비고']);
+  const headerRow = ws.addRow(['번호', '이름', '학생 연락처', '보호자1 관계', '보호자1 연락처', '보호자2 관계', '보호자2 연락처', '비고']);
   headerRow.eachCell((cell) => applyHeaderStyle(cell));
 
   ws.getColumn(1).width = 8;
   ws.getColumn(2).width = 16;
   ws.getColumn(3).width = 18;
-  ws.getColumn(4).width = 18;
-  ws.getColumn(5).width = 10;
+  ws.getColumn(4).width = 12;
+  ws.getColumn(5).width = 18;
+  ws.getColumn(6).width = 12;
+  ws.getColumn(7).width = 18;
+  ws.getColumn(8).width = 10;
 
   const sorted = [...students].sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
@@ -352,7 +355,10 @@ export async function exportRosterToExcel(students: readonly Student[]): Promise
       numberStr,
       student.name,
       student.phone ?? '',
+      student.parentPhoneLabel ?? '',
       student.parentPhone ?? '',
+      student.parentPhone2Label ?? '',
+      student.parentPhone2 ?? '',
       remarks,
     ]);
     row.eachCell((cell) => applyCellStyle(cell, bgColor));
@@ -364,12 +370,12 @@ export async function exportRosterToExcel(students: readonly Student[]): Promise
 
 export async function parseRosterFromExcel(
   buffer: ArrayBuffer,
-): Promise<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; isVacant: boolean }>> {
+): Promise<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhone2?: string; isVacant: boolean }>> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
   const ws = workbook.worksheets[0];
-  const result: Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; isVacant: boolean }> = [];
+  const result: Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhone2?: string; isVacant: boolean }> = [];
 
   if (!ws) return result;
 
@@ -377,8 +383,9 @@ export async function parseRosterFromExcel(
   let numCol = 1;
   let nameCol = 2;
   let phoneCol = 3;
-  let parentPhoneCol = 4;
-  let remarksCol = 5;
+  let parentPhoneCol = 5; // 보호자1 연락처 (새 형식: 4=관계, 5=연락처)
+  let parentPhone2Col = -1; // 보호자2 연락처
+  let remarksCol = 8;
 
   const headerRow = ws.getRow(1);
   if (headerRow) {
@@ -387,7 +394,8 @@ export async function parseRosterFromExcel(
       if (/^(번호|No|no|#|학번)$/i.test(val)) numCol = colNumber;
       else if (/^(이름|성명|학생명|name)$/i.test(val)) nameCol = colNumber;
       else if (/^(전화|연락처|학생연락처|학생전화|phone)$/i.test(val)) phoneCol = colNumber;
-      else if (/^(학부모|보호자|학부모연락처|보호자연락처|parentPhone)$/i.test(val)) parentPhoneCol = colNumber;
+      else if (/^(학부모|보호자|학부모연락처|보호자연락처|보호자1연락처|parentPhone)$/i.test(val)) parentPhoneCol = colNumber;
+      else if (/^(보호자2|보호자2연락처|parentPhone2)$/i.test(val)) parentPhone2Col = colNumber;
       else if (/^(비고|remarks|메모|결번)$/i.test(val)) remarksCol = colNumber;
     });
   }
@@ -409,10 +417,11 @@ export async function parseRosterFromExcel(
 
     const phone = String(row.getCell(phoneCol).value ?? '').trim();
     const parentPhone = String(row.getCell(parentPhoneCol).value ?? '').trim();
+    const parentPhone2 = parentPhone2Col > 0 ? String(row.getCell(parentPhone2Col).value ?? '').trim() : '';
     const remarks = String(row.getCell(remarksCol).value ?? '').trim();
     const isVacant = remarks.includes('결번');
 
-    result.push({ name, studentNumber, phone, parentPhone, isVacant });
+    result.push({ name, studentNumber, phone, parentPhone, ...(parentPhone2 ? { parentPhone2 } : {}), isVacant });
   });
 
   return result;

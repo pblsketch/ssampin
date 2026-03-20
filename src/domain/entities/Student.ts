@@ -5,8 +5,14 @@ export interface Student {
   readonly studentNumber?: number;
   /** 학생 연락처 */
   readonly phone?: string;
-  /** 학부모 연락처 */
+  /** 보호자1 연락처 */
   readonly parentPhone?: string;
+  /** 보호자1 라벨 (예: "아버지", "어머니", "조부모") */
+  readonly parentPhoneLabel?: string;
+  /** 보호자2 연락처 */
+  readonly parentPhone2?: string;
+  /** 보호자2 라벨 */
+  readonly parentPhone2Label?: string;
   /** 결번 여부 (전학 등으로 빠진 번호) */
   readonly isVacant?: boolean;
 }
