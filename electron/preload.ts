@@ -36,7 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('export:openFile', filePath),
   importAlarmAudio: (): Promise<{ name: string; dataUrl: string } | null> =>
     ipcRenderer.invoke('audio:importAlarm'),
-  importShareFile: (): Promise<string | null> =>
+  importShareFile: (): Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null> =>
     ipcRenderer.invoke('share:import'),
   onFileOpened: (callback: (filePath: string) => void): (() => void) => {
     const handler = (_event: unknown, filePath: string) => callback(filePath);

@@ -49,6 +49,8 @@ export default defineConfig(({ mode }) => {
         dir: 'ltr',
       },
       workbox: {
+        navigateFallback: 'mobile.html',
+        navigateFallbackAllowlist: [/^\/$/],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {

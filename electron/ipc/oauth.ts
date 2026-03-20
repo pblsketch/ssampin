@@ -36,11 +36,17 @@ async function canBindLocalhost(): Promise<boolean> {
   });
 }
 
+/** 현재 활성 메인 윈도우를 안전하게 조회 (트레이에서 재생성된 경우 대응) */
+function getMainWindow(): BrowserWindow | null {
+  const wins = BrowserWindow.getAllWindows();
+  return wins.find((w) => !w.isDestroyed()) ?? null;
+}
+
 /**
  * OAuth IPC 핸들러 등록
- * @param mainWindow 렌더러에 이벤트를 전달할 메인 윈도우
+ * @param _mainWindow 미사용 — 호환성 유지용. 내부에서 getMainWindow()로 동적 조회
  */
-export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
+export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
   /**
    * oauth:start — OAuth 인증 시작
    * 1) 로컬 HTTP 서버 시작 (임의 포트)
@@ -54,7 +60,7 @@ export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
     // 로컬 서버 바인딩 가능 여부 사전 확인
     const canBind = await canBindLocalhost();
     if (!canBind) {
-      mainWindow.webContents.send('oauth:error', {
+      getMainWindow()?.webContents.send('oauth:error', {
         code: 'LOCALHOST_BLOCKED',
         message: '보안 프로그램이 로컬 연결을 차단하고 있습니다.',
       });
@@ -118,7 +124,7 @@ export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
       server.on('error', (err) => {
         oauthServer = null;
         // 렌더러에 에러 전달 → UI에서 안내 표시
-        mainWindow.webContents.send('oauth:error', {
+        getMainWindow()?.webContents.send('oauth:error', {
           code: 'SERVER_START_FAILED',
           message: err.message,
         });
@@ -147,7 +153,7 @@ export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
         shell.openExternal(finalUrl);
 
         // 렌더러에 redirect_uri 전달 (토큰 교환 시 필요)
-        mainWindow.webContents.send('oauth:redirect-uri', redirectUri);
+        getMainWindow()?.webContents.send('oauth:redirect-uri', redirectUri);
       });
 
       // 10분 타임아웃 (학교 Google Workspace 계정의 추가 인증 단계 고려)
@@ -155,7 +161,7 @@ export function registerOAuthHandlers(mainWindow: BrowserWindow): void {
         if (oauthServer) {
           oauthServer.close();
           oauthServer = null;
-          mainWindow.webContents.send('oauth:error', {
+          getMainWindow()?.webContents.send('oauth:error', {
             code: 'TIMEOUT',
             message: '인증 시간이 초과되었습니다.',
           });

@@ -26,6 +26,7 @@ function getMobileDeviceId(): string {
 
 // 순환 의존 방지: 런타임에 동적으로 import
 async function reloadAllStores(): Promise<void> {
+  try {
   const [
     { useMobileSettingsStore },
     { useMobileScheduleStore },
@@ -65,6 +66,14 @@ async function reloadAllStores(): Promise<void> {
     useMobileStudentRecordsStore.getState().reload(),
     useMobileProgressStore.getState().reload(),
   ]);
+  } catch (e) {
+    // 배포 후 이전 SW 캐시가 stale 청크를 참조하는 경우 새로고침으로 복구
+    if (e instanceof Error && e.message.includes('Failed to fetch dynamically imported module')) {
+      window.location.reload();
+      return;
+    }
+    throw e;
+  }
 }
 
 type SyncState = 'idle' | 'syncing' | 'error' | 'conflict';
