@@ -32,7 +32,7 @@ export default function MigrationBanner() {
           <span className="font-semibold">쌤핀 도메인이 변경되었습니다</span>
           <span className="hidden text-blue-200 md:inline">—</span>
           <span className="text-blue-100 leading-snug">
-            모바일 앱(m.ssampin.com)을 홈 화면에 추가하신 분은 기존 아이콘을 삭제하고{' '}
+            모바일 앱(m.ssampin.com)을 v0.5.0에서 홈 화면에 추가하신 분은 기존 아이콘을 삭제하고{' '}
             <a
               href="https://m.ssampin.com"
               target="_blank"
