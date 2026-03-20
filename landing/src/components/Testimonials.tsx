@@ -12,7 +12,7 @@ const testimonials = [
   },
   {
     name: '최 선생님',
-    role: '고등학교 담임 2년차',
+    role: '초등학교 담임 2년차',
     initial: '최',
     color: 'bg-green-500/20 text-green-400',
     quote:
