@@ -21,7 +21,7 @@ const testimonials = [
   },
   {
     name: '이 선생님',
-    role: '중학교 교과교사 8년차',
+    role: '중학교 국어교사 8년차',
     initial: '이',
     color: 'bg-purple-500/20 text-purple-400',
     quote:
