@@ -92,7 +92,7 @@ export interface AnalyticsEventProperties {
   consultation_create: { type: string };
   consultation_update: { action: 'edit' | 'delete' | 'status_change' };
   bookmark_add: { url: string };
-  bookmark_click: { url: string };
+  bookmark_click: { url: string; type?: string };
   feedback_submit: Record<string, never>;
   settings_change: { section: string; key: string };
   timetable_neis_sync: { success: boolean };

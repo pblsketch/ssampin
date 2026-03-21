@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import type { Bookmark, BookmarkGroup, BookmarkIconType } from '@domain/entities/Bookmark';
-import { validateBookmarkUrl } from '@domain/rules/bookmarkRules';
+import type { Bookmark, BookmarkGroup, BookmarkIconType, BookmarkType } from '@domain/entities/Bookmark';
+import { validateBookmarkUrl, validateFolderPath } from '@domain/rules/bookmarkRules';
 
 interface BookmarkFormModalProps {
   bookmark: Bookmark | null;
@@ -8,6 +8,7 @@ interface BookmarkFormModalProps {
   onSave: (data: {
     name: string;
     url: string;
+    type: BookmarkType;
     iconType: BookmarkIconType;
     iconValue: string;
     groupId: string;
@@ -20,6 +21,7 @@ const EMOJI_CHOICES = [
   '🔬', '🎨', '🎵', '⚽', '🌍', '💻', '📊', '🔗',
   '🤖', '🔔', '📌', '🖼️', '📺', '📱', '🏛️', '💰',
   '✨', '🎯', '🛠️', '📋',
+  '📁', '📂', '🗂️', '💾',
 ];
 
 export function BookmarkFormModal({
@@ -31,6 +33,7 @@ export function BookmarkFormModal({
   const isEdit = bookmark !== null;
   const [name, setName] = useState(bookmark?.name ?? '');
   const [url, setUrl] = useState(bookmark?.url ?? '');
+  const [bookmarkType, setBookmarkType] = useState<BookmarkType>(bookmark?.type ?? 'url');
   const [iconType, setIconType] = useState<BookmarkIconType>(bookmark?.iconType ?? 'emoji');
   const [iconValue, setIconValue] = useState(bookmark?.iconValue ?? '🌐');
   const [groupId, setGroupId] = useState(bookmark?.groupId ?? groups[0]?.id ?? '');
@@ -38,13 +41,44 @@ export function BookmarkFormModal({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [faviconLoading, setFaviconLoading] = useState(false);
 
+  const canSelectFolder = !!window.electronAPI?.showOpenDialog;
+
   useEffect(() => {
-    if (url && !validateBookmarkUrl(url)) {
-      setUrlError('http:// 또는 https://로 시작하는 URL을 입력해주세요');
+    if (!url) { setUrlError(''); return; }
+
+    if (bookmarkType === 'folder') {
+      if (!validateFolderPath(url)) {
+        setUrlError('올바른 폴더 경로를 선택해주세요');
+      } else {
+        setUrlError('');
+      }
     } else {
-      setUrlError('');
+      if (!validateBookmarkUrl(url)) {
+        setUrlError('http:// 또는 https://로 시작하는 URL을 입력해주세요');
+      } else {
+        setUrlError('');
+      }
     }
-  }, [url]);
+  }, [url, bookmarkType]);
+
+  const handleSelectFolder = async () => {
+    if (!window.electronAPI?.showOpenDialog) return;
+
+    const result = await window.electronAPI.showOpenDialog({
+      properties: ['openDirectory'],
+      title: '즐겨찾기에 추가할 폴더 선택',
+    });
+
+    if (!result.canceled && result.filePaths[0]) {
+      const folderPath = result.filePaths[0];
+      setUrl(folderPath);
+
+      if (!name.trim()) {
+        const folderName = folderPath.split('\\').pop() ?? folderPath.split('/').pop() ?? '';
+        setName(folderName);
+      }
+    }
+  };
 
   const handleFetchFavicon = async () => {
     if (!validateBookmarkUrl(url)) return;
@@ -70,17 +104,24 @@ export function BookmarkFormModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !url.trim() || !validateBookmarkUrl(url) || !groupId) return;
+    const isValid = bookmarkType === 'folder'
+      ? validateFolderPath(url)
+      : validateBookmarkUrl(url);
+    if (!name.trim() || !url.trim() || !isValid || !groupId) return;
     onSave({
       name: name.trim(),
       url: url.trim(),
+      type: bookmarkType,
       iconType,
       iconValue,
       groupId,
     });
   };
 
-  const canSubmit = name.trim() && url.trim() && validateBookmarkUrl(url) && groupId;
+  const isUrlValid = bookmarkType === 'folder'
+    ? validateFolderPath(url)
+    : validateBookmarkUrl(url);
+  const canSubmit = name.trim() && url.trim() && isUrlValid && groupId;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -90,6 +131,36 @@ export function BookmarkFormModal({
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* 타입 선택 탭 (Electron에서만 표시) */}
+          {canSelectFolder && (
+            <div className="flex gap-1 bg-sp-bg rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => { setBookmarkType('url'); setUrl(''); setUrlError(''); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-md transition-colors ${
+                  bookmarkType === 'url'
+                    ? 'bg-sp-card text-sp-text shadow-sm'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">language</span>
+                웹 URL
+              </button>
+              <button
+                type="button"
+                onClick={() => { setBookmarkType('folder'); setUrl(''); setUrlError(''); setIconValue('📁'); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-md transition-colors ${
+                  bookmarkType === 'folder'
+                    ? 'bg-sp-card text-sp-text shadow-sm'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">folder</span>
+                PC 폴더
+              </button>
+            </div>
+          )}
+
           {/* 이름 */}
           <div>
             <label className="block text-sm text-sp-muted mb-1">이름 *</label>
@@ -97,24 +168,47 @@ export function BookmarkFormModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="사이트 이름"
+              placeholder={bookmarkType === 'folder' ? '폴더 이름' : '사이트 이름'}
               className="w-full bg-sp-card border border-sp-border rounded-lg px-3 py-2 text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none"
               autoFocus
             />
           </div>
 
-          {/* URL */}
+          {/* URL / 폴더 경로 */}
           <div>
-            <label className="block text-sm text-sp-muted mb-1">URL *</label>
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com"
-              className={`w-full bg-sp-card border rounded-lg px-3 py-2 text-sp-text placeholder-sp-muted/50 focus:outline-none ${
-                urlError ? 'border-red-500' : 'border-sp-border focus:border-sp-accent'
-              }`}
-            />
+            <label className="block text-sm text-sp-muted mb-1">
+              {bookmarkType === 'folder' ? '폴더 경로 *' : 'URL *'}
+            </label>
+            {bookmarkType === 'folder' ? (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={url}
+                  readOnly
+                  placeholder="폴더를 선택해주세요"
+                  className={`flex-1 bg-sp-card border rounded-lg px-3 py-2 text-sp-text placeholder-sp-muted/50 focus:outline-none cursor-default ${
+                    urlError ? 'border-red-500' : 'border-sp-border'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSelectFolder()}
+                  className="px-3 py-2 bg-sp-accent text-white text-xs rounded-lg hover:bg-blue-600 shrink-0 transition-colors"
+                >
+                  폴더 선택
+                </button>
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com"
+                className={`w-full bg-sp-card border rounded-lg px-3 py-2 text-sp-text placeholder-sp-muted/50 focus:outline-none ${
+                  urlError ? 'border-red-500' : 'border-sp-border focus:border-sp-accent'
+                }`}
+              />
+            )}
             {urlError && (
               <p className="text-xs text-red-400 mt-1">{urlError}</p>
             )}
@@ -141,7 +235,7 @@ export function BookmarkFormModal({
                 이모지 선택
               </button>
 
-              {validateBookmarkUrl(url) && (
+              {bookmarkType === 'url' && validateBookmarkUrl(url) && (
                 <button
                   type="button"
                   onClick={() => void handleFetchFavicon()}

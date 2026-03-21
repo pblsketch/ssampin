@@ -1,4 +1,4 @@
-import type { Bookmark, BookmarkGroup, BookmarkData } from '../entities/Bookmark';
+import type { Bookmark, BookmarkGroup, BookmarkData, BookmarkType } from '../entities/Bookmark';
 
 /**
  * URL이 유효한 http/https 프로토콜인지 검증
@@ -10,6 +10,21 @@ export function validateBookmarkUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Windows 폴더 경로 검증
+ * C:\Users\..., \\server\share\... 형태의 절대 경로인지 확인
+ */
+export function validateFolderPath(path: string): boolean {
+  return /^[A-Za-z]:\\/.test(path) || /^\\\\/.test(path);
+}
+
+/**
+ * 타입에 따른 통합 검증
+ */
+export function validateBookmark(url: string, type: BookmarkType = 'url'): boolean {
+  return type === 'folder' ? validateFolderPath(url) : validateBookmarkUrl(url);
 }
 
 /**

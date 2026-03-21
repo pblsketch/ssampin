@@ -1,9 +1,11 @@
 export type BookmarkIconType = 'emoji' | 'favicon';
+export type BookmarkType = 'url' | 'folder';
 
 export interface Bookmark {
   readonly id: string;
   readonly name: string;
   readonly url: string;
+  readonly type?: BookmarkType;    // 기본값 'url' (하위호환)
   readonly iconType: BookmarkIconType;
   readonly iconValue: string;     // 이모지 문자 또는 파비콘 URL
   readonly groupId: string;

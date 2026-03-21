@@ -54,8 +54,19 @@ export function BookmarkCard({
   const handleClick = () => {
     if (editMode) {
       onEdit(bookmark);
+      return;
+    }
+
+    const type = bookmark.type ?? 'url';
+    track('bookmark_click', { url: bookmark.url, type });
+
+    if (type === 'folder') {
+      if (window.electronAPI?.openPath) {
+        void window.electronAPI.openPath(bookmark.url);
+      } else {
+        alert('PC 폴더는 데스크톱 앱에서만 열 수 있어요.');
+      }
     } else {
-      track('bookmark_click', { url: bookmark.url });
       openExternal(bookmark.url);
     }
   };
@@ -126,12 +137,12 @@ export function BookmarkCard({
           )}
         </div>
 
-        {/* 이름 + 외부 링크 아이콘 */}
+        {/* 이름 + 외부 링크/폴더 아이콘 */}
         <h4 className="text-sm font-semibold text-white group-hover:text-sp-accent transition-colors flex items-center gap-1 truncate">
           {bookmark.name}
           {!editMode && (
             <span className="material-symbols-outlined text-[14px] text-sp-muted">
-              open_in_new
+              {bookmark.type === 'folder' ? 'folder_open' : 'open_in_new'}
             </span>
           )}
         </h4>
@@ -155,7 +166,7 @@ export function BookmarkCard({
             className="w-full px-4 py-2 text-left text-sm text-sp-text hover:bg-sp-card flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-[16px]">content_copy</span>
-            URL 복사
+            {bookmark.type === 'folder' ? '경로 복사' : 'URL 복사'}
           </button>
           <button
             onClick={() => { onDelete(bookmark.id); setShowMenu(false); }}

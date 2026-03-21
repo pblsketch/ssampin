@@ -132,6 +132,9 @@ const DEFAULT_SETTINGS: Settings = {
     lastSyncedAt: null,
     deviceId: '',  // 런타임에 crypto.randomUUID()로 초기화
   },
+  wallpaper: {
+    autoStart: false,
+  },
 };
 
 interface SettingsState {

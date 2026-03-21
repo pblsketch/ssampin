@@ -118,7 +118,7 @@ export function BookmarkSection() {
   );
 
   const handleBookmarkSave = async (
-    data: { name: string; url: string; iconType: 'emoji' | 'favicon'; iconValue: string; groupId: string },
+    data: { name: string; url: string; type: 'url' | 'folder'; iconType: 'emoji' | 'favicon'; iconValue: string; groupId: string },
   ) => {
     if (editingBookmark) {
       await updateBookmark(editingBookmark.id, data);

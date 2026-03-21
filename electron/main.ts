@@ -8,6 +8,7 @@ import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
 import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
 import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
+import { registerWallpaperServerHandlers, stopWallpaperServer } from './ipc/wallpaperServer';
 
 declare const __dirname: string;
 
@@ -794,6 +795,21 @@ function registerIpcHandlers(): void {
     shell.openExternal(url);
   });
 
+  // shell:openPath — 탐색기에서 폴더 열기
+  ipcMain.handle('shell:openPath', async (_event, folderPath: string): Promise<string> => {
+    return shell.openPath(folderPath);
+  });
+
+  // dialog:showOpen — 폴더/파일 선택 다이얼로그
+  ipcMain.handle('dialog:showOpen', async (
+    _event,
+    options: { title?: string; properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>; filters?: { name: string; extensions: string[] }[] },
+  ): Promise<{ canceled: boolean; filePaths: string[] }> => {
+    const win = mainWindow ?? BrowserWindow.getFocusedWindow();
+    if (!win) throw new Error('No window available');
+    return dialog.showOpenDialog(win, options);
+  });
+
   // audio:importAlarm — 알람음 파일 가져오기
   ipcMain.handle(
     'audio:importAlarm',
@@ -935,6 +951,7 @@ if (!gotTheLock) {
     registerLiveVoteHandlers(mainWindow!);
     registerLiveSurveyHandlers(mainWindow!);
     registerLiveWordCloudHandlers(mainWindow!);
+    registerWallpaperServerHandlers();
     createTray();
     setupAutoUpdater();
 
@@ -980,6 +997,7 @@ if (!gotTheLock) {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  stopWallpaperServer();
   // Analytics flush 신호 전송
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('analytics:flush');

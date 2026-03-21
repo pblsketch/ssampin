@@ -139,6 +139,10 @@ export interface SyncSettings {
   readonly deviceId: string;
 }
 
+export interface WallpaperSettings {
+  readonly autoStart: boolean;
+}
+
 export interface Settings {
   readonly schoolName: string;
   readonly className: string;
@@ -184,4 +188,6 @@ export interface Settings {
   readonly showChatbot?: boolean;
   /** 온보딩에서 선택한 교사 역할 (복수) */
   readonly teacherRoles?: readonly ('homeroom' | 'subject' | 'admin')[];
+  /** Lively Wallpaper 바탕화면 모드 설정 */
+  readonly wallpaper?: WallpaperSettings;
 }

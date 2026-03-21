@@ -29,6 +29,12 @@ interface ElectronAPI {
   importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
   onFileOpened: (callback: (filePath: string) => void) => () => void;
   openExternal: (url: string) => Promise<void>;
+  openPath: (folderPath: string) => Promise<string>;
+  showOpenDialog: (options: {
+    title?: string;
+    properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>;
+    filters?: { name: string; extensions: string[] }[];
+  }) => Promise<{ canceled: boolean; filePaths: string[] }>;
   fetchCalendarUrl: (url: string) => Promise<string | null>;
   // Auto-update
   checkForUpdate: () => Promise<void>;
@@ -91,6 +97,10 @@ interface ElectronAPI {
   wordcloudTunnelAvailable: () => Promise<boolean>;
   wordcloudTunnelInstall: () => Promise<void>;
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  // Lively Wallpaper 바탕화면 모드
+  wallpaperStart: () => Promise<{ port: number; url: string }>;
+  wallpaperStop: () => Promise<void>;
+  wallpaperStatus: () => Promise<{ running: boolean; port: number | null; url: string | null }>;
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number) => Promise<void>;
   // Analytics

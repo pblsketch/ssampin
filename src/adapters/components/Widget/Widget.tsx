@@ -27,7 +27,13 @@ interface ContextMenuState {
 
 const LAYOUT_CYCLE: WidgetLayoutMode[] = ['full', 'split-h', 'split-v', 'quad'];
 
+/** Lively Wallpaper 바탕화면 모드인지 감지 */
+function isWallpaperMode(): boolean {
+  return new URLSearchParams(window.location.search).get('wallpaper') === 'true';
+}
+
 export function Widget() {
+  const wallpaperMode = useMemo(() => isWallpaperMode(), []);
   const { track } = useAnalytics();
   const clock = useClock();
   const { load: loadSchedule } = useScheduleStore();
@@ -186,8 +192,8 @@ export function Widget() {
         {/* ── 헤더 (드래그 영역) ── */}
         <div
           className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-          onDoubleClick={handleHeaderDoubleClick}
+          style={wallpaperMode ? undefined : { WebkitAppRegion: 'drag' } as React.CSSProperties}
+          onDoubleClick={wallpaperMode ? undefined : handleHeaderDoubleClick}
         >
           {/* 날짜 + 시간 */}
           <div className="flex items-baseline justify-center gap-3 mb-1">
@@ -248,16 +254,18 @@ export function Widget() {
               </span>
             </button>
 
-            {/* 전체 화면 전환 버튼 */}
-            <button
-              className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
-              onClick={() => { track('widget_close'); window.electronAPI?.toggleWidget(); }}
-              title="전체 화면으로 전환"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                open_in_full
-              </span>
-            </button>
+            {/* 전체 화면 전환 버튼 (바탕화면 모드에서는 숨김) */}
+            {!wallpaperMode && (
+              <button
+                className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
+                onClick={() => { track('widget_close'); window.electronAPI?.toggleWidget(); }}
+                title="전체 화면으로 전환"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                  open_in_full
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -331,8 +339,8 @@ export function Widget() {
           )}
         </div>
 
-        {/* ── 리사이즈 핸들 (JS 기반, thickFrame: false 대응) ── */}
-        {['top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right'].map((edge) => (
+        {/* ── 리사이즈 핸들 (JS 기반, thickFrame: false 대응) — 바탕화면 모드에서는 숨김 ── */}
+        {!wallpaperMode && ['top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right'].map((edge) => (
           <div
             key={edge}
             className="absolute"

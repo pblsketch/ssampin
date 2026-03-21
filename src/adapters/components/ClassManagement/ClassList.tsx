@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getSubjectDotColor } from '@adapters/presenters/timetablePresenter';
@@ -20,6 +20,20 @@ export function ClassList({ onAddClass }: ClassListProps) {
   const [editName, setEditName] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpenId]);
 
   const handleSelect = useCallback((id: string) => {
     selectClass(id);
@@ -114,7 +128,7 @@ export function ClassList({ onAddClass }: ClassListProps) {
             <div key={cls.id} className="relative group">
               <button
                 onClick={() => handleSelect(cls.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
+                className={`w-full flex items-center gap-3 px-3 pr-10 py-2.5 rounded-xl transition-all text-left ${
                   isSelected
                     ? 'bg-sp-accent/10 border-l-2 border-sp-accent'
                     : 'hover:bg-white/5 border-l-2 border-transparent'
@@ -138,14 +152,18 @@ export function ClassList({ onAddClass }: ClassListProps) {
                   e.stopPropagation();
                   setMenuOpenId(menuOpenId === cls.id ? null : cls.id);
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-white/10"
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors ${
+                  isSelected || menuOpenId === cls.id
+                    ? 'opacity-100 hover:bg-white/10'
+                    : 'opacity-40 hover:opacity-100 hover:bg-white/10'
+                }`}
               >
                 <span className="material-symbols-outlined text-sp-muted text-base">more_vert</span>
               </button>
 
               {/* 컨텍스트 메뉴 */}
               {menuOpenId === cls.id && (
-                <div className="absolute right-2 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg py-1 min-w-[100px]">
+                <div ref={menuRef} className="absolute right-2 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg py-1 min-w-[100px]">
                   <button
                     onClick={() => startEdit(cls.id)}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sp-text hover:bg-white/5 transition-colors"

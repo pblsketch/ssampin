@@ -45,6 +45,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
+  openPath: (folderPath: string): Promise<string> =>
+    ipcRenderer.invoke('shell:openPath', folderPath),
+  showOpenDialog: (options: {
+    title?: string;
+    properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>;
+    filters?: { name: string; extensions: string[] }[];
+  }): Promise<{ canceled: boolean; filePaths: string[] }> =>
+    ipcRenderer.invoke('dialog:showOpen', options),
   fetchCalendarUrl: (url: string): Promise<string | null> =>
     ipcRenderer.invoke('calendar:fetch-url', url),
   // Auto-update
@@ -196,6 +204,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('live-wordcloud:tunnel-install'),
   wordcloudTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('live-wordcloud:tunnel-start'),
+  // Lively Wallpaper 바탕화면 모드
+  wallpaperStart: (): Promise<{ port: number; url: string }> =>
+    ipcRenderer.invoke('wallpaper:start'),
+  wallpaperStop: (): Promise<void> =>
+    ipcRenderer.invoke('wallpaper:stop'),
+  wallpaperStatus: (): Promise<{ running: boolean; port: number | null; url: string | null }> =>
+    ipcRenderer.invoke('wallpaper:status'),
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number): Promise<void> =>
     ipcRenderer.invoke('window:resizeWidget', edge, dx, dy),
