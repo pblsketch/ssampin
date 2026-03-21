@@ -1,5 +1,5 @@
-export type { DayOfWeek } from './DayOfWeek';
-export { DAYS_OF_WEEK } from './DayOfWeek';
+export type { DayOfWeek, DayOfWeekFull } from './DayOfWeek';
+export { DAYS_OF_WEEK, DAYS_OF_WEEK_FULL, isWeekend, getDayOfWeekFull } from './DayOfWeek';
 
 export type { PeriodTime } from './PeriodTime';
 

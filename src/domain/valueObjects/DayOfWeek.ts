@@ -7,3 +7,21 @@ export const DAYS_OF_WEEK: readonly DayOfWeek[] = [
   '목',
   '금',
 ] as const;
+
+/** 주말 포함 요일 타입 (일정/캘린더/대시보드용) */
+export type DayOfWeekFull = '월' | '화' | '수' | '목' | '금' | '토' | '일';
+
+export const DAYS_OF_WEEK_FULL: readonly DayOfWeekFull[] = [
+  '월', '화', '수', '목', '금', '토', '일',
+] as const;
+
+/** 주말인지 확인 */
+export function isWeekend(day: DayOfWeekFull): boolean {
+  return day === '토' || day === '일';
+}
+
+/** Date 객체에서 DayOfWeekFull 추출 */
+export function getDayOfWeekFull(date: Date): DayOfWeekFull {
+  const days: DayOfWeekFull[] = ['일', '월', '화', '수', '목', '금', '토'];
+  return days[date.getDay()]!;
+}

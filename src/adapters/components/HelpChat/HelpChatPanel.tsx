@@ -2,22 +2,27 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useHelpChat } from './useHelpChat';
 import { HelpChatWindow } from './HelpChatWindow';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 
 /** 플로팅 AI 도움말 패널 — 앱 어디서나 접근 가능 */
 export function HelpChatPanel() {
   const { track } = useAnalytics();
+  const showChatbot = useSettingsStore((s) => s.settings.showChatbot ?? true);
   const [isOpen, setIsOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const chat = useHelpChat();
   const inputElRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // 3초 후 알림 뱃지 표시
+  // 최초 1회만 뱃지 표시 (한 번이라도 열었으면 다시 표시하지 않음)
   useEffect(() => {
+    const hasOpened = localStorage.getItem('ssampin-chat-opened');
+    if (hasOpened) return;
+
     const timer = setTimeout(() => {
       if (!isOpen) setHasNewMessage(true);
     }, 5000);
     return () => clearTimeout(timer);
-  }, [isOpen]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 외부에서 채팅 열기 지원 (FeedbackModal 등)
   useEffect(() => {
@@ -36,6 +41,7 @@ export function HelpChatPanel() {
     track('chatbot_open');
     setIsOpen(true);
     setHasNewMessage(false);
+    localStorage.setItem('ssampin-chat-opened', 'true');
   };
 
   const handleClose = () => {
@@ -86,6 +92,9 @@ export function HelpChatPanel() {
     // 피드백 상태는 ChatFeedback 컴포넌트 내에서 escalated 상태로 관리됨
     void msg; // unused but kept for clarity
   }, [chat, track]);
+
+  // 설정에서 챗봇을 숨긴 경우 렌더링하지 않음 (단축키로는 접근 가능)
+  if (!showChatbot && !isOpen) return null;
 
   return (
     <>

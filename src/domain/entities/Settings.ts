@@ -180,6 +180,8 @@ export interface Settings {
   readonly sync?: SyncSettings;
   /** 행사 알림 팝업 활성화 여부 (기본: true) */
   readonly eventAlertEnabled?: boolean;
+  /** AI 도우미 챗봇 표시 여부 (기본: true) */
+  readonly showChatbot?: boolean;
   /** 온보딩에서 선택한 교사 역할 (복수) */
   readonly teacherRoles?: readonly ('homeroom' | 'subject' | 'admin')[];
 }

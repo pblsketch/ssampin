@@ -114,6 +114,7 @@ const DEFAULT_SETTINGS: Settings = {
   },
   seatingDefaultView: 'student',
   eventAlertEnabled: true,
+  showChatbot: true,
   analytics: {
     enabled: true,
   },

@@ -58,6 +58,16 @@ export function SystemTab({ draft, patch, setDraft }: Props) {
         </div>
         <div className="flex items-center justify-between pt-4">
           <div className="flex flex-col">
+            <span className="text-sm font-medium text-sp-text">AI 도우미</span>
+            <span className="text-xs text-sp-muted">화면 우하단의 AI 챗봇 버튼을 표시합니다</span>
+          </div>
+          <Toggle
+            checked={draft.showChatbot ?? true}
+            onChange={(v) => patch({ showChatbot: v })}
+          />
+        </div>
+        <div className="flex items-center justify-between pt-4">
+          <div className="flex flex-col">
             <span className="text-sm font-medium text-sp-text">앱 사용 통계 수집</span>
             <span className="text-xs text-sp-muted">앱 개선을 위해 익명 사용 통계를 수집합니다. 개인정보는 수집되지 않습니다.</span>
           </div>
