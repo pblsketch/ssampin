@@ -65,6 +65,11 @@ interface EventsState {
   updateCategory: (id: string, partial: Partial<Pick<CategoryItem, 'name' | 'color'>>) => Promise<void>;
   reorderCategories: (orderedIds: string[]) => Promise<void>;
 
+  // 일괄 삭제 액션
+  deleteManyEvents: (ids: string[]) => Promise<number>;
+  deleteEventsByCategory: (categoryId: string) => Promise<number>;
+  deleteEventsByDateRange: (startDate: string, endDate: string) => Promise<number>;
+
   // 공유 상태
   shareFile: EventsShareFile | null;
   showExportModal: boolean;
@@ -296,6 +301,56 @@ export const useEventsStore = create<EventsState>((set) => {
       if (eventToDelete) {
         deleteEventFromGoogle(eventToDelete);
       }
+    },
+
+    deleteManyEvents: async (ids) => {
+      const eventsToDelete = useEventsStore.getState().events.filter((e) => ids.includes(e.id));
+
+      const count = await manageEvents.deleteMany(ids);
+
+      const idSet = new Set(ids);
+      const remaining = useEventsStore.getState().events.filter((e) => !idSet.has(e.id));
+      set({ events: remaining });
+
+      for (const event of eventsToDelete) {
+        deleteEventFromGoogle(event);
+      }
+
+      return count;
+    },
+
+    deleteEventsByCategory: async (categoryId) => {
+      const eventsToDelete = useEventsStore.getState().events.filter((e) => e.category === categoryId);
+
+      const count = await manageEvents.deleteByCategory(categoryId);
+
+      const remaining = useEventsStore.getState().events.filter((e) => e.category !== categoryId);
+      set({ events: remaining });
+
+      for (const event of eventsToDelete) {
+        deleteEventFromGoogle(event);
+      }
+
+      return count;
+    },
+
+    deleteEventsByDateRange: async (startDate, endDate) => {
+      const eventsToDelete = useEventsStore.getState().events.filter(
+        (e) => e.date >= startDate && e.date <= endDate,
+      );
+
+      const count = await manageEvents.deleteByDateRange(startDate, endDate);
+
+      const remaining = useEventsStore.getState().events.filter(
+        (e) => e.date < startDate || e.date > endDate,
+      );
+      set({ events: remaining });
+
+      for (const event of eventsToDelete) {
+        deleteEventFromGoogle(event);
+      }
+
+      return count;
     },
 
     checkAlerts: async () => {

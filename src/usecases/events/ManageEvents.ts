@@ -59,6 +59,63 @@ export class ManageEvents {
     await this.eventsRepository.saveEvents(updatedData);
   }
 
+  /**
+   * 여러 일정을 한 번에 삭제
+   */
+  async deleteMany(ids: readonly string[]): Promise<number> {
+    const data = await this.eventsRepository.getEvents();
+    const events = data?.events ?? [];
+    const idSet = new Set(ids);
+
+    const updatedEvents = events.filter((e) => !idSet.has(e.id));
+    const deletedCount = events.length - updatedEvents.length;
+
+    await this.eventsRepository.saveEvents({
+      events: updatedEvents,
+      categories: data?.categories,
+    });
+
+    return deletedCount;
+  }
+
+  /**
+   * 특정 카테고리의 모든 일정 삭제
+   */
+  async deleteByCategory(categoryId: string): Promise<number> {
+    const data = await this.eventsRepository.getEvents();
+    const events = data?.events ?? [];
+
+    const updatedEvents = events.filter((e) => e.category !== categoryId);
+    const deletedCount = events.length - updatedEvents.length;
+
+    await this.eventsRepository.saveEvents({
+      events: updatedEvents,
+      categories: data?.categories,
+    });
+
+    return deletedCount;
+  }
+
+  /**
+   * 특정 기간의 모든 일정 삭제
+   */
+  async deleteByDateRange(startDate: string, endDate: string): Promise<number> {
+    const data = await this.eventsRepository.getEvents();
+    const events = data?.events ?? [];
+
+    const updatedEvents = events.filter((e) => {
+      return e.date < startDate || e.date > endDate;
+    });
+    const deletedCount = events.length - updatedEvents.length;
+
+    await this.eventsRepository.saveEvents({
+      events: updatedEvents,
+      categories: data?.categories,
+    });
+
+    return deletedCount;
+  }
+
   // ─── 카테고리 관리 ─────────────────────────────────
 
   async getCategories(): Promise<readonly CategoryItem[]> {

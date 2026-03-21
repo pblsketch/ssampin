@@ -20,6 +20,9 @@ interface EventListProps {
   hideTitle?: boolean;
   onEdit: (event: SchoolEvent) => void;
   onDelete: (id: string) => void;
+  isSelectMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
 function formatEventDate(dateStr: string, showYear?: boolean): string {
@@ -41,9 +44,12 @@ interface EventCardProps {
   showYear?: boolean;
   onEdit: (event: SchoolEvent) => void;
   onDelete: (id: string) => void;
+  isSelectMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-function EventCard({ event, categories, showYear, onEdit, onDelete }: EventCardProps) {
+function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode, isSelected, onToggleSelect }: EventCardProps) {
   const isExternal = event.id.startsWith('ext:');
   const isNeis = event.source === 'neis';
   const isNeisHoliday = isNeis && event.neis?.subtractDayType === '공휴일';
@@ -75,7 +81,7 @@ function EventCard({ event, categories, showYear, onEdit, onDelete }: EventCardP
       className={`rounded-2xl px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-colors shadow-lg group relative shrink-0 ${isToday
         ? 'bg-[var(--sp-today-bg)] ring-2 ring-sp-accent/40 shadow-xl'
         : 'bg-sp-card hover:bg-sp-surface'
-        }`}
+        } ${isSelected ? 'ring-2 ring-sp-accent/60' : ''}`}
     >
       {/* TODAY 배지 */}
       {isToday && (
@@ -85,6 +91,20 @@ function EventCard({ event, categories, showYear, onEdit, onDelete }: EventCardP
       )}
 
       <div className="flex items-start justify-between mb-2">
+        {/* 선택 모드 체크박스 */}
+        {isSelectMode && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleSelect?.(event.id); }}
+            className="mt-0.5 mr-2.5 flex-shrink-0"
+          >
+            <span className={`material-symbols-outlined text-lg ${
+              isSelected ? 'text-sp-accent' : 'text-sp-muted/50'
+            }`}>
+              {isSelected ? 'check_circle' : 'radio_button_unchecked'}
+            </span>
+          </button>
+        )}
         <div className="flex flex-col">
           <span className={`text-xs font-semibold ${colors.text} mb-0.5`}>
             {formatEventDate(event.date, showYear)}
@@ -213,7 +233,7 @@ function HolidayCard({ holiday, showYear }: { holiday: HolidayInfo; showYear?: b
   );
 }
 
-export function EventList({ events, categories, holidays, allEvents, allHolidays, year, hideTitle, onEdit, onDelete }: EventListProps) {
+export function EventList({ events, categories, holidays, allEvents, allHolidays, year, hideTitle, onEdit, onDelete, isSelectMode, selectedIds, onToggleSelect }: EventListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchYear, setSearchYear] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -385,6 +405,9 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
               showYear={isSearching}
               onEdit={onEdit}
               onDelete={onDelete}
+              isSelectMode={isSelectMode}
+              isSelected={selectedIds?.has(item.data.id)}
+              onToggleSelect={onToggleSelect}
             />
           ) : (
             <HolidayCard key={`holiday-${item.data.date}`} holiday={item.data} showYear={isSearching} />

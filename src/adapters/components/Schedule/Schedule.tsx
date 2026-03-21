@@ -14,6 +14,8 @@ import { ImportModal } from './ImportModal';
 import { DayScheduleModal } from './DayScheduleModal';
 import { YearView } from './YearView';
 import { SemesterView } from './SemesterView';
+import { BulkDeleteByCategoryModal } from './BulkDeleteByCategoryModal';
+import { BulkDeleteByDateRangeModal } from './BulkDeleteByDateRangeModal';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
@@ -47,6 +49,9 @@ export function Schedule() {
     addEvent,
     updateEvent,
     deleteEvent,
+    deleteManyEvents,
+    deleteEventsByCategory,
+    deleteEventsByDateRange,
     showExportModal,
     showImportModal,
     shareFile,
@@ -98,6 +103,13 @@ export function Schedule() {
   const [showEventModal, setShowEventModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<SchoolEvent | null>(null);
+
+  // 일괄 삭제 상태
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkMenu, setShowBulkMenu] = useState(false);
+  const [showCategoryDeleteModal, setShowCategoryDeleteModal] = useState(false);
+  const [showDateRangeDeleteModal, setShowDateRangeDeleteModal] = useState(false);
 
   useEffect(() => {
     void load();
@@ -220,6 +232,31 @@ export function Schedule() {
       setShareFile(file);
       setShowImportModal(true);
     }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    const externalCount = events.filter(
+      (e) => selectedIds.has(e.id) && (e.source === 'neis' || e.source === 'google'),
+    ).length;
+    let msg = `선택한 ${selectedIds.size}개의 일정을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`;
+    if (externalCount > 0) {
+      msg += `\n\n주의: 외부 연동 일정 ${externalCount}개가 포함되어 있습니다. 삭제해도 다음 동기화 시 다시 나타날 수 있습니다.`;
+    }
+    if (!confirm(msg)) return;
+    const count = await deleteManyEvents([...selectedIds]);
+    alert(`${count}개의 일정이 삭제되었습니다.`);
+    setSelectedIds(new Set());
+    setIsSelectMode(false);
+  }
+
+  function handleToggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   if (!loaded) {
@@ -467,6 +504,68 @@ export function Schedule() {
                 </button>
               </div>
 
+              {/* 일괄 관리 도구바 */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSelectMode(!isSelectMode);
+                    setSelectedIds(new Set());
+                  }}
+                  className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                    isSelectMode
+                      ? 'bg-sp-accent text-white'
+                      : 'bg-sp-card text-sp-muted hover:text-sp-text border border-sp-border'
+                  }`}
+                >
+                  {isSelectMode ? '선택 취소' : '선택'}
+                </button>
+
+                {isSelectMode && selectedIds.size > 0 && (
+                  <>
+                    <span className="text-xs text-sp-muted">
+                      {selectedIds.size}개 선택됨
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleBulkDelete}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+                    >
+                      선택 삭제
+                    </button>
+                  </>
+                )}
+
+                {/* 일괄 삭제 드롭다운 */}
+                <div className="relative ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkMenu(!showBulkMenu)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-sp-card text-sp-muted hover:text-sp-text border border-sp-border"
+                  >
+                    일괄 삭제 ▾
+                  </button>
+                  {showBulkMenu && (
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-sp-card border border-sp-border rounded-lg shadow-xl z-20 py-1">
+                      <button
+                        type="button"
+                        onClick={() => { setShowBulkMenu(false); setShowCategoryDeleteModal(true); }}
+                        className="w-full text-left px-4 py-2 text-xs text-sp-text hover:bg-sp-bg"
+                      >
+                        카테고리별 삭제
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowBulkMenu(false); setShowDateRangeDeleteModal(true); }}
+                        className="w-full text-left px-4 py-2 text-xs text-sp-text hover:bg-sp-bg"
+                      >
+                        기간별 삭제
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* 분할 레이아웃: 캘린더(60%) + 이벤트리스트(40%) */}
               <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
                 <div className="lg:w-[60%]">
@@ -492,6 +591,9 @@ export function Schedule() {
                     year={year}
                     onEdit={handleEditEvent}
                     onDelete={handleDeleteEvent}
+                    isSelectMode={isSelectMode}
+                    selectedIds={selectedIds}
+                    onToggleSelect={handleToggleSelect}
                   />
                 </div>
               </div>
@@ -586,6 +688,25 @@ export function Schedule() {
         open={showNeisPanel}
         onClose={() => setShowNeisPanel(false)}
       />
+
+      {/* 카테고리별 삭제 모달 */}
+      {showCategoryDeleteModal && (
+        <BulkDeleteByCategoryModal
+          categories={categories}
+          events={events}
+          onDelete={deleteEventsByCategory}
+          onClose={() => setShowCategoryDeleteModal(false)}
+        />
+      )}
+
+      {/* 기간별 삭제 모달 */}
+      {showDateRangeDeleteModal && (
+        <BulkDeleteByDateRangeModal
+          events={events}
+          onDelete={deleteEventsByDateRange}
+          onClose={() => setShowDateRangeDeleteModal(false)}
+        />
+      )}
     </div>
   );
 }
