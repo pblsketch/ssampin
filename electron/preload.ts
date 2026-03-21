@@ -207,6 +207,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number): Promise<void> =>
     ipcRenderer.invoke('window:resizeWidget', edge, dx, dy),
+  // 폴더 정리 영역: 클릭 통과 토글
+  setIgnoreMouseEvents: (ignore: boolean): void => {
+    ipcRenderer.send('widget:set-ignore-mouse', ignore);
+  },
   // Analytics flush
   onAnalyticsFlush: (callback: () => void): (() => void) => {
     const handler = () => callback();

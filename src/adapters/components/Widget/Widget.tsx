@@ -79,6 +79,30 @@ export function Widget() {
     };
   }, []);
 
+  // 폴더 정리 영역: Electron 클릭 통과 (setIgnoreMouseEvents)
+  useEffect(() => {
+    if (!window.electronAPI?.setIgnoreMouseEvents) return;
+    let ignoring = false;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const isFolderZone = el?.closest('.folder-zone-container') !== null;
+      const isClickable = el?.closest('[data-clickable]') !== null;
+      const shouldIgnore = isFolderZone && !isClickable;
+
+      if (shouldIgnore !== ignoring) {
+        ignoring = shouldIgnore;
+        window.electronAPI!.setIgnoreMouseEvents(shouldIgnore);
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      if (ignoring) window.electronAPI!.setIgnoreMouseEvents(false);
+    };
+  }, []);
+
   // 데이터 로드
   useEffect(() => {
     void loadSchedule();
@@ -308,12 +332,21 @@ export function Widget() {
                     {filteredWidgets.map((instance) => {
                       const definition = getWidgetById(instance.widgetId);
                       if (!definition) return null;
+                      const isFolderZone = instance.widgetId === 'folder-zones';
 
                       return (
                         <div
                           key={instance.widgetId}
-                          className={getSpanClass(instance.colSpan)}
-                          style={{ gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}` }}
+                          className={`${getSpanClass(instance.colSpan)}${isFolderZone ? ' folder-zone-container' : ''}`}
+                          style={{
+                            gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}`,
+                            ...(isFolderZone ? {
+                              background: 'transparent',
+                              border: 'none',
+                              boxShadow: 'none',
+                              pointerEvents: 'none' as const,
+                            } : {}),
+                          }}
                         >
                           <WidgetCard definition={definition} onNavigate={handleWidgetNavigate} />
                         </div>

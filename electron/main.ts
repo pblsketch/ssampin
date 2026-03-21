@@ -727,6 +727,12 @@ function registerIpcHandlers(): void {
     scheduleWidgetBoundsSave();
   });
 
+  // widget:set-ignore-mouse — 폴더 정리 영역 클릭 통과
+  ipcMain.on('widget:set-ignore-mouse', (_event, ignore: boolean) => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    widgetWindow.setIgnoreMouseEvents(ignore, { forward: true });
+  });
+
   // window:closeApp — 앱 완전 종료
   ipcMain.handle('window:closeApp', (): void => {
     isQuitting = true;

@@ -99,6 +99,8 @@ interface ElectronAPI {
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number) => Promise<void>;
+  // 폴더 정리 영역: 클릭 통과 토글
+  setIgnoreMouseEvents: (ignore: boolean) => void;
   // Analytics
   onAnalyticsFlush: (callback: () => void) => () => void;
 }
