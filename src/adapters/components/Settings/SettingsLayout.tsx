@@ -15,8 +15,6 @@ import { DisplayTab } from './tabs/DisplayTab';
 import { SystemTab } from './tabs/SystemTab';
 import { AboutTab } from './tabs/AboutTab';
 import { SyncTab } from './tabs/SyncTab';
-import { WallpaperTab } from './tabs/WallpaperTab';
-
 interface Props {
   activeTab: SettingsTabId;
   onTabChange: (tab: SettingsTabId) => void;
@@ -131,7 +129,6 @@ function TabContent({ activeTab, draft, patch, setDraft }: {
     case 'school':    return <SchoolTab draft={draft} patch={patch} />;
     case 'period':    return <PeriodTab draft={draft} patch={patch} />;
     case 'widget':    return <WidgetTab draft={draft} patch={patch} />;
-    case 'wallpaper': return <WallpaperTab draft={draft} patch={patch} />;
     case 'seat':      return <SeatTab draft={draft} patch={patch} />;
     case 'security':  return <SecurityTab draft={draft} patch={patch} />;
     case 'calendar':  return <CalendarTab draft={draft} patch={patch} />;

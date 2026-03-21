@@ -97,10 +97,6 @@ interface ElectronAPI {
   wordcloudTunnelAvailable: () => Promise<boolean>;
   wordcloudTunnelInstall: () => Promise<void>;
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
-  // Lively Wallpaper 바탕화면 모드
-  wallpaperStart: () => Promise<{ port: number; url: string }>;
-  wallpaperStop: () => Promise<void>;
-  wallpaperStatus: () => Promise<{ running: boolean; port: number | null; url: string | null }>;
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number) => Promise<void>;
   // Analytics

@@ -206,7 +206,7 @@ export function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const { setShareFile, setShowImportModal } = useEventsStore();
-  const { settings, loaded } = useSettingsStore();
+  const { settings } = useSettingsStore();
   useAnalyticsLifecycle();
   const { track } = useAnalytics();
 
@@ -459,14 +459,6 @@ export function App() {
       root.style.fontSize = '';
     };
   }, [settings.fontSize]);
-
-  // 바탕화면 모드 자동 시작: settings.wallpaper.autoStart가 true이면 서버 자동 시작
-  useEffect(() => {
-    if (loaded && settings.wallpaper?.autoStart && !isWidgetMode()) {
-      void window.electronAPI?.wallpaperStart();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
 
   // 위젯 모드: URL에 ?mode=widget 또는 #widget 이 있으면 위젯 전용 렌더링
   if (isWidgetMode()) {

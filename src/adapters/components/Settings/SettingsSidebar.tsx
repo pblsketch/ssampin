@@ -11,7 +11,6 @@ const TABS: TabDef[] = [
   { id: 'school',   icon: 'school',                label: '학교 정보',  color: 'bg-blue-500/10 text-blue-400' },
   { id: 'period',   icon: 'schedule',              label: '교시 시간',  color: 'bg-emerald-500/10 text-emerald-400' },
   { id: 'widget',   icon: 'widgets',               label: '위젯',      color: 'bg-indigo-500/10 text-indigo-400' },
-  { id: 'wallpaper', icon: 'wallpaper',            label: '바탕화면',   color: 'bg-teal-500/10 text-teal-400' },
   { id: 'seat',     icon: 'chair',                 label: '좌석',      color: 'bg-orange-500/10 text-orange-400' },
   { id: 'security', icon: 'lock',                  label: '보안',      color: 'bg-red-500/10 text-red-400' },
   { id: 'calendar', icon: 'event',                 label: '일정',      color: 'bg-pink-500/10 text-pink-400' },

@@ -7,7 +7,7 @@ import type { Settings } from '@domain/entities/Settings';
 import { SettingsLayout } from './SettingsLayout';
 
 export type SettingsTabId =
-  | 'school' | 'period' | 'widget' | 'wallpaper' | 'seat' | 'security'
+  | 'school' | 'period' | 'widget' | 'seat' | 'security'
   | 'calendar' | 'weather' | 'display' | 'sidebar' | 'sync' | 'system' | 'about';
 
 export function SettingsPage() {

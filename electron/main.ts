@@ -8,7 +8,6 @@ import { registerSecureStorageHandlers } from './ipc/secureStorage';
 import { registerLiveVoteHandlers } from './ipc/liveVote';
 import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
 import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
-import { registerWallpaperServerHandlers, stopWallpaperServer } from './ipc/wallpaperServer';
 
 declare const __dirname: string;
 
@@ -951,7 +950,6 @@ if (!gotTheLock) {
     registerLiveVoteHandlers(mainWindow!);
     registerLiveSurveyHandlers(mainWindow!);
     registerLiveWordCloudHandlers(mainWindow!);
-    registerWallpaperServerHandlers();
     createTray();
     setupAutoUpdater();
 
@@ -997,7 +995,6 @@ if (!gotTheLock) {
 
 app.on('before-quit', () => {
   isQuitting = true;
-  stopWallpaperServer();
   // Analytics flush 신호 전송
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('analytics:flush');
