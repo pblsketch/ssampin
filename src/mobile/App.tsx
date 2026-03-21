@@ -15,6 +15,7 @@ import { MemoPage } from './pages/MemoPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { InstallGuide } from './components/Onboarding/InstallGuide';
+import { InAppBrowserBanner } from './components/InAppBrowserBanner';
 
 type MobileTab = 'today' | 'schedule' | 'students' | 'todo' | 'memo' | 'more';
 
@@ -228,6 +229,9 @@ export function App() {
 
   return (
     <div className="flex flex-col h-dvh mobile-bg">
+      {/* 인앱 브라우저 경고 배너 */}
+      <InAppBrowserBanner />
+
       {/* Header */}
       <header
         className="flex items-center justify-between px-4 glass-header shrink-0"

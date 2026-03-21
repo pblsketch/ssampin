@@ -3,6 +3,7 @@ import type { GoogleAuthTokens } from '@domain/ports/IGoogleAuthPort';
 import { googleAuthPort } from '@mobile/di/container';
 import { readAuth, writeAuth, deleteAuth } from '@infrastructure/storage/IndexedDBStorageAdapter';
 import { generateCodeVerifier, generateCodeChallenge } from './usePKCE';
+import { detectInAppBrowser } from '@infrastructure/browser/detectInAppBrowser';
 
 const AUTH_KEY = 'google-tokens';
 const VERIFIER_KEY = 'pkce-verifier';
@@ -31,6 +32,20 @@ export function useGoogleAuth(): GoogleAuthState {
   }, []);
 
   const startLogin = useCallback(async () => {
+    // 인앱 브라우저 감지 → 로그인 차단 + 안내
+    const { isInApp, appName } = detectInAppBrowser();
+    if (isInApp) {
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      const guide = isIOS
+        ? '하단의 "Safari로 열기" 버튼을 눌러 Safari에서 다시 접속해주세요.'
+        : '우측 상단 ⋮ 메뉴에서 "브라우저에서 열기"를 눌러 Chrome에서 다시 접속해주세요.';
+
+      alert(
+        `${appName ?? '앱 내'} 브라우저에서는 Google 로그인이 차단돼요.\n\n${guide}\n\n또는 주소창의 URL을 복사해서 크롬/사파리에 붙여넣기 해주세요.`,
+      );
+      return;
+    }
+
     const verifier = generateCodeVerifier();
     const challenge = await generateCodeChallenge(verifier);
     await writeAuth(VERIFIER_KEY, verifier);
