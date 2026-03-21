@@ -67,7 +67,7 @@ export const DEFAULT_CATEGORIES: readonly CategoryItem[] = [
   { id: 'school', name: '학교', color: 'blue' },
   { id: 'class', name: '학급', color: 'green' },
   { id: 'department', name: '부서', color: 'yellow' },
-  { id: 'treeSchool', name: '나무학교', color: 'purple' },
+  { id: 'treeSchool', name: '교사학습공동체', color: 'purple' },
   { id: 'etc', name: '기타', color: 'gray' },
 ];
 

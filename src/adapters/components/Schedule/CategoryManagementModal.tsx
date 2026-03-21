@@ -165,11 +165,13 @@ function ColorPicker({
 function DeleteConfirmDialog({
   categoryName,
   eventCount,
+  isDefault,
   onConfirm,
   onCancel,
 }: {
   categoryName: string;
   eventCount: number;
+  isDefault?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -183,6 +185,11 @@ function DeleteConfirmDialog({
           <p className="text-sm font-medium text-sp-text">
             &apos;{categoryName}&apos; 카테고리를 삭제하시겠습니까?
           </p>
+          {isDefault && (
+            <p className="text-xs text-amber-400 mt-1">
+              기본 카테고리입니다. 삭제하면 복원할 수 없습니다.
+            </p>
+          )}
           {eventCount > 0 && (
             <p className="text-xs text-sp-muted mt-1">
               이 카테고리를 사용하는 일정 {eventCount}개가 있습니다.
@@ -242,6 +249,7 @@ function CategoryRow({
       <DeleteConfirmDialog
         categoryName={category.name}
         eventCount={eventCount}
+        isDefault={isDefault}
         onConfirm={() => { onDelete(); setConfirmDelete(false); }}
         onCancel={() => setConfirmDelete(false)}
       />
@@ -286,19 +294,15 @@ function CategoryRow({
         )}
       </div>
 
-      {/* 삭제 버튼 (박스 바깥) */}
-      {!isDefault ? (
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          className="text-sp-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          title="카테고리 삭제"
-        >
-          <span className="material-symbols-outlined text-[18px]">delete</span>
-        </button>
-      ) : (
-        <div className="w-[18px] shrink-0" />
-      )}
+      {/* 삭제 버튼 (기본 카테고리 포함 모두 삭제 가능) */}
+      <button
+        type="button"
+        onClick={() => setConfirmDelete(true)}
+        className="text-sp-muted hover:text-red-400 opacity-40 hover:opacity-100 transition-opacity shrink-0"
+        title="카테고리 삭제"
+      >
+        <span className="material-symbols-outlined text-[18px]">delete</span>
+      </button>
     </div>
   );
 }
