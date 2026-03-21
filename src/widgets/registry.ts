@@ -17,7 +17,6 @@ import { SurveyWidget } from './items/SurveyWidget';
 import { ConsultationWidget } from './items/ConsultationWidget';
 import { MemoFocus } from './items/MemoFocus';
 import { FavoriteTools } from './items/FavoriteTools';
-import { FolderZoneWidget } from './items/FolderZoneWidget';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -276,22 +275,6 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: FavoriteTools,
     navigateTo: 'tools',
     navigateLabel: '쌤도구 전체 보기',
-  },
-
-  // ─── 폴더 정리 영역 ───
-  {
-    id: 'folder-zones',
-    name: '폴더 정리 영역',
-    icon: '📂',
-    description: '바탕화면 파일을 시각적으로 분류하는 반투명 영역입니다',
-    category: 'info',
-    defaultSize: { w: 1, h: 4 },
-    minSize: { w: 1, h: 2 },
-    availableFor: {
-      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
-      role: ['homeroom', 'subject', 'admin'],
-    },
-    component: FolderZoneWidget,
   },
 
   // ─── 즐겨찾기 카테고리 ───

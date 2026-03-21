@@ -186,6 +186,4 @@ export interface Settings {
   readonly teacherRoles?: readonly ('homeroom' | 'subject' | 'admin')[];
   /** 자주 쓰는 쌤도구 ID 목록 (대시보드/위젯에 표시) */
   readonly favoriteTools?: readonly string[];
-  /** 폴더 정리 영역 목록 (위젯 모드에서 바탕화면 아이콘 그룹핑) */
-  readonly folderZones?: readonly import('./FolderZone').FolderZone[];
 }

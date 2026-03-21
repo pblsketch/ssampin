@@ -79,36 +79,6 @@ export function Widget() {
     };
   }, []);
 
-  // 폴더 정리 영역: Electron 클릭 통과 (setIgnoreMouseEvents)
-  useEffect(() => {
-    if (!window.electronAPI?.setIgnoreMouseEvents) return;
-    let lastIgnore: boolean | null = null;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      if (!el) return;
-
-      // 폴더 정리 영역인지 확인
-      const isZoneArea = el.closest('[data-folder-zone]') !== null;
-      // 편집 버튼 등 클릭 가능한 요소인지 확인
-      const isClickable = el.closest('[data-clickable]') !== null;
-      // 폴더 영역 위이고 클릭 가능 요소가 아니면 → 클릭 통과
-      const shouldIgnore = isZoneArea && !isClickable;
-
-      // 상태가 바뀔 때만 IPC 호출 (성능)
-      if (shouldIgnore !== lastIgnore) {
-        lastIgnore = shouldIgnore;
-        window.electronAPI!.setIgnoreMouseEvents(shouldIgnore);
-      }
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      if (lastIgnore) window.electronAPI!.setIgnoreMouseEvents(false);
-    };
-  }, []);
-
   // 데이터 로드
   useEffect(() => {
     void loadSchedule();
@@ -338,22 +308,12 @@ export function Widget() {
                     {filteredWidgets.map((instance) => {
                       const definition = getWidgetById(instance.widgetId);
                       if (!definition) return null;
-                      const isFolderZone = instance.widgetId === 'folder-zones';
 
                       return (
                         <div
                           key={instance.widgetId}
                           className={getSpanClass(instance.colSpan)}
-                          data-folder-zone={isFolderZone ? 'true' : undefined}
-                          style={{
-                            gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}`,
-                            ...(isFolderZone ? {
-                              background: 'transparent',
-                              border: 'none',
-                              boxShadow: 'none',
-                              pointerEvents: 'none' as const,
-                            } : {}),
-                          }}
+                          style={{ gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}` }}
                         >
                           <WidgetCard definition={definition} onNavigate={handleWidgetNavigate} />
                         </div>
