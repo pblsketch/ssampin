@@ -5,15 +5,15 @@ import type { PresetKey } from './types';
  * 첫 방문 시 자동 적용
  */
 export const WIDGET_PRESETS: Record<PresetKey, readonly string[]> = {
-  'elementary-homeroom': ['class-timetable', 'seating', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'survey', 'consultation', 'todo'],
-  'elementary-subject': ['class-timetable', 'today-class', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
-  'middle-homeroom': ['weekly-timetable', 'today-class', 'seating', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'survey', 'consultation', 'todo'],
-  'middle-subject': ['weekly-timetable', 'today-class', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
-  'high-homeroom': ['weekly-timetable', 'today-class', 'seating', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'survey', 'consultation', 'todo'],
-  'high-subject': ['weekly-timetable', 'today-class', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
-  'admin': ['weekly-timetable', 'today-class', 'meal', 'events', 'dday-counter', 'todo'],
-  'custom-homeroom': ['weekly-timetable', 'today-class', 'seating', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
-  'custom-subject': ['weekly-timetable', 'today-class', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
+  'elementary-homeroom': ['class-timetable', 'seating', 'favorite-tools', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'survey', 'consultation', 'todo'],
+  'elementary-subject': ['class-timetable', 'today-class', 'favorite-tools', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
+  'middle-homeroom': ['weekly-timetable', 'today-class', 'seating', 'favorite-tools', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'survey', 'consultation', 'todo'],
+  'middle-subject': ['weekly-timetable', 'today-class', 'favorite-tools', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
+  'high-homeroom': ['weekly-timetable', 'today-class', 'seating', 'favorite-tools', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'student-records', 'survey', 'consultation', 'todo'],
+  'high-subject': ['weekly-timetable', 'today-class', 'favorite-tools', 'today-progress', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
+  'admin': ['weekly-timetable', 'today-class', 'favorite-tools', 'meal', 'events', 'dday-counter', 'todo'],
+  'custom-homeroom': ['weekly-timetable', 'today-class', 'seating', 'favorite-tools', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
+  'custom-subject': ['weekly-timetable', 'today-class', 'favorite-tools', 'meal', 'events', 'dday-counter', 'memo', 'todo'],
 };
 
 /**

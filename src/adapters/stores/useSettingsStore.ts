@@ -213,6 +213,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           subjectColors: (saved as unknown as { subjectColors?: Settings['subjectColors'] }).subjectColors,
           timetableColorBy: (saved as unknown as { timetableColorBy?: Settings['timetableColorBy'] }).timetableColorBy,
           classroomColors: (saved as unknown as { classroomColors?: Settings['classroomColors'] }).classroomColors,
+          favoriteTools: (saved as unknown as { favoriteTools?: Settings['favoriteTools'] }).favoriteTools,
         };
         // maxPeriods가 periodTimes 개수보다 작으면 보정 (온보딩 버그 마이그레이션)
         let corrected = merged.periodTimes && merged.maxPeriods < merged.periodTimes.length

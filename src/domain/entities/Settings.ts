@@ -190,4 +190,6 @@ export interface Settings {
   readonly teacherRoles?: readonly ('homeroom' | 'subject' | 'admin')[];
   /** Lively Wallpaper 바탕화면 모드 설정 */
   readonly wallpaper?: WallpaperSettings;
+  /** 자주 쓰는 쌤도구 ID 목록 (대시보드/위젯에 표시) */
+  readonly favoriteTools?: readonly string[];
 }

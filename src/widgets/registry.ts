@@ -16,6 +16,7 @@ import { DDayCounter } from './items/DDayCounter';
 import { SurveyWidget } from './items/SurveyWidget';
 import { ConsultationWidget } from './items/ConsultationWidget';
 import { MemoFocus } from './items/MemoFocus';
+import { FavoriteTools } from './items/FavoriteTools';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -256,6 +257,24 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: ConsultationWidget,
     navigateTo: 'homeroom',
     navigateLabel: '상담 예약 탭 보기',
+  },
+
+  // ─── 자주 쓰는 도구 ───
+  {
+    id: 'favorite-tools',
+    name: '자주 쓰는 도구',
+    icon: '🛠️',
+    description: '자주 사용하는 쌤도구를 바로 실행합니다',
+    category: 'info',
+    defaultSize: { w: 2, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: FavoriteTools,
+    navigateTo: 'tools',
+    navigateLabel: '쌤도구 전체 보기',
   },
 
   // ─── 즐겨찾기 카테고리 ───

@@ -291,6 +291,16 @@ export function App() {
     return unsubscribe;
   }, []);
 
+  // 위젯 내 도구 클릭 → 해당 도구 페이지로 네비게이션
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      setCurrentPage(detail as PageId);
+    };
+    window.addEventListener('ssampin:navigate', handler);
+    return () => window.removeEventListener('ssampin:navigate', handler);
+  }, []);
+
   // 구글 캘린더 연결 상태 초기화
   useEffect(() => {
     useCalendarSyncStore.getState().initialize();
