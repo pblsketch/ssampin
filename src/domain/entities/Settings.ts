@@ -186,4 +186,8 @@ export interface Settings {
   readonly teacherRoles?: readonly ('homeroom' | 'subject' | 'admin')[];
   /** 자주 쓰는 쌤도구 ID 목록 (대시보드/위젯에 표시) */
   readonly favoriteTools?: readonly string[];
+  /** 즐겨찾기 위젯에서 숨길 북마크 그룹 ID 목록 */
+  readonly bookmarkWidgetHiddenGroups?: readonly string[];
+  /** 즐겨찾기 위젯에서 숨길 개별 북마크 ID 목록 */
+  readonly bookmarkWidgetHiddenBookmarks?: readonly string[];
 }

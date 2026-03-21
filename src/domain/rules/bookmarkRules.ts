@@ -71,6 +71,30 @@ export function isDuplicateUrl(
 }
 
 /**
+ * 숨김 처리된 그룹을 제외한 그룹 목록 반환
+ */
+export function filterVisibleGroups(
+  groups: readonly BookmarkGroup[],
+  hiddenGroupIds: readonly string[],
+): BookmarkGroup[] {
+  if (hiddenGroupIds.length === 0) return [...groups];
+  const hiddenSet = new Set(hiddenGroupIds);
+  return groups.filter((g) => !hiddenSet.has(g.id));
+}
+
+/**
+ * 숨김 처리된 개별 북마크를 제외한 북마크 목록 반환
+ */
+export function filterVisibleBookmarks(
+  bookmarks: readonly Bookmark[],
+  hiddenBookmarkIds: readonly string[],
+): Bookmark[] {
+  if (hiddenBookmarkIds.length === 0) return [...bookmarks];
+  const hiddenSet = new Set(hiddenBookmarkIds);
+  return bookmarks.filter((b) => !hiddenSet.has(b.id));
+}
+
+/**
  * 교사용 기본 프리셋 데이터 (4개 그룹, 16개 사이트)
  */
 export function getDefaultPresets(): BookmarkData {

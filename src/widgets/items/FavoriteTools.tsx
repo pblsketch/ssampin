@@ -9,7 +9,13 @@ export function FavoriteTools() {
   const [showPicker, setShowPicker] = useState(false);
 
   const handleToolClick = (toolId: string) => {
-    window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: toolId }));
+    // 위젯 모드(별도 BrowserWindow)에서는 IPC로 메인 윈도우 네비게이션
+    if (window.electronAPI?.navigateToPage) {
+      void window.electronAPI.navigateToPage(toolId);
+    } else {
+      // 브라우저 개발 모드 폴백
+      window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: toolId }));
+    }
   };
 
   const tools = favoriteTools
