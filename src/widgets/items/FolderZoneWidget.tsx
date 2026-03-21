@@ -34,6 +34,7 @@ export function FolderZoneWidget() {
   return (
     <div
       className="h-full flex flex-col gap-2"
+      data-folder-zone="true"
       style={{ pointerEvents: editMode ? 'auto' : 'none' }}
     >
       {/* 헤더 — 편집 버튼만 클릭 가능 */}
@@ -89,6 +90,7 @@ export function FolderZoneWidget() {
               {editMode && (
                 <div className="absolute top-1.5 right-2 flex gap-1">
                   <button
+                    data-clickable
                     onClick={() => {
                       const currentIdx = COLOR_LIST.indexOf(zone.color);
                       const nextColor = COLOR_LIST[(currentIdx + 1) % COLOR_LIST.length]!;
@@ -99,6 +101,7 @@ export function FolderZoneWidget() {
                     title="색상 변경"
                   />
                   <button
+                    data-clickable
                     onClick={() => deleteZone(zone.id)}
                     className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors"
                     title="삭제"
@@ -114,6 +117,7 @@ export function FolderZoneWidget() {
         {/* 편집 모드: 추가 버튼 */}
         {editMode && zones.length < 6 && (
           <button
+            data-clickable
             onClick={() => setAddModal(true)}
             className="rounded-xl border border-dashed border-sp-border/30 flex items-center justify-center text-sp-muted/30 hover:text-sp-muted/60 hover:border-sp-border/50 transition-colors"
           >
@@ -147,6 +151,7 @@ function ZoneAddModal({
   return (
     <div
       className="absolute inset-0 flex items-center justify-center z-50"
+      data-clickable
       style={{ pointerEvents: 'auto', background: 'rgba(0,0,0,0.5)' }}
     >
       <div className="bg-sp-card border border-sp-border rounded-xl p-4 w-56 shadow-xl">

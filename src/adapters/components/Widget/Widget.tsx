@@ -82,16 +82,22 @@ export function Widget() {
   // 폴더 정리 영역: Electron 클릭 통과 (setIgnoreMouseEvents)
   useEffect(() => {
     if (!window.electronAPI?.setIgnoreMouseEvents) return;
-    let ignoring = false;
+    let lastIgnore: boolean | null = null;
 
     const handleMouseMove = (e: MouseEvent) => {
       const el = document.elementFromPoint(e.clientX, e.clientY);
-      const isFolderZone = el?.closest('.folder-zone-container') !== null;
-      const isClickable = el?.closest('[data-clickable]') !== null;
-      const shouldIgnore = isFolderZone && !isClickable;
+      if (!el) return;
 
-      if (shouldIgnore !== ignoring) {
-        ignoring = shouldIgnore;
+      // 폴더 정리 영역인지 확인
+      const isZoneArea = el.closest('[data-folder-zone]') !== null;
+      // 편집 버튼 등 클릭 가능한 요소인지 확인
+      const isClickable = el.closest('[data-clickable]') !== null;
+      // 폴더 영역 위이고 클릭 가능 요소가 아니면 → 클릭 통과
+      const shouldIgnore = isZoneArea && !isClickable;
+
+      // 상태가 바뀔 때만 IPC 호출 (성능)
+      if (shouldIgnore !== lastIgnore) {
+        lastIgnore = shouldIgnore;
         window.electronAPI!.setIgnoreMouseEvents(shouldIgnore);
       }
     };
@@ -99,7 +105,7 @@ export function Widget() {
     document.addEventListener('mousemove', handleMouseMove);
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      if (ignoring) window.electronAPI!.setIgnoreMouseEvents(false);
+      if (lastIgnore) window.electronAPI!.setIgnoreMouseEvents(false);
     };
   }, []);
 
@@ -337,7 +343,8 @@ export function Widget() {
                       return (
                         <div
                           key={instance.widgetId}
-                          className={`${getSpanClass(instance.colSpan)}${isFolderZone ? ' folder-zone-container' : ''}`}
+                          className={getSpanClass(instance.colSpan)}
+                          data-folder-zone={isFolderZone ? 'true' : undefined}
                           style={{
                             gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}`,
                             ...(isFolderZone ? {
