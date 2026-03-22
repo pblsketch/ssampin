@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
@@ -29,12 +29,12 @@ export function TodayProgress() {
   const todayLessons = useMemo(() => {
     if (today === null) return [];
     const periods = teacherSchedule[today] ?? [];
+    const todayStr = new Date().toISOString().slice(0, 10);
     return periods
       .map((period, index) => {
         if (period === null) return null;
         const periodNumber = index + 1;
         const matchedClass = classes.find((cls) => cls.name === period.classroom) ?? null;
-        const todayStr = new Date().toISOString().slice(0, 10);
         const progress: ProgressEntry | null = matchedClass !== null
           ? (progressEntries.find(
               (e) =>
@@ -43,11 +43,42 @@ export function TodayProgress() {
                 e.period === periodNumber,
             ) ?? null)
           : null;
+
+        const prevProgress: ProgressEntry | null = matchedClass !== null
+          ? (progressEntries
+              .filter(
+                (e) =>
+                  e.classId === matchedClass.id &&
+                  e.date < todayStr &&
+                  e.status === 'completed',
+              )
+              .sort((a, b) => {
+                if (b.date !== a.date) return b.date.localeCompare(a.date);
+                return b.period - a.period;
+              })[0] ?? null)
+          : null;
+
+        const nextProgress: ProgressEntry | null = matchedClass !== null
+          ? (progressEntries
+              .filter(
+                (e) =>
+                  e.classId === matchedClass.id &&
+                  e.date > todayStr &&
+                  e.status === 'planned',
+              )
+              .sort((a, b) => {
+                if (a.date !== b.date) return a.date.localeCompare(b.date);
+                return a.period - b.period;
+              })[0] ?? null)
+          : null;
+
         return {
           period: periodNumber,
           subject: period.subject,
           classroom: period.classroom,
           progress,
+          prevProgress,
+          nextProgress,
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -58,9 +89,22 @@ export function TodayProgress() {
     [todayLessons],
   );
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isCompact, setIsCompact] = useState(false);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height ?? 0;
+      setIsCompact(height < 300);
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   if (isWeekend) {
     return (
-      <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+      <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
         <div className="py-6 text-center text-sm text-sp-muted">
           🎉 오늘은 주말입니다
         </div>
@@ -70,7 +114,7 @@ export function TodayProgress() {
 
   if (todayLessons.length === 0) {
     return (
-      <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+      <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
         <div className="py-6 text-center text-sm text-sp-muted">
           오늘은 수업이 없습니다
         </div>
@@ -79,30 +123,86 @@ export function TodayProgress() {
   }
 
   return (
-    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+    <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       <div className="flex flex-col gap-2 flex-1 overflow-auto">
         {todayLessons.map((lesson) => {
           const statusBadge = getStatusBadge(lesson.progress?.status ?? null);
+          const hasPrev = lesson.prevProgress !== null;
+          const hasNext = lesson.nextProgress !== null;
+          const hasToday = lesson.progress !== null;
+          const hasAnyProgress = hasPrev || hasToday || hasNext;
+
           return (
-            <div key={lesson.period} className="flex items-start gap-3">
-              {/* 교시 번호 */}
-              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-sp-accent/10 text-sp-accent text-xs font-bold flex items-center justify-center">
-                {lesson.period}
-              </div>
-              {/* 학급 + 진도 */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-sp-text truncate">
-                    {lesson.classroom} {lesson.subject}
-                  </span>
-                  {statusBadge}
+            <div key={lesson.period} className="rounded-xl bg-sp-bg/50 p-3">
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-1">
+                <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-sp-accent/10 text-sp-accent text-xs font-bold flex items-center justify-center">
+                  {lesson.period}
                 </div>
-                {lesson.progress !== null && (
-                  <p className="text-xs text-sp-muted mt-0.5 truncate">
+                <span className="text-sm font-medium text-sp-text truncate flex-1">
+                  {lesson.classroom} {lesson.subject}
+                </span>
+                {statusBadge}
+              </div>
+
+              {isCompact ? (
+                /* Compact mode: single line like before */
+                lesson.progress !== null ? (
+                  <p className="ml-9 text-xs text-sp-muted mt-0.5 truncate">
                     {lesson.progress.unit} · {lesson.progress.lesson}
                   </p>
-                )}
-              </div>
+                ) : null
+              ) : hasAnyProgress ? (
+                <div className="ml-9 space-y-1 mt-1">
+                  {/* Unit name */}
+                  {hasToday && lesson.progress!.unit && (
+                    <p className="text-xs font-medium text-sp-accent/80 mb-1">
+                      📖 {lesson.progress!.unit}
+                    </p>
+                  )}
+
+                  {/* Previous */}
+                  {hasPrev && (
+                    <div className="flex items-center gap-2 text-xs text-sp-muted/60">
+                      <span className="w-14 shrink-0 text-right">지난 시간</span>
+                      <span className="truncate">{lesson.prevProgress!.lesson}</span>
+                      <span className="shrink-0">✅</span>
+                    </div>
+                  )}
+
+                  {/* Today (highlighted) */}
+                  {hasToday ? (
+                    <div className="flex items-center gap-2 text-xs font-medium text-sp-text">
+                      <span className="w-14 shrink-0 text-right text-sp-accent">👉 오늘</span>
+                      <span className="truncate">{lesson.progress!.lesson}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-sp-muted/50">
+                      <span className="w-14 shrink-0 text-right">👉 오늘</span>
+                      <span className="italic">진도 미등록</span>
+                    </div>
+                  )}
+
+                  {/* Next */}
+                  {hasNext && (
+                    <div className="flex items-center gap-2 text-xs text-sp-muted/60">
+                      <span className="w-14 shrink-0 text-right">다음 시간</span>
+                      <span className="truncate">{lesson.nextProgress!.lesson}</span>
+                    </div>
+                  )}
+
+                  {/* Note */}
+                  {hasToday && lesson.progress!.note && (
+                    <p className="text-[10px] text-sp-muted/50 mt-1 ml-16">
+                      📝 {lesson.progress!.note}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="ml-9 text-xs text-sp-muted/40 italic mt-1">
+                  진도가 등록되지 않았습니다
+                </p>
+              )}
             </div>
           );
         })}

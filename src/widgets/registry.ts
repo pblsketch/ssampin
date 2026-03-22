@@ -96,7 +96,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     icon: '📚',
     description: '오늘 가르칠 학급별 진도 상태를 확인합니다',
     category: 'class',
-    defaultSize: { w: 1, h: 4 },
+    defaultSize: { w: 1, h: 5 },
     minSize: { w: 1, h: 2 },
     availableFor: {
       schoolLevel: ['middle', 'high', 'custom'],
