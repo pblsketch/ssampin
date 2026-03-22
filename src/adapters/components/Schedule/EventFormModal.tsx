@@ -151,6 +151,16 @@ export function EventFormModal({
         neis: editEvent.neis,
         isModified: true,
       }),
+      // 구글 캘린더 일정 편집 시 동기화 필드 보존
+      ...(editEvent?.source === 'google' && {
+        source: 'google' as const,
+        googleEventId: editEvent.googleEventId,
+        googleCalendarId: editEvent.googleCalendarId,
+        syncStatus: editEvent.syncStatus,
+        lastSyncedAt: editEvent.lastSyncedAt,
+        googleUpdatedAt: editEvent.googleUpdatedAt,
+        etag: editEvent.etag,
+      }),
     };
 
     onSubmit(event);
@@ -183,6 +193,17 @@ export function EventFormModal({
 
           {/* 폼 */}
           <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* 구글 캘린더 일정 안내 */}
+            {isEdit && editEvent?.source === 'google' && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <span className="material-symbols-outlined text-blue-400 text-[18px] mt-0.5">sync</span>
+                <div className="text-xs text-blue-200/80">
+                  <p className="font-medium mb-0.5">구글 캘린더에서 가져온 일정입니다</p>
+                  <p>수정하면 구글 캘린더에도 반영됩니다.</p>
+                </div>
+              </div>
+            )}
+
             {/* NEIS 일정 안내 */}
             {isEdit && editEvent?.source === 'neis' && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">

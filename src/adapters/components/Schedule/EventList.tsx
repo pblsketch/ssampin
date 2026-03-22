@@ -147,10 +147,10 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
           <span className="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium max-w-[80px] truncate">
             {categoryInfo.name}
           </span>
-          {/* 편집/삭제 (호버 시) 또는 외부/구글 배지 */}
-          {event.source === 'google' ? (
-            <GoogleBadge />
-          ) : isExternal ? (
+          {/* 구글 배지 */}
+          {event.source === 'google' && <GoogleBadge />}
+          {/* 편집/삭제 (호버 시) 또는 외부 배지 */}
+          {isExternal ? (
             <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
               외부
             </span>
