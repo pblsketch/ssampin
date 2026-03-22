@@ -12,17 +12,20 @@ export function HelpChatPanel() {
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const chat = useHelpChat();
   const inputElRef = useRef<HTMLTextAreaElement | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 최초 1회만 뱃지 표시 (한 번이라도 열었으면 다시 표시하지 않음)
   useEffect(() => {
-    const hasOpened = localStorage.getItem('ssampin-chat-opened');
-    if (hasOpened) return;
+    if (localStorage.getItem('ssampin-chat-opened')) return;
 
-    const timer = setTimeout(() => {
-      if (!isOpen) setHasNewMessage(true);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      setHasNewMessage(true);
     }, 5000);
-    return () => clearTimeout(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   // 외부에서 채팅 열기 지원 (FeedbackModal 등)
   useEffect(() => {
@@ -30,6 +33,11 @@ export function HelpChatPanel() {
     (window as any).__ssampin_open_chat = () => {
       setIsOpen(true);
       setHasNewMessage(false);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      localStorage.setItem('ssampin-chat-opened', 'true');
     };
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +49,10 @@ export function HelpChatPanel() {
     track('chatbot_open');
     setIsOpen(true);
     setHasNewMessage(false);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     localStorage.setItem('ssampin-chat-opened', 'true');
   };
 
