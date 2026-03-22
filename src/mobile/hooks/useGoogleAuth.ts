@@ -12,7 +12,7 @@ interface GoogleAuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   email: string | null;
-  startLogin: () => Promise<void>;
+  startLogin: (forceAccountSelect?: boolean) => Promise<void>;
   handleCallback: (code: string) => Promise<void>;
   getValidAccessToken: () => Promise<string>;
   logout: () => Promise<void>;
@@ -31,7 +31,7 @@ export function useGoogleAuth(): GoogleAuthState {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const startLogin = useCallback(async () => {
+  const startLogin = useCallback(async (forceAccountSelect?: boolean) => {
     // 인앱 브라우저 감지 → 로그인 차단 + 안내
     const { isInApp, appName } = detectInAppBrowser();
     if (isInApp) {
@@ -46,14 +46,17 @@ export function useGoogleAuth(): GoogleAuthState {
       return;
     }
 
+    // 첫 연결(토큰 없음) 또는 명시적 요청 시 계정 선택 화면 표시
+    const shouldSelectAccount = forceAccountSelect ?? !tokens;
+
     const verifier = generateCodeVerifier();
     const challenge = await generateCodeChallenge(verifier);
     await writeAuth(VERIFIER_KEY, verifier);
 
     const redirectUri = window.location.origin + '/';
-    const url = googleAuthPort.getAuthUrl(redirectUri, challenge);
+    const url = googleAuthPort.getAuthUrl(redirectUri, challenge, shouldSelectAccount);
     window.location.href = url;
-  }, []);
+  }, [tokens]);
 
   const handleCallback = useCallback(async (code: string) => {
     const verifier = await readAuth<string>(VERIFIER_KEY);

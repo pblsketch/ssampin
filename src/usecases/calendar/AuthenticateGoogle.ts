@@ -10,8 +10,8 @@ export class AuthenticateGoogle {
   ) {}
 
   /** OAuth 인증 URL 생성 */
-  getAuthUrl(redirectUri: string): string {
-    return this.authPort.getAuthUrl(redirectUri);
+  getAuthUrl(redirectUri: string, forceAccountSelect?: boolean): string {
+    return this.authPort.getAuthUrl(redirectUri, undefined, forceAccountSelect);
   }
 
   /** 인증 코드를 토큰으로 교환하고 저장 */

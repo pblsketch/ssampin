@@ -238,7 +238,7 @@ export function CalendarSettings() {
             구글 계정을 연결하면 캘린더 동기화와 과제수합(드라이브) 기능을 사용할 수 있습니다.
           </p>
           <button
-            onClick={startAuth}
+            onClick={() => void startAuth()}
             disabled={isLoading}
             className="flex items-center gap-2 rounded-lg bg-sp-accent px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80 disabled:opacity-50"
           >
@@ -264,13 +264,26 @@ export function CalendarSettings() {
               <p className="text-sm font-medium text-sp-text">연결됨</p>
               <p className="text-xs text-sp-muted">{email}</p>
             </div>
-            <button
-              onClick={handleDisconnect}
-              disabled={isLoading}
-              className="rounded-lg border border-sp-border px-3 py-1.5 text-xs text-sp-muted transition-colors hover:border-red-500/50 hover:text-red-400 disabled:opacity-50"
-            >
-              연결 해제
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  disconnect().then(() => {
+                    startAuth(true);
+                  });
+                }}
+                disabled={isLoading}
+                className="rounded-lg border border-sp-border px-3 py-1.5 text-xs text-sp-muted transition-colors hover:border-sp-accent/50 hover:text-sp-accent disabled:opacity-50"
+              >
+                계정 변경
+              </button>
+              <button
+                onClick={handleDisconnect}
+                disabled={isLoading}
+                className="rounded-lg border border-sp-border px-3 py-1.5 text-xs text-sp-muted transition-colors hover:border-red-500/50 hover:text-red-400 disabled:opacity-50"
+              >
+                연결 해제
+              </button>
+            </div>
           </div>
 
           {/* 연동 기능 목록 */}

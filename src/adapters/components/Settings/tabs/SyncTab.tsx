@@ -70,17 +70,29 @@ export function SyncTab() {
                     <p className="text-xs text-sp-muted">{email}</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm('Google 계정 연결을 해제하시겠습니까?\n구글에서 가져온 일정이 모두 제거됩니다.')) {
-                      void disconnect();
-                    }
-                  }}
-                  className="text-xs text-red-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10 transition-colors"
-                >
-                  연결 해제
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void disconnect().then(() => startAuth(true));
+                    }}
+                    disabled={isLoading}
+                    className="text-xs text-sp-muted hover:text-sp-accent font-medium px-3 py-1.5 rounded-lg border border-sp-border hover:border-sp-accent/50 transition-colors disabled:opacity-50"
+                  >
+                    계정 변경
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Google 계정 연결을 해제하시겠습니까?\n구글에서 가져온 일정이 모두 제거됩니다.')) {
+                        void disconnect();
+                      }
+                    }}
+                    className="text-xs text-red-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10 transition-colors"
+                  >
+                    연결 해제
+                  </button>
+                </div>
               </div>
             ) : (
               <button

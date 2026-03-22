@@ -43,9 +43,9 @@ interface CalendarSyncState {
 
   // 액션
   initialize: () => Promise<void>;
-  startAuth: () => Promise<void>;
+  startAuth: (forceAccountSelect?: boolean) => Promise<void>;
   completeAuth: (code: string, redirectUri: string) => Promise<void>;
-  startPKCEFallback: () => Promise<void>;
+  startPKCEFallback: (forceAccountSelect?: boolean) => Promise<void>;
   completePKCEAuth: (code: string) => Promise<void>;
   disconnect: () => Promise<void>;
   setError: (error: string | null) => void;
@@ -105,7 +105,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     }
   },
 
-  startAuth: async () => {
+  startAuth: async (forceAccountSelect?: boolean) => {
     set({ isLoading: true, error: null });
     try {
       const api = window.electronAPI;
@@ -114,8 +114,10 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       }
 
       const { authenticateGoogle } = await import('@adapters/di/container');
+      // 첫 연결이면 계정 선택 화면 표시
+      const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
       // placeholder redirect_uri로 URL 생성 (IPC 핸들러에서 실제 포트로 교체)
-      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback');
+      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount);
 
       // redirect_uri를 IPC에서 받아오기 위한 Promise
       const redirectUriPromise = new Promise<string>((resolve) => {
@@ -171,7 +173,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     }
   },
 
-  startPKCEFallback: async () => {
+  startPKCEFallback: async (forceAccountSelect?: boolean) => {
     set({ isLoading: true, error: null, oauthError: null });
     try {
       const api = window.electronAPI;
@@ -180,7 +182,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       }
 
       const { authenticateGoogle } = await import('@adapters/di/container');
-      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback');
+      const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
+      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount);
 
       // PKCE 시작: 브라우저에서 인증 URL 열기
       await api.startPKCEAuth(authUrl);

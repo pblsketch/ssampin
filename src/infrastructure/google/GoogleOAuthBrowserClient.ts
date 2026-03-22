@@ -38,14 +38,14 @@ export class GoogleOAuthBrowserClient implements IGoogleAuthPort {
     this.clientSecret = (import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_SECRET ?? '').trim();
   }
 
-  getAuthUrl(redirectUri: string, codeChallenge?: string): string {
+  getAuthUrl(redirectUri: string, codeChallenge?: string, forceAccountSelect?: boolean): string {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: GoogleOAuthBrowserClient.SCOPES.join(' '),
       access_type: 'offline',
-      prompt: 'consent',
+      prompt: forceAccountSelect ? 'select_account consent' : 'consent',
     });
     if (codeChallenge) {
       params.set('code_challenge', codeChallenge);

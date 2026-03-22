@@ -139,6 +139,12 @@ export interface SyncSettings {
   readonly deviceId: string;
 }
 
+export interface MealSchoolSettings {
+  readonly schoolCode: string;      // 급식 조회용 SD_SCHUL_CODE (비어있으면 neis.schoolCode 사용)
+  readonly atptCode: string;        // 급식 조회용 ATPT_OFCDC_SC_CODE
+  readonly schoolName: string;      // 표시용 학교명
+}
+
 export interface Settings {
   readonly schoolName: string;
   readonly className: string;
@@ -190,4 +196,6 @@ export interface Settings {
   readonly bookmarkWidgetHiddenGroups?: readonly string[];
   /** 즐겨찾기 위젯에서 숨길 개별 북마크 ID 목록 */
   readonly bookmarkWidgetHiddenBookmarks?: readonly string[];
+  /** 급식 조회용 별도 학교 설정 (통합학교 대응, 미설정 시 neis 학교 사용) */
+  readonly mealSchool?: MealSchoolSettings;
 }

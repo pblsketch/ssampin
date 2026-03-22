@@ -239,16 +239,27 @@ export function App() {
       >
         <h1 className="text-lg font-bold text-sp-text">쌤핀</h1>
         {auth.isAuthenticated ? (
-          <button
-            onClick={auth.logout}
-            className="text-xs text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
-          >
-            <span>{auth.email}</span>
-            <span className="material-symbols-outlined text-[14px]">logout</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                auth.logout().then(() => auth.startLogin(true));
+              }}
+              className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
+              title="다른 계정으로 변경"
+            >
+              <span className="material-symbols-outlined text-[14px]">swap_horiz</span>
+            </button>
+            <button
+              onClick={auth.logout}
+              className="text-xs text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
+            >
+              <span>{auth.email}</span>
+              <span className="material-symbols-outlined text-[14px]">logout</span>
+            </button>
+          </div>
         ) : (
           <button
-            onClick={auth.startLogin}
+            onClick={() => void auth.startLogin()}
             className="text-xs text-sp-accent font-medium px-3 py-1 rounded-full glass-card hover:bg-sp-accent/10 transition-colors"
           >
             PC 동기화

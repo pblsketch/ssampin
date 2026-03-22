@@ -12,7 +12,9 @@ function isWeekend(): boolean {
 export function DashboardMeal() {
   const { settings } = useSettingsStore();
   const { todayMeals, todayLoading, todayError, loadTodayMeals } = useMealStore();
-  const { atptCode, schoolCode } = settings.neis;
+  // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
+  const atptCode = settings.mealSchool?.atptCode || settings.neis.atptCode;
+  const schoolCode = settings.mealSchool?.schoolCode || settings.neis.schoolCode;
 
   // 자신의 colSpan 읽기 (가로 배열 판정용)
   const config = useDashboardConfig((s) => s.config);

@@ -43,6 +43,10 @@ export function TodayHub({ onNavigateAttendance }: Props) {
 
   const periodInfo = useCurrentPeriod(settings.periodTimes);
 
+  // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
+  const mealAtptCode = settings.mealSchool?.atptCode || settings.neis.atptCode;
+  const mealSchoolCode = settings.mealSchool?.schoolCode || settings.neis.schoolCode;
+
   useEffect(() => {
     void loadSettings();
     void loadSchedule();
@@ -50,17 +54,17 @@ export function TodayHub({ onNavigateAttendance }: Props) {
   }, [loadSettings, loadSchedule, loadAttendance]);
 
   useEffect(() => {
-    if (settingsLoaded && settings.neis.atptCode && settings.neis.schoolCode) {
-      void loadMeals(settings.neis.atptCode, settings.neis.schoolCode);
+    if (settingsLoaded && mealAtptCode && mealSchoolCode) {
+      void loadMeals(mealAtptCode, mealSchoolCode);
     }
-  }, [settingsLoaded, settings.neis.atptCode, settings.neis.schoolCode, loadMeals]);
+  }, [settingsLoaded, mealAtptCode, mealSchoolCode, loadMeals]);
 
   // 동기화 완료 후 급식 데이터 재로딩 (settings가 갱신된 뒤 NEIS 코드가 생기면)
   useEffect(() => {
-    if (syncState === 'idle' && lastSyncedAt && settingsLoaded && settings.neis.atptCode && settings.neis.schoolCode) {
-      void loadMeals(settings.neis.atptCode, settings.neis.schoolCode);
+    if (syncState === 'idle' && lastSyncedAt && settingsLoaded && mealAtptCode && mealSchoolCode) {
+      void loadMeals(mealAtptCode, mealSchoolCode);
     }
-  }, [syncState, lastSyncedAt, settingsLoaded, settings.neis.atptCode, settings.neis.schoolCode, loadMeals]);
+  }, [syncState, lastSyncedAt, settingsLoaded, mealAtptCode, mealSchoolCode, loadMeals]);
 
   const roles = settings.teacherRoles ?? [];
   const isHomeroom = roles.includes('homeroom');

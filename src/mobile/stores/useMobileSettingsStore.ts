@@ -20,6 +20,7 @@ interface MobileSettings {
   periodTimes: readonly PeriodTime[];
   teacherRoles: readonly string[];
   neis: { atptCode: string; schoolCode: string };
+  mealSchool?: { schoolCode: string; atptCode: string; schoolName: string };
   sync: { deviceId: string; autoSyncInterval: number };
 }
 
@@ -76,6 +77,7 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
           const patched = { ...s, sync: { ...(s as unknown as { sync?: Record<string, unknown> }).sync, deviceId: syncDeviceId } };
           await settingsRepository.saveSettings(patched as Settings);
         }
+        const rawMealSchool = (s as unknown as { mealSchool?: { schoolCode?: string; atptCode?: string; schoolName?: string } }).mealSchool;
         set({
           settings: {
             schoolName: s.schoolName ?? '',
@@ -87,6 +89,11 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
               atptCode: (s.neis as { atptCode?: string })?.atptCode ?? '',
               schoolCode: (s.neis as { schoolCode?: string })?.schoolCode ?? '',
             },
+            mealSchool: rawMealSchool?.schoolCode ? {
+              schoolCode: rawMealSchool.schoolCode,
+              atptCode: rawMealSchool.atptCode ?? '',
+              schoolName: rawMealSchool.schoolName ?? '',
+            } : undefined,
             sync: {
               deviceId: syncDeviceId,
               autoSyncInterval: readAutoSyncInterval(),

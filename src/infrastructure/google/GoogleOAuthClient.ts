@@ -50,14 +50,14 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
    * @param redirectUri 리다이렉트 URI (로컬 서버 콜백)
    * @param codeChallenge PKCE code challenge (S256)
    */
-  getAuthUrl(redirectUri: string, codeChallenge?: string): string {
+  getAuthUrl(redirectUri: string, codeChallenge?: string, forceAccountSelect?: boolean): string {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: GoogleOAuthClient.SCOPES.join(' '),
       access_type: 'offline',
-      prompt: 'consent',
+      prompt: forceAccountSelect ? 'select_account consent' : 'consent',
     });
 
     if (codeChallenge) {
