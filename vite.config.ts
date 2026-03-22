@@ -34,6 +34,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/neis-api/, ''),
         },
+        '/weather-api': {
+          target: 'https://api.weatherapi.com',
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/weather-api/, ''),
+        },
       },
     },
   };
