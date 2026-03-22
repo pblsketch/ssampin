@@ -215,6 +215,7 @@ export function useHelpChat() {
           history,
           source: 'app',
           appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
+          isTest: !!import.meta.env.DEV,
           ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
         }),
       });

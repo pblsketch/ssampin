@@ -19,6 +19,7 @@ interface ChatRequest {
   history?: ChatHistoryItem[];
   source?: 'landing' | 'app';
   appVersion?: string;
+  isTest?: boolean;
 }
 
 interface ChatHistoryItem {
@@ -450,11 +451,12 @@ async function saveConversation(
   sessionId: string,
   userMessage: string,
   assistantMessage: string,
-  sources: string[] = []
+  sources: string[] = [],
+  isTest: boolean = false
 ): Promise<void> {
   await supabase.from('ssampin_conversations').insert([
-    { session_id: sessionId, role: 'user', content: userMessage },
-    { session_id: sessionId, role: 'assistant', content: assistantMessage, sources },
+    { session_id: sessionId, role: 'user', content: userMessage, is_test: isTest },
+    { session_id: sessionId, role: 'assistant', content: assistantMessage, sources, is_test: isTest },
   ]);
 }
 
@@ -524,7 +526,7 @@ serve(async (req: Request): Promise<Response> => {
       });
 
       // 대화 로그 저장
-      await saveConversation(supabase, body.sessionId, body.message, escalation.summary);
+      await saveConversation(supabase, body.sessionId, body.message, escalation.summary, [], body.isTest ?? false);
 
       return jsonResponse({
         type: 'escalation',
@@ -547,7 +549,7 @@ serve(async (req: Request): Promise<Response> => {
       : 0.3;
 
     // 대화 로그 저장
-    await saveConversation(supabase, body.sessionId, body.message, llmResponse, sources);
+    await saveConversation(supabase, body.sessionId, body.message, llmResponse, sources, body.isTest ?? false);
 
     return jsonResponse({
       type: 'answer',
