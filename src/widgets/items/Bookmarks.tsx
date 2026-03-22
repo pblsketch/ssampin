@@ -9,11 +9,18 @@ import {
   filterVisibleBookmarks,
 } from '@domain/rules/bookmarkRules';
 
-function openExternal(url: string) {
-  if (window.electronAPI?.openExternal) {
-    void window.electronAPI.openExternal(url);
+function openBookmark(bookmark: Bookmark) {
+  const type = bookmark.type ?? 'url';
+  if (type === 'folder') {
+    if (window.electronAPI?.openPath) {
+      void window.electronAPI.openPath(bookmark.url);
+    }
   } else {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    if (window.electronAPI?.openExternal) {
+      void window.electronAPI.openExternal(bookmark.url);
+    } else {
+      window.open(bookmark.url, '_blank', 'noopener,noreferrer');
+    }
   }
 }
 
@@ -111,7 +118,7 @@ export function BookmarksWidget() {
                 {items.map((bookmark) => (
                   <button
                     key={bookmark.id}
-                    onClick={() => openExternal(bookmark.url)}
+                    onClick={() => openBookmark(bookmark)}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-sp-card transition-colors text-left group"
                   >
                     <span className="text-base flex-shrink-0">
@@ -125,7 +132,7 @@ export function BookmarksWidget() {
                       {bookmark.name}
                     </span>
                     <span className="material-symbols-outlined text-[12px] text-sp-muted ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      open_in_new
+                      {bookmark.type === 'folder' ? 'folder_open' : 'open_in_new'}
                     </span>
                   </button>
                 ))}
