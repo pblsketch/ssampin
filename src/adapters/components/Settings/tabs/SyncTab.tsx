@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
+import { SyncResultSummary } from '@adapters/components/common/SyncResultSummary';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -11,7 +12,7 @@ const INTERVAL_OPTIONS = [0, 5, 10, 15, 30] as const;
 export function SyncTab() {
   const { settings, update } = useSettingsStore();
   const { isConnected, email, startAuth, disconnect, isLoading } = useCalendarSyncStore();
-  const { status, syncToCloud, syncFromCloud, deleteCloudData } = useDriveSyncStore();
+  const { status, syncToCloud, syncFromCloud, deleteCloudData, lastSyncResult } = useDriveSyncStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const sync: SyncSettings = settings.sync ?? {
@@ -233,6 +234,8 @@ export function SyncTab() {
                 </span>
                 {status === 'syncing' ? '동기화 중...' : '지금 동기화'}
               </button>
+
+              {lastSyncResult && <SyncResultSummary result={lastSyncResult} />}
             </div>
           </SettingsSection>
 

@@ -3,6 +3,7 @@ import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import { SyncToCloud } from '@usecases/sync/SyncToCloud';
 import { SyncFromCloud } from '@usecases/sync/SyncFromCloud';
 import { getDriveSyncAdapter, driveSyncRepository, storage } from '@mobile/di/container';
+import type { SyncResult } from '@adapters/stores/useDriveSyncStore';
 
 /** 모바일 전용 고유 device ID (synced settings와 독립적으로 관리) */
 function getMobileDeviceId(): string {
@@ -91,6 +92,7 @@ interface MobileDriveSyncState {
   conflict: ConflictInfo | null;
   lastSyncedAt: string | null;
   isAuthenticated: boolean;
+  lastSyncResult: SyncResult | null;
 
   setTokenGetter: (getter: () => Promise<string>) => void;
   syncToCloud: () => Promise<void>;
@@ -121,6 +123,7 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
   conflict: null,
   lastSyncedAt: null,
   isAuthenticated: false,
+  lastSyncResult: null,
 
   setTokenGetter: (getter) => {
     tokenGetter = getter;
@@ -143,10 +146,21 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       const deviceId = getMobileDeviceId();
       const deviceName = settingsState.settings.teacherName || 'Mobile PWA';
       const syncTo = new SyncToCloud(storage, getAdapter(), driveSyncRepository, deviceId, deviceName);
-      await syncTo.execute(({ current, total }) => {
+      const result = await syncTo.execute(({ current, total }) => {
         set({ progress: Math.round((current / total) * 100) });
       });
-      set({ state: 'idle', progress: 100, lastSyncedAt: new Date().toISOString() });
+      const now = new Date().toISOString();
+      set({
+        state: 'idle',
+        progress: 100,
+        lastSyncedAt: now,
+        lastSyncResult: {
+          direction: 'upload',
+          timestamp: now,
+          uploaded: result.uploaded,
+          skipped: result.skipped,
+        },
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : '동기화 실패';
       if (msg.includes('INVALID_GRANT')) {
@@ -177,10 +191,22 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       const deviceId = getMobileDeviceId();
       const deviceName = settingsState.settings.teacherName || 'Mobile PWA';
       const syncFrom = new SyncFromCloud(storage, getAdapter(), driveSyncRepository, deviceId, deviceName, 'latest');
-      await syncFrom.execute(({ current, total }) => {
+      const result = await syncFrom.execute(({ current, total }) => {
         set({ progress: Math.round((current / total) * 100) });
       });
-      set({ state: 'idle', progress: 100, lastSyncedAt: new Date().toISOString() });
+      const now = new Date().toISOString();
+      set({
+        state: 'idle',
+        progress: 100,
+        lastSyncedAt: now,
+        lastSyncResult: {
+          direction: 'download',
+          timestamp: now,
+          downloaded: result.downloaded,
+          skipped: result.skipped,
+          conflicts: result.conflicts.map(c => c.filename),
+        },
+      });
       await reloadAllStores();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '동기화 실패';

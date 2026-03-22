@@ -2,12 +2,22 @@ import { create } from 'zustand';
 import type { DriveSyncStatus, DriveSyncConflict } from '@domain/entities/DriveSyncState';
 import type { SyncProgress } from '@usecases/sync/SyncToCloud';
 
+export interface SyncResult {
+  direction: 'upload' | 'download';
+  timestamp: string;
+  uploaded?: string[];
+  downloaded?: string[];
+  skipped: string[];
+  conflicts?: string[];
+}
+
 interface DriveSyncState {
   status: DriveSyncStatus;
   lastSyncedAt: string | null;
   conflicts: DriveSyncConflict[];
   error: string | null;
   progress: SyncProgress | null;
+  lastSyncResult: SyncResult | null;
 
   // Actions
   syncToCloud: () => Promise<void>;
@@ -26,6 +36,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
   conflicts: [],
   error: null,
   progress: null,
+  lastSyncResult: null,
 
   syncToCloud: async () => {
     if (get().status === 'syncing') return;
@@ -53,9 +64,19 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         settings.teacherName || '내 기기',
       );
 
-      await useCase.execute((p) => set({ progress: p }));
+      const result = await useCase.execute((p) => set({ progress: p }));
       const now = new Date().toISOString();
-      set({ status: 'success', lastSyncedAt: now, progress: null });
+      set({
+        status: 'success',
+        lastSyncedAt: now,
+        progress: null,
+        lastSyncResult: {
+          direction: 'upload',
+          timestamp: now,
+          uploaded: result.uploaded,
+          skipped: result.skipped,
+        },
+      });
 
       // settings에 lastSyncedAt 업데이트
       await useSettingsStore.getState().update({
@@ -129,10 +150,18 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         await reloadStores(result.downloaded);
       }
 
+      const syncResult: SyncResult = {
+        direction: 'download',
+        timestamp: now,
+        downloaded: result.downloaded,
+        skipped: result.skipped,
+        conflicts: result.conflicts.map(c => c.filename),
+      };
+
       if (result.conflicts.length > 0) {
-        set({ status: 'conflict', conflicts: result.conflicts, lastSyncedAt: now, progress: null });
+        set({ status: 'conflict', conflicts: result.conflicts, lastSyncedAt: now, progress: null, lastSyncResult: syncResult });
       } else {
-        set({ status: 'success', lastSyncedAt: now, progress: null });
+        set({ status: 'success', lastSyncedAt: now, progress: null, lastSyncResult: syncResult });
         setTimeout(() => {
           if (get().status === 'success') set({ status: 'idle' });
         }, 3000);

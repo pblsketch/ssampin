@@ -88,6 +88,34 @@ function getAppIcon(): Electron.NativeImage {
   return found ? nativeImage.createFromPath(found) : nativeImage.createEmpty();
 }
 
+/** Setup.exe를 직접 실행하고 있는지 감지 → 경고 다이얼로그 표시 */
+function checkInstallation(): void {
+  const exePath = app.getPath('exe');
+  const tempDir = app.getPath('temp');
+  const downloadsPatterns = ['Downloads', 'download', '다운로드'];
+
+  const isFromTemp = exePath.toLowerCase().startsWith(tempDir.toLowerCase());
+  const isFromDownloads = downloadsPatterns.some((p) =>
+    exePath.toLowerCase().includes(p.toLowerCase())
+  );
+  const isSetupExe = path.basename(exePath).toLowerCase().includes('setup');
+
+  if (isFromTemp || (isFromDownloads && isSetupExe)) {
+    dialog.showMessageBoxSync({
+      type: 'warning',
+      title: '쌤핀 설치 안내',
+      message: '설치 파일을 직접 실행하고 계신 것 같아요!',
+      detail:
+        '쌤핀을 정상적으로 사용하려면 설치가 필요해요.\n\n' +
+        '현재 파일을 더블클릭하면 설치 과정이 진행됩니다.\n' +
+        '설치 완료 후에는 바탕화면의 "쌤핀" 아이콘을 사용해주세요.\n\n' +
+        '💡 이미 설치하셨다면, 다운로드 폴더의 Setup 파일이 아닌\n' +
+        '바탕화면이나 시작 메뉴의 "쌤핀" 아이콘으로 실행해주세요.',
+      buttons: ['확인'],
+    });
+  }
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -942,6 +970,7 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     applySystemSettings();
+    checkInstallation();
     registerIpcHandlers();
     registerSecureStorageHandlers();
     createWindow();

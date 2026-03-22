@@ -1,5 +1,6 @@
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { SyncResultSummary } from '@adapters/components/common/SyncResultSummary';
 
 const AUTO_SYNC_OPTIONS = [
   { value: 0, label: '꺼짐' },
@@ -10,7 +11,7 @@ const AUTO_SYNC_OPTIONS = [
 ] as const;
 
 export function SyncStatus() {
-  const { state, progress, error, conflict, lastSyncedAt, syncToCloud, syncFromCloud, resolveConflict, isAuthenticated } = useMobileDriveSyncStore();
+  const { state, progress, error, conflict, lastSyncedAt, syncToCloud, syncFromCloud, resolveConflict, isAuthenticated, lastSyncResult } = useMobileDriveSyncStore();
   const currentInterval = useMobileSettingsStore((s) => s.settings.sync?.autoSyncInterval ?? 0);
   const setAutoSyncInterval = useMobileSettingsStore((s) => s.setAutoSyncInterval);
 
@@ -100,6 +101,10 @@ export function SyncStatus() {
             다운로드
           </button>
         </div>
+      )}
+
+      {isAuthenticated && lastSyncResult && (
+        <SyncResultSummary result={lastSyncResult} compact />
       )}
 
       {isAuthenticated && (
