@@ -97,6 +97,11 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       if (connected) {
         const email = await authenticateGoogle.getEmail();
         const mappings = await calendarSyncRepo.getMappings();
+        // 매핑이 없으면 연결 상태만 설정하고 동기화는 스킵
+        if (mappings.length === 0) {
+          set({ isConnected: true, email, mappings });
+          return;
+        }
         const syncState = await calendarSyncRepo.getSyncState();
         set({ isConnected: true, email, mappings, syncState });
       }

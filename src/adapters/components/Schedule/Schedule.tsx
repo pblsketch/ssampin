@@ -19,7 +19,6 @@ import { BulkDeleteByDateRangeModal } from './BulkDeleteByDateRangeModal';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
-import { useToastStore } from '@adapters/components/common/Toast';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { NeisSchedulePanel } from './NeisSchedulePanel';
 
@@ -87,17 +86,19 @@ export function Schedule() {
   const neisEnabled = useNeisScheduleStore((s) => s.settings.enabled);
   const neisSyncStatus = useNeisScheduleStore((s) => s.syncStatus);
   const neisSyncedCount = useNeisScheduleStore((s) => s.settings.syncedCount);
-  const showToast = useToastStore((s) => s.show);
 
   // NEIS 패널 상태
   const [showNeisPanel, setShowNeisPanel] = useState(false);
 
-  // 구글 캘린더 에러 토스트
+  // 구글 캘린더 에러 닫기 상태
+  const [dismissedGoogleError, setDismissedGoogleError] = useState<string | null>(null);
+
+  // 에러가 바뀌면 닫기 상태 초기화
   useEffect(() => {
-    if (googleError) {
-      showToast(googleError, 'error');
+    if (googleError && googleError !== dismissedGoogleError) {
+      setDismissedGoogleError(null);
     }
-  }, [googleError, showToast]);
+  }, [googleError, dismissedGoogleError]);
 
   // 모달 상태
   const [showEventModal, setShowEventModal] = useState(false);
@@ -394,6 +395,21 @@ export function Schedule() {
           </button>
         </div>
       </header>
+
+      {/* 구글 캘린더 오류 인라인 안내 */}
+      {googleConnected && googleError && dismissedGoogleError !== googleError && (
+        <div className="shrink-0 flex items-center gap-2 px-8 py-2 text-xs text-amber-400/70 bg-amber-400/5 border-b border-amber-400/10">
+          <span className="material-symbols-outlined text-sm">warning</span>
+          <span className="flex-1">구글 캘린더 동기화 오류 — 사용하지 않으시면 무시하셔도 괜찮아요</span>
+          <button
+            type="button"
+            onClick={() => setDismissedGoogleError(googleError)}
+            className="text-sp-muted hover:text-sp-text text-xs px-2 py-0.5 rounded hover:bg-sp-surface transition-colors"
+          >
+            닫기
+          </button>
+        </div>
+      )}
 
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto p-8">
