@@ -116,6 +116,15 @@ export function HelpChatMessage({
             </div>
           )}
 
+          {/* 낮은 신뢰도 안내 */}
+          {!isUser && message.confidence !== undefined && message.confidence < 0.45 && message.confidence > 0 && (
+            <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-2">
+              <p className="text-[0.65rem] text-amber-400">
+                ⚠️ 이 답변은 정확하지 않을 수 있어요. 더 구체적으로 질문하시면 더 좋은 답변을 드릴 수 있어요!
+              </p>
+            </div>
+          )}
+
           {/* 피드백 버튼 (어시스턴트 답변에만, welcome 제외) */}
           {!isUser && message.id !== 'welcome' && message.feedbackState && onFeedbackResolved && onFeedbackUnresolved && onFeedbackAskMore && onFeedbackEscalate && (
             <ChatFeedback

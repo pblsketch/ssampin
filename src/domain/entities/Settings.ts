@@ -198,4 +198,8 @@ export interface Settings {
   readonly bookmarkWidgetHiddenBookmarks?: readonly string[];
   /** 급식 조회용 별도 학교 설정 (통합학교 대응, 미설정 시 neis 학교 사용) */
   readonly mealSchool?: MealSchoolSettings;
+  /** 할 일 타임라인: 시간표 수업 표시 */
+  readonly todoShowTimetable?: boolean;
+  /** 할 일 타임라인: 일정 표시 */
+  readonly todoShowEvents?: boolean;
 }

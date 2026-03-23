@@ -20,6 +20,7 @@ export interface HelpChatMessage {
   readonly escalationType?: 'bug' | 'feature' | 'other';
   readonly images?: readonly ChatImage[];
   readonly feedbackState?: FeedbackState;
+  readonly suggestedQuestions?: readonly string[];
 }
 
 export interface ChatApiResponse {
@@ -28,6 +29,7 @@ export interface ChatApiResponse {
   readonly sources?: readonly string[];
   readonly confidence?: number;
   readonly escalationType?: 'bug' | 'feature' | 'other';
+  readonly suggestedQuestions?: readonly string[];
 }
 
 export interface EscalationPayload {

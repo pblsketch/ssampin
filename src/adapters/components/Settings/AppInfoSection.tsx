@@ -1,5 +1,87 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+function DeveloperModal({ onClose }: { onClose: () => void }) {
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={handleOverlayClick}
+    >
+      <div className="relative w-full max-w-sm mx-4 bg-sp-card rounded-xl ring-1 ring-sp-border p-6 flex flex-col items-center gap-4">
+        {/* 닫기 버튼 */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-3 right-3 p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+          aria-label="닫기"
+        >
+          <span className="material-symbols-outlined text-[20px]">close</span>
+        </button>
+
+        {/* 프로필 이미지 */}
+        <div className="mt-2">
+          {!imgError ? (
+            <img
+              src="/images/profile.jpg"
+              alt="박준일 프로필"
+              className="w-20 h-20 rounded-full object-cover ring-2 ring-sp-border"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-sp-surface ring-2 ring-sp-border flex items-center justify-center">
+              <span className="material-symbols-outlined text-[36px] text-sp-muted">person</span>
+            </div>
+          )}
+        </div>
+
+        {/* 이름 */}
+        <p className="text-base font-bold text-sp-text">박준일</p>
+
+        {/* 소개 문구 */}
+        <p className="text-sm text-sp-muted leading-relaxed text-center">
+          살아가는 힘을 기르는 교실을 만들기 위해 동료 선생님들과 함께 연대하고 싶은 교사입니다.
+          선생님들이 살아가는 힘을 기르는 교실을 자유롭게 상상하는 과정을 돕고 싶어
+          &lsquo;쌤핀, PBL스케치, 나무학교 숲소리&rsquo;를 운영하고 있습니다.
+        </p>
+
+        {/* 이메일 */}
+        <a
+          href="mailto:pblsketch@gmail.com"
+          className="flex items-center gap-2 text-sm text-sp-accent hover:text-sp-accent/80 transition-colors"
+        >
+          <span className="material-symbols-outlined text-[16px]">mail</span>
+          pblsketch@gmail.com
+        </a>
+
+        {/* 프로젝트 태그 */}
+        <div className="flex items-center gap-2 flex-wrap justify-center">
+          {['쌤핀', 'PBL스케치', '나무학교 숲소리'].map((tag) => (
+            <span
+              key={tag}
+              className="px-2.5 py-1 rounded-lg bg-sp-surface text-xs text-sp-muted ring-1 ring-sp-border"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type UpdateCheckStatus =
   | 'idle'
   | 'checking'
@@ -92,6 +174,7 @@ export function AppInfoSection() {
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
   const INITIAL_SHOW_COUNT = 3;
   const [showAllVersions, setShowAllVersions] = useState(false);
+  const [showDeveloperModal, setShowDeveloperModal] = useState(false);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -181,7 +264,7 @@ export function AppInfoSection() {
       </div>
 
       {/* 변경 내역 */}
-      <div className="mb-5">
+      <div className="mb-3">
         <button
           type="button"
           onClick={() => {
@@ -309,6 +392,21 @@ export function AppInfoSection() {
             )}
           </div>
         )}
+      </div>
+
+      {/* 개발자 소개 버튼 */}
+      <div className="mb-5">
+        <button
+          type="button"
+          onClick={() => setShowDeveloperModal(true)}
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-sp-surface hover:bg-sp-surface/80 transition-colors"
+        >
+          <span className="flex items-center gap-2 text-sm text-sp-text font-medium">
+            <span className="material-symbols-outlined text-[18px] text-sp-accent">person</span>
+            개발자 소개
+          </span>
+          <span className="material-symbols-outlined text-[18px] text-sp-muted">chevron_right</span>
+        </button>
       </div>
 
       {/* Update section */}
@@ -481,6 +579,11 @@ export function AppInfoSection() {
           </div>
         )}
       </div>
+      )}
+
+      {/* 개발자 소개 모달 */}
+      {showDeveloperModal && (
+        <DeveloperModal onClose={() => setShowDeveloperModal(false)} />
       )}
     </section>
   );

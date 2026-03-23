@@ -55,7 +55,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: 'PIN 잠금은 왜 필요한가요?',
     answer: '학생이 볼 수 있는 상황에서 담임메모나 성적 같은 민감한 정보를 보호할 수 있어요. 기능별로 잠금을 설정할 수 있어요.',
-    keywords: ['PIN', '잠금', '비밀번호', '보호'],
+    keywords: ['PIN', '잠금', '비밀번호', '보호', '설정', '핀'],
     category: 'settings',
   },
   {
@@ -73,7 +73,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: '위젯 모드가 뭔가요?',
     answer: '대시보드를 작은 창으로 항상 화면 위에 띄워놓을 수 있어요. 대시보드 우측 상단의 위젯 버튼을 클릭하면 됩니다.',
-    keywords: ['위젯', '항상 위', '작은 창', '미니'],
+    keywords: ['위젯', '항상 위', '작은 창', '미니', '모드', '켜기', '열기', '위젯 모드'],
     category: 'general',
   },
   {
@@ -145,7 +145,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: '일정을 검색할 수 있나요?',
     answer: '일정 관리 페이지 오른쪽 패널에서 검색 입력란에 키워드를 입력하면 전체 일정에서 검색할 수 있어요. 연도 버튼으로 특정 연도의 일정만 필터링할 수도 있어요.',
-    keywords: ['검색', '일정 검색', '찾기', '일정 찾기', '연도'],
+    keywords: ['검색', '일정 검색', '찾기', '일정 찾기', '연도', '일정'],
     category: 'schedule',
   },
   {
@@ -157,19 +157,19 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: 'D-Day는 어떻게 설정하나요?',
     answer: '일정 관리 페이지에서 D-Day를 추가할 수 있어요. 제목, 날짜, 이모지를 설정하고 대시보드에 핀으로 고정하면 남은 일수가 표시돼요.',
-    keywords: ['디데이', 'D-Day', 'dday', '카운트다운', '남은'],
+    keywords: ['디데이', 'D-Day', 'dday', '카운트다운', '남은', '설정', 'd-day'],
     category: 'schedule',
   },
   {
     question: '테마를 바꿀 수 있나요?',
     answer: '설정 → 테마에서 7가지 프리셋(다크, 라이트, 파스텔, 네이비, 포레스트, 선셋, 모노) 중 선택하거나, 커스텀 테마로 직접 색상을 지정할 수 있어요.',
-    keywords: ['테마', '다크', '라이트', '색상', '모드', '배경'],
+    keywords: ['테마', '다크', '라이트', '색상', '모드', '배경', '바꾸기', '변경', '바꿀'],
     category: 'settings',
   },
   {
     question: '폰트를 바꿀 수 있나요?',
     answer: '설정 → 폰트에서 11가지 한글 폰트 중 선택할 수 있어요: Noto Sans KR, 프리텐다드, IBM Plex, 나눔고딕, 나눔스퀘어, 고운돋움, SUIT, 원티드, 페이퍼로지, 카카오큰글씨, 스포카.',
-    keywords: ['폰트', '글꼴', '글씨', '글자'],
+    keywords: ['폰트', '글꼴', '글씨', '글자', '변경', '바꾸기', '바꿀'],
     category: 'settings',
   },
   {
@@ -235,7 +235,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: '자동 업데이트가 안 돼요',
     answer: `인터넷 연결을 확인해보세요. 방화벽이 차단할 수도 있어요. 수동으로 업데이트하려면 ${SITE_DISPLAY}에서 최신 설치 파일을 다운로드해서 실행하세요. 기존 데이터는 유지돼요.`,
-    keywords: ['업데이트', '실패', '안 됨', '안됨', '자동'],
+    keywords: ['업데이트', '실패', '안 됨', '안됨', '자동', '안 돼', '안돼'],
     category: 'troubleshoot',
   },
   {
@@ -265,7 +265,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: 'Google Drive 동기화가 안 돼요',
     answer: '인터넷 연결을 먼저 확인해주세요. 구글 계정 로그인이 만료됐을 수 있으니 설정 → Google Drive에서 연결 해제 후 다시 연결해보세요.',
-    keywords: ['구글', 'Google', 'Drive', '드라이브', '동기화', '백업', '연동'],
+    keywords: ['구글', 'Google', 'Drive', '드라이브', '동기화', '백업', '연동', '모바일', '휴대폰'],
     category: 'troubleshoot',
   },
   {
@@ -301,7 +301,7 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
   {
     question: '위젯에서 메모를 넘겨볼 수 있나요?',
     answer: '위젯 모드에서 메모를 클릭하면 포커스 보기가 열려요. 이전/다음 버튼으로 다른 메모로 넘겨볼 수 있어요.',
-    keywords: ['위젯', '메모', '넘기기', '이전', '다음', '네비게이션', '포커스'],
+    keywords: ['위젯', '메모', '넘기기', '이전', '다음', '네비게이션', '포커스', '위젯 모드'],
     category: 'general',
   },
   {
@@ -334,6 +334,24 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
     keywords: ['진도', '위젯', '대시보드', '수업', '오늘'],
     category: 'class-management',
   },
+  {
+    question: '할 일에 시간을 설정할 수 있나요?',
+    answer: '네! 할 일 추가 시 ⏰ 시간 입력란에서 시간을 지정할 수 있어요. 시간이 있는 할 일은 시간순으로 정렬됩니다.',
+    keywords: ['할일', '시간', '타임', 'time', '시간 설정', '시간 지정'],
+    category: 'general',
+  },
+  {
+    question: '할 일에서 수업이나 일정도 같이 보고 싶어요',
+    answer: '할 일 페이지 상단의 "통합 보기"에서 📚 수업, 📅 일정 체크박스를 켜면 오늘의 시간표 수업과 일정이 할 일 목록과 함께 시간순으로 표시됩니다. 대시보드 위젯에서도 동일하게 동작해요.',
+    keywords: ['통합', '타임라인', '수업', '일정', '합쳐', '같이', '시간표', '통합 보기'],
+    category: 'general',
+  },
+  {
+    question: '대시보드에 미니 캘린더가 생겼어요',
+    answer: '네, v1.4.0에서 대시보드 미니 캘린더 위젯이 추가되었어요! 이번 달 캘린더에서 일정이 있는 날짜를 한눈에 확인할 수 있습니다.',
+    keywords: ['미니 캘린더', '캘린더 위젯', '달력', '대시보드 캘린더'],
+    category: 'general',
+  },
 ];
 
 /**
@@ -360,4 +378,27 @@ export function searchOfflineFaq(query: string): readonly FaqItem[] {
     .slice(0, 3);
 
   return scored.map((item) => item.faq);
+}
+
+/**
+ * 오프라인 FAQ 검색 — 점수 포함 반환
+ * @returns { faq, score } 배열 (최대 3개)
+ */
+export function searchOfflineFaqWithScore(query: string): readonly { faq: FaqItem; score: number }[] {
+  const normalized = query.toLowerCase().trim();
+
+  return OFFLINE_FAQ.map((faq) => {
+    let score = 0;
+    for (const keyword of faq.keywords) {
+      if (normalized.includes(keyword.toLowerCase())) score += 2;
+    }
+    const cleanQuestion = faq.question.replace(/[?？]/g, '').toLowerCase();
+    if (normalized.includes(cleanQuestion)) {
+      score += 5;
+    }
+    return { faq, score };
+  })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 }

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { searchOfflineFaq } from './offlineFaq';
+import { searchOfflineFaq, searchOfflineFaqWithScore } from './offlineFaq';
 import { fileToDataUrl, resizeImage } from './imageUtils';
 import type {
   HelpChatMessage,
@@ -21,12 +21,35 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/** 앱 컨텍스트 정보 (에스컬레이션 시 자동 첨부) */
-function getAppContext(): string {
+/** 페이지 ID → 한국어 이름 매핑 */
+const PAGE_NAMES: Record<string, string> = {
+  dashboard: '대시보드',
+  timetable: '시간표',
+  seating: '자리배치',
+  schedule: '일정 관리',
+  homeroom: '담임 업무',
+  'student-records': '학생 기록',
+  todo: '할일',
+  memo: '메모',
+  meal: '급식',
+  'class-management': '수업 관리',
+  settings: '설정',
+  export: '내보내기',
+  tools: '쌤도구',
+  bookmarks: '북마크',
+};
+
+/** 앱 컨텍스트 정보 (챗봇 API에 전달) */
+function getAppContext(): { summary: string; currentPage: string } {
   const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
   const platform = navigator.platform;
   const screen = `${window.screen.width}x${window.screen.height}`;
-  return `[앱 v${version}, ${platform}, ${screen}]`;
+  const currentPage = (window as any).__ssampin_current_page as string | undefined;
+  const pageName = currentPage ? (PAGE_NAMES[currentPage] ?? currentPage) : '알 수 없음';
+  return {
+    summary: `[앱 v${version}, ${platform}, ${screen}, 현재 페이지: ${pageName}]`,
+    currentPage: pageName,
+  };
 }
 
 const WELCOME_MESSAGE: HelpChatMessage = {
@@ -36,6 +59,30 @@ const WELCOME_MESSAGE: HelpChatMessage = {
     '안녕하세요! 🎓 쌤핀 AI 도우미예요.\n\n쌤핀의 기능이나 사용법에 대해 궁금한 점이 있으면 편하게 물어보세요!\n\n예시:\n- "시간표 설정은 어떻게 하나요?"\n- "좌석 배치 방법을 알려주세요"\n- "위젯 모드가 뭔가요?"',
   timestamp: Date.now(),
 };
+
+/** 주제별 후속 질문 추천 매핑 */
+const FOLLOW_UP_MAP: Record<string, string[]> = {
+  '시간표': ['NEIS 시간표가 안 나와요', '과목 색상 바꾸기', '교사 시간표 설정'],
+  '위젯': ['위젯 항상 위에 고정', '위젯에 보이는 정보 변경', '위젯 모드 종료'],
+  '설정': ['테마 바꾸기', '폰트 변경', 'PIN 잠금 설정'],
+  '자리': ['랜덤 배치 조건 설정', '짝꿍 모드 사용법', '자리배치 내보내기'],
+  '일정': ['D-Day 추가하기', 'Google 캘린더 연동', 'NEIS 학사일정 연동'],
+  '동기화': ['모바일 앱 연결 방법', 'Google Drive 백업', '데이터 복원'],
+  '메모': ['메모 색상 변경', '메모 크기 조절', '위젯에서 메모 보기'],
+  '급식': ['급식 알레르기 정보', '급식이 안 나와요'],
+  '할일': ['우선순위 설정', '반복 할일 만들기', '할일 보관함'],
+  '내보내기': ['엑셀로 내보내기', '한글(HWPX) 내보내기', 'PDF 내보내기'],
+};
+
+function getSuggestedQuestions(question: string, answer: string): string[] {
+  const text = question + ' ' + answer;
+  for (const [keyword, questions] of Object.entries(FOLLOW_UP_MAP)) {
+    if (text.includes(keyword)) {
+      return questions.slice(0, 3);
+    }
+  }
+  return [];
+}
 
 /** AI 도움말 채팅 훅 */
 export function useHelpChat() {
@@ -111,7 +158,7 @@ export function useHelpChat() {
           message: `[챗봇 미해결 피드백]\nQ: ${lastUser?.content ?? '(없음)'}\nA: ${lastBot?.content?.slice(0, 500) ?? '(없음)'}`,
           sessionId: sessionIdRef.current,
           appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
-          appSettings: getAppContext(),
+          appSettings: getAppContext().summary,
         }),
       });
     } catch {
@@ -126,7 +173,8 @@ export function useHelpChat() {
       const content = matches
         .map((m) => `**Q: ${m.question}**\n${m.answer}`)
         .join('\n\n');
-      addAssistantMessage(content, { isOffline: true });
+      const suggested = getSuggestedQuestions(query, content);
+      addAssistantMessage(content, { isOffline: true, suggestedQuestions: suggested.length > 0 ? suggested : undefined });
     } else {
       addAssistantMessage(
         '현재 오프라인 상태예요. 인터넷에 연결하면 더 정확한 답변을 받으실 수 있어요!\n\n기본 FAQ에서 답을 찾지 못했어요.',
@@ -190,6 +238,26 @@ export function useHelpChat() {
       return;
     }
 
+    // FAQ-first 하이브리드: 고신뢰 FAQ 매칭 시 즉시 답변 표시
+    const faqResults = searchOfflineFaqWithScore(trimmed);
+    const topFaq = faqResults[0];
+    if (topFaq !== undefined && topFaq.score >= 4) {
+      const faqContent = faqResults
+        .map((r) => `**Q: ${r.faq.question}**\n${r.faq.answer}`)
+        .join('\n\n');
+      const faqSuggested = getSuggestedQuestions(trimmed, faqContent);
+      addAssistantMessage(`💡 빠른 답변이에요:\n\n${faqContent}`, {
+        isOffline: false,
+        suggestedQuestions: faqSuggested.length > 0 ? faqSuggested : undefined,
+      });
+      // 고신뢰 FAQ로 충분히 답변 가능 — API 호출 생략으로 응답 속도 향상
+      if (topFaq.score >= 6) {
+        setStatus('idle');
+        return;
+      }
+      // 중간 신뢰도(4-5)면 API도 호출하여 더 정확한 답변 보강
+    }
+
     try {
       const history = messages
         .filter((m) => m.id !== 'welcome')
@@ -216,6 +284,7 @@ export function useHelpChat() {
           source: 'app',
           appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
           isTest: !!import.meta.env.DEV,
+          appContext: getAppContext().currentPage,
           ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
         }),
       });
@@ -240,10 +309,12 @@ export function useHelpChat() {
         setEscalationType(data.escalationType ?? 'other');
         setStatus('escalation');
       } else {
+        const suggested = data.suggestedQuestions ?? getSuggestedQuestions(trimmed, data.message);
         addAssistantMessage(data.message, {
           sources: data.sources,
           confidence: data.confidence,
           responseType: 'answer',
+          suggestedQuestions: suggested.length > 0 ? suggested : undefined,
         });
         setStatus('idle');
       }
@@ -299,7 +370,7 @@ export function useHelpChat() {
           ...data,
           sessionId: sessionIdRef.current,
           appVersion: data.appVersion ?? (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined),
-          appSettings: getAppContext(),
+          appSettings: getAppContext().summary,
           ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
         }),
       });

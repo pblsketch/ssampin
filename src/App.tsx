@@ -247,6 +247,11 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
+  // 챗봇에 현재 페이지 전달
+  useEffect(() => {
+    (window as any).__ssampin_current_page = currentPage;
+  }, [currentPage]);
+
   // 전체화면 상태 감지
   useEffect(() => {
     const handleFullscreenChange = () => {

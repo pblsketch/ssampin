@@ -37,6 +37,7 @@ export interface Todo {
   readonly text: string;
   readonly completed: boolean;
   readonly dueDate?: string;          // "YYYY-MM-DD"
+  readonly time?: string;             // "HH:mm" (선택, 없으면 시간 미지정)
   readonly createdAt: string;         // ISO 8601
   readonly priority?: TodoPriority;
   readonly category?: string;

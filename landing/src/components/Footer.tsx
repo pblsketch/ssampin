@@ -73,6 +73,13 @@ export default function Footer() {
             </a>
             <span className="text-sp-muted/30">·</span>
             <a
+              href="/about"
+              className="transition-colors hover:text-sp-text"
+            >
+              개발자 소개
+            </a>
+            <span className="text-sp-muted/30">·</span>
+            <a
               href="/privacy"
               className="transition-colors hover:text-sp-text"
             >

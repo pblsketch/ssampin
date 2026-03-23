@@ -98,6 +98,14 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
             `);
             resolve(code);
           } else {
+            // access_denied인 경우 (사용자 한도 초과 포함) — 전용 에러 코드 전송
+            if (error === 'access_denied') {
+              getMainWindow()?.webContents.send('oauth:error', {
+                code: 'ACCESS_DENIED',
+                message: '구글 인증이 거부되었습니다.',
+              });
+            }
+
             res.end(`
               <!DOCTYPE html>
               <html><head><title>쌤핀 인증 실패</title></head>

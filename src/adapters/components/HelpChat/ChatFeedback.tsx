@@ -25,7 +25,7 @@ export function ChatFeedback({
   // 답변 렌더링 1초 후 페이드인
   useEffect(() => {
     if (feedbackState === 'pending') {
-      const timer = setTimeout(() => setVisible(true), 1000);
+      const timer = setTimeout(() => setVisible(true), 3000);
       return () => clearTimeout(timer);
     }
     setVisible(true);

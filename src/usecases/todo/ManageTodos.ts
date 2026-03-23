@@ -33,7 +33,7 @@ export class ManageTodos {
   /**
    * 투두를 부분 업데이트합니다 (우선순위, 카테고리 등).
    */
-  async updateTodo(id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>): Promise<void> {
+  async updateTodo(id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder' | 'time'>>): Promise<void> {
     const data = await this.todoRepository.getTodos();
     const currentTodos = data?.todos ?? [];
 

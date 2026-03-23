@@ -53,6 +53,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         return this.request<T>(path, options, true);
       }
       const err = await res.text();
+      if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
+        throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
+      }
       throw new Error(`Drive Sync API error: ${res.status} ${err}`);
     }
     if (res.status === 204) return undefined as T;
@@ -70,6 +73,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         return this.downloadText(fileId, true);
       }
       const err = await res.text();
+      if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
+        throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
+      }
       throw new Error(`Drive Sync 다운로드 오류: ${res.status} ${err}`);
     }
     return res.text();
@@ -115,6 +121,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
         return this.uploadText(metadata, content, method, fileId, true);
       }
       const err = await res.text();
+      if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
+        throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
+      }
       throw new Error(`Drive Sync 업로드 오류: ${res.status} ${err}`);
     }
     return res.json() as Promise<FileResponse>;

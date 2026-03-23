@@ -5,6 +5,17 @@ import { HelpChatInput } from './HelpChatInput';
 import { HelpEscalationForm } from './HelpEscalationForm';
 import { HelpTypingIndicator } from './HelpTypingIndicator';
 
+const QUICK_QUESTIONS = [
+  '시간표 설정 방법',
+  '위젯 모드 사용법',
+  '자리 랜덤 배치',
+  'Google Drive 동기화',
+  '설정 초기화 방법',
+  'NEIS 연동 방법',
+  '모바일 앱 연결',
+  '내보내기 방법',
+];
+
 interface Props {
   readonly messages: readonly MessageType[];
   readonly status: HelpChatStatus;
@@ -109,6 +120,47 @@ export function HelpChatWindow({
             onFeedbackEscalate={onFeedbackEscalate}
           />
         ))}
+        {/* 빠른 질문 칩 */}
+        {messages.length <= 1 && (
+          <div className="px-4 pb-3">
+            <p className="mb-2 text-xs text-sp-muted">💡 자주 묻는 질문</p>
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_QUESTIONS.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => onSend(q)}
+                  className="rounded-full border border-sp-border bg-sp-card/50 px-3 py-1.5 text-xs text-sp-text transition-colors hover:border-sp-accent hover:bg-sp-accent/10"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* 후속 질문 추천 */}
+        {(() => {
+          const lastMsg = messages.length > 1 ? messages[messages.length - 1] : undefined;
+          const followUps = lastMsg?.role === 'assistant' ? lastMsg.suggestedQuestions : undefined;
+          if (!followUps || followUps.length === 0) return null;
+          return (
+            <div className="px-4 pb-2">
+              <p className="mb-1.5 text-[11px] text-sp-muted">🔗 관련 질문</p>
+              <div className="flex flex-wrap gap-1.5">
+                {followUps.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => onSend(q)}
+                    className="rounded-full border border-sp-accent/30 bg-sp-accent/5 px-3 py-1 text-xs text-sp-accent transition-colors hover:bg-sp-accent/15"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
         {status === 'loading' && <HelpTypingIndicator />}
       </div>
 

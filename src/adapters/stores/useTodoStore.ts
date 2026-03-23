@@ -16,10 +16,11 @@ interface TodoState {
     priority?: TodoPriority,
     category?: string,
     recurrence?: TodoRecurrence,
+    time?: string,
   ) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
-  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder' | 'time'>>) => Promise<void>;
 
   // 서브태스크
   addSubTask: (todoId: string, text: string) => Promise<void>;
@@ -62,7 +63,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
       }
     },
 
-    addTodo: async (text, dueDate, priority, category, recurrence) => {
+    addTodo: async (text, dueDate, priority, category, recurrence, time) => {
       const newTodo: Todo = {
         id: crypto.randomUUID(),
         text,
@@ -72,6 +73,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
         ...(dueDate !== undefined ? { dueDate } : {}),
         ...(category !== undefined ? { category } : {}),
         ...(recurrence !== undefined ? { recurrence } : {}),
+        ...(time !== undefined ? { time } : {}),
       };
       await manageTodos.add(newTodo);
       set((state) => ({ todos: [...state.todos, newTodo] }));

@@ -90,7 +90,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     } catch (err) {
       console.error('[DriveSync] syncToCloud error:', err);
       const msg = err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.';
-      if (msg.includes('INVALID_GRANT')) {
+      if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
         // 토큰이 무효화됨 → 동기화 비활성화, 재연결 안내
         const { useSettingsStore } = await import('./useSettingsStore');
         const sync = useSettingsStore.getState().settings.sync;
@@ -101,7 +101,9 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         }
         set({
           status: 'error',
-          error: 'Google 인증이 만료되었습니다. 설정에서 Google 계정을 다시 연결해주세요.',
+          error: msg.includes('SCOPE_INSUFFICIENT')
+            ? 'Google Drive 접근 권한이 변경되었습니다. 설정에서 Google 계정을 다시 연결해주세요.'
+            : 'Google 인증이 만료되었습니다. 설정에서 Google 계정을 다시 연결해주세요.',
           progress: null,
         });
       } else {
@@ -176,7 +178,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
     } catch (err) {
       console.error('[DriveSync] syncFromCloud error:', err);
       const msg = err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.';
-      if (msg.includes('INVALID_GRANT')) {
+      if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
         const { useSettingsStore } = await import('./useSettingsStore');
         const sync = useSettingsStore.getState().settings.sync;
         if (sync) {
@@ -186,7 +188,9 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         }
         set({
           status: 'error',
-          error: 'Google 인증이 만료되었습니다. 설정에서 Google 계정을 다시 연결해주세요.',
+          error: msg.includes('SCOPE_INSUFFICIENT')
+            ? 'Google Drive 접근 권한이 변경되었습니다. 설정에서 Google 계정을 다시 연결해주세요.'
+            : 'Google 인증이 만료되었습니다. 설정에서 Google 계정을 다시 연결해주세요.',
           progress: null,
         });
       } else {

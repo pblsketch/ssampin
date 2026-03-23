@@ -144,7 +144,16 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
 
       await get().completeAuth(code, actualRedirectUri);
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.', isLoading: false });
+      const msg = err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.';
+      // access_denied 에러 시 사용자 한도 안내
+      if (msg.includes('access_denied')) {
+        set({
+          error: '구글 인증 심사 진행 중으로 신규 연동이 일시 제한될 수 있습니다. 핵심 기능(시간표, 좌석배치 등)은 정상 사용 가능합니다.',
+          isLoading: false,
+        });
+      } else {
+        set({ error: msg, isLoading: false });
+      }
     }
   },
 

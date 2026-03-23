@@ -57,12 +57,20 @@ export function HelpChatPanel() {
   };
 
   const handleClose = () => {
-    // pending 피드백이 있으면 no_response로 기록
-    const hasPending = chat.messages.some(
+    const pendingMessages = chat.messages.filter(
       (m) => m.role === 'assistant' && m.feedbackState === 'pending',
     );
-    if (hasPending) {
-      track('chatbot_feedback', { result: 'no_response' });
+    if (pendingMessages.length > 0) {
+      // 마지막 어시스턴트 메시지가 5초 이상 지났으면 암시적 긍정으로 판단
+      // pendingMessages.length > 0 이므로 lastPending은 반드시 존재
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const lastPending = pendingMessages.at(-1)!;
+      const elapsed = Date.now() - lastPending.timestamp;
+      const isImplicitPositive = elapsed > 5000;
+      track('chatbot_feedback', {
+        result: isImplicitPositive ? 'implicit_positive' : 'no_response',
+        elapsed_ms: elapsed,
+      });
       chat.hideAllPendingFeedback();
     }
     setIsOpen(false);

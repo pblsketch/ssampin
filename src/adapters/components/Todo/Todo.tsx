@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
+import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Todo as TodoType, TodoPriority, TodoCategory } from '@domain/entities/Todo';
 import {
@@ -106,6 +109,25 @@ function getPostponeOptions(): PostponeOption[] {
   ];
 }
 
+/* ─── Timeline Types ─── */
+
+type TimelineItemType = 'todo' | 'timetable' | 'event';
+
+interface TimelineItem {
+  id: string;
+  type: TimelineItemType;
+  time: string | null;
+  title: string;
+  subtitle?: string;
+  color: string;
+  icon: string;
+  isCompleted?: boolean;
+  originalId: string;
+}
+
+// 요일 매핑 (Date.getDay() → schedule key)
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
 /* ─── Main Todo Component ─── */
 
 export function Todo() {
@@ -135,12 +157,19 @@ export function Todo() {
   const [newPriority, setNewPriority] = useState<TodoPriority>('none');
   const [newRecurrenceIdx, setNewRecurrenceIdx] = useState(0);
   const [newCategory, setNewCategory] = useState('');
+  const [newTime, setNewTime] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
+  const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
+  const { events, load: loadEvents } = useEventsStore();
+  const { settings, update: updateSettings } = useSettingsStore();
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadSchedule();
+    void loadEvents();
+  }, [load, loadSchedule, loadEvents]);
 
   const now = useMemo(() => new Date(), []);
 
@@ -159,6 +188,82 @@ export function Todo() {
   // 그룹핑
   const groups = useMemo(() => groupByDate(filtered, now), [filtered, now]);
 
+  // 타임라인 통합 아이템 (시간표 + 일정)
+  const timelineItems = useMemo<TimelineItem[]>(() => {
+    const showTimetable = settings.todoShowTimetable ?? false;
+    const showEvents = settings.todoShowEvents ?? false;
+    if (!showTimetable && !showEvents) return [];
+
+    const items: TimelineItem[] = [];
+    const todayKey = DAY_KEYS[now.getDay()] ?? '';
+    const todayStr = now.toISOString().slice(0, 10);
+
+    // 시간표 수업
+    if (showTimetable) {
+      // teacherSchedule 우선, 없으면 classSchedule
+      const dayPeriods = teacherSchedule?.[todayKey] ?? [];
+      const hasPeriods = dayPeriods.length > 0 && dayPeriods.some((p) => p !== null);
+      if (hasPeriods) {
+        dayPeriods.forEach((p, idx) => {
+          if (!p) return;
+          const periodTime = settings.periodTimes.find((pt) => pt.period === idx + 1);
+          items.push({
+            id: `tt-${idx + 1}`,
+            type: 'timetable',
+            time: periodTime?.start ?? null,
+            title: `${idx + 1}교시 ${p.subject}`,
+            subtitle: p.classroom || undefined,
+            color: 'text-purple-400',
+            icon: '📚',
+            originalId: `period-${idx + 1}`,
+          });
+        });
+      } else {
+        const classPeriods = classSchedule?.[todayKey] ?? [];
+        classPeriods.forEach((p, idx) => {
+          if (!p || !p.subject) return;
+          const periodTime = settings.periodTimes.find((pt) => pt.period === idx + 1);
+          items.push({
+            id: `tt-${idx + 1}`,
+            type: 'timetable',
+            time: periodTime?.start ?? null,
+            title: `${idx + 1}교시 ${p.subject}`,
+            subtitle: p.teacher || undefined,
+            color: 'text-purple-400',
+            icon: '📚',
+            originalId: `period-${idx + 1}`,
+          });
+        });
+      }
+    }
+
+    // 일정
+    if (showEvents) {
+      const todayEvents = events.filter((e) => {
+        if (e.isHidden) return false;
+        return (
+          e.date === todayStr ||
+          (e.endDate !== undefined && e.date <= todayStr && e.endDate >= todayStr)
+        );
+      });
+      for (const ev of todayEvents) {
+        const evTime = ev.startTime ?? (ev.time !== undefined ? ev.time.split(' - ')[0]?.trim() ?? null : null);
+        items.push({
+          id: `ev-${ev.id}`,
+          type: 'event',
+          time: evTime,
+          title: ev.title,
+          subtitle: ev.category,
+          color: 'text-emerald-400',
+          icon: '📅',
+          originalId: ev.id,
+        });
+      }
+    }
+
+    return items;
+  }, [settings.todoShowTimetable, settings.todoShowEvents, teacherSchedule, classSchedule, events, settings.periodTimes, now]);
+
   // 진행률 (활성 항목만)
   const completedCount = activeTodos.filter((t) => t.completed).length;
   const totalCount = activeTodos.length;
@@ -174,12 +279,14 @@ export function Todo() {
       newPriority,
       newCategory || undefined,
       recurrence ?? undefined,
+      newTime || undefined,
     );
     setNewText('');
     setNewPriority('none');
     setNewRecurrenceIdx(0);
     setNewCategory('');
-  }, [newText, newDueDate, newPriority, newRecurrenceIdx, newCategory, addTodo]);
+    setNewTime('');
+  }, [newText, newDueDate, newPriority, newRecurrenceIdx, newCategory, newTime, addTodo]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -309,6 +416,29 @@ export function Todo() {
                     <span className="material-symbols-outlined text-[16px]">settings</span>
                   </button>
                 </div>
+
+                {/* 타임라인 통합 토글 */}
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-sp-muted">통합 보기</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={settings.todoShowTimetable ?? false}
+                      onChange={(e) => void updateSettings({ todoShowTimetable: e.target.checked })}
+                      className="rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface"
+                    />
+                    <span className="text-sp-muted hover:text-sp-text transition-colors">📚 수업</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={settings.todoShowEvents ?? false}
+                      onChange={(e) => void updateSettings({ todoShowEvents: e.target.checked })}
+                      className="rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface"
+                    />
+                    <span className="text-sp-muted hover:text-sp-text transition-colors">📅 일정</span>
+                  </label>
+                </div>
               </div>
 
               {/* 추가 폼 */}
@@ -340,8 +470,30 @@ export function Todo() {
                   </button>
                 </div>
 
-                {/* 두 번째 줄: 우선순위 + 반복 + 카테고리 */}
+                {/* 두 번째 줄: 시간 + 우선순위 + 반복 + 카테고리 */}
                 <div className="flex gap-3 items-center flex-wrap">
+                  {/* 시간 */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-sp-muted">⏰</span>
+                    <input
+                      type="time"
+                      value={newTime}
+                      onChange={(e) => setNewTime(e.target.value)}
+                      className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+                    />
+                    {newTime && (
+                      <button
+                        type="button"
+                        onClick={() => setNewTime('')}
+                        className="text-xs text-sp-muted hover:text-red-400 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  <span className="text-sp-border">|</span>
+
                   {/* 우선순위 */}
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-sp-muted mr-1">우선순위</span>
@@ -422,6 +574,44 @@ export function Todo() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
+                  {/* 타임라인 통합 아이템 (시간표/일정) */}
+                  {timelineItems.length > 0 && (
+                    <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
+                      <div className="px-4 py-2 border-b border-sp-border/50 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px] text-sp-muted">timeline</span>
+                        <span className="text-xs font-medium text-sp-muted">오늘의 시간표 · 일정</span>
+                      </div>
+                      <div className="divide-y divide-sp-border/30">
+                        {[...timelineItems]
+                          .sort((a, b) => {
+                            if (a.time && b.time) return a.time.localeCompare(b.time);
+                            if (a.time && !b.time) return -1;
+                            if (!a.time && b.time) return 1;
+                            return 0;
+                          })
+                          .map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-3 px-4 py-2 opacity-70"
+                            >
+                              <span className="text-[11px] text-sp-muted w-12 shrink-0 text-right font-mono">
+                                {item.time ?? '--:--'}
+                              </span>
+                              <span className="text-sm shrink-0">{item.icon}</span>
+                              <span className="text-sm text-sp-text truncate flex-1">
+                                {item.title}
+                              </span>
+                              {item.subtitle !== undefined && (
+                                <span className="text-[11px] text-sp-muted shrink-0">
+                                  {item.subtitle}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
                   {GROUP_ORDER.map((groupKey) => {
                     const items = groups[groupKey];
                     if (!items || items.length === 0) return null;
@@ -825,6 +1015,7 @@ function TodoItem({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(todo.text);
   const [editDueDate, setEditDueDate] = useState(todo.dueDate ?? '');
+  const [editTime, setEditTime] = useState(todo.time ?? '');
   const [editPriority, setEditPriority] = useState<TodoPriority>(todo.priority ?? 'none');
   const [editCategory, setEditCategory] = useState(todo.category ?? '');
   const [showPostpone, setShowPostpone] = useState(false);
@@ -881,17 +1072,19 @@ function TodoItem({
     if (editPriority !== (todo.priority ?? 'none')) changes.priority = editPriority;
     if (editCategory !== (todo.category ?? '')) changes.category = editCategory || undefined;
     if (editDueDate !== (todo.dueDate ?? '')) changes.dueDate = editDueDate || undefined;
+    if (editTime !== (todo.time ?? '')) changes.time = editTime || undefined;
 
     if (Object.keys(changes).length > 0) {
-      void onUpdate(todo.id, changes as Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'dueDate'>>);
+      void onUpdate(todo.id, changes as Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'dueDate' | 'time'>>);
     }
     setEditing(false);
-  }, [editText, editPriority, editCategory, editDueDate, todo, onUpdate]);
+  }, [editText, editPriority, editCategory, editDueDate, editTime, todo, onUpdate]);
 
   const handleDoubleClick = useCallback(() => {
     if (todo.completed) return;
     setEditText(todo.text);
     setEditDueDate(todo.dueDate ?? '');
+    setEditTime(todo.time ?? '');
     setEditPriority(todo.priority ?? 'none');
     setEditCategory(todo.category ?? '');
     setEditing(true);
@@ -984,6 +1177,13 @@ function TodoItem({
               type="date"
               value={editDueDate}
               onChange={(e) => setEditDueDate(e.target.value)}
+              className="bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
+            />
+            {/* Time input */}
+            <input
+              type="time"
+              value={editTime}
+              onChange={(e) => setEditTime(e.target.value)}
               className="bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
             />
             {/* Priority buttons */}
@@ -1133,6 +1333,17 @@ function TodoItem({
             }`}
           >
             {formatDueDate(todo.dueDate)}
+          </span>
+        )}
+
+        {/* 시간 라벨 */}
+        {todo.time && (
+          <span
+            className={`text-xs font-mono px-1.5 py-0.5 rounded bg-sp-surface ${
+              todo.completed ? 'text-sp-muted/50' : 'text-sp-muted'
+            }`}
+          >
+            {todo.time}
           </span>
         )}
 

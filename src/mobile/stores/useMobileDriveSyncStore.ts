@@ -163,13 +163,15 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : '동기화 실패';
-      if (msg.includes('INVALID_GRANT')) {
+      if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
         tokenGetter = null;
         adapter = null;
         set({
           state: 'error',
           isAuthenticated: false,
-          error: 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
+          error: msg.includes('SCOPE_INSUFFICIENT')
+            ? 'Google Drive 접근 권한이 변경되었습니다. 다시 로그인해주세요.'
+            : 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
         });
       } else {
         set({ state: 'error', error: msg });
@@ -210,13 +212,15 @@ export const useMobileDriveSyncStore = create<MobileDriveSyncState>((set, get) =
       await reloadAllStores();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '동기화 실패';
-      if (msg.includes('INVALID_GRANT')) {
+      if (msg.includes('INVALID_GRANT') || msg.includes('SCOPE_INSUFFICIENT')) {
         tokenGetter = null;
         adapter = null;
         set({
           state: 'error',
           isAuthenticated: false,
-          error: 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
+          error: msg.includes('SCOPE_INSUFFICIENT')
+            ? 'Google Drive 접근 권한이 변경되었습니다. 다시 로그인해주세요.'
+            : 'Google 인증이 만료되었습니다. 다시 로그인해주세요.',
         });
       } else {
         set({ state: 'error', error: msg });

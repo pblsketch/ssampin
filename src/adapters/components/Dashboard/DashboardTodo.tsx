@@ -1,23 +1,108 @@
 import { useEffect, useMemo } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
+import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { Todo } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 
 const MAX_VISIBLE = 20;
 
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+interface TimelineEntry {
+  id: string;
+  type: 'timetable' | 'event';
+  time: string | null;
+  title: string;
+  icon: string;
+}
+
 export function DashboardTodo() {
   const { todos, load, toggleTodo } = useTodoStore();
+  const { teacherSchedule, classSchedule, load: loadSchedule } = useScheduleStore();
+  const { events, load: loadEvents } = useEventsStore();
+  const { settings } = useSettingsStore();
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadSchedule();
+    void loadEvents();
+  }, [load, loadSchedule, loadEvents]);
 
   // 아카이브 제외 + 정렬 (우선순위 반영)
   const sorted = useMemo<readonly Todo[]>(() => {
     const active = filterActive(todos);
     return sortTodos(active);
   }, [todos]);
+
+  // 타임라인 통합 아이템
+  const timelineEntries = useMemo<TimelineEntry[]>(() => {
+    const showTimetable = settings.todoShowTimetable ?? false;
+    const showEvents = settings.todoShowEvents ?? false;
+    if (!showTimetable && !showEvents) return [];
+
+    const items: TimelineEntry[] = [];
+    const now = new Date();
+    const todayKey = DAY_KEYS[now.getDay()] ?? '';
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    if (showTimetable) {
+      const dayPeriods = teacherSchedule?.[todayKey] ?? [];
+      dayPeriods.forEach((p, idx) => {
+        if (!p) return;
+        const periodTime = settings.periodTimes.find((pt) => pt.period === idx + 1);
+        items.push({
+          id: `tt-${idx + 1}`,
+          type: 'timetable',
+          time: periodTime?.start ?? null,
+          title: `${idx + 1}교시 ${p.subject}`,
+          icon: '📚',
+        });
+      });
+
+      if (dayPeriods.length === 0 || dayPeriods.every((p) => !p)) {
+        const classPeriods = classSchedule?.[todayKey] ?? [];
+        classPeriods.forEach((p, idx) => {
+          if (!p || !p.subject) return;
+          const periodTime = settings.periodTimes.find((pt) => pt.period === idx + 1);
+          items.push({
+            id: `tt-${idx + 1}`,
+            type: 'timetable',
+            time: periodTime?.start ?? null,
+            title: `${idx + 1}교시 ${p.subject}`,
+            icon: '📚',
+          });
+        });
+      }
+    }
+
+    if (showEvents) {
+      const todayEvents = events.filter((e) =>
+        !('isHidden' in e && e.isHidden) && (
+          e.date === todayStr ||
+          (e.endDate !== undefined && e.date <= todayStr && e.endDate >= todayStr)
+        ),
+      );
+      for (const ev of todayEvents) {
+        items.push({
+          id: `ev-${ev.id}`,
+          type: 'event',
+          time: ev.startTime ?? ev.time?.split(' - ')[0]?.trim() ?? null,
+          title: ev.title,
+          icon: '📅',
+        });
+      }
+    }
+
+    return items.sort((a, b) => {
+      if (a.time && b.time) return a.time.localeCompare(b.time);
+      if (a.time && !b.time) return -1;
+      if (!a.time && b.time) return 1;
+      return 0;
+    });
+  }, [settings.todoShowTimetable, settings.todoShowEvents, teacherSchedule, classSchedule, events, settings.periodTimes]);
 
   const visible = sorted.slice(0, MAX_VISIBLE);
   const activeTodos = useMemo(() => filterActive(todos), [todos]);
@@ -42,12 +127,35 @@ export function DashboardTodo() {
 
       {/* 콘텐츠 - 스크롤 가능 */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {totalCount === 0 ? (
+        {totalCount === 0 && timelineEntries.length === 0 ? (
           <div className="flex items-center justify-center py-6">
             <p className="text-sm text-sp-muted">할 일이 없습니다</p>
           </div>
         ) : (
           <>
+            {/* 타임라인 항목 */}
+            {timelineEntries.length > 0 && (
+              <>
+                <ul className="space-y-0.5 mb-2">
+                  {timelineEntries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-center gap-2 rounded-lg px-2 py-1 opacity-60"
+                    >
+                      <span className="text-[10px] text-sp-muted w-10 text-right font-mono shrink-0">
+                        {entry.time ?? '--:--'}
+                      </span>
+                      <span className="text-xs shrink-0">{entry.icon}</span>
+                      <span className="text-xs text-sp-text truncate flex-1">
+                        {entry.title}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t border-sp-border/30 mb-2" />
+              </>
+            )}
+
             {/* 미완료 목록 */}
             <ul className="space-y-1">
               {incomplete.map((todo) => (
@@ -149,6 +257,13 @@ function TodoItem({ todo, onToggle }: TodoItemProps) {
       {showPriority && (
         <span className={`text-[9px] ${priorityConfig.color}`}>
           {priorityConfig.icon}
+        </span>
+      )}
+
+      {/* 시간 표시 */}
+      {todo.time && !todo.completed && (
+        <span className="text-[10px] text-sp-accent font-mono shrink-0">
+          {todo.time}
         </span>
       )}
 

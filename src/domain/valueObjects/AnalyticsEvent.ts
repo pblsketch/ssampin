@@ -99,7 +99,7 @@ export interface AnalyticsEventProperties {
   widget_layout_change: { from: string; to: string };
   onboarding_roles_selected: { roles: string[]; hiddenMenuCount: number; visibleMenuCount: number };
   onboarding_widget_preset: { presetKey: string; roles: string[] };
-  chatbot_feedback: { result: 'resolved' | 'unresolved' | 'no_response'; topic?: string };
+  chatbot_feedback: { result: 'resolved' | 'unresolved' | 'no_response' | 'implicit_positive'; topic?: string; elapsed_ms?: number };
   chatbot_escalate: { questionText: string };
   share_modal_open: { trigger: 'manual' | 'prompt' };
   share_click: { method: 'kakao' | 'clipboard' | 'qr' };
