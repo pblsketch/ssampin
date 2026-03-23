@@ -16,6 +16,7 @@ export type MessageIcon =
 
 /** 메시지 배너 색상 프리셋 */
 export type MessageColorPreset =
+  | 'theme'
   | 'emerald'
   | 'blue'
   | 'purple'
@@ -26,7 +27,7 @@ export type MessageColorPreset =
   | 'custom';
 
 /** 색상 프리셋 → 실제 색상 매핑 */
-export const MESSAGE_COLOR_MAP: Record<Exclude<MessageColorPreset, 'custom'>, {
+export const MESSAGE_COLOR_MAP: Record<Exclude<MessageColorPreset, 'custom' | 'theme'>, {
   bg: string;
   border: string;
   icon: string;
@@ -48,23 +49,12 @@ export interface MessageStyle {
   readonly colorPreset: MessageColorPreset;
   readonly customColor?: string;
   readonly subtitle: string;
-  /** 요소별 색상 오버라이드 (프리셋 기반 색상을 개별 덮어쓰기) */
-  readonly overrides?: Partial<MessageColorOverrides>;
 }
 
-/** 요소별 커스텀 색상 */
-export interface MessageColorOverrides {
-  readonly bg: string;
-  readonly border: string;
-  readonly icon: string;
-  readonly text: string;
-  readonly sub: string;
-}
-
-/** 기본 스타일 */
+/** 기본 스타일 — 위젯 테마 연동 */
 export const DEFAULT_MESSAGE_STYLE: MessageStyle = {
   icon: 'verified',
-  colorPreset: 'emerald',
+  colorPreset: 'theme',
   subtitle: '',
 };
 

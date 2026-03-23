@@ -6,7 +6,6 @@ import {
   type MessageIcon,
   type MessageColorPreset,
   type MessageStyle,
-  type MessageColorOverrides,
 } from '@domain/entities/Message';
 
 const ICON_OPTIONS: { id: MessageIcon; label: string }[] = [
@@ -35,52 +34,32 @@ const COLOR_OPTIONS: { id: MessageColorPreset; label: string; sample: string }[]
   { id: 'teal', label: '청록', sample: '#14b8a6' },
 ];
 
-function getBaseColors(s: MessageStyle) {
-  if (s.colorPreset !== 'custom') {
-    return MESSAGE_COLOR_MAP[s.colorPreset];
-  }
-  const c = s.customColor ?? '#3b82f6';
+/** hex 색상에서 배너 5색을 도출 */
+function deriveColors(hex: string) {
   return {
-    bg: `${c}1a`,
-    border: `${c}33`,
-    icon: c,
-    text: c,
-    sub: `${c}cc`,
+    bg: `${hex}1a`,
+    border: `${hex}33`,
+    icon: hex,
+    text: hex,
+    sub: `${hex}cc`,
   };
+}
+
+/** 현재 위젯 테마의 --sp-accent 값을 읽음 */
+function getThemeAccent(): string {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue('--sp-accent')
+    .trim() || '#3b82f6';
 }
 
 function getColors(s: MessageStyle) {
-  const base = getBaseColors(s);
-  if (!s.overrides) return base;
-  return {
-    bg: s.overrides.bg ?? base.bg,
-    border: s.overrides.border ?? base.border,
-    icon: s.overrides.icon ?? base.icon,
-    text: s.overrides.text ?? base.text,
-    sub: s.overrides.sub ?? base.sub,
-  };
-}
-
-const ELEMENT_LABELS: { key: keyof MessageColorOverrides; label: string }[] = [
-  { key: 'bg', label: '배경' },
-  { key: 'border', label: '테두리' },
-  { key: 'icon', label: '아이콘' },
-  { key: 'text', label: '텍스트' },
-  { key: 'sub', label: '부제목' },
-];
-
-/** rgba/hex 색상을 #hex로 근사 변환 (color picker에 넣기 위함) */
-function toHex(color: string): string {
-  if (color.startsWith('#') && !color.includes('a') && !color.includes('A') && color.length <= 7) return color;
-  // rgba → hex 근사
-  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-  if (m) {
-    const [, r, g, b] = m;
-    return `#${[r, g, b].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`;
+  if (s.colorPreset === 'theme') {
+    return deriveColors(getThemeAccent());
   }
-  // hex with alpha suffix → strip alpha
-  if (color.startsWith('#') && color.length > 7) return color.slice(0, 7);
-  return color;
+  if (s.colorPreset === 'custom') {
+    return deriveColors(s.customColor ?? '#3b82f6');
+  }
+  return MESSAGE_COLOR_MAP[s.colorPreset];
 }
 
 function MessageStyleEditor({ style, onUpdate, onClose }: {
@@ -89,22 +68,10 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
   onClose: () => void;
 }) {
   const [subtitleDraft, setSubtitleDraft] = useState(style.subtitle);
-  const currentColors = getColors(style);
-  const hasOverrides = style.overrides && Object.keys(style.overrides).length > 0;
-
-  function updateOverride(key: keyof MessageColorOverrides, value: string) {
-    onUpdate({ overrides: { ...style.overrides, [key]: value } });
-  }
-
-  function clearOverride(key: keyof MessageColorOverrides) {
-    if (!style.overrides) return;
-    const next = { ...style.overrides };
-    delete (next as Record<string, unknown>)[key];
-    onUpdate({ overrides: Object.keys(next).length > 0 ? next : undefined });
-  }
+  const isThemeSync = style.colorPreset === 'theme';
 
   return (
-    <div className="absolute top-full right-0 mt-2 w-80 bg-[#0a0e17] border border-white/10 rounded-xl shadow-2xl p-4 z-50 space-y-4">
+    <div className="absolute top-full right-0 mt-2 w-72 bg-[#0a0e17] border border-white/10 rounded-xl shadow-2xl p-4 z-50 space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-gray-100">배너 꾸미기</span>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-100">
@@ -137,16 +104,36 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
         </div>
       </div>
 
-      {/* 기본 색상 프리셋 */}
+      {/* 색상 */}
       <div>
-        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">기본 색상</label>
-        <div className="flex flex-wrap gap-1.5">
+        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">색상</label>
+
+        {/* 테마 연동 토글 */}
+        <button
+          onClick={() => onUpdate({ colorPreset: isThemeSync ? 'emerald' : 'theme' })}
+          className={`w-full mb-2.5 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+            isThemeSync
+              ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
+              : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+          }`}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+            {isThemeSync ? 'link' : 'link_off'}
+          </span>
+          위젯 테마 연동
+          {isThemeSync && (
+            <span className="ml-auto text-[10px] text-blue-400">활성</span>
+          )}
+        </button>
+
+        {/* 수동 프리셋 (테마 연동 꺼져 있을 때만 활성) */}
+        <div className={`flex flex-wrap gap-1.5 transition-opacity ${isThemeSync ? 'opacity-30 pointer-events-none' : ''}`}>
           {COLOR_OPTIONS.map((opt) => (
             <button
               key={opt.id}
-              onClick={() => onUpdate({ colorPreset: opt.id, overrides: undefined })}
+              onClick={() => onUpdate({ colorPreset: opt.id })}
               className={`w-8 h-8 rounded-full border-2 transition-all ${
-                style.colorPreset === opt.id && !hasOverrides
+                style.colorPreset === opt.id
                   ? 'border-white scale-110 ring-2 ring-white/30'
                   : 'border-transparent hover:border-white/30'
               }`}
@@ -158,46 +145,11 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
             <input
               type="color"
               value={style.customColor ?? '#3b82f6'}
-              onChange={(e) => onUpdate({ colorPreset: 'custom', customColor: e.target.value, overrides: undefined })}
+              onChange={(e) => onUpdate({ colorPreset: 'custom', customColor: e.target.value })}
               className="w-8 h-8 rounded-full cursor-pointer border-2 border-dashed border-white/20"
               title="직접 선택"
             />
           </div>
-        </div>
-      </div>
-
-      {/* 요소별 색상 커스터마이징 */}
-      <div>
-        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">요소별 색상</label>
-        <div className="grid grid-cols-5 gap-1.5">
-          {ELEMENT_LABELS.map(({ key, label }) => {
-            const isOverridden = style.overrides?.[key] != null;
-            return (
-              <div key={key} className="flex flex-col items-center gap-1">
-                <div className="relative">
-                  <input
-                    type="color"
-                    value={toHex(currentColors[key])}
-                    onChange={(e) => updateOverride(key, e.target.value)}
-                    className={`w-9 h-9 rounded-lg cursor-pointer border-2 transition-all ${
-                      isOverridden ? 'border-blue-400 ring-1 ring-blue-400/50' : 'border-white/20'
-                    }`}
-                    title={`${label} 색상 변경`}
-                  />
-                  {isOverridden && (
-                    <button
-                      onClick={() => clearOverride(key)}
-                      className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-blue-500 text-white rounded-full flex items-center justify-center text-[8px] leading-none hover:brightness-110"
-                      title="프리셋 색상으로 되돌리기"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                <span className="text-[9px] text-gray-400">{label}</span>
-              </div>
-            );
-          })}
         </div>
       </div>
 
@@ -217,7 +169,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 초기화 */}
       <button
-        onClick={() => onUpdate({ icon: 'verified', colorPreset: 'emerald', subtitle: '', customColor: undefined, overrides: undefined })}
+        onClick={() => onUpdate({ icon: 'verified', colorPreset: 'theme', subtitle: '', customColor: undefined })}
         className="w-full py-1.5 text-[10px] rounded-lg border border-white/20 text-gray-400 hover:text-gray-100 transition-colors"
       >
         기본으로 초기화
