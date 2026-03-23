@@ -1,8 +1,16 @@
-import { useCallback } from 'react';
-import type { Settings, DashboardThemeSettings, FontFamily, WidgetStyleSettings } from '@domain/entities/Settings';
+import { useCallback, useMemo } from 'react';
+import type { Settings, DashboardThemeSettings, FontFamily, WidgetStyleSettings, ShadowLevel } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { ThemeSection } from '../ThemeSection';
 import { FontSelector } from '../FontSelector';
+import {
+  DEFAULT_WIDGET_STYLE,
+  PRESET_THEMES,
+  COLOR_SWATCHES,
+  getPresetTheme,
+} from '@domain/entities/DashboardTheme';
+import type { ThemeColors, PresetThemeId } from '@domain/entities/DashboardTheme';
+import { SliderRow, ToggleRow, SelectRow, ColorSwatchRow } from '../../shared/StyleControls';
 
 interface Props {
   draft: Settings;
@@ -20,6 +28,19 @@ export function DisplayTab({ draft, patch }: Props) {
 
   const selectedFont: FontFamily = draft.fontFamily ?? 'noto-sans';
 
+  const ws = { ...DEFAULT_WIDGET_STYLE, ...draft.widgetStyle };
+
+  const themeColors: ThemeColors = useMemo(() => {
+    const pid = draft.dashboardTheme?.presetId;
+    if (pid && pid !== 'custom') return getPresetTheme(pid as PresetThemeId).colors;
+    if (pid === 'custom' && draft.dashboardTheme?.customColors) return draft.dashboardTheme.customColors;
+    return PRESET_THEMES[0]!.colors;
+  }, [draft.dashboardTheme]);
+
+  const updateStyle = useCallback((p: Partial<WidgetStyleSettings>) => {
+    patch({ widgetStyle: { ...ws, ...p } });
+  }, [patch, ws]);
+
   return (
     <SettingsSection
       icon="palette"
@@ -34,6 +55,68 @@ export function DisplayTab({ draft, patch }: Props) {
           onChange={patchDashboardTheme}
           onStyleChange={patchWidgetStyle}
         />
+
+        {/* 투명도 */}
+        <div>
+          <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">투명도</h4>
+          <div className="space-y-3">
+            <SliderRow label="배경 투명도" min={0} max={100} step={5}
+              value={Math.round(draft.widget.opacity * 100)} unit="%"
+              onChange={(v) => patch({ widget: { ...draft.widget, opacity: v / 100 } })} />
+            <SliderRow label="카드 투명도" min={0} max={100} step={5}
+              value={Math.round((draft.widget.cardOpacity ?? 1) * 100)} unit="%"
+              onChange={(v) => patch({ widget: { ...draft.widget, cardOpacity: v / 100 } })} />
+          </div>
+        </div>
+
+        {/* 색상 조정 */}
+        <div>
+          <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">색상 조정</h4>
+          <div className="space-y-4">
+            <ColorSwatchRow label="배경" value={ws.bgColor} themeDefault={themeColors.bg}
+              swatches={COLOR_SWATCHES['bg'] ?? []} onChange={(v) => updateStyle({ bgColor: v })}
+              onReset={() => updateStyle({ bgColor: null })} />
+            <ColorSwatchRow label="카드" value={ws.cardColor} themeDefault={themeColors.card}
+              swatches={COLOR_SWATCHES['card'] ?? []} onChange={(v) => updateStyle({ cardColor: v })}
+              onReset={() => updateStyle({ cardColor: null })} />
+            <ColorSwatchRow label="강조" value={ws.accentColor} themeDefault={themeColors.accent}
+              swatches={COLOR_SWATCHES['accent'] ?? []} onChange={(v) => updateStyle({ accentColor: v })}
+              onReset={() => updateStyle({ accentColor: null })} />
+            <ColorSwatchRow label="텍스트" value={ws.textColor} themeDefault={themeColors.text}
+              swatches={COLOR_SWATCHES['text'] ?? []} onChange={(v) => updateStyle({ textColor: v })}
+              onReset={() => updateStyle({ textColor: null })} />
+          </div>
+        </div>
+
+        {/* 카드 모양 */}
+        <div>
+          <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">카드 모양</h4>
+          <div className="space-y-3">
+            <SliderRow label="둥글기" min={0} max={24} step={2} value={ws.borderRadius} unit="px"
+              onChange={(v) => updateStyle({ borderRadius: v })} />
+            <SliderRow label="간격" min={4} max={32} step={2} value={ws.cardGap} unit="px"
+              onChange={(v) => updateStyle({ cardGap: v })} />
+            <ToggleRow label="테두리" checked={ws.showBorder}
+              onChange={(v) => updateStyle({ showBorder: v })} />
+            {ws.showBorder && (
+              <>
+                <SliderRow label="두께" min={1} max={4} step={1} value={ws.borderWidth} unit="px"
+                  onChange={(v) => updateStyle({ borderWidth: v })} />
+                <ColorSwatchRow label="테두리 색상" value={ws.borderColor} themeDefault={themeColors.border}
+                  swatches={COLOR_SWATCHES['border'] ?? []} onChange={(v) => updateStyle({ borderColor: v })}
+                  onReset={() => updateStyle({ borderColor: null })} />
+              </>
+            )}
+            <SelectRow label="그림자" value={ws.shadow}
+              options={[
+                { value: 'none', label: '없음' },
+                { value: 'sm', label: '약간' },
+                { value: 'md', label: '보통' },
+                { value: 'lg', label: '강하게' },
+              ]}
+              onChange={(v) => updateStyle({ shadow: v as ShadowLevel })} />
+          </div>
+        </div>
 
         {/* 글꼴 선택 */}
         <FontSelector
