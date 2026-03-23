@@ -9,6 +9,8 @@ import { exportSeatingToExcel } from '@infrastructure/export/ExcelExporter';
 import { exportSeatingToHwpx } from '@infrastructure/export/HwpxExporter';
 /* eslint-enable no-restricted-imports */
 import { ShuffleOverlay } from './ShuffleOverlay';
+import { GroupShuffleOverlay } from './GroupShuffleOverlay';
+import { GroupSeatingView } from './GroupSeatingView';
 import { SeatZoneModal } from './SeatZoneModal';
 import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
@@ -236,6 +238,10 @@ export function Seating(_props?: { embedded?: boolean }) {
     resizeGrid,
     togglePairMode,
     toggleOddColumnMode,
+    changeLayout,
+    updateGroups,
+    shuffleGroupSeating,
+    toggleGroupGridSync,
   } = useSeatingStore();
 
   const {
@@ -247,12 +253,16 @@ export function Seating(_props?: { embedded?: boolean }) {
   const className = useSettingsStore((s) => s.settings.className);
   const seatingDefaultView = useSettingsStore((s) => s.settings.seatingDefaultView);
 
+  const layout = seating.layout ?? 'grid';
+  const groupGridSync = seating.groupGridSync !== false;
+
   const [isTeacherView, setIsTeacherView] = useState(seatingDefaultView === 'teacher');
   const [dragSource, setDragSource] = useState<{ row: number; col: number } | null>(null);
   const [dragTarget, setDragTarget] = useState<{ row: number; col: number } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showShuffle, setShowShuffle] = useState(false);
+  const [showGroupShuffle, setShowGroupShuffle] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showConstraintModal, setShowConstraintModal] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -325,8 +335,19 @@ export function Seating(_props?: { embedded?: boolean }) {
 
   const confirmRandomize = useCallback(async () => {
     setShowConfirm(false);
-    setShowShuffle(true);
     track('seating_shuffle', { studentCount: totalStudents });
+
+    if (layout === 'group') {
+      // 모둠 모드: 기존 모둠 구조 유지하면서 학생만 재배정
+      const groups = seating.groups ?? [];
+      const groupCount = Math.max(1, groups.length);
+      const maxSize = groups[0]?.maxSize ?? 6;
+      await shuffleGroupSeating(groupCount, maxSize);
+      setShowGroupShuffle(true);
+      return;
+    }
+
+    setShowShuffle(true);
     const result = await randomize();
     if (result && !result.success) {
       useToastStore.getState().show(
@@ -339,7 +360,7 @@ export function Seating(_props?: { embedded?: boolean }) {
         'info',
       );
     }
-  }, [randomize, track, totalStudents]);
+  }, [randomize, track, totalStudents, layout, seating.groups, shuffleGroupSeating]);
 
    
   const handleEditSave = useCallback(
@@ -437,49 +458,91 @@ export function Seating(_props?: { embedded?: boolean }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+              {/* 레이아웃 모드 스위치 */}
+              <div className="flex items-center gap-0.5 bg-sp-surface rounded-lg p-0.5 shrink-0">
+                <button
+                  onClick={() => void changeLayout('grid')}
+                  className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    layout === 'grid' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm mr-1 align-middle">grid_view</span>
+                  격자
+                </button>
+                <button
+                  onClick={() => void changeLayout('group')}
+                  className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    layout === 'group' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm mr-1 align-middle">workspaces</span>
+                  모둠
+                </button>
+              </div>
+              <button
+                onClick={() => void toggleGroupGridSync()}
+                className={`shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                  groupGridSync
+                    ? 'border-sp-accent/40 bg-sp-accent/10 text-sp-accent'
+                    : 'border-sp-border bg-sp-card text-sp-muted hover:text-sp-text'
+                }`}
+                title={groupGridSync
+                  ? '격자↔모둠 연동: 전환 시 학생 자동 재분배'
+                  : '격자↔모둠 비연동: 각각 독립 유지'}
+              >
+                <span className="material-symbols-outlined text-sm">
+                  {groupGridSync ? 'link' : 'link_off'}
+                </span>
+                {groupGridSync ? '연동' : '비연동'}
+              </button>
+              <div className="w-px h-8 bg-sp-border shrink-0" />
               <button
                 onClick={handleRandomize}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
               >
                 <span className="material-symbols-outlined text-lg">shuffle</span>
                 <span>자리 바꾸기</span>
               </button>
               <button
                 onClick={() => setShowConstraintModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
               >
                 <span className="material-symbols-outlined text-lg">tune</span>
                 <span>배치 조건</span>
               </button>
-              <button
-                onClick={() => void togglePairMode()}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${seating.pairMode
-                  ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
-                  : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
-                  }`}
-                title="짝꿍 모드: 2명씩 짝 그룹으로 표시"
-              >
-                <span className="material-symbols-outlined text-lg">group</span>
-                <span>짝꿍</span>
-              </button>
-              {seating.pairMode && (
-                <button
-                  onClick={() => void toggleOddColumnMode()}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
-                    (seating.oddColumnMode ?? 'single') === 'triple'
+              {layout === 'grid' && (
+                <>
+                  <button
+                    onClick={() => void togglePairMode()}
+                    className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${seating.pairMode
                       ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
                       : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
-                  }`}
-                  title="홀수 열 처리: 3명 함께 앉기 / 1명 따로 앉기"
-                >
-                  <span className="material-symbols-outlined text-lg">group_add</span>
-                  <span>{(seating.oddColumnMode ?? 'single') === 'triple' ? '3인 짝' : '1인 따로'}</span>
-                </button>
+                      }`}
+                    title="짝꿍 모드: 2명씩 짝 그룹으로 표시"
+                  >
+                    <span className="material-symbols-outlined text-lg">group</span>
+                    <span>짝꿍</span>
+                  </button>
+                  {seating.pairMode && (
+                    <button
+                      onClick={() => void toggleOddColumnMode()}
+                      className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
+                        (seating.oddColumnMode ?? 'single') === 'triple'
+                          ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
+                          : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
+                      }`}
+                      title="홀수 열 처리: 3명 함께 앉기 / 1명 따로 앉기"
+                    >
+                      <span className="material-symbols-outlined text-lg">group_add</span>
+                      <span>{(seating.oddColumnMode ?? 'single') === 'triple' ? '3인 짝' : '1인 따로'}</span>
+                    </button>
+                  )}
+                </>
               )}
               <button
                 onClick={() => setIsTeacherView((v) => !v)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isTeacherView
+                className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isTeacherView
                   ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
                   : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
                   }`}
@@ -492,7 +555,7 @@ export function Seating(_props?: { embedded?: boolean }) {
               </button>
               <button
                 onClick={() => setEditing(!isEditing)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
+                className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
                   ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
                   : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
                   }`}
@@ -502,12 +565,12 @@ export function Seating(_props?: { embedded?: boolean }) {
               </button>
               {isEditing && (
                 <>
-                  <div className="w-px h-8 bg-sp-border" />
+                  <div className="w-px h-8 bg-sp-border shrink-0" />
                   <button
                     onClick={() => void undo()}
                     title="실행 취소 (Ctrl+Z)"
                     disabled={!canUndo()}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                    className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
                   >
                     <span className="material-symbols-outlined text-lg">undo</span>
                     <span>실행 취소</span>
@@ -516,14 +579,14 @@ export function Seating(_props?: { embedded?: boolean }) {
                     onClick={() => void redo()}
                     title="다시 실행 (Ctrl+Shift+Z)"
                     disabled={!canRedo()}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                    className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
                   >
                     <span className="material-symbols-outlined text-lg">redo</span>
                     <span>다시 실행</span>
                   </button>
                   <button
                     onClick={() => setShowClearConfirm(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-sp-card hover:bg-red-500/10 text-sm font-medium text-red-400 transition-colors shadow-sm"
+                    className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-sp-card hover:bg-red-500/10 text-sm font-medium text-red-400 transition-colors shadow-sm"
                   >
                     <span className="material-symbols-outlined text-lg">delete_sweep</span>
                     <span>모두 삭제</span>
@@ -531,10 +594,10 @@ export function Seating(_props?: { embedded?: boolean }) {
                 </>
               )}
 
-          <div className="relative" ref={exportMenuRef}>
+          <div className="relative shrink-0" ref={exportMenuRef}>
             <button
               onClick={() => setShowExportMenu((v) => !v)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors shadow-sm shadow-sp-accent/20"
+              className="whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors shadow-sm shadow-sp-accent/20"
             >
               <span className="material-symbols-outlined text-lg">download</span>
               <span>내보내기</span>
@@ -591,7 +654,14 @@ export function Seating(_props?: { embedded?: boolean }) {
             )}
 
             {/* 좌석 그리드 */}
-            {seating.pairMode ? (
+            {layout === 'group' ? (
+              <GroupSeatingView
+                groups={seating.groups ?? []}
+                isEditing={isEditing}
+                onUpdateGroups={(groups) => void updateGroups(groups)}
+                onShuffleGroups={(count, max) => void shuffleGroupSeating(count, max)}
+              />
+            ) : seating.pairMode ? (
               /* ── 짝꿍 모드 그리드 ── */
               <div className="w-full max-w-6xl mx-auto pb-8 flex flex-col gap-5">
                 {Array.from({ length: seating.rows }, (_, vi) => {
@@ -770,45 +840,47 @@ export function Seating(_props?: { embedded?: boolean }) {
                 <span>총 {totalStudents}명</span>
                 <span className="text-sp-border">|</span>
                 {/* 열 × 행 크기 조절 컨트롤 */}
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => void resizeGrid(seating.rows, seating.cols - 1)}
-                    disabled={seating.cols <= 1}
-                    className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="열 줄이기"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
-                  </button>
-                  <span className="w-4 text-center">{seating.cols}</span>
-                  <button
-                    onClick={() => void resizeGrid(seating.rows, seating.cols + 1)}
-                    disabled={seating.cols >= 10}
-                    className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="열 늘리기"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
-                  </button>
-                  <span className="ml-0.5">열</span>
-                  <span className="mx-1 text-sp-border">×</span>
-                  <button
-                    onClick={() => void resizeGrid(seating.rows - 1, seating.cols)}
-                    disabled={seating.rows <= 1}
-                    className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="행 줄이기"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
-                  </button>
-                  <span className="w-4 text-center">{seating.rows}</span>
-                  <button
-                    onClick={() => void resizeGrid(seating.rows + 1, seating.cols)}
-                    disabled={seating.rows >= 10}
-                    className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="행 늘리기"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
-                  </button>
-                  <span className="ml-0.5">행</span>
-                </div>
+                {layout === 'grid' && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => void resizeGrid(seating.rows, seating.cols - 1)}
+                      disabled={seating.cols <= 1}
+                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="열 줄이기"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
+                    </button>
+                    <span className="w-4 text-center">{seating.cols}</span>
+                    <button
+                      onClick={() => void resizeGrid(seating.rows, seating.cols + 1)}
+                      disabled={seating.cols >= 10}
+                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="열 늘리기"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
+                    </button>
+                    <span className="ml-0.5">열</span>
+                    <span className="mx-1 text-sp-border">×</span>
+                    <button
+                      onClick={() => void resizeGrid(seating.rows - 1, seating.cols)}
+                      disabled={seating.rows <= 1}
+                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="행 줄이기"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
+                    </button>
+                    <span className="w-4 text-center">{seating.rows}</span>
+                    <button
+                      onClick={() => void resizeGrid(seating.rows + 1, seating.cols)}
+                      disabled={seating.rows >= 10}
+                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="행 늘리기"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
+                    </button>
+                    <span className="ml-0.5">행</span>
+                  </div>
+                )}
                 <span className="text-sp-border">|</span>
                 <span>빈 자리: {emptySeats}개</span>
               </div>
@@ -895,6 +967,15 @@ export function Seating(_props?: { embedded?: boolean }) {
           students={students}
           finalSeats={seating.seats}
           onComplete={() => setShowShuffle(false)}
+        />
+      )}
+
+      {/* 모둠 셔플 애니메이션 오버레이 */}
+      {showGroupShuffle && (
+        <GroupShuffleOverlay
+          groups={seating.groups ?? []}
+          students={students}
+          onComplete={() => setShowGroupShuffle(false)}
         />
       )}
 

@@ -135,7 +135,7 @@ export function ShuffleOverlay({
       }`}
     >
       {/* 배경 */}
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className="absolute inset-0 backdrop-blur-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--sp-bg) 92%, transparent)' }} />
 
       {/* 콘텐츠 */}
       <div className="relative z-10 flex flex-col items-center w-full">
@@ -201,7 +201,7 @@ export function ShuffleOverlay({
                       isEmpty
                         ? 'border-sp-border/30 bg-sp-card/30'
                         : isLocked
-                          ? 'border-sp-accent bg-sp-card shadow-[0_0_20px_rgba(59,130,246,0.4)] shuffle-lock-in'
+                          ? 'border-sp-accent bg-sp-card shadow-[0_0_20px_color-mix(in_srgb,var(--sp-accent)_40%,transparent)] shuffle-lock-in'
                           : 'border-sp-border/40 bg-sp-card/40 shuffle-cycling'
                     }
                     ${phase === 'done' && !isEmpty && isLocked ? 'shuffle-celebrate' : ''}

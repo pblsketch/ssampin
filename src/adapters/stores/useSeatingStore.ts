@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { SeatingData } from '@domain/entities/Seating';
+import type { SeatingLayout, SeatGroup } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
-import { countStudents, countEmptySeats } from '@domain/rules/seatRules';
+import { countStudents, countEmptySeats, shuffleGroups } from '@domain/rules/seatRules';
 import type { ShuffleResult } from '@domain/rules/seatRules';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import { seatingRepository, seatConstraintsRepository } from '@adapters/di/container';
@@ -117,6 +118,15 @@ interface SeatingState {
   togglePairMode: () => Promise<void>;
   /** 홀수 열 처리 모드 토글 (single ↔ triple) */
   toggleOddColumnMode: () => Promise<void>;
+
+  /** 레이아웃 모드 전환 (grid ↔ group) */
+  changeLayout: (layout: SeatingLayout) => Promise<void>;
+  /** 모둠 목록 업데이트 */
+  updateGroups: (groups: SeatGroup[]) => Promise<void>;
+  /** 모둠 셔플 (학생들을 모둠에 랜덤 분배) */
+  shuffleGroupSeating: (groupCount: number, maxSize: number) => Promise<void>;
+  /** 격자-모둠 연동 토글 */
+  toggleGroupGridSync: () => Promise<void>;
 
   /** 명렬표 변경 시 좌석 동기화 */
   syncFromRoster: (students: readonly Student[]) => Promise<void>;
@@ -276,6 +286,88 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       } catch {
         // 무시
       }
+    },
+
+    changeLayout: async (layout) => {
+      const { seating } = get();
+      pushToHistory();
+      const sync = seating.groupGridSync !== false; // 기본 true
+
+      if (sync && layout === 'group' && (!seating.groups || seating.groups.length === 0)) {
+        // 연동 모드 + grid → group (최초): 격자 학생을 모둠으로 자동 분배
+        const allStudentIds = seating.seats.flat().filter((id): id is string => id !== null);
+        const maxSize = 6;
+        const groupCount = Math.max(1, Math.ceil(allStudentIds.length / maxSize));
+        const groups = shuffleGroups(allStudentIds, groupCount, maxSize, [], Math.random);
+        const updated: SeatingData = { ...seating, layout, groups };
+        try {
+          await seatingRepository.saveSeating(updated);
+          set({ seating: updated });
+        } catch { /* 무시 */ }
+      } else if (sync && layout === 'grid' && seating.layout === 'group') {
+        // 연동 모드 + group → grid: 모둠 학생을 격자에 재배치
+        const allStudentIds = (seating.groups ?? []).flatMap(g => [...g.studentIds]);
+        const cols = seating.cols;
+        const rows = Math.max(seating.rows, Math.ceil(allStudentIds.length / cols));
+        const seats: (string | null)[][] = [];
+        let idx = 0;
+        for (let r = 0; r < rows; r++) {
+          const row: (string | null)[] = [];
+          for (let c = 0; c < cols; c++) {
+            row.push(idx < allStudentIds.length ? (allStudentIds[idx++] ?? null) : null);
+          }
+          seats.push(row);
+        }
+        const updated: SeatingData = { ...seating, layout, rows, seats };
+        try {
+          await seatingRepository.saveSeating(updated);
+          set({ seating: updated });
+        } catch { /* 무시 */ }
+      } else {
+        // 비연동 모드 또는 이미 모둠이 존재: 레이아웃만 전환
+        const updated: SeatingData = { ...seating, layout };
+        try {
+          await seatingRepository.saveSeating(updated);
+          set({ seating: updated });
+        } catch { /* 무시 */ }
+      }
+    },
+
+    updateGroups: async (groups) => {
+      const { seating } = get();
+      pushToHistory();
+      const updated: SeatingData = { ...seating, groups };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch { /* 무시 */ }
+    },
+
+    shuffleGroupSeating: async (groupCount, maxSize) => {
+      const { seating } = get();
+      pushToHistory();
+      // 모든 학생 ID 수집 (격자 + 모둠)
+      let allStudentIds: string[];
+      if (seating.groups && seating.groups.length > 0) {
+        allStudentIds = seating.groups.flatMap(g => [...g.studentIds]);
+      } else {
+        allStudentIds = seating.seats.flat().filter((id): id is string => id !== null);
+      }
+      const groups = shuffleGroups(allStudentIds, groupCount, maxSize, seating.groups ?? [], Math.random);
+      const updated: SeatingData = { ...seating, layout: 'group' as SeatingLayout, groups };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch { /* 무시 */ }
+    },
+
+    toggleGroupGridSync: async () => {
+      const { seating } = get();
+      const updated: SeatingData = { ...seating, groupGridSync: seating.groupGridSync === false };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch { /* 무시 */ }
     },
 
     resizeGrid: async (newRows, newCols) => {

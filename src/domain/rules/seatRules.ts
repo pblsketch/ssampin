@@ -1,4 +1,5 @@
-import type { SeatingData } from '../entities/Seating';
+import type { SeatingData, SeatGroup } from '../entities/Seating';
+import { GROUP_COLORS } from '../entities/Seating';
 import type { Student } from '../entities/Student';
 import type {
   ZoneId,
@@ -541,4 +542,40 @@ export function shuffleSeatsWithConstraints(
     relaxed: true,
     violations: ['모든 배치 시도 실패'],
   };
+}
+
+/**
+ * 모둠 랜덤 배치: 학생들을 모둠에 균등 분배 (라운드로빈)
+ */
+export function shuffleGroups(
+  studentIds: string[],
+  groupCount: number,
+  maxSize: number,
+  existingGroups: readonly SeatGroup[],
+  random: () => number = Math.random,
+): SeatGroup[] {
+  const shuffled = fisherYatesShuffle([...studentIds], random);
+  const groups: SeatGroup[] = [];
+
+  for (let i = 0; i < groupCount; i++) {
+    const base = existingGroups[i];
+    groups.push({
+      id: base?.id ?? `grp-${Date.now()}-${i}`,
+      name: base?.name ?? `${i + 1}모둠`,
+      color: base?.color ?? GROUP_COLORS[i % GROUP_COLORS.length]!,
+      studentIds: [],
+      maxSize,
+    });
+  }
+
+  // 라운드로빈 분배
+  shuffled.forEach((sid, idx) => {
+    const groupIdx = idx % groupCount;
+    const group = groups[groupIdx]!;
+    if (group.studentIds.length < group.maxSize) {
+      groups[groupIdx] = { ...group, studentIds: [...group.studentIds, sid] };
+    }
+  });
+
+  return groups;
 }
