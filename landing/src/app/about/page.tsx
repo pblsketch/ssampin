@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 const CONTACT_EMAIL = 'pblsketch@gmail.com';
 
 const PROJECTS = [
-  { name: '쌤핀' },
-  { name: 'PBL스케치' },
-  { name: '나무학교 숲소리' },
+  { name: '쌤핀', url: 'https://ssampin.com' },
+  { name: 'PBL스케치', url: 'https://pblsketch.xyz' },
+  { name: '나무학교 숲소리', url: 'https://supsori.com' },
 ];
 
 export default function AboutPage() {
@@ -100,12 +100,15 @@ export default function AboutPage() {
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               {PROJECTS.map((project) => (
-                <span
+                <a
                   key={project.name}
-                  className="rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-sm text-sp-muted"
+                  href={project.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-sm text-sp-muted transition-colors hover:border-sp-accent/50 hover:text-sp-accent"
                 >
                   {project.name}
-                </span>
+                </a>
               ))}
             </div>
           </div>

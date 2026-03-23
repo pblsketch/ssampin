@@ -68,13 +68,20 @@ function DeveloperModal({ onClose }: { onClose: () => void }) {
 
         {/* 프로젝트 태그 */}
         <div className="flex items-center gap-2 flex-wrap justify-center">
-          {['쌤핀', 'PBL스케치', '나무학교 숲소리'].map((tag) => (
-            <span
-              key={tag}
-              className="px-2.5 py-1 rounded-lg bg-sp-surface text-xs text-sp-muted ring-1 ring-sp-border"
+          {[
+            { name: '쌤핀', url: 'https://ssampin.com' },
+            { name: 'PBL스케치', url: 'https://pblsketch.xyz' },
+            { name: '나무학교 숲소리', url: 'https://supsori.com' },
+          ].map((project) => (
+            <a
+              key={project.name}
+              href={project.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 rounded-lg bg-sp-surface text-xs text-sp-muted ring-1 ring-sp-border transition-colors hover:ring-sp-accent/50 hover:text-sp-accent cursor-pointer"
             >
-              {tag}
-            </span>
+              {project.name}
+            </a>
           ))}
         </div>
       </div>
