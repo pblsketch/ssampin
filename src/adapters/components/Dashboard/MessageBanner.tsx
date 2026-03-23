@@ -69,17 +69,17 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
   const isThemeSync = style.colorPreset === 'theme';
 
   return (
-    <div className="absolute top-full right-0 mt-2 w-72 bg-[#0a0e17] border border-white/10 rounded-xl shadow-2xl p-4 z-50 space-y-4">
+    <div className="absolute top-full right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50 space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-gray-100">배너 꾸미기</span>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-100">
+        <span className="text-sm font-bold text-gray-800">배너 꾸미기</span>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
           <span className="material-symbols-outlined text-sm">close</span>
         </button>
       </div>
 
       {/* 아이콘 선택 */}
       <div>
-        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">아이콘</label>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">아이콘</label>
         <div className="flex flex-wrap gap-1.5">
           {ICON_OPTIONS.map((opt) => (
             <button
@@ -88,7 +88,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
               className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all ${
                 style.icon === opt.id
                   ? 'bg-blue-500 text-white ring-2 ring-blue-400 scale-110'
-                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
               title={opt.id}
             >
@@ -104,15 +104,15 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 색상 */}
       <div>
-        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">색상</label>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">색상</label>
 
         {/* 테마 연동 토글 */}
         <button
           onClick={() => onUpdate({ colorPreset: isThemeSync ? 'emerald' : 'theme' })}
           className={`w-full mb-2.5 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
             isThemeSync
-              ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
-              : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+              ? 'bg-blue-50 text-blue-600 border border-blue-200'
+              : 'bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100'
           }`}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
@@ -120,7 +120,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
           </span>
           위젯 테마 연동
           {isThemeSync && (
-            <span className="ml-auto text-[10px] text-blue-400">활성</span>
+            <span className="ml-auto text-[10px] text-blue-500">활성</span>
           )}
         </button>
 
@@ -132,8 +132,8 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
               onClick={() => onUpdate({ colorPreset: opt.id })}
               className={`w-8 h-8 rounded-full border-2 transition-all ${
                 style.colorPreset === opt.id
-                  ? 'border-white scale-110 ring-2 ring-white/30'
-                  : 'border-transparent hover:border-white/30'
+                  ? 'border-gray-800 scale-110 ring-2 ring-gray-300'
+                  : 'border-transparent hover:border-gray-300'
               }`}
               style={{ background: opt.sample }}
               title={opt.label}
@@ -144,7 +144,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
               type="color"
               value={style.customColor ?? '#3b82f6'}
               onChange={(e) => onUpdate({ colorPreset: 'custom', customColor: e.target.value })}
-              className="w-8 h-8 rounded-full cursor-pointer border-2 border-dashed border-white/20"
+              className="w-8 h-8 rounded-full cursor-pointer border-2 border-dashed border-gray-300"
               title="직접 선택"
             />
           </div>
@@ -153,7 +153,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 부제목 */}
       <div>
-        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">부제목</label>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">부제목</label>
         <input
           type="text"
           value={subtitleDraft}
@@ -161,14 +161,14 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
           onBlur={() => onUpdate({ subtitle: subtitleDraft.trim() })}
           onKeyDown={(e) => { if (e.key === 'Enter') onUpdate({ subtitle: subtitleDraft.trim() }); }}
           placeholder="예: 오늘도 힘내자! 💪"
-          className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-400"
+          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
         />
       </div>
 
       {/* 초기화 */}
       <button
         onClick={() => onUpdate({ icon: 'verified', colorPreset: 'theme', subtitle: '', customColor: undefined })}
-        className="w-full py-1.5 text-[10px] rounded-lg border border-white/20 text-gray-400 hover:text-gray-100 transition-colors"
+        className="w-full py-1.5 text-[10px] rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
       >
         기본으로 초기화
       </button>
