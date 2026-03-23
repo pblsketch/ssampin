@@ -158,8 +158,8 @@ export const COLOR_SWATCHES: Record<string, readonly string[]> = {
     '#e6e7eb', '#f5f3ff', '#ecfdf5', '#ffffff',
   ],
   accent: [
-    '#3b82f6', '#ef4444', '#22c55e', '#a855f7', '#f97316',
-    '#ec4899', '#06b6d4', '#eab308', '#6366f1', '#14b8a6',
+    '#4285d6', '#cc5a5a', '#35a862', '#9564cc', '#d47a35',
+    '#c45a8e', '#1a9ab0', '#bfa01c', '#626bc8', '#24a090',
   ],
   text: [
     '#ffffff', '#e2e8f0', '#f1f5f9', '#fef3c7', '#dcfce7',
