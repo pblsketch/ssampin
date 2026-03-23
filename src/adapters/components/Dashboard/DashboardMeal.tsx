@@ -11,30 +11,42 @@ function isWeekend(): boolean {
 
 export function DashboardMeal() {
   const { settings } = useSettingsStore();
-  const { todayMeals, todayLoading, todayError, loadTodayMeals } = useMealStore();
+  const {
+    todayLoading, todayError, loadTodayMeals,
+    manualLoaded, loadManualMeals, mealSource,
+    getMergedTodayMeals,
+  } = useMealStore();
   // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
   const atptCode = settings.mealSchool?.atptCode || settings.neis.atptCode;
   const schoolCode = settings.mealSchool?.schoolCode || settings.neis.schoolCode;
+
+  // 병합된 오늘의 급식
+  const todayMeals = getMergedTodayMeals();
 
   // 자신의 colSpan 읽기 (가로 배열 판정용)
   const config = useDashboardConfig((s) => s.config);
   const myColSpan = config?.widgets.find((w) => w.widgetId === 'meal')?.colSpan ?? 1;
   const isWide = myColSpan >= 3;
 
+  // 수동 급식 로드
   useEffect(() => {
-    if (atptCode && schoolCode) {
+    if (!manualLoaded) void loadManualMeals();
+  }, [manualLoaded, loadManualMeals]);
+
+  useEffect(() => {
+    if (atptCode && schoolCode && mealSource !== 'manual') {
       void loadTodayMeals(atptCode, schoolCode);
     }
-  }, [atptCode, schoolCode, loadTodayMeals]);
+  }, [atptCode, schoolCode, loadTodayMeals, mealSource]);
 
   const reloadMeal = useCallback(() => {
-    if (atptCode && schoolCode) void loadTodayMeals(atptCode, schoolCode);
-  }, [atptCode, schoolCode, loadTodayMeals]);
+    if (atptCode && schoolCode && mealSource !== 'manual') void loadTodayMeals(atptCode, schoolCode);
+  }, [atptCode, schoolCode, loadTodayMeals, mealSource]);
 
   useWidgetRefresh(reloadMeal, { intervalMs: 30 * 60 * 1000 });
 
-  // 학교 미설정
-  if (!schoolCode) {
+  // 학교 미설정 (수동 모드에서는 허용)
+  if (!schoolCode && mealSource !== 'manual') {
     return (
       <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
         <h3 className="text-base font-bold text-white flex items-center gap-2 mb-2">

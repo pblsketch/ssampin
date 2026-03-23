@@ -25,6 +25,23 @@ export interface SchoolSearchResult {
   readonly schoolType: string;   // SCHUL_KND_SC_NM (고등학교, 중학교 등)
 }
 
+/** 수동 입력 급식 */
+export interface ManualMealInfo {
+  readonly date: string;       // YYYYMMDD
+  readonly mealType: string;   // "중식", "간식" 등
+  readonly dishes: readonly MealDish[];
+  readonly calorie?: string;
+  readonly source: 'manual';
+}
+
+/** 급식 데이터 소스 */
+export type MealSource = 'neis' | 'manual' | 'merged';
+
+/** 수동 급식 저장 데이터 (날짜 → 배열) */
+export interface ManualMealData {
+  readonly [date: string]: readonly ManualMealInfo[];
+}
+
 /** 날짜별 급식 캐시 */
 export interface MealCache {
   readonly [date: string]: readonly MealInfo[];

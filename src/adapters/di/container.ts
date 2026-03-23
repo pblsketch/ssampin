@@ -29,6 +29,7 @@ import type { IConsultationRepository } from '@domain/repositories/IConsultation
 import type { ISurveyRepository } from '@domain/repositories/ISurveyRepository';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
+import type { IManualMealRepository } from '@domain/repositories/IManualMealRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -59,6 +60,7 @@ import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentR
 import { JsonConsultationRepository } from '@adapters/repositories/JsonConsultationRepository';
 import { JsonSurveyRepository } from '@adapters/repositories/JsonSurveyRepository';
 import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
+import { JsonManualMealRepository } from '@adapters/repositories/JsonManualMealRepository';
 import { DriveSyncAdapter } from '@infrastructure/google/DriveSyncAdapter';
 import { ConsultationSupabaseClient } from '@infrastructure/supabase/ConsultationSupabaseClient';
 import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
@@ -121,6 +123,9 @@ export const bookmarkRepository: IBookmarkRepository =
 
 export const ddayRepository: IDDayRepository =
   new JsonDDayRepository(storage);
+
+export const manualMealRepository: IManualMealRepository =
+  new JsonManualMealRepository(storage);
 
 export const neisPort: INeisPort = new NeisApiClient();
 
