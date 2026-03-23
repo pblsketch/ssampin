@@ -14,6 +14,7 @@ import {
   groupByDate,
   isOverdue,
 } from '@domain/rules/todoRules';
+import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { RECURRENCE_PRESETS, getRecurrenceLabel } from '@domain/valueObjects/TodoRecurrence';
 import { TodoCategoryModal } from './TodoCategoryModal';
@@ -125,8 +126,6 @@ interface TimelineItem {
   originalId: string;
 }
 
-// 요일 매핑 (Date.getDay() → schedule key)
-const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 /* ─── Main Todo Component ─── */
 
@@ -195,7 +194,7 @@ export function Todo() {
     if (!showTimetable && !showEvents) return [];
 
     const items: TimelineItem[] = [];
-    const todayKey = DAY_KEYS[now.getDay()] ?? '';
+    const todayKey = getDayOfWeek(now) ?? '';
     const todayStr = now.toISOString().slice(0, 10);
 
     // 시간표 수업

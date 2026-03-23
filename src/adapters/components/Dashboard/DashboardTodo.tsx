@@ -5,11 +5,10 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { Todo } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
+import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 
 const MAX_VISIBLE = 20;
-
-const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 interface TimelineEntry {
   id: string;
@@ -45,7 +44,7 @@ export function DashboardTodo() {
 
     const items: TimelineEntry[] = [];
     const now = new Date();
-    const todayKey = DAY_KEYS[now.getDay()] ?? '';
+    const todayKey = getDayOfWeek(now) ?? '';
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     if (showTimetable) {
