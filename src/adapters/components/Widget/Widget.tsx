@@ -179,7 +179,7 @@ export function Widget() {
         onContextMenu={handleContextMenu}
         style={{
           fontFamily: 'inherit',
-          fontSize: `${settings.dashboardFontScale ?? 1}rem`,
+          zoom: settings.dashboardFontScale ?? 1,
           backgroundColor: `rgba(var(--sp-widget-rgb), ${settings.widget.opacity})`,
           '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
         } as React.CSSProperties}

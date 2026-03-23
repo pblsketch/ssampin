@@ -26,7 +26,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   }, []);
 
   return (
-    <div className="h-full flex flex-col" style={{ fontSize: `${fontScale}rem` }}>
+    <div className="h-full flex flex-col" style={{ zoom: fontScale }}>
       {/* 헤더 */}
       <DashboardHeader
         isEditMode={isEditMode}
