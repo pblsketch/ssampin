@@ -223,6 +223,8 @@ export function RosterManagementTab() {
 
           <div className="w-px h-8 bg-sp-border" />
 
+          <BirthdaySyncToggle />
+
           <button
             onClick={() => setIsEditing(!isEditing)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
@@ -487,9 +489,6 @@ export function RosterManagementTab() {
           <span>여기서 등록한 명렬은 자리배치, 과제수합, 학생기록 등 모든 기능에서 사용됩니다. 자리배치를 따로 설정하지 않아도 명렬만 등록하면 다른 기능을 이용할 수 있어요.</span>
         </div>
 
-        {/* 생일 → 일정 동기화 토글 */}
-        <BirthdaySyncToggle />
-
         {/* 엑셀 가져오기 미리보기 */}
         {previewStudents && (
           <div className="max-w-5xl mx-auto mt-4 p-4 rounded-lg bg-sp-surface border border-sp-border">
@@ -620,29 +619,18 @@ function BirthdaySyncToggle() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto mt-3 flex items-center justify-between py-2.5 px-4 rounded-xl bg-sp-surface/50 border border-sp-border/30">
-      <div className="flex items-center gap-3">
-        <span className="text-lg">🎂</span>
-        <div>
-          <span className="text-sm font-medium text-sp-text">생일을 일정에 등록</span>
-          <p className="text-[10px] text-sp-muted mt-0.5">
-            생년월일이 입력된 학생의 생일이 캘린더에 매년 표시됩니다
-          </p>
-        </div>
-      </div>
-      <button
-        role="switch"
-        aria-checked={!!syncEnabled}
-        disabled={loading}
-        onClick={() => void handleToggle()}
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-          syncEnabled ? 'bg-sp-accent' : 'bg-sp-border'
-        } ${loading ? 'opacity-50' : ''}`}
-      >
-        <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-          syncEnabled ? 'translate-x-4' : 'translate-x-0.5'
-        }`} />
-      </button>
-    </div>
+    <button
+      onClick={() => void handleToggle()}
+      disabled={loading}
+      title={syncEnabled ? '생일 일정 등록됨 (클릭하여 해제)' : '생일을 일정에 등록'}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
+        syncEnabled
+          ? 'border-pink-500/40 bg-pink-500/15 text-pink-400'
+          : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-muted'
+      } ${loading ? 'opacity-50' : ''}`}
+    >
+      <span style={{ fontSize: '16px' }}>🎂</span>
+      <span>{syncEnabled ? '생일 등록됨' : '생일 등록'}</span>
+    </button>
   );
 }
