@@ -1,21 +1,31 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
-/**
- * 자리배치 미니 위젯
- * 현재 좌석 배치를 축소 격자로 미리보기
- */
 export function Seating() {
   const { seating, load } = useSeatingStore();
   const { students, load: loadStudents } = useStudentStore();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [sizeMode, setSizeMode] = useState<'sm' | 'md' | 'lg'>('sm');
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      setSizeMode(width < 300 ? 'sm' : width < 500 ? 'md' : 'lg');
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     void load();
     void loadStudents();
   }, [load, loadStudents]);
 
-  const { rows, cols, seats } = seating;
+  const { rows, cols, seats, pairMode, oddColumnMode, layout, groups } = seating;
 
   const studentMap = useMemo(
     () => new Map(students.map((s) => [s.id, s])),
@@ -23,8 +33,9 @@ export function Seating() {
   );
 
   const hasSeating = useMemo(() => {
+    if (layout === 'group' && groups && groups.length > 0) return true;
     return seats.some((row) => row.some((cell) => cell !== null));
-  }, [seats]);
+  }, [seats, layout, groups]);
 
   if (!hasSeating) {
     return (
@@ -36,19 +47,118 @@ export function Seating() {
     );
   }
 
-  return (
-    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col items-center gap-2">
-      {/* 교탁 */}
-      <div className="w-16 rounded bg-sp-border/30 py-0.5 text-center text-[10px] text-sp-muted">
-        교탁
+  if (layout === 'group' && groups && groups.length > 0) {
+    return (
+      <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col gap-2 overflow-y-auto">
+        {groups.map((group) => {
+          const groupStudents = group.studentIds
+            .map((id) => studentMap.get(id))
+            .filter(Boolean);
+          return (
+            <div
+              key={group.id}
+              className={`rounded-lg ${sizeMode === 'sm' ? 'px-2 py-1' : 'px-3 py-2'}`}
+              style={{ borderLeft: `3px solid ${group.color}`, background: `${group.color}10` }}
+            >
+              <div className={`font-medium text-sp-text ${sizeMode === 'sm' ? 'text-[10px]' : 'text-xs'}`}>
+                {group.name}
+                <span className="text-sp-muted ml-1">({groupStudents.length}명)</span>
+              </div>
+              {sizeMode !== 'sm' && groupStudents.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {groupStudents.map((s) => (
+                    <span
+                      key={s!.id}
+                      className={`rounded px-1 ${sizeMode === 'lg' ? 'text-xs' : 'text-[10px]'} text-sp-accent`}
+                      style={{ background: `${group.color}20` }}
+                    >
+                      {s!.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+    );
+  }
 
-      {/* 좌석 그리드 */}
+  if (pairMode) {
+    const mode = oddColumnMode ?? 'single';
+    const basePairs = buildPairGroups(cols, cols % 2 !== 0 ? mode : 'single');
+
+    return (
+      <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col items-center gap-2">
+        <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
+          sizeMode === 'lg' ? 'w-24 text-sm' : sizeMode === 'md' ? 'w-20 text-xs' : 'w-16 text-[10px]'
+        }`}>교탁</div>
+
+        <div className={`flex flex-col ${sizeMode === 'lg' ? 'gap-2' : sizeMode === 'md' ? 'gap-1.5' : 'gap-1'}`}>
+          {Array.from({ length: rows }, (_, r) => {
+            const row = seats[r]!;
+            const pairs = (mode === 'triple' && cols % 2 === 0)
+              ? adjustPairGroupsForRow(basePairs, row)
+              : basePairs;
+
+            return (
+              <div key={r} className={`flex items-center ${
+                sizeMode === 'lg' ? 'gap-4' : sizeMode === 'md' ? 'gap-3' : 'gap-2'
+              }`}>
+                {pairs.map((pair, pi) => {
+                  const isSingle = pair.startCol === pair.endCol;
+                  const colRange: number[] = [];
+                  for (let c = pair.startCol; c <= pair.endCol; c++) colRange.push(c);
+
+                  return (
+                    <div
+                      key={pi}
+                      className={`flex gap-0.5 ${!isSingle ? 'bg-sp-surface/40 rounded px-0.5 py-0.5' : ''}`}
+                    >
+                      {colRange.map((c) => {
+                        const studentId = row[c] ?? null;
+                        const student = studentId ? studentMap.get(studentId) : undefined;
+                        const hasStudent = studentId !== null;
+
+                        return (
+                          <div
+                            key={c}
+                            className={`${
+                              sizeMode === 'lg' ? 'h-8 w-14 text-xs' :
+                              sizeMode === 'md' ? 'h-6 w-10 text-[10px]' :
+                              'h-5 w-5 text-[8px]'
+                            } rounded-sm flex items-center justify-center ${
+                              hasStudent ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface/30'
+                            }`}
+                          >
+                            {student ? (
+                              <span className="truncate max-w-full px-0.5">
+                                {sizeMode === 'sm' ? student.name.charAt(0) : student.name}
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col items-center gap-2">
+      <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
+        sizeMode === 'lg' ? 'w-24 text-sm' : sizeMode === 'md' ? 'w-20 text-xs' : 'w-16 text-[10px]'
+      }`}>교탁</div>
+
       <div
-        className="grid gap-1"
-        style={{
-          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-        }}
+        className={`grid ${sizeMode === 'lg' ? 'gap-2' : sizeMode === 'md' ? 'gap-1.5' : 'gap-1'}`}
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: rows }).map((_, r) =>
           Array.from({ length: cols }).map((_, c) => {
@@ -59,15 +169,17 @@ export function Seating() {
             return (
               <div
                 key={`${r}-${c}`}
-                className={`h-5 w-5 rounded-sm text-[8px] flex items-center justify-center ${
-                  hasStudent
-                    ? 'bg-sp-accent/20 text-sp-accent'
-                    : 'bg-sp-surface/30'
+                className={`${
+                  sizeMode === 'lg' ? 'h-8 w-16 text-xs' :
+                  sizeMode === 'md' ? 'h-6 w-12 text-[10px]' :
+                  'h-5 w-5 text-[8px]'
+                } rounded-sm flex items-center justify-center ${
+                  hasStudent ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface/30'
                 }`}
               >
                 {student ? (
                   <span className="truncate max-w-full px-0.5">
-                    {student.name.charAt(0)}
+                    {sizeMode === 'sm' ? student.name.charAt(0) : student.name}
                   </span>
                 ) : null}
               </div>
