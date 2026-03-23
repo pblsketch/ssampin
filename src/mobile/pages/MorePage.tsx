@@ -67,10 +67,10 @@ export function MorePage({ onNavigate }: Props) {
           </div>
         </section>
 
-        {/* 동기화 */}
+        {/* 구글 드라이브 동기화 */}
         <section>
           <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
-            동기화
+            구글 드라이브 동기화
           </h3>
           <SyncStatus />
         </section>
