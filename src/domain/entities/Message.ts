@@ -48,6 +48,17 @@ export interface MessageStyle {
   readonly colorPreset: MessageColorPreset;
   readonly customColor?: string;
   readonly subtitle: string;
+  /** 요소별 색상 오버라이드 (프리셋 기반 색상을 개별 덮어쓰기) */
+  readonly overrides?: Partial<MessageColorOverrides>;
+}
+
+/** 요소별 커스텀 색상 */
+export interface MessageColorOverrides {
+  readonly bg: string;
+  readonly border: string;
+  readonly icon: string;
+  readonly text: string;
+  readonly sub: string;
 }
 
 /** 기본 스타일 */

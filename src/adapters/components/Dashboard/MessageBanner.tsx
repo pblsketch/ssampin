@@ -6,6 +6,7 @@ import {
   type MessageIcon,
   type MessageColorPreset,
   type MessageStyle,
+  type MessageColorOverrides,
 } from '@domain/entities/Message';
 
 const ICON_OPTIONS: { id: MessageIcon; label: string }[] = [
@@ -34,7 +35,7 @@ const COLOR_OPTIONS: { id: MessageColorPreset; label: string; sample: string }[]
   { id: 'teal', label: '청록', sample: '#14b8a6' },
 ];
 
-function getColors(s: MessageStyle) {
+function getBaseColors(s: MessageStyle) {
   if (s.colorPreset !== 'custom') {
     return MESSAGE_COLOR_MAP[s.colorPreset];
   }
@@ -48,25 +49,72 @@ function getColors(s: MessageStyle) {
   };
 }
 
+function getColors(s: MessageStyle) {
+  const base = getBaseColors(s);
+  if (!s.overrides) return base;
+  return {
+    bg: s.overrides.bg ?? base.bg,
+    border: s.overrides.border ?? base.border,
+    icon: s.overrides.icon ?? base.icon,
+    text: s.overrides.text ?? base.text,
+    sub: s.overrides.sub ?? base.sub,
+  };
+}
+
+const ELEMENT_LABELS: { key: keyof MessageColorOverrides; label: string }[] = [
+  { key: 'bg', label: '배경' },
+  { key: 'border', label: '테두리' },
+  { key: 'icon', label: '아이콘' },
+  { key: 'text', label: '텍스트' },
+  { key: 'sub', label: '부제목' },
+];
+
+/** rgba/hex 색상을 #hex로 근사 변환 (color picker에 넣기 위함) */
+function toHex(color: string): string {
+  if (color.startsWith('#') && !color.includes('a') && !color.includes('A') && color.length <= 7) return color;
+  // rgba → hex 근사
+  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (m) {
+    const [, r, g, b] = m;
+    return `#${[r, g, b].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`;
+  }
+  // hex with alpha suffix → strip alpha
+  if (color.startsWith('#') && color.length > 7) return color.slice(0, 7);
+  return color;
+}
+
 function MessageStyleEditor({ style, onUpdate, onClose }: {
   style: MessageStyle;
   onUpdate: (patch: Partial<MessageStyle>) => void;
   onClose: () => void;
 }) {
   const [subtitleDraft, setSubtitleDraft] = useState(style.subtitle);
+  const currentColors = getColors(style);
+  const hasOverrides = style.overrides && Object.keys(style.overrides).length > 0;
+
+  function updateOverride(key: keyof MessageColorOverrides, value: string) {
+    onUpdate({ overrides: { ...style.overrides, [key]: value } });
+  }
+
+  function clearOverride(key: keyof MessageColorOverrides) {
+    if (!style.overrides) return;
+    const next = { ...style.overrides };
+    delete (next as Record<string, unknown>)[key];
+    onUpdate({ overrides: Object.keys(next).length > 0 ? next : undefined });
+  }
 
   return (
-    <div className="absolute top-full right-0 mt-2 w-72 bg-[#0a0e17] border border-sp-border rounded-xl shadow-xl p-4 z-50 space-y-4">
+    <div className="absolute top-full right-0 mt-2 w-80 bg-[#0a0e17] border border-white/10 rounded-xl shadow-2xl p-4 z-50 space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-sp-text">배너 꾸미기</span>
-        <button onClick={onClose} className="text-sp-muted hover:text-sp-text">
+        <span className="text-sm font-bold text-gray-100">배너 꾸미기</span>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-100">
           <span className="material-symbols-outlined text-sm">close</span>
         </button>
       </div>
 
       {/* 아이콘 선택 */}
       <div>
-        <label className="text-[10px] text-sp-muted uppercase tracking-wider mb-1.5 block">아이콘</label>
+        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">아이콘</label>
         <div className="flex flex-wrap gap-1.5">
           {ICON_OPTIONS.map((opt) => (
             <button
@@ -74,8 +122,8 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
               onClick={() => onUpdate({ icon: opt.id })}
               className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all ${
                 style.icon === opt.id
-                  ? 'bg-sp-accent text-sp-accent-fg ring-2 ring-sp-accent scale-110'
-                  : 'bg-sp-surface text-sp-muted hover:bg-sp-card'
+                  ? 'bg-blue-500 text-white ring-2 ring-blue-400 scale-110'
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
               }`}
               title={opt.id}
             >
@@ -89,18 +137,18 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
         </div>
       </div>
 
-      {/* 색상 선택 */}
+      {/* 기본 색상 프리셋 */}
       <div>
-        <label className="text-[10px] text-sp-muted uppercase tracking-wider mb-1.5 block">색상</label>
+        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">기본 색상</label>
         <div className="flex flex-wrap gap-1.5">
           {COLOR_OPTIONS.map((opt) => (
             <button
               key={opt.id}
-              onClick={() => onUpdate({ colorPreset: opt.id })}
+              onClick={() => onUpdate({ colorPreset: opt.id, overrides: undefined })}
               className={`w-8 h-8 rounded-full border-2 transition-all ${
-                style.colorPreset === opt.id
+                style.colorPreset === opt.id && !hasOverrides
                   ? 'border-white scale-110 ring-2 ring-white/30'
-                  : 'border-transparent hover:border-sp-border'
+                  : 'border-transparent hover:border-white/30'
               }`}
               style={{ background: opt.sample }}
               title={opt.label}
@@ -110,17 +158,52 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
             <input
               type="color"
               value={style.customColor ?? '#3b82f6'}
-              onChange={(e) => onUpdate({ colorPreset: 'custom', customColor: e.target.value })}
-              className="w-8 h-8 rounded-full cursor-pointer border-2 border-dashed border-sp-border"
+              onChange={(e) => onUpdate({ colorPreset: 'custom', customColor: e.target.value, overrides: undefined })}
+              className="w-8 h-8 rounded-full cursor-pointer border-2 border-dashed border-white/20"
               title="직접 선택"
             />
           </div>
         </div>
       </div>
 
+      {/* 요소별 색상 커스터마이징 */}
+      <div>
+        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">요소별 색상</label>
+        <div className="grid grid-cols-5 gap-1.5">
+          {ELEMENT_LABELS.map(({ key, label }) => {
+            const isOverridden = style.overrides?.[key] != null;
+            return (
+              <div key={key} className="flex flex-col items-center gap-1">
+                <div className="relative">
+                  <input
+                    type="color"
+                    value={toHex(currentColors[key])}
+                    onChange={(e) => updateOverride(key, e.target.value)}
+                    className={`w-9 h-9 rounded-lg cursor-pointer border-2 transition-all ${
+                      isOverridden ? 'border-blue-400 ring-1 ring-blue-400/50' : 'border-white/20'
+                    }`}
+                    title={`${label} 색상 변경`}
+                  />
+                  {isOverridden && (
+                    <button
+                      onClick={() => clearOverride(key)}
+                      className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-blue-500 text-white rounded-full flex items-center justify-center text-[8px] leading-none hover:brightness-110"
+                      title="프리셋 색상으로 되돌리기"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <span className="text-[9px] text-gray-400">{label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 부제목 */}
       <div>
-        <label className="text-[10px] text-sp-muted uppercase tracking-wider mb-1.5 block">부제목</label>
+        <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block">부제목</label>
         <input
           type="text"
           value={subtitleDraft}
@@ -128,14 +211,14 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
           onBlur={() => onUpdate({ subtitle: subtitleDraft.trim() })}
           onKeyDown={(e) => { if (e.key === 'Enter') onUpdate({ subtitle: subtitleDraft.trim() }); }}
           placeholder="예: 오늘도 힘내자! 💪"
-          className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
+          className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-400"
         />
       </div>
 
       {/* 초기화 */}
       <button
-        onClick={() => onUpdate({ icon: 'verified', colorPreset: 'emerald', subtitle: '', customColor: undefined })}
-        className="w-full py-1.5 text-[10px] rounded-lg border border-sp-border text-sp-muted hover:text-sp-text transition-colors"
+        onClick={() => onUpdate({ icon: 'verified', colorPreset: 'emerald', subtitle: '', customColor: undefined, overrides: undefined })}
+        className="w-full py-1.5 text-[10px] rounded-lg border border-white/20 text-gray-400 hover:text-gray-100 transition-colors"
       >
         기본으로 초기화
       </button>
