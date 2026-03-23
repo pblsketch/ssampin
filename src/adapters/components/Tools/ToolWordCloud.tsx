@@ -63,7 +63,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleStart(); }}
           placeholder="학생들에게 물어볼 질문을 입력하세요"
-          className="w-full px-4 py-3 rounded-xl bg-sp-bg border border-sp-border text-white text-lg focus:border-sp-accent focus:outline-none transition-colors"
+          className="w-full px-4 py-3 rounded-xl bg-sp-bg border border-sp-border text-sp-text text-lg focus:border-sp-accent focus:outline-none transition-colors"
           autoFocus
         />
       </div>
@@ -74,7 +74,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
           <button
             key={eq}
             onClick={() => setQuestion(eq)}
-            className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 text-sm transition-all"
+            className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 text-sm transition-all"
           >
             {eq}
           </button>
@@ -87,14 +87,14 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMaxSubmissions((v) => Math.max(1, v - 1))}
-            className="w-8 h-8 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-white text-lg flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text text-lg flex items-center justify-center transition-colors"
           >
             −
           </button>
-          <span className="w-8 text-center text-white font-bold">{maxSubmissions}</span>
+          <span className="w-8 text-center text-sp-text font-bold">{maxSubmissions}</span>
           <button
             onClick={() => setMaxSubmissions((v) => Math.min(10, v + 1))}
-            className="w-8 h-8 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-white text-lg flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text text-lg flex items-center justify-center transition-colors"
           >
             +
           </button>
@@ -193,12 +193,12 @@ function LivePanel({
       <div className="flex items-center gap-2 w-full">
         <span className="text-green-400 text-sm font-bold">● LIVE</span>
         <span className="text-sp-muted text-sm">
-          접속 학생: <span className="text-white font-bold">{connectedStudents}명</span>
+          접속 학생: <span className="text-sp-text font-bold">{connectedStudents}명</span>
         </span>
         <div className="flex-1" />
         <button
           onClick={onToggleQRFullscreen}
-          className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-white text-xs transition-all"
+          className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text text-xs transition-all"
           title="QR 코드 크게 보기"
         >
           🔍 크게
@@ -216,12 +216,12 @@ function LivePanel({
           <canvas ref={canvasRef} />
         </div>
         <div className="flex flex-col gap-2">
-          <p className="text-white font-mono text-sm break-all">{displayUrl}</p>
+          <p className="text-sp-text font-mono text-sm break-all">{displayUrl}</p>
           {!tunnelUrl && serverInfo.localIPs.length > 1 && (
             <select
               value={selectedIP}
               onChange={(e) => onSelectIP(e.target.value)}
-              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-white focus:border-sp-accent focus:outline-none"
+              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
             >
               {serverInfo.localIPs.map((ip) => (
                 <option key={ip} value={ip}>{ip}</option>
@@ -296,7 +296,7 @@ function WordCloudDisplay({ words, question, isFullscreen, totalSubmissions }: W
     <div className="flex-1 flex flex-col">
       {/* Question */}
       <div className="text-center mb-4">
-        <h2 className={`text-white font-bold ${isFullscreen ? 'text-2xl' : 'text-xl'}`}>{question}</h2>
+        <h2 className={`text-sp-text font-bold ${isFullscreen ? 'text-2xl' : 'text-xl'}`}>{question}</h2>
         <p className="text-sp-muted text-sm mt-1">
           총 {totalSubmissions}개 제출 · {words.length}개 고유 단어
         </p>
@@ -521,7 +521,7 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
                 <p className="text-red-400">{liveError}</p>
                 <button
                   onClick={handleReset}
-                  className="mt-3 px-4 py-2 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-white text-sm transition-all"
+                  className="mt-3 px-4 py-2 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-all"
                 >
                   돌아가기
                 </button>
@@ -559,7 +559,7 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
               <div className="flex items-center justify-center gap-3 py-2">
                 <button
                   onClick={handleReset}
-                  className="px-4 py-2 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-white text-sm transition-all"
+                  className="px-4 py-2 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-all"
                 >
                   새로 시작
                 </button>

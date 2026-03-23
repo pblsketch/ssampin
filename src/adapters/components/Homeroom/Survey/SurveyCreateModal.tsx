@@ -223,14 +223,17 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
   }, [canSubmit, title, description, mode, questions, dueDate, color, classId, customLinkCode, pinProtection, createSurvey, showToast, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true">
       <div
         className="bg-sp-card rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-survey-create"
       >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-5 border-b border-sp-border shrink-0">
-          <h3 className="text-lg font-bold text-sp-text">새 설문/체크리스트</h3>
+          <h3 id="modal-title-survey-create" className="text-lg font-bold text-sp-text">새 설문/체크리스트</h3>
           <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -368,7 +371,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
                         + 옵션 추가
                       </button>
                       {q.options.length < 2 && (
-                        <p className="text-[10px] text-amber-400">선택형은 최소 2개 옵션이 필요합니다</p>
+                        <p className="text-caption text-amber-400">선택형은 최소 2개 옵션이 필요합니다</p>
                       )}
                     </div>
                   )}
@@ -422,7 +425,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
               <div className="flex items-center justify-between bg-sp-surface rounded-lg border border-sp-border px-4 py-3">
                 <div>
                   <p className="text-sm text-sp-text font-medium">PIN 코드 인증</p>
-                  <p className="text-[11px] text-sp-muted mt-0.5">
+                  <p className="text-detail text-sp-muted mt-0.5">
                     학생별 4자리 PIN을 자동 생성하여 본인 확인
                   </p>
                 </div>
@@ -438,7 +441,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
                 </button>
               </div>
               {pinProtection && (
-                <p className="text-[10px] text-amber-400 mt-1.5 flex items-center gap-1">
+                <p className="text-caption text-amber-400 mt-1.5 flex items-center gap-1">
                   <span className="material-symbols-outlined text-xs">info</span>
                   설문 생성 후 명렬표에서 PIN을 확인하고 학생들에게 개별 배부하세요
                 </p>
@@ -465,12 +468,12 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
                 />
               </div>
               {linkCodeError && (
-                <p className="text-[10px] text-red-400 mt-1">{linkCodeError}</p>
+                <p className="text-caption text-red-400 mt-1">{linkCodeError}</p>
               )}
               {customLinkCode && !linkCodeError && !isCheckingCode && (
-                <p className="text-[10px] text-green-400 mt-1">사용 가능</p>
+                <p className="text-caption text-green-400 mt-1">사용 가능</p>
               )}
-              <p className="text-[10px] text-sp-muted/50 mt-1">
+              <p className="text-caption text-sp-muted/50 mt-1">
                 비워두면 자동으로 생성됩니다. 한글, 영문, 숫자, -, _ 사용 가능
               </p>
             </div>

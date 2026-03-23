@@ -73,20 +73,25 @@ export function ShareModal() {
   return (
     <>
       {/* Overlay */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={closeModal} aria-hidden="true" />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md pointer-events-auto animate-scale-in">
+        <div
+          className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md pointer-events-auto animate-scale-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title-share"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-amber-500/10">
                 <span className="material-symbols-outlined text-amber-400">mail</span>
               </div>
-              <h2 className="text-lg font-bold text-sp-text">동료 선생님께 추천</h2>
+              <h2 id="modal-title-share" className="text-lg font-bold text-sp-text">동료 선생님께 추천</h2>
             </div>
-            <button onClick={closeModal} className="p-2 rounded-lg hover:bg-sp-border/30 transition-colors">
+            <button onClick={closeModal} aria-label="닫기" className="p-2 rounded-lg hover:bg-sp-border/30 transition-colors">
               <span className="material-symbols-outlined text-sp-muted">close</span>
             </button>
           </div>
@@ -117,13 +122,13 @@ export function ShareModal() {
                 onClick={() => void handleCopy()}
                 className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-sp-accent text-white hover:bg-sp-accent/80 transition-all w-full text-left font-medium text-sm"
               >
-                <span className="material-symbols-outlined text-[20px]">content_copy</span>
+                <span className="material-symbols-outlined text-icon-lg">content_copy</span>
                 링크 복사
               </button>
 
               {/* QR 코드 */}
               <div className="flex flex-col items-center mt-3">
-                <p className="text-xs text-sp-muted mb-3">옆 반 선생님 폰으로 바로 스캔!</p>
+                <p className="text-xs text-sp-muted mb-3">옆 자리 선생님 폰으로 바로 스캔!</p>
                 <div className="bg-white rounded-xl p-3">
                   <canvas ref={canvasRef} className="block" />
                 </div>
@@ -132,7 +137,7 @@ export function ShareModal() {
                   disabled={!qrDataUrl}
                   className="mt-3 px-4 py-2 text-xs text-sp-muted hover:text-sp-text border border-sp-border rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
                 >
-                  <span className="material-symbols-outlined text-[14px]">download</span>
+                  <span className="material-symbols-outlined text-icon-sm">download</span>
                   QR 이미지 저장
                 </button>
               </div>

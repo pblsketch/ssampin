@@ -83,11 +83,11 @@ export function MemoRichEditor({
               e.preventDefault();
               handleFormat(fmt.command);
             }}
-            className="rounded p-0.5 text-slate-500 transition-colors hover:bg-black/10 hover:text-slate-700"
+            className="rounded p-0.5 text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text"
             aria-label={fmt.label}
             title={fmt.label}
           >
-            <span className="material-symbols-outlined text-[16px]">{fmt.icon}</span>
+            <span className="material-symbols-outlined text-icon">{fmt.icon}</span>
           </button>
         ))}
       </div>
@@ -95,7 +95,7 @@ export function MemoRichEditor({
       {/* 편집 영역 */}
       <div className="relative">
         {isEmpty && (
-          <div className="pointer-events-none absolute left-0 top-0 select-none text-sm text-slate-400">
+          <div className="pointer-events-none absolute left-0 top-0 select-none text-sm text-sp-muted/60">
             {placeholder}
           </div>
         )}

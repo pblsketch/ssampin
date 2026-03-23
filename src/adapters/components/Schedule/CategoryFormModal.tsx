@@ -20,21 +20,24 @@ export function CategoryFormModal({ onSubmit, onClose }: CategoryFormModalProps)
   return (
     <>
       {/* 오버레이 */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
       {/* 모달 */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           className="w-full max-w-[400px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title-category-form"
         >
           {/* 헤더 */}
           <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
-            <h2 className="text-lg font-bold text-white">카테고리 추가</h2>
+            <h2 id="modal-title-category-form" className="text-lg font-bold text-sp-text">카테고리 추가</h2>
             <button
               type="button"
               onClick={onClose}
-              className="p-1 hover:bg-slate-700 rounded-lg transition-colors text-sp-muted hover:text-white"
+              className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
             >
               <span className="material-symbols-outlined">close</span>
             </button>
@@ -52,7 +55,7 @@ export function CategoryFormModal({ onSubmit, onClose }: CategoryFormModalProps)
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="예: 동아리"
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
                 required
                 autoFocus
               />
@@ -73,7 +76,7 @@ export function CategoryFormModal({ onSubmit, onClose }: CategoryFormModalProps)
                       onClick={() => setColor(c)}
                       className={`w-8 h-8 rounded-full transition-all ${colors.dot} ${
                         isSelected
-                          ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card scale-110'
+                          ? 'ring-2 ring-sp-text ring-offset-2 ring-offset-sp-card scale-110'
                           : 'hover:scale-110'
                       }`}
                     />

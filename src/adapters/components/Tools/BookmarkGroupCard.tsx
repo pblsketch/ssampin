@@ -82,7 +82,7 @@ export function BookmarkGroupCard({
       {/* 그룹 헤더 */}
       <div className="flex items-center gap-2 mb-3">
         {editMode && (
-          <span className="material-symbols-outlined text-[18px] text-sp-muted cursor-grab">
+          <span className="material-symbols-outlined text-icon-md text-sp-muted cursor-grab">
             drag_indicator
           </span>
         )}
@@ -92,9 +92,9 @@ export function BookmarkGroupCard({
           className="flex items-center gap-2 flex-1 text-left"
         >
           <span className="text-xl">{group.emoji}</span>
-          <h3 className="text-lg font-bold text-white">{group.name}</h3>
+          <h3 className="text-lg font-bold text-sp-text">{group.name}</h3>
           <span className="text-sm text-sp-muted">({groupBookmarks.length})</span>
-          <span className={`material-symbols-outlined text-[18px] text-sp-muted transition-transform ${group.collapsed ? '' : 'rotate-180'}`}>
+          <span className={`material-symbols-outlined text-icon-md text-sp-muted transition-transform ${group.collapsed ? '' : 'rotate-180'}`}>
             expand_more
           </span>
         </button>
@@ -105,13 +105,13 @@ export function BookmarkGroupCard({
               onClick={() => onEditGroup(group)}
               className="p-1 rounded hover:bg-sp-card text-sp-muted hover:text-sp-accent transition-colors"
             >
-              <span className="material-symbols-outlined text-[18px]">edit</span>
+              <span className="material-symbols-outlined text-icon-md">edit</span>
             </button>
             <button
               onClick={() => onDeleteGroup(group.id)}
               className="p-1 rounded hover:bg-sp-card text-sp-muted hover:text-red-400 transition-colors"
             >
-              <span className="material-symbols-outlined text-[18px]">delete</span>
+              <span className="material-symbols-outlined text-icon-md">delete</span>
             </button>
           </div>
         )}

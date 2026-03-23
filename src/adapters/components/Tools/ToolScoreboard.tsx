@@ -79,17 +79,17 @@ function SetupView({
           <button
             onClick={() => onTeamCountChange(teamCount - 1)}
             disabled={teamCount <= 2}
-            className="w-9 h-9 rounded-lg bg-sp-bg text-sp-muted hover:text-white hover:bg-white/10 transition-all flex items-center justify-center text-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-9 h-9 rounded-lg bg-sp-bg text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all flex items-center justify-center text-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed"
           >
             −
           </button>
-          <span className="w-10 text-center text-xl font-bold text-white font-mono">
+          <span className="w-10 text-center text-xl font-bold text-sp-text font-mono">
             {teamCount}
           </span>
           <button
             onClick={() => onTeamCountChange(teamCount + 1)}
             disabled={teamCount >= 10}
-            className="w-9 h-9 rounded-lg bg-sp-bg text-sp-muted hover:text-white hover:bg-white/10 transition-all flex items-center justify-center text-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-9 h-9 rounded-lg bg-sp-bg text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all flex items-center justify-center text-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed"
           >
             +
           </button>
@@ -134,7 +134,7 @@ function SetupView({
               value={team.name}
               onChange={(e) => onTeamNameChange(team.id, e.target.value)}
               maxLength={20}
-              className="flex-1 min-w-0 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-white placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
+              className="flex-1 min-w-0 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
               placeholder={`${idx + 1}팀`}
             />
           </div>
@@ -353,13 +353,13 @@ function ScoreboardView({
       <div className="flex items-center justify-center gap-3 shrink-0 pb-1">
         <button
           onClick={onReset}
-          className="px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+          className="px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
         >
           🔄 점수 초기화
         </button>
         <button
           onClick={onSetup}
-          className="px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+          className="px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
         >
           ⚙️ 팀 설정
         </button>

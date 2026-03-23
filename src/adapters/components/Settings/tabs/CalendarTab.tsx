@@ -59,7 +59,7 @@ export function CalendarTab({ draft, patch }: Props) {
             onClick={() => setShowCatForm(true)}
             className="text-xs font-medium text-sp-accent hover:text-blue-400 flex items-center gap-1"
           >
-            <span className="material-symbols-outlined text-[16px]">add</span>
+            <span className="material-symbols-outlined text-icon">add</span>
             카테고리 추가
           </button>
         }
@@ -145,7 +145,7 @@ function CategoryRow({
         <div className={colorDot(category.color)} />
         <span className="text-sm font-medium text-sp-text">{category.name}</span>
         {isDefault && (
-          <span className="text-[10px] text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">기본</span>
+          <span className="text-caption text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">기본</span>
         )}
       </div>
       {!isDefault && (
@@ -154,7 +154,7 @@ function CategoryRow({
           onClick={onDelete}
           className="text-sp-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          <span className="material-symbols-outlined text-[18px]">delete</span>
+          <span className="material-symbols-outlined text-icon-md">delete</span>
         </button>
       )}
     </div>

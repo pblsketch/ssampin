@@ -189,7 +189,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
       </div>
 
       {/* 네비게이션 */}
-      <nav className="flex-1 px-4 py-2 flex flex-col gap-1 overflow-y-auto">
+      <nav aria-label="메인 내비게이션" className="flex-1 px-4 py-2 flex flex-col gap-1 overflow-y-auto">
         {visibleItems.map((item) => {
           const isActive = currentPage === item.id
             || (item.id === 'tools' && currentPage.startsWith('tool-'));
@@ -212,12 +212,12 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left group ${
                 isActive
                   ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/20'
-                  : 'text-sp-muted hover:text-white hover:bg-white/5'
+                  : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
               } ${isDragged ? 'opacity-30' : ''} ${
                 isDragOver ? 'ring-2 ring-sp-accent/50 bg-sp-accent/10' : ''
               }`}
             >
-              <span className="material-symbols-outlined text-[18px] opacity-0 group-hover:opacity-50 cursor-grab active:cursor-grabbing shrink-0 -ml-1 mr--2 transition-opacity">
+              <span className="material-symbols-outlined text-icon-md opacity-0 group-hover:opacity-50 cursor-grab active:cursor-grabbing shrink-0 -ml-1 mr--2 transition-opacity">
                 drag_indicator
               </span>
               <span className="material-symbols-outlined">{item.icon}</span>
@@ -238,7 +238,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           }}
           className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all w-full text-left ${currentPage === 'settings'
             ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/20'
-            : 'text-sp-muted hover:text-white hover:bg-white/5'
+            : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
             }`}
         >
           <span className="material-symbols-outlined">settings</span>
@@ -268,20 +268,20 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           }}
           className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-accent/80 hover:text-sp-accent hover:bg-sp-accent/5 mt-1"
         >
-          <span className="material-symbols-outlined text-[18px]">mail</span>
-          <span className="text-xs font-medium">동료에게 추천</span>
+          <span className="material-symbols-outlined text-icon-md">mail</span>
+          <span className="text-xs font-medium">지인에게 추천</span>
         </button>
 
         <button
           type="button"
           onClick={onFeedback}
-          className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-muted hover:text-sp-text hover:bg-white/5 mt-1"
+          className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-muted hover:text-sp-text hover:bg-sp-text/5 mt-1"
         >
-          <span className="material-symbols-outlined text-[18px]">rate_review</span>
+          <span className="material-symbols-outlined text-icon-md">rate_review</span>
           <span className="text-xs font-medium">건의사항 보내기</span>
         </button>
 
-        <p className="text-[10px] text-sp-muted text-center mt-2">v1.5.0</p>
+        <p className="text-caption text-sp-muted text-center mt-2">v1.5.0</p>
       </div>
     </aside>
   );

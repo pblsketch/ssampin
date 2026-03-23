@@ -53,7 +53,7 @@ export function InlineRecordEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editCategory]);
 
-  const chipSize = compact ? 'text-[11px] px-2 py-0.5' : 'px-2.5 py-1 text-xs';
+  const chipSize = compact ? 'text-detail px-2 py-0.5' : 'px-2.5 py-1 text-xs';
 
   return (
     <div className={compact
@@ -62,7 +62,7 @@ export function InlineRecordEditor({
     }>
       {/* 카테고리 */}
       <div>
-        <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>카테고리</p>
+        <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>카테고리</p>
         <div className="flex flex-wrap gap-1.5">
           {categories.map((c) => {
             const isSelected = c.id === editCategory;
@@ -90,7 +90,7 @@ export function InlineRecordEditor({
       {/* 세부 항목 */}
       {cat && (
         <div>
-          <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>세부 항목</p>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>세부 항목</p>
           {isAttendance ? (
             <div className="space-y-1.5">
               {/* 출결 유형 */}
@@ -106,7 +106,7 @@ export function InlineRecordEditor({
                     className={getSubcategoryChipClass(cat.color, localAttType === t).replace(
                       compact ? '' : '',
                       ''
-                    ) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                    ) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
                   >
                     {localAttType === t && <span className="mr-0.5">✓</span>}{t}
                   </button>
@@ -115,7 +115,7 @@ export function InlineRecordEditor({
               {/* 출결 사유 (유형 선택 시만) */}
               {localAttType && (
                 <div className="ml-2 pl-3 border-l-2 border-red-500/30">
-                  <p className="text-[11px] text-sp-muted mb-1">사유</p>
+                  <p className="text-detail text-sp-muted mb-1">사유</p>
                   <div className="flex flex-wrap gap-1.5">
                     {ATTENDANCE_REASONS.map((r) => {
                       const isReasonSelected = localAttReason === r;
@@ -126,7 +126,7 @@ export function InlineRecordEditor({
                             setLocalAttReason(r);
                             setEditSubcategory(`${localAttType} (${r})`);
                           }}
-                          className={getSubcategoryChipClass(cat.color, isReasonSelected) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                          className={getSubcategoryChipClass(cat.color, isReasonSelected) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
                         >
                           {isReasonSelected && <span className="mr-0.5">✓</span>}{r}
                         </button>
@@ -144,7 +144,7 @@ export function InlineRecordEditor({
                   <button
                     key={sub}
                     onClick={() => setEditSubcategory(sub)}
-                    className={getSubcategoryChipClass(cat.color, isSelected) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                    className={getSubcategoryChipClass(cat.color, isSelected) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
                   >
                     {isSelected && <span className="mr-0.5">✓</span>}{sub}
                   </button>
@@ -157,7 +157,7 @@ export function InlineRecordEditor({
 
       {/* 메모 */}
       <div>
-        <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>메모</p>
+        <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>메모</p>
         <input
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}

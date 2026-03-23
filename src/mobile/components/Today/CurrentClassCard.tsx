@@ -47,7 +47,7 @@ function DayScheduleOverview({ daySchedule, currentPeriod, nextPeriod, isBreak }
 
           let pillClass = 'flex-shrink-0 flex flex-col items-center px-2.5 py-1.5 rounded-xl text-xs transition-all ';
           if (isCurrent) {
-            pillClass += 'bg-blue-500/30 border border-blue-500/60 text-blue-200';
+            pillClass += 'bg-sp-accent/30 border border-sp-accent/60 text-sp-accent/70';
           } else if (isNext) {
             pillClass += 'bg-green-500/20 border border-green-500/40 text-green-200';
           } else if (isPast) {
@@ -60,7 +60,7 @@ function DayScheduleOverview({ daySchedule, currentPeriod, nextPeriod, isBreak }
             <div key={period} className={pillClass}>
               <div className="flex items-center gap-1 mb-0.5">
                 {isCurrent && (
-                  <span className="material-symbols-outlined text-blue-400" style={{ fontSize: '10px' }}>
+                  <span className="material-symbols-outlined text-sp-accent" style={{ fontSize: '10px' }}>
                     radio_button_checked
                   </span>
                 )}
@@ -69,7 +69,7 @@ function DayScheduleOverview({ daySchedule, currentPeriod, nextPeriod, isBreak }
                     arrow_right
                   </span>
                 )}
-                <span className={`font-semibold ${isCurrent ? 'text-blue-300' : isNext ? 'text-green-300' : ''}`}>
+                <span className={`font-semibold ${isCurrent ? 'text-sp-accent' : isNext ? 'text-green-300' : ''}`}>
                   {period}교시
                 </span>
               </div>
@@ -172,8 +172,8 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
     <div className="glass-card-accent p-4">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-blue-500">school</span>
-          <span className="pill-badge bg-blue-500 text-white">{currentPeriod}교시</span>
+          <span className="material-symbols-outlined text-sp-accent">school</span>
+          <span className="pill-badge bg-sp-accent text-sp-accent-fg">{currentPeriod}교시</span>
         </div>
         <span className="text-sp-muted text-sm">{formatMinutes(remainingMinutes)} 남음</span>
       </div>
@@ -184,7 +184,7 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
       )}
       <div className="h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
         <div
-          className="h-full bg-blue-500 rounded-full transition-all duration-1000"
+          className="h-full bg-sp-accent rounded-full transition-all duration-1000"
           style={{ width: `${progress}%` }}
         />
       </div>

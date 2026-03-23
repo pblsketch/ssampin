@@ -51,7 +51,7 @@ export function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps
     <div className="flex items-center gap-2 mb-4">
       <button
         onClick={handlePrev}
-        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sp-surface text-sp-muted hover:text-white hover:bg-sp-surface/80 transition-all"
+        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80 transition-all"
         title="이전 날짜"
       >
         <span className="material-symbols-outlined text-lg">chevron_left</span>
@@ -80,7 +80,7 @@ export function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps
 
       <button
         onClick={handleNext}
-        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sp-surface text-sp-muted hover:text-white hover:bg-sp-surface/80 transition-all"
+        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80 transition-all"
         title="다음 날짜"
       >
         <span className="material-symbols-outlined text-lg">chevron_right</span>

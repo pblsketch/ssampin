@@ -170,7 +170,7 @@ export function StudentsPage() {
                 onClick={() => setViewMode('seating')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'seating'
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-sp-accent text-sp-accent-fg'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -180,7 +180,7 @@ export function StudentsPage() {
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-sp-accent text-sp-accent-fg'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -196,7 +196,7 @@ export function StudentsPage() {
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-sp-accent text-sp-accent-fg'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -206,7 +206,7 @@ export function StudentsPage() {
                 onClick={() => setViewMode('seating')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'seating'
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-sp-accent text-sp-accent-fg'
                     : 'text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -224,7 +224,7 @@ export function StudentsPage() {
               onClick={() => setSelectedClass('homeroom')}
               className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                 selectedClass === 'homeroom'
-                  ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                  ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
                   : 'glass-card border-transparent text-sp-muted hover:text-sp-text'
               }`}
             >
@@ -238,7 +238,7 @@ export function StudentsPage() {
                 onClick={() => setSelectedClass(tc.id)}
                 className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   selectedClass === tc.id
-                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                    ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
                     : 'glass-card border-transparent text-sp-muted hover:text-sp-text'
                 }`}
               >
@@ -264,7 +264,7 @@ export function StudentsPage() {
             {!isToday && (
               <button
                 onClick={() => setSelectedDate(new Date())}
-                className="px-2 py-0.5 rounded-full bg-blue-500 text-white text-xs font-medium"
+                className="px-2 py-0.5 rounded-full bg-sp-accent text-sp-accent-fg text-xs font-medium"
               >
                 오늘로 가기
               </button>
@@ -426,12 +426,12 @@ function SeatingView({ seatingData, studentMap, onStudentTap, dateStr, getRecord
                 {hasStudent && !isVacant ? (
                   <>
                     {student?.number !== undefined && (
-                      <span className="text-sp-muted text-[9px] leading-none">{student.number}</span>
+                      <span className="text-sp-muted text-tiny leading-none">{student.number}</span>
                     )}
                     <span className="font-medium">{student?.name.charAt(0) ?? '?'}</span>
                   </>
                 ) : hasStudent && isVacant ? (
-                  <span className="text-[10px]">결번</span>
+                  <span className="text-caption">결번</span>
                 ) : null}
               </button>
             );
@@ -591,16 +591,16 @@ function TeachingSeatingView({ teachingClass, onStudentTap, dateStr, getRecordFo
                 {hasStudent && !isVacant ? (
                   <>
                     {student?.grade != null && student?.classNum != null ? (
-                      <span className="text-sp-muted text-[8px] leading-none">
+                      <span className="text-sp-muted text-micro leading-none">
                         {student.grade}-{student.classNum}
                       </span>
                     ) : (
-                      <span className="text-sp-muted text-[9px] leading-none">{student?.number}</span>
+                      <span className="text-sp-muted text-tiny leading-none">{student?.number}</span>
                     )}
                     <span className="font-medium">{student?.name.charAt(0) ?? '?'}</span>
                   </>
                 ) : hasStudent && isVacant ? (
-                  <span className="text-[10px]">결번</span>
+                  <span className="text-caption">결번</span>
                 ) : null}
               </button>
             );
@@ -752,7 +752,7 @@ function HomeroomListView({ students, onStudentTap, dateStr, getRecordForDate }:
                   결번
                 </span>
               ) : (
-                <span className="material-symbols-outlined text-sp-muted text-[18px]">
+                <span className="material-symbols-outlined text-sp-muted text-icon-md">
                   chevron_right
                 </span>
               )}
@@ -864,7 +864,7 @@ function TeachingListView({ teachingClass, onStudentTap, dateStr, getRecordForDa
                   결번
                 </span>
               ) : (
-                <span className="material-symbols-outlined text-sp-muted text-[18px]">
+                <span className="material-symbols-outlined text-sp-muted text-icon-md">
                   chevron_right
                 </span>
               )}
@@ -926,7 +926,7 @@ function StudentQuickActionSheet({ info, onClose, getRecordForDate }: StudentQui
 
         {/* 학생 정보 */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-sp-border">
-          <div className="w-12 h-12 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-full bg-sp-accent/15 flex items-center justify-center shrink-0">
             <span className="text-blue-500 font-bold text-lg">{info.name.charAt(0)}</span>
           </div>
           <div className="flex-1 min-w-0">
@@ -957,7 +957,7 @@ function StudentQuickActionSheet({ info, onClose, getRecordForDate }: StudentQui
             onClick={() => setSubTab('attendance')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
               subTab === 'attendance'
-                ? 'bg-sp-accent text-white shadow-sm'
+                ? 'bg-sp-accent text-sp-accent-fg shadow-sm'
                 : 'text-sp-muted'
             }`}
           >
@@ -967,7 +967,7 @@ function StudentQuickActionSheet({ info, onClose, getRecordForDate }: StudentQui
             onClick={() => setSubTab('records')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
               subTab === 'records'
-                ? 'bg-sp-accent text-white shadow-sm'
+                ? 'bg-sp-accent text-sp-accent-fg shadow-sm'
                 : 'text-sp-muted'
             }`}
           >
@@ -1148,7 +1148,7 @@ function AttendanceSubTab({
                     onClick={() => setReason(isSelected ? undefined : r)}
                     className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
                       isSelected
-                        ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                        ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
                         : 'border-sp-border text-sp-muted hover:text-sp-text'
                     }`}
                   >
@@ -1168,7 +1168,7 @@ function AttendanceSubTab({
           <button
             onClick={() => void handleSave()}
             disabled={saving}
-            className="w-full mt-4 py-3 bg-blue-500 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-all active:scale-[0.98]"
+            className="w-full mt-4 py-3 bg-sp-accent text-sp-accent-fg text-sm font-bold rounded-xl disabled:opacity-50 transition-all active:scale-[0.98]"
           >
             {saving ? '저장 중...' : '저장'}
           </button>
@@ -1337,7 +1337,7 @@ function RecordsSubTab({ studentId }: { studentId: string; studentName: string }
           <button
             onClick={() => void handleSubmit()}
             disabled={!selectedCategoryId || !content.trim() || saving}
-            className="w-full py-3 bg-sp-accent text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors active:bg-sp-accent/80"
+            className="w-full py-3 bg-sp-accent text-sp-accent-fg text-sm font-bold rounded-xl disabled:opacity-50 transition-colors active:bg-sp-accent/80"
           >
             {saving ? '저장 중...' : '기록 저장'}
           </button>

@@ -51,7 +51,7 @@ function DefaultRecordListView({
                     }`}
                   >
                     <span
-                      className="text-[11px] font-medium text-sp-muted rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 whitespace-nowrap tabular-nums flex-shrink-0"
+                      className="text-detail font-medium text-sp-muted rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 whitespace-nowrap tabular-nums flex-shrink-0"
                       title="작성 시간"
                     >
                       {formatTimeKR(record.createdAt)}
@@ -75,7 +75,7 @@ function DefaultRecordListView({
                     )}
                     <span className="text-sm text-sp-text font-medium min-w-[60px] flex items-center gap-1.5">
                       {student?.studentNumber != null && (
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-sp-surface border border-sp-border text-[11px] font-bold text-sp-muted tabular-nums flex-shrink-0">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-sp-surface border border-sp-border text-detail font-bold text-sp-muted tabular-nums flex-shrink-0">
                           {student.studentNumber}
                         </span>
                       )}

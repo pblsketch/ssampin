@@ -39,7 +39,7 @@ function ChangeBadge({ type }: { type: ChangeType }) {
   if (!config) return null;
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${config.badge} shrink-0`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-detail font-medium ${config.badge} shrink-0`}>
       <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{config.icon}</span>
       {config.label}
     </span>
@@ -237,9 +237,9 @@ export function UpdateNotification() {
                     {releaseNotes.length > 1 && (
                       <div className={`flex items-center gap-2 ${vi > 0 ? 'mt-4 pt-3 border-t border-sp-border/30' : ''} mb-2.5`}>
                         <span className="text-sp-accent text-xs font-bold">v{note.version}</span>
-                        <span className="text-sp-muted text-[10px]">{note.date}</span>
+                        <span className="text-sp-muted text-caption">{note.date}</span>
                         {vi > 0 && note.highlights && (
-                          <span className="text-sp-muted text-[10px] truncate flex-1">— {note.highlights}</span>
+                          <span className="text-sp-muted text-caption truncate flex-1">— {note.highlights}</span>
                         )}
                       </div>
                     )}

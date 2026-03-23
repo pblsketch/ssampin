@@ -135,7 +135,7 @@ export function RosterManagementTab() {
             <button
               onClick={() => void setStudentCount(students.length - 1)}
               disabled={students.length <= 1}
-              className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>remove</span>
             </button>
@@ -143,7 +143,7 @@ export function RosterManagementTab() {
             <button
               onClick={() => void setStudentCount(students.length + 1)}
               disabled={students.length >= 50}
-              className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>add</span>
             </button>
@@ -152,7 +152,7 @@ export function RosterManagementTab() {
 
           <button
             onClick={() => setShowBulkImport(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-lg">group_add</span>
             <span>일괄 입력</span>
@@ -161,7 +161,7 @@ export function RosterManagementTab() {
           {/* 엑셀 가져오기 */}
           <button
             onClick={() => rosterFileRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-lg">upload_file</span>
             <span>엑셀 가져오기</span>
@@ -215,7 +215,7 @@ export function RosterManagementTab() {
           {/* 내보내기 */}
           <button
             onClick={() => void handleExportRoster()}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-lg">download</span>
             <span>내보내기</span>
@@ -229,7 +229,7 @@ export function RosterManagementTab() {
             onClick={() => setIsEditing(!isEditing)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
               ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
-              : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
+              : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
               }`}
           >
             <span className="material-symbols-outlined text-lg">edit</span>
@@ -579,7 +579,7 @@ export function RosterManagementTab() {
                   setBulkText('');
                   setShowBulkImport(false);
                 }}
-                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
               >
                 취소
               </button>
@@ -626,7 +626,7 @@ function BirthdaySyncToggle() {
       className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
         syncEnabled
           ? 'border-pink-500/40 bg-pink-500/15 text-pink-400'
-          : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-muted'
+          : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-muted'
       } ${loading ? 'opacity-50' : ''}`}
     >
       <span style={{ fontSize: '16px' }}>🎂</span>

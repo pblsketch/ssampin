@@ -273,7 +273,7 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
           onClick={handleDelete}
           className="text-slate-500 opacity-0 transition-opacity hover:text-slate-900 group-hover:opacity-100"
         >
-          <span className="material-symbols-outlined text-[18px]">close</span>
+          <span className="material-symbols-outlined text-icon-md">close</span>
         </button>
       </div>
 
@@ -314,14 +314,14 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
           ${resizing ? '!opacity-100' : ''}`}
         title="드래그: 크기 조절 / 더블클릭: 기본 크기로"
       >
-        <span className="material-symbols-outlined text-[16px] text-slate-400 hover:text-slate-600">
+        <span className="material-symbols-outlined text-icon text-slate-400 hover:text-slate-600">
           drag_indicator
         </span>
       </div>
 
       {/* 리사이즈 중 크기 표시 — 카드 위에 띄움 */}
       {resizing && (
-        <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-30 bg-slate-800 !text-white text-xs px-2.5 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none">
+        <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-30 bg-sp-card !text-sp-text text-xs px-2.5 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none">
           {Math.round(resizeSize.width)} &times; {Math.round(resizeSize.height)}
         </div>
       )}

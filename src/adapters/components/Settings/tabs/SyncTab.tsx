@@ -100,7 +100,7 @@ export function SyncTab() {
                 {/* 인증 심사 안내 배너 */}
                 <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0">info</span>
+                    <span className="material-symbols-outlined text-amber-400 text-icon-md shrink-0">info</span>
                     <p className="text-sm font-medium text-amber-400">구글 연동 일시 제한 안내</p>
                   </div>
                   <p className="text-xs text-sp-muted leading-relaxed">
@@ -119,9 +119,9 @@ export function SyncTab() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-sp-accent hover:bg-blue-600 text-white font-medium text-sm transition-all disabled:opacity-50"
                 >
                   {isLoading ? (
-                    <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                    <span className="material-symbols-outlined animate-spin text-icon-md">progress_activity</span>
                   ) : (
-                    <span className="material-symbols-outlined text-[18px]">login</span>
+                    <span className="material-symbols-outlined text-icon-md">login</span>
                   )}
                   {isLoading ? '연결 중...' : 'Google 계정 연결'}
                 </button>
@@ -246,7 +246,7 @@ export function SyncTab() {
                 disabled={status === 'syncing' || !isConnected}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-sp-surface hover:bg-sp-text/5 text-sp-text font-medium text-sm border border-sp-border transition-all disabled:opacity-50"
               >
-                <span className={`material-symbols-outlined text-[18px] ${status === 'syncing' ? 'animate-spin' : ''}`}>
+                <span className={`material-symbols-outlined text-icon-md ${status === 'syncing' ? 'animate-spin' : ''}`}>
                   {status === 'syncing' ? 'progress_activity' : 'sync'}
                 </span>
                 {status === 'syncing' ? '동기화 중...' : '지금 동기화'}

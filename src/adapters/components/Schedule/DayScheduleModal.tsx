@@ -42,21 +42,25 @@ export function DayScheduleModal({
         <div
             className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/60 p-4 md:p-8 animate-in fade-in duration-200"
             onClick={onClose}
+            aria-hidden="true"
         >
             <div
                 className="bg-sp-bg w-full max-w-md rounded-3xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh] border border-sp-border"
                 onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-title-day-schedule"
             >
                 <div className="flex items-center justify-between p-6 border-b border-sp-border bg-sp-surface shrink-0">
                     <div>
-                        <h2 className="text-xl font-bold text-sp-text">{titleStr} 일정</h2>
+                        <h2 id="modal-title-day-schedule" className="text-xl font-bold text-sp-text">{titleStr} 일정</h2>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-2 hover:bg-sp-bg rounded-full transition-colors text-sp-muted hover:text-white"
+                        className="p-2 hover:bg-sp-bg rounded-full transition-colors text-sp-muted hover:text-sp-text"
                     >
-                        <span className="material-symbols-outlined text-[20px]">close</span>
+                        <span className="material-symbols-outlined text-icon-lg">close</span>
                     </button>
                 </div>
 
@@ -79,7 +83,7 @@ export function DayScheduleModal({
                         onClick={onAddEvent}
                         className="w-full flex items-center justify-center gap-2 bg-sp-accent hover:bg-blue-600 text-white px-5 py-3 rounded-xl transition-all font-bold shadow-lg shadow-sp-accent/20"
                     >
-                        <span className="material-symbols-outlined text-[20px]">add</span>
+                        <span className="material-symbols-outlined text-icon-lg">add</span>
                         새 일정 추가
                     </button>
                 </div>

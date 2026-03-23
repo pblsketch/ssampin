@@ -55,7 +55,7 @@ export function SharePromptOverlay() {
               }}
               className="w-full px-4 py-3 rounded-xl bg-sp-accent text-white font-medium text-sm hover:bg-sp-accent/80 transition-all mb-3"
             >
-              동료에게 추천하기
+              지인에게 추천하기
             </button>
 
             {/* 나중에 */}
@@ -64,7 +64,7 @@ export function SharePromptOverlay() {
                 dismissPrompt(false);
                 track('share_prompt_action', { action: 'later' });
               }}
-              className="w-full px-4 py-2.5 rounded-xl text-sp-muted text-sm hover:bg-white/5 transition-all mb-1"
+              className="w-full px-4 py-2.5 rounded-xl text-sp-muted text-sm hover:bg-sp-text/5 transition-all mb-1"
             >
               나중에
             </button>

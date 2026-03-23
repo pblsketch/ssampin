@@ -20,17 +20,17 @@ export function SyncStatusBar() {
       <button
         onClick={() => void syncNow()}
         disabled={syncState.status === 'syncing'}
-        className="flex items-center gap-2 w-full rounded-lg px-3 py-1.5 text-xs hover:bg-white/5 transition-colors disabled:opacity-50"
+        className="flex items-center gap-2 w-full rounded-lg px-3 py-1.5 text-xs hover:bg-sp-text/5 transition-colors disabled:opacity-50"
         title="클릭하여 동기화"
       >
-        <span className={`material-symbols-outlined text-[16px] ${config.color} ${config.animate ? 'animate-spin' : ''}`}>
+        <span className={`material-symbols-outlined text-icon ${config.color} ${config.animate ? 'animate-spin' : ''}`}>
           {config.icon}
         </span>
         <span className={`${config.color} flex-1 text-left`}>
           구글 캘린더 {config.text}
         </span>
         {conflicts.length > 0 && (
-          <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] text-white font-bold">
+          <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-caption text-white font-bold">
             {conflicts.length}
           </span>
         )}

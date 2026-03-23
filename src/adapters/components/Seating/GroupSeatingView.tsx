@@ -31,11 +31,11 @@ function StudentChip({ studentId, groupColor, isEditing, onRemove }: StudentChip
       </div>
       {/* 이름 + 번호 */}
       <div className="flex flex-col items-center">
-        <span className="text-[11px] font-medium text-sp-text leading-tight">
+        <span className="text-detail font-medium text-sp-text leading-tight">
           {student?.name ?? '알 수 없음'}
         </span>
         {studentNumber !== undefined && (
-          <span className="text-[9px] text-sp-muted font-mono">
+          <span className="text-tiny text-sp-muted font-mono">
             {String(studentNumber).padStart(2, '0')}번
           </span>
         )}
@@ -44,7 +44,7 @@ function StudentChip({ studentId, groupColor, isEditing, onRemove }: StudentChip
       {isEditing && (
         <button
           onClick={onRemove}
-          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] hover:bg-red-600 transition-colors shadow-sm"
+          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-caption hover:bg-red-600 transition-colors shadow-sm"
           title="모둠에서 제거"
         >
           ×
@@ -126,7 +126,7 @@ function GroupCard({ group, isEditing, onUpdate, onRemove }: GroupCardProps) {
               {group.name}
             </span>
           )}
-          <span className="text-[10px] text-sp-muted">
+          <span className="text-caption text-sp-muted">
             {group.studentIds.length}/{group.maxSize}
           </span>
           {/* 편집 모드: 인원 수 조절 */}
@@ -135,14 +135,14 @@ function GroupCard({ group, isEditing, onUpdate, onRemove }: GroupCardProps) {
               <button
                 onClick={() => handleMaxSizeChange(-1)}
                 disabled={group.maxSize <= 2}
-                className="w-4 h-4 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 text-[10px] text-sp-muted transition-colors"
+                className="w-4 h-4 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 text-caption text-sp-muted transition-colors"
               >
                 −
               </button>
               <button
                 onClick={() => handleMaxSizeChange(1)}
                 disabled={group.maxSize >= 10}
-                className="w-4 h-4 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 text-[10px] text-sp-muted transition-colors"
+                className="w-4 h-4 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 text-caption text-sp-muted transition-colors"
               >
                 +
               </button>
@@ -178,7 +178,7 @@ function GroupCard({ group, isEditing, onUpdate, onRemove }: GroupCardProps) {
             className="w-14 h-14 rounded-full border-2 border-dashed flex items-center justify-center"
             style={{ borderColor: group.color + '30' }}
           >
-            <span className="text-sp-muted text-[9px]">빈자리</span>
+            <span className="text-sp-muted text-tiny">빈자리</span>
           </div>
         ))}
       </div>
@@ -213,18 +213,18 @@ function UnassignedStudents({ groups, allStudentIds, isEditing, onAssignToGroup 
           const student = getStudent(sid);
           return (
             <div key={sid} className="flex items-center gap-2 bg-sp-surface rounded-lg px-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-xs text-sp-muted">
+              <div className="w-8 h-8 rounded-full bg-sp-surface border border-sp-border flex items-center justify-center text-xs text-sp-muted">
                 {student?.name?.charAt(0) ?? '?'}
               </div>
               <div className="flex flex-col">
                 <span className="text-xs text-sp-text">{student?.name ?? '알 수 없음'}</span>
                 {student?.studentNumber !== undefined && (
-                  <span className="text-[9px] text-sp-muted font-mono">{String(student.studentNumber).padStart(2, '0')}번</span>
+                  <span className="text-tiny text-sp-muted font-mono">{String(student.studentNumber).padStart(2, '0')}번</span>
                 )}
               </div>
               {isEditing && groups.length > 0 && (
                 <select
-                  className="ml-2 text-[10px] bg-sp-bg border border-sp-border rounded px-1 py-0.5 text-sp-muted focus:outline-none focus:border-sp-accent"
+                  className="ml-2 text-caption bg-sp-bg border border-sp-border rounded px-1 py-0.5 text-sp-muted focus:outline-none focus:border-sp-accent"
                   defaultValue=""
                   onChange={(e) => {
                     if (e.target.value) {
@@ -312,7 +312,7 @@ export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleG
         <div className="flex items-center justify-center gap-3 mb-4">
           <button
             onClick={() => setShowShuffleModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-base">settings</span>
             모둠 설정
@@ -362,14 +362,14 @@ export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleG
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setShuffleGroupCount(Math.max(1, shuffleGroupCount - 1))}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-slate-700 text-sp-text transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-sp-surface text-sp-text transition-colors"
                   >
                     −
                   </button>
                   <span className="text-lg font-bold text-sp-text w-8 text-center">{shuffleGroupCount}</span>
                   <button
                     onClick={() => setShuffleGroupCount(Math.min(12, shuffleGroupCount + 1))}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-slate-700 text-sp-text transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-sp-surface text-sp-text transition-colors"
                   >
                     +
                   </button>
@@ -380,14 +380,14 @@ export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleG
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setShuffleMaxSize(Math.max(2, shuffleMaxSize - 1))}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-slate-700 text-sp-text transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-sp-surface text-sp-text transition-colors"
                   >
                     −
                   </button>
                   <span className="text-lg font-bold text-sp-text w-8 text-center">{shuffleMaxSize}</span>
                   <button
                     onClick={() => setShuffleMaxSize(Math.min(10, shuffleMaxSize + 1))}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-slate-700 text-sp-text transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-sp-border bg-sp-surface hover:bg-sp-surface text-sp-text transition-colors"
                   >
                     +
                   </button>
@@ -400,7 +400,7 @@ export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleG
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => setShowShuffleModal(false)}
-                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
               >
                 취소
               </button>

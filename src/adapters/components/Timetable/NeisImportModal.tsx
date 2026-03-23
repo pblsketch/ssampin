@@ -246,12 +246,12 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label="나이스 시간표 불러오기"
+      aria-labelledby="modal-title-neis-import"
     >
       <div className="bg-sp-card border border-sp-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
-          <h2 className="text-lg font-bold text-sp-text flex items-center gap-2">
+          <h2 id="modal-title-neis-import" className="text-lg font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-sp-accent">download</span>
             나이스 시간표 불러오기
           </h2>
@@ -292,7 +292,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                         stepNum
                       )}
                     </div>
-                    <span className={`text-[10px] font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                    <span className={`text-caption font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
                       {label}
                     </span>
                   </div>

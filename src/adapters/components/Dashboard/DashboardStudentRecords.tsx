@@ -17,7 +17,7 @@ const FALLBACK_COLOR = RECORD_COLOR_MAP['gray']!;
 
 function getTagClass(color: string): string {
   const colorInfo = RECORD_COLOR_MAP[color] ?? FALLBACK_COLOR;
-  return `px-1.5 py-0.5 rounded text-[10px] font-medium ${colorInfo.tagBg}`;
+  return `px-1.5 py-0.5 rounded text-caption font-medium ${colorInfo.tagBg}`;
 }
 
 type WidgetTab = 'all' | 'attendance' | 'counseling' | 'life';
@@ -133,7 +133,7 @@ export function DashboardStudentRecords() {
             className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-sp-accent/20 text-sp-accent'
-                : 'text-sp-muted hover:text-sp-text hover:bg-white/5'
+                : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
             }`}
           >
             {tab.label}
@@ -149,19 +149,19 @@ export function DashboardStudentRecords() {
             <div className="grid grid-cols-4 gap-1.5 mb-3">
               <div className="bg-green-500/10 rounded-lg p-2 text-center">
                 <div className="text-green-400 text-sm font-bold">{attendanceStats.present}</div>
-                <div className="text-[10px] text-sp-muted">출석</div>
+                <div className="text-caption text-sp-muted">출석</div>
               </div>
               <div className="bg-red-500/10 rounded-lg p-2 text-center">
                 <div className="text-red-400 text-sm font-bold">{attendanceStats.absent}</div>
-                <div className="text-[10px] text-sp-muted">결석</div>
+                <div className="text-caption text-sp-muted">결석</div>
               </div>
               <div className="bg-yellow-500/10 rounded-lg p-2 text-center">
                 <div className="text-yellow-400 text-sm font-bold">{attendanceStats.late}</div>
-                <div className="text-[10px] text-sp-muted">지각</div>
+                <div className="text-caption text-sp-muted">지각</div>
               </div>
               <div className="bg-orange-500/10 rounded-lg p-2 text-center">
                 <div className="text-orange-400 text-sm font-bold">{attendanceStats.earlyLeave}</div>
-                <div className="text-[10px] text-sp-muted">조퇴</div>
+                <div className="text-caption text-sp-muted">조퇴</div>
               </div>
             </div>
             {/* Attendance issue list */}

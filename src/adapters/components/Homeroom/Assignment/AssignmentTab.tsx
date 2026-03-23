@@ -118,7 +118,7 @@ export function AssignmentTab() {
           {/* Google 연동 상태 */}
           {googleConnected ? (
             <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-2.5 py-1.5 rounded-lg">
-              <span className="material-symbols-outlined text-[14px]">check_circle</span>
+              <span className="material-symbols-outlined text-icon-sm">check_circle</span>
               연결됨
             </span>
           ) : (
@@ -131,7 +131,7 @@ export function AssignmentTab() {
               {googleAuthLoading ? (
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
               ) : (
-                <span className="material-symbols-outlined text-[14px]">add_link</span>
+                <span className="material-symbols-outlined text-icon-sm">add_link</span>
               )}
               {googleAuthLoading ? '연결 중...' : '구글 연동'}
             </button>
@@ -164,7 +164,7 @@ export function AssignmentTab() {
             onClick={() => void handleGoogleConnect()}
             className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 mx-auto text-sm font-medium"
           >
-            <span className="material-symbols-outlined text-[16px]">link</span>
+            <span className="material-symbols-outlined text-icon">link</span>
             Google 계정 연결하기
           </button>
         </div>

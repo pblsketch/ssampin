@@ -31,8 +31,13 @@ export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props)
   if (conflicts.length === 0) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-sp-card rounded-xl ring-1 ring-sp-border w-full max-w-lg max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" aria-hidden="true">
+      <div
+        className="bg-sp-card rounded-xl ring-1 ring-sp-border w-full max-w-lg max-h-[80vh] flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-drive-sync-conflict"
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-sp-border">
           <div className="flex items-center gap-3">
@@ -40,7 +45,7 @@ export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props)
               <span className="material-symbols-outlined text-amber-400">merge_type</span>
             </div>
             <div>
-              <h3 className="text-lg font-bold text-sp-text">동기화 충돌</h3>
+              <h3 id="modal-title-drive-sync-conflict" className="text-lg font-bold text-sp-text">동기화 충돌</h3>
               <p className="text-xs text-sp-muted">{conflicts.length}개 파일에서 충돌이 발생했습니다</p>
             </div>
           </div>
@@ -58,7 +63,7 @@ export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props)
           {conflicts.map((conflict) => (
             <div key={conflict.filename} className="p-4 rounded-lg bg-sp-surface border border-sp-border">
               <div className="flex items-center gap-2 mb-3">
-                <span className="material-symbols-outlined text-sp-accent text-[18px]">description</span>
+                <span className="material-symbols-outlined text-sp-accent text-icon-md">description</span>
                 <span className="text-sm font-bold text-sp-text">
                   {FILE_LABELS[conflict.filename] ?? conflict.filename}
                 </span>

@@ -130,14 +130,14 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div role="dialog" aria-modal="true" aria-label="새 과제 만들기" className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-xl pointer-events-auto flex flex-col max-h-[90vh]">
+        <div role="dialog" aria-modal="true" aria-labelledby="modal-title-assignment-create" className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-xl pointer-events-auto flex flex-col max-h-[90vh]">
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-sp-accent/10">
                 <span className="material-symbols-outlined text-sp-accent">add_task</span>
               </div>
-              <h2 className="text-lg font-bold text-sp-text">새 과제 만들기</h2>
+              <h2 id="modal-title-assignment-create" className="text-lg font-bold text-sp-text">새 과제 만들기</h2>
             </div>
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-sp-border/30 transition-colors">
               <span className="material-symbols-outlined text-sp-muted">close</span>
@@ -275,7 +275,7 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
                           : 'bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">{opt.icon}</span>
+                      <span className="material-symbols-outlined text-icon">{opt.icon}</span>
                       {opt.label}
                     </button>
                   ))}
@@ -387,12 +387,12 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
             >
               {isLoading ? (
                 <>
-                  <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                  <span className="material-symbols-outlined text-icon animate-spin">progress_activity</span>
                   생성 중...
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-[16px]">add_task</span>
+                  <span className="material-symbols-outlined text-icon">add_task</span>
                   과제 생성
                 </>
               )}

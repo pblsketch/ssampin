@@ -8,11 +8,13 @@ interface Props {
 
 export function SettingsTabBar({ activeTab, onTabChange }: Props) {
   return (
-    <div className="flex overflow-x-auto py-2 px-4 gap-1 scrollbar-hide">
+    <div role="tablist" className="flex overflow-x-auto py-2 px-4 gap-1 scrollbar-hide">
       {TABS.map((tab) => (
         <button
           key={tab.id}
           type="button"
+          role="tab"
+          aria-selected={activeTab === tab.id}
           onClick={() => onTabChange(tab.id)}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-lg whitespace-nowrap text-sm shrink-0 transition-all ${
             activeTab === tab.id
@@ -20,7 +22,7 @@ export function SettingsTabBar({ activeTab, onTabChange }: Props) {
               : 'text-sp-muted hover:text-sp-text'
           }`}
         >
-          <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+          <span className="material-symbols-outlined text-icon">{tab.icon}</span>
           {tab.label}
         </button>
       ))}

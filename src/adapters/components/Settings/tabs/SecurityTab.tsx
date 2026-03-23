@@ -139,7 +139,7 @@ export function SecurityTab({ draft, patch }: Props) {
       title="PIN 잠금 설정"
       actions={
         pinEnabled ? (
-          <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full font-medium">
+          <span className="text-caption text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full font-medium">
             활성화됨
           </span>
         ) : undefined
@@ -152,7 +152,7 @@ export function SecurityTab({ draft, patch }: Props) {
             onClick={handleSetupStart}
             className="w-full px-4 py-3 rounded-lg bg-sp-accent/10 border border-sp-accent/30 text-sp-accent hover:bg-sp-accent/20 text-sm font-medium transition-colors flex items-center justify-center gap-2"
           >
-            <span className="material-symbols-outlined text-[18px]">lock</span>
+            <span className="material-symbols-outlined text-icon-md">lock</span>
             PIN 설정하기
           </button>
         )}
@@ -164,7 +164,7 @@ export function SecurityTab({ draft, patch }: Props) {
               onClick={handleChangeStart}
               className="flex-1 px-4 py-2.5 rounded-lg border border-sp-border text-sp-text hover:bg-sp-text/5 text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
-              <span className="material-symbols-outlined text-[16px]">edit</span>
+              <span className="material-symbols-outlined text-icon">edit</span>
               PIN 변경
             </button>
             <button
@@ -172,7 +172,7 @@ export function SecurityTab({ draft, patch }: Props) {
               onClick={handleRemoveStart}
               className="flex-1 px-4 py-2.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
-              <span className="material-symbols-outlined text-[16px]">lock_open</span>
+              <span className="material-symbols-outlined text-icon">lock_open</span>
               PIN 해제
             </button>
           </div>
@@ -256,7 +256,7 @@ export function SecurityTab({ draft, patch }: Props) {
                 {FEATURE_LABELS.map(({ key, icon, label }) => (
                   <div key={key} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-sp-muted text-[18px]">{icon}</span>
+                      <span className="material-symbols-outlined text-sp-muted text-icon-md">{icon}</span>
                       <span className="text-sm font-medium text-sp-text">{label}</span>
                     </div>
                     <Toggle
@@ -298,7 +298,7 @@ export function SecurityTab({ draft, patch }: Props) {
                 onClick={() => pinStore.lock()}
                 className="w-full px-4 py-2.5 rounded-lg border border-sp-border text-sp-muted hover:bg-sp-text/5 hover:text-sp-text text-sm font-medium transition-colors flex items-center justify-center gap-2"
               >
-                <span className="material-symbols-outlined text-[16px]">lock</span>
+                <span className="material-symbols-outlined text-icon">lock</span>
                 지금 잠그기
               </button>
             </div>

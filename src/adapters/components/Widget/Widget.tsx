@@ -43,7 +43,6 @@ export function Widget() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showLayoutSelector, setShowLayoutSelector] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [isStyleMode, setIsStyleMode] = useState(false);
   const layoutBtnRef = useRef<HTMLButtonElement>(null);
 
   const layoutMode = settings.widget.layoutMode ?? 'full';
@@ -217,22 +216,6 @@ export function Widget() {
               </span>
             </button>
 
-            {/* 스타일 편집 버튼 */}
-            <button
-              className={[
-                'p-1.5 rounded-lg transition-colors',
-                isStyleMode
-                  ? 'bg-sp-accent/20 text-sp-accent'
-                  : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
-              ].join(' ')}
-              onClick={() => { setIsStyleMode((prev) => !prev); if (isEditMode) setIsEditMode(false); }}
-              title="스타일 편집"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                palette
-              </span>
-            </button>
-
             {/* 위젯 편집 버튼 */}
             <button
               className={[
@@ -241,7 +224,7 @@ export function Widget() {
                   ? 'bg-sp-accent/20 text-sp-accent'
                   : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
               ].join(' ')}
-              onClick={() => { setIsEditMode((prev) => !prev); if (isStyleMode) setIsStyleMode(false); }}
+              onClick={() => setIsEditMode((prev) => !prev)}
               title="위젯 편집"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
@@ -346,11 +329,6 @@ export function Widget() {
           {/* 편집 모드: 위젯 설정 사이드 패널 */}
           {isEditMode && (
             <WidgetSettingsPanel onClose={() => setIsEditMode(false)} />
-          )}
-
-          {/* 스타일 모드: 스타일 전용 패널 (DnD 없이) */}
-          {isStyleMode && !isEditMode && (
-            <WidgetSettingsPanel onClose={() => setIsStyleMode(false)} styleOnly />
           )}
         </div>
 

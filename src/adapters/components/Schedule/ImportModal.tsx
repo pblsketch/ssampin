@@ -363,7 +363,7 @@ function Step3({
                   className="w-4 h-4 text-sp-accent bg-sp-bg border-sp-border focus:ring-sp-accent"
                 />
                 <div>
-                  <span className="text-sm text-sp-text font-medium group-hover:text-white transition-colors">
+                  <span className="text-sm text-sp-text font-medium group-hover:text-sp-text transition-colors">
                     {strategy === 'skip' ? '건너뛰기' : '덮어쓰기'}
                   </span>
                   <p className="text-xs text-sp-muted">
@@ -447,7 +447,7 @@ function StepDone({ result, onClose }: StepDoneProps) {
   return (
     <div className="flex flex-col items-center gap-5 py-4">
       <span className="material-symbols-outlined text-6xl text-green-400">check_circle</span>
-      <h3 className="text-xl font-bold text-white">가져오기 완료</h3>
+      <h3 className="text-xl font-bold text-sp-text">가져오기 완료</h3>
 
       <div className="w-full bg-sp-surface rounded-xl p-4 grid grid-cols-2 gap-3">
         <ResultStat
@@ -583,6 +583,7 @@ export function ImportModal({
       <div
         className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
         onClick={step !== 'done' && !isImporting ? onClose : undefined}
+        aria-hidden="true"
       />
 
       {/* Modal */}
@@ -590,16 +591,19 @@ export function ImportModal({
         <div
           className="w-full max-w-[640px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title-import"
         >
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border">
-            <h2 className="text-lg font-bold text-white">{stepTitle}</h2>
+            <h2 id="modal-title-import" className="text-lg font-bold text-sp-text">{stepTitle}</h2>
             {step !== 'done' && (
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isImporting}
-                className="p-1 hover:bg-slate-700 rounded-lg transition-colors text-sp-muted hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined">close</span>
               </button>

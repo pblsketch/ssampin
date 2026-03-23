@@ -14,20 +14,20 @@ interface MenuItemProps {
   onClick: () => void;
 }
 
-function MenuItem({ icon, iconColor = 'text-blue-500 bg-blue-500/10', label, description, onClick }: MenuItemProps) {
+function MenuItem({ icon, iconColor = 'text-sp-accent bg-sp-accent/15', label, description, onClick }: MenuItemProps) {
   return (
     <button
       onClick={onClick}
       className="flex items-center gap-4 w-full px-4 py-4 glass-card active:scale-[0.98] transition-transform text-left"
     >
-      <div className={`flex items-center justify-center w-11 h-11 rounded-xl shrink-0 ${iconColor.includes('bg-') ? iconColor.split(' ').find((c) => c.startsWith('bg-')) : 'bg-blue-500/10'}`}>
-        <span className={`material-symbols-outlined text-[24px] ${iconColor.includes('text-') ? iconColor.split(' ').find((c) => c.startsWith('text-')) : 'text-blue-500'}`}>{icon}</span>
+      <div className={`flex items-center justify-center w-11 h-11 rounded-xl shrink-0 ${iconColor.includes('bg-') ? iconColor.split(' ').find((c) => c.startsWith('bg-')) : 'bg-sp-accent/15'}`}>
+        <span className={`material-symbols-outlined text-icon-xl ${iconColor.includes('text-') ? iconColor.split(' ').find((c) => c.startsWith('text-')) : 'text-sp-accent'}`}>{icon}</span>
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sp-text font-semibold text-sm">{label}</p>
         <p className="text-sp-muted text-xs mt-0.5">{description}</p>
       </div>
-      <span className="material-symbols-outlined text-sp-muted text-[20px] shrink-0">
+      <span className="material-symbols-outlined text-sp-muted text-icon-lg shrink-0">
         chevron_right
       </span>
     </button>
@@ -60,7 +60,7 @@ export function MorePage({ onNavigate }: Props) {
             <MenuItem
               icon="mail"
               iconColor="text-amber-500 bg-amber-500/10"
-              label="동료에게 추천"
+              label="지인에게 추천"
               description="동료 선생님께 쌤핀을 알려주세요"
               onClick={() => setShowShare(true)}
             />

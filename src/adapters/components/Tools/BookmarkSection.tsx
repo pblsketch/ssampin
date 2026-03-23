@@ -172,7 +172,7 @@ export function BookmarkSection() {
                 }}
                 className="px-3 py-1.5 text-sm rounded-lg bg-sp-card hover:bg-sp-border text-sp-text transition-colors flex items-center gap-1"
               >
-                <span className="material-symbols-outlined text-[16px]">create_new_folder</span>
+                <span className="material-symbols-outlined text-icon">create_new_folder</span>
                 그룹 추가
               </button>
               <button
@@ -182,7 +182,7 @@ export function BookmarkSection() {
                 }}
                 className="px-3 py-1.5 text-sm rounded-lg bg-sp-accent hover:bg-blue-600 text-white transition-colors flex items-center gap-1"
               >
-                <span className="material-symbols-outlined text-[16px]">add</span>
+                <span className="material-symbols-outlined text-icon">add</span>
                 즐겨찾기 추가
               </button>
               <button
@@ -193,7 +193,7 @@ export function BookmarkSection() {
                     : 'bg-sp-card hover:bg-sp-border text-sp-text'
                 }`}
               >
-                <span className="material-symbols-outlined text-[16px]">
+                <span className="material-symbols-outlined text-icon">
                   {editMode ? 'check' : 'edit'}
                 </span>
                 {editMode ? '완료' : '편집'}
@@ -207,7 +207,7 @@ export function BookmarkSection() {
       {isEmpty && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <span className="text-6xl mb-4">🔗</span>
-          <h3 className="text-lg font-semibold text-white mb-2">
+          <h3 className="text-lg font-semibold text-sp-text mb-2">
             아직 즐겨찾기가 없습니다
           </h3>
           <p className="text-sp-muted mb-6 max-w-md">
@@ -219,7 +219,7 @@ export function BookmarkSection() {
               onClick={() => void handleAddDefaultPresets()}
               className="px-5 py-2.5 rounded-xl bg-sp-accent hover:bg-blue-600 text-white font-medium transition-colors flex items-center gap-2"
             >
-              <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+              <span className="material-symbols-outlined text-icon-md">auto_awesome</span>
               기본 즐겨찾기 추가
             </button>
             <button
@@ -229,7 +229,7 @@ export function BookmarkSection() {
               }}
               className="px-5 py-2.5 rounded-xl bg-sp-card hover:bg-sp-border text-sp-text font-medium transition-colors flex items-center gap-2"
             >
-              <span className="material-symbols-outlined text-[18px]">add</span>
+              <span className="material-symbols-outlined text-icon-md">add</span>
               직접 추가
             </button>
           </div>

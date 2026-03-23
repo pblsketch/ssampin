@@ -127,7 +127,7 @@ export function WeatherTab({ draft, patch }: Props) {
                 inputRef.current?.focus();
               }}
             >
-              <span className="material-symbols-outlined text-sp-muted text-[18px] mr-2 shrink-0 select-none">
+              <span className="material-symbols-outlined text-sp-muted text-icon-md mr-2 shrink-0 select-none">
                 search
               </span>
               <input
@@ -150,16 +150,16 @@ export function WeatherTab({ draft, patch }: Props) {
                   className="ml-1 shrink-0 text-sp-muted hover:text-sp-text transition-colors"
                   title="선택 해제"
                 >
-                  <span className="material-symbols-outlined text-[16px]">close</span>
+                  <span className="material-symbols-outlined text-icon">close</span>
                 </button>
               )}
               {!selectedCity && !isOpen && (
-                <span className="material-symbols-outlined text-sp-muted text-[18px] shrink-0 select-none">
+                <span className="material-symbols-outlined text-sp-muted text-icon-md shrink-0 select-none">
                   expand_more
                 </span>
               )}
               {isOpen && (
-                <span className="material-symbols-outlined text-sp-muted text-[18px] shrink-0 select-none">
+                <span className="material-symbols-outlined text-sp-muted text-icon-md shrink-0 select-none">
                   expand_less
                 </span>
               )}
@@ -196,7 +196,7 @@ export function WeatherTab({ draft, patch }: Props) {
                             >
                               <span>{highlightMatch(city.name, query)}</span>
                               {isSelected && (
-                                <span className="material-symbols-outlined text-sp-accent text-[16px] shrink-0">
+                                <span className="material-symbols-outlined text-sp-accent text-icon shrink-0">
                                   check
                                 </span>
                               )}

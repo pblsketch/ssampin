@@ -69,7 +69,7 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
             <div
               key={i}
               className={`w-2 h-2 rounded-full transition-colors ${
-                i === step ? 'bg-blue-500' : 'bg-sp-border'
+                i === step ? 'bg-sp-accent' : 'bg-sp-border'
               }`}
             />
           ))}
@@ -79,7 +79,7 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
           <div className="space-y-3">
             <button
               onClick={onLogin}
-              className="w-full py-3.5 rounded-2xl bg-blue-500 text-white font-semibold text-base active:scale-[0.98] transition-transform"
+              className="w-full py-3.5 rounded-2xl bg-sp-accent text-sp-accent-fg font-semibold text-base active:scale-[0.98] transition-transform"
             >
               Google 계정으로 시작하기
             </button>
@@ -93,7 +93,7 @@ export function OnboardingFlow({ onComplete, onLogin }: Props) {
         ) : (
           <button
             onClick={() => setStep((s) => s + 1)}
-            className="w-full py-3.5 rounded-2xl bg-blue-500 text-white font-semibold text-base active:scale-[0.98] transition-transform"
+            className="w-full py-3.5 rounded-2xl bg-sp-accent text-sp-accent-fg font-semibold text-base active:scale-[0.98] transition-transform"
           >
             다음
           </button>

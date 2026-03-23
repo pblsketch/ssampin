@@ -37,33 +37,39 @@ export function ExportPreviewModal({
     });
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-sp-surface border border-sp-border rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" aria-hidden="true">
+            <div
+                className="bg-sp-surface border border-sp-border rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-title-export-preview"
+            >
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border bg-sp-card">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <h3 id="modal-title-export-preview" className="text-lg font-bold text-sp-text flex items-center gap-2">
                         <span className="material-symbols-outlined text-sp-accent">preview</span>
                         내보내기 미리보기
                     </h3>
                     <button
                         onClick={onCancel}
                         disabled={isExporting}
-                        className="text-sp-muted hover:text-white transition-colors disabled:opacity-50"
+                        aria-label="닫기"
+                        className="text-sp-muted hover:text-sp-text transition-colors disabled:opacity-50"
                     >
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
 
                 {/* Content (Mock Preview) */}
-                <div className="p-6 flex-1 overflow-y-auto bg-slate-900/50">
+                <div className="p-6 flex-1 overflow-y-auto bg-sp-bg/50">
                     <div className="bg-white rounded-lg p-8 shadow-inner min-h-[400px] flex flex-col border border-slate-300 relative">
 
                         <div className="text-center mb-8 border-b pb-4 border-slate-200">
                             <h1 className="text-2xl font-bold text-slate-800 mb-2">문서 미리보기</h1>
                             <p className="text-slate-500 font-medium">포함된 항목: {itemsList.join(', ')}</p>
                             <div className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-slate-100 rounded-full text-slate-600 text-sm font-semibold">
-                                <span className="material-symbols-outlined text-[16px]">insert_drive_file</span>
+                                <span className="material-symbols-outlined text-icon">insert_drive_file</span>
                                 포맷: {format.toUpperCase()}
                             </div>
                         </div>
@@ -86,7 +92,7 @@ export function ExportPreviewModal({
                     <button
                         onClick={onCancel}
                         disabled={isExporting}
-                        className="px-5 py-2.5 rounded-lg font-medium text-sp-text hover:bg-slate-700 transition-colors disabled:opacity-50"
+                        className="px-5 py-2.5 rounded-lg font-medium text-sp-text hover:bg-sp-surface transition-colors disabled:opacity-50"
                     >
                         취소
                     </button>
@@ -97,12 +103,12 @@ export function ExportPreviewModal({
                     >
                         {isExporting ? (
                             <>
-                                <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
+                                <span className="material-symbols-outlined animate-spin text-icon-lg">progress_activity</span>
                                 저장 중...
                             </>
                         ) : (
                             <>
-                                <span className="material-symbols-outlined text-[20px]">save</span>
+                                <span className="material-symbols-outlined text-icon-lg">save</span>
                                 이대로 내보내기
                             </>
                         )}

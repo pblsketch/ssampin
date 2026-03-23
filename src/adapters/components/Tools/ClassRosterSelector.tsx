@@ -117,7 +117,7 @@ export function ClassRosterSelector({
               placeholder="예: 1학년 3반"
               maxLength={20}
               autoFocus
-              className="w-full px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-white text-sm placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent"
+              className="w-full px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent"
             />
           </div>
           <div>
@@ -126,7 +126,7 @@ export function ClassRosterSelector({
               value={editorText}
               onChange={(e) => setEditorText(e.target.value)}
               placeholder={'학생 이름을 한 줄에 하나씩 입력\n\n엑셀에서 복사-붙여넣기도 가능합니다'}
-              className="w-full h-32 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-white text-sm placeholder-sp-muted/50 resize-none focus:outline-none focus:border-sp-accent"
+              className="w-full h-32 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm placeholder-sp-muted/50 resize-none focus:outline-none focus:border-sp-accent"
             />
             <div className="mt-1 text-xs text-sp-muted">
               {editorStudentCount}명
@@ -135,7 +135,7 @@ export function ClassRosterSelector({
           <div className="flex gap-2 justify-end">
             <button
               onClick={handleCancelEditor}
-              className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-white text-sm transition-colors"
+              className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
             >
               취소
             </button>
@@ -163,12 +163,12 @@ export function ClassRosterSelector({
             onClick={() => setIsDropdownOpen((v) => !v)}
             className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sm hover:border-sp-accent transition-all"
           >
-            <span className={selectedRoster ? 'text-white' : 'text-sp-muted'}>
+            <span className={selectedRoster ? 'text-sp-text' : 'text-sp-muted'}>
               {selectedRoster
                 ? `${selectedRoster.name} (${selectedRoster.studentNames.length}명)`
                 : '반을 선택하세요'}
             </span>
-            <span className="material-symbols-outlined text-[16px] text-sp-muted">
+            <span className="material-symbols-outlined text-icon text-sp-muted">
               {isDropdownOpen ? 'expand_less' : 'expand_more'}
             </span>
           </button>
@@ -184,12 +184,12 @@ export function ClassRosterSelector({
                   <button
                     key={roster.id}
                     onClick={() => handleSelect(roster.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 text-left transition-colors ${
+                    className={`w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left transition-colors ${
                       roster.id === selectedRosterId ? 'bg-sp-accent/10' : ''
                     }`}
                   >
                     <span className="text-sm text-sp-text truncate">{roster.name}</span>
-                    <span className="text-[10px] text-sp-muted ml-2 shrink-0">
+                    <span className="text-caption text-sp-muted ml-2 shrink-0">
                       {roster.studentNames.length}명
                     </span>
                   </button>
@@ -205,24 +205,24 @@ export function ClassRosterSelector({
           className="flex items-center gap-1 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent transition-all shrink-0"
           title="새 반 등록"
         >
-          <span className="material-symbols-outlined text-[14px]">add</span>
+          <span className="material-symbols-outlined text-icon-sm">add</span>
           <span>새 반</span>
         </button>
         {selectedRoster && (
           <>
             <button
               onClick={handleStartEdit}
-              className="p-2 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent transition-all shrink-0"
+              className="p-2 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent transition-all shrink-0"
               title="명단 수정"
             >
-              <span className="material-symbols-outlined text-[14px]">edit</span>
+              <span className="material-symbols-outlined text-icon-sm">edit</span>
             </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="p-2 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-red-400 hover:border-red-400/40 transition-all shrink-0"
               title="반 삭제"
             >
-              <span className="material-symbols-outlined text-[14px]">delete</span>
+              <span className="material-symbols-outlined text-icon-sm">delete</span>
             </button>
           </>
         )}
@@ -276,14 +276,14 @@ export function ClassRosterSelector({
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-sp-card border border-sp-border rounded-2xl p-5 w-72">
-            <h3 className="text-sm font-bold text-white mb-2">반 삭제</h3>
+            <h3 className="text-sm font-bold text-sp-text mb-2">반 삭제</h3>
             <p className="text-xs text-sp-muted mb-4">
               &apos;{selectedRoster?.name}&apos; 명단을 삭제할까요?
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-white text-sm transition-colors"
+                className="flex-1 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
               >
                 취소
               </button>

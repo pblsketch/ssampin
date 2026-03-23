@@ -180,7 +180,7 @@ export function GroupShuffleOverlay({
                   style={{ background: group.color }}
                 />
                 <span className="text-sm font-bold text-sp-text">{group.name}</span>
-                <span className="text-[10px] text-sp-muted">
+                <span className="text-caption text-sp-muted">
                   {group.studentIds.length}명
                 </span>
               </div>
@@ -217,7 +217,7 @@ export function GroupShuffleOverlay({
                       </div>
                       {/* 이름 */}
                       <span
-                        className={`text-[11px] leading-tight transition-all duration-300 ${
+                        className={`text-detail leading-tight transition-all duration-300 ${
                           isLocked
                             ? 'text-sp-text font-medium'
                             : 'text-sp-muted/60'
@@ -227,7 +227,7 @@ export function GroupShuffleOverlay({
                       </span>
                       {/* 번호 (잠금 시) */}
                       {isLocked && student?.studentNumber !== undefined && (
-                        <span className="text-[9px] text-sp-muted font-mono">
+                        <span className="text-tiny text-sp-muted font-mono">
                           {String(student.studentNumber).padStart(2, '0')}번
                         </span>
                       )}

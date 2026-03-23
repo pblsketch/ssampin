@@ -97,9 +97,14 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
     cal.backgroundColor ?? '#3b82f6';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="max-h-[80vh] w-full max-w-[480px] overflow-y-auto rounded-2xl bg-sp-card p-6 shadow-2xl">
-        <h2 className="mb-1 text-lg font-bold text-sp-text">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" aria-hidden="true">
+      <div
+        className="max-h-[80vh] w-full max-w-[480px] overflow-y-auto rounded-2xl bg-sp-card p-6 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-calendar-mapping"
+      >
+        <h2 id="modal-title-calendar-mapping" className="mb-1 text-lg font-bold text-sp-text">
           {isInitialSetup ? '동기화할 캘린더 선택' : '캘린더 선택'}
         </h2>
         <p className="mb-5 text-sm text-sp-muted">
@@ -164,7 +169,7 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
                   }`}
                 >
                   {selected.has(cal.id) && (
-                    <span className="material-symbols-outlined text-[14px]">check</span>
+                    <span className="material-symbols-outlined text-icon-sm">check</span>
                   )}
                 </div>
 

@@ -142,7 +142,7 @@ export function TodayProgress() {
       <div className="flex flex-col gap-2 flex-1 overflow-auto">
         {todayLessons.map((lesson) => {
           const statusBadge = lesson.matchedClass === null
-            ? <span className="flex-shrink-0 text-[10px] text-sp-muted/40 italic">학급 미매칭</span>
+            ? <span className="flex-shrink-0 text-caption text-sp-muted/40 italic">학급 미매칭</span>
             : getStatusBadge(lesson.progress?.status ?? null);
           const hasPrev = lesson.prevProgress !== null;
           const hasNext = lesson.nextProgress !== null;
@@ -210,7 +210,7 @@ export function TodayProgress() {
 
                   {/* Note */}
                   {hasToday && lesson.progress!.note && (
-                    <p className="text-[10px] text-sp-muted/50 mt-1 ml-16">
+                    <p className="text-caption text-sp-muted/50 mt-1 ml-16">
                       📝 {lesson.progress!.note}
                     </p>
                   )}

@@ -64,7 +64,7 @@ function MiniMonthInner({ year, month, events, onClick }: MiniMonthProps) {
       }`}>
         {month + 1}월
       </h4>
-      <div className="grid grid-cols-7 gap-0 text-[9px]">
+      <div className="grid grid-cols-7 gap-0 text-tiny">
         {/* 요일 헤더 */}
         {DAY_HEADERS.map((d) => (
           <div key={d} className="text-center text-sp-muted/50">{d}</div>
@@ -103,7 +103,7 @@ function MiniMonthInner({ year, month, events, onClick }: MiniMonthProps) {
       </div>
       {/* 이벤트 수 */}
       {monthEvents.length > 0 && (
-        <p className="text-[10px] text-sp-muted text-center mt-1">
+        <p className="text-caption text-sp-muted text-center mt-1">
           일정 {monthEvents.length}건
         </p>
       )}

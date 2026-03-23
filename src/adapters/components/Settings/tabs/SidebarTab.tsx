@@ -69,7 +69,7 @@ export function SidebarTab({ draft, patch }: Props) {
   return (
     <SettingsSection
       icon="menu"
-      iconColor="bg-slate-500/10 text-slate-400"
+      iconColor="bg-sp-surface text-sp-muted"
       title="메뉴 표시 설정"
       actions={
         <div className="flex gap-2">
@@ -112,13 +112,13 @@ export function SidebarTab({ draft, patch }: Props) {
               } ${isDragOver ? 'ring-2 ring-sp-accent/50 bg-sp-accent/5' : 'hover:bg-sp-surface/50'}`}
             >
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-[16px] text-sp-muted/40 cursor-grab active:cursor-grabbing">
+                <span className="material-symbols-outlined text-icon text-sp-muted/40 cursor-grab active:cursor-grabbing">
                   drag_indicator
                 </span>
-                <span className={`material-symbols-outlined text-[18px] ${isAlwaysVisible ? 'text-sp-muted/50' : isHidden ? 'text-sp-muted/30' : 'text-sp-muted'}`}>{item.icon}</span>
+                <span className={`material-symbols-outlined text-icon-md ${isAlwaysVisible ? 'text-sp-muted/50' : isHidden ? 'text-sp-muted/30' : 'text-sp-muted'}`}>{item.icon}</span>
                 <span className={`text-sm font-medium ${isAlwaysVisible ? 'text-sp-muted/70' : isHidden ? 'text-sp-muted/40' : 'text-sp-text'}`}>{item.label}</span>
                 {isAlwaysVisible && (
-                  <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">항상 표시</span>
+                  <span className="text-caption text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">항상 표시</span>
                 )}
               </div>
               <Toggle

@@ -45,13 +45,16 @@ export function BulkDeleteByCategoryModal({ categories, events, onDelete, onClos
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose} aria-hidden="true">
       <div
         className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-bulk-delete-category"
       >
         <div className="px-6 py-5 border-b border-sp-border">
-          <h3 className="text-lg font-bold text-sp-text">카테고리별 일정 삭제</h3>
+          <h3 id="modal-title-bulk-delete-category" className="text-lg font-bold text-sp-text">카테고리별 일정 삭제</h3>
           <p className="text-sm text-sp-muted mt-1">
             선택한 카테고리의 모든 일정을 삭제합니다.
           </p>

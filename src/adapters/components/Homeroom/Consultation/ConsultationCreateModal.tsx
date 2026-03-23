@@ -555,16 +555,20 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
+      aria-hidden="true"
     >
       <div
         className="bg-sp-card rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-consultation-create"
       >
         {/* 헤더 + 스텝 인디케이터 */}
         <div className="p-5 border-b border-sp-border shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-sp-text">새 상담 일정</h3>
-            <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+            <h3 id="modal-title-consultation-create" className="text-lg font-bold text-sp-text">새 상담 일정</h3>
+            <button onClick={onClose} aria-label="닫기" className="text-sp-muted hover:text-sp-text transition-colors">
               <span className="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -589,7 +593,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                         : 'text-sp-muted/50'
                   }`}
                 >
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-caption font-bold shrink-0 ${
                     step === currentStep
                       ? 'bg-sp-accent text-white'
                       : step < currentStep
@@ -670,7 +674,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               ))}
             </div>
             {methods.length === 0 && (
-              <p className="text-[10px] text-amber-400 mt-1">상담 방식을 최소 1개 선택하세요</p>
+              <p className="text-caption text-amber-400 mt-1">상담 방식을 최소 1개 선택하세요</p>
             )}
           </div>
 
@@ -724,7 +728,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               </div>
             )}
             {type === 'parent' && !customSlot && (
-              <p className="text-[10px] text-sp-muted/70 mt-1.5">
+              <p className="text-caption text-sp-muted/70 mt-1.5">
                 💡 학부모 상담은 보통 45~55분으로 설정합니다
               </p>
             )}
@@ -743,7 +747,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               <div className="flex flex-col gap-3">
                 {/* 날짜 선택 */}
                 <div>
-                  <label className="text-[10px] text-sp-muted mb-1 block">날짜</label>
+                  <label className="text-caption text-sp-muted mb-1 block">날짜</label>
                   <input
                     type="date"
                     value={studentDate}
@@ -755,7 +759,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                 {/* 프리셋 체크박스 */}
                 {studentDate && breakPresets.length > 0 && (
                   <div>
-                    <label className="text-[10px] text-sp-muted mb-1.5 block">시간대 선택</label>
+                    <label className="text-caption text-sp-muted mb-1.5 block">시간대 선택</label>
                     <div className="flex flex-col gap-1.5">
                       {breakPresets.map((preset) => {
                         const checked = selectedPresets.has(preset.id);
@@ -795,7 +799,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                                 <span className="text-xs text-sp-muted font-mono">{preset.startTime}~{preset.endTime}</span>
                               )}
                               {/* N명 가능 / 불가 배지 (또는 선택 현황) */}
-                              <span className={`text-[10px] font-medium ml-1 shrink-0 ${
+                              <span className={`text-caption font-medium ml-1 shrink-0 ${
                                 disabled ? 'text-sp-muted/50'
                                   : checked ? 'text-sp-accent'
                                     : presetSlotCount >= 1 ? 'text-sp-accent' : 'text-sp-muted/50'
@@ -816,7 +820,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                                     <button
                                       key={chip}
                                       onClick={(e) => { e.stopPropagation(); toggleChip(preset.id, chip); }}
-                                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-mono border transition-all ${
+                                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-caption font-mono border transition-all ${
                                         isSelected
                                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                                           : 'bg-sp-surface border-sp-border text-sp-muted/50 hover:text-sp-muted hover:border-sp-muted/50'
@@ -863,7 +867,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                         </button>
                       </div>
                       {isInvalid && (
-                        <p className="text-[10px] text-amber-400">종료 시간이 시작 시간보다 이전입니다</p>
+                        <p className="text-caption text-amber-400">종료 시간이 시작 시간보다 이전입니다</p>
                       )}
                     </div>
                   );
@@ -922,7 +926,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                         </span>
                       </div>
                       {isInvalid && (
-                        <p className="text-[10px] text-amber-400">종료 시간이 시작 시간보다 이전입니다</p>
+                        <p className="text-caption text-amber-400">종료 시간이 시작 시간보다 이전입니다</p>
                       )}
                     </div>
                   );
@@ -951,12 +955,12 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                         {excludeClassTime ? 'toggle_on' : 'toggle_off'}
                       </span>
                       <span className="flex-1 text-left">수업 시간 제외</span>
-                      <span className="text-[10px] text-sp-muted">시간표 연동</span>
+                      <span className="text-caption text-sp-muted">시간표 연동</span>
                     </button>
 
                     {excludeClassTime && (
                       <div className="mt-2 rounded-lg border border-sp-border bg-sp-surface/50 p-3 flex flex-col gap-2">
-                        <label className="text-[10px] font-medium text-sp-muted">시간표 기반 제외 시간</label>
+                        <label className="text-caption font-medium text-sp-muted">시간표 기반 제외 시간</label>
                         <div className="flex flex-col gap-1">
                           {breakPresets.map((preset) => {
                             const isClass = preset.id.startsWith('period-');
@@ -977,9 +981,9 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                                   {isExcluded && <span className="material-symbols-outlined text-white" style={{ fontSize: '10px' }}>close</span>}
                                 </span>
                                 <span className="flex-1 text-left">{preset.label}</span>
-                                <span className="text-[10px] font-mono text-sp-muted">{preset.startTime}~{preset.endTime}</span>
+                                <span className="text-caption font-mono text-sp-muted">{preset.startTime}~{preset.endTime}</span>
                                 {isClass && !isExcluded && (
-                                  <span className="text-[9px] text-green-400">상담가능</span>
+                                  <span className="text-tiny text-green-400">상담가능</span>
                                 )}
                               </button>
                             );
@@ -989,11 +993,11 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                         {/* 커스텀 제외 */}
                         {customExclusions.length > 0 && (
                           <div className="flex flex-col gap-1 mt-1">
-                            <label className="text-[10px] font-medium text-sp-muted">추가 제외 시간</label>
+                            <label className="text-caption font-medium text-sp-muted">추가 제외 시간</label>
                             {customExclusions.map((ex, idx) => (
                               <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 bg-red-500/10 rounded-md">
-                                <span className="text-[10px] font-mono text-red-400">{ex.startTime}~{ex.endTime}</span>
-                                {ex.label && <span className="text-[10px] text-sp-muted">({ex.label})</span>}
+                                <span className="text-caption font-mono text-red-400">{ex.startTime}~{ex.endTime}</span>
+                                {ex.label && <span className="text-caption text-sp-muted">({ex.label})</span>}
                                 <button
                                   onClick={() => setCustomExclusions((prev) => prev.filter((_, i) => i !== idx))}
                                   className="ml-auto text-sp-muted hover:text-red-400"
@@ -1007,7 +1011,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
 
                         <button
                           onClick={() => setCustomExclusions((prev) => [...prev, { startTime: '12:00', endTime: '13:00', label: '' }])}
-                          className="flex items-center justify-center gap-1 py-1.5 rounded-md border border-dashed border-sp-border text-[10px] text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
+                          className="flex items-center justify-center gap-1 py-1.5 rounded-md border border-dashed border-sp-border text-caption text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
                         >
                           <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
                           제외 시간 추가
@@ -1025,7 +1029,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                           });
                           return (
                             <div className="mt-1 p-2 rounded-md bg-sp-card border border-sp-border">
-                              <p className="text-[10px] font-medium text-sp-muted mb-1">상담 가능 시간</p>
+                              <p className="text-caption font-medium text-sp-muted mb-1">상담 가능 시간</p>
                               <div className="flex flex-wrap gap-1">
                                 {ranges.map((r, i) => {
                                   const dur = parseTimeToMinutes(r.endTime) - parseTimeToMinutes(r.startTime);
@@ -1033,18 +1037,18 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                                   return (
                                     <span
                                       key={i}
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono ${
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-caption font-mono ${
                                         slots > 0 ? 'bg-sp-accent/10 text-sp-accent' : 'bg-sp-surface text-sp-muted/50'
                                       }`}
                                     >
                                       {r.startTime}~{r.endTime}
-                                      <span className="text-[9px]">({dur}분{slots > 0 ? ` / ${slots}슬롯` : ''})</span>
+                                      <span className="text-tiny">({dur}분{slots > 0 ? ` / ${slots}슬롯` : ''})</span>
                                     </span>
                                   );
                                 })}
                               </div>
                               {hasShortGap && (
-                                <p className="text-[10px] text-amber-400 mt-1.5 flex items-center gap-1">
+                                <p className="text-caption text-amber-400 mt-1.5 flex items-center gap-1">
                                   <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>warning</span>
                                   일부 시간대가 {slotMinutes}분보다 짧아 슬롯이 생성되지 않습니다
                                 </p>
@@ -1056,7 +1060,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                     )}
                   </div>
                 ) : (
-                  <p className="text-[10px] text-sp-muted/50 mt-1">
+                  <p className="text-caption text-sp-muted/50 mt-1">
                     설정 → 교시 시간 등록 후 수업 시간 제외 기능을 사용할 수 있습니다
                   </p>
                 )}
@@ -1087,7 +1091,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                         const preset = breakPresets.find((p) => p.id === presetId);
                         if (!preset) return null;
                         return (
-                          <span key={presetId} className="text-[10px] text-sp-muted">
+                          <span key={presetId} className="text-caption text-sp-muted">
                             {preset.label}: <span className="text-sp-accent">{count}슬롯</span>
                           </span>
                         );
@@ -1133,12 +1137,12 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               />
             </div>
             {linkCodeError && (
-              <p className="text-[10px] text-red-400 mt-1">{linkCodeError}</p>
+              <p className="text-caption text-red-400 mt-1">{linkCodeError}</p>
             )}
             {customLinkCode && !linkCodeError && !isCheckingCode && (
-              <p className="text-[10px] text-green-400 mt-1">사용 가능</p>
+              <p className="text-caption text-green-400 mt-1">사용 가능</p>
             )}
-            <p className="text-[10px] text-sp-muted/50 mt-1">
+            <p className="text-caption text-sp-muted/50 mt-1">
               비워두면 자동으로 생성됩니다. 한글, 영문, 숫자, -, _ 사용 가능
             </p>
           </div>
@@ -1154,7 +1158,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                     <span className="text-red-400 ml-1">· {blockedSlotKeys.size}개 차단</span>
                   )}
                 </label>
-                <p className="text-[10px] text-sp-muted/70 mb-2">클릭하여 개별 슬롯을 차단/해제할 수 있습니다</p>
+                <p className="text-caption text-sp-muted/70 mb-2">클릭하여 개별 슬롯을 차단/해제할 수 있습니다</p>
                 <div className="rounded-lg border border-sp-border bg-sp-surface/50 p-3 max-h-72 overflow-y-auto">
                   {/* 날짜별 그룹 */}
                   {(() => {
@@ -1166,7 +1170,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                     }
                     return [...byDate.entries()].map(([date, daySlots]) => (
                       <div key={date} className="mb-3 last:mb-0">
-                        <p className="text-[10px] font-medium text-sp-muted mb-1.5">{date}</p>
+                        <p className="text-caption font-medium text-sp-muted mb-1.5">{date}</p>
                         <div className="flex flex-wrap gap-1">
                           {daySlots.map((slot) => {
                             const key = `${slot.date}_${slot.startTime}`;
@@ -1175,7 +1179,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                               <button
                                 key={key}
                                 onClick={() => toggleBlockSlot(slot.date, slot.startTime)}
-                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono border transition-all ${
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-caption font-mono border transition-all ${
                                   isBlocked
                                     ? 'bg-red-500/15 border-red-500/40 text-red-400 line-through'
                                     : 'bg-sp-card border-sp-border text-sp-text hover:border-sp-accent/50'
@@ -1195,7 +1199,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                   })()}
 
                   {/* 요약 */}
-                  <div className="mt-2 pt-2 border-t border-sp-border flex items-center gap-3 text-[10px]">
+                  <div className="mt-2 pt-2 border-t border-sp-border flex items-center gap-3 text-caption">
                     <span className="text-sp-accent font-medium">
                       예약 가능: {generatedSlots.length - blockedSlotKeys.size}개
                     </span>
@@ -1219,7 +1223,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
               <div className="flex flex-col items-center justify-center py-8 text-sp-muted">
                 <span className="material-symbols-outlined text-3xl mb-2">event_busy</span>
                 <p className="text-sm">생성될 슬롯이 없습니다</p>
-                <p className="text-[10px] mt-1">이전 단계에서 날짜와 시간을 설정하세요</p>
+                <p className="text-caption mt-1">이전 단계에서 날짜와 시간을 설정하세요</p>
               </div>
             )}
 

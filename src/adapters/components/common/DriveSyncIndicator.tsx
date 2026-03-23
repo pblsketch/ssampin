@@ -21,7 +21,7 @@ export function DriveSyncIndicator() {
     <div className="mb-2">
       {status === 'syncing' && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sp-surface text-xs text-sp-muted">
-          <span className="material-symbols-outlined text-[16px] animate-spin text-sp-accent">sync</span>
+          <span className="material-symbols-outlined text-icon animate-spin text-sp-accent">sync</span>
           <span>
             {progress
               ? `동기화 중... (${progress.current}/${progress.total})`
@@ -32,7 +32,7 @@ export function DriveSyncIndicator() {
 
       {status === 'success' && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 text-xs text-emerald-400">
-          <span className="material-symbols-outlined text-[16px]">check_circle</span>
+          <span className="material-symbols-outlined text-icon">check_circle</span>
           <span>동기화 완료</span>
         </div>
       )}
@@ -43,15 +43,15 @@ export function DriveSyncIndicator() {
           onClick={handleRetry}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
         >
-          <span className="material-symbols-outlined text-[16px]">error</span>
+          <span className="material-symbols-outlined text-icon">error</span>
           <span className="flex-1 text-left truncate">{error ?? '동기화 실패'}</span>
-          <span className="material-symbols-outlined text-[14px]">refresh</span>
+          <span className="material-symbols-outlined text-icon-sm">refresh</span>
         </button>
       )}
 
       {status === 'conflict' && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 text-xs text-amber-400">
-          <span className="material-symbols-outlined text-[16px]">warning</span>
+          <span className="material-symbols-outlined text-icon">warning</span>
           <span>충돌 {conflicts.length}건</span>
         </div>
       )}

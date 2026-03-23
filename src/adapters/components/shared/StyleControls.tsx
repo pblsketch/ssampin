@@ -9,7 +9,7 @@ interface StyleSectionProps {
 export function StyleSection({ title, children, compact = false }: StyleSectionProps) {
   return (
     <div>
-      <h3 className={`mb-2 font-semibold uppercase tracking-wider text-sp-muted ${compact ? 'text-[11px]' : 'text-xs'}`}>{title}</h3>
+      <h3 className={`mb-2 font-semibold uppercase tracking-wider text-sp-muted ${compact ? 'text-detail' : 'text-xs'}`}>{title}</h3>
       <div className="space-y-2">{children}</div>
     </div>
   );
@@ -29,7 +29,7 @@ interface SliderRowProps {
 export function SliderRow({ label, min, max, step, value, unit, onChange, compact = false }: SliderRowProps) {
   return (
     <div className="flex items-center gap-2">
-      <span className={`text-sp-muted shrink-0 ${compact ? 'text-[10px] w-14' : 'text-xs w-20'}`}>{label}</span>
+      <span className={`text-sp-muted shrink-0 ${compact ? 'text-caption w-14' : 'text-xs w-20'}`}>{label}</span>
       <input
         type="range"
         min={min}
@@ -39,7 +39,7 @@ export function SliderRow({ label, min, max, step, value, unit, onChange, compac
         onChange={(e) => onChange(Number(e.target.value))}
         className="flex-1 accent-[var(--sp-accent)]"
       />
-      <span className={`text-sp-muted tabular-nums w-10 text-right ${compact ? 'text-[10px]' : 'text-xs'}`}>
+      <span className={`text-sp-muted tabular-nums w-10 text-right ${compact ? 'text-caption' : 'text-xs'}`}>
         {value}{unit}
       </span>
     </div>
@@ -56,7 +56,7 @@ interface ToggleRowProps {
 export function ToggleRow({ label, checked, onChange, compact = false }: ToggleRowProps) {
   return (
     <div className="flex items-center gap-2">
-      <span className={`text-sp-muted flex-1 ${compact ? 'text-[10px]' : 'text-xs'}`}>{label}</span>
+      <span className={`text-sp-muted flex-1 ${compact ? 'text-caption' : 'text-xs'}`}>{label}</span>
       <button
         role="switch"
         aria-checked={checked}
@@ -86,11 +86,11 @@ interface SelectRowProps<T extends string> {
 export function SelectRow<T extends string>({ label, value, options, onChange, compact = false }: SelectRowProps<T>) {
   return (
     <div className="flex items-center gap-2">
-      <span className={`text-sp-muted shrink-0 ${compact ? 'text-[10px] w-14' : 'text-xs w-20'}`}>{label}</span>
+      <span className={`text-sp-muted shrink-0 ${compact ? 'text-caption w-14' : 'text-xs w-20'}`}>{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className={`flex-1 bg-sp-surface border border-sp-border/50 rounded-lg px-2 py-1 text-sp-text ${compact ? 'text-[11px]' : 'text-xs'}`}
+        className={`flex-1 bg-sp-surface border border-sp-border/50 rounded-lg px-2 py-1 text-sp-text ${compact ? 'text-detail' : 'text-xs'}`}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -128,7 +128,7 @@ export function ColorSwatchRow({ label, value, themeDefault, swatches, onChange,
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
-        <span className={`text-sp-muted shrink-0 ${compact ? 'text-[10px] w-10' : 'text-xs w-20'}`}>{label}</span>
+        <span className={`text-sp-muted shrink-0 ${compact ? 'text-caption w-10' : 'text-xs w-20'}`}>{label}</span>
         <div
           className={`rounded border border-sp-border/50 shrink-0 ${compact ? 'w-5 h-5' : 'w-6 h-6'}`}
           style={{ background: currentColor }}
@@ -146,11 +146,11 @@ export function ColorSwatchRow({ label, value, themeDefault, swatches, onChange,
               placeholder="#000000"
               maxLength={7}
               autoFocus
-              className={`w-full bg-sp-surface border border-sp-border/50 rounded px-1.5 py-0.5 text-sp-text font-mono placeholder:text-sp-muted/50 focus:border-sp-accent outline-none ${compact ? 'text-[10px]' : 'text-xs'}`}
+              className={`w-full bg-sp-surface border border-sp-border/50 rounded px-1.5 py-0.5 text-sp-text font-mono placeholder:text-sp-muted/50 focus:border-sp-accent outline-none ${compact ? 'text-caption' : 'text-xs'}`}
             />
             <button
               onClick={applyHex}
-              className={`text-sp-accent hover:text-sp-accent/80 shrink-0 font-medium ${compact ? 'text-[9px]' : 'text-[10px]'}`}
+              className={`text-sp-accent hover:text-sp-accent/80 shrink-0 font-medium ${compact ? 'text-tiny' : 'text-caption'}`}
             >
               적용
             </button>
@@ -158,7 +158,7 @@ export function ColorSwatchRow({ label, value, themeDefault, swatches, onChange,
         ) : (
           <button
             onClick={() => { setShowHexInput(true); setHexInput(currentColor); }}
-            className={`text-sp-muted hover:text-sp-text flex-1 truncate text-left transition-colors font-mono ${compact ? 'text-[10px]' : 'text-xs'}`}
+            className={`text-sp-muted hover:text-sp-text flex-1 truncate text-left transition-colors font-mono ${compact ? 'text-caption' : 'text-xs'}`}
             title="클릭하여 색상 코드 입력"
           >
             {value ?? '테마 기본'}
@@ -167,7 +167,7 @@ export function ColorSwatchRow({ label, value, themeDefault, swatches, onChange,
         {value && !showHexInput && (
           <button
             onClick={onReset}
-            className={`text-sp-muted hover:text-red-400 transition-colors shrink-0 ${compact ? 'text-[9px]' : 'text-[10px]'}`}
+            className={`text-sp-muted hover:text-red-400 transition-colors shrink-0 ${compact ? 'text-tiny' : 'text-caption'}`}
           >
             초기화
           </button>

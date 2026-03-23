@@ -71,22 +71,29 @@ export function TodoCategoryModal({ onClose }: TodoCategoryModalProps) {
       <div
         className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md pointer-events-auto flex flex-col max-h-[80vh]">
+        <div
+          className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md pointer-events-auto flex flex-col max-h-[80vh]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title-todo-category"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
-            <h3 className="text-sp-text font-bold text-lg flex items-center gap-2">
+            <h3 id="modal-title-todo-category" className="text-sp-text font-bold text-lg flex items-center gap-2">
               <span>📁</span> 카테고리 관리
             </h3>
             <button
               type="button"
               onClick={onClose}
+              aria-label="닫기"
               className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <span className="material-symbols-outlined text-icon-lg">close</span>
             </button>
           </div>
 
@@ -140,7 +147,7 @@ export function TodoCategoryModal({ onClose }: TodoCategoryModalProps) {
                   onClick={() => handleRemove(cat.id)}
                   className="p-1 rounded text-sp-muted hover:text-red-400 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  <span className="material-symbols-outlined text-icon">delete</span>
                 </button>
               </div>
             ))}
@@ -193,7 +200,7 @@ export function TodoCategoryModal({ onClose }: TodoCategoryModalProps) {
                 disabled={!newName.trim()}
                 className="p-1 rounded text-sp-accent hover:bg-sp-accent/10 disabled:opacity-30 transition-colors"
               >
-                <span className="material-symbols-outlined text-[18px]">add</span>
+                <span className="material-symbols-outlined text-icon-md">add</span>
               </button>
             </div>
           </div>

@@ -98,7 +98,7 @@ function ProgressMode({ students, records }: ModeProps) {
   const SortHeader = useCallback(({ label, sortId, className }: { label: string; sortId: SortKey; className?: string }) => (
     <th
       onClick={() => handleSort(sortId)}
-      className={`p-3 font-medium border-b cursor-pointer hover:text-white transition-colors select-none ${className ?? ''}`}
+      className={`p-3 font-medium border-b cursor-pointer hover:text-sp-text transition-colors select-none ${className ?? ''}`}
     >
       {label}
       {sortKey === sortId && (
@@ -134,7 +134,7 @@ function ProgressMode({ students, records }: ModeProps) {
               onClick={() => setStatsTab(tab.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${statsTab === tab.id
                 ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
                 }`}
             >
               {tab.label}
@@ -154,7 +154,7 @@ function ProgressMode({ students, records }: ModeProps) {
               onClick={() => setStatsPeriod(f.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${statsPeriod === f.id
                 ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
                 }`}
             >
               {f.label}

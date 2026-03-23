@@ -167,7 +167,7 @@ function DDayRow({ item, dday, onEdit, onTogglePin, onDelete }: DDayRowProps) {
         <div className="flex items-center gap-1">
           <span className="text-sm text-sp-text truncate">{item.title}</span>
           {item.pinned && (
-            <span className="text-[10px] text-sp-muted">📌</span>
+            <span className="text-caption text-sp-muted">📌</span>
           )}
         </div>
         <span className="text-xs text-sp-muted">{formatDateKR(item.targetDate)}</span>
@@ -200,14 +200,14 @@ function DDayRow({ item, dday, onEdit, onTogglePin, onDelete }: DDayRowProps) {
           title="편집"
           className="w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-sp-accent hover:bg-sp-card transition-colors"
         >
-          <span className="material-symbols-outlined text-[14px]">edit</span>
+          <span className="material-symbols-outlined text-icon-sm">edit</span>
         </button>
         <button
           onClick={onDelete}
           title="삭제"
           className="w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-red-400 hover:bg-sp-card transition-colors"
         >
-          <span className="material-symbols-outlined text-[14px]">delete</span>
+          <span className="material-symbols-outlined text-icon-sm">delete</span>
         </button>
       </div>
     </div>
@@ -337,7 +337,7 @@ export function DDayCounter() {
                   className="flex items-center gap-1.5 w-full px-2 py-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
                 >
                   <span
-                    className={`transition-transform text-[10px] ${showPast ? 'rotate-90' : ''}`}
+                    className={`transition-transform text-caption ${showPast ? 'rotate-90' : ''}`}
                   >
                     ▶
                   </span>
@@ -348,7 +348,7 @@ export function DDayCounter() {
                         e.stopPropagation();
                         void handleDeleteAllPast();
                       }}
-                      className="ml-auto text-[10px] text-red-400/70 hover:text-red-400"
+                      className="ml-auto text-caption text-red-400/70 hover:text-red-400"
                     >
                       모두 삭제
                     </button>

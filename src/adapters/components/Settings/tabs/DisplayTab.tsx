@@ -11,6 +11,7 @@ import {
 } from '@domain/entities/DashboardTheme';
 import type { ThemeColors, PresetThemeId } from '@domain/entities/DashboardTheme';
 import { SliderRow, ToggleRow, SelectRow, ColorSwatchRow } from '../../shared/StyleControls';
+import { BackgroundImageSection } from '../../shared/BackgroundImageSection';
 
 interface Props {
   draft: Settings;
@@ -88,6 +89,16 @@ export function DisplayTab({ draft, patch }: Props) {
           </div>
         </div>
 
+        {/* 배경 이미지 */}
+        <div>
+          <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">배경 이미지</h4>
+          <BackgroundImageSection
+            value={ws.backgroundImage}
+            opacity={ws.backgroundImageOpacity}
+            onChange={(p) => updateStyle(p)}
+          />
+        </div>
+
         {/* 카드 모양 */}
         <div>
           <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">카드 모양</h4>
@@ -129,8 +140,8 @@ export function DisplayTab({ draft, patch }: Props) {
           <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">글꼴 크기 (Font Size)</h4>
           <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
             {([
-              { value: 'small', label: '작게', iconSize: 'text-[14px]' },
-              { value: 'medium', label: '보통', iconSize: 'text-[16px]' },
+              { value: 'small', label: '작게', iconSize: 'text-icon-sm' },
+              { value: 'medium', label: '보통', iconSize: 'text-icon' },
               { value: 'large', label: '크게', iconSize: 'text-[18px]' },
               { value: 'xlarge', label: '매우 크게', iconSize: 'text-[20px]' },
             ] as const).map((opt) => (
@@ -169,7 +180,7 @@ export function DisplayTab({ draft, patch }: Props) {
               onChange={(e) => patch({ dashboardFontScale: parseFloat(e.target.value) })}
               className="w-full accent-sp-accent"
             />
-            <div className="flex justify-between text-[10px] text-sp-muted">
+            <div className="flex justify-between text-caption text-sp-muted">
               <span>80%</span>
               <span>100%</span>
               <span>150%</span>

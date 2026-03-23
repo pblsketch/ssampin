@@ -123,10 +123,10 @@ function EmojiPicker({ value, onSelect }: EmojiPickerProps) {
                   key={cat.label}
                   type="button"
                   onClick={() => setActiveCategory(i)}
-                  className={`px-2 py-1 rounded-md text-[11px] whitespace-nowrap transition-all ${
+                  className={`px-2 py-1 rounded-md text-detail whitespace-nowrap transition-all ${
                     activeCategory === i
                       ? 'bg-sp-accent text-white'
-                      : 'text-sp-muted hover:text-sp-text hover:bg-white/5'
+                      : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
                   }`}
                 >
                   {cat.label}
@@ -145,7 +145,7 @@ function EmojiPicker({ value, onSelect }: EmojiPickerProps) {
                       key={`${emoji}-${i}`}
                       type="button"
                       onClick={() => handleSelect(emoji)}
-                      className="w-9 h-9 flex items-center justify-center text-xl rounded-lg hover:bg-white/10 transition-colors"
+                      className="w-9 h-9 flex items-center justify-center text-xl rounded-lg hover:bg-sp-text/10 transition-colors"
                     >
                       {emoji}
                     </button>
@@ -161,7 +161,7 @@ function EmojiPicker({ value, onSelect }: EmojiPickerProps) {
                     key={`${emoji}-${i}`}
                     type="button"
                     onClick={() => handleSelect(emoji)}
-                    className="w-9 h-9 flex items-center justify-center text-xl rounded-lg hover:bg-white/10 transition-colors"
+                    className="w-9 h-9 flex items-center justify-center text-xl rounded-lg hover:bg-sp-text/10 transition-colors"
                   >
                     {emoji}
                   </button>
@@ -173,7 +173,7 @@ function EmojiPicker({ value, onSelect }: EmojiPickerProps) {
           {/* Direct input fallback */}
           <div className="px-3 py-2 border-t border-sp-border">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-sp-muted whitespace-nowrap">직접 입력:</span>
+              <span className="text-detail text-sp-muted whitespace-nowrap">직접 입력:</span>
               <input
                 type="text"
                 defaultValue=""
@@ -288,12 +288,12 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
-          <h2 className="text-lg font-bold text-white">활동 기호 설정</h2>
+          <h2 className="text-lg font-bold text-sp-text">활동 기호 설정</h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-sp-muted hover:text-white hover:bg-white/5 transition-all"
+            className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <span className="material-symbols-outlined text-icon-lg">close</span>
           </button>
         </div>
 
@@ -312,7 +312,7 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
               <div className="flex items-start gap-3">
                 {/* Drag handle */}
                 <div className="pt-1 text-sp-muted">
-                  <span className="material-symbols-outlined text-[18px]">drag_indicator</span>
+                  <span className="material-symbols-outlined text-icon-md">drag_indicator</span>
                 </div>
 
                 {/* Emoji picker */}
@@ -358,7 +358,7 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
                   className="p-1.5 rounded-lg text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                   title="삭제"
                 >
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                  <span className="material-symbols-outlined text-icon-md">delete</span>
                 </button>
               </div>
             </div>
@@ -379,14 +379,14 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
         <div className="flex items-center justify-between px-6 py-4 border-t border-sp-border">
           <button
             onClick={resetDefaults}
-            className="px-4 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-white/5 transition-all"
+            className="px-4 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
           >
             기본값으로 복원
           </button>
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="px-5 py-2 rounded-lg text-sm text-sp-muted hover:text-white bg-sp-card border border-sp-border hover:border-sp-accent transition-all"
+              className="px-5 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border hover:border-sp-accent transition-all"
             >
               취소
             </button>
@@ -547,7 +547,7 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
           </div>
 
           {/* Name */}
-          <div className={`mt-4 font-bold text-white transition-all duration-300 ${nameSize} ${animPhase !== 'idle' ? 'opacity-0' : 'opacity-100'}`}>
+          <div className={`mt-4 font-bold text-sp-text transition-all duration-300 ${nameSize} ${animPhase !== 'idle' ? 'opacity-0' : 'opacity-100'}`}>
             {currentSymbol.name}
           </div>
 
@@ -579,7 +579,7 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
                 }`}
               >
                 <span className="text-3xl leading-none">{symbol.emoji}</span>
-                <span className="text-[10px] text-sp-muted mt-1 leading-tight text-center px-1 truncate w-full">
+                <span className="text-caption text-sp-muted mt-1 leading-tight text-center px-1 truncate w-full">
                   {symbol.name}
                 </span>
               </button>
@@ -589,11 +589,11 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
             {!isFullscreen && (
               <button
                 onClick={() => setShowSettings(true)}
-                className="flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-sp-card/50 border border-dashed border-sp-border text-sp-muted hover:text-white hover:border-sp-accent transition-all"
+                className="flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-sp-card/50 border border-dashed border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent transition-all"
                 title="설정"
               >
                 <span className="material-symbols-outlined text-xl">settings</span>
-                <span className="text-[10px] mt-1">설정</span>
+                <span className="text-caption mt-1">설정</span>
               </button>
             )}
           </div>
@@ -603,7 +603,7 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
             단축키:{' '}
             {symbols.map((_, i) => (
               <span key={i}>
-                <kbd className="px-1.5 py-0.5 rounded bg-sp-card border border-sp-border font-mono text-[10px]">
+                <kbd className="px-1.5 py-0.5 rounded bg-sp-card border border-sp-border font-mono text-caption">
                   {i + 1}
                 </kbd>
                 {i < symbols.length - 1 && <span className="mx-1" />}

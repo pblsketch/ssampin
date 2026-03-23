@@ -132,22 +132,6 @@ export const FONT_MAP: Record<FontFamily, string> = {
   'spoqa-han-sans': '"Spoqa Han Sans Neo", "Noto Sans KR", sans-serif',
 };
 
-export const BACKGROUND_PRESETS = [
-  { id: 'geometric', name: '기하학', thumbnail: '◇' },
-  { id: 'gradient-warm', name: '따뜻한 그라데이션', thumbnail: '🌅' },
-  { id: 'gradient-cool', name: '시원한 그라데이션', thumbnail: '🌊' },
-  { id: 'dots', name: '도트', thumbnail: '⚬' },
-  { id: 'waves', name: '웨이브', thumbnail: '〰️' },
-] as const;
-
-export const BG_PATTERN_CSS: Record<string, string> = {
-  'geometric': 'repeating-linear-gradient(45deg, transparent, transparent 20px, var(--sp-border) 20px, var(--sp-border) 21px)',
-  'gradient-warm': 'linear-gradient(135deg, #f97316 0%, #ec4899 50%, #8b5cf6 100%)',
-  'gradient-cool': 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 50%, #10b981 100%)',
-  'dots': 'radial-gradient(circle, var(--sp-border) 1px, transparent 1px)',
-  'waves': 'repeating-linear-gradient(0deg, transparent, transparent 14px, var(--sp-border) 14px, var(--sp-border) 15px)',
-};
-
 export const COLOR_SWATCHES: Record<string, readonly string[]> = {
   bg: [
     '#0a0e17', '#1a1a2e', '#0c1929', '#0a1a0f', '#1a0e0a', '#111111',

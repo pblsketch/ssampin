@@ -196,7 +196,7 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
             <h3 className="text-sm font-semibold text-sp-muted uppercase tracking-wider">통계</h3>
             <button
               onClick={handleResetStats}
-              className="text-xs text-sp-muted hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/5"
+              className="text-xs text-sp-muted hover:text-sp-text transition-colors px-2 py-1 rounded hover:bg-sp-text/5"
             >
               통계 초기화
             </button>

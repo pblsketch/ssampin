@@ -301,7 +301,7 @@ export function Onboarding() {
                     {[1, 2, 3, 4, 5].map((i) => (
                         <div
                             key={i}
-                            className={`w-2.5 h-2.5 rounded-full transition-all ${i === step ? 'bg-sp-accent w-6' : i < step ? 'bg-sp-accent/50' : 'bg-slate-700'
+                            className={`w-2.5 h-2.5 rounded-full transition-all ${i === step ? 'bg-sp-accent w-6' : i < step ? 'bg-sp-accent/50' : 'bg-sp-surface'
                                 }`}
                         />
                     ))}
@@ -314,8 +314,8 @@ export function Onboarding() {
                             <div className="mx-auto w-24 h-24 bg-sp-accent/20 rounded-full flex items-center justify-center mb-6">
                                 <span className="material-symbols-outlined text-5xl text-sp-accent">emoji_people</span>
                             </div>
-                            <h1 className="text-4xl font-black text-white tracking-tight mb-4">쌤핀에 오신 것을 환영합니다!</h1>
-                            <p className="text-slate-400 text-lg mb-8">
+                            <h1 className="text-4xl font-black text-sp-text tracking-tight mb-4">쌤핀에 오신 것을 환영합니다!</h1>
+                            <p className="text-sp-muted text-lg mb-8">
                                 스마트한 교실 관리를 위한 모든 것,<br />지금 바로 몇 가지 기본 정보를 설정해 보세요.
                             </p>
                             <button
@@ -331,7 +331,7 @@ export function Onboarding() {
 
                     {step === 2 && (
                         <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                            <h2 className="text-2xl font-bold text-white mb-2 text-center">학교 정보 입력</h2>
+                            <h2 className="text-2xl font-bold text-sp-text mb-2 text-center">학교 정보 입력</h2>
                             <p className="text-sp-muted text-center mb-8">대시보드와 출력물에 사용될 기본 정보입니다.</p>
 
                             <div className="grid grid-cols-2 gap-6 max-w-lg mx-auto">
@@ -342,7 +342,7 @@ export function Onboarding() {
                                         <button
                                             type="button"
                                             onClick={() => { setManualSchoolInput(!manualSchoolInput); clearSearch(); setSchoolQuery(''); }}
-                                            className="text-[10px] text-sp-muted hover:text-sp-accent transition-colors"
+                                            className="text-caption text-sp-muted hover:text-sp-accent transition-colors"
                                         >
                                             {manualSchoolInput ? '학교 검색으로 전환' : '직접 입력'}
                                         </button>
@@ -350,9 +350,9 @@ export function Onboarding() {
 
                                     {/* 선택된 학교 표시 */}
                                     {!manualSchoolInput && draft.schoolName && !schoolQuery ? (
-                                        <div className="flex items-center gap-3 bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3">
-                                            <span className="material-symbols-outlined text-teal-400 text-[18px]">school</span>
-                                            <span className="text-sm text-[#e2e8f0] flex-1 truncate">{draft.schoolName}</span>
+                                        <div className="flex items-center gap-3 bg-sp-bg border border-sp-border rounded-lg px-4 py-3">
+                                            <span className="material-symbols-outlined text-teal-400 text-icon-md">school</span>
+                                            <span className="text-sm text-sp-text flex-1 truncate">{draft.schoolName}</span>
                                             <button
                                                 type="button"
                                                 onClick={() => { setSchoolQuery(draft.schoolName ?? ''); patch({ schoolName: '' }); }}
@@ -367,7 +367,7 @@ export function Onboarding() {
                                             value={draft.schoolName}
                                             onChange={(e) => patch({ schoolName: e.target.value })}
                                             placeholder="예: 서울미래초등학교"
-                                            className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                            className="w-full bg-sp-bg border border-sp-border rounded-lg px-4 py-3 text-sp-text placeholder:text-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                         />
                                     ) : (
                                         <>
@@ -378,7 +378,7 @@ export function Onboarding() {
                                                     onChange={(e) => { setSchoolQuery(e.target.value); clearSearch(); }}
                                                     onKeyDown={(e) => e.key === 'Enter' && handleSchoolSearch()}
                                                     placeholder="학교명을 검색하세요"
-                                                    className="flex-1 bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                                    className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-4 py-3 text-sp-text placeholder:text-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                                 />
                                                 <button
                                                     type="button"
@@ -389,7 +389,7 @@ export function Onboarding() {
                                                     {searching ? (
                                                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                                     ) : (
-                                                        <span className="material-symbols-outlined text-[18px]">search</span>
+                                                        <span className="material-symbols-outlined text-icon-md">search</span>
                                                     )}
                                                     검색
                                                 </button>
@@ -406,11 +406,11 @@ export function Onboarding() {
                                                             key={`${school.atptCode}-${school.schoolCode}`}
                                                             type="button"
                                                             onClick={() => handleSelectSchool(school)}
-                                                            className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-slate-700/50 last:border-0"
+                                                            className="w-full text-left px-4 py-3 hover:bg-sp-text/5 transition-colors border-b border-sp-border/50 last:border-0"
                                                         >
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-sm font-medium text-sp-text">{school.schoolName}</span>
-                                                                <span className="text-[10px] text-sp-muted bg-slate-700/50 px-1.5 py-0.5 rounded">
+                                                                <span className="text-caption text-sp-muted bg-sp-surface/50 px-1.5 py-0.5 rounded">
                                                                     {school.schoolType}
                                                                 </span>
                                                             </div>
@@ -427,8 +427,8 @@ export function Onboarding() {
                                 {hasNeisSchool ? (
                                     <>
                                         <div className="col-span-2 flex items-start gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
-                                            <span className="material-symbols-outlined text-blue-400 text-[16px] mt-0.5">info</span>
-                                            <p className="text-[11px] text-blue-200/70">
+                                            <span className="material-symbols-outlined text-blue-400 text-icon mt-0.5">info</span>
+                                            <p className="text-detail text-blue-200/70">
                                                 학년/반을 선택하면 NEIS 시간표가 자동으로 연동됩니다. 건너뛰어도 나중에 설정할 수 있어요.
                                             </p>
                                         </div>
@@ -440,7 +440,7 @@ export function Onboarding() {
                                                     setNeisGrade(e.target.value);
                                                     patch({ className: e.target.value ? `${e.target.value}학년` : '' });
                                                 }}
-                                                className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                                className="w-full bg-sp-bg border border-sp-border rounded-lg px-4 py-3 text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                             >
                                                 <option value="">선택</option>
                                                 {gradeRange.map((g) => (
@@ -451,7 +451,7 @@ export function Onboarding() {
                                         <div className="space-y-2">
                                             <label className="text-xs font-semibold text-sp-muted uppercase tracking-wider">반 <span className="text-sp-muted/50 normal-case">(선택)</span></label>
                                             {classListLoading ? (
-                                                <div className="flex items-center gap-2 bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-slate-400 text-sm">
+                                                <div className="flex items-center gap-2 bg-sp-bg border border-sp-border rounded-lg px-4 py-3 text-sp-muted text-sm">
                                                     <div className="w-4 h-4 border-2 border-sp-accent/30 border-t-sp-accent rounded-full animate-spin" />
                                                     반 목록 로딩 중...
                                                 </div>
@@ -465,7 +465,7 @@ export function Onboarding() {
                                                         }
                                                     }}
                                                     disabled={!neisGrade || classList.length === 0}
-                                                    className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all disabled:opacity-40"
+                                                    className="w-full bg-sp-bg border border-sp-border rounded-lg px-4 py-3 text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all disabled:opacity-40"
                                                 >
                                                     <option value="">{!neisGrade ? '학년 먼저 선택' : classList.length === 0 ? '반 정보 없음' : '선택'}</option>
                                                     {classList.map((c) => (
@@ -477,7 +477,7 @@ export function Onboarding() {
                                         {/* NEIS 시간표 자동 연동 안내 */}
                                         {neisGrade && neisClass && (
                                             <div className="col-span-2 flex items-start gap-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 animate-in fade-in duration-300">
-                                                <span className="material-symbols-outlined text-emerald-400 text-[18px] mt-0.5">auto_awesome</span>
+                                                <span className="material-symbols-outlined text-emerald-400 text-icon-md mt-0.5">auto_awesome</span>
                                                 <p className="text-xs text-emerald-200/80">
                                                     NEIS에 등록된 {neisGrade}학년 {neisClass}반 시간표가 대시보드에 자동으로 표시됩니다.
                                                 </p>
@@ -492,7 +492,7 @@ export function Onboarding() {
                                             value={draft.className}
                                             onChange={(e) => patch({ className: e.target.value })}
                                             placeholder="예: 6학년 3반"
-                                            className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                            className="w-full bg-sp-bg border border-sp-border rounded-lg px-4 py-3 text-sp-text placeholder:text-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                         />
                                     </div>
                                 )}
@@ -503,7 +503,7 @@ export function Onboarding() {
                                         value={draft.teacherName}
                                         onChange={(e) => patch({ teacherName: e.target.value })}
                                         placeholder="홍길동"
-                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-sp-bg border border-sp-border rounded-lg px-4 py-3 text-sp-text placeholder:text-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -513,7 +513,7 @@ export function Onboarding() {
                                         value={draft.subject}
                                         onChange={(e) => patch({ subject: e.target.value })}
                                         placeholder="구분 없음 (담임)"
-                                        className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-4 py-3 text-[#e2e8f0] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
+                                        className="w-full bg-sp-bg border border-sp-border rounded-lg px-4 py-3 text-sp-text placeholder:text-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-all"
                                     />
                                 </div>
                             </div>
@@ -522,7 +522,7 @@ export function Onboarding() {
 
                     {step === 3 && (
                         <div className="animate-in fade-in slide-in-from-right-8 duration-300 flex flex-col items-center">
-                            <h2 className="text-2xl font-bold text-white mb-2 text-center">교시 시간 설정</h2>
+                            <h2 className="text-2xl font-bold text-sp-text mb-2 text-center">교시 시간 설정</h2>
                             <p className="text-sp-muted text-center mb-6">학교급에 맞는 프리셋을 선택하고 시간을 수정할 수 있습니다.</p>
 
                             <div className="flex gap-4 w-full max-w-lg mb-6">
@@ -538,7 +538,7 @@ export function Onboarding() {
                                         onClick={() => setPresetByLevel(l.id as SchoolLevel)}
                                         className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${draft.schoolLevel === l.id
                                             ? 'bg-sp-accent/20 border-sp-accent text-white ring-1 ring-sp-accent'
-                                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
+                                            : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-border'
                                             }`}
                                     >
                                         {l.label}
@@ -559,7 +559,7 @@ export function Onboarding() {
                                                 const dur = Math.max(20, Math.min(120, Number(e.target.value)));
                                                 setDraft((prev) => ({ ...prev, customPeriodDuration: dur }));
                                             }}
-                                            className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent"
+                                            className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent"
                                         />
                                     </div>
                                     <div className="flex-1 space-y-1">
@@ -573,7 +573,7 @@ export function Onboarding() {
                                                 const total = Math.max(1, Math.min(12, Number(e.target.value)));
                                                 setDraft((prev) => ({ ...prev, maxPeriods: total }));
                                             }}
-                                            className="w-full bg-[#0d1117] border border-slate-600 rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent"
+                                            className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent"
                                         />
                                     </div>
                                     <button
@@ -594,26 +594,26 @@ export function Onboarding() {
                                 </div>
                             )}
 
-                            <div className="w-full max-w-lg bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                            <div className="w-full max-w-lg bg-sp-surface rounded-xl border border-sp-border overflow-hidden">
                                 <div className="max-h-[240px] overflow-y-auto">
                                     <table className="w-full text-sm text-center">
-                                        <thead className="bg-slate-900/50 text-xs text-sp-muted uppercase sticky top-0">
+                                        <thead className="bg-sp-bg/50 text-xs text-sp-muted uppercase sticky top-0">
                                             <tr>
                                                 <th className="py-2.5 font-medium">교시</th>
                                                 <th className="py-2.5 font-medium">시작</th>
                                                 <th className="py-2.5 font-medium">종료</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-slate-700">
+                                        <tbody className="divide-y divide-sp-border">
                                             {(draft.periodTimes ?? []).map((pt, i) => (
-                                                <tr key={pt.period} className="hover:bg-slate-700/30 transition-colors">
-                                                    <td className="py-2 text-slate-300">{i + 1}교시</td>
+                                                <tr key={pt.period} className="hover:bg-sp-surface/30 transition-colors">
+                                                    <td className="py-2 text-sp-muted">{i + 1}교시</td>
                                                     <td className="py-2">
                                                         <input
                                                             type="time"
                                                             value={pt.start}
                                                             onChange={(e) => updatePeriod(i, 'start', e.target.value)}
-                                                            className="bg-[#0d1117] border border-slate-600 rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
+                                                            className="bg-sp-bg border border-sp-border rounded px-2 py-1 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
                                                         />
                                                     </td>
                                                     <td className="py-2">
@@ -621,7 +621,7 @@ export function Onboarding() {
                                                             type="time"
                                                             value={pt.end}
                                                             onChange={(e) => updatePeriod(i, 'end', e.target.value)}
-                                                            className="bg-[#0d1117] border border-slate-600 rounded px-2 py-1 text-sm text-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
+                                                            className="bg-sp-bg border border-sp-border rounded px-2 py-1 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent [color-scheme:dark]"
                                                         />
                                                     </td>
                                                 </tr>
@@ -630,13 +630,13 @@ export function Onboarding() {
                                     </table>
                                 </div>
                             </div>
-                            <p className="text-xs text-slate-500 mt-2">나중에 설정 화면에서 자유롭게 수정할 수 있습니다.</p>
+                            <p className="text-xs text-sp-muted mt-2">나중에 설정 화면에서 자유롭게 수정할 수 있습니다.</p>
                         </div>
                     )}
 
                     {step === 4 && (
                         <div className="animate-in fade-in slide-in-from-right-8 duration-300 flex flex-col">
-                            <h2 className="text-2xl font-bold text-white mb-2 text-center">나에게 맞는 메뉴 설정</h2>
+                            <h2 className="text-2xl font-bold text-sp-text mb-2 text-center">나에게 맞는 메뉴 설정</h2>
                             <p className="text-sp-muted text-center mb-6">역할을 선택하면 맞춤 메뉴를 추천해 드려요.</p>
 
                             {/* 역할 선택 */}
@@ -657,7 +657,7 @@ export function Onboarding() {
                                                 className={`flex flex-col items-center gap-2 px-6 py-4 rounded-xl border-2 transition-all ${
                                                     isSelected
                                                         ? 'bg-sp-accent/20 border-sp-accent text-white ring-1 ring-sp-accent shadow-lg shadow-sp-accent/10'
-                                                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
+                                                        : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-border'
                                                 }`}
                                             >
                                                 <span className="material-symbols-outlined text-2xl">{role.icon}</span>
@@ -673,7 +673,7 @@ export function Onboarding() {
                             {selectedRoles.length > 0 && (
                                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                                     <p className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-3">추천 메뉴</p>
-                                    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden max-h-[240px] overflow-y-auto">
+                                    <div className="bg-sp-surface rounded-xl border border-sp-border overflow-hidden max-h-[240px] overflow-y-auto">
                                         {NAV_ITEMS.map((item) => {
                                             const isAlwaysVisible = item.id === 'dashboard';
                                             const isVisible = menuVisibility[item.id] ?? true;
@@ -681,7 +681,7 @@ export function Onboarding() {
                                             return (
                                                 <div
                                                     key={item.id}
-                                                    className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50 last:border-b-0 hover:bg-slate-700/30 transition-colors"
+                                                    className="flex items-center justify-between px-4 py-3 border-b border-sp-border/50 last:border-b-0 hover:bg-sp-surface/30 transition-colors"
                                                 >
                                                     <div className="flex items-center gap-3">
                                                         <span className={`material-symbols-outlined text-lg ${isVisible ? 'text-sp-muted' : 'text-sp-muted/30'}`}>
@@ -698,7 +698,7 @@ export function Onboarding() {
                                                             )}
                                                         </div>
                                                         {isAlwaysVisible && (
-                                                            <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded ml-1">항상 표시</span>
+                                                            <span className="text-caption text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded ml-1">항상 표시</span>
                                                         )}
                                                     </div>
                                                     <label className="relative inline-flex items-center cursor-pointer">
@@ -714,7 +714,7 @@ export function Onboarding() {
                                                                 ? 'bg-sp-accent/50 cursor-not-allowed'
                                                                 : isVisible
                                                                     ? 'bg-sp-accent'
-                                                                    : 'bg-slate-600'
+                                                                    : 'bg-sp-surface'
                                                         } after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all ${
                                                             (isAlwaysVisible || isVisible) ? 'after:translate-x-4' : ''
                                                         }`} />
@@ -723,14 +723,14 @@ export function Onboarding() {
                                             );
                                         })}
                                     </div>
-                                    <p className="text-xs text-slate-500 mt-3 text-center">
+                                    <p className="text-xs text-sp-muted mt-3 text-center">
                                         나중에 <span className="text-sp-accent">설정 &gt; 사이드바</span>에서 언제든 변경할 수 있어요
                                     </p>
                                 </div>
                             )}
 
                             {selectedRoles.length === 0 && (
-                                <p className="text-sm text-slate-500 text-center mt-4">
+                                <p className="text-sm text-sp-muted text-center mt-4">
                                     역할을 선택하면 맞춤 메뉴가 추천됩니다
                                 </p>
                             )}
@@ -742,8 +742,8 @@ export function Onboarding() {
                             <div className="mx-auto w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6">
                                 <span className="material-symbols-outlined text-6xl text-emerald-400">check_circle</span>
                             </div>
-                            <h2 className="text-3xl font-black text-white mb-3">설정이 모두 완료되었습니다!</h2>
-                            <p className="text-slate-400 text-lg mb-8">이제 쌤핀을 사용하여 교실 업무를 더욱 스마트하게 관리하세요.</p>
+                            <h2 className="text-3xl font-black text-sp-text mb-3">설정이 모두 완료되었습니다!</h2>
+                            <p className="text-sp-muted text-lg mb-8">이제 쌤핀을 사용하여 교실 업무를 더욱 스마트하게 관리하세요.</p>
 
                             <button
                                 type="button"
@@ -759,11 +759,11 @@ export function Onboarding() {
 
                 {/* Action Bar */}
                 {step > 1 && step < 5 && (
-                    <div className="bg-slate-900/50 p-6 flex justify-between border-t border-slate-800">
+                    <div className="bg-sp-bg/50 p-6 flex justify-between border-t border-sp-border">
                         <button
                             type="button"
                             onClick={prevStep}
-                            className="px-6 py-2.5 rounded-lg border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors font-semibold"
+                            className="px-6 py-2.5 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors font-semibold"
                         >
                             이전
                         </button>

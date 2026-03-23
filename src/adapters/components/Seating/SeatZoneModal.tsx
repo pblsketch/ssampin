@@ -115,17 +115,22 @@ export function SeatZoneModal({ open, onClose }: SeatZoneModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-sp-card border border-sp-border rounded-xl w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" aria-hidden="true">
+      <div
+        className="bg-sp-card border border-sp-border rounded-xl w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-seat-zone"
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 border-b border-sp-border">
-          <h2 className="text-lg font-bold text-sp-text flex items-center gap-2">
+          <h2 id="modal-title-seat-zone" className="text-lg font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-sp-accent">tune</span>
             배치 조건
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-700 text-sp-muted hover:text-sp-text transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
           >
             <span className="material-symbols-outlined">close</span>
           </button>

@@ -86,7 +86,7 @@ function FullscreenQR({
         onClick={onClose}
         className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 transition-colors z-10"
       >
-        <span className="material-symbols-outlined text-[24px]">close</span>
+        <span className="material-symbols-outlined text-icon-xl">close</span>
       </button>
 
       {/* 안내 텍스트 */}
@@ -294,7 +294,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === 'url'
                 ? 'bg-sp-accent text-white shadow-sm'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             🔗 URL
@@ -304,7 +304,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === 'text'
                 ? 'bg-sp-accent text-white shadow-sm'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             ✏️ 텍스트
@@ -319,7 +319,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
               placeholder="https://padlet.com/... 또는 구글폼 주소 입력"
-              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-xl text-lg text-white placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
+              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-xl text-lg text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
             />
             {urlInput.trim() && (
               <p className={`text-sm px-1 ${urlValid ? 'text-green-400' : 'text-amber-400'}`}>
@@ -338,7 +338,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
               }}
               placeholder="학생들에게 공유할 텍스트를 입력하세요"
               rows={4}
-              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-xl text-white placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors resize-none"
+              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-xl text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors resize-none"
             />
             <p className="text-sm text-sp-muted text-right px-1">
               {textInput.length}/{TEXT_MAX_LENGTH}
@@ -362,7 +362,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
               </>
             ) : (
               <div className="flex flex-col items-center gap-3 py-8 text-sp-muted">
-                <span className="material-symbols-outlined text-[48px] opacity-30">
+                <span className="material-symbols-outlined text-5xl opacity-30">
                   qr_code_2
                 </span>
                 <p className="text-sm">
@@ -381,12 +381,12 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
             showOptions
               ? 'bg-sp-accent/15 text-sp-accent border border-sp-accent/30'
-              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/40'
+              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
           }`}
         >
-          <span className="material-symbols-outlined text-[18px]">tune</span>
+          <span className="material-symbols-outlined text-icon-md">tune</span>
           <span>QR코드 옵션</span>
-          <span className="material-symbols-outlined text-[16px]">
+          <span className="material-symbols-outlined text-icon">
             {showOptions ? 'expand_less' : 'expand_more'}
           </span>
         </button>
@@ -404,7 +404,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
                     className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
                       qrSize === opt.value
                         ? 'bg-sp-accent text-white'
-                        : 'bg-sp-bg border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50'
+                        : 'bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
                     }`}
                   >
                     {opt.label}
@@ -423,7 +423,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
                     className={`w-10 h-10 rounded-full text-sm font-bold transition-all ${
                       errorLevel === lvl
                         ? 'bg-sp-accent text-white'
-                        : 'bg-sp-bg border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50'
+                        : 'bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
                     }`}
                   >
                     {lvl}
@@ -439,25 +439,25 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
           <div className="flex gap-3 w-full justify-center">
             <button
               onClick={handleCopy}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all text-sm font-medium"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all text-sm font-medium"
             >
-              <span className="material-symbols-outlined text-[18px]">
+              <span className="material-symbols-outlined text-icon-md">
                 {copyFeedback ? 'check' : 'content_copy'}
               </span>
               <span>{copyFeedback ? '복사됨 ✓' : '이미지 복사'}</span>
             </button>
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all text-sm font-medium"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all text-sm font-medium"
             >
-              <span className="material-symbols-outlined text-[18px]">download</span>
+              <span className="material-symbols-outlined text-icon-md">download</span>
               <span>PNG 저장</span>
             </button>
             <button
               onClick={handleFullscreen}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sp-accent text-white hover:bg-sp-accent/80 transition-all text-sm font-medium"
             >
-              <span className="material-symbols-outlined text-[18px]">fullscreen</span>
+              <span className="material-symbols-outlined text-icon-md">fullscreen</span>
               <span>전체화면</span>
             </button>
           </div>
@@ -487,7 +487,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
                     {item.mode === 'url' ? '🔗' : '✏️'}
                   </span>
                   {/* 값 미리보기 */}
-                  <span className="text-sm text-white truncate flex-1">
+                  <span className="text-sm text-sp-text truncate flex-1">
                     {item.value}
                   </span>
                   {/* 시각 */}
@@ -502,7 +502,7 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
                     }}
                     className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-all"
                   >
-                    <span className="material-symbols-outlined text-[14px]">close</span>
+                    <span className="material-symbols-outlined text-icon-sm">close</span>
                   </button>
                 </div>
               ))}

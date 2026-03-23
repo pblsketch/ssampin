@@ -152,7 +152,7 @@ export function MemoFocus() {
                 className="rounded-md p-0.5 text-sp-muted hover:text-sp-text disabled:opacity-30 disabled:cursor-default transition-colors"
                 title="이전 메모"
               >
-                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                <span className="material-symbols-outlined text-icon-md">chevron_left</span>
               </button>
               <span className="text-xs text-sp-muted tabular-nums min-w-[36px] text-center">
                 {activeIndex + 1} / {sortedMemos.length}
@@ -163,7 +163,7 @@ export function MemoFocus() {
                 className="rounded-md p-0.5 text-sp-muted hover:text-sp-text disabled:opacity-30 disabled:cursor-default transition-colors"
                 title="다음 메모"
               >
-                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                <span className="material-symbols-outlined text-icon-md">chevron_right</span>
               </button>
             </div>
           )}
@@ -176,7 +176,7 @@ export function MemoFocus() {
               className="rounded-md p-1 text-sp-muted hover:text-sp-text transition-colors"
               title="상세 보기"
             >
-              <span className="material-symbols-outlined text-[18px]">open_in_full</span>
+              <span className="material-symbols-outlined text-icon-md">open_in_full</span>
             </button>
           )}
           <button
@@ -192,7 +192,7 @@ export function MemoFocus() {
             }`}
             title={isEditing ? '저장' : '편집'}
           >
-            <span className="material-symbols-outlined text-[18px]">
+            <span className="material-symbols-outlined text-icon-md">
               {isEditing ? 'check' : 'edit'}
             </span>
           </button>

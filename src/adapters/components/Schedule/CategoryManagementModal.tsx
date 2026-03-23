@@ -121,7 +121,7 @@ function ColorPicker({
         title="색상 변경"
       >
         <div className={colorDot(value, 'w-4 h-4')} />
-        <span className="material-symbols-outlined text-[14px] text-sp-muted">
+        <span className="material-symbols-outlined text-icon-sm text-sp-muted">
           expand_more
         </span>
       </button>
@@ -179,7 +179,7 @@ function DeleteConfirmDialog({
     <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-xl space-y-3">
       <div className="flex items-start gap-3">
         <div className="p-1.5 bg-red-500/10 rounded-lg shrink-0">
-          <span className="material-symbols-outlined text-red-400 text-[20px]">warning</span>
+          <span className="material-symbols-outlined text-red-400 text-icon-lg">warning</span>
         </div>
         <div>
           <p className="text-sm font-medium text-sp-text">
@@ -272,7 +272,7 @@ function CategoryRow({
         }`}
       >
         {/* 드래그 핸들 */}
-        <span className="material-symbols-outlined text-[18px] text-sp-muted/40 group-hover:text-sp-muted transition-colors shrink-0 select-none mr-3">
+        <span className="material-symbols-outlined text-icon-md text-sp-muted/40 group-hover:text-sp-muted transition-colors shrink-0 select-none mr-3">
           drag_indicator
         </span>
 
@@ -288,7 +288,7 @@ function CategoryRow({
         </div>
 
         {isDefault && (
-          <span className="text-[10px] text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded shrink-0 ml-2">
+          <span className="text-caption text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded shrink-0 ml-2">
             기본
           </span>
         )}
@@ -301,7 +301,7 @@ function CategoryRow({
         className="text-sp-muted hover:text-red-400 opacity-40 hover:opacity-100 transition-opacity shrink-0"
         title="카테고리 삭제"
       >
-        <span className="material-symbols-outlined text-[18px]">delete</span>
+        <span className="material-symbols-outlined text-icon-md">delete</span>
       </button>
     </div>
   );
@@ -365,11 +365,14 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           className="w-full max-w-[520px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title-category-management"
         >
           {/* 헤더 */}
           <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border shrink-0">
@@ -378,14 +381,14 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
                 <span className="material-symbols-outlined">category</span>
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">일정 카테고리 관리</h2>
+                <h2 id="modal-title-category-management" className="text-lg font-bold text-sp-text">일정 카테고리 관리</h2>
                 <p className="text-xs text-sp-muted mt-0.5">이름, 색상을 수정하고 드래그하여 순서를 변경하세요</p>
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="p-1 hover:bg-slate-700 rounded-lg transition-colors text-sp-muted hover:text-white"
+              className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
             >
               <span className="material-symbols-outlined">close</span>
             </button>
@@ -403,7 +406,7 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
                   onClick={() => setShowCatForm(true)}
                   className="text-xs font-medium text-sp-accent hover:text-blue-400 flex items-center gap-1"
                 >
-                  <span className="material-symbols-outlined text-[16px]">add</span>
+                  <span className="material-symbols-outlined text-icon">add</span>
                   카테고리 추가
                 </button>
               )}
@@ -411,8 +414,8 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
 
             {/* 도움말 */}
             <div className="flex items-center gap-2 p-2.5 rounded-lg bg-sp-accent/5 border border-sp-accent/10">
-              <span className="material-symbols-outlined text-sp-accent text-[16px]">info</span>
-              <span className="text-[11px] text-sp-muted">
+              <span className="material-symbols-outlined text-sp-accent text-icon">info</span>
+              <span className="text-detail text-sp-muted">
                 이름 클릭 → 수정 · 색상 점 클릭 → 변경 · 드래그하여 순서 이동
               </span>
             </div>
@@ -445,7 +448,7 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
                           type="button"
                           onClick={() => setNewCatColor(c)}
                           className={`w-5 h-5 rounded-full ${SETTINGS_COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${
-                            newCatColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card' : ''
+                            newCatColor === c ? 'ring-2 ring-sp-text ring-offset-2 ring-offset-sp-card' : ''
                           }`}
                         />
                       ))}

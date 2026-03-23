@@ -5,7 +5,7 @@ export function BookmarksPage() {
     <div>
       {/* 헤더 */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-sp-text flex items-center gap-2">
           <span className="material-symbols-outlined text-[28px]">bookmark</span>
           <span>즐겨찾기</span>
         </h1>

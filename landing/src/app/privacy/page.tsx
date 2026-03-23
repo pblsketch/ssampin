@@ -270,7 +270,7 @@ export default async function PrivacyPage({ searchParams }: PageProps) {
   const content = isEnglish ? enContent : koContent;
 
   return (
-    <div className="min-h-screen bg-[#0a0e17] text-sp-text">
+    <div className="min-h-screen bg-sp-bg text-sp-text">
       {/* Header */}
       <header className="border-b border-sp-border/50 bg-[#060a12]/80 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl px-6 py-4 flex items-center justify-between">
@@ -387,7 +387,7 @@ export default async function PrivacyPage({ searchParams }: PageProps) {
           line-height: 1.6;
         }
         .prose-privacy strong {
-          color: #e2e8f0;
+          color: var(--color-sp-text);
           font-weight: 600;
         }
         .prose-privacy a {

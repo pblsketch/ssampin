@@ -59,13 +59,13 @@ export function ThemePreviewCard({ theme, isSelected, onClick }: ThemePreviewCar
       {/* 선택 체크마크 */}
       {isSelected && (
         <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-sp-accent flex items-center justify-center">
-          <span className="material-symbols-outlined text-white text-[14px]">check</span>
+          <span className="material-symbols-outlined text-white text-icon-sm">check</span>
         </div>
       )}
 
       {/* 테마 이름 */}
       <div
-        className="absolute bottom-0 left-0 right-0 text-center text-[10px] font-medium py-0.5"
+        className="absolute bottom-0 left-0 right-0 text-center text-caption font-medium py-0.5"
         style={{ color: colors.text, backgroundColor: `${colors.surface}cc` }}
       >
         {theme.name}

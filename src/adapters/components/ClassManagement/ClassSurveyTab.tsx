@@ -205,7 +205,7 @@ function ClassSurveyCard({ survey, totalStudents, onSelect, onShare }: ClassSurv
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
-          <div className="text-[10px] text-sp-muted mt-1 text-right">
+          <div className="text-caption text-sp-muted mt-1 text-right">
             {progress.percentage}%
           </div>
 
@@ -217,7 +217,7 @@ function ClassSurveyCard({ survey, totalStudents, onSelect, onShare }: ClassSurv
                   e.stopPropagation();
                   onShare(survey);
                 }}
-                className="text-[11px] text-sp-accent hover:text-sp-accent/80 transition-colors flex items-center gap-1"
+                className="text-detail text-sp-accent hover:text-sp-accent/80 transition-colors flex items-center gap-1"
               >
                 <span className="material-symbols-outlined text-xs">share</span>
                 공유 (링크 + QR)

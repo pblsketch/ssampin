@@ -229,7 +229,7 @@ export function SchedulePage() {
                 <span
                   className={`w-8 h-8 flex items-center justify-center rounded-full text-sm ${
                     isToday
-                      ? 'bg-blue-500 text-white font-bold'
+                      ? 'bg-sp-accent text-sp-accent-fg font-bold'
                       : isSelected
                       ? 'ring-2 ring-blue-500 text-sp-text font-medium'
                       : colIndex === 0
@@ -291,8 +291,8 @@ export function SchedulePage() {
                     <span
                       className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${
                         dday === 'D-Day'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-blue-500/10 text-blue-500 border border-blue-500/40'
+                          ? 'bg-sp-accent text-sp-accent-fg'
+                          : 'bg-sp-accent/15 text-sp-accent border border-sp-accent/40'
                       }`}
                     >
                       {dday}
@@ -308,7 +308,7 @@ export function SchedulePage() {
       {/* FAB */}
       <button
         onClick={openAddModal}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center z-10 active:scale-95 transition-transform"
+        className="fixed bottom-20 right-4 w-14 h-14 bg-sp-accent text-sp-accent-fg rounded-full shadow-lg flex items-center justify-center z-10 active:scale-95 transition-transform"
         aria-label="일정 추가"
       >
         <span className="material-symbols-outlined text-2xl">add</span>
@@ -377,7 +377,7 @@ export function SchedulePage() {
               <button
                 onClick={() => void handleAdd()}
                 disabled={!newTitle.trim() || !newDate}
-                className="flex-1 h-11 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-40 active:scale-[0.98] transition-all"
+                className="flex-1 h-11 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-medium disabled:opacity-40 active:scale-[0.98] transition-all"
               >
                 추가
               </button>

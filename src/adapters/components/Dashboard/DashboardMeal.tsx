@@ -101,16 +101,16 @@ export function DashboardMeal() {
                     {meal.mealType}
                   </span>
                   {meal.calorie && (
-                    <span className="text-[11px] text-sp-muted">{meal.calorie}</span>
+                    <span className="text-detail text-sp-muted">{meal.calorie}</span>
                   )}
                 </div>
                 <ul className="space-y-1">
                   {meal.dishes.map((dish, di) => (
                     <li key={di} className="text-sm text-sp-text flex items-baseline gap-1.5">
-                      <span className="text-sp-muted text-[10px] mt-0.5">•</span>
+                      <span className="text-sp-muted text-caption mt-0.5">•</span>
                       <span>{dish.name}</span>
                       {dish.allergens.length > 0 && (
-                        <span className="text-[10px] text-sp-muted shrink-0">
+                        <span className="text-caption text-sp-muted shrink-0">
                           {dish.allergens.join('.')}
                         </span>
                       )}

@@ -17,7 +17,7 @@ export function SystemTab({ draft, patch, setDraft }: Props) {
   return (
     <SettingsSection
       icon="settings_applications"
-      iconColor="bg-slate-500/10 text-slate-400"
+      iconColor="bg-sp-surface text-sp-muted"
       title="시스템"
     >
       <div className="space-y-4 divide-y divide-sp-border/30">

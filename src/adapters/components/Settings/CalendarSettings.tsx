@@ -259,7 +259,7 @@ export function CalendarSettings() {
           {/* 인증 심사 안내 배너 */}
           <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 space-y-2">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0">info</span>
+              <span className="material-symbols-outlined text-amber-400 text-icon-md shrink-0">info</span>
               <p className="text-sm font-medium text-amber-400">구글 연동 일시 제한 안내</p>
             </div>
             <p className="text-xs text-sp-muted leading-relaxed">
@@ -283,7 +283,7 @@ export function CalendarSettings() {
               </>
             ) : (
               <>
-                <span className="material-symbols-outlined text-[18px]">link</span>
+                <span className="material-symbols-outlined text-icon-md">link</span>
                 구글 계정 연결하기
               </>
             )}
@@ -325,7 +325,7 @@ export function CalendarSettings() {
             {/* 캘린더 동기화 */}
             <div className="flex items-center gap-3 rounded-lg border border-sp-border p-3">
               <div className="p-1.5 rounded-md bg-blue-500/10 text-blue-400">
-                <span className="material-symbols-outlined text-[18px]">event</span>
+                <span className="material-symbols-outlined text-icon-md">event</span>
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-sp-text">캘린더 동기화</p>
@@ -342,7 +342,7 @@ export function CalendarSettings() {
             {/* 과제수합 (드라이브) */}
             <div className="flex items-center gap-3 rounded-lg border border-sp-border p-3">
               <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400">
-                <span className="material-symbols-outlined text-[18px]">folder_open</span>
+                <span className="material-symbols-outlined text-icon-md">folder_open</span>
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-sp-text">과제수합 (드라이브)</p>
@@ -429,7 +429,7 @@ export function CalendarSettings() {
               </span>
             ) : (
               <span className="flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-[16px]">sync</span>
+                <span className="material-symbols-outlined text-icon">sync</span>
                 지금 동기화
               </span>
             )}
@@ -450,7 +450,7 @@ export function CalendarSettings() {
           }}
           className="text-xs text-sp-muted hover:text-sp-accent transition-colors flex items-center gap-1"
         >
-          <span className="material-symbols-outlined text-[14px]">description</span>
+          <span className="material-symbols-outlined text-icon-sm">description</span>
           개인정보처리방침
         </button>
       </div>

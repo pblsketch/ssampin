@@ -15,7 +15,7 @@ interface InfoRowProps {
 function InfoRow({ label, value, icon }: InfoRowProps) {
   return (
     <div className="flex items-center gap-3 py-3 border-b border-black/5 dark:border-white/5 last:border-b-0">
-      <span className="material-symbols-outlined text-sp-muted text-[20px] shrink-0">{icon}</span>
+      <span className="material-symbols-outlined text-sp-muted text-icon-lg shrink-0">{icon}</span>
       <div className="flex-1 min-w-0">
         <p className="text-sp-muted text-xs mb-0.5">{label}</p>
         <p className="text-sp-text text-sm font-medium truncate">
@@ -114,11 +114,11 @@ export function SettingsPage({ onBack }: Props) {
                     onClick={() => handleThemeChange(option.value)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors ${
                       isSelected
-                        ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                        ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
                         : 'bg-transparent border-black/10 dark:border-white/10 text-sp-muted'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[16px]">{option.icon}</span>
+                    <span className="material-symbols-outlined text-icon">{option.icon}</span>
                     {option.label}
                   </button>
                 );
@@ -142,7 +142,7 @@ export function SettingsPage({ onBack }: Props) {
           </h3>
           <div className="glass-card px-4">
             <div className="flex items-center gap-3 py-3 border-b border-black/5 dark:border-white/5">
-              <span className="material-symbols-outlined text-sp-muted text-[20px]">info</span>
+              <span className="material-symbols-outlined text-sp-muted text-icon-lg">info</span>
               <div className="flex-1">
                 <p className="text-sp-muted text-xs mb-0.5">버전</p>
                 <p className="text-sp-text text-sm font-medium">쌤핀 모바일 v1.5.0</p>

@@ -27,12 +27,15 @@ export function TempChangeModal({
   const displayDate = date.replace(/-/g, '.');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} aria-hidden="true">
       <div
         className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-temp-change"
       >
-        <h3 className="text-base font-bold text-sp-text mb-1 flex items-center gap-2">
+        <h3 id="modal-title-temp-change" className="text-base font-bold text-sp-text mb-1 flex items-center gap-2">
           <span className="material-symbols-outlined text-amber-400 text-lg">push_pin</span>
           임시 시간표 변경
         </h3>

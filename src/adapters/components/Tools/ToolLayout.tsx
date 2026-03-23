@@ -106,33 +106,33 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
             <>
               <button
                 onClick={onBack}
-                className="flex items-center gap-1.5 text-sp-muted hover:text-white transition-colors text-sm"
+                className="flex items-center gap-1.5 text-sp-muted hover:text-sp-text transition-colors text-sm"
               >
-                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                <span className="material-symbols-outlined text-icon-md">arrow_back</span>
                 <span>쌤도구</span>
               </button>
               <div className="w-px h-5 bg-sp-border" />
             </>
           )}
-          <h1 className={`font-bold text-white flex items-center gap-2 ${isFullscreen ? 'text-lg' : 'text-xl'}`}>
+          <h1 className={`font-bold text-sp-text flex items-center gap-2 ${isFullscreen ? 'text-lg' : 'text-xl'}`}>
             <span>{emoji}</span>
             <span>{title}</span>
           </h1>
         </div>
         <div className="flex items-center gap-2">
           {/* Zoom controls */}
-          <div className="flex items-center gap-0.5 bg-white/5 rounded-lg px-1 py-0.5">
+          <div className="flex items-center gap-0.5 bg-sp-text/5 rounded-lg px-1 py-0.5">
             <button
               onClick={zoomOut}
               disabled={zoom <= ZOOM_MIN}
-              className="p-1.5 rounded text-sp-muted hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
+              className="p-1.5 rounded text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
               title="축소"
             >
-              <span className="material-symbols-outlined text-[18px]">remove</span>
+              <span className="material-symbols-outlined text-icon-md">remove</span>
             </button>
             <button
               onClick={resetZoom}
-              className="px-2 py-1 text-xs font-medium text-sp-muted hover:text-white transition-colors min-w-[3.5rem] text-center rounded hover:bg-white/10"
+              className="px-2 py-1 text-xs font-medium text-sp-muted hover:text-sp-text transition-colors min-w-[3.5rem] text-center rounded hover:bg-sp-text/10"
               title="기본 배율로 초기화"
             >
               {zoom}%
@@ -140,10 +140,10 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
             <button
               onClick={zoomIn}
               disabled={zoom >= ZOOM_MAX}
-              className="p-1.5 rounded text-sp-muted hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
+              className="p-1.5 rounded text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
               title="확대"
             >
-              <span className="material-symbols-outlined text-[18px]">add</span>
+              <span className="material-symbols-outlined text-icon-md">add</span>
             </button>
           </div>
 
@@ -151,23 +151,23 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
           <div className="relative">
             <button
               onClick={() => setShowHelp((v) => !v)}
-              className="p-2 rounded-lg text-sp-muted hover:text-white hover:bg-white/5 transition-all"
+              className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
               title="단축키 안내"
             >
-              <span className="material-symbols-outlined text-[20px]">keyboard</span>
+              <span className="material-symbols-outlined text-icon-lg">keyboard</span>
             </button>
             {showHelp && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowHelp(false)} />
                 <div className="absolute right-0 top-full mt-2 w-52 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 p-3">
-                  <h3 className="text-xs font-bold text-white mb-2 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[14px]">keyboard</span>
+                  <h3 className="text-xs font-bold text-sp-text mb-2 flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-icon-sm">keyboard</span>
                     단축키
                   </h3>
                   <div className="space-y-1">
                     {allShortcuts.map((s, i) => (
                       <div key={i} className="flex items-center justify-between text-xs">
-                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-sp-text font-mono text-[10px]">
+                        <kbd className="px-1.5 py-0.5 rounded bg-sp-text/10 text-sp-text font-mono text-caption">
                           {s.key}
                         </kbd>
                         <span className="text-sp-muted">{s.label}</span>
@@ -182,7 +182,7 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
           {/* Fullscreen button */}
           <button
             onClick={toggleFullscreen}
-            className="p-2 rounded-lg text-sp-muted hover:text-white hover:bg-white/5 transition-all"
+            className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
             title={isFullscreen ? '전체화면 나가기' : '전체화면'}
           >
             <span className="material-symbols-outlined">

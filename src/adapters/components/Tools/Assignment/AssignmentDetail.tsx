@@ -34,7 +34,7 @@ function TextViewerModal({ studentNumber, studentName, text, onClose }: {
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border/40 shrink-0">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-sp-accent text-[20px]">edit_note</span>
+              <span className="material-symbols-outlined text-sp-accent text-icon-lg">edit_note</span>
               <h3 className="text-base font-bold text-sp-text">
                 {studentNumber}번 {studentName}
               </h3>
@@ -45,7 +45,7 @@ function TextViewerModal({ studentNumber, studentName, text, onClose }: {
                 className="p-1.5 rounded-lg hover:bg-sp-border/30 transition-colors"
                 aria-label={isFullscreen ? '축소' : '전체화면'}
               >
-                <span className="material-symbols-outlined text-sp-muted text-[18px]">
+                <span className="material-symbols-outlined text-sp-muted text-icon-md">
                   {isFullscreen ? 'close_fullscreen' : 'open_in_full'}
                 </span>
               </button>
@@ -54,7 +54,7 @@ function TextViewerModal({ studentNumber, studentName, text, onClose }: {
                 className="p-1.5 rounded-lg hover:bg-sp-border/30 transition-colors"
                 aria-label="닫기"
               >
-                <span className="material-symbols-outlined text-sp-muted text-[18px]">close</span>
+                <span className="material-symbols-outlined text-sp-muted text-icon-md">close</span>
               </button>
             </div>
           </div>
@@ -71,7 +71,7 @@ function TextViewerModal({ studentNumber, studentName, text, onClose }: {
               }}
               className="px-3 py-1.5 text-xs text-sp-accent hover:bg-sp-accent/10 rounded-lg transition-colors flex items-center gap-1"
             >
-              <span className="material-symbols-outlined text-[14px]">content_copy</span>
+              <span className="material-symbols-outlined text-icon-sm">content_copy</span>
               복사
             </button>
           </div>
@@ -113,7 +113,7 @@ function SubmissionRow({ detail, onViewText }: { detail: SubmissionDetail; onVie
           <span className="text-sp-muted">{dateText}</span>
           {detail.submission?.fileName && (
             <span className="text-sp-muted/70 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px]">description</span>
+              <span className="material-symbols-outlined text-icon-sm">description</span>
               {detail.submission.fileName}
             </span>
           )}
@@ -122,7 +122,7 @@ function SubmissionRow({ detail, onViewText }: { detail: SubmissionDetail; onVie
               onClick={() => onViewText?.(detail)}
               className="text-sp-accent/80 hover:text-sp-accent flex items-center gap-1 text-xs font-medium transition-colors px-2 py-0.5 rounded bg-sp-accent/10 hover:bg-sp-accent/20"
             >
-              <span className="material-symbols-outlined text-[14px]">edit_note</span>
+              <span className="material-symbols-outlined text-icon-sm">edit_note</span>
               텍스트 보기
             </button>
           )}
@@ -284,7 +284,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
             <button onClick={onBack} aria-label="뒤로" className="p-2 rounded-lg hover:bg-sp-card transition-colors">
               <span className="material-symbols-outlined text-sp-muted">arrow_back</span>
             </button>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-sp-text flex items-center gap-2">
               <span>📝</span>
               <span>과제 상세</span>
             </h1>
@@ -336,7 +336,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
           <button onClick={onBack} aria-label="뒤로" className="p-2 rounded-lg hover:bg-sp-card transition-colors">
             <span className="material-symbols-outlined text-sp-muted">arrow_back</span>
           </button>
-          <h1 className="text-2xl font-bold text-white">과제 상세</h1>
+          <h1 className="text-2xl font-bold text-sp-text">과제 상세</h1>
         </div>
         {isGoogleError ? (
           <div className="p-6 bg-sp-card rounded-xl border border-sp-border/50 text-center">
@@ -349,7 +349,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
               onClick={onBack}
               className="px-6 py-3 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 mx-auto font-medium"
             >
-              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+              <span className="material-symbols-outlined text-icon-md">arrow_back</span>
               목록으로 돌아가기
             </button>
           </div>
@@ -386,7 +386,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
           <button onClick={onBack} aria-label="뒤로" className="p-2 rounded-lg hover:bg-sp-card transition-colors">
             <span className="material-symbols-outlined text-sp-muted">arrow_back</span>
           </button>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-sp-text flex items-center gap-2">
             <span>📝</span>
             <span>{currentAssignment.title}</span>
           </h1>
@@ -452,7 +452,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
           aria-label="미제출자 복사"
           className="px-4 py-2.5 bg-sp-card border border-sp-border rounded-lg text-sp-text text-sm hover:bg-sp-border/40 transition-colors flex items-center gap-2"
         >
-          <span className="material-symbols-outlined text-[16px]">content_copy</span>
+          <span className="material-symbols-outlined text-icon">content_copy</span>
           미제출자 복사
         </button>
         <button
@@ -460,7 +460,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
           aria-label="링크 공유"
           className="px-4 py-2.5 bg-sp-card border border-sp-border rounded-lg text-sp-text text-sm hover:bg-sp-border/40 transition-colors flex items-center gap-2"
         >
-          <span className="material-symbols-outlined text-[16px]">link</span>
+          <span className="material-symbols-outlined text-icon">link</span>
           링크 공유
         </button>
         <button
@@ -468,7 +468,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
           aria-label="엑셀 내보내기"
           className="px-4 py-2.5 bg-sp-card border border-sp-border rounded-lg text-sp-text text-sm hover:bg-sp-border/40 transition-colors flex items-center gap-2"
         >
-          <span className="material-symbols-outlined text-[16px]">download</span>
+          <span className="material-symbols-outlined text-icon">download</span>
           내보내기
         </button>
         <button
@@ -476,7 +476,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
           aria-label="새로고침"
           className="px-4 py-2.5 bg-sp-card border border-sp-border rounded-lg text-sp-text text-sm hover:bg-sp-border/40 transition-colors flex items-center gap-2"
         >
-          <span className="material-symbols-outlined text-[16px]">refresh</span>
+          <span className="material-symbols-outlined text-icon">refresh</span>
           새로고침
         </button>
       </div>

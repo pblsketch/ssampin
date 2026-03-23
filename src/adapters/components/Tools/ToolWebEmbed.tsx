@@ -29,7 +29,7 @@ declare module 'react' {
   }
 }
 
-const BTN = 'p-1 rounded text-sp-muted hover:text-white hover:bg-white/10 transition-all';
+const BTN = 'p-1 rounded text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all';
 
 export function ToolWebEmbed({ url, title, onBack, isFullscreen }: ToolWebEmbedProps) {
   const webviewRef = useRef<WebviewElement>(null);
@@ -111,13 +111,13 @@ export function ToolWebEmbed({ url, title, onBack, isFullscreen }: ToolWebEmbedP
         {/* Mini navigation bar */}
         <div className="flex items-center gap-0.5 h-8 bg-white/5 rounded-lg px-2 shrink-0">
           <button onClick={goBack} className={BTN} title="뒤로">
-            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            <span className="material-symbols-outlined text-icon">arrow_back</span>
           </button>
           <button onClick={goForward} className={BTN} title="앞으로">
-            <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            <span className="material-symbols-outlined text-icon">arrow_forward</span>
           </button>
           <button onClick={reload} className={BTN} title="새로고침">
-            <span className="material-symbols-outlined text-[16px]">refresh</span>
+            <span className="material-symbols-outlined text-icon">refresh</span>
           </button>
           <span className="flex-1 text-center text-xs text-sp-muted truncate px-3 select-text">
             {currentUrl}
@@ -127,7 +127,7 @@ export function ToolWebEmbed({ url, title, onBack, isFullscreen }: ToolWebEmbedP
             className={BTN}
             title="브라우저에서 열기"
           >
-            <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+            <span className="material-symbols-outlined text-icon">open_in_new</span>
           </button>
         </div>
 
@@ -145,7 +145,7 @@ export function ToolWebEmbed({ url, title, onBack, isFullscreen }: ToolWebEmbedP
               <div className="flex gap-2">
                 <button
                   onClick={reload}
-                  className="px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+                  className="px-3 py-1.5 text-sm bg-sp-text/10 hover:bg-sp-text/20 rounded-lg text-sp-text transition-colors"
                 >
                   다시 시도
                 </button>

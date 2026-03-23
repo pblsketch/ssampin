@@ -379,7 +379,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 mode === tab.key
                   ? 'bg-sp-accent text-white shadow-lg shadow-blue-500/20'
-                  : 'bg-sp-card text-sp-muted hover:text-white hover:bg-sp-card/80 border border-sp-border'
+                  : 'bg-sp-card text-sp-muted hover:text-sp-text hover:bg-sp-card/80 border border-sp-border'
               }`}
             >
               {tab.label}
@@ -402,7 +402,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   dataSource === src.key
                     ? 'bg-sp-accent/20 text-sp-accent border border-sp-accent/40'
-                    : 'bg-sp-surface text-sp-muted hover:text-white border border-sp-border'
+                    : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
                 }`}
               >
                 {src.label}
@@ -471,7 +471,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                   max={999}
                   value={rangeConfig.start}
                   onChange={(e) => setRangeConfig((prev) => ({ ...prev, start: Math.max(1, parseInt(e.target.value) || 1) }))}
-                  className="w-20 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-white text-sm text-center focus:outline-none focus:border-sp-accent"
+                  className="w-20 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm text-center focus:outline-none focus:border-sp-accent"
                 />
               </div>
               <span className="text-sp-muted text-lg">~</span>
@@ -483,7 +483,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                   max={999}
                   value={rangeConfig.end}
                   onChange={(e) => setRangeConfig((prev) => ({ ...prev, end: Math.max(1, parseInt(e.target.value) || 1) }))}
-                  className="w-20 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-white text-sm text-center focus:outline-none focus:border-sp-accent"
+                  className="w-20 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm text-center focus:outline-none focus:border-sp-accent"
                 />
               </div>
               <span className="text-sp-muted text-xs ml-2">
@@ -501,7 +501,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                 value={customText}
                 onChange={(e) => setCustomText(e.target.value)}
                 placeholder={'이름을 한 줄에 하나씩 입력하세요\n예:\n김민수\n박영희\n이지은'}
-                className="w-full h-28 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-white text-sm placeholder-sp-muted/50 resize-none focus:outline-none focus:border-sp-accent"
+                className="w-full h-28 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm placeholder-sp-muted/50 resize-none focus:outline-none focus:border-sp-accent"
               />
               <div className="mt-1 text-xs text-sp-muted text-center">
                 {customText.split('\n').filter((l) => l.trim().length > 0).length}개 항목
@@ -517,7 +517,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setMultipleCount((prev) => Math.max(1, prev - 1))}
-                className="w-8 h-8 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-sp-surface transition-all flex items-center justify-center"
+                className="w-8 h-8 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-all flex items-center justify-center"
               >
                 -
               </button>
@@ -527,11 +527,11 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                 max={poolTotal}
                 value={multipleCount}
                 onChange={(e) => setMultipleCount(Math.max(1, Math.min(poolTotal, parseInt(e.target.value) || 1)))}
-                className="w-14 px-2 py-1 rounded-lg bg-sp-surface border border-sp-border text-white text-sm text-center focus:outline-none focus:border-sp-accent"
+                className="w-14 px-2 py-1 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-sm text-center focus:outline-none focus:border-sp-accent"
               />
               <button
                 onClick={() => setMultipleCount((prev) => Math.min(poolTotal, prev + 1))}
-                className="w-8 h-8 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-sp-surface transition-all flex items-center justify-center"
+                className="w-8 h-8 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-all flex items-center justify-center"
               >
                 +
               </button>
@@ -544,7 +544,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
         <div className="bg-sp-card rounded-xl border border-sp-border p-8 min-h-[200px] flex flex-col items-center justify-center relative">
           {/* Slot animation display */}
           {isAnimating && !showResult && (
-            <div className={`${resultTextSize} font-bold text-white animate-pulse text-center`}>
+            <div className={`${resultTextSize} font-bold text-sp-text animate-pulse text-center`}>
               {slotDisplay || '...'}
             </div>
           )}
@@ -569,7 +569,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
           {showResult && mode === 'single' && result.length > 0 && (
             <div className="text-center">
               <div
-                className={`${resultTextSize} font-bold text-white mb-2 px-8 py-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.5)] ring-2 ring-amber-400 transition-all`}
+                className={`${resultTextSize} font-bold text-sp-text mb-2 px-8 py-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.5)] ring-2 ring-amber-400 transition-all`}
               >
                 {result[0]}
               </div>
@@ -589,7 +589,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                   style={{ animationDelay: `${idx * 100}ms` }}
                 >
                   <span className="text-amber-400 text-xs font-bold mb-1">#{idx + 1}</span>
-                  <span className={`${isFullscreen ? 'text-4xl' : 'text-2xl'} font-bold text-white`}>
+                  <span className={`${isFullscreen ? 'text-4xl' : 'text-2xl'} font-bold text-sp-text`}>
                     {item}
                   </span>
                 </div>
@@ -622,7 +622,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
                       {idx + 1}
                     </span>
                     <span className={`font-medium ${
-                      idx === 0 ? 'text-amber-400 text-lg' : 'text-white'
+                      idx === 0 ? 'text-amber-400 text-lg' : 'text-sp-text'
                     }`}>
                       {item}
                     </span>
@@ -653,7 +653,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
           </button>
           <button
             onClick={handleReset}
-            className="px-4 py-3 rounded-xl text-sp-muted hover:text-white hover:bg-sp-card border border-sp-border transition-all text-sm"
+            className="px-4 py-3 rounded-xl text-sp-muted hover:text-sp-text hover:bg-sp-card border border-sp-border transition-all text-sm"
           >
             전체 초기화
           </button>

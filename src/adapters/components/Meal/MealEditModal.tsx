@@ -67,9 +67,15 @@ export function MealEditModal({ date, existingMeals, onSave, onClose }: MealEdit
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={handleBackdropClick}
+      aria-hidden="true"
     >
-      <div className="bg-sp-bg rounded-2xl border border-sp-border p-6 w-full max-w-md shadow-2xl">
-        <h3 className="text-lg font-bold text-sp-text mb-4 flex items-center gap-2">
+      <div
+        className="bg-sp-bg rounded-2xl border border-sp-border p-6 w-full max-w-md shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-meal-edit"
+      >
+        <h3 id="modal-title-meal-edit" className="text-lg font-bold text-sp-text mb-4 flex items-center gap-2">
           <span className="material-symbols-outlined text-sp-accent">edit_note</span>
           급식 메뉴 입력 — {formatDateDisplay(date)}
         </h3>

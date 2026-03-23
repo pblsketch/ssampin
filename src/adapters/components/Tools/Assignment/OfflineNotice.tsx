@@ -18,7 +18,7 @@ export function OfflineNotice({
           onClick={onRetry ?? (() => window.location.reload())}
           className="px-6 py-3 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 mx-auto"
         >
-          <span className="material-symbols-outlined text-[18px]">refresh</span>
+          <span className="material-symbols-outlined text-icon-md">refresh</span>
           다시 시도
         </button>
       </div>

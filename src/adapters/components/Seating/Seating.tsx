@@ -201,7 +201,7 @@ function SeatCard({
 
       {/* 아바타 + 이름 */}
       <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-full bg-slate-700 overflow-hidden shrink-0 border border-slate-600 flex items-center justify-center">
+        <div className="h-8 w-8 rounded-full bg-sp-surface overflow-hidden shrink-0 border border-sp-border flex items-center justify-center">
           <span className="text-xs text-sp-muted">
             {student?.name.charAt(0) ?? '?'}
           </span>
@@ -499,14 +499,14 @@ export function Seating(_props?: { embedded?: boolean }) {
               <div className="w-px h-8 bg-sp-border shrink-0" />
               <button
                 onClick={handleRandomize}
-                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
               >
                 <span className="material-symbols-outlined text-lg">shuffle</span>
                 <span>자리 바꾸기</span>
               </button>
               <button
                 onClick={() => setShowConstraintModal(true)}
-                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm font-medium text-sp-text transition-colors shadow-sm"
+                className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
               >
                 <span className="material-symbols-outlined text-lg">tune</span>
                 <span>배치 조건</span>
@@ -517,7 +517,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                     onClick={() => void togglePairMode()}
                     className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${seating.pairMode
                       ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
-                      : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
+                      : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
                       }`}
                     title="짝꿍 모드: 2명씩 짝 그룹으로 표시"
                   >
@@ -530,7 +530,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                       className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
                         (seating.oddColumnMode ?? 'single') === 'triple'
                           ? 'border-sp-highlight bg-sp-highlight/20 text-sp-highlight'
-                          : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
+                          : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
                       }`}
                       title="홀수 열 처리: 3명 함께 앉기 / 1명 따로 앉기"
                     >
@@ -544,7 +544,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                 onClick={() => setIsTeacherView((v) => !v)}
                 className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isTeacherView
                   ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
-                  : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
+                  : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
                   }`}
                 title={isTeacherView ? '학생 시점으로 보기' : '교사 시점으로 보기'}
               >
@@ -557,7 +557,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                 onClick={() => setEditing(!isEditing)}
                 className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
                   ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
-                  : 'border-sp-border bg-sp-card hover:bg-slate-700 text-sp-text'
+                  : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
                   }`}
               >
                 <span className="material-symbols-outlined text-lg">edit</span>
@@ -570,7 +570,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                     onClick={() => void undo()}
                     title="실행 취소 (Ctrl+Z)"
                     disabled={!canUndo()}
-                    className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                    className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
                   >
                     <span className="material-symbols-outlined text-lg">undo</span>
                     <span>실행 취소</span>
@@ -579,7 +579,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                     onClick={() => void redo()}
                     title="다시 실행 (Ctrl+Shift+Z)"
                     disabled={!canRedo()}
-                    className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                    className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
                   >
                     <span className="material-symbols-outlined text-lg">redo</span>
                     <span>다시 실행</span>
@@ -845,7 +845,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                     <button
                       onClick={() => void resizeGrid(seating.rows, seating.cols - 1)}
                       disabled={seating.cols <= 1}
-                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       title="열 줄이기"
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
@@ -854,7 +854,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                     <button
                       onClick={() => void resizeGrid(seating.rows, seating.cols + 1)}
                       disabled={seating.cols >= 10}
-                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       title="열 늘리기"
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
@@ -864,7 +864,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                     <button
                       onClick={() => void resizeGrid(seating.rows - 1, seating.cols)}
                       disabled={seating.rows <= 1}
-                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       title="행 줄이기"
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
@@ -873,7 +873,7 @@ export function Seating(_props?: { embedded?: boolean }) {
                     <button
                       onClick={() => void resizeGrid(seating.rows + 1, seating.cols)}
                       disabled={seating.rows >= 10}
-                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       title="행 늘리기"
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
@@ -908,7 +908,7 @@ export function Seating(_props?: { embedded?: boolean }) {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
               >
                 취소
               </button>
@@ -936,7 +936,7 @@ export function Seating(_props?: { embedded?: boolean }) {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
               >
                 취소
               </button>

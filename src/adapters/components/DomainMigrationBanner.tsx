@@ -30,7 +30,7 @@ export function DomainMigrationBanner() {
         className="p-1 hover:bg-white/20 rounded transition-colors text-white/70 hover:text-white shrink-0"
         title="닫기"
       >
-        <span className="material-symbols-outlined text-[18px]">close</span>
+        <span className="material-symbols-outlined text-icon-md">close</span>
       </button>
     </div>
   );

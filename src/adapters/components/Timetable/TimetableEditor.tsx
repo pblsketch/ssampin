@@ -376,7 +376,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                 onClick={() => setShowNeisImport(true)}
                 className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
               >
-                <span className="material-symbols-outlined text-[20px]">download</span>
+                <span className="material-symbols-outlined text-icon-lg">download</span>
                 <span>나이스에서 불러오기</span>
               </button>
               <div className="w-px h-8 bg-sp-border" />
@@ -388,7 +388,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
             disabled={!canUndo()}
             className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="material-symbols-outlined text-[20px]">undo</span>
+            <span className="material-symbols-outlined text-icon-lg">undo</span>
             <span>실행 취소</span>
           </button>
           <button
@@ -397,14 +397,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
             disabled={!canRedo()}
             className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="material-symbols-outlined text-[20px]">redo</span>
+            <span className="material-symbols-outlined text-icon-lg">redo</span>
             <span>다시 실행</span>
           </button>
           <button
             onClick={() => setShowClearConfirm(true)}
             className="flex items-center gap-2 rounded-xl bg-sp-surface border border-red-500/30 px-4 py-2.5 text-sm font-bold text-red-400 hover:bg-red-500/10 transition-all active:scale-95"
           >
-            <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
+            <span className="material-symbols-outlined text-icon-lg">delete_sweep</span>
             <span>모두 삭제</span>
           </button>
           <div className="w-px h-8 bg-sp-border" />
@@ -431,17 +431,17 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
             <div className="w-full overflow-x-auto">
               <table className="w-full min-w-[800px] border-collapse">
                 <thead>
-                  <tr className="bg-slate-700/50 border-b border-sp-border">
-                    <th className="px-4 py-3 text-center text-slate-200 font-bold text-sm w-20 border-r border-sp-border">
+                  <tr className="bg-sp-surface/50 border-b border-sp-border">
+                    <th className="px-4 py-3 text-center text-sp-text font-bold text-sm w-20 border-r border-sp-border">
                       교시
                     </th>
-                    <th className="px-4 py-3 text-center text-slate-200 font-bold text-sm w-24 border-r border-sp-border">
+                    <th className="px-4 py-3 text-center text-sp-text font-bold text-sm w-24 border-r border-sp-border">
                       시간
                     </th>
                     {DAYS_OF_WEEK.map((day) => (
                       <th
                         key={day}
-                        className="px-4 py-3 text-center text-slate-200 font-bold text-sm w-1/5 border-r border-sp-border"
+                        className="px-4 py-3 text-center text-sp-text font-bold text-sm w-1/5 border-r border-sp-border"
                       >
                         {day}
                       </th>
@@ -481,7 +481,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
               disabled={localMaxPeriods <= MIN_PERIODS_LIMIT}
               className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-4 py-2 text-sm font-medium text-sp-muted hover:text-red-400 hover:border-red-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <span className="material-symbols-outlined text-[18px]">remove</span>
+              <span className="material-symbols-outlined text-icon-md">remove</span>
               교시 삭제
             </button>
             <span className="text-sp-muted text-sm font-bold min-w-[4rem] text-center">
@@ -492,7 +492,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
               disabled={localMaxPeriods >= MAX_PERIODS_LIMIT}
               className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-4 py-2 text-sm font-medium text-sp-muted hover:text-sp-accent hover:border-sp-accent/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <span className="material-symbols-outlined text-[18px]">add</span>
+              <span className="material-symbols-outlined text-icon-md">add</span>
               교시 추가
             </button>
           </div>
@@ -524,7 +524,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-slate-700 text-sm text-sp-text transition-colors"
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
               >
                 취소
               </button>
@@ -600,15 +600,15 @@ function EditorPeriodRow({
   return (
     <>
       {lunchBefore && (
-        <tr className="bg-slate-800/80">
-          <td className="px-4 py-3 text-center text-sp-muted font-medium text-sm bg-slate-800 border-r border-sp-border">
+        <tr className="bg-sp-card/80">
+          <td className="px-4 py-3 text-center text-sp-muted font-medium text-sm bg-sp-card border-r border-sp-border">
             점심
           </td>
           <td className="px-4 py-3 text-center text-sp-muted text-sm border-r border-sp-border font-mono">
             {lunchTimeStr.split(' ~ ')[0]}
           </td>
           <td
-            className="px-4 py-3 text-center text-slate-500 text-sm font-medium tracking-wide"
+            className="px-4 py-3 text-center text-sp-muted text-sm font-medium tracking-wide"
             colSpan={5}
           >
             🍽️ 점심시간 ({lunchTimeStr})
@@ -616,7 +616,7 @@ function EditorPeriodRow({
         </tr>
       )}
 
-      <tr className="hover:bg-slate-800/30 transition-colors">
+      <tr className="hover:bg-sp-card/30 transition-colors">
         <td className="px-4 py-3 text-center text-sp-muted font-medium text-sm bg-sp-card border-r border-sp-border">
           {periodTime.period}교시
         </td>
@@ -677,7 +677,7 @@ function EditorPeriodRow({
                     className="absolute left-1 top-full z-50 mt-0.5 p-2 rounded-xl bg-sp-card border border-sp-border shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <p className="text-[10px] text-sp-muted mb-1.5 font-medium">{subjectValue}</p>
+                    <p className="text-caption text-sp-muted mb-1.5 font-medium">{subjectValue}</p>
                     <div className="grid grid-cols-8 gap-1.5">
                       {COLOR_PRESETS.map((p) => (
                         <button

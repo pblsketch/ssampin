@@ -327,11 +327,11 @@ export function Schedule() {
               {neisSyncStatus === 'syncing' ? (
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-400/30 border-t-purple-400" />
               ) : (
-                <span className="material-symbols-outlined text-[16px]">school</span>
+                <span className="material-symbols-outlined text-icon">school</span>
               )}
               <span className="hidden sm:inline">NEIS</span>
               {neisEnabled && neisSyncedCount > 0 && (
-                <span className="text-purple-300 text-[10px] bg-purple-500/15 px-1.5 py-0.5 rounded">
+                <span className="text-purple-300 text-caption bg-purple-500/15 px-1.5 py-0.5 rounded">
                   {neisSyncedCount}
                 </span>
               )}
@@ -346,7 +346,7 @@ export function Schedule() {
               className="flex items-center gap-1.5 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all disabled:opacity-50"
               title="구글 캘린더 동기화"
             >
-              <span className={`material-symbols-outlined text-[18px] ${syncState.status === 'syncing' ? 'animate-spin' : ''}`}>
+              <span className={`material-symbols-outlined text-icon-md ${syncState.status === 'syncing' ? 'animate-spin' : ''}`}>
                 sync
               </span>
               <span className="hidden sm:inline">{syncState.status === 'syncing' ? '동기화 중...' : '구글 동기화'}</span>
@@ -362,7 +362,7 @@ export function Schedule() {
               {googleLoading ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
               ) : (
-                <span className="material-symbols-outlined text-[18px]">add_link</span>
+                <span className="material-symbols-outlined text-icon-md">add_link</span>
               )}
               <span className="hidden sm:inline">{googleLoading ? '연결 중...' : '구글 캘린더 연결'}</span>
             </button>
@@ -373,7 +373,7 @@ export function Schedule() {
             className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
             title="양식 다운로드"
           >
-            <span className="material-symbols-outlined text-[18px]">description</span>
+            <span className="material-symbols-outlined text-icon-md">description</span>
             <span className="hidden lg:inline">양식 다운로드</span>
           </button>
           <button
@@ -382,7 +382,7 @@ export function Schedule() {
             className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
             title="가져오기"
           >
-            <span className="material-symbols-outlined text-[18px]">download</span>
+            <span className="material-symbols-outlined text-icon-md">download</span>
             <span className="hidden lg:inline">가져오기</span>
           </button>
           <button
@@ -391,7 +391,7 @@ export function Schedule() {
             className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-semibold transition-all"
             title="내보내기"
           >
-            <span className="material-symbols-outlined text-[18px]">upload</span>
+            <span className="material-symbols-outlined text-icon-md">upload</span>
             <span className="hidden lg:inline">내보내기</span>
           </button>
           <button
@@ -403,7 +403,7 @@ export function Schedule() {
             className="flex items-center gap-1.5 bg-sp-accent hover:bg-blue-600 text-white px-4 xl:px-5 py-2 xl:py-2.5 rounded-xl transition-all shadow-lg shadow-sp-accent/20"
             title="일정 추가"
           >
-            <span className="material-symbols-outlined text-[20px]">add</span>
+            <span className="material-symbols-outlined text-icon-lg">add</span>
             <span className="text-xs xl:text-sm font-bold">일정 추가</span>
           </button>
         </div>
@@ -515,7 +515,7 @@ export function Schedule() {
                           }`}
                       >
                         <span className="flex items-center gap-1">
-                          <span className="text-[9px] text-purple-300 bg-purple-500/15 px-1 py-0.5 rounded font-medium">N</span>
+                          <span className="text-tiny text-purple-300 bg-purple-500/15 px-1 py-0.5 rounded font-medium">N</span>
                           NEIS{neisSyncStatus === 'syncing' && ' ⟳'}
                         </span>
                       </button>
@@ -528,7 +528,7 @@ export function Schedule() {
                   onClick={() => setShowCategoryModal(true)}
                   className="text-sp-muted text-sm font-medium hover:text-sp-accent transition-colors flex items-center gap-1 shrink-0"
                 >
-                  <span className="material-symbols-outlined text-[18px]">settings</span>
+                  <span className="material-symbols-outlined text-icon-md">settings</span>
                   카테고리 관리
                 </button>
               </div>

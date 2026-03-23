@@ -73,7 +73,7 @@ function StudentTimelineView({
                 {/* 날짜 구분 */}
                 <div className="flex items-center gap-3 mb-3 -ml-6">
                   <div className="w-[22px] h-[22px] rounded-full bg-sp-surface border-2 border-sp-border flex items-center justify-center z-10">
-                    <span className="text-[8px] text-sp-muted">{'\uD83D\uDCC5'}</span>
+                    <span className="text-micro text-sp-muted">{'\uD83D\uDCC5'}</span>
                   </div>
                   <span className="text-xs font-semibold text-sp-muted">{formatDateKR(date)}</span>
                 </div>
@@ -103,7 +103,7 @@ function StudentTimelineView({
                                 {record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}
                               </span>
                             )}
-                            <span className="text-[11px] text-sp-muted ml-auto">
+                            <span className="text-detail text-sp-muted ml-auto">
                               {formatTimeKR(record.createdAt)}
                             </span>
                           </div>
@@ -134,7 +134,7 @@ function StudentTimelineView({
                                   )}
                                   <button
                                     onClick={() => void onToggleFollowUp(record.id)}
-                                    className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                    className={`px-1.5 py-0.5 rounded text-caption ${
                                       record.followUpDone
                                         ? 'bg-green-500/15 text-green-400'
                                         : 'bg-orange-500/15 text-orange-400 hover:bg-orange-500/25'

@@ -126,7 +126,7 @@ export function HelpEscalationForm({ type, onSubmit, onCancel, disabled }: Props
               <button
                 type="button"
                 onClick={() => removeScreenshot(i)}
-                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-caption text-white opacity-0 transition-opacity group-hover:opacity-100"
                 aria-label="스크린샷 삭제"
               >
                 ×

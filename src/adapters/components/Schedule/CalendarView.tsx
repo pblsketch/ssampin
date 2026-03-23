@@ -151,7 +151,7 @@ function MultiDayBar({
 
   return (
     <div
-      className={`h-[18px] ${colors.bar} text-white text-[10px] leading-[18px] px-1.5 truncate cursor-pointer hover:brightness-110 transition-all ${roundedLeft} ${roundedRight}`}
+      className={`h-[18px] ${colors.bar} text-white text-caption leading-[18px] px-1.5 truncate cursor-pointer hover:brightness-110 transition-all ${roundedLeft} ${roundedRight}`}
       style={{
         gridColumn: `${bar.startCol + 1} / span ${bar.span}`,
         gridRow: bar.row + 1,
@@ -202,7 +202,7 @@ export function CalendarView({
         <button
           type="button"
           onClick={onPrevMonth}
-          className="p-2 hover:bg-slate-700 rounded-full transition-colors text-sp-muted hover:text-white"
+          className="p-2 hover:bg-sp-surface rounded-full transition-colors text-sp-muted hover:text-sp-text"
         >
           <span className="material-symbols-outlined">chevron_left</span>
         </button>
@@ -210,7 +210,7 @@ export function CalendarView({
         <button
           type="button"
           onClick={onNextMonth}
-          className="p-2 hover:bg-slate-700 rounded-full transition-colors text-sp-muted hover:text-white"
+          className="p-2 hover:bg-sp-surface rounded-full transition-colors text-sp-muted hover:text-sp-text"
         >
           <span className="material-symbols-outlined">chevron_right</span>
         </button>
@@ -280,7 +280,7 @@ export function CalendarView({
                       )}
                       {/* 공휴일 이름 */}
                       {d.isHoliday && d.isCurrentMonth && (
-                        <span className="text-[9px] text-red-400/80 leading-tight truncate w-full text-center">
+                        <span className="text-tiny text-red-400/80 leading-tight truncate w-full text-center">
                           {d.holidayName}
                         </span>
                       )}

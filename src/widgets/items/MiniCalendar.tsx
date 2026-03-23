@@ -128,7 +128,7 @@ export function MiniCalendar() {
         {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
           <div
             key={d}
-            className={`text-center text-[9px] font-medium py-0.5 ${
+            className={`text-center text-tiny font-medium py-0.5 ${
               i === 0 ? 'text-red-400/70' : i === 6 ? 'text-blue-400/70' : 'text-sp-muted/50'
             }`}
           >
@@ -147,7 +147,7 @@ export function MiniCalendar() {
             }`}
           >
             <span
-              className={`text-[10px] w-5 h-5 flex items-center justify-center rounded-full ${
+              className={`text-caption w-5 h-5 flex items-center justify-center rounded-full ${
                 day.isToday
                   ? 'bg-sp-accent text-sp-accent-fg font-bold'
                   : day.isHoliday || day.isSunday
@@ -173,7 +173,7 @@ export function MiniCalendar() {
 
       {/* 하단: 이번 달 일정 수 */}
       <div className="mt-1 pt-1 border-t border-sp-border/20 text-center">
-        <span className="text-[10px] text-sp-muted">
+        <span className="text-caption text-sp-muted">
           이번 달 일정 {monthEventCount}건
         </span>
       </div>

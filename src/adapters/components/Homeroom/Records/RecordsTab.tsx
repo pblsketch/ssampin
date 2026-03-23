@@ -73,7 +73,7 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
               onClick={() => setViewMode(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === tab.id
                 ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
                 }`}
             >
               <span>{tab.icon}</span>
@@ -84,7 +84,7 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-sp-surface transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-all"
             title="내보내기"
           >
             <span className="material-symbols-outlined text-base">download</span>
@@ -92,7 +92,7 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
           </button>
           <button
             onClick={() => setShowCategoryModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-sp-surface transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-all"
             title="카테고리 관리"
           >
             <span className="material-symbols-outlined text-base">tune</span>

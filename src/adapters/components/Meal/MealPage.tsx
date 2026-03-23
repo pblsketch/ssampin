@@ -54,23 +54,23 @@ function MealCell({ meals, hasManual }: { meals: readonly MealInfo[]; hasManual:
       {hasManual && (
         <div className="flex items-center gap-1 mb-1">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
-          <span className="text-[10px] text-amber-400/80">수동 입력</span>
+          <span className="text-caption text-amber-400/80">수동 입력</span>
         </div>
       )}
       {meals.map((meal, idx) => (
         <div key={idx}>
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] font-bold text-sp-accent">{meal.mealType}</span>
+            <span className="text-detail font-bold text-sp-accent">{meal.mealType}</span>
             {meal.calorie && (
-              <span className="text-[10px] text-sp-muted">{meal.calorie}</span>
+              <span className="text-caption text-sp-muted">{meal.calorie}</span>
             )}
           </div>
           <ul className="space-y-0.5">
             {meal.dishes.map((dish, di) => (
-              <li key={di} className="text-xs text-slate-300 leading-relaxed">
+              <li key={di} className="text-xs text-sp-text leading-relaxed">
                 {dish.name}
                 {dish.allergens.length > 0 && (
-                  <span className="text-[10px] text-slate-500 ml-1">
+                  <span className="text-caption text-sp-muted ml-1">
                     ({dish.allergens.join('.')})
                   </span>
                 )}
@@ -199,7 +199,7 @@ export function MealPage() {
       {/* Header */}
       <header className="flex items-center justify-between px-8 py-6 sticky top-0 bg-sp-bg/95 backdrop-blur-sm z-10 border-b border-sp-border/30">
         <div>
-          <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-2">
+          <h2 className="text-3xl font-black text-sp-text tracking-tight flex items-center gap-2">
             <span className="text-2xl">🍚</span>
             급식
           </h2>
@@ -270,17 +270,17 @@ export function MealPage() {
         <button
           type="button"
           onClick={() => goWeek(-1)}
-          className="p-2 rounded-lg text-sp-muted hover:text-white hover:bg-white/5 transition-colors"
+          className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
         >
           <span className="material-symbols-outlined">chevron_left</span>
         </button>
 
         <div className="flex items-center gap-3">
-          <h3 className="text-lg font-bold text-white">{formatWeekLabel(weekDates)}</h3>
+          <h3 className="text-lg font-bold text-sp-text">{formatWeekLabel(weekDates)}</h3>
           <button
             type="button"
             onClick={goThisWeek}
-            className="text-xs px-3 py-1 rounded-lg border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-colors"
+            className="text-xs px-3 py-1 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
           >
             이번 주
           </button>
@@ -289,7 +289,7 @@ export function MealPage() {
         <button
           type="button"
           onClick={() => goWeek(1)}
-          className="p-2 rounded-lg text-sp-muted hover:text-white hover:bg-white/5 transition-colors"
+          className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
         >
           <span className="material-symbols-outlined">chevron_right</span>
         </button>
@@ -342,7 +342,7 @@ export function MealPage() {
                   <button
                     type="button"
                     onClick={() => setEditingDate(date)}
-                    className="mt-2 w-full py-1 text-[10px] text-sp-muted hover:text-sp-accent border border-dashed border-sp-border/50 rounded-lg transition-colors"
+                    className="mt-2 w-full py-1 text-caption text-sp-muted hover:text-sp-accent border border-dashed border-sp-border/50 rounded-lg transition-colors"
                   >
                     <span className="material-symbols-outlined text-xs align-middle mr-0.5">edit</span>
                     수동 입력

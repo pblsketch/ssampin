@@ -182,15 +182,20 @@ export function RecordsExportModal({ records, students, categories, onClose }: R
   ]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" aria-hidden="true">
+      <div
+        className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-records-export"
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-sp-accent">download</span>
-            <h3 className="text-white font-semibold">담임 메모 내보내기</h3>
+            <h3 id="modal-title-records-export" className="text-sp-text font-semibold">담임 메모 내보내기</h3>
           </div>
-          <button onClick={onClose} className="text-sp-muted hover:text-white transition-colors">
+          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -211,7 +216,7 @@ export function RecordsExportModal({ records, students, categories, onClose }: R
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                     format === f.id
                       ? 'bg-sp-accent text-white'
-                      : 'bg-sp-surface text-sp-muted hover:text-white border border-sp-border'
+                      : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
                   }`}
                 >
                   <span className="material-symbols-outlined text-base">{f.icon}</span>
@@ -237,7 +242,7 @@ export function RecordsExportModal({ records, students, categories, onClose }: R
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     periodPreset === p.id
                       ? 'bg-sp-accent text-white'
-                      : 'bg-sp-surface text-sp-muted hover:text-white border border-sp-border'
+                      : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
                   }`}
                 >
                   {p.label}
@@ -326,7 +331,7 @@ export function RecordsExportModal({ records, students, categories, onClose }: R
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-sp-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-sp-surface transition-all"
+            className="px-4 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-all"
           >
             취소
           </button>

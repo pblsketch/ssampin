@@ -16,15 +16,17 @@ interface HomeroomTabBarProps {
 
 export function HomeroomTabBar({ activeTab, onChange }: HomeroomTabBarProps) {
   return (
-    <div className="flex gap-1 bg-sp-surface rounded-lg p-1 overflow-x-auto">
+    <div role="tablist" className="flex gap-1 bg-sp-surface rounded-lg p-1 overflow-x-auto">
       {TABS.map((tab) => (
         <button
           key={tab.id}
+          role="tab"
+          aria-selected={activeTab === tab.id}
           onClick={() => onChange(tab.id)}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
             activeTab === tab.id
               ? 'bg-sp-accent text-white'
-              : 'text-sp-muted hover:text-white'
+              : 'text-sp-muted hover:text-sp-text'
           }`}
         >
           <span>{tab.icon}</span>

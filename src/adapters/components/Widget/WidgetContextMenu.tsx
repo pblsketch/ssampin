@@ -75,12 +75,12 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
   const menu = (
     <div
       ref={menuRef}
-      className="fixed z-[9999] w-56 bg-slate-800/75 backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl overflow-hidden"
+      className="fixed z-[9999] w-56 bg-sp-card/75 backdrop-blur-xl rounded-xl border border-sp-border/50 shadow-2xl overflow-hidden"
       style={{ left: position.left, top: position.top }}
     >
       {/* 메뉴 헤더 */}
       <div className="px-3 pt-3 pb-2">
-        <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+        <p className="text-xs uppercase tracking-wider text-sp-muted font-semibold">
           SsamPin Menu
         </p>
       </div>
@@ -89,12 +89,12 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
       <div className="px-3 py-2">
         <div className="flex items-center gap-3 mb-2">
           <span
-            className="material-symbols-outlined text-slate-400 flex-shrink-0"
+            className="material-symbols-outlined text-sp-muted flex-shrink-0"
             style={{ fontSize: 20 }}
           >
             grid_view
           </span>
-          <span className="flex-1 text-sm text-slate-200">레이아웃</span>
+          <span className="flex-1 text-sm text-sp-text">레이아웃</span>
         </div>
         <div className="flex flex-col gap-0.5 pl-1">
           {([
@@ -111,7 +111,7 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
                   'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors text-sm',
                   isActive
                     ? 'bg-blue-500/15 text-blue-400'
-                    : 'hover:bg-white/[0.06] text-slate-300',
+                    : 'hover:bg-sp-text/[0.06] text-sp-text',
                 ].join(' ')}
                 onClick={() => {
                   void update({ widget: { ...settings.widget, layoutMode: opt.mode } });
@@ -120,12 +120,12 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
               >
                 <span className={[
                   'w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
-                  isActive ? 'border-blue-400' : 'border-slate-500',
+                  isActive ? 'border-blue-400' : 'border-sp-border',
                 ].join(' ')}>
                   {isActive && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
                 </span>
                 <span className="flex-1">{opt.label}</span>
-                <span className="text-xs text-slate-500">{opt.shortcut}</span>
+                <span className="text-xs text-sp-muted">{opt.shortcut}</span>
               </button>
             );
           })}
@@ -133,36 +133,36 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
       </div>
 
       {/* 구분선 */}
-      <div className="h-px bg-white/10 mx-3 my-1" />
+      <div className="h-px bg-sp-border mx-3 my-1" />
 
       {/* 전체 화면으로 전환 */}
       <button
-        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-white/[0.08] transition-colors text-left"
+        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-sp-text/[0.08] transition-colors text-left"
         onClick={handleToggleWidget}
       >
         <span
-          className="material-symbols-outlined text-slate-400 flex-shrink-0"
+          className="material-symbols-outlined text-sp-muted flex-shrink-0"
           style={{ fontSize: 20 }}
         >
           fullscreen
         </span>
-        <span className="text-sm text-slate-200">전체 화면으로 전환</span>
+        <span className="text-sm text-sp-text">전체 화면으로 전환</span>
       </button>
 
       {/* 구분선 */}
-      <div className="h-px bg-white/10 mx-3 my-1" />
+      <div className="h-px bg-sp-border mx-3 my-1" />
 
       {/* 투명도 조절 */}
       <div className="px-3 py-2">
         <div className="flex items-center gap-3 mb-2">
           <span
-            className="material-symbols-outlined text-slate-400 flex-shrink-0"
+            className="material-symbols-outlined text-sp-muted flex-shrink-0"
             style={{ fontSize: 20 }}
           >
             opacity
           </span>
-          <span className="flex-1 text-sm text-slate-200">투명도 조절</span>
-          <span className="text-xs font-mono text-slate-400 flex-shrink-0 w-8 text-right">
+          <span className="flex-1 text-sm text-sp-text">투명도 조절</span>
+          <span className="text-xs font-mono text-sp-muted flex-shrink-0 w-8 text-right">
             {Math.round(opacity * 100)}%
           </span>
         </div>
@@ -186,13 +186,13 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
       <div className="px-3 py-2">
         <div className="flex items-center gap-3 mb-2">
           <span
-            className="material-symbols-outlined text-slate-400 flex-shrink-0"
+            className="material-symbols-outlined text-sp-muted flex-shrink-0"
             style={{ fontSize: 20 }}
           >
             format_size
           </span>
-          <span className="flex-1 text-sm text-slate-200">글자 크기</span>
-          <span className="text-xs font-mono text-slate-400 flex-shrink-0 w-12 text-right">
+          <span className="flex-1 text-sm text-sp-text">글자 크기</span>
+          <span className="text-xs font-mono text-sp-muted flex-shrink-0 w-12 text-right">
             {settings.fontSize === 'small' ? '작게' : settings.fontSize === 'large' ? '크게' : settings.fontSize === 'xlarge' ? '매우 크게' : '보통'}
           </span>
         </div>
@@ -203,7 +203,7 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
               onClick={() => void update({ fontSize: size })}
               className={`w-full py-1 rounded text-xs transition-colors ${settings.fontSize === size
                   ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                  : 'bg-sp-surface/50 text-sp-muted hover:bg-sp-surface hover:text-sp-text'
                 }`}
             >
               {size === 'small' ? '가' : size === 'medium' ? '가' : size === 'large' ? '가' : '가'}
@@ -213,20 +213,20 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
       </div>
 
       {/* 구분선 */}
-      <div className="h-px bg-white/10 mx-3 my-1" />
+      <div className="h-px bg-sp-border mx-3 my-1" />
 
       {/* 설정 */}
       <button
-        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-white/[0.08] transition-colors text-left"
+        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-sp-text/[0.08] transition-colors text-left"
         onClick={handleSettings}
       >
         <span
-          className="material-symbols-outlined text-slate-400 flex-shrink-0"
+          className="material-symbols-outlined text-sp-muted flex-shrink-0"
           style={{ fontSize: 20 }}
         >
           settings
         </span>
-        <span className="text-sm text-slate-200">설정</span>
+        <span className="text-sm text-sp-text">설정</span>
       </button>
 
       {/* 닫기 */}
@@ -235,12 +235,12 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
         onClick={handleClose}
       >
         <span
-          className="material-symbols-outlined text-slate-400 group-hover:text-red-400 flex-shrink-0 transition-colors"
+          className="material-symbols-outlined text-sp-muted group-hover:text-red-400 flex-shrink-0 transition-colors"
           style={{ fontSize: 20 }}
         >
           close
         </span>
-        <span className="text-sm text-slate-200 group-hover:text-red-300 transition-colors">
+        <span className="text-sm text-sp-text group-hover:text-red-300 transition-colors">
           닫기
         </span>
       </button>

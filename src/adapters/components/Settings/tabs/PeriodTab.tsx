@@ -132,7 +132,7 @@ export function PeriodTab({ draft, patch }: Props) {
               : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
               }`}
           >
-            <span className="material-symbols-outlined text-[16px]">auto_fix_high</span>
+            <span className="material-symbols-outlined text-icon">auto_fix_high</span>
             빠른 설정
           </button>
           <button
@@ -140,7 +140,7 @@ export function PeriodTab({ draft, patch }: Props) {
             onClick={addPeriod}
             className="text-xs font-medium text-sp-accent hover:text-blue-400 flex items-center gap-1"
           >
-            <span className="material-symbols-outlined text-[16px]">add</span>
+            <span className="material-symbols-outlined text-icon">add</span>
             교시 추가
           </button>
         </div>
@@ -150,7 +150,7 @@ export function PeriodTab({ draft, patch }: Props) {
       {showPreset && (
         <div className="mb-6 p-5 rounded-lg bg-sp-surface/80 border border-emerald-500/20 space-y-5">
           <div className="flex items-center gap-2 mb-1">
-            <span className="material-symbols-outlined text-emerald-400 text-[18px]">auto_fix_high</span>
+            <span className="material-symbols-outlined text-emerald-400 text-icon-md">auto_fix_high</span>
             <span className="text-sm font-bold text-sp-text">학교급 선택</span>
             <span className="text-xs text-sp-muted ml-auto">학교급에 맞게 교시 시간을 자동으로 생성합니다</span>
           </div>
@@ -169,7 +169,7 @@ export function PeriodTab({ draft, patch }: Props) {
                 <div className={`text-sm font-bold ${preset.schoolLevel === opt.value ? 'text-emerald-400' : 'text-sp-text'}`}>
                   {opt.label}
                 </div>
-                <div className="text-[11px] text-sp-muted mt-0.5">{opt.desc}</div>
+                <div className="text-detail text-sp-muted mt-0.5">{opt.desc}</div>
               </button>
             ))}
           </div>
@@ -217,7 +217,7 @@ export function PeriodTab({ draft, patch }: Props) {
                 onChange={(e) => setPreset((p) => ({ ...p, lunchDuration: Number(e.target.value) }))}
                 className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               />
-              <p className="text-[10px] text-sp-muted/70 leading-relaxed">
+              <p className="text-caption text-sp-muted/70 leading-relaxed">
                 쉬는 시간({preset.breakDuration}분)이 별도로 추가됩니다.
                 실제 점심 간격: {preset.lunchDuration + preset.breakDuration}분
               </p>
@@ -240,7 +240,7 @@ export function PeriodTab({ draft, patch }: Props) {
                   }))}
                   className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
-                <p className="text-[10px] text-sp-muted/70">20~120분</p>
+                <p className="text-caption text-sp-muted/70">20~120분</p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-sp-muted">총 교시 수</label>
@@ -255,7 +255,7 @@ export function PeriodTab({ draft, patch }: Props) {
                   }))}
                   className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
-                <p className="text-[10px] text-sp-muted/70">1~12교시</p>
+                <p className="text-caption text-sp-muted/70">1~12교시</p>
               </div>
             </div>
           )}
@@ -263,8 +263,8 @@ export function PeriodTab({ draft, patch }: Props) {
           {/* 미리보기 */}
           <div className="mt-1 p-3 rounded-lg bg-sp-bg/50 border border-sp-border/50">
             <div className="flex items-center gap-1.5 mb-2">
-              <span className="material-symbols-outlined text-[14px] text-sp-muted">preview</span>
-              <span className="text-[10px] font-medium text-sp-muted uppercase tracking-wider">미리보기</span>
+              <span className="material-symbols-outlined text-icon-sm text-sp-muted">preview</span>
+              <span className="text-caption font-medium text-sp-muted uppercase tracking-wider">미리보기</span>
             </div>
             <div className="space-y-0.5 text-xs">
               {(() => {
@@ -275,19 +275,19 @@ export function PeriodTab({ draft, patch }: Props) {
                     <div key={pt.period}>
                       <div className="flex items-center gap-3 py-0.5">
                         <span className="w-10 text-sp-muted">{pt.period}교시</span>
-                        <span className="text-sp-text font-mono text-[11px]">{pt.start}</span>
+                        <span className="text-sp-text font-mono text-detail">{pt.start}</span>
                         <span className="text-sp-muted">~</span>
-                        <span className="text-sp-text font-mono text-[11px]">{pt.end}</span>
+                        <span className="text-sp-text font-mono text-detail">{pt.end}</span>
                       </div>
                       {isBeforeLunch && (
                         <div className="flex items-center gap-3 py-0.5 text-amber-700">
                           <span className="w-10 text-center">🍱</span>
-                          <span className="font-mono text-[11px]">{pt.end}</span>
+                          <span className="font-mono text-detail">{pt.end}</span>
                           <span className="text-amber-600">~</span>
-                          <span className="font-mono text-[11px]">
+                          <span className="font-mono text-detail">
                             {formatTime(parseMinutes(pt.end) + preset.lunchDuration)}
                           </span>
-                          <span className="text-[10px] text-amber-600">
+                          <span className="text-caption text-amber-600">
                             ({preset.lunchDuration}분)
                           </span>
                         </div>
@@ -308,7 +308,7 @@ export function PeriodTab({ draft, patch }: Props) {
               onClick={handleApplyPreset}
               className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 text-sm font-medium transition-colors flex items-center gap-1.5"
             >
-              <span className="material-symbols-outlined text-[16px]">auto_fix_high</span>
+              <span className="material-symbols-outlined text-icon">auto_fix_high</span>
               자동 생성
             </button>
           </div>
@@ -344,7 +344,7 @@ export function PeriodTab({ draft, patch }: Props) {
             })()})
           </span>
         </div>
-        <p className="mt-2 text-[11px] text-sp-muted/70 leading-relaxed">
+        <p className="mt-2 text-detail text-sp-muted/70 leading-relaxed">
           교시 사이 간격 중 위 시간대와 겹치는 구간이 점심시간으로 표시됩니다.
         </p>
       </div>
@@ -418,7 +418,7 @@ function PeriodRows({
       {showLunchBefore && (
         <tr className="bg-amber-100 border-y-2 border-amber-300">
           <td className="px-4 py-2 font-medium text-amber-700 flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[16px]">restaurant</span>
+            <span className="material-symbols-outlined text-icon">restaurant</span>
             점심
           </td>
           <td className="px-4 py-2">
@@ -446,7 +446,7 @@ function PeriodRows({
             )}
           </td>
           <td className="px-4 py-2 text-center">
-            <span className="text-[10px] text-amber-600 font-medium">
+            <span className="text-caption text-amber-600 font-medium">
               {(() => {
                 const parts = lunchTimeStr.split(' ~ ');
                 if (parts.length === 2 && parts[0] && parts[1]) {
@@ -484,7 +484,7 @@ function PeriodRows({
               onClick={onDelete}
               className="text-sp-muted hover:text-red-400 transition-colors"
             >
-              <span className="material-symbols-outlined text-[18px]">close</span>
+              <span className="material-symbols-outlined text-icon-md">close</span>
             </button>
           )}
         </td>

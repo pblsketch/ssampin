@@ -89,7 +89,7 @@ export function ChatFeedback({
       className="mt-2 border-t border-white/10 pt-2 transition-opacity duration-300"
       style={{ opacity: visible ? 1 : 0 }}
     >
-      <p className="mb-1.5 text-center text-[11px] text-sp-muted">도움이 되었나요?</p>
+      <p className="mb-1.5 text-center text-detail text-sp-muted">도움이 되었나요?</p>
       <div className="flex gap-2">
         <button
           type="button"
@@ -101,7 +101,7 @@ export function ChatFeedback({
         <button
           type="button"
           onClick={() => onUnresolved(messageId)}
-          className="flex-1 rounded-lg border border-sp-border px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-white/5"
+          className="flex-1 rounded-lg border border-sp-border px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-sp-text/5"
         >
           😥 아직이요
         </button>

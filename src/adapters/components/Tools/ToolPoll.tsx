@@ -130,7 +130,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="질문을 입력하세요"
-            className="flex-1 bg-sp-card border border-sp-border rounded-xl px-4 py-3 text-xl text-white placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
+            className="flex-1 bg-sp-card border border-sp-border rounded-xl px-4 py-3 text-xl text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
             maxLength={100}
           />
           <button
@@ -161,7 +161,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
                 onChange={(e) => handleOptionChange(index, e.target.value)}
                 onKeyDown={(e) => handleOptionKeyDown(e, index)}
                 placeholder={`선택지 ${index + 1}`}
-                className="flex-1 bg-sp-card border border-sp-border rounded-lg px-3 py-2 text-white placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
+                className="flex-1 bg-sp-card border border-sp-border rounded-lg px-3 py-2 text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
                 maxLength={50}
               />
               <button
@@ -177,7 +177,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
         {optionTexts.length < 6 && (
           <button
             onClick={handleAddOption}
-            className="self-start px-4 py-2 rounded-lg border border-dashed border-sp-border text-sp-muted hover:text-white hover:border-sp-accent transition-all text-sm"
+            className="self-start px-4 py-2 rounded-lg border border-dashed border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent transition-all text-sm"
           >
             + 선택지 추가
           </button>
@@ -192,7 +192,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
             <button
               key={preset.label}
               onClick={() => handlePreset(preset)}
-              className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sm text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all"
+              className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sm text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all"
             >
               {preset.emoji} {preset.label}
             </button>
@@ -295,12 +295,12 @@ function LiveVotePanel({
       <div className="flex items-center gap-2 w-full">
         <span className="text-green-400 text-sm font-bold">● LIVE</span>
         <span className="text-sp-muted text-sm">
-          접속 학생: <span className="text-white font-bold">{connectedStudents}명</span>
+          접속 학생: <span className="text-sp-text font-bold">{connectedStudents}명</span>
         </span>
         <div className="flex-1" />
         <button
           onClick={onToggleQRFullscreen}
-          className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-white text-xs transition-all"
+          className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text text-xs transition-all"
           title="QR 코드 크게 보기"
         >
           🔍 크게
@@ -321,12 +321,12 @@ function LiveVotePanel({
 
         {/* URL + IP selector + Tunnel */}
         <div className="flex flex-col gap-2">
-          <p className="text-white font-mono text-sm break-all">{displayUrl}</p>
+          <p className="text-sp-text font-mono text-sm break-all">{displayUrl}</p>
           {!tunnelUrl && serverInfo.localIPs.length > 1 && (
             <select
               value={selectedIP}
               onChange={(e) => onSelectIP(e.target.value)}
-              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-white focus:border-sp-accent focus:outline-none"
+              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
             >
               {serverInfo.localIPs.map((ip) => (
                 <option key={ip} value={ip}>{ip}</option>
@@ -503,7 +503,7 @@ function VotingView({
     <div className="w-full flex flex-col h-full min-h-0 gap-4">
       {/* Question */}
       <div className="text-center shrink-0">
-        <h2 className={`font-bold text-white ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
+        <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
           {question}
         </h2>
       </div>
@@ -568,7 +568,7 @@ function VotingView({
                   className="w-4 h-4 rounded-full shrink-0"
                   style={{ backgroundColor: option.color }}
                 />
-                <span className={`font-medium text-white flex-1 ${isFullscreen ? 'text-2xl' : 'text-xl'}`}>
+                <span className={`font-medium text-sp-text flex-1 ${isFullscreen ? 'text-2xl' : 'text-xl'}`}>
                   {option.text}
                 </span>
 
@@ -623,7 +623,7 @@ function VotingView({
       {directInputId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setDirectInputId(null)}>
           <div className="bg-sp-card border border-sp-border rounded-2xl p-6 w-72 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-white font-bold text-lg text-center">몇 명?</h3>
+            <h3 className="text-sp-text font-bold text-lg text-center">몇 명?</h3>
             <input
               ref={directInputRef}
               type="number"
@@ -634,12 +634,12 @@ function VotingView({
                 if (e.key === 'Escape') setDirectInputId(null);
               }}
               min={0}
-              className="bg-sp-bg border border-sp-border rounded-xl px-4 py-3 text-2xl text-white text-center font-mono focus:border-sp-accent focus:outline-none"
+              className="bg-sp-bg border border-sp-border rounded-xl px-4 py-3 text-2xl text-sp-text text-center font-mono focus:border-sp-accent focus:outline-none"
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setDirectInputId(null)}
-                className="flex-1 py-2.5 rounded-xl bg-sp-bg border border-sp-border text-sp-muted hover:text-white transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text transition-colors"
               >
                 취소
               </button>
@@ -657,7 +657,7 @@ function VotingView({
       {/* Bottom bar */}
       <div className="flex items-center justify-between shrink-0 pb-1">
         <span className="text-sp-muted text-sm font-medium">
-          총 <span className="text-white font-bold">{totalVotes}표</span>
+          총 <span className="text-sp-text font-bold">{totalVotes}표</span>
         </span>
         {/* Student live vote toggle */}
         <button
@@ -665,22 +665,23 @@ function VotingView({
           className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
             isLiveMode
               ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
-              : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:bg-white/5'
+              : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
           }`}
         >
           {isLiveMode ? `📱 학생 투표 중 (${connectedStudents}명)` : '📱 학생 투표'}
+
         </button>
         <div className="flex items-center gap-2">
           <button
             onClick={onToggleResults}
-            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
           >
             {showResults ? '👁️ 결과 숨기기' : '👁️ 결과 보기'}
           </button>
           {isOpen ? (
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+              className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
             >
               🔒 투표 종료
             </button>
@@ -694,7 +695,7 @@ function VotingView({
           )}
           <button
             onClick={onReset}
-            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
           >
             🗑️ 초기화
           </button>
@@ -731,7 +732,7 @@ function ResultsView({ question, options, isFullscreen, onRevote, onNewPoll }: R
     <div className="w-full flex flex-col h-full min-h-0 gap-6">
       {/* Question */}
       <div className="text-center shrink-0">
-        <h2 className={`font-bold text-white ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
+        <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
           {question}
         </h2>
       </div>
@@ -757,7 +758,7 @@ function ResultsView({ question, options, isFullscreen, onRevote, onNewPoll }: R
                   className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: option.color }}
                 />
-                <span className={`font-medium text-white ${isFullscreen ? 'text-xl' : 'text-base'}`}>
+                <span className={`font-medium text-sp-text ${isFullscreen ? 'text-xl' : 'text-base'}`}>
                   {option.text}
                 </span>
                 {isWinner && <span className="text-yellow-400">👑</span>}
@@ -777,7 +778,7 @@ function ResultsView({ question, options, isFullscreen, onRevote, onNewPoll }: R
                     }}
                   >
                     {barWidth > 15 && (
-                      <span className="text-sm font-medium text-white whitespace-nowrap">
+                      <span className="text-sm font-medium text-sp-text whitespace-nowrap">
                         {option.votes}표 ({percent.toFixed(0)}%)
                       </span>
                     )}
@@ -797,7 +798,7 @@ function ResultsView({ question, options, isFullscreen, onRevote, onNewPoll }: R
       {/* Total */}
       <div className="text-center shrink-0">
         <span className="text-sp-muted">
-          총 <span className="text-white font-bold text-lg">{totalVotes}표</span>
+          총 <span className="text-sp-text font-bold text-lg">{totalVotes}표</span>
         </span>
       </div>
 
@@ -805,7 +806,7 @@ function ResultsView({ question, options, isFullscreen, onRevote, onNewPoll }: R
       <div className="flex items-center justify-center gap-3 shrink-0 pb-1">
         <button
           onClick={onRevote}
-          className="px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+          className="px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
         >
           📊 다시 투표
         </button>

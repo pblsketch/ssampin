@@ -58,7 +58,7 @@ function ClassAssignmentCard({ assignment, onClick, onDelete, onCopyLink }: Clas
               className="p-1 rounded hover:bg-sp-border/40 transition-colors opacity-0 group-hover:opacity-100"
               aria-label="메뉴"
             >
-              <span className="material-symbols-outlined text-sp-muted text-[18px]">more_vert</span>
+              <span className="material-symbols-outlined text-sp-muted text-icon-md">more_vert</span>
             </button>
             {showMenu && (
               <div className="absolute right-0 top-8 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">
@@ -96,7 +96,7 @@ function ClassAssignmentCard({ assignment, onClick, onDelete, onCopyLink }: Clas
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="text-[10px] text-sp-muted font-medium w-9 text-right">{progress}%</span>
+          <span className="text-caption text-sp-muted font-medium w-9 text-right">{progress}%</span>
         </div>
       )}
     </button>
@@ -223,7 +223,7 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
           {/* Google 연동 버튼 */}
           {googleConnected ? (
             <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-2.5 py-1.5 rounded-lg">
-              <span className="material-symbols-outlined text-[14px]">check_circle</span>
+              <span className="material-symbols-outlined text-icon-sm">check_circle</span>
               구글 연결됨
             </span>
           ) : (
@@ -236,7 +236,7 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
               {googleAuthLoading ? (
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
               ) : (
-                <span className="material-symbols-outlined text-[14px]">add_link</span>
+                <span className="material-symbols-outlined text-icon-sm">add_link</span>
               )}
               {googleAuthLoading ? '연결 중...' : '구글 연동'}
             </button>
@@ -267,7 +267,7 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
             onClick={() => void handleGoogleConnect()}
             className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 mx-auto text-sm font-medium"
           >
-            <span className="material-symbols-outlined text-[16px]">link</span>
+            <span className="material-symbols-outlined text-icon">link</span>
             Google 계정 연결하기
           </button>
         </div>

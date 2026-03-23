@@ -247,14 +247,14 @@ export function App() {
               className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
               title="다른 계정으로 변경"
             >
-              <span className="material-symbols-outlined text-[14px]">swap_horiz</span>
+              <span className="material-symbols-outlined text-icon-sm">swap_horiz</span>
             </button>
             <button
               onClick={auth.logout}
               className="text-xs text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
             >
               <span>{auth.email}</span>
-              <span className="material-symbols-outlined text-[14px]">logout</span>
+              <span className="material-symbols-outlined text-icon-sm">logout</span>
             </button>
           </div>
         ) : (
@@ -293,7 +293,7 @@ export function App() {
       <InstallGuide />
 
       {/* Tab Bar */}
-      <nav className="tab-bar flex items-center justify-around glass-tabbar shrink-0">
+      <nav aria-label="하단 내비게이션" className="tab-bar flex items-center justify-around glass-tabbar shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -303,16 +303,16 @@ export function App() {
             }}
             className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-2 transition-all active:scale-95 ${
               activeTab === tab.key
-                ? 'text-blue-500'
-                : 'text-slate-400 dark:text-slate-500'
+                ? 'text-sp-accent'
+                : 'text-sp-muted'
             }`}
           >
-            <span className={`material-symbols-outlined text-[22px] ${
+            <span className={`material-symbols-outlined text-2xl ${
               activeTab === tab.key ? 'font-bold' : ''
             }`}>
               {tab.icon}
             </span>
-            <span className="text-[9px] font-medium leading-tight">{tab.label}</span>
+            <span className="text-tiny font-medium leading-tight">{tab.label}</span>
           </button>
         ))}
       </nav>

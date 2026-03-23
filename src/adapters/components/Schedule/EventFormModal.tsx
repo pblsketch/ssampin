@@ -177,23 +177,27 @@ export function EventFormModal({
   return (
     <>
       {/* 오버레이 */}
-      <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
       {/* 모달 */}
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <div
           className="w-full max-w-[520px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title-event-form"
         >
           {/* 헤더 */}
           <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
-            <h2 className="text-lg font-bold text-white">
+            <h2 id="modal-title-event-form" className="text-lg font-bold text-sp-text">
               {isEdit ? '일정 수정' : '일정 추가'}
             </h2>
             <button
               type="button"
               onClick={onClose}
-              className="p-1 hover:bg-slate-700 rounded-lg transition-colors text-sp-muted hover:text-white"
+              aria-label="닫기"
+              className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
             >
               <span className="material-symbols-outlined">close</span>
             </button>
@@ -204,7 +208,7 @@ export function EventFormModal({
             {/* 구글 캘린더 일정 안내 */}
             {isEdit && editEvent?.source === 'google' && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                <span className="material-symbols-outlined text-blue-400 text-[18px] mt-0.5">sync</span>
+                <span className="material-symbols-outlined text-blue-400 text-icon-md mt-0.5">sync</span>
                 <div className="text-xs text-blue-200/80">
                   <p className="font-medium mb-0.5">구글 캘린더에서 가져온 일정입니다</p>
                   <p>수정하면 구글 캘린더에도 반영됩니다.</p>
@@ -215,7 +219,7 @@ export function EventFormModal({
             {/* NEIS 일정 안내 */}
             {isEdit && editEvent?.source === 'neis' && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                <span className="material-symbols-outlined text-purple-400 text-[18px] mt-0.5">info</span>
+                <span className="material-symbols-outlined text-purple-400 text-icon-md mt-0.5">info</span>
                 <div className="text-xs text-purple-200/80">
                   <p className="font-medium mb-0.5">NEIS에서 가져온 일정입니다</p>
                   <p>수정하면 다음 동기화 시 덮어씌워지지 않습니다.</p>
@@ -239,7 +243,7 @@ export function EventFormModal({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="일정 제목을 입력하세요"
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
                 required
               />
             </div>
@@ -313,7 +317,7 @@ export function EventFormModal({
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                   placeholder="예: 09:00 또는 09:00 - 18:00"
-                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
                 />
               </div>
               <div>
@@ -323,7 +327,7 @@ export function EventFormModal({
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="예: 강당"
-                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
                 />
               </div>
             </div>
@@ -351,7 +355,7 @@ export function EventFormModal({
                     onClick={() => togglePreset(key)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${alerts.includes(key)
                         ? 'bg-sp-accent text-white'
-                        : 'bg-sp-bg border border-sp-border text-sp-muted hover:bg-slate-700'
+                        : 'bg-sp-bg border border-sp-border text-sp-muted hover:bg-sp-surface'
                       }`}
                   >
                     {label}
@@ -363,7 +367,7 @@ export function EventFormModal({
                   onClick={() => setShowCustomInput((v) => !v)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showCustomInput
                       ? 'bg-sp-accent/20 text-sp-accent border border-sp-accent/40'
-                      : 'bg-sp-bg border border-dashed border-sp-border text-sp-muted hover:bg-slate-700 hover:text-sp-text'
+                      : 'bg-sp-bg border border-dashed border-sp-border text-sp-muted hover:bg-sp-surface hover:text-sp-text'
                     }`}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -384,7 +388,7 @@ export function EventFormModal({
                     onChange={(e) => setCustomValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomAlert(); } }}
                     placeholder="숫자"
-                    className="w-20 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text text-center placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="w-20 bg-sp-bg border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text text-center placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     autoFocus
                   />
                   <select
@@ -420,7 +424,7 @@ export function EventFormModal({
                       <button
                         type="button"
                         onClick={() => removeAlert(timing)}
-                        className="hover:text-white transition-colors ml-0.5"
+                        className="hover:text-sp-text transition-colors ml-0.5"
                       >
                         <span className="material-symbols-outlined text-sm leading-none" style={{ fontSize: '14px' }}>close</span>
                       </button>
@@ -462,7 +466,7 @@ export function EventFormModal({
                       <button
                         type="button"
                         onClick={() => handleRestoreDate(d)}
-                        className="hover:text-white transition-colors ml-0.5"
+                        className="hover:text-sp-text transition-colors ml-0.5"
                         title="복원"
                       >
                         <span className="material-symbols-outlined text-sm leading-none" style={{ fontSize: '14px' }}>close</span>
@@ -470,7 +474,7 @@ export function EventFormModal({
                     </span>
                   ))}
                 </div>
-                <p className="text-[11px] text-sp-muted mt-1">
+                <p className="text-detail text-sp-muted mt-1">
                   × 버튼으로 날짜를 복원하면 해당 날짜에 다시 일정이 표시됩니다
                 </p>
               </div>
@@ -484,7 +488,7 @@ export function EventFormModal({
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="추가 메모를 입력하세요"
                 rows={2}
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent resize-none"
+                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent resize-none"
               />
             </div>
 

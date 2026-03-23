@@ -172,21 +172,21 @@ export function MemoDetailPopup({
               }`}
               aria-label="편집 모드 전환"
             >
-              <span className="material-symbols-outlined text-[18px]">edit</span>
+              <span className="material-symbols-outlined text-icon-md">edit</span>
             </button>
             <button
               onClick={() => void handleDelete()}
               className="rounded-md p-1 text-slate-500 transition-colors hover:text-slate-700"
               aria-label="메모 삭제"
             >
-              <span className="material-symbols-outlined text-[18px]">delete</span>
+              <span className="material-symbols-outlined text-icon-md">delete</span>
             </button>
             <button
               onClick={onClose}
               className="rounded-md p-1 text-slate-500 transition-colors hover:text-slate-700"
               aria-label="닫기"
             >
-              <span className="material-symbols-outlined text-[18px]">close</span>
+              <span className="material-symbols-outlined text-icon-md">close</span>
             </button>
           </div>
         </div>
@@ -223,7 +223,7 @@ export function MemoDetailPopup({
 
         {/* Footer */}
         <div className="flex items-center gap-1 border-t border-black/10 px-4 py-2">
-          <span className="material-symbols-outlined text-[14px] text-slate-400">
+          <span className="material-symbols-outlined text-icon-sm text-slate-400">
             calendar_today
           </span>
           <span className="text-xs text-slate-500">

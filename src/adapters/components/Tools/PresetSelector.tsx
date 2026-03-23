@@ -63,7 +63,7 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
           disabled={typePresets.length === 0}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <span className="material-symbols-outlined text-[14px]">folder_open</span>
+          <span className="material-symbols-outlined text-icon-sm">folder_open</span>
           <span>불러오기</span>
           {typePresets.length > 0 && (
             <span className="text-sp-muted">({typePresets.length})</span>
@@ -76,11 +76,11 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
               <button
                 key={preset.id}
                 onClick={() => handleSelect(preset.id)}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 text-left group transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left group transition-colors"
               >
                 <div className="flex-1 min-w-0">
                   <span className="text-sm text-sp-text truncate block">{preset.name}</span>
-                  <span className="text-[10px] text-sp-muted">
+                  <span className="text-caption text-sp-muted">
                     {preset.items.length}개 항목
                   </span>
                 </div>
@@ -89,7 +89,7 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
                   className="text-sp-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all ml-2 shrink-0"
                   title="삭제"
                 >
-                  <span className="material-symbols-outlined text-[14px]">delete</span>
+                  <span className="material-symbols-outlined text-icon-sm">delete</span>
                 </button>
               </button>
             ))}
@@ -103,7 +103,7 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
         disabled={currentItems.length < 2}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent transition-all disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        <span className="material-symbols-outlined text-[14px]">save</span>
+        <span className="material-symbols-outlined text-icon-sm">save</span>
         <span>프리셋 저장</span>
       </button>
 
@@ -111,7 +111,7 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
       {showSaveDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-sp-card border border-sp-border rounded-2xl p-5 w-72">
-            <h3 className="text-sm font-bold text-white mb-3">프리셋 저장</h3>
+            <h3 className="text-sm font-bold text-sp-text mb-3">프리셋 저장</h3>
             <input
               type="text"
               value={presetName}
@@ -131,7 +131,7 @@ export function PresetSelector({ type, currentItems, onLoad }: PresetSelectorPro
             <div className="flex gap-2 mt-4">
               <button
                 onClick={() => setShowSaveDialog(false)}
-                className="flex-1 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-white text-sm transition-colors"
+                className="flex-1 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
               >
                 취소
               </button>

@@ -145,7 +145,7 @@ export function HelpChatInput({ onSend, disabled, onInputRef }: Props) {
               <button
                 type="button"
                 onClick={() => removeImage(i)}
-                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-caption text-white opacity-0 transition-opacity group-hover:opacity-100"
                 aria-label="이미지 삭제"
               >
                 ×

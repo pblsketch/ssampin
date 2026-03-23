@@ -53,17 +53,23 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-[560px] max-h-[80vh] flex flex-col rounded-2xl bg-sp-card border border-sp-border shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" aria-hidden="true">
+      <div
+        className="w-full max-w-[560px] max-h-[80vh] flex flex-col rounded-2xl bg-sp-card border border-sp-border shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-record-category-management"
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
-          <h2 className="text-base font-bold text-sp-text flex items-center gap-2">
+          <h2 id="modal-title-record-category-management" className="text-base font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-base">tune</span>
             카테고리 관리
           </h2>
           <button
             onClick={onClose}
-            className="text-sp-muted hover:text-white transition-colors"
+            aria-label="닫기"
+            className="text-sp-muted hover:text-sp-text transition-colors"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -104,7 +110,7 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
                       </button>
                       <button
                         onClick={() => setEditingCat(null)}
-                        className="text-xs text-sp-muted hover:text-white transition-colors"
+                        className="text-xs text-sp-muted hover:text-sp-text transition-colors"
                       >
                         취소
                       </button>
@@ -116,7 +122,7 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
                       <div className="flex items-center gap-2 ml-auto">
                         <button
                           onClick={() => setIsExpanded(cat.id, !isExpanded)}
-                          className="text-xs text-sp-muted hover:text-white transition-colors"
+                          className="text-xs text-sp-muted hover:text-sp-text transition-colors"
                         >
                           {isExpanded ? '접기' : '펼치기'}
                         </button>

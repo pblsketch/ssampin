@@ -79,7 +79,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 아이콘 선택 */}
       <div>
-        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">아이콘</label>
+        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">아이콘</label>
         <div className="flex flex-wrap gap-1.5">
           {ICON_OPTIONS.map((opt) => (
             <button
@@ -95,7 +95,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
               {opt.id !== 'none' ? (
                 <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{opt.id}</span>
               ) : (
-                <span className="text-[10px]">✕</span>
+                <span className="text-caption">✕</span>
               )}
             </button>
           ))}
@@ -104,7 +104,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 색상 */}
       <div>
-        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">색상</label>
+        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">색상</label>
 
         {/* 테마 연동 토글 */}
         <button
@@ -120,7 +120,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
           </span>
           위젯 테마 연동
           {isThemeSync && (
-            <span className="ml-auto text-[10px] text-blue-500">활성</span>
+            <span className="ml-auto text-caption text-blue-500">활성</span>
           )}
         </button>
 
@@ -153,7 +153,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
 
       {/* 부제목 */}
       <div>
-        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">부제목</label>
+        <label className="text-caption text-gray-500 uppercase tracking-wider mb-1.5 block">부제목</label>
         <input
           type="text"
           value={subtitleDraft}
@@ -168,7 +168,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
       {/* 초기화 */}
       <button
         onClick={() => onUpdate({ icon: 'verified', colorPreset: 'theme', subtitle: '', customColor: undefined })}
-        className="w-full py-1.5 text-[10px] rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+        className="w-full py-1.5 text-caption rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
       >
         기본으로 초기화
       </button>

@@ -37,10 +37,10 @@ export function SyncStatusBanner() {
   // 동기화 중
   if (state === 'syncing') {
     return (
-      <div className="mx-4 mb-3 rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-3">
+      <div className="mx-4 mb-3 rounded-xl bg-sp-accent/15 border border-sp-accent/20 px-4 py-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-400 text-base animate-spin">
+            <span className="material-symbols-outlined text-sp-accent text-base animate-spin">
               sync
             </span>
             <span className="text-sm text-sp-text font-medium">
@@ -55,9 +55,9 @@ export function SyncStatusBanner() {
             <span className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
-        <div className="h-1 w-full rounded-full bg-blue-500/20">
+        <div className="h-1 w-full rounded-full bg-sp-accent/20">
           <div
-            className="h-1 rounded-full bg-blue-400 transition-all duration-300"
+            className="h-1 rounded-full bg-sp-accent transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>

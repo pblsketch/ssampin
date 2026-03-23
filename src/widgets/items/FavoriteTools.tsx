@@ -48,7 +48,7 @@ export function FavoriteTools() {
               className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl ${tool.color} hover:scale-105 active:scale-95 transition-all`}
             >
               <span className="text-xl">{tool.icon}</span>
-              <span className="text-[10px] font-medium truncate w-full text-center">
+              <span className="text-caption font-medium truncate w-full text-center">
                 {tool.name}
               </span>
             </button>
@@ -60,7 +60,7 @@ export function FavoriteTools() {
               className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl bg-sp-border/30 text-sp-muted hover:bg-sp-border/50 transition-colors"
             >
               <span className="material-symbols-outlined text-xl">add</span>
-              <span className="text-[10px]">추가</span>
+              <span className="text-caption">추가</span>
             </button>
           )}
         </div>
@@ -97,7 +97,7 @@ function FavoriteToolPicker({
 
   return (
     <div className="flex-1 flex flex-col">
-      <p className="text-[10px] text-sp-muted mb-2">
+      <p className="text-caption text-sp-muted mb-2">
         대시보드에 표시할 도구를 선택하세요 (최대 8개)
       </p>
       <div className="grid grid-cols-4 gap-1.5 overflow-y-auto" style={{ maxHeight: 'calc(100% - 60px)' }}>
@@ -110,7 +110,7 @@ function FavoriteToolPicker({
                 if (!isSelected && picked.length >= 8) return;
                 toggle(tool.id);
               }}
-              className={`flex flex-col items-center justify-center gap-1 p-1.5 rounded-lg transition-all text-[10px] ${
+              className={`flex flex-col items-center justify-center gap-1 p-1.5 rounded-lg transition-all text-caption ${
                 isSelected
                   ? `${tool.color} ring-1 ring-sp-accent`
                   : 'bg-sp-bg text-sp-muted hover:bg-sp-border/30'

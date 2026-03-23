@@ -101,7 +101,7 @@ function CategoryTab({ label, count, active, onClick }: {
       }`}
     >
       {label}
-      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+      <span className={`text-caption px-1.5 py-0.5 rounded-full ${
         active ? 'bg-white/20' : 'bg-sp-border/50'
       }`}>
         {count}
@@ -136,7 +136,7 @@ function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }
           isSelected ? 'border-sp-accent bg-sp-accent' : 'border-sp-border'
         }`}>
           {isSelected && (
-            <span className="material-symbols-outlined text-white text-[14px]">check</span>
+            <span className="material-symbols-outlined text-white text-icon-sm">check</span>
           )}
         </div>
 
@@ -153,7 +153,7 @@ function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }
 
         {/* NEW 뱃지 */}
         {font.isNew && (
-          <span className="text-[10px] font-bold text-sp-accent bg-sp-accent/10 px-1.5 py-0.5 rounded-full shrink-0">
+          <span className="text-caption font-bold text-sp-accent bg-sp-accent/10 px-1.5 py-0.5 rounded-full shrink-0">
             NEW
           </span>
         )}
@@ -166,7 +166,7 @@ function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onToggleExpand(); } }}
           className="text-sp-muted hover:text-sp-text transition-colors shrink-0 cursor-pointer"
         >
-          <span className={`material-symbols-outlined text-[18px] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+          <span className={`material-symbols-outlined text-icon-md transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
             expand_more
           </span>
         </span>
@@ -189,12 +189,12 @@ function FontListItem({ font, isSelected, isExpanded, onSelect, onToggleExpand }
             The quick brown fox jumps over the lazy dog.
           </p>
           <div className="flex items-center gap-3 pt-2">
-            <span className="text-[10px] text-sp-muted uppercase tracking-wider">Weight</span>
+            <span className="text-caption text-sp-muted uppercase tracking-wider">Weight</span>
             <div className="flex gap-1 flex-wrap">
               {font.weights.map((w) => (
                 <span
                   key={w}
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-sp-surface text-sp-muted"
+                  className="text-caption px-1.5 py-0.5 rounded bg-sp-surface text-sp-muted"
                   style={{ fontFamily: font.cssFamily, fontWeight: w }}
                 >
                   {w}

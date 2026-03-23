@@ -18,10 +18,15 @@ export function ConflictResolveModal({ onClose }: ConflictResolveModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-sp-card rounded-xl border border-sp-border p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" aria-hidden="true">
+      <div
+        className="bg-sp-card rounded-xl border border-sp-border p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-conflict-resolve"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-sp-text">동기화 충돌 해결</h2>
+          <h2 id="modal-title-conflict-resolve" className="text-lg font-bold text-sp-text">동기화 충돌 해결</h2>
           <span className="text-sm text-sp-muted">{conflicts.length}건</span>
         </div>
 

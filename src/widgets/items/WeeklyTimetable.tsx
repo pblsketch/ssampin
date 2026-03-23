@@ -77,7 +77,7 @@ export function WeeklyTimetable() {
           {/* 교시별 행 */}
           {periods.map((period) => (
             <Fragment key={period}>
-              <div className="bg-sp-card flex items-center justify-center text-sp-muted text-[11px]">
+              <div className="bg-sp-card flex items-center justify-center text-sp-muted text-detail">
                 {period}
               </div>
               {DAYS.map(({ key }) => {
@@ -91,14 +91,14 @@ export function WeeklyTimetable() {
                 return (
                   <div key={key} className="bg-sp-card p-0.5">
                     {tp ? (
-                      <div className={`rounded h-full flex flex-col items-center justify-center text-[11px] font-medium ${colorClass}`}>
+                      <div className={`rounded h-full flex flex-col items-center justify-center text-detail font-medium ${colorClass}`}>
                         <span>{tp.subject}</span>
                         {tp.classroom && (
-                          <span className="text-[9px] opacity-60">{tp.classroom}</span>
+                          <span className="text-tiny opacity-60">{tp.classroom}</span>
                         )}
                       </div>
                     ) : (
-                      <div className="rounded h-full flex items-center justify-center text-[11px] text-sp-border">
+                      <div className="rounded h-full flex items-center justify-center text-detail text-sp-border">
                         -
                       </div>
                     )}

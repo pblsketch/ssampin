@@ -34,9 +34,9 @@ export class ErrorBoundary extends Component<Props, State> {
         alignItems: 'center',
         justifyContent: 'center',
         height: '100vh',
-        background: '#0a0e17',
-        color: '#e2e8f0',
-        fontFamily: "'Noto Sans KR', sans-serif",
+        background: 'var(--sp-bg)',
+        color: 'var(--sp-text)',
+        fontFamily: "var(--sp-font-family, 'Noto Sans KR'), sans-serif",
         gap: '16px',
         padding: '24px',
         textAlign: 'center',
@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>
           앱에 오류가 발생했습니다
         </h2>
-        <p style={{ fontSize: '14px', color: '#94a3b8', margin: 0, maxWidth: '400px', lineHeight: 1.6 }}>
+        <p style={{ fontSize: '14px', color: 'var(--sp-muted)', margin: 0, maxWidth: '400px', lineHeight: 1.6 }}>
           {this.state.error?.message ?? '알 수 없는 오류'}
         </p>
         <button
@@ -55,7 +55,7 @@ export class ErrorBoundary extends Component<Props, State> {
             padding: '10px 24px',
             borderRadius: '8px',
             border: 'none',
-            background: '#3b82f6',
+            background: 'var(--sp-accent)',
             color: '#fff',
             fontSize: '14px',
             fontWeight: 600,

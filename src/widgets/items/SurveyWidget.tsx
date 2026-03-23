@@ -65,7 +65,7 @@ export function SurveyWidget() {
               <span className="text-xs text-sp-text font-medium truncate flex-1">
                 {survey.title}
               </span>
-              <span className="text-[10px] text-sp-muted whitespace-nowrap">
+              <span className="text-caption text-sp-muted whitespace-nowrap">
                 {progress.completed}/{progress.total}
               </span>
             </div>
@@ -80,12 +80,12 @@ export function SurveyWidget() {
       })}
 
       {activeSurveys.length > 3 && (
-        <p className="text-[10px] text-sp-muted text-right">
+        <p className="text-caption text-sp-muted text-right">
           외 {activeSurveys.length - 3}건
         </p>
       )}
 
-      <p className="text-[10px] text-sp-muted mt-auto">
+      <p className="text-caption text-sp-muted mt-auto">
         진행 중 {activeSurveys.length}건
       </p>
     </div>

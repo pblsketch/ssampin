@@ -339,7 +339,7 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
               </button>
             </div>
             <p className="text-xs text-sp-muted">
-              키보드 단축키는 우측 상단 <kbd className="px-1 py-0.5 rounded bg-sp-card border border-sp-border font-mono text-[10px]">⌨</kbd> 버튼을 참고하세요
+              키보드 단축키는 우측 상단 <kbd className="px-1 py-0.5 rounded bg-sp-card border border-sp-border font-mono text-caption">⌨</kbd> 버튼을 참고하세요
             </p>
           </div>
         )}

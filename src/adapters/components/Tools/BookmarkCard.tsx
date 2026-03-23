@@ -101,13 +101,13 @@ export function BookmarkCard({
           <div className="absolute top-2 right-2 flex gap-1 z-10">
             <span
               onClick={(e) => { e.stopPropagation(); onEdit(bookmark); }}
-              className="material-symbols-outlined text-[16px] text-sp-muted hover:text-sp-accent cursor-pointer p-1 rounded bg-sp-surface/80"
+              className="material-symbols-outlined text-icon text-sp-muted hover:text-sp-accent cursor-pointer p-1 rounded bg-sp-surface/80"
             >
               edit
             </span>
             <span
               onClick={(e) => { e.stopPropagation(); onDelete(bookmark.id); }}
-              className="material-symbols-outlined text-[16px] text-sp-muted hover:text-red-400 cursor-pointer p-1 rounded bg-sp-surface/80"
+              className="material-symbols-outlined text-icon text-sp-muted hover:text-red-400 cursor-pointer p-1 rounded bg-sp-surface/80"
             >
               delete
             </span>
@@ -116,7 +116,7 @@ export function BookmarkCard({
 
         {/* 드래그 핸들 */}
         {editMode && (
-          <span className="material-symbols-outlined text-[16px] text-sp-muted absolute top-2 left-2">
+          <span className="material-symbols-outlined text-icon text-sp-muted absolute top-2 left-2">
             drag_indicator
           </span>
         )}
@@ -138,10 +138,10 @@ export function BookmarkCard({
         </div>
 
         {/* 이름 + 외부 링크/폴더 아이콘 */}
-        <h4 className="text-sm font-semibold text-white group-hover:text-sp-accent transition-colors flex items-center gap-1 truncate">
+        <h4 className="text-sm font-semibold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1 truncate">
           {bookmark.name}
           {!editMode && (
-            <span className="material-symbols-outlined text-[14px] text-sp-muted">
+            <span className="material-symbols-outlined text-icon-sm text-sp-muted">
               {bookmark.type === 'folder' ? 'folder_open' : 'open_in_new'}
             </span>
           )}
@@ -158,21 +158,21 @@ export function BookmarkCard({
             onClick={() => { onEdit(bookmark); setShowMenu(false); }}
             className="w-full px-4 py-2 text-left text-sm text-sp-text hover:bg-sp-card flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-[16px]">edit</span>
+            <span className="material-symbols-outlined text-icon">edit</span>
             편집
           </button>
           <button
             onClick={() => void handleCopyUrl()}
             className="w-full px-4 py-2 text-left text-sm text-sp-text hover:bg-sp-card flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-[16px]">content_copy</span>
+            <span className="material-symbols-outlined text-icon">content_copy</span>
             {bookmark.type === 'folder' ? '경로 복사' : 'URL 복사'}
           </button>
           <button
             onClick={() => { onDelete(bookmark.id); setShowMenu(false); }}
             className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-sp-card flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-[16px]">delete</span>
+            <span className="material-symbols-outlined text-icon">delete</span>
             삭제
           </button>
         </div>

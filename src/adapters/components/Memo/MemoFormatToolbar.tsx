@@ -115,11 +115,11 @@ export function MemoFormatToolbar({ textareaRef, content, onContentChange }: Mem
           key={marker}
           type="button"
           onMouseDown={(e) => handleButtonMouseDown(e, marker)}
-          className="flex h-7 w-7 items-center justify-center rounded text-slate-500 transition-colors hover:bg-black/5 hover:text-slate-700"
+          className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/5 hover:text-sp-text"
           aria-label={label}
           title={label}
         >
-          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+          <span className="material-symbols-outlined text-icon-md">{icon}</span>
         </button>
       ))}
     </div>

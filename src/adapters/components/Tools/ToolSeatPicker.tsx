@@ -363,7 +363,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
             {/* Title card */}
             <div className="bg-sp-card border border-sp-border rounded-xl p-6 text-center">
               <p className="text-3xl mb-2">🪑</p>
-              <h2 className="text-xl font-bold text-white mb-1">자리 뽑기</h2>
+              <h2 className="text-xl font-bold text-sp-text mb-1">자리 뽑기</h2>
               <p className="text-sp-muted text-sm">
                 학생들이 한 명씩 카드를 뽑아 자리를 배정받습니다
               </p>
@@ -386,7 +386,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                         <span className="text-lg">👩‍🎓</span>
                       </div>
                       <div>
-                        <p className="text-white font-medium">학생 수</p>
+                        <p className="text-sp-text font-medium">학생 수</p>
                         <p className="text-sp-accent text-lg font-bold">
                           {activeStudents.length}명
                         </p>
@@ -397,7 +397,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                         <span className="text-lg">🪑</span>
                       </div>
                       <div>
-                        <p className="text-white font-medium">좌석 수</p>
+                        <p className="text-sp-text font-medium">좌석 수</p>
                         <p className="text-green-400 text-lg font-bold">
                           {seating.rows}행 &times; {seating.cols}열 = {totalSeats}석
                         </p>
@@ -418,22 +418,22 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
                 {/* Row/Col adjustment */}
                 <div className="bg-sp-card border border-sp-border rounded-xl p-5">
-                  <p className="text-white font-medium mb-3">좌석 행/열 조절</p>
+                  <p className="text-sp-text font-medium mb-3">좌석 행/열 조절</p>
                   <div className="flex items-center justify-center gap-8">
                     <div className="flex items-center gap-3">
                       <span className="text-sm text-sp-muted">행</span>
                       <button
                         onClick={() => void resizeGrid(seating.rows - 1, seating.cols)}
                         disabled={seating.rows <= 1}
-                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
+                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
                       >
                         −
                       </button>
-                      <span className="w-6 text-center text-white font-bold">{seating.rows}</span>
+                      <span className="w-6 text-center text-sp-text font-bold">{seating.rows}</span>
                       <button
                         onClick={() => void resizeGrid(seating.rows + 1, seating.cols)}
                         disabled={seating.rows >= 10}
-                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
+                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
                       >
                         +
                       </button>
@@ -443,15 +443,15 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       <button
                         onClick={() => void resizeGrid(seating.rows, seating.cols - 1)}
                         disabled={seating.cols <= 1}
-                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
+                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
                       >
                         −
                       </button>
-                      <span className="w-6 text-center text-white font-bold">{seating.cols}</span>
+                      <span className="w-6 text-center text-sp-text font-bold">{seating.cols}</span>
                       <button
                         onClick={() => void resizeGrid(seating.rows, seating.cols + 1)}
                         disabled={seating.cols >= 10}
-                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
+                        className="w-8 h-8 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg font-bold"
                       >
                         +
                       </button>
@@ -461,14 +461,14 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
                 {/* Student order */}
                 <div className="bg-sp-card border border-sp-border rounded-xl p-5">
-                  <p className="text-white font-medium mb-3">뽑기 순서</p>
+                  <p className="text-sp-text font-medium mb-3">뽑기 순서</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setOrderMode('number')}
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
                         orderMode === 'number'
                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-white'
+                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
                       }`}
                     >
                       <span>🔢</span>
@@ -479,7 +479,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
                         orderMode === 'random'
                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-white'
+                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
                       }`}
                     >
                       <span>🔀</span>
@@ -490,7 +490,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
                         orderMode === 'direct'
                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-white'
+                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
                       }`}
                     >
                       <span>✏️</span>
@@ -501,17 +501,17 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
                 {/* Advance mode (hidden in direct mode) */}
                 {orderMode !== 'direct' && <div className="bg-sp-card border border-sp-border rounded-xl p-5">
-                  <p className="text-white font-medium mb-3">진행 방식</p>
+                  <p className="text-sp-text font-medium mb-3">진행 방식</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setAdvanceMode('manual')}
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
                         advanceMode === 'manual'
                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-white'
+                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[18px]">touch_app</span>
+                      <span className="material-symbols-outlined text-icon-md">touch_app</span>
                       <span>수동 진행</span>
                     </button>
                     <button
@@ -519,10 +519,10 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
                         advanceMode === 'auto'
                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-white'
+                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[18px]">play_arrow</span>
+                      <span className="material-symbols-outlined text-icon-md">play_arrow</span>
                       <span>자동 진행</span>
                     </button>
                   </div>
@@ -536,7 +536,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                 {/* Direct mode hint */}
                 {orderMode === 'direct' && (
                   <div className="bg-sp-card border border-sp-border rounded-xl p-5">
-                    <p className="text-white font-medium mb-2">직접 지정 모드</p>
+                    <p className="text-sp-text font-medium mb-2">직접 지정 모드</p>
                     <p className="text-sp-muted text-xs">
                       학급 자리 배치도에서 빈 좌석을 클릭하여 학생의 자리를 직접 지정합니다
                     </p>
@@ -632,10 +632,10 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                         >
                           {assigned ? (
                             <>
-                              <span className="text-white text-xs font-bold truncate w-full leading-tight">
+                              <span className="text-sp-text text-xs font-bold truncate w-full leading-tight">
                                 {assigned.student.name}
                               </span>
-                              <span className="text-sp-muted text-[10px] leading-tight">
+                              <span className="text-sp-muted text-caption leading-tight">
                                 {r + 1}행 {c + 1}열
                               </span>
                             </>
@@ -644,7 +644,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                               <span className={`text-lg font-bold leading-none ${canClickSeat ? 'text-sp-accent/60' : 'text-sp-muted'}`}>
                                 {canClickSeat ? '＋' : '?'}
                               </span>
-                              <span className="text-sp-muted/60 text-[10px] leading-tight">
+                              <span className="text-sp-muted/60 text-caption leading-tight">
                                 {r + 1}행 {c + 1}열
                               </span>
                             </>
@@ -663,7 +663,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
               {currentStudent && (
                 <div className="bg-sp-card border border-sp-accent/30 rounded-xl p-4 text-center flex-shrink-0">
                   <p className="text-sp-muted text-xs mb-1">현재 차례</p>
-                  <p className="text-white text-2xl font-bold">
+                  <p className="text-sp-text text-2xl font-bold">
                     🎯 {currentStudent.studentNumber ?? ''}번{' '}
                     {currentStudent.name}의 차례!
                   </p>
@@ -680,7 +680,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-center px-4">
                     <span className="text-4xl block mb-3">👈</span>
-                    <p className="text-white font-medium mb-1">좌석을 클릭하세요</p>
+                    <p className="text-sp-text font-medium mb-1">좌석을 클릭하세요</p>
                     <p className="text-sp-muted text-sm">
                       왼쪽 학급 자리 배치도에서 빈 자리를 클릭하면<br />
                       현재 학생이 해당 자리에 배정됩니다
@@ -720,7 +720,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                               `}
                             >
                               <span className="text-2xl font-bold text-amber-400">?</span>
-                              <span className="text-[10px] text-amber-400/50 mt-0.5">
+                              <span className="text-caption text-amber-400/50 mt-0.5">
                                 {cardIdx + 1}
                               </span>
                             </button>
@@ -731,7 +731,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                               style={{ transform: 'rotateY(180deg)' }}
                             >
                               <span className="text-green-400 text-sm mb-0.5">✓</span>
-                              <span className="text-sp-muted text-[10px] font-medium leading-tight">
+                              <span className="text-sp-muted text-caption font-medium leading-tight">
                                 {seat.row + 1}행 {seat.col + 1}열
                               </span>
                             </div>
@@ -760,13 +760,13 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                 )}
                 <button
                   onClick={() => setIsPaused((p) => !p)}
-                  className="px-4 py-3 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all text-sm font-medium"
+                  className="px-4 py-3 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-red-400/50 transition-all text-sm font-medium"
                 >
                   {isPaused ? '▶️ 재개' : '⏸️ 일시정지'}
                 </button>
                 <button
                   onClick={handleReset}
-                  className="px-4 py-3 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-red-400/50 transition-all text-sm font-medium"
+                  className="px-4 py-3 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-red-400/50 transition-all text-sm font-medium"
                 >
                   ⟲ 처음부터
                 </button>
@@ -808,7 +808,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                 style={{ animation: 'seatPickerPopup 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
               >
                 <p className="text-4xl mb-2">🎉</p>
-                <p className="text-white text-2xl md:text-3xl font-bold">{popupText}</p>
+                <p className="text-sp-text text-2xl md:text-3xl font-bold">{popupText}</p>
               </div>
             </div>
           )}
@@ -870,7 +870,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
             ))}
           </div>
           <p className="text-4xl mb-2">🎉</p>
-          <h2 className="text-2xl md:text-3xl font-bold text-white relative z-10">
+          <h2 className="text-2xl md:text-3xl font-bold text-sp-text relative z-10">
             자리 배치 완료!
           </h2>
           <p className="text-sp-muted text-sm mt-1 relative z-10">
@@ -904,10 +904,10 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                   >
                     {assigned ? (
                       <>
-                        <span className="text-white text-xs font-bold truncate w-full leading-tight">
+                        <span className="text-sp-text text-xs font-bold truncate w-full leading-tight">
                           {assigned.student.name}
                         </span>
-                        <span className="text-sp-muted text-[10px] leading-tight">
+                        <span className="text-sp-muted text-caption leading-tight">
                           {r + 1}행 {c + 1}열
                         </span>
                       </>
@@ -924,7 +924,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
         {/* Result table */}
         <div className="w-full max-w-2xl bg-sp-card border border-sp-border rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-sp-border">
-            <p className="text-white font-medium text-sm">배정 결과</p>
+            <p className="text-sp-text font-medium text-sm">배정 결과</p>
           </div>
           <div className="max-h-64 overflow-auto">
             <table className="w-full text-sm">
@@ -941,7 +941,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                     <td className="px-4 py-2 text-sp-text">
                       {student.studentNumber ?? '-'}
                     </td>
-                    <td className="px-4 py-2 text-white font-medium">{student.name}</td>
+                    <td className="px-4 py-2 text-sp-text font-medium">{student.name}</td>
                     <td className="px-4 py-2 text-sp-accent font-medium">
                       {pos ? `${pos.row + 1}행 ${pos.col + 1}열` : '-'}
                     </td>
@@ -962,13 +962,13 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
           </button>
           <button
             onClick={handleReset}
-            className="flex-1 min-w-[140px] py-3 rounded-xl bg-sp-card border border-sp-border text-sp-text hover:text-white hover:border-sp-accent/50 transition-all text-sm font-medium"
+            className="flex-1 min-w-[140px] py-3 rounded-xl bg-sp-card border border-sp-border text-sp-text hover:text-sp-text hover:border-sp-accent/50 transition-all text-sm font-medium"
           >
             🔄 다시 뽑기
           </button>
           <button
             onClick={handleFullscreen}
-            className="py-3 px-5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50 transition-all text-sm font-medium"
+            className="py-3 px-5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all text-sm font-medium"
           >
             ⛶ 전체화면
           </button>
@@ -978,14 +978,14 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
         {showSaveModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
-              <p className="text-white text-lg font-bold mb-2">학급 자리 배치 저장</p>
+              <p className="text-sp-text text-lg font-bold mb-2">학급 자리 배치 저장</p>
               <p className="text-sp-muted text-sm mb-6">
                 현재 학급 자리 배치를 덮어씌울까요? 이 작업은 되돌릴 수 없습니다.
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowSaveModal(false)}
-                  className="flex-1 py-2.5 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-white transition-all text-sm font-medium"
+                  className="flex-1 py-2.5 rounded-lg bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text transition-all text-sm font-medium"
                 >
                   취소
                 </button>

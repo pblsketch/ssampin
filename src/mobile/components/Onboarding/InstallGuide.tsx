@@ -84,7 +84,7 @@ export function InstallGuide() {
           {canInstall ? (
             <button
               onClick={handleInstall}
-              className="mt-2 px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-semibold active:scale-[0.98] transition-transform"
+              className="mt-2 px-4 py-2 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-semibold active:scale-[0.98] transition-transform"
             >
               앱 설치하기
             </button>
@@ -106,7 +106,7 @@ export function InstallGuide() {
           onClick={dismiss}
           className="text-sp-muted hover:text-sp-text text-xs p-1 shrink-0"
         >
-          <span className="material-symbols-outlined text-[16px]">close</span>
+          <span className="material-symbols-outlined text-icon">close</span>
         </button>
       </div>
     </div>

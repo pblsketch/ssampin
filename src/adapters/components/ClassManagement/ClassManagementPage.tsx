@@ -71,7 +71,7 @@ export function ClassManagementPage() {
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeTab === tab.id
                         ? 'bg-sp-accent text-white'
-                        : 'text-sp-muted hover:text-sp-text hover:bg-white/5'
+                        : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
                     }`}
                   >
                     <span className="material-symbols-outlined text-lg">{tab.icon}</span>

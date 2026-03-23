@@ -191,7 +191,7 @@ export function StudentRecords() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowCategoryModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-white hover:bg-sp-surface transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-all"
             title="카테고리 관리"
           >
             <span className="material-symbols-outlined text-base">tune</span>
@@ -204,7 +204,7 @@ export function StudentRecords() {
                 onClick={() => setViewMode(tab.id)}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === tab.id
                   ? 'bg-sp-accent text-white'
-                  : 'text-sp-muted hover:text-white'
+                  : 'text-sp-muted hover:text-sp-text'
                   }`}
               >
                 <span>{tab.icon}</span>
@@ -252,7 +252,7 @@ function ClassTab({ label, isActive }: ClassTabProps) {
     <button
       className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive
         ? 'bg-sp-accent text-white'
-        : 'text-sp-muted hover:text-white hover:bg-sp-surface'
+        : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
         }`}
     >
       {label}
@@ -499,7 +499,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                     </div>
                     {attendanceType && (
                       <div className="ml-2 pl-3 border-l-2 border-red-500/30">
-                        <p className="text-[11px] text-sp-muted mb-1">사유</p>
+                        <p className="text-detail text-sp-muted mb-1">사유</p>
                         <div className="flex flex-wrap gap-1.5">
                           {ATTENDANCE_REASONS.map((reason) => {
                             const combined = `${attendanceType} (${reason})`;
@@ -561,7 +561,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                         isSelected
                           ? 'bg-sp-accent text-white'
-                          : 'bg-sp-surface text-sp-muted hover:text-white hover:bg-sp-surface/80'
+                          : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
                       }`}
                     >
                       {opt.icon} {opt.label}
@@ -657,7 +657,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                       </>
                     )}
                     {isEditing && (
-                      <span className="ml-auto text-[10px] text-sp-accent font-medium">수정 중</span>
+                      <span className="ml-auto text-caption text-sp-accent font-medium">수정 중</span>
                     )}
                   </div>
                 );
@@ -797,7 +797,7 @@ function ProgressMode({ students, records }: ModeProps) {
   const SortHeader = useCallback(({ label, sortId, className }: { label: string; sortId: SortKey; className?: string }) => (
     <th
       onClick={() => handleSort(sortId)}
-      className={`p-3 font-medium border-b cursor-pointer hover:text-white transition-colors select-none ${className ?? ''}`}
+      className={`p-3 font-medium border-b cursor-pointer hover:text-sp-text transition-colors select-none ${className ?? ''}`}
     >
       {label}
       {sortKey === sortId && (
@@ -833,7 +833,7 @@ function ProgressMode({ students, records }: ModeProps) {
               onClick={() => setStatsTab(tab.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${statsTab === tab.id
                 ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
                 }`}
             >
               {tab.label}
@@ -853,7 +853,7 @@ function ProgressMode({ students, records }: ModeProps) {
               onClick={() => setStatsPeriod(f.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${statsPeriod === f.id
                 ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
                 }`}
             >
               {f.label}
@@ -1262,7 +1262,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
           className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
             followUpOnly
               ? 'bg-sp-accent text-white'
-              : 'bg-sp-surface text-sp-muted hover:text-white border border-sp-border'
+              : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
           }`}
         >
           {'\uD83D\uDCCC'} 미완료만
@@ -1280,7 +1280,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               onClick={() => setPeriodFilter(f.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${periodFilter === f.id
                 ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
                 }`}
             >
               {f.label}
@@ -1310,7 +1310,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                 sortMode === opt.mode
                   ? 'bg-sp-accent text-white'
-                  : 'text-sp-muted hover:text-white'
+                  : 'text-sp-muted hover:text-sp-text'
               }`}
             >
               <span className="material-symbols-outlined text-sm">{opt.icon}</span>
@@ -1438,7 +1438,7 @@ function StudentTimelineView({
                 {/* 날짜 구분 */}
                 <div className="flex items-center gap-3 mb-3 -ml-6">
                   <div className="w-[22px] h-[22px] rounded-full bg-sp-surface border-2 border-sp-border flex items-center justify-center z-10">
-                    <span className="text-[8px] text-sp-muted">{'\uD83D\uDCC5'}</span>
+                    <span className="text-micro text-sp-muted">{'\uD83D\uDCC5'}</span>
                   </div>
                   <span className="text-xs font-semibold text-sp-muted">{formatDateKR(date)}</span>
                 </div>
@@ -1468,7 +1468,7 @@ function StudentTimelineView({
                                 {record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}
                               </span>
                             )}
-                            <span className="text-[11px] text-sp-muted ml-auto">
+                            <span className="text-detail text-sp-muted ml-auto">
                               {formatTimeKR(record.createdAt)}
                             </span>
                           </div>
@@ -1499,7 +1499,7 @@ function StudentTimelineView({
                                   )}
                                   <button
                                     onClick={() => void onToggleFollowUp(record.id)}
-                                    className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                    className={`px-1.5 py-0.5 rounded text-caption ${
                                       record.followUpDone
                                         ? 'bg-green-500/15 text-green-400'
                                         : 'bg-orange-500/15 text-orange-400 hover:bg-orange-500/25'
@@ -1596,7 +1596,7 @@ function DefaultRecordListView({
                     }`}
                   >
                     <span
-                      className="text-[11px] font-medium text-sp-muted rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 whitespace-nowrap tabular-nums flex-shrink-0"
+                      className="text-detail font-medium text-sp-muted rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 whitespace-nowrap tabular-nums flex-shrink-0"
                       title="작성 시간"
                     >
                       {formatTimeKR(record.createdAt)}
@@ -1620,7 +1620,7 @@ function DefaultRecordListView({
                     )}
                     <span className="text-sm text-sp-text font-medium min-w-[60px] flex items-center gap-1.5">
                       {student?.studentNumber != null && (
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-sp-surface border border-sp-border text-[11px] font-bold text-sp-muted tabular-nums flex-shrink-0">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-sp-surface border border-sp-border text-detail font-bold text-sp-muted tabular-nums flex-shrink-0">
                           {student.studentNumber}
                         </span>
                       )}
@@ -1738,7 +1738,7 @@ function InlineRecordEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editCategory]);
 
-  const chipSize = compact ? 'text-[11px] px-2 py-0.5' : 'px-2.5 py-1 text-xs';
+  const chipSize = compact ? 'text-detail px-2 py-0.5' : 'px-2.5 py-1 text-xs';
 
   return (
     <div className={compact
@@ -1747,7 +1747,7 @@ function InlineRecordEditor({
     }>
       {/* 카테고리 */}
       <div>
-        <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>카테고리</p>
+        <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>카테고리</p>
         <div className="flex flex-wrap gap-1.5">
           {categories.map((c) => {
             const isSelected = c.id === editCategory;
@@ -1775,7 +1775,7 @@ function InlineRecordEditor({
       {/* 세부 항목 */}
       {cat && (
         <div>
-          <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>세부 항목</p>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>세부 항목</p>
           {isAttendance ? (
             <div className="space-y-1.5">
               {/* 출결 유형 */}
@@ -1791,7 +1791,7 @@ function InlineRecordEditor({
                     className={getSubcategoryChipClass(cat.color, localAttType === t).replace(
                       compact ? '' : '',
                       ''
-                    ) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                    ) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
                   >
                     {localAttType === t && <span className="mr-0.5">✓</span>}{t}
                   </button>
@@ -1800,7 +1800,7 @@ function InlineRecordEditor({
               {/* 출결 사유 (유형 선택 시만) */}
               {localAttType && (
                 <div className="ml-2 pl-3 border-l-2 border-red-500/30">
-                  <p className="text-[11px] text-sp-muted mb-1">사유</p>
+                  <p className="text-detail text-sp-muted mb-1">사유</p>
                   <div className="flex flex-wrap gap-1.5">
                     {ATTENDANCE_REASONS.map((r) => {
                       const isReasonSelected = localAttReason === r;
@@ -1811,7 +1811,7 @@ function InlineRecordEditor({
                             setLocalAttReason(r);
                             setEditSubcategory(`${localAttType} (${r})`);
                           }}
-                          className={getSubcategoryChipClass(cat.color, isReasonSelected) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                          className={getSubcategoryChipClass(cat.color, isReasonSelected) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
                         >
                           {isReasonSelected && <span className="mr-0.5">✓</span>}{r}
                         </button>
@@ -1829,7 +1829,7 @@ function InlineRecordEditor({
                   <button
                     key={sub}
                     onClick={() => setEditSubcategory(sub)}
-                    className={getSubcategoryChipClass(cat.color, isSelected) + (compact ? ' !text-[11px] !px-2 !py-0.5' : '')}
+                    className={getSubcategoryChipClass(cat.color, isSelected) + (compact ? ' !text-detail !px-2 !py-0.5' : '')}
                   >
                     {isSelected && <span className="mr-0.5">✓</span>}{sub}
                   </button>
@@ -1842,7 +1842,7 @@ function InlineRecordEditor({
 
       {/* 메모 */}
       <div>
-        <p className={`text-sp-muted mb-1 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>메모</p>
+        <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>메모</p>
         <input
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}

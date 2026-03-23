@@ -74,7 +74,7 @@ function SemesterTimeline({
               <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${colors.dot}`} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-sp-text truncate">{event.title}</p>
-                <p className="text-[11px] text-sp-muted">{dateLabel}{endLabel}</p>
+                <p className="text-detail text-sp-muted">{dateLabel}{endLabel}</p>
               </div>
             </div>
           );

@@ -87,19 +87,24 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
   return (
     <>
       {/* Overlay */}
-      <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose} aria-hidden="true" />
 
       {/* Bottom sheet */}
-      <div className="fixed inset-x-0 bottom-0 z-50 animate-slide-up">
-        <div className="bg-white dark:bg-slate-800 rounded-t-2xl shadow-2xl max-h-[85dvh] overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div
+        className="fixed inset-x-0 bottom-0 z-50 animate-slide-up"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-mobile-share"
+      >
+        <div className="bg-sp-surface rounded-t-2xl shadow-2xl max-h-[85dvh] overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           {/* Handle */}
           <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+            <div className="w-10 h-1 rounded-full bg-sp-border" />
           </div>
 
           {/* Header */}
           <div className="px-5 pb-4 pt-2">
-            <h2 className="text-lg font-bold text-sp-text">동료 선생님께 추천</h2>
+            <h2 id="modal-title-mobile-share" className="text-lg font-bold text-sp-text">동료 선생님께 추천</h2>
             <p className="text-xs text-sp-muted mt-1">쌤핀이 도움이 되셨다면 알려주세요!</p>
           </div>
 
@@ -109,9 +114,9 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
             {typeof navigator.share === 'function' && (
               <button
                 onClick={() => void handleNativeShare()}
-                className="flex items-center gap-3 w-full px-4 py-3.5 rounded-xl bg-blue-500 text-white font-medium text-sm active:scale-[0.98] transition-transform"
+                className="flex items-center gap-3 w-full px-4 py-3.5 rounded-xl bg-sp-accent text-sp-accent-fg font-medium text-sm active:scale-[0.98] transition-transform"
               >
-                <span className="material-symbols-outlined text-[20px]">share</span>
+                <span className="material-symbols-outlined text-icon-lg">share</span>
                 공유하기
               </button>
             )}
@@ -134,7 +139,7 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
               onClick={() => void handleCopy()}
               className="flex items-center gap-3 w-full px-4 py-3.5 rounded-xl glass-card text-sp-text font-medium text-sm active:scale-[0.98] transition-transform"
             >
-              <span className="material-symbols-outlined text-[20px] text-blue-500">
+              <span className="material-symbols-outlined text-icon-lg text-blue-500">
                 {copied ? 'check' : 'content_copy'}
               </span>
               {copied ? '복사되었습니다!' : '링크 복사'}
@@ -142,17 +147,17 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
           </div>
 
           {/* QR */}
-          <div className="px-5 pb-6 flex flex-col items-center border-t border-slate-200 dark:border-slate-700 pt-4">
-            <p className="text-xs text-sp-muted mb-3">옆 반 선생님 폰으로 바로 스캔!</p>
+          <div className="px-5 pb-6 flex flex-col items-center border-t border-sp-border pt-4">
+            <p className="text-xs text-sp-muted mb-3">옆 자리 선생님 폰으로 바로 스캔!</p>
             <div className="bg-white rounded-xl p-3">
               <canvas ref={canvasRef} className="block" />
             </div>
             <button
               onClick={handleQrDownload}
               disabled={!qrReady}
-              className="mt-3 px-3 py-1.5 text-xs text-sp-muted border border-slate-300 dark:border-slate-600 rounded-lg flex items-center gap-1 disabled:opacity-40"
+              className="mt-3 px-3 py-1.5 text-xs text-sp-muted border border-sp-border rounded-lg flex items-center gap-1 disabled:opacity-40"
             >
-              <span className="material-symbols-outlined text-[14px]">download</span>
+              <span className="material-symbols-outlined text-icon-sm">download</span>
               QR 저장
             </button>
           </div>

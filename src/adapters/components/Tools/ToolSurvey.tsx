@@ -61,7 +61,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="질문을 입력하세요"
-            className="flex-1 bg-sp-card border border-sp-border rounded-xl px-4 py-3 text-xl text-white placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
+            className="flex-1 bg-sp-card border border-sp-border rounded-xl px-4 py-3 text-xl text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
             maxLength={100}
             onKeyDown={(e) => { if (e.key === 'Enter' && canStart) handleStart(); }}
           />
@@ -86,7 +86,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
               className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
                 maxLength === len
                   ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50'
+                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
               }`}
             >
               {len}자
@@ -190,12 +190,12 @@ function LiveSurveyPanel({
       <div className="flex items-center gap-2 w-full">
         <span className="text-green-400 text-sm font-bold">● LIVE</span>
         <span className="text-sp-muted text-sm">
-          접속 학생: <span className="text-white font-bold">{connectedStudents}명</span>
+          접속 학생: <span className="text-sp-text font-bold">{connectedStudents}명</span>
         </span>
         <div className="flex-1" />
         <button
           onClick={onToggleQRFullscreen}
-          className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-white text-xs transition-all"
+          className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text text-xs transition-all"
           title="QR 코드 크게 보기"
         >
           🔍 크게
@@ -216,12 +216,12 @@ function LiveSurveyPanel({
 
         {/* URL + IP selector + Tunnel */}
         <div className="flex flex-col gap-2">
-          <p className="text-white font-mono text-sm break-all">{displayUrl}</p>
+          <p className="text-sp-text font-mono text-sm break-all">{displayUrl}</p>
           {!tunnelUrl && serverInfo.localIPs.length > 1 && (
             <select
               value={selectedIP}
               onChange={(e) => onSelectIP(e.target.value)}
-              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-white focus:border-sp-accent focus:outline-none"
+              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
             >
               {serverInfo.localIPs.map((ip) => (
                 <option key={ip} value={ip}>{ip}</option>
@@ -285,7 +285,7 @@ function ResponseCard({ response, index, isNew, isFullscreen }: ResponseCardProp
         <span className={`shrink-0 font-mono text-sp-muted font-bold ${isFullscreen ? 'text-base' : 'text-sm'}`}>
           #{index}
         </span>
-        <p className={`text-white flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}>
+        <p className={`text-sp-text flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}>
           {response.text}
         </p>
       </div>
@@ -365,7 +365,7 @@ function SurveyingView({
     <div className="w-full flex flex-col h-full min-h-0 gap-4">
       {/* Question */}
       <div className="text-center shrink-0">
-        <h2 className={`font-bold text-white ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
+        <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
           {question}
         </h2>
       </div>
@@ -420,7 +420,7 @@ function SurveyingView({
       {/* Bottom bar */}
       <div className="flex items-center justify-between shrink-0 pb-1">
         <span className="text-sp-muted text-sm font-medium">
-          📝 <span className="text-white font-bold">{responses.length}개</span> 응답
+          📝 <span className="text-sp-text font-bold">{responses.length}개</span> 응답
         </span>
 
         <div className="flex items-center gap-2">
@@ -430,7 +430,7 @@ function SurveyingView({
             className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
               isLiveMode
                 ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
-                : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:bg-white/5'
+                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
             }`}
           >
             {isLiveMode ? `📱 학생 설문 중 (${connectedStudents}명)` : '📱 학생 설문'}
@@ -445,7 +445,7 @@ function SurveyingView({
 
           <button
             onClick={handleReset}
-            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
           >
             🗑️ 초기화
           </button>
@@ -469,7 +469,7 @@ function ResultsView({ question, responses, isFullscreen, onNewSurvey }: Results
     <div className="w-full flex flex-col h-full min-h-0 gap-6">
       {/* Question */}
       <div className="text-center shrink-0">
-        <h2 className={`font-bold text-white ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
+        <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
           {question}
         </h2>
       </div>
@@ -490,7 +490,7 @@ function ResultsView({ question, responses, isFullscreen, onNewSurvey }: Results
                 <span className={`shrink-0 font-mono text-sp-muted font-bold ${isFullscreen ? 'text-base' : 'text-sm'}`}>
                   #{responses.length - idx}
                 </span>
-                <p className={`text-white flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}>
+                <p className={`text-sp-text flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}>
                   {response.text}
                 </p>
               </div>
@@ -502,7 +502,7 @@ function ResultsView({ question, responses, isFullscreen, onNewSurvey }: Results
       {/* Total */}
       <div className="text-center shrink-0">
         <span className="text-sp-muted">
-          총 <span className="text-white font-bold text-lg">{responses.length}개</span> 응답
+          총 <span className="text-sp-text font-bold text-lg">{responses.length}개</span> 응답
         </span>
       </div>
 

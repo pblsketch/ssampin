@@ -63,7 +63,7 @@ export function ToastContainer() {
 
 function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => void }) {
   return (
-    <div className='animate-slide-in-right flex items-center gap-3 bg-sp-card border border-sp-border rounded-xl px-4 py-3 shadow-xl min-w-[320px] max-w-[400px]'>
+    <div role="alert" aria-live="polite" className='animate-slide-in-right flex items-center gap-3 bg-sp-card border border-sp-border rounded-xl px-4 py-3 shadow-xl min-w-[320px] max-w-[400px]'>
       <span
         className={`material-symbols-outlined ${COLOR_MAP[toast.type]} text-white p-1 rounded-lg text-sm`}
       >
@@ -78,7 +78,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
           {toast.action.label}
         </button>
       )}
-      <button onClick={onDismiss} className='text-sp-muted hover:text-white transition-colors'>
+      <button onClick={onDismiss} className='text-sp-muted hover:text-sp-text transition-colors'>
         <span className='material-symbols-outlined text-base'>close</span>
       </button>
     </div>

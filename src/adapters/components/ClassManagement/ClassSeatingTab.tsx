@@ -656,7 +656,7 @@ function SeatCard({
       {student ? (
         <>
           {student.grade != null && student.classNum != null && (
-            <span className="text-[10px] text-sp-muted">
+            <span className="text-caption text-sp-muted">
               {student.grade}-{student.classNum}
             </span>
           )}

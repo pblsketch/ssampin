@@ -96,7 +96,7 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
                 onClick={() => setPriority(opt.value)}
                 className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
                   priority === opt.value
-                    ? 'bg-blue-500/20 border-blue-500 text-blue-500'
+                    ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                     : 'border-sp-border text-sp-muted hover:border-sp-text/30'
                 }`}
               >
@@ -131,7 +131,7 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
           <button
             onClick={handleAdd}
             disabled={!text.trim()}
-            className="flex-1 py-3 rounded-xl bg-blue-500 text-white text-sm font-bold disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-bold disabled:opacity-40"
           >
             추가
           </button>
@@ -168,13 +168,13 @@ function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
         <div
           className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
             todo.completed
-              ? 'bg-blue-500 border-blue-500'
-              : 'border-sp-border hover:border-blue-500'
+              ? 'bg-sp-accent border-sp-accent'
+              : 'border-sp-border hover:border-sp-accent'
           }`}
         >
           {todo.completed && (
             <svg
-              className="w-3.5 h-3.5 text-white"
+              className="w-3.5 h-3.5 text-sp-accent-fg"
               viewBox="0 0 12 12"
               fill="none"
               stroke="currentColor"
@@ -286,7 +286,7 @@ export function TodoPage() {
         <h1 className="text-sp-text font-bold text-lg">할 일</h1>
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-blue-500 text-white font-bold text-xl leading-none active:scale-95 transition-transform"
+          className="flex items-center justify-center w-9 h-9 rounded-full bg-sp-accent text-sp-accent-fg font-bold text-xl leading-none active:scale-95 transition-transform"
           aria-label="할 일 추가"
           style={{ minWidth: 44, minHeight: 44 }}
         >

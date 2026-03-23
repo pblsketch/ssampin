@@ -128,12 +128,12 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-sp-border">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-purple-500/10">
-              <span className="material-symbols-outlined text-purple-400 text-[20px]">school</span>
+              <span className="material-symbols-outlined text-purple-400 text-icon-lg">school</span>
             </div>
             <div>
               <h3 className="text-sm font-bold text-sp-text">NEIS 학사일정</h3>
               {schoolName && (
-                <p className="text-[11px] text-sp-muted">{schoolName}</p>
+                <p className="text-detail text-sp-muted">{schoolName}</p>
               )}
             </div>
           </div>
@@ -142,7 +142,7 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
             onClick={onClose}
             className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <span className="material-symbols-outlined text-icon-lg">close</span>
           </button>
         </div>
 
@@ -152,7 +152,7 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-sp-text">학사일정 동기화</p>
-              <p className="text-[11px] text-sp-muted mt-0.5">
+              <p className="text-detail text-sp-muted mt-0.5">
                 NEIS에서 학교 학사일정을 가져옵니다
               </p>
             </div>
@@ -162,8 +162,8 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
           {/* 학교 미설정 안내 */}
           {!hasSchoolInfo && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
-              <span className="material-symbols-outlined text-yellow-500 text-[16px] mt-0.5">info</span>
-              <p className="text-[11px] text-yellow-200/80">
+              <span className="material-symbols-outlined text-yellow-500 text-icon mt-0.5">info</span>
+              <p className="text-detail text-yellow-200/80">
                 설정 → 학교/학급 정보에서 학교를 먼저 검색해주세요.
               </p>
             </div>
@@ -179,35 +179,35 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                     {syncStatus === 'syncing' ? (
                       <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
                     ) : syncStatus === 'error' ? (
-                      <span className="material-symbols-outlined text-red-400 text-[18px]">error</span>
+                      <span className="material-symbols-outlined text-red-400 text-icon-md">error</span>
                     ) : settings.lastSyncAt ? (
-                      <span className="material-symbols-outlined text-green-400 text-[18px]">check_circle</span>
+                      <span className="material-symbols-outlined text-green-400 text-icon-md">check_circle</span>
                     ) : (
-                      <span className="material-symbols-outlined text-sp-muted text-[18px]">sync</span>
+                      <span className="material-symbols-outlined text-sp-muted text-icon-md">sync</span>
                     )}
                     <div>
-                      <p className="text-[11px] text-sp-muted">마지막 동기화</p>
+                      <p className="text-detail text-sp-muted">마지막 동기화</p>
                       <p className="text-sm text-sp-text font-medium">
                         {syncStatus === 'syncing' ? '동기화 중...' : formatSyncTime(settings.lastSyncAt)}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-[11px] text-sp-muted">일정 수</p>
+                    <p className="text-detail text-sp-muted">일정 수</p>
                     <p className="text-sm text-sp-text font-bold">{settings.syncedCount}건</p>
                   </div>
                 </div>
 
                 {/* 에러 */}
                 {syncStatus === 'error' && errorMessage && (
-                  <p className="text-[11px] text-red-400 bg-red-500/10 rounded-md px-3 py-2">
+                  <p className="text-detail text-red-400 bg-red-500/10 rounded-md px-3 py-2">
                     {errorMessage}
                   </p>
                 )}
 
                 {/* 성공 결과 */}
                 {lastSyncResult && syncStatus === 'success' && (
-                  <p className="text-[11px] text-green-400 bg-green-500/10 rounded-md px-3 py-2">
+                  <p className="text-detail text-green-400 bg-green-500/10 rounded-md px-3 py-2">
                     추가 {lastSyncResult.added}건 · 업데이트 {lastSyncResult.updated}건 · 스킵 {lastSyncResult.skipped}건
                   </p>
                 )}
@@ -222,7 +222,7 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                   {syncStatus === 'syncing' ? (
                     <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <span className="material-symbols-outlined text-[18px]">sync</span>
+                    <span className="material-symbols-outlined text-icon-md">sync</span>
                   )}
                   {syncStatus === 'syncing' ? '동기화 중...' : '지금 동기화'}
                 </button>
@@ -230,7 +230,7 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
 
               {/* 표시 설정 */}
               <div className="space-y-3">
-                <p className="text-[11px] font-semibold text-sp-muted uppercase tracking-wider">표시 설정</p>
+                <p className="text-detail font-semibold text-sp-muted uppercase tracking-wider">표시 설정</p>
 
                 {/* 학년 필터 */}
                 <div className="flex items-center justify-between">
@@ -265,7 +265,7 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
 
         {/* 하단 안내 */}
         <div className="shrink-0 px-5 py-3 border-t border-sp-border">
-          <p className="text-[10px] text-sp-muted text-center">
+          <p className="text-caption text-sp-muted text-center">
             나이스 교육정보 개방 포털 데이터 활용
           </p>
         </div>

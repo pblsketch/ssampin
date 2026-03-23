@@ -14,8 +14,8 @@
 }
 
 body {
-  background: #0a0e17;
-  color: #f8fafc;
+  background: var(--color-sp-bg);
+  color: var(--color-sp-text);
 }
 
 /* 채팅 위젯 애니메이션 */
@@ -39,9 +39,9 @@ body {
   background: transparent;
 }
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #2a3548;
+  background: var(--color-sp-border);
   border-radius: 2px;
 }
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #3b82f6;
+  background: var(--color-sp-accent);
 }

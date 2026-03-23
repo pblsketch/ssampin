@@ -115,7 +115,7 @@ function StudentCell<T extends string>({
     return (
       <div className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30">
         {displayNumber}
-        <div className="text-[10px] truncate">결번</div>
+        <div className="text-caption truncate">결번</div>
       </div>
     );
   }
@@ -147,7 +147,7 @@ function StudentCell<T extends string>({
         className={`px-2 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${style || 'bg-sp-surface text-sp-text'} hover:opacity-80`}
       >
         <div>{displayNumber} {label}</div>
-        <div className="text-[10px] truncate">{student.name}</div>
+        <div className="text-caption truncate">{student.name}</div>
       </button>
     );
   }
@@ -160,8 +160,8 @@ function StudentCell<T extends string>({
   return (
     <div className={`px-2 py-2.5 rounded-lg text-xs text-center ${style || 'bg-sp-surface text-sp-text'}`}>
       <div>{displayNumber} {label}</div>
-      <div className="text-[10px] truncate">{student.name}</div>
-      {sub && <div className="text-[9px] text-sp-muted truncate">{sub}</div>}
+      <div className="text-caption truncate">{student.name}</div>
+      {sub && <div className="text-tiny text-sp-muted truncate">{sub}</div>}
     </div>
   );
 }

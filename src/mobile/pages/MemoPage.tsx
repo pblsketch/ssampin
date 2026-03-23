@@ -80,7 +80,7 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
                 onClick={() => setColor(c)}
                 title={COLOR_LABEL[c]}
                 className={`w-7 h-7 rounded-full ${COLOR_DOT[c]} transition-transform ${
-                  color === c ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-blue-500 scale-110' : 'opacity-70'
+                  color === c ? 'ring-2 ring-offset-2 ring-offset-sp-surface dark:ring-offset-sp-card ring-sp-accent scale-110' : 'opacity-70'
                 }`}
               />
             ))}
@@ -98,7 +98,7 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
           <button
             onClick={handleAdd}
             disabled={!content.trim()}
-            className="flex-1 py-3 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-medium disabled:opacity-40"
           >
             추가
           </button>
@@ -149,7 +149,7 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
                 : 'text-sp-muted border border-sp-border'
             }`}
           >
-            <span className="material-symbols-outlined text-[16px]">delete</span>
+            <span className="material-symbols-outlined text-icon">delete</span>
             {confirmDelete ? '정말 삭제' : '삭제'}
           </button>
         </div>
@@ -171,7 +171,7 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
                 onClick={() => setColor(c)}
                 title={COLOR_LABEL[c]}
                 className={`w-7 h-7 rounded-full ${COLOR_DOT[c]} transition-transform ${
-                  color === c ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-blue-500 scale-110' : 'opacity-70'
+                  color === c ? 'ring-2 ring-offset-2 ring-offset-sp-surface dark:ring-offset-sp-card ring-sp-accent scale-110' : 'opacity-70'
                 }`}
               />
             ))}
@@ -189,7 +189,7 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
           <button
             onClick={handleSave}
             disabled={!content.trim()}
-            className="flex-1 py-3 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-medium disabled:opacity-40"
           >
             저장
           </button>
@@ -261,9 +261,9 @@ export function MemoPage({ onBack = undefined }: Props) {
         <h2 className="flex-1 text-sp-text font-bold text-base">메모</h2>
         <button
           onClick={() => setShowAdd(true)}
-          className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500/10 text-blue-500"
+          className="flex items-center justify-center w-10 h-10 rounded-full bg-sp-accent/15 text-sp-accent"
         >
-          <span className="material-symbols-outlined text-[22px]">add</span>
+          <span className="material-symbols-outlined text-2xl">add</span>
         </button>
       </header>
 
@@ -281,7 +281,7 @@ export function MemoPage({ onBack = undefined }: Props) {
             <p className="text-sp-muted text-sm">메모가 없습니다.</p>
             <button
               onClick={() => setShowAdd(true)}
-              className="px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium active:scale-95 transition-transform"
+              className="px-4 py-2 rounded-xl bg-sp-accent text-sp-accent-fg text-sm font-medium active:scale-95 transition-transform"
             >
               첫 메모 작성
             </button>
@@ -308,7 +308,7 @@ export function MemoPage({ onBack = undefined }: Props) {
                       }}
                       className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-sp-muted hover:text-red-400 transition-colors"
                     >
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                      <span className="material-symbols-outlined text-icon-md">delete</span>
                     </button>
                   </div>
                   <p className="text-sp-muted text-xs mt-2">{relativeTime(memo.updatedAt)}</p>

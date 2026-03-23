@@ -96,7 +96,7 @@ export function SchoolTab({ draft, patch }: Props) {
           </label>
           {draft.neis.schoolName && !showSchoolSearch ? (
             <div className="flex items-center gap-3 bg-sp-surface border border-sp-border rounded-lg px-4 py-2.5">
-              <span className="material-symbols-outlined text-teal-400 text-[18px]">school</span>
+              <span className="material-symbols-outlined text-teal-400 text-icon-md">school</span>
               <span className="text-sm text-sp-text flex-1 truncate">{draft.neis.schoolName}</span>
               <button
                 type="button"
@@ -126,7 +126,7 @@ export function SchoolTab({ draft, patch }: Props) {
                   {searching ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <span className="material-symbols-outlined text-[18px]">search</span>
+                    <span className="material-symbols-outlined text-icon-md">search</span>
                   )}
                   검색
                 </button>
@@ -147,7 +147,7 @@ export function SchoolTab({ draft, patch }: Props) {
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-sp-text">{school.schoolName}</span>
-                        <span className="text-[10px] text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">
+                        <span className="text-caption text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">
                           {school.schoolType}
                         </span>
                       </div>
@@ -199,7 +199,7 @@ export function SchoolTab({ draft, patch }: Props) {
               <span>🍱</span>
               <span>급식이 안 나오나요?</span>
             </span>
-            <span className="material-symbols-outlined text-[16px]">expand_more</span>
+            <span className="material-symbols-outlined text-icon">expand_more</span>
           </summary>
           <div className="px-4 pb-4 space-y-3">
             <p className="text-xs text-sp-muted leading-relaxed">
@@ -212,7 +212,7 @@ export function SchoolTab({ draft, patch }: Props) {
               {draft.mealSchool?.schoolName && !showMealSchoolSearch ? (
                 <div className="flex items-center justify-between bg-sp-card rounded-lg px-3 py-2.5 border border-sp-border">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0">restaurant</span>
+                    <span className="material-symbols-outlined text-amber-400 text-icon-md shrink-0">restaurant</span>
                     <span className="text-sm text-sp-text truncate">{draft.mealSchool.schoolName}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -252,7 +252,7 @@ export function SchoolTab({ draft, patch }: Props) {
                       {mealSearching ? (
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       ) : (
-                        <span className="material-symbols-outlined text-[16px]">search</span>
+                        <span className="material-symbols-outlined text-icon">search</span>
                       )}
                       검색
                     </button>
@@ -273,7 +273,7 @@ export function SchoolTab({ draft, patch }: Props) {
                         >
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-sp-text">{school.schoolName}</span>
-                            <span className="text-[10px] text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">
+                            <span className="text-caption text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">
                               {school.schoolType}
                             </span>
                           </div>

@@ -392,7 +392,7 @@ export function Todo() {
                     }`}
                     title={sortMode === 'dueDate' ? 'D-Day 순 정렬 중' : '우선순위 순 정렬 중'}
                   >
-                    <span className="material-symbols-outlined text-[16px]">
+                    <span className="material-symbols-outlined text-icon">
                       {sortMode === 'dueDate' ? 'event' : 'priority_high'}
                     </span>
                     {sortMode === 'dueDate' ? 'D-Day 순' : '우선순위 순'}
@@ -432,7 +432,7 @@ export function Todo() {
                     className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
                     title="카테고리 관리"
                   >
-                    <span className="material-symbols-outlined text-[16px]">settings</span>
+                    <span className="material-symbols-outlined text-icon">settings</span>
                   </button>
                 </div>
 
@@ -484,7 +484,7 @@ export function Todo() {
                     disabled={!newText.trim()}
                     className="flex items-center gap-2 bg-sp-accent hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-xl transition-all shadow-lg shadow-sp-accent/20 text-sm font-bold"
                   >
-                    <span className="material-symbols-outlined text-[18px]">add</span>
+                    <span className="material-symbols-outlined text-icon-md">add</span>
                     추가
                   </button>
                 </div>
@@ -530,7 +530,7 @@ export function Todo() {
                           }`}
                         >
                           <span>{config.icon}</span>
-                          <span className="text-[10px] leading-tight mt-0.5">{config.label}</span>
+                          <span className="text-caption leading-tight mt-0.5">{config.label}</span>
                         </button>
                       );
                     })}
@@ -579,7 +579,7 @@ export function Todo() {
               {timelineItems.length > 0 && (
                 <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
                   <div className="px-4 py-2 border-b border-sp-border/50 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[16px] text-sp-muted">timeline</span>
+                    <span className="material-symbols-outlined text-icon text-sp-muted">timeline</span>
                     <span className="text-xs font-medium text-sp-muted">오늘의 시간표 · 일정</span>
                   </div>
                   <div className="divide-y divide-sp-border/30">
@@ -595,7 +595,7 @@ export function Todo() {
                           key={item.id}
                           className="flex items-center gap-3 px-4 py-2 opacity-70"
                         >
-                          <span className="text-[11px] text-sp-muted w-12 shrink-0 text-right font-mono">
+                          <span className="text-detail text-sp-muted w-12 shrink-0 text-right font-mono">
                             {item.time ?? '--:--'}
                           </span>
                           <span className="text-sm shrink-0">{item.icon}</span>
@@ -603,7 +603,7 @@ export function Todo() {
                             {item.title}
                           </span>
                           {item.subtitle !== undefined && (
-                            <span className="text-[11px] text-sp-muted shrink-0">
+                            <span className="text-detail text-sp-muted shrink-0">
                               {item.subtitle}
                             </span>
                           )}
@@ -741,7 +741,7 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
           onClick={onBack}
           className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
         >
-          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+          <span className="material-symbols-outlined text-icon-lg">arrow_back</span>
         </button>
         <h3 className="text-sp-text text-lg font-bold flex items-center gap-2">
           <span>🗃️</span> 아카이브
@@ -771,7 +771,7 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
                     {todo.text}
                   </span>
                   {cat && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'}`}>
+                    <span className={`text-caption px-1.5 py-0.5 rounded ${CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'}`}>
                       {cat.icon}
                     </span>
                   )}
@@ -803,7 +803,7 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
               onClick={onDeleteAll}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-red-400 hover:bg-red-400/10 ring-1 ring-red-400/30 transition-colors"
             >
-              <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+              <span className="material-symbols-outlined text-icon-md">delete_forever</span>
               전체 삭제
             </button>
           </div>
@@ -890,7 +890,7 @@ function TodoGroup({
         className="w-full flex items-center gap-2 px-4 py-3 hover:bg-sp-surface/50 transition-colors"
       >
         <span
-          className={`material-symbols-outlined text-[18px] transition-transform ${
+          className={`material-symbols-outlined text-icon-md transition-transform ${
             collapsed ? '' : 'rotate-90'
           } ${isOverdueGroup ? 'text-red-400' : 'text-sp-muted'}`}
         >
@@ -944,7 +944,7 @@ function TodoGroup({
                 className="w-full flex items-center gap-2 px-4 py-2 text-sp-muted hover:bg-sp-surface/30 transition-colors border-t border-sp-border/50"
               >
                 <span
-                  className={`text-[10px] transition-transform ${
+                  className={`text-caption transition-transform ${
                     completedCollapsed ? '' : 'rotate-90'
                   }`}
                 >
@@ -1345,21 +1345,21 @@ function TodoItem({
 
         {/* 우선순위 dot */}
         {todo.priority && todo.priority !== 'none' && (
-          <span className={`text-[10px] ${priorityConfig.color}`} title={priorityConfig.label}>
+          <span className={`text-caption ${priorityConfig.color}`} title={priorityConfig.label}>
             {priorityConfig.icon}
           </span>
         )}
 
         {/* D-Day 뱃지 (dueDate 순 모드) */}
         {dDayText && (
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${dDayColor} shrink-0 tabular-nums`}>
+          <span className={`text-caption font-bold px-1.5 py-0.5 rounded ${dDayColor} shrink-0 tabular-nums`}>
             {dDayText}
           </span>
         )}
 
         {/* 반복 아이콘 */}
         {todo.recurrence && (
-          <span className="text-[10px] text-sp-muted" title={getRecurrenceLabel(todo.recurrence)}>
+          <span className="text-caption text-sp-muted" title={getRecurrenceLabel(todo.recurrence)}>
             🔄
           </span>
         )}
@@ -1378,7 +1378,7 @@ function TodoItem({
 
         {/* Subtask progress */}
         {subTaskTotal > 0 && (
-          <span className="text-[10px] text-sp-muted font-medium bg-sp-surface px-1.5 py-0.5 rounded">
+          <span className="text-caption text-sp-muted font-medium bg-sp-surface px-1.5 py-0.5 rounded">
             {subTaskCompleted}/{subTaskTotal}
           </span>
         )}
@@ -1386,7 +1386,7 @@ function TodoItem({
         {/* 카테고리 태그 */}
         {cat && (
           <span
-            className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+            className={`text-caption px-1.5 py-0.5 rounded font-medium ${
               CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'
             }`}
           >
@@ -1435,7 +1435,7 @@ function TodoItem({
             }`}
             title="서브태스크 추가"
           >
-            <span className="material-symbols-outlined text-[16px]">add_task</span>
+            <span className="material-symbols-outlined text-icon">add_task</span>
           </button>
         )}
 
@@ -1528,7 +1528,7 @@ function TodoItem({
               : 'opacity-0'
           }`}
         >
-          <span className="material-symbols-outlined text-[18px]">close</span>
+          <span className="material-symbols-outlined text-icon-md">close</span>
         </button>
       </li>
 
@@ -1558,7 +1558,7 @@ function TodoItem({
                 onClick={() => void onDeleteSubTask(todo.id, st.id)}
                 className="p-0.5 rounded text-red-400/60 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover/sub:opacity-100 transition-all"
               >
-                <span className="material-symbols-outlined text-[14px]">close</span>
+                <span className="material-symbols-outlined text-icon-sm">close</span>
               </button>
             </li>
           ))}

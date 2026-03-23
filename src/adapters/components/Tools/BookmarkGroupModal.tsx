@@ -29,9 +29,14 @@ export function BookmarkGroupModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-sp-surface border border-sp-border rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-        <h2 className="text-lg font-bold text-white mb-5">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" aria-hidden="true">
+      <div
+        className="bg-sp-surface border border-sp-border rounded-2xl w-full max-w-sm p-6 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-bookmark-group"
+      >
+        <h2 id="modal-title-bookmark-group" className="text-lg font-bold text-sp-text mb-5">
           {isEdit ? '그룹 편집' : '그룹 추가'}
         </h2>
 

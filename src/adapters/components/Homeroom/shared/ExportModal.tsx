@@ -73,14 +73,17 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} aria-hidden="true">
       <div
         className="bg-sp-card rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-homeroom-export"
       >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-5 border-b border-sp-border">
-          <h3 className="text-lg font-bold text-sp-text">{title}</h3>
+          <h3 id="modal-title-homeroom-export" className="text-lg font-bold text-sp-text">{title}</h3>
           <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
             <span className="material-symbols-outlined">close</span>
           </button>

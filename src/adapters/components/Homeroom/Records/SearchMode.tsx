@@ -312,7 +312,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
           className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
             followUpOnly
               ? 'bg-sp-accent text-white'
-              : 'bg-sp-surface text-sp-muted hover:text-white border border-sp-border'
+              : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
           }`}
         >
           {'\uD83D\uDCCC'} 미완료만
@@ -330,7 +330,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               onClick={() => setPeriodFilter(f.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${periodFilter === f.id
                 ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
                 }`}
             >
               {f.label}
@@ -343,7 +343,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
           <button
             onClick={() => void handleExportFiltered()}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs
-                       text-sp-muted hover:text-white hover:bg-sp-surface
+                       text-sp-muted hover:text-sp-text hover:bg-sp-surface
                        border border-sp-border transition-all"
           >
             <span className="material-symbols-outlined text-sm">download</span>
@@ -371,7 +371,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                 sortMode === opt.mode
                   ? 'bg-sp-accent text-white'
-                  : 'text-sp-muted hover:text-white'
+                  : 'text-sp-muted hover:text-sp-text'
               }`}
             >
               <span className="material-symbols-outlined text-sm">{opt.icon}</span>

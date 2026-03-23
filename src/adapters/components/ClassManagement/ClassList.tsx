@@ -137,7 +137,7 @@ function SortableClassItem({
         className={`w-full flex items-center gap-3 pl-7 pr-10 py-2.5 rounded-xl transition-all text-left ${
           isSelected
             ? 'bg-sp-accent/10 border-l-2 border-sp-accent'
-            : 'hover:bg-white/5 border-l-2 border-transparent'
+            : 'hover:bg-sp-text/5 border-l-2 border-transparent'
         }`}
       >
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getSubjectDotColor(cls.subject, subjectColors)}`} />
@@ -147,7 +147,7 @@ function SortableClassItem({
           </p>
           <p className="text-xs text-sp-muted/70 truncate">{cls.subject}</p>
         </div>
-        <span className="text-[10px] text-sp-muted bg-sp-bg px-1.5 py-0.5 rounded-full shrink-0">
+        <span className="text-caption text-sp-muted bg-sp-bg px-1.5 py-0.5 rounded-full shrink-0">
           {cls.students.length}명
         </span>
       </button>
@@ -160,8 +160,8 @@ function SortableClassItem({
         }}
         className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors ${
           isSelected || menuOpenId === cls.id
-            ? 'opacity-100 hover:bg-white/10'
-            : 'opacity-40 hover:opacity-100 hover:bg-white/10'
+            ? 'opacity-100 hover:bg-sp-text/10'
+            : 'opacity-40 hover:opacity-100 hover:bg-sp-text/10'
         }`}
       >
         <span className="material-symbols-outlined text-sp-muted text-base">more_vert</span>
@@ -172,7 +172,7 @@ function SortableClassItem({
         <div ref={menuRef as React.RefObject<HTMLDivElement>} className="absolute right-2 top-full mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg py-1 min-w-[100px]">
           <button
             onClick={() => onStartEdit(cls.id)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sp-text hover:bg-white/5 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sp-text hover:bg-sp-text/5 transition-colors"
           >
             <span className="material-symbols-outlined text-sm">edit</span>
             편집
@@ -193,7 +193,7 @@ function SortableClassItem({
           <p className="text-xs text-sp-text mb-2">
             &apos;{cls.name}&apos; 학급을 삭제하시겠습니까?
           </p>
-          <p className="text-[10px] text-sp-muted mb-3">
+          <p className="text-caption text-sp-muted mb-3">
             진도 기록과 출석 기록도 함께 삭제됩니다.
           </p>
           <div className="flex gap-2">

@@ -137,7 +137,7 @@ export function DashboardTodo() {
           key={entry.id}
           className="flex items-center gap-2 rounded-lg px-2 py-1 opacity-60"
         >
-          <span className="text-[10px] text-sp-muted w-10 text-right font-mono shrink-0">
+          <span className="text-caption text-sp-muted w-10 text-right font-mono shrink-0">
             {entry.time ?? '--:--'}
           </span>
           <span className="text-xs shrink-0">{entry.icon}</span>
@@ -277,14 +277,14 @@ function TodoItem({ todo, onToggle }: TodoItemProps) {
 
       {/* 우선순위 dot */}
       {showPriority && (
-        <span className={`text-[9px] ${priorityConfig.color}`}>
+        <span className={`text-tiny ${priorityConfig.color}`}>
           {priorityConfig.icon}
         </span>
       )}
 
       {/* 시간 표시 */}
       {todo.time && !todo.completed && (
-        <span className="text-[10px] text-sp-accent font-mono shrink-0">
+        <span className="text-caption text-sp-accent font-mono shrink-0">
           {todo.time}
         </span>
       )}
@@ -301,7 +301,7 @@ function TodoItem({ todo, onToggle }: TodoItemProps) {
 
       {/* 마감일 라벨 */}
       {dueDateLabel && !todo.completed && (
-        <span className={`text-[11px] flex-shrink-0 ${dueDateLabel.className}`}>
+        <span className={`text-detail flex-shrink-0 ${dueDateLabel.className}`}>
           {dueDateLabel.text}
         </span>
       )}

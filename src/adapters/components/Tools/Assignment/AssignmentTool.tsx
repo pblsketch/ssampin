@@ -67,7 +67,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
             <button onClick={onBack} aria-label="뒤로" className="p-2 rounded-lg hover:bg-sp-card transition-colors">
               <span className="material-symbols-outlined text-sp-muted">arrow_back</span>
             </button>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-sp-text flex items-center gap-2">
               <span>📋</span>
               <span>과제수합</span>
             </h1>
@@ -91,7 +91,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
           <button onClick={onBack} aria-label="뒤로" className="p-2 rounded-lg hover:bg-sp-card transition-colors">
             <span className="material-symbols-outlined text-sp-muted">arrow_back</span>
           </button>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-sp-text flex items-center gap-2">
             <span>📋</span>
             <span>과제수합</span>
           </h1>
@@ -100,7 +100,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
           {/* 구글 연동 버튼 */}
           {googleConnected ? (
             <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-3 py-2 rounded-lg" title="구글 계정 연결됨">
-              <span className="material-symbols-outlined text-[16px]">check_circle</span>
+              <span className="material-symbols-outlined text-icon">check_circle</span>
               구글 연결됨
             </span>
           ) : (
@@ -114,7 +114,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
               {googleAuthLoading ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400/30 border-t-blue-400" />
               ) : (
-                <span className="material-symbols-outlined text-[16px]">add_link</span>
+                <span className="material-symbols-outlined text-icon">add_link</span>
               )}
               {googleAuthLoading ? '연결 중...' : '구글 연동'}
             </button>
@@ -126,7 +126,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
               aria-label="새 과제"
               className="px-4 py-2 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 text-sm font-medium"
             >
-              <span className="material-symbols-outlined text-[18px]">add</span>
+              <span className="material-symbols-outlined text-icon-md">add</span>
               새 과제
             </button>
           )}
@@ -148,7 +148,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
             onClick={() => void handleGoogleConnect()}
             className="px-6 py-3 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 mx-auto font-medium"
           >
-            <span className="material-symbols-outlined text-[18px]">link</span>
+            <span className="material-symbols-outlined text-icon-md">link</span>
             Google 계정 연결하기
           </button>
         </div>
@@ -191,7 +191,7 @@ export function AssignmentTool({ onBack, onDetail }: AssignmentToolProps) {
               onClick={() => setShowCreateModal(true)}
               className="px-6 py-3 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 mx-auto"
             >
-              <span className="material-symbols-outlined text-[18px]">add</span>
+              <span className="material-symbols-outlined text-icon-md">add</span>
               새 과제
             </button>
           </div>
@@ -321,7 +321,7 @@ export function AssignmentCard({
               className="p-1 rounded hover:bg-sp-border/40 transition-colors opacity-0 group-hover:opacity-100"
               aria-label="메뉴"
             >
-              <span className="material-symbols-outlined text-sp-muted text-[18px]">more_vert</span>
+              <span className="material-symbols-outlined text-sp-muted text-icon-md">more_vert</span>
             </button>
             {showMenu && (
               <div className="absolute right-0 top-8 bg-sp-card border border-sp-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">

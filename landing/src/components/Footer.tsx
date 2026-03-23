@@ -49,6 +49,7 @@ export default function Footer() {
 
       {/* Footer 링크 */}
       <div className="bg-[#060a12] py-8">
+        {/* Note: #060a12 is non-standard, kept as-is */}
         <div className="mx-auto max-w-6xl px-6 text-center">
           <p className="text-sm font-medium text-sp-muted">
             쌤핀 (SsamPin) · 선생님의 대시보드

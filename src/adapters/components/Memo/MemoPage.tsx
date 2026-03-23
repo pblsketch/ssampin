@@ -111,10 +111,10 @@ export function MemoPage() {
           {/* Arrange in Grid Button */}
           <button
             onClick={() => void arrangeInGrid(canvasRef.current?.clientWidth || 800)}
-            className="flex items-center gap-2 rounded-lg bg-sp-card border border-sp-border px-4 py-2.5 text-sm font-medium text-sp-text transition-all hover:bg-slate-700 active:scale-95 shadow-sm"
+            className="flex items-center gap-2 rounded-lg bg-sp-card border border-sp-border px-4 py-2.5 text-sm font-medium text-sp-text transition-all hover:bg-sp-surface active:scale-95 shadow-sm"
             title="격자로 정렬"
           >
-            <span className="material-symbols-outlined text-[20px]">grid_view</span>
+            <span className="material-symbols-outlined text-icon-lg">grid_view</span>
             격자 정렬
           </button>
 
@@ -123,7 +123,7 @@ export function MemoPage() {
             onClick={handleAddMemo}
             className="flex items-center gap-2 rounded-lg bg-sp-accent px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-600 active:scale-95"
           >
-            <span className="material-symbols-outlined text-[20px]">add</span>
+            <span className="material-symbols-outlined text-icon-lg">add</span>
             새 메모
           </button>
         </div>
@@ -140,7 +140,7 @@ export function MemoPage() {
       >
         {memos.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <span className="material-symbols-outlined text-[48px] text-sp-muted/30">note_add</span>
+            <span className="material-symbols-outlined text-5xl text-sp-muted/30">note_add</span>
             <p className="text-sp-muted/50 text-sm">새 메모를 추가해보세요</p>
           </div>
         )}
@@ -158,8 +158,8 @@ export function MemoPage() {
         ))}
 
         {/* Hint */}
-        <p className="pointer-events-none absolute bottom-6 right-6 flex select-none items-center gap-2 text-sm text-slate-600">
-          <span className="material-symbols-outlined text-[18px]">touch_app</span>
+        <p className="pointer-events-none absolute bottom-6 right-6 flex select-none items-center gap-2 text-sm text-sp-muted">
+          <span className="material-symbols-outlined text-icon-md">touch_app</span>
           클릭하여 상세보기 · 더블 클릭하여 수정
         </p>
       </div>

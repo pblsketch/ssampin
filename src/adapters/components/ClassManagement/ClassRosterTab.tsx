@@ -678,7 +678,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
             return (
               <div
                 key={studentKey(student)}
-                className={`grid items-center px-4 py-2 hover:bg-white/[0.02] transition-colors ${gridCols}`}
+                className={`grid items-center px-4 py-2 hover:bg-sp-text/[0.02] transition-colors ${gridCols}`}
               >
                 {/* 소속 (학년-반) */}
                 {showGradeCol && (
@@ -771,7 +771,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 ) : (
                   <button
                     onClick={() => startMemoEdit(studentKey(student), student.memo ?? '')}
-                    className="text-left text-sm truncate pr-2 py-1 rounded hover:bg-white/[0.04] transition-colors"
+                    className="text-left text-sm truncate pr-2 py-1 rounded hover:bg-sp-text/[0.04] transition-colors"
                   >
                     {student.memo ? (
                       <span className="text-sp-text">{student.memo}</span>

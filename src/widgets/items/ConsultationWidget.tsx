@@ -80,7 +80,7 @@ export function ConsultationWidget() {
                 {schedule.title}
               </span>
               {data && (
-                <span className="text-[10px] text-sp-muted whitespace-nowrap">
+                <span className="text-caption text-sp-muted whitespace-nowrap">
                   {data.booked}/{data.total}
                 </span>
               )}
@@ -93,7 +93,7 @@ export function ConsultationWidget() {
                 />
               </div>
             ) : (
-              <p className="text-[10px] text-sp-muted">
+              <p className="text-caption text-sp-muted">
                 {isOnline ? '로딩 중...' : '(연결 필요)'}
               </p>
             )}
@@ -102,12 +102,12 @@ export function ConsultationWidget() {
       })}
 
       {activeSchedules.length > 3 && (
-        <p className="text-[10px] text-sp-muted text-right">
+        <p className="text-caption text-sp-muted text-right">
           외 {activeSchedules.length - 3}건
         </p>
       )}
 
-      <p className="text-[10px] text-sp-muted mt-auto">
+      <p className="text-caption text-sp-muted mt-auto">
         진행 중 {activeSchedules.length}건
       </p>
     </div>

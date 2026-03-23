@@ -53,7 +53,7 @@ export function CustomThemePanel({ colors, onChange, onReset }: CustomThemePanel
           onClick={onReset}
           className="text-xs text-sp-muted hover:text-sp-accent transition-colors flex items-center gap-1"
         >
-          <span className="material-symbols-outlined text-[14px]">restart_alt</span>
+          <span className="material-symbols-outlined text-icon-sm">restart_alt</span>
           기본값으로 리셋
         </button>
       </div>
@@ -68,7 +68,7 @@ export function CustomThemePanel({ colors, onChange, onReset }: CustomThemePanel
               className="w-8 h-8 rounded-lg border border-sp-border cursor-pointer shrink-0 [&::-webkit-color-swatch-wrapper]:p-0.5 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none"
             />
             <div className="flex-1 min-w-0">
-              <label className="text-[11px] text-sp-muted block mb-0.5">{label}</label>
+              <label className="text-detail text-sp-muted block mb-0.5">{label}</label>
               <input
                 type="text"
                 value={colors[key]}

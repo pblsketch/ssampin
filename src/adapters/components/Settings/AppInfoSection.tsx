@@ -28,7 +28,7 @@ function DeveloperModal({ onClose }: { onClose: () => void }) {
           className="absolute top-3 right-3 p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
           aria-label="닫기"
         >
-          <span className="material-symbols-outlined text-[20px]">close</span>
+          <span className="material-symbols-outlined text-icon-lg">close</span>
         </button>
 
         {/* 프로필 이미지 */}
@@ -42,7 +42,7 @@ function DeveloperModal({ onClose }: { onClose: () => void }) {
             />
           ) : (
             <div className="w-20 h-20 rounded-full bg-sp-surface ring-2 ring-sp-border flex items-center justify-center">
-              <span className="material-symbols-outlined text-[36px] text-sp-muted">person</span>
+              <span className="material-symbols-outlined text-4xl text-sp-muted">person</span>
             </div>
           )}
         </div>
@@ -62,7 +62,7 @@ function DeveloperModal({ onClose }: { onClose: () => void }) {
           href="mailto:pblsketch@gmail.com"
           className="flex items-center gap-2 text-sm text-sp-accent hover:text-sp-accent/80 transition-colors"
         >
-          <span className="material-symbols-outlined text-[16px]">mail</span>
+          <span className="material-symbols-outlined text-icon">mail</span>
           pblsketch@gmail.com
         </a>
 
@@ -284,11 +284,11 @@ export function AppInfoSection() {
           className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-sp-surface hover:bg-sp-surface/80 transition-colors"
         >
           <span className="flex items-center gap-2 text-sm text-sp-text font-medium">
-            <span className="material-symbols-outlined text-[18px] text-sp-accent">history</span>
+            <span className="material-symbols-outlined text-icon-md text-sp-accent">history</span>
             업데이트 내역
           </span>
           <span
-            className="material-symbols-outlined text-[18px] text-sp-muted transition-transform duration-200"
+            className="material-symbols-outlined text-icon-md text-sp-muted transition-transform duration-200"
             style={{ transform: showChangelog ? 'rotate(180deg)' : 'rotate(0deg)' }}
           >
             expand_more
@@ -324,7 +324,7 @@ export function AppInfoSection() {
                         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-sp-card/50 transition-colors text-left"
                       >
                         <span
-                          className="material-symbols-outlined text-[14px] text-sp-muted transition-transform duration-200"
+                          className="material-symbols-outlined text-icon-sm text-sp-muted transition-transform duration-200"
                           style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
                         >
                           chevron_right
@@ -333,11 +333,11 @@ export function AppInfoSection() {
                           v{ver.version}
                         </span>
                         {isCurrent && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-sp-accent/20 text-sp-accent">
+                          <span className="px-1.5 py-0.5 rounded text-caption font-medium bg-sp-accent/20 text-sp-accent">
                             현재
                           </span>
                         )}
-                        <span className="text-[11px] text-sp-muted ml-auto">{ver.date}</span>
+                        <span className="text-detail text-sp-muted ml-auto">{ver.date}</span>
                       </button>
 
                       {isExpanded && (
@@ -350,7 +350,7 @@ export function AppInfoSection() {
                             return (
                               <div key={i} className="flex items-start gap-2 pl-5">
                                 {cfg && (
-                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.badge} shrink-0`}>
+                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-caption font-medium ${cfg.badge} shrink-0`}>
                                     <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>{cfg.icon}</span>
                                     {cfg.label}
                                   </span>
@@ -358,7 +358,7 @@ export function AppInfoSection() {
                                 <div className="min-w-0">
                                   <span className="text-sp-text text-xs leading-relaxed">{c.title}</span>
                                   {c.description && (
-                                    <p className="text-sp-muted text-[11px] leading-relaxed mt-0.5">{c.description}</p>
+                                    <p className="text-sp-muted text-detail leading-relaxed mt-0.5">{c.description}</p>
                                   )}
                                 </div>
                               </div>
@@ -402,10 +402,10 @@ export function AppInfoSection() {
           className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-sp-surface hover:bg-sp-surface/80 transition-colors"
         >
           <span className="flex items-center gap-2 text-sm text-sp-text font-medium">
-            <span className="material-symbols-outlined text-[18px] text-sp-accent">person</span>
+            <span className="material-symbols-outlined text-icon-md text-sp-accent">person</span>
             개발자 소개
           </span>
-          <span className="material-symbols-outlined text-[18px] text-sp-muted">chevron_right</span>
+          <span className="material-symbols-outlined text-icon-md text-sp-muted">chevron_right</span>
         </button>
       </div>
 
@@ -423,7 +423,7 @@ export function AppInfoSection() {
               onClick={handleCheckUpdate}
               className="px-4 py-2 rounded-lg bg-sp-accent/10 text-sp-accent text-sm font-medium hover:bg-sp-accent/20 transition-colors flex items-center gap-2"
             >
-              <span className="material-symbols-outlined text-[18px]">refresh</span>
+              <span className="material-symbols-outlined text-icon-md">refresh</span>
               업데이트 확인
             </button>
           )}
@@ -431,7 +431,7 @@ export function AppInfoSection() {
           {/* checking */}
           {status === 'checking' && (
             <div className="flex items-center gap-2 text-sp-muted text-sm">
-              <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+              <span className="material-symbols-outlined text-icon-md animate-spin">progress_activity</span>
               확인 중...
             </div>
           )}
@@ -439,7 +439,7 @@ export function AppInfoSection() {
           {/* not-available */}
           {status === 'not-available' && (
             <div className="flex items-center gap-2 text-emerald-400 text-sm">
-              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+              <span className="material-symbols-outlined text-icon-md">check_circle</span>
               최신 버전입니다
             </div>
           )}
@@ -448,7 +448,7 @@ export function AppInfoSection() {
           {status === 'available' && updateInfo && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sp-highlight text-sm">
-                <span className="material-symbols-outlined text-[18px]">new_releases</span>
+                <span className="material-symbols-outlined text-icon-md">new_releases</span>
                 새 버전 v{updateInfo.version} 사용 가능
               </div>
               <div className="flex items-center gap-2">
@@ -457,7 +457,7 @@ export function AppInfoSection() {
                   onClick={handleDownload}
                   className="px-4 py-2 rounded-lg bg-sp-accent text-white text-sm font-medium hover:bg-sp-accent/90 transition-colors flex items-center gap-2"
                 >
-                  <span className="material-symbols-outlined text-[18px]">download</span>
+                  <span className="material-symbols-outlined text-icon-md">download</span>
                   다운로드
                 </button>
                 <button
@@ -475,7 +475,7 @@ export function AppInfoSection() {
                   className="px-3 py-2 rounded-lg text-sp-muted text-sm hover:text-sp-text hover:bg-sp-text/5 transition-colors flex items-center gap-1"
                 >
                   <span
-                    className="material-symbols-outlined text-[16px] transition-transform duration-200"
+                    className="material-symbols-outlined text-icon transition-transform duration-200"
                     style={{ transform: showNotes ? 'rotate(180deg)' : 'rotate(0deg)' }}
                   >
                     expand_more
@@ -500,7 +500,7 @@ export function AppInfoSection() {
                         return (
                           <div key={i} className="flex items-start gap-2">
                             {cfg && (
-                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.badge} shrink-0`}>
+                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-caption font-medium ${cfg.badge} shrink-0`}>
                                 <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>{cfg.icon}</span>
                                 {cfg.label}
                               </span>
@@ -538,7 +538,7 @@ export function AppInfoSection() {
           {status === 'downloaded' && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-emerald-400 text-sm">
-                <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                <span className="material-symbols-outlined text-icon-md">check_circle</span>
                 업데이트가 준비되었습니다
               </div>
               <div className="flex items-center gap-2">
@@ -547,7 +547,7 @@ export function AppInfoSection() {
                   onClick={handleInstall}
                   className="px-4 py-2 rounded-lg bg-sp-accent text-white text-sm font-medium hover:bg-sp-accent/90 transition-colors flex items-center gap-2"
                 >
-                  <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+                  <span className="material-symbols-outlined text-icon-md">restart_alt</span>
                   지금 재시작
                 </button>
                 <button
@@ -565,7 +565,7 @@ export function AppInfoSection() {
         {status === 'error' && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-red-400 text-sm">
-              <span className="material-symbols-outlined text-[18px]">error</span>
+              <span className="material-symbols-outlined text-icon-md">error</span>
               {errorMsg || '업데이트 확인 중 오류가 발생했습니다.'}
             </div>
             <button
@@ -573,7 +573,7 @@ export function AppInfoSection() {
               onClick={handleCheckUpdate}
               className="px-4 py-2 rounded-lg bg-sp-accent/10 text-sp-accent text-sm font-medium hover:bg-sp-accent/20 transition-colors flex items-center gap-2"
             >
-              <span className="material-symbols-outlined text-[18px]">refresh</span>
+              <span className="material-symbols-outlined text-icon-md">refresh</span>
               다시 시도
             </button>
           </div>

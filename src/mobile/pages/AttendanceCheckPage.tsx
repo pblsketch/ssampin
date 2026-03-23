@@ -183,7 +183,7 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
         <button
           onClick={() => void handleComplete()}
           disabled={saving}
-          className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-xl disabled:opacity-50 touch-target active:scale-[0.98] transition-all"
+          className="px-4 py-2 bg-sp-accent text-sp-accent-fg text-sm font-medium rounded-xl disabled:opacity-50 touch-target active:scale-[0.98] transition-all"
         >
           {saving ? '저장 중...' : '완료'}
         </button>
@@ -258,7 +258,7 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
                                   : 'border-sp-border text-sp-muted hover:border-sp-text/30'
                               }`}
                             >
-                              <span className="material-symbols-outlined text-[18px]">
+                              <span className="material-symbols-outlined text-icon-md">
                                 {config.icon}
                               </span>
                               <span className="hidden sm:inline">{config.label}</span>
@@ -292,7 +292,7 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
                               }}
                               className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                                 isSelected
-                                  ? 'bg-blue-500/15 border-blue-500/40 text-blue-500'
+                                  ? 'bg-sp-accent/15 border-sp-accent/40 text-sp-accent'
                                   : 'border-sp-border text-sp-muted hover:text-sp-text'
                               }`}
                             >

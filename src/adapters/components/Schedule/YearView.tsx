@@ -25,7 +25,7 @@ export function YearView({
         <button
           type="button"
           onClick={onPrevYear}
-          className="p-2 hover:bg-slate-700 rounded-full transition-colors text-sp-muted hover:text-white"
+          className="p-2 hover:bg-sp-surface rounded-full transition-colors text-sp-muted hover:text-sp-text"
         >
           <span className="material-symbols-outlined">chevron_left</span>
         </button>
@@ -33,7 +33,7 @@ export function YearView({
         <button
           type="button"
           onClick={onNextYear}
-          className="p-2 hover:bg-slate-700 rounded-full transition-colors text-sp-muted hover:text-white"
+          className="p-2 hover:bg-sp-surface rounded-full transition-colors text-sp-muted hover:text-sp-text"
         >
           <span className="material-symbols-outlined">chevron_right</span>
         </button>

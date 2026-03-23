@@ -212,7 +212,7 @@ export function ShuffleOverlay({
                   ) : isLocked ? (
                     <>
                       {finalStudent?.studentNumber !== undefined && (
-                        <span className="text-[10px] font-mono text-sp-accent font-bold">
+                        <span className="text-caption font-mono text-sp-accent font-bold">
                           {String(finalStudent.studentNumber).padStart(2, '0')}
                         </span>
                       )}

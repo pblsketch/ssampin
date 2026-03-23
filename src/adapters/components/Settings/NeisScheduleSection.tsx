@@ -130,7 +130,7 @@ export function NeisScheduleSection() {
         {/* OFF 시 안내 */}
         {!settings.enabled && !hasSchoolInfo && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
-            <span className="material-symbols-outlined text-yellow-500 text-[18px] mt-0.5">info</span>
+            <span className="material-symbols-outlined text-yellow-500 text-icon-md mt-0.5">info</span>
             <p className="text-xs text-yellow-200/80">
               먼저 위의 &quot;학교/학급 정보&quot; 섹션에서 학교를 검색해주세요.
             </p>
@@ -147,11 +147,11 @@ export function NeisScheduleSection() {
                   {syncStatus === 'syncing' ? (
                     <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
                   ) : syncStatus === 'error' ? (
-                    <span className="material-symbols-outlined text-red-400 text-[18px]">error</span>
+                    <span className="material-symbols-outlined text-red-400 text-icon-md">error</span>
                   ) : settings.lastSyncAt ? (
-                    <span className="material-symbols-outlined text-green-400 text-[18px]">check_circle</span>
+                    <span className="material-symbols-outlined text-green-400 text-icon-md">check_circle</span>
                   ) : (
-                    <span className="material-symbols-outlined text-sp-muted text-[18px]">sync</span>
+                    <span className="material-symbols-outlined text-sp-muted text-icon-md">sync</span>
                   )}
                   <div>
                     <p className="text-xs text-sp-muted">마지막 동기화</p>
@@ -190,7 +190,7 @@ export function NeisScheduleSection() {
                 {syncStatus === 'syncing' ? (
                   <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <span className="material-symbols-outlined text-[18px]">sync</span>
+                  <span className="material-symbols-outlined text-icon-md">sync</span>
                 )}
                 {syncStatus === 'syncing' ? '동기화 중...' : '지금 동기화'}
               </button>

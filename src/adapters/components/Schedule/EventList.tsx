@@ -91,7 +91,7 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
     >
       {/* TODAY 배지 */}
       {isToday && (
-        <div className="absolute right-0 top-0 p-1 bg-sp-accent text-white text-[9px] font-bold rounded-bl-lg">
+        <div className="absolute right-0 top-0 p-1 bg-sp-accent text-white text-tiny font-bold rounded-bl-lg">
           TODAY
         </div>
       )}
@@ -129,7 +129,7 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
           {/* D-Day 배지 */}
           {event.isDDay && dday > 0 && (
             <span
-              className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${dday <= 7
+              className={`text-caption px-2 py-0.5 rounded-md font-bold ${dday <= 7
                 ? 'bg-red-900/50 text-red-300 border border-red-700/50'
                 : 'bg-blue-900/50 text-blue-300 border border-blue-700/50'
                 } ${dday <= 7 ? 'animate-pulse' : ''}`}
@@ -139,25 +139,25 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
           )}
           {/* NEIS 출처 배지 */}
           {isNeis && (
-            <span className="text-[9px] text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded font-medium border border-purple-500/20">
+            <span className="text-tiny text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded font-medium border border-purple-500/20">
               NEIS
             </span>
           )}
           {/* NEIS 학년 배지 */}
           {isNeis && gradeBadge && (
-            <span className="text-[9px] text-slate-300 bg-slate-600/40 px-1.5 py-0.5 rounded font-medium">
+            <span className="text-tiny text-sp-muted bg-sp-surface/40 px-1.5 py-0.5 rounded font-medium">
               {gradeBadge}
             </span>
           )}
           {/* 카테고리 배지 */}
-          <span className="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded-md font-medium max-w-[80px] truncate">
+          <span className="bg-sp-surface text-sp-muted text-caption px-2 py-1 rounded-md font-medium max-w-[80px] truncate">
             {categoryInfo.name}
           </span>
           {/* 구글 배지 */}
           {event.source === 'google' && <GoogleBadge />}
           {/* 편집/삭제 (호버 시) 또는 외부 배지 */}
           {isExternal ? (
-            <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
+            <span className="text-caption text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
               외부
             </span>
           ) : (
@@ -166,25 +166,25 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
                 <button
                   type="button"
                   onClick={() => onSkipDate(event.id, currentDate)}
-                  className="p-1 hover:bg-amber-900/50 rounded transition-colors text-slate-400 hover:text-amber-400"
+                  className="p-1 hover:bg-amber-900/50 rounded transition-colors text-sp-muted hover:text-amber-400"
                   title="이 날짜만 건너뛰기"
                 >
-                  <span className="material-symbols-outlined text-[16px]">event_busy</span>
+                  <span className="material-symbols-outlined text-icon">event_busy</span>
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => onEdit(event)}
-                className="p-1 hover:bg-slate-600 rounded transition-colors text-slate-400 hover:text-white"
+                className="p-1 hover:bg-sp-surface rounded transition-colors text-sp-muted hover:text-sp-text"
               >
-                <span className="material-symbols-outlined text-[16px]">edit</span>
+                <span className="material-symbols-outlined text-icon">edit</span>
               </button>
               <button
                 type="button"
                 onClick={() => onDelete(event.id)}
-                className="p-1 hover:bg-red-900/50 rounded transition-colors text-slate-400 hover:text-red-400"
+                className="p-1 hover:bg-red-900/50 rounded transition-colors text-sp-muted hover:text-red-400"
               >
-                <span className="material-symbols-outlined text-[16px]">delete</span>
+                <span className="material-symbols-outlined text-icon">delete</span>
               </button>
             </div>
           )}
@@ -195,31 +195,31 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
       <div className="flex items-center gap-4 text-xs text-sp-muted">
         {event.period && (
           <div className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">class</span>
+            <span className="material-symbols-outlined text-icon-sm">class</span>
             {periodToLabel(event.period)}
           </div>
         )}
         {event.time && (
           <div className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">schedule</span>
+            <span className="material-symbols-outlined text-icon-sm">schedule</span>
             {event.time}
           </div>
         )}
         {event.location && (
           <div className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">location_on</span>
+            <span className="material-symbols-outlined text-icon-sm">location_on</span>
             {event.location}
           </div>
         )}
         {isMultiDay && (
           <div className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">date_range</span>
+            <span className="material-symbols-outlined text-icon-sm">date_range</span>
             {event.date.split('-').slice(1).map(Number).join('/')} ~ {event.endDate!.split('-').slice(1).map(Number).join('/')}
           </div>
         )}
         {event.recurrence && (
           <div className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">repeat</span>
+            <span className="material-symbols-outlined text-icon-sm">repeat</span>
             {event.recurrence === 'weekly' ? '매주' : event.recurrence === 'monthly' ? '매월' : '매년'}
           </div>
         )}
@@ -247,7 +247,7 @@ function HolidayCard({ holiday, showYear }: { holiday: HolidayInfo; showYear?: b
             {holiday.name}
           </h4>
         </div>
-        <span className="bg-red-900/40 text-red-300 text-[10px] px-2 py-1 rounded-md font-medium border border-red-800/30">
+        <span className="bg-red-900/40 text-red-300 text-caption px-2 py-1 rounded-md font-medium border border-red-800/30">
           공휴일
         </span>
       </div>
@@ -351,7 +351,7 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
           </h3>
           {/* 검색 입력 */}
           <div className="relative">
-            <span className="material-symbols-outlined text-[18px] text-sp-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+            <span className="material-symbols-outlined text-icon-md text-sp-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
               search
             </span>
             <input
@@ -371,7 +371,7 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
                 }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-sp-border/50 text-sp-muted hover:text-sp-text transition-colors"
               >
-                <span className="material-symbols-outlined text-[16px]">close</span>
+                <span className="material-symbols-outlined text-icon">close</span>
               </button>
             )}
           </div>
@@ -410,7 +410,7 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
 
       {displayItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
-          <span className="material-symbols-outlined text-[48px] mb-4">
+          <span className="material-symbols-outlined text-5xl mb-4">
             {isSearching ? 'search_off' : 'event_busy'}
           </span>
           <p className="text-sm">

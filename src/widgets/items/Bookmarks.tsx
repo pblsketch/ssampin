@@ -213,7 +213,7 @@ function DroppableGroup({
       {showGroupHeader && (
         <div className="flex items-center gap-1.5 px-1 mb-1">
           <span className="text-xs">{group.emoji}</span>
-          <span className="text-[11px] font-semibold text-sp-muted uppercase tracking-wider">
+          <span className="text-detail font-semibold text-sp-muted uppercase tracking-wider">
             {group.name}
           </span>
         </div>
@@ -234,7 +234,7 @@ function DroppableGroup({
       </SortableContext>
 
       {items.length === 0 && (
-        <div className={`py-4 text-center text-[10px] ${isOver ? 'text-sp-accent/60' : 'text-sp-muted/40'}`}>
+        <div className={`py-4 text-center text-caption ${isOver ? 'text-sp-accent/60' : 'text-sp-muted/40'}`}>
           {isOver ? '여기에 놓기' : '비어 있음'}
         </div>
       )}
@@ -281,7 +281,7 @@ function SortableBookmarkItem({ bookmark }: { bookmark: Bookmark }) {
       <span className="text-sm text-sp-text truncate group-hover:text-sp-accent transition-colors whitespace-nowrap">
         {bookmark.name}
       </span>
-      <span className="material-symbols-outlined text-[12px] text-sp-muted ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <span className="material-symbols-outlined text-xs text-sp-muted ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
         {bookmark.type === 'folder' ? 'folder_open' : 'open_in_new'}
       </span>
     </button>
@@ -332,7 +332,7 @@ function BookmarkVisibilityPicker({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <p className="text-[10px] text-sp-muted mb-2">
+      <p className="text-caption text-sp-muted mb-2">
         대시보드에 표시할 즐겨찾기를 선택하세요
       </p>
       <div className="flex-1 overflow-y-auto space-y-1.5">
@@ -354,7 +354,7 @@ function BookmarkVisibilityPicker({
                 <span className="text-xs font-semibold text-sp-text">
                   {group.name}
                 </span>
-                <span className="text-[10px] text-sp-muted ml-auto">
+                <span className="text-caption text-sp-muted ml-auto">
                   {groupBookmarks.length}개
                 </span>
               </label>

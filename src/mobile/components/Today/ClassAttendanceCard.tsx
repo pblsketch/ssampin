@@ -17,7 +17,7 @@ export function ClassAttendanceCard({ period, classInfo, attendanceRecord, onChe
   return (
     <div className="glass-card p-4 h-full flex flex-col">
       <div className="flex items-center gap-1.5 mb-3">
-        <span className="material-symbols-outlined text-blue-500 text-[20px]">fact_check</span>
+        <span className="material-symbols-outlined text-sp-accent text-icon-lg">fact_check</span>
         <span className="text-sp-text font-bold text-sm">
           {period}교시 · {classInfo.classroom}
         </span>
@@ -26,15 +26,15 @@ export function ClassAttendanceCard({ period, classInfo, attendanceRecord, onChe
         <div className="flex gap-3 flex-1 items-center">
           <div className="text-center">
             <p className="text-green-500 font-bold text-lg">{present}</p>
-            <p className="text-sp-muted text-[10px]">출석</p>
+            <p className="text-sp-muted text-caption">출석</p>
           </div>
           <div className="text-center">
             <p className="text-red-500 font-bold text-lg">{absent}</p>
-            <p className="text-sp-muted text-[10px]">결석</p>
+            <p className="text-sp-muted text-caption">결석</p>
           </div>
           <div className="text-center">
             <p className="text-yellow-500 font-bold text-lg">{late}</p>
-            <p className="text-sp-muted text-[10px]">지각</p>
+            <p className="text-sp-muted text-caption">지각</p>
           </div>
         </div>
       ) : (
@@ -42,7 +42,7 @@ export function ClassAttendanceCard({ period, classInfo, attendanceRecord, onChe
       )}
       <button
         onClick={onCheckAttendance}
-        className="mt-2 w-full text-xs text-blue-500 font-medium py-2 rounded-xl bg-blue-500/10 active:scale-[0.98] transition-all touch-target"
+        className="mt-2 w-full text-xs text-sp-accent font-medium py-2 rounded-xl bg-sp-accent/15 active:scale-[0.98] transition-all touch-target"
       >
         체크하기
       </button>

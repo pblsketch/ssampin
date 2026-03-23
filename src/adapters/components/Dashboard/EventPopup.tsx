@@ -65,7 +65,7 @@ function EventItem({ event, categories }: EventItemProps) {
   return (
     <div className="flex items-start gap-3 p-3 rounded-lg bg-sp-bg/50 hover:bg-sp-bg transition-colors">
       <div className="flex items-center justify-center shrink-0 mt-0.5">
-        <span className={`material-symbols-outlined ${colors.text} text-[24px]`}>
+        <span className={`material-symbols-outlined ${colors.text} text-icon-xl`}>
           {icon}
         </span>
       </div>
@@ -76,13 +76,13 @@ function EventItem({ event, categories }: EventItemProps) {
         </p>
         {event.time && (
           <div className="flex items-center gap-1.5 mt-1 text-sm text-sp-muted">
-            <span className="material-symbols-outlined text-[16px]">schedule</span>
+            <span className="material-symbols-outlined text-icon">schedule</span>
             <span>{event.time}</span>
           </div>
         )}
         {event.location && (
           <div className="flex items-center gap-1.5 mt-0.5 text-sm text-sp-muted">
-            <span className="material-symbols-outlined text-[16px]">location_on</span>
+            <span className="material-symbols-outlined text-icon">location_on</span>
             <span>{event.location}</span>
           </div>
         )}
@@ -185,7 +185,7 @@ export function EventPopup() {
               onClick={snoozePopup}
               className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-sp-border px-4 py-2.5 text-sm font-semibold text-sp-muted hover:bg-sp-surface transition-all"
             >
-              <span className="material-symbols-outlined text-[18px]">snooze</span>
+              <span className="material-symbols-outlined text-icon-md">snooze</span>
               다시 알림 (1시간 후)
             </button>
             <button

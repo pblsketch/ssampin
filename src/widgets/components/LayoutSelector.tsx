@@ -107,7 +107,7 @@ export function LayoutSelector({ anchorRect, currentMode, onSelect, onClose }: L
               'w-full flex items-center gap-3 px-3 py-2 transition-colors text-left',
               isActive
                 ? 'bg-sp-accent/15 text-sp-accent'
-                : 'hover:bg-white/[0.08] text-sp-text',
+                : 'hover:bg-sp-text/[0.08] text-sp-text',
             ].join(' ')}
             onClick={() => {
               onSelect(opt.mode);

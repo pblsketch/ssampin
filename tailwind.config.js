@@ -21,6 +21,19 @@ export default {
           muted: 'var(--sp-muted)',
         },
       },
+      fontSize: {
+        'micro': ['0.5rem', { lineHeight: '0.75rem' }],         // 8px — 극소 라벨
+        'tiny': ['0.5625rem', { lineHeight: '0.875rem' }],      // 9px — 컴팩트 뱃지
+        'caption': ['0.625rem', { lineHeight: '1rem' }],        // 10px — 버전, 캡션
+        'detail': ['0.6875rem', { lineHeight: '1rem' }],        // 11px — 상세 텍스트
+        // text-xs(12px), text-sm(14px), text-base(16px), text-lg(18px) 등은 Tailwind 기본값 사용
+        'icon-xs': ['0.625rem', { lineHeight: '1' }],           // 10px Material Symbol
+        'icon-sm': ['0.875rem', { lineHeight: '1' }],           // 14px Material Symbol
+        'icon': ['1rem', { lineHeight: '1' }],                  // 16px Material Symbol
+        'icon-md': ['1.125rem', { lineHeight: '1' }],           // 18px Material Symbol
+        'icon-lg': ['1.25rem', { lineHeight: '1' }],            // 20px Material Symbol
+        'icon-xl': ['1.5rem', { lineHeight: '1' }],             // 24px Material Symbol
+      },
       fontFamily: {
         display: ['Noto Sans KR', 'sans-serif'],
         body: ['Noto Sans KR', 'sans-serif'],

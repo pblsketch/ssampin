@@ -21,7 +21,7 @@ import { WidgetCard } from './WidgetCard';
 import { WidgetTabBar } from './WidgetTabBar';
 import type { TabFilter } from './WidgetTabBar';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { DEFAULT_WIDGET_STYLE, BG_PATTERN_CSS } from '@domain/entities/DashboardTheme';
+import { DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
 
 interface WidgetGridProps {
   isEditMode?: boolean;
@@ -121,10 +121,9 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
         <div
           className="absolute inset-0 pointer-events-none rounded-xl"
           style={{
-            background: ws.backgroundImage.startsWith('file://')
-              ? `url(${ws.backgroundImage})`
-              : (BG_PATTERN_CSS[ws.backgroundImage] ?? 'none'),
-            backgroundSize: ws.backgroundImage === 'dots' ? '16px 16px' : 'cover',
+            backgroundImage: `url(${ws.backgroundImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
             opacity: ws.backgroundImageOpacity,
           }}
         />

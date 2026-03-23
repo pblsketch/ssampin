@@ -63,7 +63,7 @@ export function Seating() {
               className={`rounded-lg ${sizeMode === 'sm' ? 'px-2 py-1' : 'px-3 py-2'}`}
               style={{ borderLeft: `3px solid ${group.color}`, background: `${group.color}10` }}
             >
-              <div className={`font-medium text-sp-text ${sizeMode === 'sm' ? 'text-[10px]' : 'text-xs'}`}>
+              <div className={`font-medium text-sp-text ${sizeMode === 'sm' ? 'text-caption' : 'text-xs'}`}>
                 {group.name}
                 <span className="text-sp-muted ml-1">({groupStudents.length}명)</span>
               </div>
@@ -72,7 +72,7 @@ export function Seating() {
                   {groupStudents.map((s) => (
                     <span
                       key={s!.id}
-                      className={`rounded px-1 ${sizeMode === 'lg' ? 'text-xs' : 'text-[10px]'} text-sp-accent`}
+                      className={`rounded px-1 ${sizeMode === 'lg' ? 'text-xs' : 'text-caption'} text-sp-accent`}
                       style={{ background: `${group.color}20` }}
                     >
                       {s!.name}
@@ -97,7 +97,7 @@ export function Seating() {
           <h3 className="text-sm font-bold text-sp-text">자리배치</h3>
         </div>
         <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
-          sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-[10px]'
+          sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-caption'
         }`}>교탁</div>
 
         <div className={`flex flex-col ${sizeMode === 'lg' ? 'gap-2' : sizeMode === 'md' ? 'gap-1.5' : 'gap-1'}`}>
@@ -131,8 +131,8 @@ export function Seating() {
                             key={c}
                             className={`${
                               sizeMode === 'lg' ? 'h-8 text-xs' :
-                              sizeMode === 'md' ? 'h-6 text-[10px]' :
-                              'h-5 text-[8px]'
+                              sizeMode === 'md' ? 'h-6 text-caption' :
+                              'h-5 text-micro'
                             } min-w-0 flex-1 rounded-sm flex items-center justify-center ${
                               hasStudent ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface/30'
                             }`}
@@ -162,7 +162,7 @@ export function Seating() {
         <h3 className="text-sm font-bold text-sp-text">자리배치</h3>
       </div>
       <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
-        sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-[10px]'
+        sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-caption'
       }`}>교탁</div>
 
       <div
@@ -180,8 +180,8 @@ export function Seating() {
                 key={`${r}-${c}`}
                 className={`${
                   sizeMode === 'lg' ? 'h-8 text-xs' :
-                  sizeMode === 'md' ? 'h-6 text-[10px]' :
-                  'h-5 text-[8px]'
+                  sizeMode === 'md' ? 'h-6 text-caption' :
+                  'h-5 text-micro'
                 } rounded-sm flex items-center justify-center ${
                   hasStudent ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface/30'
                 }`}

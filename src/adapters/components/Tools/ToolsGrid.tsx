@@ -52,7 +52,7 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
     <div>
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-sp-text flex items-center gap-2">
           <span className="material-symbols-outlined text-[28px]">construction</span>
           <span>쌤도구</span>
         </h1>
@@ -68,10 +68,10 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
             className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
           >
             <div className="text-4xl mb-3">{tool.emoji}</div>
-            <h3 className="text-lg font-bold text-white group-hover:text-sp-accent transition-colors flex items-center gap-1">
+            <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1">
               {tool.name}
               {tool.externalUrl && (
-                <span className="material-symbols-outlined text-[14px] text-sp-muted">open_in_new</span>
+                <span className="material-symbols-outlined text-icon-sm text-sp-muted">open_in_new</span>
               )}
             </h3>
             <p className="text-sm text-sp-muted mt-1">{tool.description}</p>

@@ -62,18 +62,23 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
   return (
     <>
       {/* Overlay */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md pointer-events-auto">
+        <div
+          className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md pointer-events-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title-share-link"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-sp-accent/10">
                 <span className="material-symbols-outlined text-sp-accent">share</span>
               </div>
-              <h2 className="text-lg font-bold text-sp-text">과제 공유</h2>
+              <h2 id="modal-title-share-link" className="text-lg font-bold text-sp-text">과제 공유</h2>
             </div>
             <button
               onClick={onClose}
@@ -113,7 +118,7 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
                 onClick={() => void handleCopyLink()}
                 className="px-5 py-2.5 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors flex items-center gap-2 text-sm font-medium"
               >
-                <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                <span className="material-symbols-outlined text-icon">content_copy</span>
                 링크 복사
               </button>
               <button
@@ -121,7 +126,7 @@ export function ShareLinkModal({ isOpen, onClose, assignment }: ShareLinkModalPr
                 disabled={!qrDataUrl}
                 className="px-5 py-2.5 bg-sp-card border border-sp-border rounded-lg text-sp-text hover:bg-sp-border/40 transition-colors flex items-center gap-2 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <span className="material-symbols-outlined text-[16px]">download</span>
+                <span className="material-symbols-outlined text-icon">download</span>
                 QR 다운로드
               </button>
             </div>

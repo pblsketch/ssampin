@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .focus-ring {
+    @apply focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:ring-offset-2 focus-visible:ring-offset-sp-bg outline-none;
+  }
+
+  .sp-input {
+    @apply bg-sp-surface border border-sp-border rounded-lg px-4 py-3 text-sp-text placeholder:text-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent transition-colors;
+  }
+}
+
 @layer base {
   :root {
     --sp-bg: #0a0e17;
@@ -103,11 +113,6 @@ body {
   color: var(--sp-text) !important;
 }
 
-/* group-hover:text-white → sp-text in light mode */
-.theme-light .group:hover .group-hover\:text-white {
-  color: var(--sp-text) !important;
-}
-
 /* Translucent white hover backgrounds → dark equivalents in light mode */
 .theme-light .hover\:bg-white\/5:hover {
   background-color: rgba(0, 0, 0, 0.05) !important;
@@ -119,36 +124,6 @@ body {
 
 .theme-light .hover\:bg-white\/20:hover {
   background-color: rgba(0, 0, 0, 0.10) !important;
-}
-
-/* Dark slate hover backgrounds → lighter in light mode */
-.theme-light .hover\:bg-slate-600:hover {
-  background-color: rgba(0, 0, 0, 0.06) !important;
-}
-
-.theme-light .hover\:bg-slate-700:hover {
-  background-color: rgba(0, 0, 0, 0.08) !important;
-}
-
-.theme-light .hover\:bg-slate-700\/50:hover {
-  background-color: rgba(0, 0, 0, 0.05) !important;
-}
-
-.theme-light .hover\:bg-slate-800:hover {
-  background-color: rgba(0, 0, 0, 0.08) !important;
-}
-
-.theme-light .hover\:bg-slate-800\/50:hover {
-  background-color: rgba(0, 0, 0, 0.04) !important;
-}
-
-/* Dark border hovers → sp-border in light mode */
-.theme-light .hover\:border-slate-500:hover {
-  border-color: var(--sp-accent) !important;
-}
-
-.theme-light .hover\:border-slate-600:hover {
-  border-color: var(--sp-border) !important;
 }
 
 /* ─── Light Theme: Fix static text colors ─── */
@@ -671,5 +646,17 @@ body {
   }
   .widget-grid > * {
     grid-row: auto !important;
+  }
+}
+
+/* ─── Accessibility: Reduced Motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

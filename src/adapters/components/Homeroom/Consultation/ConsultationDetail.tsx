@@ -137,7 +137,7 @@ function ConsultationShareModal({ schedule, onClose, onCopyLink }: ConsultationS
             </button>
           </div>
 
-          <p className="text-[10px] text-sp-muted/60 text-center">
+          <p className="text-caption text-sp-muted/60 text-center">
             학부모/학생에게 이 링크를 공유하세요.
           </p>
         </div>
@@ -504,7 +504,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
         const blockedPct = Math.round((dateBlocked / dateTotal) * 100);
         return (
           <div className="mb-3">
-            <div className="flex items-center justify-between text-[10px] text-sp-muted mb-1">
+            <div className="flex items-center justify-between text-caption text-sp-muted mb-1">
               <span>예약 현황</span>
               <span className="text-sp-text font-medium">{dateBooked}/{dateTotal}</span>
             </div>
@@ -533,10 +533,10 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
             <div key={section.label}>
               {/* 섹션 헤더 */}
               <div className={`flex items-center gap-2 px-1 mb-1.5 ${si > 0 ? 'mt-3' : ''}`}>
-                <span className="text-[10px] font-bold text-sp-muted uppercase tracking-widest">
+                <span className="text-caption font-bold text-sp-muted uppercase tracking-widest">
                   {section.label}
                 </span>
-                <span className="text-[10px] text-sp-muted/50 bg-sp-surface rounded-full px-1.5 py-0.5">
+                <span className="text-caption text-sp-muted/50 bg-sp-surface rounded-full px-1.5 py-0.5">
                   {section.slots.length}슬롯
                 </span>
                 <div className="flex-1 h-px bg-sp-border/40" />
@@ -565,7 +565,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                         <span className="text-xs font-semibold text-sp-text font-mono leading-none">
                           {slot.startTime.slice(0, 5)}
                         </span>
-                        <span className="text-[10px] text-sp-muted/70 font-mono leading-none mt-0.5">
+                        <span className="text-caption text-sp-muted/70 font-mono leading-none mt-0.5">
                           {slot.endTime.slice(0, 5)}
                         </span>
                       </div>
@@ -596,14 +596,14 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                           <div>
                             {/* 1줄: 학생 정보 + 상담 방식 + 상세 토글 + 액션 */}
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-500/15 text-green-400 border border-green-500/25">
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-caption font-medium bg-green-500/15 text-green-400 border border-green-500/25">
                                 <span className="material-symbols-outlined text-xs">check_circle</span>
                                 예약됨
                               </span>
                               <span className="text-sp-text text-xs font-medium">
                                 {booking.studentNumber}번 {getStudentName(booking.studentNumber)}
                               </span>
-                              <span className="text-sp-muted text-[11px] flex items-center gap-0.5">
+                              <span className="text-sp-muted text-detail flex items-center gap-0.5">
                                 <span className="material-symbols-outlined text-xs">
                                   {getMethodIcon(booking.method)}
                                 </span>
@@ -617,12 +617,12 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                 <span className="material-symbols-outlined text-sm">
                                   {isExpanded ? 'expand_less' : 'expand_more'}
                                 </span>
-                                <span className="text-[11px]">{isExpanded ? '접기' : '상세'}</span>
+                                <span className="text-detail">{isExpanded ? '접기' : '상세'}</span>
                               </button>
                               {/* 액션 버튼들 */}
                               <div className="ml-auto flex items-center gap-1 shrink-0">
                                 {addedToCalendarIds.has(booking.id) ? (
-                                  <span className="text-green-400 flex items-center gap-0.5 text-[11px]">
+                                  <span className="text-green-400 flex items-center gap-0.5 text-detail">
                                     <span className="material-symbols-outlined text-sm">event_available</span>
                                     추가됨
                                   </span>
@@ -636,7 +636,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                     <span className="material-symbols-outlined text-sm">
                                       {addingCalendarId === booking.id ? 'hourglass_empty' : 'calendar_add_on'}
                                     </span>
-                                    <span className="text-[11px]">캘린더</span>
+                                    <span className="text-detail">캘린더</span>
                                   </button>
                                 )}
                                 {onWriteRecord && (
@@ -656,14 +656,14 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                     title="상담 기록 작성"
                                   >
                                     <span className="material-symbols-outlined text-sm">edit_note</span>
-                                    <span className="text-[11px]">기록</span>
+                                    <span className="text-detail">기록</span>
                                   </button>
                                 )}
                               </div>
                             </div>
                             {/* 펼치기: 예약자 상세 정보 (개인정보) */}
                             {isExpanded && (
-                              <div className="mt-2 ml-0.5 p-2.5 rounded-lg bg-sp-surface/60 border border-sp-border/40 text-[11px] text-sp-muted space-y-1.5">
+                              <div className="mt-2 ml-0.5 p-2.5 rounded-lg bg-sp-surface/60 border border-sp-border/40 text-detail text-sp-muted space-y-1.5">
                                 {parsed && (
                                   <>
                                     <div className="flex items-center gap-2">
@@ -713,7 +713,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                         ) : (
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-sp-muted/70">예약 가능</span>
-                            <span className="ml-auto text-[10px] text-sp-accent/50 font-medium">
+                            <span className="ml-auto text-caption text-sp-accent/50 font-medium">
                               {schedule.slotMinutes}분
                             </span>
                           </div>
@@ -758,7 +758,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                 <span className="material-symbols-outlined text-xs">warning</span>
                 미신청: {unbookedStudents.length}명
               </span>
-              <span className="text-[10px] text-sp-muted">
+              <span className="text-caption text-sp-muted">
                 {showAllUnbooked ? '접기 ▲' : '펼치기 ▼'}
               </span>
             </button>
@@ -767,7 +767,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                 {unbookedStudents.map((s) => (
                   <span
                     key={s.number}
-                    className="inline-flex items-center px-2 py-0.5 rounded bg-sp-border/60 text-sp-text text-[11px]"
+                    className="inline-flex items-center px-2 py-0.5 rounded bg-sp-border/60 text-sp-text text-detail"
                   >
                     {s.number}번 {s.name}
                   </span>

@@ -23,7 +23,7 @@ export function ConstraintHintBadge({ studentId }: ConstraintHintBadgeProps) {
     <div className="flex items-center gap-0.5">
       {zone && (
         <span
-          className="text-[10px] leading-none"
+          className="text-caption leading-none"
           title={`영역 고정: ${ZONE_LABELS[zone.zone]}`}
         >
           📍
@@ -31,7 +31,7 @@ export function ConstraintHintBadge({ studentId }: ConstraintHintBadgeProps) {
       )}
       {fixed && (
         <span
-          className="text-[10px] leading-none"
+          className="text-caption leading-none"
           title={`좌석 고정: ${fixed.row + 1}행 ${fixed.col + 1}열`}
         >
           📌

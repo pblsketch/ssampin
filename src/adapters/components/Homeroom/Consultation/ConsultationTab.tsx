@@ -184,7 +184,7 @@ function ConsultationCard({ schedule, onSelect, onShare }: ConsultationCardProps
                 e.stopPropagation();
                 onShare(schedule);
               }}
-              className="text-[11px] text-sp-accent hover:text-sp-accent/80 transition-colors flex items-center gap-1"
+              className="text-detail text-sp-accent hover:text-sp-accent/80 transition-colors flex items-center gap-1"
             >
               <span className="material-symbols-outlined text-xs">share</span>
               공유 (링크 + QR)

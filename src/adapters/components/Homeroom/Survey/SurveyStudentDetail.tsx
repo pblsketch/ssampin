@@ -442,7 +442,7 @@ function PinListModal({
 
         {/* 안내 */}
         <div className="p-3 border-t border-sp-border text-center shrink-0 print:hidden">
-          <p className="text-[10px] text-sp-muted/60">
+          <p className="text-caption text-sp-muted/60">
             인쇄 후 잘라서 학생들에게 개별 배부하세요. PIN은 이 설문에서만 유효합니다.
           </p>
         </div>
@@ -568,7 +568,7 @@ function ShareModal({ title, url: initialUrl, survey, onClose }: ShareModalProps
             </button>
           </div>
 
-          <p className="text-[10px] text-sp-muted/60 text-center">
+          <p className="text-caption text-sp-muted/60 text-center">
             학생들에게 QR 코드를 보여주거나 링크를 공유하세요.
           </p>
         </div>

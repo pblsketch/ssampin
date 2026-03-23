@@ -14,6 +14,7 @@ import {
 import type { ThemeColors, PresetThemeId } from '@domain/entities/DashboardTheme';
 import { FONT_PRESETS } from '@domain/entities/FontPreset';
 import { StyleSection, SliderRow, ToggleRow, SelectRow, ColorSwatchRow } from '@adapters/components/shared/StyleControls';
+import { BackgroundImageSection } from '@adapters/components/shared/BackgroundImageSection';
 
 type PanelTab = 'widgets' | 'style';
 
@@ -128,7 +129,7 @@ function WidgetListTab() {
         return (
           <Fragment key={category}>
             <div>
-              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-sp-muted">
+              <h3 className="mb-2 text-detail font-semibold uppercase tracking-wider text-sp-muted">
                 {CATEGORY_LABELS[category]}
               </h3>
               <div className="space-y-1">
@@ -145,7 +146,7 @@ function WidgetListTab() {
                         {def.name}
                       </span>
                       {isVisible && (
-                        <span className="text-[10px] text-sp-muted tabular-nums">
+                        <span className="text-caption text-sp-muted tabular-nums">
                           {sizeMap.get(def.id)?.colSpan ?? 1}×{sizeMap.get(def.id)?.rowSpan ?? 3}
                         </span>
                       )}
@@ -231,7 +232,7 @@ function StyleTab() {
                     widgetStyle: mergedStyle,
                   });
                 }}
-                className={`rounded-lg p-1.5 text-center text-[10px] border transition-all ${
+                className={`rounded-lg p-1.5 text-center text-caption border transition-all ${
                   isSelected
                     ? 'border-sp-accent ring-1 ring-sp-accent scale-105'
                     : 'border-sp-border/50 hover:border-sp-border'
@@ -266,6 +267,15 @@ function StyleTab() {
             swatches={COLOR_SWATCHES['text'] ?? []} onChange={(v) => updateStyle({ textColor: v })}
             onReset={() => updateStyle({ textColor: null })} />
         </div>
+      </StyleSection>
+
+      <StyleSection title="배경" compact>
+        <BackgroundImageSection
+          value={ws.backgroundImage}
+          opacity={ws.backgroundImageOpacity}
+          onChange={(patch) => updateStyle(patch)}
+          compact
+        />
       </StyleSection>
 
       <StyleSection title="카드 모양" compact>
@@ -311,7 +321,7 @@ function StyleTab() {
             <button
               key={p.label}
               onClick={() => void updateSettings({ dashboardFontScale: p.value })}
-              className={`flex-1 py-1 text-[10px] rounded-md border transition-all ${
+              className={`flex-1 py-1 text-caption rounded-md border transition-all ${
                 Math.round((settings.dashboardFontScale ?? 1.0) * 100) === Math.round(p.value * 100)
                   ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                   : 'border-sp-border text-sp-muted hover:text-sp-text'

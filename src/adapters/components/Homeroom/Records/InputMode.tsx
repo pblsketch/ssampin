@@ -255,7 +255,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                     </div>
                     {attendanceType && (
                       <div className="ml-2 pl-3 border-l-2 border-red-500/30">
-                        <p className="text-[11px] text-sp-muted mb-1">사유</p>
+                        <p className="text-detail text-sp-muted mb-1">사유</p>
                         <div className="flex flex-wrap gap-1.5">
                           {ATTENDANCE_REASONS.map((reason) => {
                             const combined = `${attendanceType} (${reason})`;
@@ -317,7 +317,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                         isSelected
                           ? 'bg-sp-accent text-white'
-                          : 'bg-sp-surface text-sp-muted hover:text-white hover:bg-sp-surface/80'
+                          : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
                       }`}
                     >
                       {opt.icon} {opt.label}
@@ -413,7 +413,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                       </>
                     )}
                     {isEditing && (
-                      <span className="ml-auto text-[10px] text-sp-accent font-medium">수정 중</span>
+                      <span className="ml-auto text-caption text-sp-accent font-medium">수정 중</span>
                     )}
                   </div>
                 );

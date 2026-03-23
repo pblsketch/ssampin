@@ -175,6 +175,7 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
       <div
         className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* 모달 */}
@@ -182,14 +183,17 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
         <div
           className="bg-sp-card rounded-2xl border border-sp-border shadow-2xl w-full max-w-[520px]"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title-schedule-export"
         >
           {/* 헤더 */}
           <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
-            <h2 className="text-lg font-bold text-white">일정 내보내기</h2>
+            <h2 id="modal-title-schedule-export" className="text-lg font-bold text-sp-text">일정 내보내기</h2>
             <button
               type="button"
               onClick={onClose}
-              className="p-1 hover:bg-slate-700 rounded-lg transition-colors text-sp-muted hover:text-white"
+              className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
             >
               <span className="material-symbols-outlined">close</span>
             </button>
@@ -221,7 +225,7 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
                       className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
                         checked
                           ? 'border-sp-accent bg-sp-accent/10'
-                          : 'border-sp-border bg-sp-bg hover:bg-slate-800'
+                          : 'border-sp-border bg-sp-bg hover:bg-sp-surface'
                       }`}
                     >
                       <input
@@ -248,7 +252,7 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
                       dateRange === key
                         ? 'border-sp-accent bg-sp-accent/10'
-                        : 'border-sp-border bg-sp-bg hover:bg-slate-800'
+                        : 'border-sp-border bg-sp-bg hover:bg-sp-surface'
                     }`}
                   >
                     <input
@@ -305,7 +309,7 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
             {hasNeisEvents && (
               <section className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded font-medium border border-purple-500/20">
+                  <span className="text-tiny text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded font-medium border border-purple-500/20">
                     NEIS
                   </span>
                   <span className="text-sm text-sp-text">학사일정 포함</span>
@@ -332,7 +336,7 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="공유 파일에 대한 설명을 입력하세요 (선택사항)"
                 rows={2}
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent resize-none"
+                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text placeholder-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent resize-none"
               />
             </section>
 
@@ -364,7 +368,7 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
               disabled={previewCount === 0 || isExporting}
               className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-sp-accent hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 text-sm font-semibold shadow-sm transition-all"
             >
-              <span className="material-symbols-outlined text-[18px]">upload</span>
+              <span className="material-symbols-outlined text-icon-md">upload</span>
               {isExporting ? '내보내는 중...' : '내보내기'}
             </button>
           </div>

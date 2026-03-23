@@ -145,7 +145,7 @@ export function HelpChatWindow({
           if (!followUps || followUps.length === 0) return null;
           return (
             <div className="px-4 pb-2">
-              <p className="mb-1.5 text-[11px] text-sp-muted">🔗 관련 질문</p>
+              <p className="mb-1.5 text-detail text-sp-muted">🔗 관련 질문</p>
               <div className="flex flex-wrap gap-1.5">
                 {followUps.map((q) => (
                   <button

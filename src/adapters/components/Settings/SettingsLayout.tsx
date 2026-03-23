@@ -52,7 +52,7 @@ export function SettingsLayout({
             onClick={() => setShowReset(true)}
             className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:bg-sp-text/5 hover:text-sp-text font-medium text-sm transition-colors flex items-center gap-1.5"
           >
-            <span className="material-symbols-outlined text-[16px]">refresh</span>
+            <span className="material-symbols-outlined text-icon">refresh</span>
             초기화
           </button>
           <button
@@ -61,7 +61,7 @@ export function SettingsLayout({
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white font-medium text-sm shadow-lg shadow-sp-accent/25 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
           >
-            <span className="material-symbols-outlined text-[16px]">save</span>
+            <span className="material-symbols-outlined text-icon">save</span>
             {saving ? '저장 중...' : '저장'}
           </button>
         </div>
@@ -90,9 +90,14 @@ export function SettingsLayout({
 
       {/* Reset Confirmation Dialog */}
       {showReset && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-          <div className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold text-sp-text mb-2">설정 초기화</h3>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" aria-hidden="true">
+          <div
+            className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 max-w-sm w-full mx-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title-settings-reset"
+          >
+            <h3 id="modal-title-settings-reset" className="text-lg font-bold text-sp-text mb-2">설정 초기화</h3>
             <p className="text-sm text-sp-muted mb-6">
               변경사항을 저장하지 않고 마지막 저장 상태로 되돌리시겠습니까?
             </p>

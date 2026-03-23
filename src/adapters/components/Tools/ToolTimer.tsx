@@ -414,7 +414,7 @@ function CustomTimeModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-sp-card border border-sp-border rounded-2xl p-6 w-80">
-        <h3 className="text-lg font-bold text-white mb-4">시간 직접 입력</h3>
+        <h3 className="text-lg font-bold text-sp-text mb-4">시간 직접 입력</h3>
         <div className="flex items-center gap-3 justify-center mb-6">
           <div className="flex flex-col items-center gap-1">
             <input
@@ -423,7 +423,7 @@ function CustomTimeModal({
               max={99}
               value={min}
               onChange={(e) => setMin(e.target.value)}
-              className="w-20 h-14 bg-sp-bg border border-sp-border rounded-lg text-center text-2xl font-mono text-white focus:border-sp-accent focus:outline-none"
+              className="w-20 h-14 bg-sp-bg border border-sp-border rounded-lg text-center text-2xl font-mono text-sp-text focus:border-sp-accent focus:outline-none"
             />
             <span className="text-xs text-sp-muted">분</span>
           </div>
@@ -435,7 +435,7 @@ function CustomTimeModal({
               max={59}
               value={sec}
               onChange={(e) => setSec(e.target.value)}
-              className="w-20 h-14 bg-sp-bg border border-sp-border rounded-lg text-center text-2xl font-mono text-white focus:border-sp-accent focus:outline-none"
+              className="w-20 h-14 bg-sp-bg border border-sp-border rounded-lg text-center text-2xl font-mono text-sp-text focus:border-sp-accent focus:outline-none"
             />
             <span className="text-xs text-sp-muted">초</span>
           </div>
@@ -443,7 +443,7 @@ function CustomTimeModal({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-lg border border-sp-border text-sp-muted hover:text-white hover:bg-white/5 transition-colors"
+            className="flex-1 py-2.5 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
           >
             취소
           </button>
@@ -504,13 +504,13 @@ function AlarmSoundSelector({
             onClick={() => onSelectSound(preset.id)}
             className={`relative flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
               selectedSound === preset.id
-                ? 'bg-sp-accent/15 border-sp-accent text-white'
-                : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/40'
+                ? 'bg-sp-accent/15 border-sp-accent text-sp-accent'
+                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
             }`}
           >
             <span className="material-symbols-outlined text-[22px]">{preset.icon}</span>
             <span className="text-xs font-medium">{preset.label}</span>
-            <span className="text-[10px] opacity-60">{preset.description}</span>
+            <span className="text-caption opacity-60">{preset.description}</span>
             {/* 미리듣기 버튼 */}
             <button
               onClick={(e) => {
@@ -520,11 +520,11 @@ function AlarmSoundSelector({
               className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                 previewPlaying === preset.id
                   ? 'bg-sp-accent text-white'
-                  : 'bg-white/10 text-sp-muted hover:text-white hover:bg-white/20'
+                  : 'bg-sp-text/10 text-sp-muted hover:text-sp-text hover:bg-sp-text/20'
               }`}
               title="미리듣기"
             >
-              <span className="material-symbols-outlined text-[14px]">
+              <span className="material-symbols-outlined text-icon-sm">
                 {previewPlaying === preset.id ? 'volume_up' : 'play_arrow'}
               </span>
             </button>
@@ -542,8 +542,8 @@ function AlarmSoundSelector({
           }}
           className={`relative flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
             selectedSound === 'custom'
-              ? 'bg-sp-accent/15 border-sp-accent text-white'
-              : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/40'
+              ? 'bg-sp-accent/15 border-sp-accent text-sp-accent'
+              : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
           }`}
         >
           <span className="material-symbols-outlined text-[22px]">
@@ -552,7 +552,7 @@ function AlarmSoundSelector({
           <span className="text-xs font-medium">
             {customDataUrl ? '내 파일' : '직접 등록'}
           </span>
-          <span className="text-[10px] opacity-60 truncate max-w-full px-1">
+          <span className="text-caption opacity-60 truncate max-w-full px-1">
             {customAudioName || '파일 선택'}
           </span>
 
@@ -567,11 +567,11 @@ function AlarmSoundSelector({
                 className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                   previewPlaying === 'custom'
                     ? 'bg-sp-accent text-white'
-                    : 'bg-white/10 text-sp-muted hover:text-white hover:bg-white/20'
+                    : 'bg-sp-text/10 text-sp-muted hover:text-sp-text hover:bg-sp-text/20'
                 }`}
                 title="미리듣기"
               >
-                <span className="material-symbols-outlined text-[14px]">
+                <span className="material-symbols-outlined text-icon-sm">
                   {previewPlaying === 'custom' ? 'volume_up' : 'play_arrow'}
                 </span>
               </button>
@@ -583,7 +583,7 @@ function AlarmSoundSelector({
                 className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full flex items-center justify-center bg-white/10 text-sp-muted hover:text-red-400 hover:bg-red-500/20 transition-all"
                 title="삭제"
               >
-                <span className="material-symbols-outlined text-[14px]">close</span>
+                <span className="material-symbols-outlined text-icon-sm">close</span>
               </button>
             </>
           )}
@@ -592,7 +592,7 @@ function AlarmSoundSelector({
 
       {/* 볼륨 슬라이더 */}
       <div className="flex items-center gap-3 px-1">
-        <span className="material-symbols-outlined text-sp-muted text-[18px]">
+        <span className="material-symbols-outlined text-sp-muted text-icon-md">
           {volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
         </span>
         <input
@@ -612,7 +612,7 @@ function AlarmSoundSelector({
 
       {/* 볼륨 부스트 */}
       <div className="flex items-center gap-3 px-1">
-        <span className="material-symbols-outlined text-sp-muted text-[18px]">graphic_eq</span>
+        <span className="material-symbols-outlined text-sp-muted text-icon-md">graphic_eq</span>
         <div className="flex gap-1.5">
           {BOOST_OPTIONS.map((b) => (
             <button
@@ -621,7 +621,7 @@ function AlarmSoundSelector({
               className={`px-3 py-1 rounded-lg text-xs font-medium transition-all border ${
                 boost === b
                   ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/40'
+                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
               }`}
             >
               {b}x
@@ -630,7 +630,7 @@ function AlarmSoundSelector({
         </div>
         {boost > 1 && (
           <span className="text-xs text-amber-400 flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">volume_up</span>
+            <span className="material-symbols-outlined text-icon-sm">volume_up</span>
             {boost}배 증폭
           </span>
         )}
@@ -979,7 +979,7 @@ function TimerMode() {
             className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
               selectedPreset === p.seconds
                 ? 'bg-sp-accent text-white'
-                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50'
+                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
             } disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             {p.label}
@@ -991,7 +991,7 @@ function TimerMode() {
           className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
             selectedPreset === -1
               ? 'bg-sp-accent text-white'
-              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/50'
+              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
           } disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           직접 입력
@@ -1014,7 +1014,7 @@ function TimerMode() {
                 transition-all text-xs font-medium"
               title={`${adj.label} 빼기`}
             >
-              <span className="material-symbols-outlined text-[14px] group-hover:text-red-400">remove</span>
+              <span className="material-symbols-outlined text-icon-sm group-hover:text-red-400">remove</span>
               {adj.label}
             </button>
           ))}
@@ -1026,7 +1026,7 @@ function TimerMode() {
           {showPreWarningBanner && state === 'running' && (
             <div className="absolute -top-2 left-0 right-0 z-30 flex justify-center animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-amber-500 shadow-md">
-                <span className="material-symbols-outlined text-white text-[20px]">
+                <span className="material-symbols-outlined text-white text-icon-lg">
                   notifications_active
                 </span>
                 <span className="text-sm font-bold text-white">
@@ -1036,7 +1036,7 @@ function TimerMode() {
             </div>
           )}
           <CircleProgress ratio={ratio} preWarningActive={showPreWarningBanner && state === 'running'} />
-          <span className="text-7xl md:text-8xl font-mono font-bold text-white z-10 select-none">
+          <span className="text-7xl md:text-8xl font-mono font-bold text-sp-text z-10 select-none">
             {formatTime(remaining)}
           </span>
         </div>
@@ -1055,7 +1055,7 @@ function TimerMode() {
                 transition-all text-xs font-medium"
               title={`${adj.label} 추가`}
             >
-              <span className="material-symbols-outlined text-[14px] group-hover:text-emerald-400">add</span>
+              <span className="material-symbols-outlined text-icon-sm group-hover:text-emerald-400">add</span>
               {adj.label}
             </button>
           ))}
@@ -1067,7 +1067,7 @@ function TimerMode() {
         <button
           onClick={reset}
           disabled={state === 'idle'}
-          className="w-16 h-16 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/10 transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-16 h-16 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
           title="리셋"
         >
           <span className="material-symbols-outlined text-[28px]">restart_alt</span>
@@ -1078,7 +1078,7 @@ function TimerMode() {
             className="w-20 h-20 rounded-full bg-sp-highlight text-white flex items-center justify-center hover:bg-sp-highlight/80 transition-colors shadow-lg shadow-sp-highlight/20"
             title="일시정지"
           >
-            <span className="material-symbols-outlined text-[36px]">pause</span>
+            <span className="material-symbols-outlined text-4xl">pause</span>
           </button>
         ) : (
           <button
@@ -1087,7 +1087,7 @@ function TimerMode() {
             className="w-20 h-20 rounded-full bg-sp-accent text-white flex items-center justify-center hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20 disabled:opacity-30 disabled:cursor-not-allowed"
             title="시작"
           >
-            <span className="material-symbols-outlined text-[36px]">play_arrow</span>
+            <span className="material-symbols-outlined text-4xl">play_arrow</span>
           </button>
         )}
         <div className="w-16 h-16" />
@@ -1102,10 +1102,10 @@ function TimerMode() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
               showSoundPanel
                 ? 'bg-sp-accent/15 text-sp-accent border border-sp-accent/30'
-                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-sp-accent/40'
+                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">
+            <span className="material-symbols-outlined text-icon-md">
               {volume === 0 ? 'volume_off' : 'volume_up'}
             </span>
             <span>
@@ -1113,7 +1113,7 @@ function TimerMode() {
                 ? customAudioName
                 : ALARM_PRESETS.find((p) => p.id === selectedSound)?.label ?? '기본 알림'}
             </span>
-            <span className="material-symbols-outlined text-[16px]">
+            <span className="material-symbols-outlined text-icon">
               {showSoundPanel ? 'expand_less' : 'expand_more'}
             </span>
           </button>
@@ -1126,12 +1126,12 @@ function TimerMode() {
                 ? 'bg-amber-500 text-white border border-amber-500'
                 : preWarning.enabled
                   ? 'bg-sp-card border border-amber-500/50 text-sp-text hover:border-amber-500'
-                  : 'bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:border-amber-500/40'
+                  : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-amber-500/40'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+            <span className="material-symbols-outlined text-icon-md">notifications_active</span>
             <span>예고 알림{preWarning.enabled ? `: ${preWarning.secondsBefore < 60 ? `${preWarning.secondsBefore}초` : `${preWarning.secondsBefore / 60}분`} 전` : ' (꺼짐)'}</span>
-            <span className="material-symbols-outlined text-[16px]">
+            <span className="material-symbols-outlined text-icon">
               {showPreWarningPanel ? 'expand_less' : 'expand_more'}
             </span>
           </button>
@@ -1161,7 +1161,7 @@ function TimerMode() {
         <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-amber-400 text-[18px]">
+              <span className="material-symbols-outlined text-amber-400 text-icon-md">
                 notifications_active
               </span>
               <span className="text-sm font-medium text-sp-text">종료 전 예고 알림</span>
@@ -1194,7 +1194,7 @@ function TimerMode() {
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                         preWarning.secondsBefore === sec
                           ? 'bg-amber-500 border-amber-500 text-white'
-                          : 'bg-sp-card border-sp-border text-sp-muted hover:text-white'
+                          : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'
                       }`}
                     >
                       {sec < 60 ? `${sec}초` : `${sec / 60}분`}
@@ -1218,10 +1218,10 @@ function TimerMode() {
                       className={`flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
                         preWarning.sound === preset.id
                           ? 'bg-amber-500 border-amber-500 text-white'
-                          : 'bg-sp-card border-sp-border text-sp-muted hover:text-white hover:border-amber-500/40'
+                          : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-amber-500/40'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[20px]">{preset.icon}</span>
+                      <span className="material-symbols-outlined text-icon-lg">{preset.icon}</span>
                       <span className="text-xs font-medium">{preset.label}</span>
                     </button>
                   ))}
@@ -1327,7 +1327,7 @@ function StopwatchMode() {
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto">
       {/* 경과 시간 */}
-      <div className="text-8xl font-mono font-bold text-white select-none tabular-nums">
+      <div className="text-8xl font-mono font-bold text-sp-text select-none tabular-nums">
         {formatTimeMs(elapsed)}
       </div>
 
@@ -1336,10 +1336,10 @@ function StopwatchMode() {
         <button
           onClick={reset}
           disabled={state === 'idle'}
-          className="w-14 h-14 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/10 transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-14 h-14 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
           title="리셋"
         >
-          <span className="material-symbols-outlined text-[24px]">restart_alt</span>
+          <span className="material-symbols-outlined text-icon-xl">restart_alt</span>
         </button>
 
         {state === 'running' ? (
@@ -1348,7 +1348,7 @@ function StopwatchMode() {
             className="w-20 h-20 rounded-full bg-sp-highlight text-white flex items-center justify-center hover:bg-sp-highlight/80 transition-colors shadow-lg shadow-sp-highlight/20"
             title="일시정지"
           >
-            <span className="material-symbols-outlined text-[36px]">pause</span>
+            <span className="material-symbols-outlined text-4xl">pause</span>
           </button>
         ) : (
           <button
@@ -1356,17 +1356,17 @@ function StopwatchMode() {
             className="w-20 h-20 rounded-full bg-sp-accent text-white flex items-center justify-center hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20"
             title="시작"
           >
-            <span className="material-symbols-outlined text-[36px]">play_arrow</span>
+            <span className="material-symbols-outlined text-4xl">play_arrow</span>
           </button>
         )}
 
         <button
           onClick={lap}
           disabled={state !== 'running'}
-          className="w-14 h-14 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-white hover:bg-white/10 transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-14 h-14 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
           title="랩"
         >
-          <span className="material-symbols-outlined text-[24px]">flag</span>
+          <span className="material-symbols-outlined text-icon-xl">flag</span>
         </button>
       </div>
 
@@ -1388,7 +1388,7 @@ function StopwatchMode() {
                   className="border-b border-sp-border/50 last:border-0"
                 >
                   <td className="py-2 px-4 text-sp-muted">#{l.index}</td>
-                  <td className="py-2 px-4 text-right font-mono text-white">
+                  <td className="py-2 px-4 text-right font-mono text-sp-text">
                     {formatTimeMs(l.elapsed)}
                   </td>
                   <td className="py-2 px-4 text-right font-mono text-sp-accent">
@@ -1441,7 +1441,7 @@ export function ToolTimer({ onBack, isFullscreen }: ToolTimerProps) {
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === 'timer'
                 ? 'bg-sp-accent text-white shadow-sm'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             ⏱️ 타이머
@@ -1451,7 +1451,7 @@ export function ToolTimer({ onBack, isFullscreen }: ToolTimerProps) {
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === 'stopwatch'
                 ? 'bg-sp-accent text-white shadow-sm'
-                : 'text-sp-muted hover:text-white'
+                : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             ⏱️ 스톱워치

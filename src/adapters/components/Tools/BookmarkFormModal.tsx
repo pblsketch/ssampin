@@ -124,9 +124,14 @@ export function BookmarkFormModal({
   const canSubmit = name.trim() && url.trim() && isUrlValid && groupId;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-sp-surface border border-sp-border rounded-2xl w-full max-w-md p-6 shadow-2xl">
-        <h2 className="text-lg font-bold text-white mb-5">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" aria-hidden="true">
+      <div
+        className="bg-sp-surface border border-sp-border rounded-2xl w-full max-w-md p-6 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-bookmark-form"
+      >
+        <h2 id="modal-title-bookmark-form" className="text-lg font-bold text-sp-text mb-5">
           {isEdit ? '즐겨찾기 편집' : '즐겨찾기 추가'}
         </h2>
 
