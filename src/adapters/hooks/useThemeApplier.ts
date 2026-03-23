@@ -2,6 +2,9 @@ import { useLayoutEffect } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getPresetTheme, PRESET_THEMES } from '@domain/entities/DashboardTheme';
 import type { ThemeColors } from '@domain/entities/DashboardTheme';
+import { DEFAULT_WIDGET_STYLE, SHADOW_MAP, FONT_MAP } from '@domain/entities/DashboardTheme';
+import type { WidgetStyleSettings, FontFamily } from '@domain/entities/Settings';
+import { getFontPreset } from '@domain/entities/FontPreset';
 
 /**
  * HEX (#rrggbb) 를 "r, g, b" RGB 문자열로 변환
@@ -84,6 +87,60 @@ function resolveColors(
 }
 
 /**
+ * 위젯 스타일 설정을 CSS 변수로 적용
+ */
+function applyWidgetStyle(ws: WidgetStyleSettings | undefined): void {
+  const s = { ...DEFAULT_WIDGET_STYLE, ...ws };
+  const root = document.documentElement;
+
+  // 색상 오버라이드 → CSS 변수 덮어쓰기
+  if (s.cardColor) root.style.setProperty('--sp-card-base', s.cardColor);
+  if (s.bgColor) root.style.setProperty('--sp-bg', s.bgColor);
+  if (s.accentColor) {
+    root.style.setProperty('--sp-accent', s.accentColor);
+    root.style.setProperty('--sp-accent-fg', computeAccentFg(s.accentColor));
+  }
+  if (s.textColor) root.style.setProperty('--sp-text', s.textColor);
+
+  // 레이아웃 변수
+  root.style.setProperty('--sp-card-radius', `${s.borderRadius}px`);
+  root.style.setProperty('--sp-card-gap', `${s.cardGap}px`);
+  root.style.setProperty('--sp-card-border', s.showBorder ? '1px solid var(--sp-border)' : 'none');
+  root.style.setProperty('--sp-card-shadow', SHADOW_MAP[s.shadow]);
+  root.style.setProperty('--sp-font-family', FONT_MAP[s.fontFamily]);
+
+  // 폰트 파일 동적 로드
+  loadFontStylesheet(s.fontFamily);
+}
+
+/**
+ * 위젯 스타일에서 선택한 폰트의 stylesheet을 동적으로 로드
+ */
+function loadFontStylesheet(fontFamily: FontFamily): void {
+  if (fontFamily === 'noto-sans') return; // 기본 폰트는 이미 로드됨
+
+  const preset = getFontPreset(fontFamily);
+
+  // customCss (@font-face 직접 정의) 처리
+  if (preset.customCss && !document.querySelector(`style[data-ssp-font="${fontFamily}"]`)) {
+    const style = document.createElement('style');
+    style.dataset.sspFont = fontFamily;
+    style.textContent = preset.customCss;
+    document.head.appendChild(style);
+  }
+
+  // CDN/Google Fonts stylesheet 처리
+  const url = preset.googleFontsUrl ?? preset.cdnUrl;
+  if (url && !document.querySelector(`link[href="${url}"]`)) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = url;
+    link.dataset.sspFont = fontFamily;
+    document.head.appendChild(link);
+  }
+}
+
+/**
  * CSS 변수를 직접 document.documentElement에 주입하여 테마를 적용한다.
  * useLayoutEffect로 렌더링 전에 적용 (FOUC 방지)
  */
@@ -94,7 +151,8 @@ export function useThemeApplier(): void {
     const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const colors = resolveColors(settings.dashboardTheme, settings.theme, systemDark);
     applyThemeColors(colors);
-  }, [settings.dashboardTheme, settings.theme]);
+    applyWidgetStyle(settings.widgetStyle);
+  }, [settings.dashboardTheme, settings.theme, settings.widgetStyle]);
 
   // system 테마 변경 감지
   useLayoutEffect(() => {

@@ -41,10 +41,7 @@ export function useFontApplier(fontFamily: FontFamily) {
       }
     }
 
-    document.documentElement.style.fontFamily = preset.cssFamily;
-
-    return () => {
-      document.documentElement.style.fontFamily = '';
-    };
+    // 폰트 적용은 --sp-font-family CSS 변수(useThemeApplier)가 담당
+    // 인라인 fontFamily를 설정하면 CSS 변수를 덮어쓰므로 여기선 로드만 수행
   }, [fontFamily]);
 }
