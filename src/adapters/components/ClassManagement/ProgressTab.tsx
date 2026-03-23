@@ -4,6 +4,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
+import { isSubjectMatch } from '@domain/rules/matchingRules';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -51,7 +52,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     deleteProgressEntry,
   } = useTeachingClassStore();
 
-  const { classSchedule } = useScheduleStore();
+  const { classSchedule, teacherSchedule } = useScheduleStore();
   const { settings } = useSettingsStore();
 
   const [showForm, setShowForm] = useState(false);
@@ -113,16 +114,45 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     if (!currentClass) return [];
     const subjectName = currentClass.subject;
     const dayOfWeek = getDayOfWeek(dateStr);
-    const daySchedule = classSchedule[dayOfWeek];
-    if (!daySchedule) return [];
+
+    // 학급 시간표 먼저, 없으면 교사 시간표에서 찾기
+    const dayScheduleClass = classSchedule[dayOfWeek];
+    const dayScheduleTeacher = teacherSchedule?.[dayOfWeek];
+
     const periods: number[] = [];
-    daySchedule.forEach((slot, idx) => {
-      if (slot.subject && slot.subject.includes(subjectName)) {
-        periods.push(idx + 1);
-      }
-    });
+
+    // 학급 시간표에서 매칭
+    if (dayScheduleClass && dayScheduleClass.length > 0) {
+      dayScheduleClass.forEach((slot, idx) => {
+        if (slot.subject && isSubjectMatch(slot.subject, subjectName)) {
+          periods.push(idx + 1);
+        }
+      });
+    }
+
+    // 학급 시간표에서 못 찾았으면 교사 시간표에서 매칭
+    if (periods.length === 0 && dayScheduleTeacher) {
+      dayScheduleTeacher.forEach((slot, idx) => {
+        if (slot && isSubjectMatch(slot.subject, subjectName)) {
+          // 교실명으로도 학급 매칭 확인
+          if (slot.classroom.includes(currentClass.name) || currentClass.name.includes(slot.classroom)) {
+            periods.push(idx + 1);
+          }
+        }
+      });
+    }
+
+    // 그래도 못 찾았으면 교사 시간표에서 과목만으로 매칭
+    if (periods.length === 0 && dayScheduleTeacher) {
+      dayScheduleTeacher.forEach((slot, idx) => {
+        if (slot && isSubjectMatch(slot.subject, subjectName)) {
+          periods.push(idx + 1);
+        }
+      });
+    }
+
     return periods;
-  }, [classId, classes, classSchedule, getDayOfWeek]);
+  }, [classId, classes, classSchedule, teacherSchedule, getDayOfWeek]);
 
   // 날짜 변경 핸들러 (교시 자동 선택 포함)
   const handleDateChange = useCallback((newDate: string) => {
