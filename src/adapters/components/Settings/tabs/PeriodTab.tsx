@@ -6,6 +6,7 @@ import { getDefaultPreset, generatePeriodTimes, parseMinutes, formatTime, PERIOD
 import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { SettingsSection } from '../shared/SettingsSection';
 import { SCHOOL_LEVEL_OPTIONS } from '../shared/constants';
+import { NeisTimetableAutoSyncSection } from '../NeisTimetableAutoSyncSection';
 
 interface Props {
   draft: Settings;
@@ -116,6 +117,7 @@ export function PeriodTab({ draft, patch }: Props) {
   }, []);
 
   return (
+    <>
     <SettingsSection
       icon="schedule"
       iconColor="bg-emerald-500/10 text-emerald-400"
@@ -381,6 +383,10 @@ export function PeriodTab({ draft, patch }: Props) {
         </table>
       </div>
     </SettingsSection>
+
+      {/* NEIS 시간표 자동 동기화 — custom(직접 설정)일 때 숨김 */}
+      {draft.schoolLevel !== 'custom' && <NeisTimetableAutoSyncSection />}
+    </>
   );
 }
 

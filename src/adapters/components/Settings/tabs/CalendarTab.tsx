@@ -7,7 +7,6 @@ import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
 import { COLOR_MAP, colorDot, DEFAULT_CAT_IDS } from '../shared/constants';
 import { NeisScheduleSection } from '../NeisScheduleSection';
-import { NeisTimetableAutoSyncSection } from '../NeisTimetableAutoSyncSection';
 import { CalendarSettings } from '../CalendarSettings';
 
 interface Props {
@@ -118,9 +117,6 @@ export function CalendarTab({ draft, patch }: Props) {
 
       {/* NEIS 학사일정 — custom(직접 설정)일 때 숨김 */}
       {draft.schoolLevel !== 'custom' && <NeisScheduleSection />}
-
-      {/* NEIS 시간표 자동 동기화 — custom(직접 설정)일 때 숨김 */}
-      {draft.schoolLevel !== 'custom' && <NeisTimetableAutoSyncSection />}
 
       {/* 구글 캘린더 연동 */}
       <SettingsSection
