@@ -16,22 +16,12 @@ import {
   getLunchBreakIndex,
   formatLunchBreakTime,
 } from '@adapters/presenters/timetablePresenter';
-import { neisPort } from '@adapters/di/container';
-import { NEIS_API_KEY } from '@domain/entities/Meal';
-import {
-  getCurrentWeekRange,
-  settingsLevelToNeisLevel,
-  getCurrentAcademicYear,
-  getCurrentSemester,
-} from '@domain/entities/NeisTimetable';
-import {
-  transformToClassSchedule,
-  getMaxPeriod,
-} from '@domain/rules/neisTransformRules';
 import { smartAutoAssignColors, extractSubjectsFromSchedule, extractClassroomsFromSchedule, autoAssignClassroomColors } from '@domain/rules/subjectColorRules';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
+import type { ClassScheduleData } from '@domain/entities/Timetable';
 import { TimetableEditor } from './TimetableEditor';
 import { TempChangeModal } from './TempChangeModal';
+import { NeisImportModal } from './NeisImportModal';
 /* eslint-disable no-restricted-imports */
 import {
   exportClassScheduleToExcel,
@@ -55,7 +45,7 @@ export function TimetablePage() {
     deleteOverride,
   } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
-  const { track } = useAnalytics();
+  useAnalytics();
   const [tab, setTab] = useState<TabType>('teacher');
   const [isEditing, setIsEditing] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -223,59 +213,24 @@ export function TimetablePage() {
     }
   }, [tab, classSchedule, teacherSchedule, settings.maxPeriods, showToast]);
 
-  // ── 자동 동기화 ──
-  const autoSync = settings.neis.autoSync;
-  const hasSchoolInfo = Boolean(settings.neis.atptCode && settings.neis.schoolCode);
-  const autoSyncReady = Boolean(autoSync?.enabled && autoSync?.grade && autoSync?.className && hasSchoolInfo);
-  const [syncing, setSyncing] = useState(false);
-
   const updateSettings = useSettingsStore((s) => s.update);
   const updateClassSchedule = useScheduleStore((s) => s.updateClassSchedule);
 
-  const handleToggleAutoSync = useCallback(async () => {
-    const nextEnabled = !(autoSync?.enabled ?? false);
-    if (nextEnabled && !hasSchoolInfo) {
-      showToast('설정에서 학교를 먼저 검색해주세요.', 'error');
-      return;
-    }
-    await updateSettings({
-      neis: {
-        ...settings.neis,
-        autoSync: {
-          ...(autoSync ?? { enabled: false, grade: '', className: '', lastSyncDate: '', lastSyncWeek: '', syncTarget: 'class' as const }),
-          enabled: nextEnabled,
-        },
-      },
-    });
-    showToast(nextEnabled ? '자동 동기화가 켜졌습니다.' : '자동 동기화가 꺼졌습니다.', 'info');
-  }, [autoSync, hasSchoolInfo, settings.neis, updateSettings, showToast]);
+  // ── 나이스 불러오기 모달 ──
+  const [showNeisImport, setShowNeisImport] = useState(false);
 
-  const handleSyncNow = useCallback(async () => {
-    if (!autoSyncReady) return;
-    setSyncing(true);
-    try {
-      const { fromDate, toDate } = getCurrentWeekRange();
-      const neisLevel = settingsLevelToNeisLevel(settings.schoolLevel);
-      const rows = await neisPort.getTimetable({
-        apiKey: NEIS_API_KEY,
-        officeCode: settings.neis.atptCode,
-        schoolCode: settings.neis.schoolCode,
-        schoolLevel: neisLevel,
-        academicYear: getCurrentAcademicYear(),
-        semester: getCurrentSemester(),
-        grade: autoSync!.grade,
-        className: autoSync!.className,
-        fromDate,
-        toDate,
-      });
-      if (rows.length === 0) {
-        showToast('해당 기간의 시간표 데이터가 없습니다.', 'error');
-        return;
-      }
-      const maxPeriods = getMaxPeriod(rows);
-      const data = transformToClassSchedule(rows, maxPeriods);
+  const hasExistingData = useMemo(() => {
+    return DAYS_OF_WEEK.some((day) =>
+      (classSchedule[day] ?? []).some((cp) => cp.subject.trim() !== ''),
+    );
+  }, [classSchedule]);
+
+  const handleNeisImport = useCallback(
+    async (data: ClassScheduleData, maxPeriods: number) => {
       await updateClassSchedule(data);
-
+      if (maxPeriods !== settings.maxPeriods) {
+        await updateSettings({ maxPeriods });
+      }
       const currentColors = settings.subjectColors ?? {};
       const allSubjects = extractSubjectsFromSchedule(data);
       const newSubjects = allSubjects.filter(
@@ -285,23 +240,29 @@ export function TimetablePage() {
         const updatedColors = smartAutoAssignColors(currentColors, newSubjects);
         await updateSettings({ subjectColors: updatedColors });
       }
+    },
+    [updateClassSchedule, settings.maxPeriods, settings.subjectColors, updateSettings],
+  );
 
+  const handleEnableAutoSync = useCallback(
+    async (grade: string, className_: string) => {
       await updateSettings({
-        ...(maxPeriods > settings.maxPeriods ? { maxPeriods } : {}),
         neis: {
           ...settings.neis,
-          autoSync: { ...autoSync!, lastSyncDate: new Date().toISOString().slice(0, 10), lastSyncWeek: getCurrentISOWeek() },
+          autoSync: {
+            enabled: true,
+            grade,
+            className: className_,
+            lastSyncDate: new Date().toISOString().slice(0, 10),
+            lastSyncWeek: getCurrentISOWeek(),
+            syncTarget: 'class',
+          },
         },
       });
-      showToast('시간표를 동기화했습니다!', 'success');
-      track('timetable_neis_sync', { success: true });
-    } catch {
-      showToast('동기화에 실패했습니다.', 'error');
-      track('timetable_neis_sync', { success: false });
-    } finally {
-      setSyncing(false);
-    }
-  }, [autoSyncReady, autoSync, settings, updateClassSchedule, updateSettings, showToast]);
+      showToast('자동 동기화가 설정되었습니다!', 'success');
+    },
+    [settings.neis, updateSettings, showToast],
+  );
 
   const { className, teacherName } = settings;
   const yearStr = `${now.getFullYear()}학년도`;
@@ -334,32 +295,15 @@ export function TimetablePage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* 자동 동기화 상태 (비-custom 학교급에서만 표시) */}
-          {hasSchoolInfo && settings.schoolLevel !== 'custom' && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => void handleToggleAutoSync()}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all active:scale-95 border ${
-                  autoSync?.enabled
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                    : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
-                }`}
-                title={autoSync?.enabled ? '자동 동기화 끄기' : '자동 동기화 켜기'}
-              >
-                <span className={`block w-2 h-2 rounded-full ${autoSync?.enabled ? 'bg-emerald-400' : 'bg-sp-muted/50'}`} />
-                {autoSync?.enabled ? '자동 동기화' : '동기화 꺼짐'}
-              </button>
-              {autoSyncReady && (
-                <button
-                  onClick={() => void handleSyncNow()}
-                  disabled={syncing}
-                  className="flex items-center gap-1 rounded-xl bg-sp-surface border border-sp-border px-2.5 py-2 text-xs font-bold text-sp-muted hover:text-sp-accent transition-all active:scale-95 disabled:opacity-50"
-                  title={autoSync?.lastSyncDate ? `마지막 동기화: ${autoSync.lastSyncDate}` : '지금 동기화'}
-                >
-                  <span className={`material-symbols-outlined text-[16px] ${syncing ? 'animate-spin' : ''}`}>sync</span>
-                </button>
-              )}
-            </div>
+          {/* 나이스에서 불러오기 버튼 (학급 시간표, 비-custom 학교급에서만 표시) */}
+          {tab === 'class' && settings.schoolLevel !== 'custom' && (
+            <button
+              onClick={() => setShowNeisImport(true)}
+              className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95"
+            >
+              <span className="material-symbols-outlined text-icon-lg">download</span>
+              <span>나이스에서 불러오기</span>
+            </button>
           )}
 
           {/* 색상 모드 토글 (교사 시간표에서만 표시) */}
@@ -395,7 +339,7 @@ export function TimetablePage() {
             onClick={() => setIsEditing(true)}
             className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
           >
-            <span className="material-symbols-outlined text-[20px]">edit</span>
+            <span className="material-symbols-outlined text-icon-lg">edit</span>
             <span>편집</span>
           </button>
           {/* 내보내기 */}
@@ -404,7 +348,7 @@ export function TimetablePage() {
               onClick={() => setShowExportMenu((v) => !v)}
               className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
             >
-              <span className="material-symbols-outlined text-[20px]">download</span>
+              <span className="material-symbols-outlined text-icon-lg">download</span>
               <span>내보내기</span>
             </button>
             {showExportMenu && (
@@ -491,6 +435,13 @@ export function TimetablePage() {
           onClose={() => setTempChangeTarget(null)}
         />
       )}
+      <NeisImportModal
+        isOpen={showNeisImport}
+        onClose={() => setShowNeisImport(false)}
+        onImport={(data, maxPeriods) => void handleNeisImport(data, maxPeriods)}
+        hasExistingData={hasExistingData}
+        onEnableAutoSync={(grade, cls) => void handleEnableAutoSync(grade, cls)}
+      />
     </div>
   );
 }
@@ -603,7 +554,7 @@ function PeriodRow({
             {lunchTimeStr.split(' ~ ')[0]}
           </td>
           <td
-            className="px-4 py-3 text-center text-slate-500 text-sm font-medium tracking-wide"
+            className="px-4 py-3 text-center text-sp-muted text-sm font-medium tracking-wide"
             colSpan={5}
           >
             🍽️ 점심시간 ({lunchTimeStr})
@@ -726,8 +677,8 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
         }`}>
           {isOverridden ? '자습' : '—'}
           {isOverridden && (
-            <span className="absolute top-0.5 right-0.5 text-[8px] text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
-              <span className="material-symbols-outlined text-[12px]">push_pin</span>
+            <span className="absolute top-0.5 right-0.5 text-micro text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+              <span className="material-symbols-outlined text-xs">push_pin</span>
             </span>
           )}
         </div>
@@ -742,7 +693,7 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
       <span className={`${style.text} font-bold text-sm`}>{displaySubject}</span>
       {displayTeacher && <span className="text-sp-muted text-xs">{displayTeacher}</span>}
       {isOverridden && override.reason && (
-        <span className="text-amber-400/70 text-[9px]">{override.reason}</span>
+        <span className="text-amber-400/70 text-tiny">{override.reason}</span>
       )}
     </div>
   );
@@ -764,7 +715,7 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
           {cellContent}
           {isOverridden ? (
             <span className="absolute -top-1 -right-1 text-amber-400">
-              <span className="material-symbols-outlined text-[14px]">push_pin</span>
+              <span className="material-symbols-outlined text-icon-sm">push_pin</span>
             </span>
           ) : (
             <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
@@ -789,7 +740,7 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
         {cellContent}
         {isOverridden && (
           <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
-            <span className="material-symbols-outlined text-[12px]">push_pin</span>
+            <span className="material-symbols-outlined text-xs">push_pin</span>
           </span>
         )}
       </div>
@@ -831,7 +782,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
           {isOverridden ? '자습' : '공강'}
           {isOverridden && (
             <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
-              <span className="material-symbols-outlined text-[12px]">push_pin</span>
+              <span className="material-symbols-outlined text-xs">push_pin</span>
             </span>
           )}
         </div>
@@ -846,7 +797,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
       <span className={`${style.text} font-bold text-sm`}>{displayPeriod.subject}</span>
       <span className="text-sp-muted text-xs">{displayPeriod.classroom}</span>
       {isOverridden && override.reason && (
-        <span className="text-amber-400/70 text-[9px]">{override.reason}</span>
+        <span className="text-amber-400/70 text-tiny">{override.reason}</span>
       )}
     </div>
   );
@@ -868,7 +819,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
           {cellContent}
           {isOverridden ? (
             <span className="absolute -top-1 -right-1 text-amber-400">
-              <span className="material-symbols-outlined text-[14px]">push_pin</span>
+              <span className="material-symbols-outlined text-icon-sm">push_pin</span>
             </span>
           ) : (
             <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
@@ -893,7 +844,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
         {cellContent}
         {isOverridden && (
           <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
-            <span className="material-symbols-outlined text-[12px]">push_pin</span>
+            <span className="material-symbols-outlined text-xs">push_pin</span>
           </span>
         )}
       </div>
