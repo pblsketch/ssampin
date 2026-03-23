@@ -463,6 +463,21 @@ body {
   background: var(--sp-muted);
 }
 
+/* Widget Card Thin Scrollbar */
+.widget-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.widget-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.widget-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+}
+.widget-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
 /* PIN Overlay Animations */
 @keyframes pin-shake {
 

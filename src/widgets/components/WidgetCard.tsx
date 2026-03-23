@@ -47,9 +47,9 @@ export function WidgetCard({ definition, isEditMode, onHide, onNavigate, maxHeig
   const content = (
     <div className={`h-full flex flex-col transition-all duration-200 ${isClickable ? 'group/clickable' : ''}`}>
       <div
-        className="relative overflow-hidden flex-1 min-h-0"
+        className="relative overflow-y-auto flex-1 min-h-0 widget-scroll"
         style={{
-          ...(adjustedMaxHeight ? { maxHeight: adjustedMaxHeight, overflow: 'hidden' } : {}),
+          ...(adjustedMaxHeight ? { maxHeight: adjustedMaxHeight, overflowY: 'auto' } : {}),
           ...(scale ? {
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
