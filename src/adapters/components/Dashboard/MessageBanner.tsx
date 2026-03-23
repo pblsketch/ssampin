@@ -35,6 +35,15 @@ const COLOR_OPTIONS: { id: MessageColorPreset; label: string; sample: string }[]
 ];
 
 /** hex 색상에서 배너 5색을 도출 */
+/** CSS 변수를 직접 사용하여 테마 변경에 자동 반응 */
+const THEME_COLORS = {
+  bg: 'color-mix(in srgb, var(--sp-accent) 10%, transparent)',
+  border: 'color-mix(in srgb, var(--sp-accent) 20%, transparent)',
+  icon: 'var(--sp-accent)',
+  text: 'var(--sp-accent)',
+  sub: 'color-mix(in srgb, var(--sp-accent) 80%, transparent)',
+};
+
 function deriveColors(hex: string) {
   return {
     bg: `${hex}1a`,
@@ -45,20 +54,9 @@ function deriveColors(hex: string) {
   };
 }
 
-/** 현재 위젯 테마의 --sp-accent 값을 읽음 */
-function getThemeAccent(): string {
-  return getComputedStyle(document.documentElement)
-    .getPropertyValue('--sp-accent')
-    .trim() || '#3b82f6';
-}
-
 function getColors(s: MessageStyle) {
-  if (s.colorPreset === 'theme') {
-    return deriveColors(getThemeAccent());
-  }
-  if (s.colorPreset === 'custom') {
-    return deriveColors(s.customColor ?? '#3b82f6');
-  }
+  if (s.colorPreset === 'theme') return THEME_COLORS;
+  if (s.colorPreset === 'custom') return deriveColors(s.customColor ?? '#3b82f6');
   return MESSAGE_COLOR_MAP[s.colorPreset];
 }
 
