@@ -35,7 +35,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* 본문: 그리드 + 사이드 패널 (편집 모드) */}
       <div className="flex-1 flex min-h-0">
-        <section className="flex-1 overflow-y-auto">
+        <section className="flex-1 overflow-y-auto pb-8">
           <WidgetGrid isEditMode={isEditMode} onNavigate={onNavigate} />
         </section>
 
