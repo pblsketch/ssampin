@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Settings, DashboardThemeSettings, FontFamily } from '@domain/entities/Settings';
+import type { Settings, DashboardThemeSettings, FontFamily, WidgetStyleSettings } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { ThemeSection } from '../ThemeSection';
 import { FontSelector } from '../FontSelector';
@@ -14,6 +14,10 @@ export function DisplayTab({ draft, patch }: Props) {
     patch({ dashboardTheme: t });
   }, [patch]);
 
+  const patchWidgetStyle = useCallback((s: WidgetStyleSettings) => {
+    patch({ widgetStyle: s });
+  }, [patch]);
+
   const selectedFont: FontFamily = draft.fontFamily ?? 'noto-sans';
 
   return (
@@ -26,7 +30,9 @@ export function DisplayTab({ draft, patch }: Props) {
         {/* 테마 설정 */}
         <ThemeSection
           dashboardTheme={draft.dashboardTheme}
+          widgetStyle={draft.widgetStyle}
           onChange={patchDashboardTheme}
+          onStyleChange={patchWidgetStyle}
         />
 
         {/* 글꼴 선택 */}

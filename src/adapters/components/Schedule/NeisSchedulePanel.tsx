@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { getGradeList } from '@domain/entities/NeisSchedule';
 
 /* ─── Toggle Switch ─── */
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -234,8 +235,8 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                 {/* 학년 필터 */}
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-sp-text">학년 필터</p>
-                  <div className="flex items-center gap-2">
-                    {[1, 2, 3].map((grade) => (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {getGradeList(appSettings.schoolLevel).map((grade) => (
                       <label key={grade} className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"

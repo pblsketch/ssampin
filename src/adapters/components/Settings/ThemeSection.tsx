@@ -1,19 +1,21 @@
 import { useCallback, useMemo } from 'react';
-import { PRESET_THEMES } from '@domain/entities/DashboardTheme';
+import { PRESET_THEMES, DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
 import type { DashboardTheme, PresetThemeId, ThemeColors } from '@domain/entities/DashboardTheme';
-import type { DashboardThemeSettings } from '@domain/entities/Settings';
+import type { DashboardThemeSettings, WidgetStyleSettings } from '@domain/entities/Settings';
 import { ThemePreviewCard } from './ThemePreviewCard';
 import { CustomThemePanel } from './CustomThemePanel';
 
 interface ThemeSectionProps {
   dashboardTheme: DashboardThemeSettings | undefined;
+  widgetStyle: WidgetStyleSettings | undefined;
   onChange: (theme: DashboardThemeSettings) => void;
+  onStyleChange: (style: WidgetStyleSettings) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 const DEFAULT_CUSTOM_COLORS: ThemeColors = PRESET_THEMES[0]!.colors;
 
-export function ThemeSection({ dashboardTheme, onChange }: ThemeSectionProps) {
+export function ThemeSection({ dashboardTheme, widgetStyle, onChange, onStyleChange }: ThemeSectionProps) {
   const currentId = dashboardTheme?.presetId ?? 'dark';
   const customColors = dashboardTheme?.customColors ?? DEFAULT_CUSTOM_COLORS;
 
@@ -23,9 +25,18 @@ export function ThemeSection({ dashboardTheme, onChange }: ThemeSectionProps) {
     colors: customColors,
   }), [customColors]);
 
-  const handlePresetClick = useCallback((id: PresetThemeId) => {
-    onChange({ presetId: id, customColors: dashboardTheme?.customColors });
-  }, [onChange, dashboardTheme?.customColors]);
+  const handlePresetClick = useCallback((theme: DashboardTheme) => {
+    onChange({ presetId: theme.id as PresetThemeId, customColors: dashboardTheme?.customColors });
+    // styleHint가 있으면 위젯 스타일도 함께 적용
+    if (theme.styleHint) {
+      const colorReset = { bgColor: null, cardColor: null, accentColor: null, textColor: null } as const;
+      onStyleChange({
+        ...(widgetStyle ?? DEFAULT_WIDGET_STYLE),
+        ...theme.styleHint,
+        ...colorReset,
+      });
+    }
+  }, [onChange, onStyleChange, dashboardTheme?.customColors, widgetStyle]);
 
   const handleCustomClick = useCallback(() => {
     onChange({ presetId: 'custom', customColors });
@@ -52,7 +63,7 @@ export function ThemeSection({ dashboardTheme, onChange }: ThemeSectionProps) {
             key={theme.id}
             theme={theme}
             isSelected={currentId === theme.id}
-            onClick={() => handlePresetClick(theme.id as PresetThemeId)}
+            onClick={() => handlePresetClick(theme)}
           />
         ))}
 

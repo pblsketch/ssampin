@@ -1,6 +1,6 @@
 import type { FontFamily, ShadowLevel, WidgetStyleSettings } from './Settings';
 
-export type PresetThemeId = 'dark' | 'light' | 'pastel' | 'navy' | 'forest' | 'sunset' | 'mono';
+export type PresetThemeId = 'dark' | 'light' | 'pastel' | 'navy' | 'forest' | 'sunset' | 'mono' | 'notion-light' | 'notion-dark';
 
 export interface ThemeColors {
   readonly bg: string;
@@ -13,10 +13,19 @@ export interface ThemeColors {
   readonly muted: string;
 }
 
+export interface ThemeStyleHint {
+  readonly borderRadius?: number;
+  readonly cardGap?: number;
+  readonly showBorder?: boolean;
+  readonly shadow?: ShadowLevel;
+  readonly fontFamily?: FontFamily;
+}
+
 export interface DashboardTheme {
   readonly id: PresetThemeId | 'custom';
   readonly name: string;
   readonly colors: ThemeColors;
+  readonly styleHint?: ThemeStyleHint;
 }
 
 export const PRESET_THEMES: readonly DashboardTheme[] = [
@@ -55,10 +64,22 @@ export const PRESET_THEMES: readonly DashboardTheme[] = [
     name: '모노',
     colors: { bg: '#111111', surface: '#1a1a1a', card: '#222222', border: '#3a3a3a', accent: '#ffffff', highlight: '#a3a3a3', text: '#e5e5e5', muted: '#a3a3a3' },
   },
+  {
+    id: 'notion-light',
+    name: '노션',
+    colors: { bg: '#ffffff', surface: '#f7f6f3', card: '#f5f5f3', border: '#e9e9e7', accent: '#2383e2', highlight: '#c29343', text: '#37352f', muted: '#787774' },
+    styleHint: { borderRadius: 4, cardGap: 12, showBorder: false, shadow: 'none', fontFamily: 'pretendard' },
+  },
+  {
+    id: 'notion-dark',
+    name: '노션 다크',
+    colors: { bg: '#191919', surface: '#202020', card: '#252525', border: '#363636', accent: '#447acb', highlight: '#c19138', text: '#d4d4d4', muted: '#9b9b9b' },
+    styleHint: { borderRadius: 4, cardGap: 12, showBorder: false, shadow: 'none', fontFamily: 'pretendard' },
+  },
 ] as const;
 
 export function getPresetTheme(id: PresetThemeId): DashboardTheme {
-  // PRESET_THEMES는 항상 7개 이상의 요소를 가지므로 [0]은 안전
+  // PRESET_THEMES는 항상 9개 이상의 요소를 가지므로 [0]은 안전
   return PRESET_THEMES.find((t) => t.id === id) ?? PRESET_THEMES[0]!;
 }
 

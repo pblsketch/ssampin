@@ -192,7 +192,7 @@ function StyleTab() {
     <div className="space-y-5 px-4 py-3">
       {/* 섹션 1: 테마 프리셋 */}
       <StyleSection title="테마">
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-3 gap-1.5">
           {(() => {
             const currentPresetId = settings.dashboardTheme?.presetId
               ?? (settings.theme === 'light' ? 'light' : settings.theme === 'dark' ? 'dark' : undefined);
@@ -201,13 +201,20 @@ function StyleTab() {
               return (
               <button
                 key={t.id}
-                onClick={() => void updateSettings({
-                  dashboardTheme: { presetId: t.id },
-                  // 테마 변경 시 색상 오버라이드 초기화
-                  widgetStyle: settings.widgetStyle
-                    ? { ...settings.widgetStyle, bgColor: null, cardColor: null, accentColor: null, textColor: null }
-                    : undefined,
-                })}
+                onClick={() => {
+                  const colorReset = { bgColor: null, cardColor: null, accentColor: null, textColor: null } as const;
+                  const baseStyle = settings.widgetStyle
+                    ? { ...settings.widgetStyle, ...colorReset }
+                    : undefined;
+                  // styleHint가 있으면 위젯 스타일도 함께 적용
+                  const mergedStyle = t.styleHint
+                    ? { ...(baseStyle ?? DEFAULT_WIDGET_STYLE), ...t.styleHint, ...colorReset }
+                    : baseStyle;
+                  void updateSettings({
+                    dashboardTheme: { presetId: t.id },
+                    widgetStyle: mergedStyle,
+                  });
+                }}
                 className={`rounded-lg p-1.5 text-center text-[10px] border transition-all ${
                   isSelected
                     ? 'border-sp-accent ring-1 ring-sp-accent scale-105'
@@ -422,7 +429,7 @@ function ColorSwatchRow({ label, value, themeDefault, swatches, onChange, onRese
             className={`w-4 h-4 rounded-sm border transition-all hover:scale-125 ${
               currentColor.toLowerCase() === color.toLowerCase()
                 ? 'border-sp-accent ring-1 ring-sp-accent scale-110'
-                : 'border-white/10'
+                : 'border-sp-border/30'
             }`}
             style={{ background: color }}
             title={color}

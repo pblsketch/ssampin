@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { SchoolEvent, CategoryItem, AlertTiming, AlertTimingPreset, Recurrence } from '@domain/entities/SchoolEvent';
 import { isCustomAlert, alertTimingToLabel } from '@domain/entities/SchoolEvent';
+import { getGradeBadgeText } from '@domain/entities/NeisSchedule';
 
 interface EventFormModalProps {
   categories: readonly CategoryItem[];
@@ -220,13 +221,7 @@ export function EventFormModal({
                   <p>수정하면 다음 동기화 시 덮어씌워지지 않습니다.</p>
                   {editEvent.neis?.gradeYn && (
                     <p className="mt-1 text-purple-300/60">
-                      해당 학년: {
-                        [
-                          editEvent.neis.gradeYn.grade1 && '1학년',
-                          editEvent.neis.gradeYn.grade2 && '2학년',
-                          editEvent.neis.gradeYn.grade3 && '3학년',
-                        ].filter(Boolean).join(', ') || '없음'
-                      }
+                      해당 학년: {getGradeBadgeText(editEvent.neis.gradeYn) || '없음'}
                       {editEvent.neis.subtractDayType && ` · ${editEvent.neis.subtractDayType}`}
                     </p>
                   )}

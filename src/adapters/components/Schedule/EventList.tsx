@@ -7,6 +7,7 @@ import { type HolidayInfo, getKoreanHolidays } from '@domain/rules/holidayRules'
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { getGradeBadgeText } from '@domain/entities/NeisSchedule';
 import { periodToLabel } from '@adapters/presenters/periodPresenter';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -63,6 +64,7 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
 
   const categoryInfo = getCategoryInfo(event.category, categories);
   const colors = getColorsForCategory(event.category, categories);
+  const schoolLevel = useSettingsStore((s) => s.settings.schoolLevel);
 
   // 오늘 이벤트인지 확인
   const eventDate = new Date(
@@ -77,7 +79,7 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
 
   // NEIS 학년 배지 텍스트
   const gradeBadge = isNeis && event.neis?.gradeYn
-    ? getGradeBadgeText(event.neis.gradeYn)
+    ? getGradeBadgeText(event.neis.gradeYn, schoolLevel)
     : '';
 
   return (

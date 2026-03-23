@@ -1,3 +1,5 @@
+import type { GradeYn } from './NeisSchedule';
+
 /** @deprecated 커스텀 카테고리 시스템으로 대체됨. CategoryItem 사용 권장 */
 export type EventCategory =
   | 'school'
@@ -108,11 +110,7 @@ export interface SchoolEvent {
     readonly eventId: string;        // `${AA_YMD}_${hash(EVENT_NM)}` 고유 키
     readonly eventName: string;      // 원본 행사명
     readonly schoolYear: string;     // 학년도
-    readonly gradeYn: {
-      readonly grade1: boolean;
-      readonly grade2: boolean;
-      readonly grade3: boolean;
-    };
+    readonly gradeYn: GradeYn;
     readonly subtractDayType: string; // 수업공제일 구분 (공휴일/해당없음)
     readonly loadDate: string;        // 데이터 적재일
     readonly lastSyncAt: string;      // 마지막 동기화 시간

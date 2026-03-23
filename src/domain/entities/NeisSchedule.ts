@@ -2,6 +2,18 @@
  * NEIS 학사일정 API 관련 타입 정의
  */
 
+import type { SchoolLevel } from './Settings';
+
+/** 학년별 행사 해당 여부 (최대 6학년) */
+export interface GradeYn {
+  readonly grade1: boolean;
+  readonly grade2: boolean;
+  readonly grade3: boolean;
+  readonly grade4: boolean;
+  readonly grade5: boolean;
+  readonly grade6: boolean;
+}
+
 /** NEIS 학사일정 API 원본 행 */
 export interface NeisScheduleRow {
   readonly AA_YMD: string;                // 학사일자 (YYYYMMDD)
@@ -10,6 +22,9 @@ export interface NeisScheduleRow {
   readonly ONE_GRADE_EVENT_YN: string;    // 1학년 해당 여부 (Y/N)
   readonly TW_GRADE_EVENT_YN: string;     // 2학년 해당 여부 (Y/N)
   readonly THREE_GRADE_EVENT_YN: string;  // 3학년 해당 여부 (Y/N)
+  readonly FR_GRADE_EVENT_YN: string;     // 4학년 해당 여부
+  readonly FIV_GRADE_EVENT_YN: string;    // 5학년 해당 여부
+  readonly SIX_GRADE_EVENT_YN: string;    // 6학년 해당 여부
   readonly SBTR_DD_SC_NM: string;         // 수업공제일 구분 (공휴일/해당없음)
   readonly AY: string;                    // 학년도
   readonly LOAD_DTM: string;              // 데이터 적재일
@@ -21,11 +36,7 @@ export interface NeisScheduleEvent {
   readonly title: string;         // EVENT_NM
   readonly date: string;          // YYYY-MM-DD
   readonly schoolYear: string;    // AY
-  readonly gradeYn: {
-    readonly grade1: boolean;
-    readonly grade2: boolean;
-    readonly grade3: boolean;
-  };
+  readonly gradeYn: GradeYn;
   readonly subtractDayType: string; // 수업공제일 구분
   readonly eventContent: string;    // EVENT_CNTNT
   readonly loadDate: string;        // LOAD_DTM
@@ -96,6 +107,9 @@ export function parseNeisScheduleRow(row: NeisScheduleRow): NeisScheduleEvent {
       grade1: row.ONE_GRADE_EVENT_YN === 'Y',
       grade2: row.TW_GRADE_EVENT_YN === 'Y',
       grade3: row.THREE_GRADE_EVENT_YN === 'Y',
+      grade4: row.FR_GRADE_EVENT_YN === 'Y',
+      grade5: row.FIV_GRADE_EVENT_YN === 'Y',
+      grade6: row.SIX_GRADE_EVENT_YN === 'Y',
     },
     subtractDayType: row.SBTR_DD_SC_NM?.trim() ?? '',
     eventContent: row.EVENT_CNTNT?.trim() ?? '',
@@ -152,14 +166,40 @@ export function getAcademicYearRange(): { fromDate: string; toDate: string; acad
   return { fromDate, toDate, academicYear: String(academicYear) };
 }
 
-/** 학년 배지 텍스트 생성 */
-export function getGradeBadgeText(gradeYn: { grade1: boolean; grade2: boolean; grade3: boolean }): string {
-  const grades: string[] = [];
-  if (gradeYn.grade1) grades.push('1');
-  if (gradeYn.grade2) grades.push('2');
-  if (gradeYn.grade3) grades.push('3');
+/** 학교급별 최대 학년 */
+export const MAX_GRADE_BY_LEVEL: Record<SchoolLevel, number> = {
+  elementary: 6,
+  middle: 3,
+  high: 3,
+  custom: 6,
+};
 
-  if (grades.length === 3) return '전학년';
+/** 학교급별 학년 목록 생성 */
+export function getGradeList(schoolLevel: SchoolLevel): number[] {
+  const max = MAX_GRADE_BY_LEVEL[schoolLevel];
+  return Array.from({ length: max }, (_, i) => i + 1);
+}
+
+/** 학교급 변경 시 유효하지 않은 학년 필터 제거 */
+export function sanitizeGradeFilter(
+  filter: readonly number[],
+  schoolLevel: SchoolLevel,
+): number[] {
+  const maxGrade = MAX_GRADE_BY_LEVEL[schoolLevel];
+  return filter.filter((g) => g <= maxGrade);
+}
+
+/** 학년 배지 텍스트 생성 */
+export function getGradeBadgeText(gradeYn: GradeYn, schoolLevel?: SchoolLevel): string {
+  const maxGrade = schoolLevel ? MAX_GRADE_BY_LEVEL[schoolLevel] : 6;
+  const grades: string[] = [];
+
+  for (let i = 1; i <= maxGrade; i++) {
+    const key = `grade${i}` as keyof GradeYn;
+    if (gradeYn[key]) grades.push(String(i));
+  }
+
+  if (grades.length === maxGrade) return '전학년';
   if (grades.length === 0) return '';
   return grades.map((g) => `${g}학년`).join(', ');
 }
