@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { useMessageStore } from '@adapters/stores/useMessageStore';
 import {
   MESSAGE_COLOR_MAP,
@@ -57,7 +56,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
   const [subtitleDraft, setSubtitleDraft] = useState(style.subtitle);
 
   return (
-    <div className="w-72 bg-[#0a0e17] border border-sp-border rounded-xl shadow-xl p-4 space-y-4">
+    <div className="absolute top-full right-0 mt-2 w-72 bg-[#0a0e17] border border-sp-border rounded-xl shadow-xl p-4 z-50 space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-sp-text">배너 꾸미기</span>
         <button onClick={onClose} className="text-sp-muted hover:text-sp-text">
@@ -151,8 +150,6 @@ export function MessageBanner() {
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
-  const paletteRef = useRef<HTMLButtonElement>(null);
-  const [editorPos, setEditorPos] = useState<{ top: number; left: number } | null>(null);
 
   const s = { ...DEFAULT_MESSAGE_STYLE, ...style };
   const colors = getColors(s);
@@ -251,16 +248,9 @@ export function MessageBanner() {
 
         {/* 스타일 편집 버튼 */}
         <button
-          ref={paletteRef}
           onClick={(e) => {
             e.stopPropagation();
-            setShowStyleEditor((v) => {
-              if (!v && paletteRef.current) {
-                const rect = paletteRef.current.getBoundingClientRect();
-                setEditorPos({ top: rect.bottom + 8, left: Math.max(8, rect.right - 288) });
-              }
-              return !v;
-            });
+            setShowStyleEditor((v) => !v);
           }}
           className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-white/10"
           style={{ color: colors.text }}
@@ -270,16 +260,15 @@ export function MessageBanner() {
         </button>
       </div>
 
-      {/* 스타일 편집 드롭다운 (portal로 overflow-hidden 회피) */}
-      {showStyleEditor && editorPos && createPortal(
-        <div ref={editorRef} className="fixed z-[200]" style={{ top: editorPos.top, left: editorPos.left }}>
+      {/* 스타일 편집 드롭다운 */}
+      {showStyleEditor && (
+        <div ref={editorRef}>
           <MessageStyleEditor
             style={s}
             onUpdate={(patch) => void setStyle(patch)}
             onClose={() => setShowStyleEditor(false)}
           />
-        </div>,
-        document.body,
+        </div>
       )}
     </div>
   );
