@@ -219,15 +219,14 @@ export function getKoreanHolidays(year: number): readonly HolidayInfo[] {
     }
   }
 
-  // 단일 공휴일 대체공휴일 (삼일절, 어린이날, 현충일, 광복절, 개천절, 한글날, 성탄절)
+  // 단일 공휴일 대체공휴일 (삼일절, 어린이날, 광복절, 개천절, 한글날)
+  // 현충일(6/6)·성탄절(12/25)은 국경일이 아니므로 대체공휴일 대상 아님
   const singleSubstituteCandidates: Array<{ m: number; d: number; name: string }> = [
     { m: 3, d: 1, name: '삼일절' },
     { m: 5, d: 5, name: '어린이날' },
-    { m: 6, d: 6, name: '현충일' },
     { m: 8, d: 15, name: '광복절' },
     { m: 10, d: 3, name: '개천절' },
     { m: 10, d: 9, name: '한글날' },
-    { m: 12, d: 25, name: '성탄절' },
   ];
 
   for (const c of singleSubstituteCandidates) {
