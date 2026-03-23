@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { Student } from '@domain/entities/Student';
 import { studentRepository } from '@adapters/di/container';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useEventsStore } from '@adapters/stores/useEventsStore';
 
 /** 샘플 한국 학생 35명 (학번: 1학년 2반) */
 const SAMPLE_STUDENTS: readonly Student[] = [
@@ -99,6 +101,11 @@ export const useStudentStore = create<StudentState>((set, get) => ({
     try {
       await studentRepository.saveStudents(newStudents);
       set({ students: newStudents });
+
+      // 생일 변경 시 일정 동기화
+      if (field === 'birthDate' && useSettingsStore.getState().settings.syncBirthdaysToSchedule) {
+        void useEventsStore.getState().syncBirthdayEvents(newStudents);
+      }
     } catch {
       // 무시
     }
@@ -116,6 +123,11 @@ export const useStudentStore = create<StudentState>((set, get) => ({
     try {
       await studentRepository.saveStudents(newStudents);
       set({ students: newStudents });
+
+      // 결번 변경 시 생일 동기화 반영
+      if (student.birthDate && useSettingsStore.getState().settings.syncBirthdaysToSchedule) {
+        void useEventsStore.getState().syncBirthdayEvents(newStudents);
+      }
     } catch {
       // 무시
     }

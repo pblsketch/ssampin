@@ -99,7 +99,7 @@ export interface SchoolEvent {
   readonly lastSyncedAt?: string;       // ISO 8601
   readonly googleUpdatedAt?: string;    // ISO 8601
   readonly etag?: string;
-  readonly source?: 'ssampin' | 'google' | 'neis';
+  readonly source?: 'ssampin' | 'google' | 'neis' | 'birthday';
   readonly startTime?: string;          // "HH:mm"
   readonly endTime?: string;            // "HH:mm"
 

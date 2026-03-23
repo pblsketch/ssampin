@@ -24,6 +24,31 @@ export type FontFamily =
   | 'kakao-big'
   | 'spoqa-han-sans';
 
+export type ShadowLevel = 'none' | 'sm' | 'md' | 'lg';
+
+export interface WidgetStyleSettings {
+  /** 카드 테두리 라운드 (0~24px, 기본 12) */
+  readonly borderRadius: number;
+  /** 카드 배경 오버라이드 (null → 테마 기본) */
+  readonly cardColor: string | null;
+  /** 대시보드 배경 오버라이드 (null → 테마 기본) */
+  readonly bgColor: string | null;
+  /** 강조 색상 오버라이드 (null → 테마 기본) */
+  readonly accentColor: string | null;
+  /** 카드 간 gap (4~32px, 기본 16) */
+  readonly cardGap: number;
+  /** 카드 테두리 표시 여부 */
+  readonly showBorder: boolean;
+  /** 그림자 레벨 */
+  readonly shadow: ShadowLevel;
+  /** 배경 이미지 (프리셋 ID 또는 로컬 file:// 경로, null → 없음) */
+  readonly backgroundImage: string | null;
+  /** 배경 이미지 불투명도 (0.05~1, 기본 0.15) */
+  readonly backgroundImageOpacity: number;
+  /** 폰트 */
+  readonly fontFamily: FontFamily;
+}
+
 export type AlarmSoundId = 'beep' | 'school-bell' | 'alarm-clock' | 'gentle-chime' | 'buzzer' | 'custom';
 
 export type PreWarningSoundId = 'gentle-chime' | 'soft-bell' | 'tick-tock';
@@ -175,6 +200,8 @@ export interface Settings {
   readonly feedback?: FeedbackConfig;
   readonly neisSchedule?: NeisScheduleSettings;
   readonly dashboardTheme?: DashboardThemeSettings;
+  /** 위젯 스타일 커스터마이징 */
+  readonly widgetStyle?: WidgetStyleSettings;
   readonly subjectColors?: SubjectColorMap;
   /** 시간표 셀 색상 기준: 'subject'(과목별) | 'classroom'(학반별) */
   readonly timetableColorBy?: 'subject' | 'classroom';
@@ -208,4 +235,6 @@ export interface Settings {
   readonly lunchStart?: string;
   /** 점심시간 종료 (HH:mm). 미설정 시 학교급 기본값 사용 */
   readonly lunchEnd?: string;
+  /** 학생 생일을 일정에 자동 등록 (기본 false) */
+  readonly syncBirthdaysToSchedule?: boolean;
 }

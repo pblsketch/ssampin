@@ -22,6 +22,14 @@ import type {
 import type { ExternalCalendarSource } from '@domain/entities/ExternalCalendar';
 import { SyncExternalCalendar } from '@usecases/events/SyncExternalCalendar';
 import { eventsRepository, settingsRepository, externalCalendarRepository } from '@adapters/di/container';
+import type { Student } from '@domain/entities/Student';
+import {
+  generateBirthdayEvents,
+  mergeBirthdayEvents,
+  removeBirthdayEvents as removeBirthdayEventsFromList,
+  ensureBirthdayCategory,
+  removeBirthdayCategory,
+} from '@domain/rules/birthdaySync';
 
 interface AddEventParams {
   title: string;
@@ -88,6 +96,10 @@ interface EventsState {
   setShowImportModal: (show: boolean) => void;
   setShareFile: (file: EventsShareFile | null) => void;
   downloadTemplate: () => Promise<void>;
+
+  // 생일 동기화
+  syncBirthdayEvents: (students: readonly Student[]) => Promise<void>;
+  removeBirthdayEvents: () => Promise<void>;
 
   // 외부 캘린더
   externalSources: readonly ExternalCalendarSource[];
@@ -672,6 +684,32 @@ export const useEventsStore = create<EventsState>((set) => {
       );
       await externalCalendarRepository.saveData({ sources });
       set({ externalSources: sources });
+    },
+
+    // 생일 동기화
+    syncBirthdayEvents: async (students) => {
+      const evData = await eventsRepository.getEvents();
+      const events = evData?.events ?? [];
+      const categories = evData?.categories ?? [...DEFAULT_CATEGORIES];
+
+      const updatedCategories = ensureBirthdayCategory(categories);
+      const birthdayEvents = generateBirthdayEvents(students);
+      const merged = mergeBirthdayEvents(events, birthdayEvents);
+
+      await eventsRepository.saveEvents({ events: merged, categories: updatedCategories });
+      set({ events: merged, categories: updatedCategories });
+    },
+
+    removeBirthdayEvents: async () => {
+      const evData = await eventsRepository.getEvents();
+      const events = evData?.events ?? [];
+      const categories = evData?.categories ?? [...DEFAULT_CATEGORIES];
+
+      const cleaned = removeBirthdayEventsFromList(events);
+      const cleanedCats = removeBirthdayCategory(categories);
+
+      await eventsRepository.saveEvents({ events: cleaned, categories: cleanedCats });
+      set({ events: cleaned, categories: cleanedCats });
     },
   };
 });
