@@ -35,6 +35,8 @@ export interface WidgetStyleSettings {
   readonly bgColor: string | null;
   /** 강조 색상 오버라이드 (null → 테마 기본) */
   readonly accentColor: string | null;
+  /** 텍스트 색상 오버라이드 (null → 테마 기본) */
+  readonly textColor: string | null;
   /** 카드 간 gap (4~32px, 기본 16) */
   readonly cardGap: number;
   /** 카드 테두리 표시 여부 */

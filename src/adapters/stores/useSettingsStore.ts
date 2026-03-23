@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, DashboardThemeSettings } from '@domain/entities/Settings';
+import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, DashboardThemeSettings, WidgetStyleSettings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
 import { detectLunchFromPeriods, getDefaultLunchTime } from '@domain/rules/periodRules';
@@ -208,6 +208,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             return { ...defaults, ...savedSync };
           })(),
           dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings }).dashboardTheme,
+          widgetStyle: (saved as unknown as { widgetStyle?: WidgetStyleSettings }).widgetStyle,
           subjectColors: (saved as unknown as { subjectColors?: Settings['subjectColors'] }).subjectColors,
           timetableColorBy: (saved as unknown as { timetableColorBy?: Settings['timetableColorBy'] }).timetableColorBy,
           classroomColors: (saved as unknown as { classroomColors?: Settings['classroomColors'] }).classroomColors,

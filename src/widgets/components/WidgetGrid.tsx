@@ -20,6 +20,8 @@ import { SortableWidget } from './SortableWidget';
 import { WidgetCard } from './WidgetCard';
 import { WidgetTabBar } from './WidgetTabBar';
 import type { TabFilter } from './WidgetTabBar';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { DEFAULT_WIDGET_STYLE, BG_PATTERN_CSS } from '@domain/entities/DashboardTheme';
 
 interface WidgetGridProps {
   isEditMode?: boolean;
@@ -39,6 +41,9 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
   const resizeWidgetHeight = useDashboardConfig((s) => s.resizeWidgetHeight);
 
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  const widgetStyle = useSettingsStore((s) => s.settings.widgetStyle);
+  const ws = { ...DEFAULT_WIDGET_STYLE, ...widgetStyle };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -110,7 +115,21 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
   }
 
   return (
-    <>
+    <div className="relative">
+      {/* 배경 이미지/패턴 레이어 */}
+      {ws.backgroundImage && (
+        <div
+          className="absolute inset-0 pointer-events-none rounded-xl"
+          style={{
+            background: ws.backgroundImage.startsWith('file://')
+              ? `url(${ws.backgroundImage})`
+              : (BG_PATTERN_CSS[ws.backgroundImage] ?? 'none'),
+            backgroundSize: ws.backgroundImage === 'dots' ? '16px 16px' : 'cover',
+            opacity: ws.backgroundImageOpacity,
+          }}
+        />
+      )}
+
       {/* 탭 바 — 편집 모드가 아닐 때만 표시 */}
       {!isEditMode && visibleWidgets.length > 4 && (
         <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />
@@ -123,8 +142,8 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
       >
         <SortableContext items={isEditMode ? widgetIds : filteredIds} strategy={rectSortingStrategy}>
           <div
-            className="widget-grid grid grid-cols-1 gap-4 md:grid-cols-4 grid-flow-row-dense"
-            style={{ gridAutoRows: '80px' }}
+            className="widget-grid grid grid-cols-1 md:grid-cols-4 grid-flow-row-dense"
+            style={{ gap: `${ws.cardGap}px`, gridAutoRows: '80px' }}
           >
             {(isEditMode ? visibleWidgets : filteredWidgets).map((instance) => {
               const definition = getWidgetById(instance.widgetId);
@@ -154,14 +173,17 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
         }}>
           {activeWidget && (
             <div
-              className="rounded-xl ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20 overflow-hidden"
-              style={{ maxHeight: activeWidget.instance.rowSpan * 80 + (activeWidget.instance.rowSpan - 1) * 16 }}
+              className="ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20 overflow-hidden"
+              style={{
+                borderRadius: 'var(--sp-card-radius, 12px)',
+                maxHeight: activeWidget.instance.rowSpan * 80 + (activeWidget.instance.rowSpan - 1) * 16,
+              }}
             >
               <WidgetCard definition={activeWidget.definition} />
             </div>
           )}
         </DragOverlay>
       </DndContext>
-    </>
+    </div>
   );
 }

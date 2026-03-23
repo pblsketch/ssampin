@@ -100,7 +100,12 @@ function applyWidgetStyle(ws: WidgetStyleSettings | undefined): void {
     root.style.setProperty('--sp-accent', s.accentColor);
     root.style.setProperty('--sp-accent-fg', computeAccentFg(s.accentColor));
   }
-  if (s.textColor) root.style.setProperty('--sp-text', s.textColor);
+  if (s.textColor) {
+    root.style.setProperty('--sp-text', s.textColor);
+    // 텍스트 색상 변경 시 muted도 60% 불투명도로 파생
+    const rgb = hexToRgb(s.textColor);
+    root.style.setProperty('--sp-muted', `rgba(${rgb}, 0.6)`);
+  }
 
   // 레이아웃 변수
   root.style.setProperty('--sp-card-radius', `${s.borderRadius}px`);

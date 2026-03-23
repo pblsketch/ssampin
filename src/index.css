@@ -17,6 +17,11 @@
     --memo-dot-color: #223149;
     --sp-widget-rgb: 15, 23, 42;
     --sp-today-bg: rgba(30, 41, 59, 0.8);
+    --sp-card-radius: 12px;
+    --sp-card-gap: 16px;
+    --sp-card-border: 1px solid var(--sp-border);
+    --sp-card-shadow: none;
+    --sp-font-family: "Noto Sans KR", sans-serif;
   }
 
   body {
@@ -39,17 +44,7 @@
 }
 
 :root {
-  font-family:
-    'Noto Sans KR',
-    -apple-system,
-    BlinkMacSystemFont,
-    system-ui,
-    Roboto,
-    'Helvetica Neue',
-    'Segoe UI',
-    'Apple SD Gothic Neo',
-    'Malgun Gothic',
-    sans-serif;
+  font-family: var(--sp-font-family, 'Noto Sans KR'), -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   line-height: 1.5;
   font-weight: 400;
 }

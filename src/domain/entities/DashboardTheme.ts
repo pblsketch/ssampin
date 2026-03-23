@@ -1,3 +1,5 @@
+import type { FontFamily, ShadowLevel, WidgetStyleSettings } from './Settings';
+
 export type PresetThemeId = 'dark' | 'light' | 'pastel' | 'navy' | 'forest' | 'sunset' | 'mono';
 
 export interface ThemeColors {
@@ -59,3 +61,73 @@ export function getPresetTheme(id: PresetThemeId): DashboardTheme {
   // PRESET_THEMES는 항상 7개 이상의 요소를 가지므로 [0]은 안전
   return PRESET_THEMES.find((t) => t.id === id) ?? PRESET_THEMES[0]!;
 }
+
+export const DEFAULT_WIDGET_STYLE: WidgetStyleSettings = {
+  borderRadius: 12,
+  cardColor: null,
+  bgColor: null,
+  accentColor: null,
+  textColor: null,
+  cardGap: 16,
+  showBorder: true,
+  shadow: 'none',
+  backgroundImage: null,
+  backgroundImageOpacity: 0.15,
+  fontFamily: 'noto-sans',
+};
+
+export const SHADOW_MAP: Record<ShadowLevel, string> = {
+  none: 'none',
+  sm: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)',
+  md: '0 4px 12px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.1)',
+  lg: '0 8px 24px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.12)',
+};
+
+export const FONT_MAP: Record<FontFamily, string> = {
+  'noto-sans': '"Noto Sans KR", sans-serif',
+  'pretendard': '"Pretendard Variable", "Pretendard", "Noto Sans KR", sans-serif',
+  'ibm-plex': '"IBM Plex Sans KR", "Noto Sans KR", sans-serif',
+  'nanum-gothic': '"NanumGothic", "Noto Sans KR", sans-serif',
+  'nanum-square': '"NanumSquare", "Noto Sans KR", sans-serif',
+  'gowun-dodum': '"Gowun Dodum", "Noto Sans KR", sans-serif',
+  'suit': '"SUIT Variable", "SUIT", "Noto Sans KR", sans-serif',
+  'wanted-sans': '"Wanted Sans Variable", "Wanted Sans", "Noto Sans KR", sans-serif',
+  'paperlogy': '"Paperlogy", "Noto Sans KR", sans-serif',
+  'kakao-big': '"KakaoBig", "Noto Sans KR", sans-serif',
+  'spoqa-han-sans': '"Spoqa Han Sans Neo", "Noto Sans KR", sans-serif',
+};
+
+export const BACKGROUND_PRESETS = [
+  { id: 'geometric', name: '기하학', thumbnail: '◇' },
+  { id: 'gradient-warm', name: '따뜻한 그라데이션', thumbnail: '🌅' },
+  { id: 'gradient-cool', name: '시원한 그라데이션', thumbnail: '🌊' },
+  { id: 'dots', name: '도트', thumbnail: '⚬' },
+  { id: 'waves', name: '웨이브', thumbnail: '〰️' },
+] as const;
+
+export const BG_PATTERN_CSS: Record<string, string> = {
+  'geometric': 'repeating-linear-gradient(45deg, transparent, transparent 20px, var(--sp-border) 20px, var(--sp-border) 21px)',
+  'gradient-warm': 'linear-gradient(135deg, #f97316 0%, #ec4899 50%, #8b5cf6 100%)',
+  'gradient-cool': 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 50%, #10b981 100%)',
+  'dots': 'radial-gradient(circle, var(--sp-border) 1px, transparent 1px)',
+  'waves': 'repeating-linear-gradient(0deg, transparent, transparent 14px, var(--sp-border) 14px, var(--sp-border) 15px)',
+};
+
+export const COLOR_SWATCHES: Record<string, readonly string[]> = {
+  bg: [
+    '#0a0e17', '#1a1a2e', '#0c1929', '#0a1a0f', '#1a0e0a', '#111111',
+    '#e0e2e6', '#faf5ff', '#f0fdf4', '#fff7ed',
+  ],
+  card: [
+    '#1a2332', '#1e293b', '#1a2d50', '#1a3322', '#3d2218', '#222222',
+    '#e6e7eb', '#f5f3ff', '#ecfdf5', '#ffffff',
+  ],
+  accent: [
+    '#3b82f6', '#ef4444', '#22c55e', '#a855f7', '#f97316',
+    '#ec4899', '#06b6d4', '#eab308', '#6366f1', '#14b8a6',
+  ],
+  text: [
+    '#ffffff', '#e2e8f0', '#f1f5f9', '#fef3c7', '#dcfce7',
+    '#0f172a', '#1e293b', '#334155', '#1a1a1a', '#374151',
+  ],
+};

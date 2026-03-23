@@ -38,6 +38,7 @@ export function SortableWidget({
     transform: CSS.Transform.toString(transform),
     transition,
     gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}`,
+    ...(isEditMode ? { borderRadius: 'var(--sp-card-radius, 12px)' } : {}),
   };
 
   const spanClass = getSpanClass(instance.colSpan);
@@ -46,7 +47,7 @@ export function SortableWidget({
     <div
       ref={setNodeRef}
       style={style}
-      className={`${spanClass} ${isDragging ? 'opacity-50 z-50' : ''} ${isEditMode ? 'ring-1 ring-dashed ring-sp-border/50 rounded-xl' : ''}`}
+      className={`${spanClass} ${isDragging ? 'opacity-50 z-50' : ''} ${isEditMode ? 'ring-1 ring-dashed ring-sp-border/50' : ''}`}
     >
       <div className="relative group/widget h-full">
         {/* 드래그 핸들 (편집 모드) */}
@@ -68,12 +69,21 @@ export function SortableWidget({
           </button>
         )}
 
-        <WidgetCard
-          definition={definition}
-          isEditMode={isEditMode}
-          onHide={onHide}
-          onNavigate={onNavigate}
-        />
+        <div
+          className="h-full overflow-hidden"
+          style={{
+            borderRadius: 'var(--sp-card-radius, 12px)',
+            border: 'var(--sp-card-border, 1px solid var(--sp-border))',
+            boxShadow: 'var(--sp-card-shadow, none)',
+          }}
+        >
+          <WidgetCard
+            definition={definition}
+            isEditMode={isEditMode}
+            onHide={onHide}
+            onNavigate={onNavigate}
+          />
+        </div>
 
         {/* 크기 조절 핸들 (편집 모드) */}
         {isEditMode && (
