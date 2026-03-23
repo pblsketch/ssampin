@@ -1,6 +1,7 @@
 import { useMemo, Fragment } from 'react';
 import { WIDGET_DEFINITIONS } from '../registry';
 import { useDashboardConfig } from '../useDashboardConfig';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { WidgetCategory } from '../types';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../constants';
 
@@ -16,6 +17,8 @@ export function WidgetSettingsPanel({ onClose }: WidgetSettingsPanelProps) {
   const config = useDashboardConfig((s) => s.config);
   const toggleWidget = useDashboardConfig((s) => s.toggleWidget);
   const resetToPreset = useDashboardConfig((s) => s.resetToPreset);
+  const fontScale = useSettingsStore((s) => s.settings.dashboardFontScale) ?? 1.0;
+  const updateSettings = useSettingsStore((s) => s.update);
 
   const widgetsByCategory = useMemo(() => {
     const map = new Map<WidgetCategory, typeof WIDGET_DEFINITIONS>();
@@ -117,6 +120,47 @@ export function WidgetSettingsPanel({ onClose }: WidgetSettingsPanelProps) {
             </Fragment>
           );
         })}
+
+        {/* 글씨 크기 */}
+        <div className="border-t border-sp-border/30 pt-4">
+          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-sp-muted">
+            글씨 크기
+          </h3>
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="range"
+              min="0.8"
+              max="1.5"
+              step="0.05"
+              value={fontScale}
+              onChange={(e) => void updateSettings({ dashboardFontScale: parseFloat(e.target.value) })}
+              className="flex-1 accent-sp-accent"
+            />
+            <span className="text-[11px] text-sp-accent font-mono w-8 text-right">
+              {Math.round(fontScale * 100)}%
+            </span>
+          </div>
+          <div className="flex gap-1">
+            {([
+              { label: '작게', value: 0.85 },
+              { label: '기본', value: 1.0 },
+              { label: '크게', value: 1.2 },
+              { label: '아주 크게', value: 1.4 },
+            ] as const).map((p) => (
+              <button
+                key={p.label}
+                onClick={() => void updateSettings({ dashboardFontScale: p.value })}
+                className={`flex-1 py-1 text-[10px] rounded-md border transition-all ${
+                  fontScale === p.value
+                    ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                    : 'border-sp-border text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* 푸터 */}
