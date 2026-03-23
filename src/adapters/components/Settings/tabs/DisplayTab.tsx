@@ -60,6 +60,54 @@ export function DisplayTab({ draft, patch }: Props) {
             ))}
           </div>
         </div>
+
+        {/* 대시보드 글씨 크기 */}
+        <div>
+          <h4 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">대시보드 글씨 크기</h4>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-sp-text">대시보드·위젯 전용 글씨 배율</span>
+              <span className="text-sm text-sp-accent font-mono font-medium">
+                {Math.round((draft.dashboardFontScale ?? 1.0) * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0.8"
+              max="1.5"
+              step="0.05"
+              value={draft.dashboardFontScale ?? 1.0}
+              onChange={(e) => patch({ dashboardFontScale: parseFloat(e.target.value) })}
+              className="w-full accent-sp-accent"
+            />
+            <div className="flex justify-between text-[10px] text-sp-muted">
+              <span>80%</span>
+              <span>100%</span>
+              <span>150%</span>
+            </div>
+            <div className="flex gap-2 mt-1">
+              {([
+                { label: '작게', value: 0.85 },
+                { label: '기본', value: 1.0 },
+                { label: '크게', value: 1.2 },
+                { label: '아주 크게', value: 1.4 },
+              ] as const).map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => patch({ dashboardFontScale: preset.value })}
+                  className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                    (draft.dashboardFontScale ?? 1.0) === preset.value
+                      ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                      : 'border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-text/30'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </SettingsSection>
   );

@@ -202,4 +202,6 @@ export interface Settings {
   readonly todoShowTimetable?: boolean;
   /** 할 일 타임라인: 일정 표시 */
   readonly todoShowEvents?: boolean;
+  /** 대시보드 글씨 크기 배율 (기본 1.0, 범위 0.8~1.5) */
+  readonly dashboardFontScale?: number;
 }

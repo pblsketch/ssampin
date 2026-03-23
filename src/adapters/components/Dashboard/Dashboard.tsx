@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useMessageStore } from '@adapters/stores/useMessageStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useDashboardConfig } from '@widgets/useDashboardConfig';
 import { DashboardHeader } from '@widgets/components/DashboardHeader';
 import { WidgetGrid } from '@widgets/components/WidgetGrid';
@@ -12,6 +13,7 @@ interface DashboardProps {
 export function Dashboard({ onNavigate }: DashboardProps) {
   const loadMessage = useMessageStore((s) => s.loadMessage);
   const loadConfig = useDashboardConfig((s) => s.load);
+  const fontScale = useSettingsStore((s) => s.settings.dashboardFontScale) ?? 1.0;
   const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   }, []);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" style={{ fontSize: `${fontScale}rem` }}>
       {/* 헤더 */}
       <DashboardHeader
         isEditMode={isEditMode}
