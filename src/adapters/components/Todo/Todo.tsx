@@ -5,6 +5,7 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Todo as TodoType, TodoPriority, TodoCategory } from '@domain/entities/Todo';
+import type { TodoSortMode } from '@domain/rules/todoRules';
 import {
   sortTodos,
   filterByDateRange,
@@ -158,6 +159,7 @@ export function Todo() {
   const [newCategory, setNewCategory] = useState('');
   const [newTime, setNewTime] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [sortMode, setSortMode] = useState<TodoSortMode>('priority');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
   const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
@@ -181,8 +183,8 @@ export function Todo() {
     let result = activeTodos;
     result = filterByDateRange(result, filter, now);
     result = filterByCategory(result, categoryFilter);
-    return sortTodos(result);
-  }, [activeTodos, filter, categoryFilter, now]);
+    return sortTodos(result, sortMode);
+  }, [activeTodos, filter, categoryFilter, now, sortMode]);
 
   // 그룹핑
   const groups = useMemo(() => groupByDate(filtered, now), [filtered, now]);
@@ -361,8 +363,8 @@ export function Todo() {
             <>
               {/* 필터 탭 */}
               <div className="flex flex-col gap-3">
-                {/* 날짜 필터 */}
-                <div className="flex gap-3">
+                {/* 날짜 필터 + 정렬 모드 */}
+                <div className="flex gap-3 items-center">
                   {(Object.keys(FILTER_LABELS) as DateFilter[]).map((key) => (
                     <button
                       key={key}
@@ -377,6 +379,24 @@ export function Todo() {
                       {FILTER_LABELS[key]}
                     </button>
                   ))}
+
+                  <span className="text-sp-border">|</span>
+
+                  <button
+                    type="button"
+                    onClick={() => setSortMode((m) => m === 'priority' ? 'dueDate' : 'priority')}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium ring-1 transition-colors ${
+                      sortMode === 'dueDate'
+                        ? 'bg-sp-accent text-white ring-sp-accent/30'
+                        : 'bg-sp-card text-sp-muted ring-sp-border/50 hover:text-sp-text'
+                    }`}
+                    title={sortMode === 'dueDate' ? 'D-Day 순 정렬 중' : '우선순위 순 정렬 중'}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {sortMode === 'dueDate' ? 'event' : 'priority_high'}
+                    </span>
+                    {sortMode === 'dueDate' ? 'D-Day 순' : '우선순위 순'}
+                  </button>
                 </div>
 
                 {/* 카테고리 필터 */}
@@ -593,7 +613,7 @@ export function Todo() {
                 </div>
               )}
 
-              {/* 투두 리스트 (그룹별) */}
+              {/* 투두 리스트 */}
               {totalCount === 0 && timelineItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
                   <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
@@ -611,7 +631,8 @@ export function Todo() {
                   </span>
                   <p className="text-lg">필터에 해당하는 할 일이 없습니다</p>
                 </div>
-              ) : (
+              ) : sortMode === 'priority' ? (
+                /* 우선순위 모드: 기존 그룹핑 뷰 */
                 <div className="flex flex-col gap-4">
                   {GROUP_ORDER.map((groupKey) => {
                     const items = groups[groupKey];
@@ -624,7 +645,7 @@ export function Todo() {
                         key={groupKey}
                         groupKey={groupKey}
                         label={GROUP_LABELS[groupKey] ?? groupKey}
-                        items={sortTodos(items)}
+                        items={sortTodos(items, sortMode)}
                         isOverdueGroup={groupKey === 'overdue'}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleGroup(groupKey)}
@@ -640,6 +661,27 @@ export function Todo() {
                       />
                     );
                   })}
+                </div>
+              ) : (
+                /* D-Day 순 모드: 플랫 리스트 */
+                <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-visible">
+                  <ul>
+                    {filtered.map((todo) => (
+                      <TodoItem
+                        key={todo.id}
+                        todo={todo}
+                        overdue={isOverdue(todo, now)}
+                        categories={categories}
+                        onToggle={toggleTodo}
+                        onDelete={deleteTodo}
+                        onUpdate={updateTodo}
+                        onAddSubTask={addSubTask}
+                        onToggleSubTask={toggleSubTask}
+                        onDeleteSubTask={deleteSubTask}
+                        showDDay
+                      />
+                    ))}
+                  </ul>
                 </div>
               )}
 
@@ -997,6 +1039,7 @@ interface TodoItemProps {
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   dragHandleProps?: DragHandleProps;
+  showDDay?: boolean;
 }
 
 function TodoItem({
@@ -1010,6 +1053,7 @@ function TodoItem({
   onToggleSubTask,
   onDeleteSubTask,
   dragHandleProps,
+  showDDay,
 }: TodoItemProps) {
   const { track } = useAnalytics();
   const [hovered, setHovered] = useState(false);
@@ -1030,6 +1074,27 @@ function TodoItem({
 
   const priorityConfig = PRIORITY_CONFIG[todo.priority ?? 'none'];
   const cat = categories.find((c) => c.id === todo.category);
+
+  // D-Day 계산
+  const dDayText = useMemo(() => {
+    if (!showDDay || !todo.dueDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(todo.dueDate + 'T00:00:00');
+    const diff = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return 'D-Day';
+    if (diff < 0) return `D+${Math.abs(diff)}`;
+    return `D-${diff}`;
+  }, [todo.dueDate, showDDay]);
+
+  const dDayColor = useMemo(() => {
+    if (!dDayText) return '';
+    if (dDayText === 'D-Day') return 'text-sp-accent bg-sp-accent/10';
+    if (dDayText.startsWith('D+')) return 'text-red-400 bg-red-400/10';
+    const num = parseInt(dDayText.replace('D-', ''), 10);
+    if (num <= 3) return 'text-amber-400 bg-amber-400/10';
+    return 'text-sp-muted bg-sp-surface';
+  }, [dDayText]);
 
   // Subtask stats
   const subTasks = todo.subTasks ?? [];
@@ -1282,6 +1347,13 @@ function TodoItem({
         {todo.priority && todo.priority !== 'none' && (
           <span className={`text-[10px] ${priorityConfig.color}`} title={priorityConfig.label}>
             {priorityConfig.icon}
+          </span>
+        )}
+
+        {/* D-Day 뱃지 (dueDate 순 모드) */}
+        {dDayText && (
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${dDayColor} shrink-0 tabular-nums`}>
+            {dDayText}
           </span>
         )}
 

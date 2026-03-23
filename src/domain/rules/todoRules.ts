@@ -1,13 +1,36 @@
 import type { Todo, TodoRecurrence } from '@domain/entities/Todo';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 
+/** 할 일 정렬 모드 */
+export type TodoSortMode = 'priority' | 'dueDate';
+
 /**
- * 투두 정렬: 미완료(우선순위 높은 순 → 마감일 빠른 순) → 완료
+ * 투두 정렬
+ * @param mode 'priority' = 우선순위 우선 (기본), 'dueDate' = 마감일 우선 (D-Day 순)
  */
-export function sortTodos(todos: readonly Todo[]): readonly Todo[] {
+export function sortTodos(
+  todos: readonly Todo[],
+  mode: TodoSortMode = 'priority',
+): readonly Todo[] {
   return [...todos].sort((a, b) => {
     // 1차: 완료 여부
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
+
+    if (mode === 'dueDate') {
+      // D-Day 순: 마감일 빠른 순 → 우선순위
+      if (a.dueDate && b.dueDate) {
+        const cmp = a.dueDate.localeCompare(b.dueDate);
+        if (cmp !== 0) return cmp;
+      }
+      if (a.dueDate && !b.dueDate) return -1;
+      if (!a.dueDate && b.dueDate) return 1;
+      // 마감일 같으면 우선순위
+      const pa = PRIORITY_CONFIG[a.priority ?? 'none'].sortOrder;
+      const pb = PRIORITY_CONFIG[b.priority ?? 'none'].sortOrder;
+      return pa - pb;
+    }
+
+    // priority 모드 (기존 로직)
     // 2차: 수동 정렬 순서 (설정된 경우 최우선)
     if (a.sortOrder !== undefined && b.sortOrder !== undefined) {
       if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
