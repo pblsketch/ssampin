@@ -1,6 +1,6 @@
 import type { FontFamily, ShadowLevel, WidgetStyleSettings } from './Settings';
 
-export type PresetThemeId = 'dark' | 'light' | 'pastel' | 'navy' | 'forest' | 'sunset' | 'mono' | 'notion-light' | 'notion-dark';
+export type PresetThemeId = 'dark' | 'light' | 'pastel' | 'navy' | 'forest' | 'sunset' | 'mono' | 'notion-light' | 'notion-dark' | 'kraft-light' | 'kraft-dark';
 
 export interface ThemeColors {
   readonly bg: string;
@@ -75,6 +75,18 @@ export const PRESET_THEMES: readonly DashboardTheme[] = [
     name: '노션 다크',
     colors: { bg: '#191919', surface: '#202020', card: '#252525', border: '#363636', accent: '#447acb', highlight: '#c19138', text: '#d4d4d4', muted: '#9b9b9b' },
     styleHint: { borderRadius: 4, cardGap: 12, showBorder: false, shadow: 'none', fontFamily: 'pretendard' },
+  },
+  {
+    id: 'kraft-light',
+    name: '크래프트',
+    colors: { bg: '#f5efe6', surface: '#ebe3d6', card: '#f9f4ec', border: '#d5c4ad', accent: '#c07830', highlight: '#8b6914', text: '#3d2c1e', muted: '#8c7b6a' },
+    styleHint: { borderRadius: 8, cardGap: 14, showBorder: true, shadow: 'sm', fontFamily: 'pretendard' },
+  },
+  {
+    id: 'kraft-dark',
+    name: '크래프트 다크',
+    colors: { bg: '#1c1610', surface: '#261e16', card: '#302518', border: '#4a3a28', accent: '#d4943c', highlight: '#c07830', text: '#ddd0c0', muted: '#9c8a74' },
+    styleHint: { borderRadius: 8, cardGap: 14, showBorder: true, shadow: 'sm', fontFamily: 'pretendard' },
   },
 ] as const;
 
