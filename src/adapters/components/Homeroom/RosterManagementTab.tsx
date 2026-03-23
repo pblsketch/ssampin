@@ -21,7 +21,7 @@ export function RosterManagementTab() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const rosterFileRef = useRef<HTMLInputElement>(null);
-  const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhone2?: string; birthDate?: string; isVacant: boolean }> | null>(null);
+  const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }> | null>(null);
   // 보호자2 필드가 열려있는 학생 ID 세트
   const [showParent2, setShowParent2] = useState<Set<string>>(new Set());
   const showToast = useToastStore((s) => s.show);
@@ -512,7 +512,9 @@ export function RosterManagementTab() {
                       studentNumber: p.studentNumber,
                       phone: p.phone,
                       parentPhone: p.parentPhone,
+                      parentPhoneLabel: p.parentPhoneLabel ?? '',
                       parentPhone2: p.parentPhone2 ?? '',
+                      parentPhone2Label: p.parentPhone2Label ?? '',
                       birthDate: p.birthDate ?? '',
                       isVacant: p.isVacant,
                     }));

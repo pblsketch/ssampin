@@ -372,12 +372,12 @@ export async function exportRosterToExcel(students: readonly Student[]): Promise
 
 export async function parseRosterFromExcel(
   buffer: ArrayBuffer,
-): Promise<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhone2?: string; birthDate?: string; isVacant: boolean }>> {
+): Promise<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }>> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
   const ws = workbook.worksheets[0];
-  const result: Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhone2?: string; birthDate?: string; isVacant: boolean }> = [];
+  const result: Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }> = [];
 
   if (!ws) return result;
 
@@ -385,9 +385,11 @@ export async function parseRosterFromExcel(
   let numCol = 1;
   let nameCol = 2;
   let phoneCol = 3;
+  let parentPhoneLabelCol = 4; // 보호자1 관계
   let parentPhoneCol = 5; // 보호자1 연락처 (새 형식: 4=관계, 5=연락처)
-  let parentPhone2Col = -1; // 보호자2 연락처
-  let birthDateCol = -1; // 생년월일
+  let parentPhone2LabelCol = 6; // 보호자2 관계
+  let parentPhone2Col = 7; // 보호자2 연락처
+  let birthDateCol = 8; // 생년월일
   let remarksCol = 9;
 
   const headerRow = ws.getRow(1);
@@ -397,7 +399,9 @@ export async function parseRosterFromExcel(
       if (/^(번호|No|no|#|학번)$/i.test(val)) numCol = colNumber;
       else if (/^(이름|성명|학생명|name)$/i.test(val)) nameCol = colNumber;
       else if (/^(전화|연락처|학생연락처|학생전화|phone)$/i.test(val)) phoneCol = colNumber;
+      else if (/^(보호자1?관계|관계|relationship)$/i.test(val)) parentPhoneLabelCol = colNumber;
       else if (/^(학부모|보호자|학부모연락처|보호자연락처|보호자1연락처|parentPhone)$/i.test(val)) parentPhoneCol = colNumber;
+      else if (/^(보호자2관계)$/i.test(val)) parentPhone2LabelCol = colNumber;
       else if (/^(보호자2|보호자2연락처|parentPhone2)$/i.test(val)) parentPhone2Col = colNumber;
       else if (/^(생년월일|생일|birthDate|birthday|birth)$/i.test(val)) birthDateCol = colNumber;
       else if (/^(비고|remarks|메모|결번)$/i.test(val)) remarksCol = colNumber;
@@ -416,18 +420,40 @@ export async function parseRosterFromExcel(
     const studentNumber = parseInt(String(numRaw ?? ''), 10);
     if (isNaN(studentNumber) || studentNumber <= 0) return;
 
-    const name = String(row.getCell(nameCol).value ?? '').trim();
-    if (!name) return;
-
-    const phone = String(row.getCell(phoneCol).value ?? '').trim();
-    const parentPhone = String(row.getCell(parentPhoneCol).value ?? '').trim();
-    const parentPhone2 = parentPhone2Col > 0 ? String(row.getCell(parentPhone2Col).value ?? '').trim() : '';
     const remarks = String(row.getCell(remarksCol).value ?? '').trim();
     const isVacant = remarks.includes('결번');
 
-    const birthDate = birthDateCol > 0 ? String(row.getCell(birthDateCol).value ?? '').trim() : '';
+    const name = String(row.getCell(nameCol).value ?? '').trim();
+    if (!name && !isVacant) return;
 
-    result.push({ name, studentNumber, phone, parentPhone, ...(parentPhone2 ? { parentPhone2 } : {}), ...(birthDate ? { birthDate } : {}), isVacant });
+    const phone = String(row.getCell(phoneCol).value ?? '').trim();
+    const parentPhoneLabel = String(row.getCell(parentPhoneLabelCol).value ?? '').trim();
+    const parentPhone = String(row.getCell(parentPhoneCol).value ?? '').trim();
+    const parentPhone2Label = String(row.getCell(parentPhone2LabelCol).value ?? '').trim();
+    const parentPhone2 = String(row.getCell(parentPhone2Col).value ?? '').trim();
+
+    let birthDate = '';
+    const rawBirth = row.getCell(birthDateCol).value;
+    if (rawBirth instanceof Date) {
+      const y = rawBirth.getFullYear();
+      const m = String(rawBirth.getMonth() + 1).padStart(2, '0');
+      const d = String(rawBirth.getDate()).padStart(2, '0');
+      birthDate = `${y}-${m}-${d}`;
+    } else if (rawBirth) {
+      birthDate = String(rawBirth).trim();
+    }
+
+    result.push({
+      name,
+      studentNumber,
+      phone,
+      parentPhone,
+      ...(parentPhoneLabel ? { parentPhoneLabel } : {}),
+      ...(parentPhone2 ? { parentPhone2 } : {}),
+      ...(parentPhone2Label ? { parentPhone2Label } : {}),
+      ...(birthDate ? { birthDate } : {}),
+      isVacant,
+    });
   });
 
   return result;
