@@ -556,8 +556,46 @@ export function Todo() {
                 </div>
               </div>
 
+              {/* 타임라인 통합 아이템 (시간표/일정) — 할 일 유무와 무관하게 표시 */}
+              {timelineItems.length > 0 && (
+                <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
+                  <div className="px-4 py-2 border-b border-sp-border/50 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px] text-sp-muted">timeline</span>
+                    <span className="text-xs font-medium text-sp-muted">오늘의 시간표 · 일정</span>
+                  </div>
+                  <div className="divide-y divide-sp-border/30">
+                    {[...timelineItems]
+                      .sort((a, b) => {
+                        if (a.time && b.time) return a.time.localeCompare(b.time);
+                        if (a.time && !b.time) return -1;
+                        if (!a.time && b.time) return 1;
+                        return 0;
+                      })
+                      .map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3 px-4 py-2 opacity-70"
+                        >
+                          <span className="text-[11px] text-sp-muted w-12 shrink-0 text-right font-mono">
+                            {item.time ?? '--:--'}
+                          </span>
+                          <span className="text-sm shrink-0">{item.icon}</span>
+                          <span className="text-sm text-sp-text truncate flex-1">
+                            {item.title}
+                          </span>
+                          {item.subtitle !== undefined && (
+                            <span className="text-[11px] text-sp-muted shrink-0">
+                              {item.subtitle}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               {/* 투두 리스트 (그룹별) */}
-              {totalCount === 0 ? (
+              {totalCount === 0 && timelineItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
                   <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
                     checklist
@@ -565,6 +603,8 @@ export function Todo() {
                   <p className="text-lg">할 일이 없습니다</p>
                   <p className="text-sm mt-1">위에서 새로운 할 일을 추가해보세요</p>
                 </div>
+              ) : totalCount === 0 ? (
+                null
               ) : filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
                   <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
@@ -574,44 +614,6 @@ export function Todo() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {/* 타임라인 통합 아이템 (시간표/일정) */}
-                  {timelineItems.length > 0 && (
-                    <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
-                      <div className="px-4 py-2 border-b border-sp-border/50 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[16px] text-sp-muted">timeline</span>
-                        <span className="text-xs font-medium text-sp-muted">오늘의 시간표 · 일정</span>
-                      </div>
-                      <div className="divide-y divide-sp-border/30">
-                        {[...timelineItems]
-                          .sort((a, b) => {
-                            if (a.time && b.time) return a.time.localeCompare(b.time);
-                            if (a.time && !b.time) return -1;
-                            if (!a.time && b.time) return 1;
-                            return 0;
-                          })
-                          .map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex items-center gap-3 px-4 py-2 opacity-70"
-                            >
-                              <span className="text-[11px] text-sp-muted w-12 shrink-0 text-right font-mono">
-                                {item.time ?? '--:--'}
-                              </span>
-                              <span className="text-sm shrink-0">{item.icon}</span>
-                              <span className="text-sm text-sp-text truncate flex-1">
-                                {item.title}
-                              </span>
-                              {item.subtitle !== undefined && (
-                                <span className="text-[11px] text-sp-muted shrink-0">
-                                  {item.subtitle}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-
                   {GROUP_ORDER.map((groupKey) => {
                     const items = groups[groupKey];
                     if (!items || items.length === 0) return null;
