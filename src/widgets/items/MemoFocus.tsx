@@ -188,7 +188,7 @@ export function MemoFocus() {
               }
             }}
             className={`rounded-md p-1 transition-colors ${
-              isEditing ? 'text-blue-500 hover:text-blue-600' : 'text-sp-muted hover:text-sp-text'
+              isEditing ? 'text-sp-accent hover:text-sp-accent' : 'text-sp-muted hover:text-sp-text'
             }`}
             title={isEditing ? '저장' : '편집'}
           >

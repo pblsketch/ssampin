@@ -49,7 +49,7 @@ export function DashboardMeal() {
   if (!schoolCode && mealSource !== 'manual') {
     return (
       <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
-        <h3 className="text-base font-bold text-white flex items-center gap-2 mb-2">
+        <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-2">
           <span className="text-lg">🍚</span>
           오늘의 급식
         </h3>
@@ -64,7 +64,7 @@ export function DashboardMeal() {
 
   return (
     <div className="rounded-xl bg-sp-card p-4 flex flex-col">
-      <h3 className="text-base font-bold text-white flex items-center gap-2 mb-2">
+      <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-2">
         <span className="text-lg">🍚</span>
         오늘의 급식
       </h3>
@@ -106,11 +106,11 @@ export function DashboardMeal() {
                 </div>
                 <ul className="space-y-1">
                   {meal.dishes.map((dish, di) => (
-                    <li key={di} className="text-sm text-slate-300 flex items-baseline gap-1.5">
+                    <li key={di} className="text-sm text-sp-text flex items-baseline gap-1.5">
                       <span className="text-sp-muted text-[10px] mt-0.5">•</span>
                       <span>{dish.name}</span>
                       {dish.allergens.length > 0 && (
-                        <span className="text-[10px] text-slate-500 shrink-0">
+                        <span className="text-[10px] text-sp-muted shrink-0">
                           {dish.allergens.join('.')}
                         </span>
                       )}

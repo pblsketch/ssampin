@@ -134,7 +134,7 @@ function TabButton({ active, onClick, label }: TabButtonProps) {
       onClick={onClick}
       className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
         active
-          ? 'bg-sp-accent text-white'
+          ? 'bg-sp-accent text-sp-accent-fg'
           : 'text-sp-muted hover:text-sp-text'
       }`}
     >

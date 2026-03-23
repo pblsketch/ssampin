@@ -115,7 +115,7 @@ export function EventPopup() {
           <div className="p-6 pb-2">
             <div className="flex items-center gap-3 mb-2">
               <span className="text-3xl">🔔</span>
-              <h2 className="text-2xl font-bold tracking-tight text-white">
+              <h2 className="text-2xl font-bold tracking-tight text-sp-text">
                 오늘 행사 알림!
               </h2>
             </div>
@@ -191,7 +191,7 @@ export function EventPopup() {
             <button
               type="button"
               onClick={dismissPopup}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white px-4 py-2.5 text-sm font-semibold shadow-sm transition-all"
+              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-sp-accent hover:brightness-110 text-sp-accent-fg px-4 py-2.5 text-sm font-semibold shadow-sm transition-all"
             >
               확인
             </button>

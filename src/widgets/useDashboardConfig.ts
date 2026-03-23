@@ -84,12 +84,15 @@ export const useDashboardConfig = create<DashboardConfigState>((set, get) => ({
       const maxOrder = Math.max(0, ...saved.widgets.map((w) => w.order));
       let nextOrder = maxOrder + 1;
 
+      // 기존 헤더에서 항상 표시되던 위젯은 추가 시 자동 활성화
+      const AUTO_ENABLE_ON_ADD = new Set(['message']);
+
       const newWidgets: WidgetInstance[] = [];
       for (const def of WIDGET_DEFINITIONS) {
         if (!existingIds.has(def.id)) {
           newWidgets.push({
             widgetId: def.id,
-            visible: false,
+            visible: AUTO_ENABLE_ON_ADD.has(def.id),
             order: nextOrder++,
             colSpan: Math.min(def.defaultSize.w, 4) as 1 | 2 | 3 | 4,
             rowSpan: def.defaultSize.h,

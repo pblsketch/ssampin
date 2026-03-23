@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -23,6 +23,21 @@ export function DashboardTodo() {
   const { teacherSchedule, classSchedule, load: loadSchedule } = useScheduleStore();
   const { events, load: loadEvents } = useEventsStore();
   const { settings } = useSettingsStore();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isWide, setIsWide] = useState(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setIsWide(entry.contentRect.width >= 400);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     void load();
@@ -112,8 +127,50 @@ export function DashboardTodo() {
   const incomplete = visible.filter((t) => !t.completed);
   const completed = visible.filter((t) => t.completed);
 
+  const hasBothSections = timelineEntries.length > 0 && (incomplete.length > 0 || completed.length > 0);
+  const showWideLayout = isWide && hasBothSections;
+
+  const timelineList = (
+    <ul className="space-y-0.5">
+      {timelineEntries.map((entry) => (
+        <li
+          key={entry.id}
+          className="flex items-center gap-2 rounded-lg px-2 py-1 opacity-60"
+        >
+          <span className="text-[10px] text-sp-muted w-10 text-right font-mono shrink-0">
+            {entry.time ?? '--:--'}
+          </span>
+          <span className="text-xs shrink-0">{entry.icon}</span>
+          <span className="text-xs text-sp-text truncate flex-1">
+            {entry.title}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+
+  const todoList = (
+    <>
+      <ul className="space-y-1">
+        {incomplete.map((todo) => (
+          <TodoItem key={todo.id} todo={todo} onToggle={toggleTodo} />
+        ))}
+      </ul>
+      {completed.length > 0 && incomplete.length > 0 && (
+        <div className="my-2 border-t border-sp-border/30" />
+      )}
+      {completed.length > 0 && (
+        <ul className="space-y-1">
+          {completed.map((todo) => (
+            <TodoItem key={todo.id} todo={todo} onToggle={toggleTodo} />
+          ))}
+        </ul>
+      )}
+    </>
+  );
+
   return (
-    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+    <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text">오늘 할 일</h3>
@@ -124,68 +181,34 @@ export function DashboardTodo() {
         )}
       </div>
 
-      {/* 콘텐츠 - 스크롤 가능 */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {totalCount === 0 && timelineEntries.length === 0 ? (
-          <div className="flex items-center justify-center py-6">
-            <p className="text-sm text-sp-muted">할 일이 없습니다</p>
+      {/* 콘텐츠 */}
+      {totalCount === 0 && timelineEntries.length === 0 ? (
+        <div className="flex items-center justify-center py-6">
+          <p className="text-sm text-sp-muted">할 일이 없습니다</p>
+        </div>
+      ) : showWideLayout ? (
+        /* 가로 레이아웃: 시간표/일정 | 할 일 */
+        <div className="flex-1 min-h-0 flex gap-4">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {timelineList}
           </div>
-        ) : (
-          <>
-            {/* 타임라인 항목 */}
-            {timelineEntries.length > 0 && (
-              <>
-                <ul className="space-y-0.5 mb-2">
-                  {timelineEntries.map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex items-center gap-2 rounded-lg px-2 py-1 opacity-60"
-                    >
-                      <span className="text-[10px] text-sp-muted w-10 text-right font-mono shrink-0">
-                        {entry.time ?? '--:--'}
-                      </span>
-                      <span className="text-xs shrink-0">{entry.icon}</span>
-                      <span className="text-xs text-sp-text truncate flex-1">
-                        {entry.title}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="border-t border-sp-border/30 mb-2" />
-              </>
-            )}
-
-            {/* 미완료 목록 */}
-            <ul className="space-y-1">
-              {incomplete.map((todo) => (
-                <TodoItem
-                  key={todo.id}
-                  todo={todo}
-                  onToggle={toggleTodo}
-                />
-              ))}
-            </ul>
-
-            {/* 완료 항목 구분선 */}
-            {completed.length > 0 && incomplete.length > 0 && (
-              <div className="my-2 border-t border-sp-border/30" />
-            )}
-
-            {/* 완료 목록 */}
-            {completed.length > 0 && (
-              <ul className="space-y-1">
-                {completed.map((todo) => (
-                  <TodoItem
-                    key={todo.id}
-                    todo={todo}
-                    onToggle={toggleTodo}
-                  />
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </div>
+          <div className="w-px bg-sp-border/30 shrink-0" />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {todoList}
+          </div>
+        </div>
+      ) : (
+        /* 세로 레이아웃 (기존) */
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {timelineEntries.length > 0 && (
+            <>
+              {timelineList}
+              <div className="border-t border-sp-border/30 my-2" />
+            </>
+          )}
+          {todoList}
+        </div>
+      )}
     </div>
   );
 }
@@ -304,11 +327,11 @@ function Checkbox({ checked }: CheckboxProps) {
           viewBox="0 0 10 8"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="h-2.5 w-2.5"
+          className="h-2.5 w-2.5 text-sp-accent-fg"
         >
           <path
             d="M1 4L3.5 6.5L9 1"
-            stroke="white"
+            stroke="currentColor"
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"

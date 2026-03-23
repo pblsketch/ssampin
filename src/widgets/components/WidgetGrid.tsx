@@ -173,7 +173,7 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
         }}>
           {activeWidget && (
             <div
-              className="ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20 overflow-hidden"
+              className="ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20 overflow-hidden bg-sp-card"
               style={{
                 borderRadius: 'var(--sp-card-radius, 12px)',
                 maxHeight: activeWidget.instance.rowSpan * 80 + (activeWidget.instance.rowSpan - 1) * 16,

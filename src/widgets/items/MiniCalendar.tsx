@@ -149,7 +149,7 @@ export function MiniCalendar() {
             <span
               className={`text-[10px] w-5 h-5 flex items-center justify-center rounded-full ${
                 day.isToday
-                  ? 'bg-sp-accent text-white font-bold'
+                  ? 'bg-sp-accent text-sp-accent-fg font-bold'
                   : day.isHoliday || day.isSunday
                     ? 'text-red-400'
                     : day.isSaturday

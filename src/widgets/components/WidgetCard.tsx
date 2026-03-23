@@ -84,7 +84,8 @@ export function WidgetCard({ definition, isEditMode, onHide, onNavigate, maxHeig
       {isClickable && (
         <div
           onClick={handleClick}
-          className="mt-1 flex items-center justify-center py-1.5 cursor-pointer rounded-b-xl opacity-0 group-hover/clickable:opacity-100 transition-opacity"
+          className="mt-1 flex items-center justify-center py-1.5 cursor-pointer opacity-0 group-hover/clickable:opacity-100 transition-opacity"
+          style={{ borderRadius: '0 0 var(--sp-card-radius, 12px) var(--sp-card-radius, 12px)' }}
         >
           <span className="text-xs text-sp-accent font-medium flex items-center gap-1">
             {definition.navigateLabel ?? '더 보기'}

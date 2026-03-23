@@ -89,11 +89,11 @@ export function LayoutSelector({ anchorRect, currentMode, onSelect, onClose }: L
   const popup = (
     <div
       ref={menuRef}
-      className="fixed z-[9999] w-44 bg-slate-800/75 backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl overflow-hidden"
+      className="fixed z-[9999] w-44 bg-sp-card/75 backdrop-blur-xl rounded-xl border border-sp-border shadow-2xl overflow-hidden"
       style={{ left: position.left, top: position.top }}
     >
       <div className="px-3 pt-3 pb-2">
-        <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+        <p className="text-xs uppercase tracking-wider text-sp-muted font-semibold">
           레이아웃 선택
         </p>
       </div>
@@ -106,8 +106,8 @@ export function LayoutSelector({ anchorRect, currentMode, onSelect, onClose }: L
             className={[
               'w-full flex items-center gap-3 px-3 py-2 transition-colors text-left',
               isActive
-                ? 'bg-blue-500/15 text-blue-400'
-                : 'hover:bg-white/[0.08] text-slate-200',
+                ? 'bg-sp-accent/15 text-sp-accent'
+                : 'hover:bg-white/[0.08] text-sp-text',
             ].join(' ')}
             onClick={() => {
               onSelect(opt.mode);
@@ -124,7 +124,7 @@ export function LayoutSelector({ anchorRect, currentMode, onSelect, onClose }: L
             >
               <path
                 d={opt.icon}
-                stroke={isActive ? '#60a5fa' : '#94a3b8'}
+                stroke={isActive ? 'var(--sp-accent)' : 'var(--sp-muted)'}
                 strokeWidth="1.5"
                 fill="none"
                 rx="1"
@@ -133,7 +133,7 @@ export function LayoutSelector({ anchorRect, currentMode, onSelect, onClose }: L
             <span className="flex-1 text-sm">{opt.label}</span>
             {isActive && (
               <span
-                className="material-symbols-outlined text-blue-400 flex-shrink-0"
+                className="material-symbols-outlined text-sp-accent flex-shrink-0"
                 style={{ fontSize: 16 }}
               >
                 check

@@ -18,6 +18,7 @@ import { ConsultationWidget } from './items/ConsultationWidget';
 import { MemoFocus } from './items/MemoFocus';
 import { FavoriteTools } from './items/FavoriteTools';
 import { MiniCalendar } from './items/MiniCalendar';
+import { MessageWidget } from './items/MessageWidget';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -125,6 +126,20 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
 
   // ─── 정보 카테고리 ───
+  {
+    id: 'message',
+    name: '오늘의 한마디',
+    icon: '💬',
+    description: '오늘의 메시지를 표시하고 편집합니다',
+    category: 'info',
+    defaultSize: { w: 2, h: 2 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: MessageWidget,
+  },
   {
     id: 'meal',
     name: '급식 메뉴',

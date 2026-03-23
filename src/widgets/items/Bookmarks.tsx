@@ -348,7 +348,7 @@ function BookmarkVisibilityPicker({
                   type="checkbox"
                   checked={!groupHidden}
                   onChange={() => toggleGroup(group.id)}
-                  className="accent-blue-500 w-3.5 h-3.5"
+                  className="accent-[color:var(--sp-accent)] w-3.5 h-3.5"
                 />
                 <span className="text-xs">{group.emoji}</span>
                 <span className="text-xs font-semibold text-sp-text">
@@ -371,7 +371,7 @@ function BookmarkVisibilityPicker({
                         type="checkbox"
                         checked={!hBookmarks.includes(bm.id)}
                         onChange={() => toggleBookmark(bm.id)}
-                        className="accent-blue-500 w-3 h-3"
+                        className="accent-[color:var(--sp-accent)] w-3 h-3"
                       />
                       <span className="text-xs flex-shrink-0">
                         {bm.iconType === 'favicon' ? (
@@ -396,7 +396,7 @@ function BookmarkVisibilityPicker({
       <div className="flex gap-2 mt-2">
         <button
           onClick={() => onSave(hGroups, hBookmarks)}
-          className="flex-1 text-xs bg-sp-accent text-white rounded-lg py-1.5 hover:bg-blue-600 transition-colors"
+          className="flex-1 text-xs bg-sp-accent text-sp-accent-fg rounded-lg py-1.5 hover:brightness-110 transition-colors"
         >
           저장 ({visibleCount}/{bookmarks.length}개 표시)
         </button>

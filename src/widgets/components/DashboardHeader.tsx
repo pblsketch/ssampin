@@ -44,7 +44,7 @@ export function DashboardHeader({ isEditMode, onToggleEditMode }: DashboardHeade
             onClick={onToggleEditMode}
             className={`shrink-0 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5 text-sm font-medium ${
               isEditMode
-                ? 'bg-sp-accent text-white'
+                ? 'bg-sp-accent text-sp-accent-fg'
                 : 'text-sp-muted hover:text-sp-text hover:bg-sp-card'
             }`}
             title={isEditMode ? '편집 모드 끄기' : '위젯 편집'}

@@ -70,7 +70,7 @@ export function SortableWidget({
         )}
 
         <div
-          className="h-full overflow-hidden"
+          className="h-full overflow-hidden bg-sp-card"
           style={{
             borderRadius: 'var(--sp-card-radius, 12px)',
             border: 'var(--sp-card-border, 1px solid var(--sp-border))',

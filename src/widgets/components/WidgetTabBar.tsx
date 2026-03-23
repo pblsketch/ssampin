@@ -24,7 +24,7 @@ export function WidgetTabBar({ activeTab, onTabChange }: WidgetTabBarProps) {
             flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
             whitespace-nowrap transition-colors
             ${activeTab === tab.key
-              ? 'bg-sp-accent text-white'
+              ? 'bg-sp-accent text-sp-accent-fg'
               : 'text-sp-muted hover:text-sp-text hover:bg-sp-card/50'
             }
           `}

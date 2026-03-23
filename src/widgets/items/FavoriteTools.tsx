@@ -23,7 +23,7 @@ export function FavoriteTools() {
     .filter((t): t is ToolDefinition => t !== undefined);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xs font-bold text-sp-text">자주 쓰는 도구</h3>
@@ -100,7 +100,7 @@ function FavoriteToolPicker({
       <p className="text-[10px] text-sp-muted mb-2">
         대시보드에 표시할 도구를 선택하세요 (최대 8개)
       </p>
-      <div className="grid grid-cols-4 gap-1.5 flex-1 overflow-y-auto">
+      <div className="grid grid-cols-4 gap-1.5 overflow-y-auto" style={{ maxHeight: 'calc(100% - 60px)' }}>
         {TOOL_DEFINITIONS.map((tool) => {
           const isSelected = picked.includes(tool.id);
           return (
@@ -122,10 +122,10 @@ function FavoriteToolPicker({
           );
         })}
       </div>
-      <div className="flex gap-2 mt-2">
+      <div className="flex gap-2 mt-2 sticky bottom-0 bg-sp-card pt-2">
         <button
           onClick={() => onSave(picked)}
-          className="flex-1 text-xs bg-sp-accent text-white rounded-lg py-1.5 hover:bg-blue-600 transition-colors"
+          className="flex-1 text-xs bg-sp-accent text-sp-accent-fg rounded-lg py-1.5 hover:brightness-110 transition-colors"
         >
           저장 ({picked.length}개)
         </button>

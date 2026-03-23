@@ -129,7 +129,7 @@ function DDayForm({ initial, onSave, onCancel }: DDayFormProps) {
         <button
           type="submit"
           disabled={!title.trim() || !targetDate}
-          className="rounded-lg bg-sp-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-sp-accent/80 transition-colors disabled:opacity-40"
+          className="rounded-lg bg-sp-accent px-3 py-1.5 text-sm font-medium text-sp-accent-fg hover:brightness-110 transition-colors disabled:opacity-40"
         >
           저장
         </button>

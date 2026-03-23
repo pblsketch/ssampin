@@ -71,7 +71,7 @@ export function WidgetVerticalResizeHandle({ currentRowSpan, minRowSpan, onResiz
 
       {isDragging && (
         <div className="absolute inset-0 z-10 rounded-xl border-2 border-sp-accent/40 pointer-events-none flex items-end justify-center pb-3">
-          <span className="bg-sp-accent text-white text-xs font-medium px-2.5 py-1 rounded-md shadow-lg">
+          <span className="bg-sp-accent text-sp-accent-fg text-xs font-medium px-2.5 py-1 rounded-md shadow-lg">
             {previewSpan}행
           </span>
         </div>
