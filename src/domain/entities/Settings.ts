@@ -41,6 +41,10 @@ export interface WidgetStyleSettings {
   readonly cardGap: number;
   /** 카드 테두리 표시 여부 */
   readonly showBorder: boolean;
+  /** 카드 테두리 두께 (0~4px, 기본 1). showBorder가 true일 때 적용 */
+  readonly borderWidth: number;
+  /** 카드 테두리 색상 오버라이드 (null → 테마 기본 --sp-border) */
+  readonly borderColor: string | null;
   /** 그림자 레벨 */
   readonly shadow: ShadowLevel;
   /** 배경 이미지 (프리셋 ID 또는 로컬 file:// 경로, null → 없음) */

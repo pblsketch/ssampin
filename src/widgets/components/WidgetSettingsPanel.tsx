@@ -190,6 +190,16 @@ function StyleTab() {
 
   return (
     <div className="space-y-5 px-4 py-3">
+      {/* 섹션 0: 투명도 */}
+      <StyleSection title="투명도">
+        <SliderRow label="배경 투명도" min={0} max={100} step={5}
+          value={Math.round(settings.widget.opacity * 100)} unit="%"
+          onChange={(v) => void updateSettings({ widget: { ...settings.widget, opacity: v / 100 } })} />
+        <SliderRow label="카드 투명도" min={0} max={100} step={5}
+          value={Math.round((settings.widget.cardOpacity ?? 1) * 100)} unit="%"
+          onChange={(v) => void updateSettings({ widget: { ...settings.widget, cardOpacity: v / 100 } })} />
+      </StyleSection>
+
       {/* 섹션 1: 테마 프리셋 */}
       <StyleSection title="테마">
         <div className="grid grid-cols-3 gap-1.5">
@@ -261,6 +271,15 @@ function StyleTab() {
           onChange={(v) => updateStyle({ cardGap: v })} />
         <ToggleRow label="테두리" checked={ws.showBorder}
           onChange={(v) => updateStyle({ showBorder: v })} />
+        {ws.showBorder && (
+          <>
+            <SliderRow label="두께" min={1} max={4} step={1} value={ws.borderWidth} unit="px"
+              onChange={(v) => updateStyle({ borderWidth: v })} />
+            <ColorSwatchRow label="테두리 색상" value={ws.borderColor} themeDefault={themeColors.border}
+              swatches={COLOR_SWATCHES['border'] ?? []} onChange={(v) => updateStyle({ borderColor: v })}
+              onReset={() => updateStyle({ borderColor: null })} />
+          </>
+        )}
         <SelectRow label="그림자" value={ws.shadow}
           options={[
             { value: 'none', label: '없음' },

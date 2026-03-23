@@ -110,7 +110,7 @@ function applyWidgetStyle(ws: WidgetStyleSettings | undefined): void {
   // 레이아웃 변수
   root.style.setProperty('--sp-card-radius', `${s.borderRadius}px`);
   root.style.setProperty('--sp-card-gap', `${s.cardGap}px`);
-  root.style.setProperty('--sp-card-border', s.showBorder ? '1px solid var(--sp-border)' : 'none');
+  root.style.setProperty('--sp-card-border', s.showBorder ? `${s.borderWidth}px solid ${s.borderColor ?? 'var(--sp-border)'}` : 'none');
   root.style.setProperty('--sp-card-shadow', SHADOW_MAP[s.shadow]);
   root.style.setProperty('--sp-font-family', FONT_MAP[s.fontFamily]);
 

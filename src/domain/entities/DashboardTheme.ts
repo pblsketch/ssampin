@@ -91,6 +91,8 @@ export const DEFAULT_WIDGET_STYLE: WidgetStyleSettings = {
   textColor: null,
   cardGap: 16,
   showBorder: true,
+  borderWidth: 1,
+  borderColor: null,
   shadow: 'none',
   backgroundImage: null,
   backgroundImageOpacity: 0.15,
@@ -150,5 +152,9 @@ export const COLOR_SWATCHES: Record<string, readonly string[]> = {
   text: [
     '#ffffff', '#e2e8f0', '#f1f5f9', '#fef3c7', '#dcfce7',
     '#0f172a', '#1e293b', '#334155', '#1a1a1a', '#374151',
+  ],
+  border: [
+    '#2a3548', '#3a3a3a', '#363636', '#2a4066', '#2a5435', '#5c3a2a',
+    '#b0b5bf', '#d8b4fe', '#e9e9e7', '#ffffff',
   ],
 };
