@@ -49,7 +49,10 @@ export function Seating() {
 
   if (layout === 'group' && groups && groups.length > 0) {
     return (
-      <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col gap-2 overflow-y-auto">
+      <div ref={containerRef} className="rounded-xl bg-sp-card p-3 h-full flex flex-col gap-2 overflow-y-auto">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-sp-text">자리배치</h3>
+        </div>
         {groups.map((group) => {
           const groupStudents = group.studentIds
             .map((id) => studentMap.get(id))
@@ -89,9 +92,12 @@ export function Seating() {
     const basePairs = buildPairGroups(cols, cols % 2 !== 0 ? mode : 'single');
 
     return (
-      <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col items-center gap-2">
+      <div ref={containerRef} className="rounded-xl bg-sp-card p-3 h-full flex flex-col gap-2">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-sp-text">자리배치</h3>
+        </div>
         <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
-          sizeMode === 'lg' ? 'w-24 text-sm' : sizeMode === 'md' ? 'w-20 text-xs' : 'w-16 text-[10px]'
+          sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-[10px]'
         }`}>교탁</div>
 
         <div className={`flex flex-col ${sizeMode === 'lg' ? 'gap-2' : sizeMode === 'md' ? 'gap-1.5' : 'gap-1'}`}>
@@ -113,7 +119,7 @@ export function Seating() {
                   return (
                     <div
                       key={pi}
-                      className={`flex gap-0.5 ${!isSingle ? 'bg-sp-surface/40 rounded px-0.5 py-0.5' : ''}`}
+                      className={`flex gap-0.5 flex-1 ${!isSingle ? 'bg-sp-surface/40 rounded px-0.5 py-0.5' : ''}`}
                     >
                       {colRange.map((c) => {
                         const studentId = row[c] ?? null;
@@ -124,10 +130,10 @@ export function Seating() {
                           <div
                             key={c}
                             className={`${
-                              sizeMode === 'lg' ? 'h-8 w-14 text-xs' :
-                              sizeMode === 'md' ? 'h-6 w-10 text-[10px]' :
-                              'h-5 w-5 text-[8px]'
-                            } rounded-sm flex items-center justify-center ${
+                              sizeMode === 'lg' ? 'h-8 text-xs' :
+                              sizeMode === 'md' ? 'h-6 text-[10px]' :
+                              'h-5 text-[8px]'
+                            } min-w-0 flex-1 rounded-sm flex items-center justify-center ${
                               hasStudent ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface/30'
                             }`}
                           >
@@ -151,13 +157,16 @@ export function Seating() {
   }
 
   return (
-    <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col items-center gap-2">
+    <div ref={containerRef} className="rounded-xl bg-sp-card p-3 h-full flex flex-col gap-2">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-sp-text">자리배치</h3>
+      </div>
       <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
-        sizeMode === 'lg' ? 'w-24 text-sm' : sizeMode === 'md' ? 'w-20 text-xs' : 'w-16 text-[10px]'
+        sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-[10px]'
       }`}>교탁</div>
 
       <div
-        className={`grid ${sizeMode === 'lg' ? 'gap-2' : sizeMode === 'md' ? 'gap-1.5' : 'gap-1'}`}
+        className={`grid w-full ${sizeMode === 'lg' ? 'gap-2' : sizeMode === 'md' ? 'gap-1.5' : 'gap-1'}`}
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: rows }).map((_, r) =>
@@ -170,9 +179,9 @@ export function Seating() {
               <div
                 key={`${r}-${c}`}
                 className={`${
-                  sizeMode === 'lg' ? 'h-8 w-16 text-xs' :
-                  sizeMode === 'md' ? 'h-6 w-12 text-[10px]' :
-                  'h-5 w-5 text-[8px]'
+                  sizeMode === 'lg' ? 'h-8 text-xs' :
+                  sizeMode === 'md' ? 'h-6 text-[10px]' :
+                  'h-5 text-[8px]'
                 } rounded-sm flex items-center justify-center ${
                   hasStudent ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface/30'
                 }`}
