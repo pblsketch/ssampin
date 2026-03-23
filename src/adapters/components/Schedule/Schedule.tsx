@@ -223,6 +223,19 @@ export function Schedule() {
     void deleteEvent(id);
   }
 
+  function handleSkipDate(eventId: string, dateToSkip: string) {
+    const event = events.find((e) => e.id === eventId);
+    if (!event || !event.recurrence) return;
+
+    const currentExcludes = event.excludeDates ?? [];
+    if (currentExcludes.includes(dateToSkip)) return; // 이미 제외됨
+
+    void updateEvent({
+      ...event,
+      excludeDates: [...currentExcludes, dateToSkip],
+    });
+  }
+
   function handleDateSelect(date: Date) {
     setSelectedDate(date);
   }
@@ -696,6 +709,7 @@ export function Schedule() {
           }}
           onEditEvent={handleEditEvent}
           onDeleteEvent={handleDeleteEvent}
+          onSkipDate={handleSkipDate}
         />
       )}
 

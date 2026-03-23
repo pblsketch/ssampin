@@ -88,6 +88,8 @@ export interface SchoolEvent {
   readonly isDDay?: boolean;
   readonly alerts?: readonly AlertTiming[];
   readonly recurrence?: Recurrence;
+  /** 반복 일정에서 제외할 날짜 목록 (YYYY-MM-DD) */
+  readonly excludeDates?: readonly string[];
   readonly period?: string;  // "1"~"7", "afterSchool", "allDay" 또는 undefined
 
   // 구글 캘린더 동기화 필드 (모두 optional, 하위 호환성 유지)

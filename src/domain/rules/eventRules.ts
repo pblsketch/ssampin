@@ -86,6 +86,12 @@ export function isRecurring(event: SchoolEvent, targetDate: Date): boolean {
   // 원본 날짜와 같으면 반복이 아닌 원본임
   if (eventDate.getTime() === target.getTime()) return false;
 
+  // excludeDates에 포함된 날짜는 건너뛰기
+  if (event.excludeDates) {
+    const targetStr = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+    if (event.excludeDates.includes(targetStr)) return false;
+  }
+
   switch (event.recurrence) {
     case 'weekly':
       return eventDate.getDay() === target.getDay();
@@ -134,6 +140,12 @@ export function getEventsForDate(
   return events.filter((event) => {
     const eventStart = parseLocalDate(event.date);
     const eventEnd = event.endDate ? parseLocalDate(event.endDate) : eventStart;
+
+    // excludeDates 체크 (반복 일정 전용)
+    if (event.recurrence && event.excludeDates) {
+      const targetStr = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+      if (event.excludeDates.includes(targetStr)) return false;
+    }
 
     // 원본 이벤트가 해당 날짜에 포함되는지
     const inRange = eventStart.getTime() <= targetMs && eventEnd.getTime() >= targetMs;

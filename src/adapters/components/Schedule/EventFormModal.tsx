@@ -74,6 +74,7 @@ export function EventFormModal({
   const [customValue, setCustomValue] = useState('');
   const [customUnit, setCustomUnit] = useState<CustomUnit>('min');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [excludeDates, setExcludeDates] = useState<string[]>([]);
 
   useEffect(() => {
     if (editEvent) {
@@ -88,6 +89,7 @@ export function EventFormModal({
       setAlerts([...(editEvent.alerts ?? [])]);
       setRecurrence(editEvent.recurrence ?? '');
       setDescription(editEvent.description ?? '');
+      setExcludeDates([...(editEvent.excludeDates ?? [])]);
     }
   }, [editEvent]);
 
@@ -128,6 +130,10 @@ export function EventFormModal({
     return map[minutes] ?? null;
   }
 
+  function handleRestoreDate(dateStr: string) {
+    setExcludeDates((prev) => prev.filter((d) => d !== dateStr));
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !date) return;
@@ -144,6 +150,7 @@ export function EventFormModal({
       ...(alerts.length > 0 && { alerts }),
       ...(period && { period }),
       ...(recurrence && { recurrence }),
+      ...(recurrence && excludeDates.length > 0 && { excludeDates }),
       ...(description.trim() && { description: description.trim() }),
       // NEIS 일정 편집 시 기존 필드 보존 + isModified 플래그
       ...(editEvent?.source === 'neis' && {
@@ -443,6 +450,36 @@ export function EventFormModal({
                 ))}
               </select>
             </div>
+
+            {/* 건너뛴 날짜 목록 (반복 일정 수정 시) */}
+            {recurrence && excludeDates.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-sp-muted mb-1.5">
+                  건너뛴 날짜 ({excludeDates.length}개)
+                </label>
+                <div className="flex flex-wrap gap-1.5 bg-sp-bg/50 border border-sp-border rounded-xl p-3">
+                  {[...excludeDates].sort().map((d) => (
+                    <span
+                      key={d}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                    >
+                      {d}
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreDate(d)}
+                        className="hover:text-white transition-colors ml-0.5"
+                        title="복원"
+                      >
+                        <span className="material-symbols-outlined text-sm leading-none" style={{ fontSize: '14px' }}>close</span>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[11px] text-sp-muted mt-1">
+                  × 버튼으로 날짜를 복원하면 해당 날짜에 다시 일정이 표시됩니다
+                </p>
+              </div>
+            )}
 
             {/* 메모 */}
             <div>

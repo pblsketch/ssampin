@@ -12,6 +12,7 @@ interface DayScheduleModalProps {
     onAddEvent: () => void;
     onEditEvent: (event: SchoolEvent) => void;
     onDeleteEvent: (id: string) => void;
+    onSkipDate?: (eventId: string, date: string) => void;
 }
 
 export function DayScheduleModal({
@@ -22,6 +23,7 @@ export function DayScheduleModal({
     onAddEvent,
     onEditEvent,
     onDeleteEvent,
+    onSkipDate,
 }: DayScheduleModalProps) {
     const y = date.getFullYear();
     const mStr = String(date.getMonth() + 1).padStart(2, '0');
@@ -66,6 +68,8 @@ export function DayScheduleModal({
                         onEdit={onEditEvent}
                         onDelete={onDeleteEvent}
                         hideTitle={true}
+                        onSkipDate={onSkipDate}
+                        currentDate={dateStr}
                     />
                 </div>
 

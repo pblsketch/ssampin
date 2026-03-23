@@ -23,6 +23,8 @@ interface EventListProps {
   isSelectMode?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
+  onSkipDate?: (eventId: string, date: string) => void;
+  currentDate?: string; // "YYYY-MM-DD" — the date context for this event list
 }
 
 function formatEventDate(dateStr: string, showYear?: boolean): string {
@@ -47,9 +49,11 @@ interface EventCardProps {
   isSelectMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
+  onSkipDate?: (eventId: string, date: string) => void;
+  currentDate?: string;
 }
 
-function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode, isSelected, onToggleSelect }: EventCardProps) {
+function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode, isSelected, onToggleSelect, onSkipDate, currentDate }: EventCardProps) {
   const isExternal = event.id.startsWith('ext:');
   const isNeis = event.source === 'neis';
   const isNeisHoliday = isNeis && event.neis?.subtractDayType === '공휴일';
@@ -156,6 +160,16 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
             </span>
           ) : (
             <div className="hidden group-hover:flex items-center gap-1">
+              {event.recurrence && onSkipDate && currentDate && (
+                <button
+                  type="button"
+                  onClick={() => onSkipDate(event.id, currentDate)}
+                  className="p-1 hover:bg-amber-900/50 rounded transition-colors text-slate-400 hover:text-amber-400"
+                  title="이 날짜만 건너뛰기"
+                >
+                  <span className="material-symbols-outlined text-[16px]">event_busy</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onEdit(event)}
@@ -201,6 +215,12 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
             {event.date.split('-').slice(1).map(Number).join('/')} ~ {event.endDate!.split('-').slice(1).map(Number).join('/')}
           </div>
         )}
+        {event.recurrence && (
+          <div className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">repeat</span>
+            {event.recurrence === 'weekly' ? '매주' : event.recurrence === 'monthly' ? '매월' : '매년'}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -233,7 +253,7 @@ function HolidayCard({ holiday, showYear }: { holiday: HolidayInfo; showYear?: b
   );
 }
 
-export function EventList({ events, categories, holidays, allEvents, allHolidays, year, hideTitle, onEdit, onDelete, isSelectMode, selectedIds, onToggleSelect }: EventListProps) {
+export function EventList({ events, categories, holidays, allEvents, allHolidays, year, hideTitle, onEdit, onDelete, isSelectMode, selectedIds, onToggleSelect, onSkipDate, currentDate }: EventListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchYear, setSearchYear] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -408,6 +428,8 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
               isSelectMode={isSelectMode}
               isSelected={selectedIds?.has(item.data.id)}
               onToggleSelect={onToggleSelect}
+              onSkipDate={onSkipDate}
+              currentDate={currentDate}
             />
           ) : (
             <HolidayCard key={`holiday-${item.data.date}`} holiday={item.data} showYear={isSearching} />
