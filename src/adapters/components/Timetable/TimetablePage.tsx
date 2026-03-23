@@ -139,8 +139,8 @@ export function TimetablePage() {
   } | null>(null);
 
   const lunchIndex = useMemo(
-    () => getLunchBreakIndex(settings.periodTimes),
-    [settings.periodTimes],
+    () => getLunchBreakIndex(settings.periodTimes, settings.lunchStart, settings.lunchEnd),
+    [settings.periodTimes, settings.lunchStart, settings.lunchEnd],
   );
   const lunchTimeStr = useMemo(
     () => (lunchIndex >= 0 ? formatLunchBreakTime(settings.periodTimes, lunchIndex) : ''),

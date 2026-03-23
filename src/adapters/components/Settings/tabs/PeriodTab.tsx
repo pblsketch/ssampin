@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { Settings, SchoolLevel } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { PeriodPreset } from '@domain/rules/periodRules';
-import { getDefaultPreset, generatePeriodTimes, parseMinutes, formatTime, PERIOD_DURATION } from '@domain/rules/periodRules';
+import { getDefaultPreset, generatePeriodTimes, parseMinutes, formatTime, PERIOD_DURATION, getDefaultLunchTime } from '@domain/rules/periodRules';
 import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { SettingsSection } from '../shared/SettingsSection';
 import { SCHOOL_LEVEL_OPTIONS } from '../shared/constants';
@@ -55,7 +55,7 @@ export function PeriodTab({ draft, patch }: Props) {
     patch({ periodTimes: renumbered, maxPeriods: renumbered.length });
   }, [draft.periodTimes, patch]);
 
-  const lunchIndex = getLunchBreakIndex(draft.periodTimes);
+  const lunchIndex = getLunchBreakIndex(draft.periodTimes, draft.lunchStart, draft.lunchEnd);
 
   const updateLunchTime = useCallback(
     (field: 'start' | 'end', value: string) => {
@@ -81,14 +81,14 @@ export function PeriodTab({ draft, patch }: Props) {
             end: formatTime(newEnd),
           };
         }
-        patch({ periodTimes: arr });
+        patch({ periodTimes: arr, lunchEnd: value });
       } else if (field === 'start') {
         const newLunchStart = parseMinutes(value);
         arr[lunchIndex - 1] = {
           ...prevPeriod,
           end: formatTime(newLunchStart),
         };
-        patch({ periodTimes: arr });
+        patch({ periodTimes: arr, lunchStart: value });
       }
     },
     [draft.periodTimes, lunchIndex, patch],
@@ -96,11 +96,16 @@ export function PeriodTab({ draft, patch }: Props) {
 
   const handleApplyPreset = useCallback(() => {
     const generated = generatePeriodTimes(preset);
+    // 프리셋 적용 시 점심시간도 자동 설정
+    const lunchPeriod = generated[preset.lunchAfterPeriod - 1];
+    const afterLunch = generated[preset.lunchAfterPeriod];
     patch({
       schoolLevel: preset.schoolLevel,
       periodTimes: generated,
       maxPeriods: generated.length,
       customPeriodDuration: preset.schoolLevel === 'custom' ? preset.customPeriodDuration : undefined,
+      lunchStart: lunchPeriod?.end,
+      lunchEnd: afterLunch?.start,
     });
     setShowPreset(false);
   }, [preset, patch]);
@@ -307,6 +312,40 @@ export function PeriodTab({ draft, patch }: Props) {
           </div>
         </div>
       )}
+
+      {/* 점심시간 설정 */}
+      <div className="mb-4 p-4 rounded-lg bg-sp-surface/60 border border-sp-border">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-base">🍱</span>
+          <span className="text-sm font-bold text-sp-text">점심시간 설정</span>
+          <span className="text-xs text-sp-muted ml-auto">점심시간으로 표시할 시간을 직접 설정합니다</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="time"
+            value={draft.lunchStart ?? getDefaultLunchTime(draft.schoolLevel).start}
+            onChange={(e) => patch({ lunchStart: e.target.value })}
+            className="bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-amber-500/50 [color-scheme:dark]"
+          />
+          <span className="text-sm text-sp-muted">~</span>
+          <input
+            type="time"
+            value={draft.lunchEnd ?? getDefaultLunchTime(draft.schoolLevel).end}
+            onChange={(e) => patch({ lunchEnd: e.target.value })}
+            className="bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-amber-500/50 [color-scheme:dark]"
+          />
+          <span className="text-xs text-sp-muted">
+            ({(() => {
+              const s = parseMinutes(draft.lunchStart ?? getDefaultLunchTime(draft.schoolLevel).start);
+              const e = parseMinutes(draft.lunchEnd ?? getDefaultLunchTime(draft.schoolLevel).end);
+              return e > s ? `${e - s}분` : '';
+            })()})
+          </span>
+        </div>
+        <p className="mt-2 text-[11px] text-sp-muted/70 leading-relaxed">
+          교시 사이 간격 중 위 시간대와 겹치는 구간이 점심시간으로 표시됩니다.
+        </p>
+      </div>
 
       <div className="overflow-hidden rounded-lg border border-sp-border">
         <table className="w-full text-sm text-left">

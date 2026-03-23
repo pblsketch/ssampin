@@ -204,4 +204,8 @@ export interface Settings {
   readonly todoShowEvents?: boolean;
   /** 대시보드 글씨 크기 배율 (기본 1.0, 범위 0.8~1.5) */
   readonly dashboardFontScale?: number;
+  /** 점심시간 시작 (HH:mm). 미설정 시 학교급 기본값 사용 */
+  readonly lunchStart?: string;
+  /** 점심시간 종료 (HH:mm). 미설정 시 학교급 기본값 사용 */
+  readonly lunchEnd?: string;
 }

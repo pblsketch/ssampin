@@ -138,3 +138,28 @@ export function generatePeriodTimes(preset: PeriodPreset): PeriodTime[] {
 
   return result;
 }
+
+/** 학교급별 기본 점심시간 */
+export function getDefaultLunchTime(level: SchoolLevel): { start: string; end: string } {
+  switch (level) {
+    case 'elementary': return { start: '12:00', end: '12:50' };
+    case 'middle':     return { start: '12:00', end: '12:50' };
+    case 'high':       return { start: '12:50', end: '13:50' };
+    default:           return { start: '12:00', end: '13:00' };
+  }
+}
+
+/** 기존 교시 시간표에서 점심시간 추정 (마이그레이션용) */
+export function detectLunchFromPeriods(periodTimes: readonly PeriodTime[]): { start: string; end: string } | null {
+  for (let i = 1; i < periodTimes.length; i++) {
+    const prevEnd = parseMinutes(periodTimes[i - 1]!.end);
+    const currStart = parseMinutes(periodTimes[i]!.start);
+    if (currStart - prevEnd >= 30) {
+      return {
+        start: periodTimes[i - 1]!.end,
+        end: periodTimes[i]!.start,
+      };
+    }
+  }
+  return null;
+}

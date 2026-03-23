@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, DashboardThemeSettings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
+import { detectLunchFromPeriods, getDefaultLunchTime } from '@domain/rules/periodRules';
 
 export const DEFAULT_WORK_SYMBOLS: readonly WorkSymbolItem[] = [
   { id: 'silence', emoji: '🤫', name: '조용히', description: '소리 내지 않고 혼자 활동합니다', bgGradient: 'from-blue-950/30 to-transparent' },
@@ -213,11 +214,25 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           favoriteTools: (saved as unknown as { favoriteTools?: Settings['favoriteTools'] }).favoriteTools,
           bookmarkWidgetHiddenGroups: (saved as unknown as { bookmarkWidgetHiddenGroups?: Settings['bookmarkWidgetHiddenGroups'] }).bookmarkWidgetHiddenGroups,
           bookmarkWidgetHiddenBookmarks: (saved as unknown as { bookmarkWidgetHiddenBookmarks?: Settings['bookmarkWidgetHiddenBookmarks'] }).bookmarkWidgetHiddenBookmarks,
+          lunchStart: (saved as unknown as { lunchStart?: string }).lunchStart,
+          lunchEnd: (saved as unknown as { lunchEnd?: string }).lunchEnd,
         };
         // maxPeriods가 periodTimes 개수보다 작으면 보정 (온보딩 버그 마이그레이션)
         let corrected = merged.periodTimes && merged.maxPeriods < merged.periodTimes.length
           ? { ...merged, maxPeriods: merged.periodTimes.length }
           : merged;
+
+        // lunchStart/lunchEnd 마이그레이션 (기존 사용자)
+        if (!corrected.lunchStart) {
+          const detected = detectLunchFromPeriods(corrected.periodTimes);
+          if (detected) {
+            corrected = { ...corrected, lunchStart: detected.start, lunchEnd: detected.end };
+          } else {
+            const defaults = getDefaultLunchTime(corrected.schoolLevel);
+            corrected = { ...corrected, lunchStart: defaults.start, lunchEnd: defaults.end };
+          }
+          void settingsRepository.saveSettings(corrected);
+        }
 
         // sync.deviceId 자동 초기화
         if (!corrected.sync?.deviceId) {

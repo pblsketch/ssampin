@@ -58,7 +58,11 @@ interface BreakPreset {
   endTime: string;
 }
 
-function computeBreakPresets(periodTimes: readonly PeriodTime[]): BreakPreset[] {
+function computeBreakPresets(
+  periodTimes: readonly PeriodTime[],
+  lunchStart?: string,
+  lunchEnd?: string,
+): BreakPreset[] {
   if (periodTimes.length === 0) return [];
   const sorted = [...periodTimes].sort((a, b) => parseTimeToMinutes(a.start) - parseTimeToMinutes(b.start));
   const presets: BreakPreset[] = [];
@@ -72,7 +76,7 @@ function computeBreakPresets(periodTimes: readonly PeriodTime[]): BreakPreset[] 
     endTime: sorted[0]!.start,
   });
 
-  // 교시 사이 쉬는 시간
+  // 교시 사이 쉬는 시간 (점심 fallback: 가장 긴 간격 >= 30분)
   let longestGapIdx = -1;
   let longestGap = 0;
   for (let i = 0; i < sorted.length - 1; i++) {
@@ -99,7 +103,9 @@ function computeBreakPresets(periodTimes: readonly PeriodTime[]): BreakPreset[] 
       const endMins = parseTimeToMinutes(sorted[i]!.end);
       const nextStartMins = parseTimeToMinutes(sorted[i + 1]!.start);
       if (nextStartMins <= endMins) continue;
-      const isLunch = i === longestGapIdx && longestGap >= 30;
+      const isLunch = lunchStart && lunchEnd
+        ? (endMins >= parseTimeToMinutes(lunchStart) && nextStartMins <= parseTimeToMinutes(lunchEnd))
+        : (i === longestGapIdx && longestGap >= 30);
       presets.push({
         id: isLunch ? 'lunch' : `break-${sorted[i]!.period}`,
         label: isLunch ? '점심 시간' : `${sorted[i]!.period}교시 후 쉬는 시간`,
@@ -206,8 +212,8 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
   const breakPresets = useMemo(
-    () => computeBreakPresets(settings.periodTimes),
-    [settings.periodTimes],
+    () => computeBreakPresets(settings.periodTimes, settings.lunchStart, settings.lunchEnd),
+    [settings.periodTimes, settings.lunchStart, settings.lunchEnd],
   );
 
   // 학부모: 제외할 시간대 목록 (수업 교시 + 커스텀)

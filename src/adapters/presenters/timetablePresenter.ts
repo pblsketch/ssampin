@@ -102,17 +102,37 @@ export function getCellWidgetStyle(
 
 /**
  * 점심시간이 들어갈 교시 인덱스를 반환한다.
- * periodTimes 배열에서 연속 교시 간 간격이 30분 이상인 지점을 찾는다.
- * 찾지 못하면 -1 (점심 행 없음).
+ *
+ * lunchStart/lunchEnd가 설정되어 있으면, 해당 시간대와 겹치는 교시 간 간격을 찾는다.
+ * 미설정 시 연속 교시 간 간격이 30분 이상인 첫 번째 지점을 사용한다 (하위 호환).
  *
  * @returns 0-based 인덱스. 해당 인덱스의 교시 *앞에* 점심 행이 삽입된다.
  */
-export function getLunchBreakIndex(periodTimes: readonly PeriodTime[]): number {
+export function getLunchBreakIndex(
+  periodTimes: readonly PeriodTime[],
+  lunchStart?: string,
+  lunchEnd?: string,
+): number {
+  if (lunchStart && lunchEnd) {
+    const lStart = parseTimeToMinutes(lunchStart);
+    const lEnd = parseTimeToMinutes(lunchEnd);
+    for (let i = 1; i < periodTimes.length; i++) {
+      const prevEnd = parseTimeToMinutes(periodTimes[i - 1]!.end);
+      const currStart = parseTimeToMinutes(periodTimes[i]!.start);
+      // 교시 간 간격이 점심시간 설정과 겹치는지 확인
+      if (currStart > prevEnd && prevEnd >= lStart && currStart <= lEnd) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  // 하위 호환: 설정 없으면 기존 30분 간격 기반 자동 감지
   for (let i = 1; i < periodTimes.length; i++) {
     const prevEnd = parseTimeToMinutes(periodTimes[i - 1]!.end);
     const currStart = parseTimeToMinutes(periodTimes[i]!.start);
     if (currStart - prevEnd >= 30) {
-      return i; // 이 교시 앞에 점심 행 삽입
+      return i;
     }
   }
   return -1;

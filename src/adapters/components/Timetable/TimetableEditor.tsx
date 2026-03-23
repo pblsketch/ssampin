@@ -123,8 +123,8 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   );
 
   const lunchIndex = useMemo(
-    () => getLunchBreakIndex(visiblePeriodTimes),
-    [visiblePeriodTimes],
+    () => getLunchBreakIndex(visiblePeriodTimes, settings.lunchStart, settings.lunchEnd),
+    [visiblePeriodTimes, settings.lunchStart, settings.lunchEnd],
   );
   const lunchTimeStr = useMemo(
     () => (lunchIndex >= 0 ? formatLunchBreakTime(visiblePeriodTimes, lunchIndex) : ''),
