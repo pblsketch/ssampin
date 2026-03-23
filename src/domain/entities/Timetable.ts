@@ -27,4 +27,19 @@ export type LegacyClassScheduleData = {
   readonly [day: string]: readonly string[];
 };
 
+/** 시간표 임시 변경 (특정 날짜의 특정 교시를 오버라이드) */
+export interface TimetableOverride {
+  readonly id: string;
+  readonly date: string;           // "YYYY-MM-DD"
+  readonly period: number;         // 교시 (1-based)
+  readonly subject: string;        // 변경된 과목 (빈 문자열 = 자습/공강)
+  readonly classroom?: string;     // 변경된 교실 (교사 시간표용)
+  readonly reason?: string;        // 변경 사유 ("수업 교환", "시험", "행사" 등)
+  readonly createdAt: string;
+}
+
+export interface TimetableOverridesData {
+  readonly overrides: readonly TimetableOverride[];
+}
+
 export type { DayOfWeek };

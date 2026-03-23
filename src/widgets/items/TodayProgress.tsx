@@ -58,7 +58,7 @@ function findMatchingClass(
  */
 export function TodayProgress() {
   const { classes, progressEntries, load: loadClasses } = useTeachingClassStore();
-  const { teacherSchedule, load: loadSchedule } = useScheduleStore();
+  const { teacherSchedule, overrides, getEffectiveTeacherSchedule, load: loadSchedule } = useScheduleStore();
 
   useEffect(() => {
     void loadClasses();
@@ -87,8 +87,8 @@ export function TodayProgress() {
 
   const todayLessons = useMemo(() => {
     if (today === null) return [];
-    const periods = teacherSchedule[today] ?? [];
     const todayStr = new Date().toISOString().slice(0, 10);
+    const periods = getEffectiveTeacherSchedule(todayStr);
     return periods
       .map((period, index) => {
         if (period === null) return null;
@@ -142,7 +142,8 @@ export function TodayProgress() {
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
-  }, [today, teacherSchedule, classes, progressEntries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today, teacherSchedule, overrides, classes, progressEntries]);
 
   const completedCount = useMemo(
     () => todayLessons.filter((l) => l.progress?.status === 'completed').length,

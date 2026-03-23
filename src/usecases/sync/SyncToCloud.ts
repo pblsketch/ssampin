@@ -16,7 +16,7 @@ export const SYNC_FILES = [
   'settings', 'class-schedule', 'teacher-schedule', 'students',
   'seating', 'events', 'memos', 'todos', 'student-records',
   'bookmarks', 'surveys', 'seat-constraints', 'teaching-classes', 'dday',
-  'curriculum-progress', 'attendance', 'consultations',
+  'curriculum-progress', 'attendance', 'consultations', 'timetable-overrides',
 ] as const;
 
 export type SyncFileName = typeof SYNC_FILES[number];

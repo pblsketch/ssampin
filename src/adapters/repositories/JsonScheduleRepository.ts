@@ -3,6 +3,7 @@ import type { IScheduleRepository } from '@domain/repositories/IScheduleReposito
 import type {
   ClassScheduleData,
   TeacherScheduleData,
+  TimetableOverridesData,
 } from '@domain/entities/Timetable';
 
 export class JsonScheduleRepository implements IScheduleRepository {
@@ -22,5 +23,13 @@ export class JsonScheduleRepository implements IScheduleRepository {
 
   saveTeacherSchedule(data: TeacherScheduleData): Promise<void> {
     return this.storage.write('teacher-schedule', data);
+  }
+
+  getTimetableOverrides(): Promise<TimetableOverridesData | null> {
+    return this.storage.read<TimetableOverridesData>('timetable-overrides');
+  }
+
+  saveTimetableOverrides(data: TimetableOverridesData): Promise<void> {
+    return this.storage.write('timetable-overrides', data);
   }
 }

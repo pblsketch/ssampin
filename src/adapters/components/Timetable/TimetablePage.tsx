@@ -7,7 +7,7 @@ import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
+import type { TeacherPeriod, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
 import {
@@ -31,6 +31,7 @@ import {
 import { smartAutoAssignColors, extractSubjectsFromSchedule, extractClassroomsFromSchedule, autoAssignClassroomColors } from '@domain/rules/subjectColorRules';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 import { TimetableEditor } from './TimetableEditor';
+import { TempChangeModal } from './TempChangeModal';
 /* eslint-disable no-restricted-imports */
 import {
   exportClassScheduleToExcel,
@@ -48,7 +49,10 @@ export function TimetablePage() {
   const {
     classSchedule,
     teacherSchedule,
+    overrides,
     load: loadSchedule,
+    addOverride,
+    deleteOverride,
   } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
   const { track } = useAnalytics();
@@ -101,6 +105,38 @@ export function TimetablePage() {
     () => (dayOfWeek ? getCurrentPeriod(settings.periodTimes, now) : null),
     [dayOfWeek, settings.periodTimes, now],
   );
+
+  // 이번 주 월~금 날짜 계산
+  const weekDates = useMemo(() => {
+    const d = new Date(now);
+    const jsDay = d.getDay(); // 0=일 ... 6=토
+    const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + mondayOffset);
+    return DAYS_OF_WEEK.map((_, i) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
+      return date.toISOString().slice(0, 10);
+    });
+  }, [now]);
+
+  // 오버라이드 맵: 날짜+교시 → override
+  const overrideMap = useMemo(() => {
+    const map = new Map<string, TimetableOverride>();
+    for (const o of overrides) {
+      map.set(`${o.date}:${o.period}`, o);
+    }
+    return map;
+  }, [overrides]);
+
+  // 임시 변경 모달 상태
+  const [tempChangeTarget, setTempChangeTarget] = useState<{
+    date: string;
+    period: number;
+    dayIdx: number;
+    subject: string;
+    classroom?: string;
+  } | null>(null);
 
   const lunchIndex = useMemo(
     () => getLunchBreakIndex(settings.periodTimes),
@@ -423,6 +459,12 @@ export function TimetablePage() {
                         subjectColors={settings.subjectColors}
                         classroomColors={classroomColors}
                         colorBy={colorBy}
+                        weekDates={weekDates}
+                        overrideMap={overrideMap}
+                        onTempChange={(date, dayIdx, subject, classroom) =>
+                          setTempChangeTarget({ date, period: periodNum, dayIdx, subject, classroom })
+                        }
+                        onDeleteOverride={(id) => void deleteOverride(id)}
                       />
                     );
                   })}
@@ -438,6 +480,17 @@ export function TimetablePage() {
         </div>
       </div>
 
+      {/* 임시 변경 모달 */}
+      {tempChangeTarget && (
+        <TempChangeModal
+          date={tempChangeTarget.date}
+          period={tempChangeTarget.period}
+          currentSubject={tempChangeTarget.subject}
+          currentClassroom={tempChangeTarget.classroom}
+          onSave={(override) => void addOverride(override)}
+          onClose={() => setTempChangeTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -515,6 +568,10 @@ interface PeriodRowProps {
   subjectColors?: SubjectColorMap;
   classroomColors?: SubjectColorMap;
   colorBy: 'subject' | 'classroom';
+  weekDates: string[];
+  overrideMap: Map<string, TimetableOverride>;
+  onTempChange: (date: string, dayIdx: number, subject: string, classroom?: string) => void;
+  onDeleteOverride: (id: string) => void;
 }
 
 function PeriodRow({
@@ -529,6 +586,10 @@ function PeriodRow({
   subjectColors,
   classroomColors,
   colorBy,
+  weekDates,
+  overrideMap,
+  onTempChange,
+  onDeleteOverride,
 }: PeriodRowProps) {
   return (
     <>
@@ -581,6 +642,8 @@ function PeriodRow({
         {/* 요일별 과목 셀 */}
         {DAYS_OF_WEEK.map((day, dayIdx) => {
           const isToday = day === dayOfWeek;
+          const dateStr = weekDates[dayIdx] ?? '';
+          const override = overrideMap.get(`${dateStr}:${periodTime.period}`);
 
           if (tab === 'class') {
             const cp = classPeriods[dayIdx] ?? null;
@@ -593,6 +656,15 @@ function PeriodRow({
                 isToday={isToday}
                 isCurrent={isCurrent && isToday}
                 isLastCol={dayIdx === DAYS_OF_WEEK.length - 1}
+                override={override}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  if (override) {
+                    onDeleteOverride(override.id);
+                  } else {
+                    onTempChange(dateStr, dayIdx, cp?.subject ?? '', undefined);
+                  }
+                }}
               />
             );
           }
@@ -608,6 +680,15 @@ function PeriodRow({
               subjectColors={subjectColors}
               classroomColors={classroomColors}
               colorBy={colorBy}
+              override={override}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (override) {
+                  onDeleteOverride(override.id);
+                } else {
+                  onTempChange(dateStr, dayIdx, tp?.subject ?? '', tp?.classroom ?? '');
+                }
+              }}
             />
           );
         })}
@@ -623,29 +704,46 @@ interface SubjectCellProps {
   isCurrent: boolean;
   isLastCol: boolean;
   subjectColors?: SubjectColorMap;
+  override?: TimetableOverride;
+  onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectColors }: SubjectCellProps) {
-  if (!subject) {
+function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectColors, override, onContextMenu }: SubjectCellProps) {
+  const isOverridden = override != null;
+  const displaySubject = isOverridden ? (override.subject || '') : subject;
+  const displayTeacher = isOverridden ? '' : teacher;
+
+  if (!displaySubject) {
     return (
       <td
         className={`p-2 ${!isLastCol ? 'border-r border-sp-border' : ''} ${
           isToday ? 'bg-sp-accent/5' : ''
         }`}
+        onContextMenu={onContextMenu}
       >
-        <div className="h-14 w-full flex items-center justify-center text-sp-muted text-sm">
-          —
+        <div className={`h-14 w-full flex items-center justify-center text-sp-muted text-sm relative ${
+          isOverridden ? 'border border-dashed border-amber-400/30 rounded-lg' : ''
+        }`}>
+          {isOverridden ? '자습' : '—'}
+          {isOverridden && (
+            <span className="absolute top-0.5 right-0.5 text-[8px] text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+              <span className="material-symbols-outlined text-[12px]">push_pin</span>
+            </span>
+          )}
         </div>
       </td>
     );
   }
 
-  const style = getSubjectStyle(subject, subjectColors);
+  const style = getSubjectStyle(displaySubject, subjectColors);
 
   const cellContent = (
     <div className="flex flex-col items-center justify-center gap-0.5">
-      <span className={`${style.text} font-bold text-sm`}>{subject}</span>
-      {teacher && <span className="text-sp-muted text-xs">{teacher}</span>}
+      <span className={`${style.text} font-bold text-sm`}>{displaySubject}</span>
+      {displayTeacher && <span className="text-sp-muted text-xs">{displayTeacher}</span>}
+      {isOverridden && override.reason && (
+        <span className="text-amber-400/70 text-[9px]">{override.reason}</span>
+      )}
     </div>
   );
 
@@ -655,13 +753,22 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
         className={`p-2 relative ${!isLastCol ? 'border-r border-sp-border' : ''} ${
           isToday ? 'bg-sp-accent/5' : ''
         }`}
+        onContextMenu={onContextMenu}
       >
         <div className="absolute inset-0 bg-amber-500/10 pointer-events-none animate-pulse" />
         <div
-          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20`}
+          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20 ${
+            isOverridden ? 'border-dashed' : ''
+          }`}
         >
           {cellContent}
-          <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
+          {isOverridden ? (
+            <span className="absolute -top-1 -right-1 text-amber-400">
+              <span className="material-symbols-outlined text-[14px]">push_pin</span>
+            </span>
+          ) : (
+            <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
+          )}
         </div>
       </td>
     );
@@ -672,11 +779,19 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
       className={`p-2 ${!isLastCol ? 'border-r border-sp-border' : ''} ${
         isToday ? 'bg-sp-accent/5' : ''
       }`}
+      onContextMenu={onContextMenu}
     >
       <div
-        className={`h-14 w-full rounded-lg ${style.bg} border ${style.border} flex items-center justify-center`}
+        className={`h-14 w-full rounded-lg ${style.bg} border ${
+          isOverridden ? 'border-dashed border-amber-400/30' : style.border
+        } flex items-center justify-center relative`}
       >
         {cellContent}
+        {isOverridden && (
+          <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+            <span className="material-symbols-outlined text-[12px]">push_pin</span>
+          </span>
+        )}
       </div>
     </td>
   );
@@ -690,29 +805,49 @@ interface TeacherCellProps {
   subjectColors?: SubjectColorMap;
   classroomColors?: SubjectColorMap;
   colorBy: 'subject' | 'classroom';
+  override?: TimetableOverride;
+  onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, classroomColors, colorBy }: TeacherCellProps) {
-  if (!period) {
+function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, classroomColors, colorBy, override, onContextMenu }: TeacherCellProps) {
+  const isOverridden = override != null;
+
+  // 오버라이드된 경우 override 데이터로 표시
+  const displayPeriod: TeacherPeriod | null = isOverridden
+    ? (override.subject ? { subject: override.subject, classroom: override.classroom ?? '' } : null)
+    : period;
+
+  if (!displayPeriod) {
     return (
       <td
         className={`p-2 ${!isLastCol ? 'border-r border-sp-border' : ''} ${
           isToday ? 'bg-sp-accent/5' : ''
         }`}
+        onContextMenu={onContextMenu}
       >
-        <div className="h-14 w-full flex items-center justify-center text-sp-muted text-xs">
-          공강
+        <div className={`h-14 w-full flex items-center justify-center text-sp-muted text-xs relative ${
+          isOverridden ? 'border border-dashed border-amber-400/30 rounded-lg' : ''
+        }`}>
+          {isOverridden ? '자습' : '공강'}
+          {isOverridden && (
+            <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+              <span className="material-symbols-outlined text-[12px]">push_pin</span>
+            </span>
+          )}
         </div>
       </td>
     );
   }
 
-  const style = getCellStyle(period.subject, period.classroom, colorBy, subjectColors, classroomColors);
+  const style = getCellStyle(displayPeriod.subject, displayPeriod.classroom, colorBy, subjectColors, classroomColors);
 
   const cellContent = (
     <div className="flex flex-col items-center justify-center gap-0.5">
-      <span className={`${style.text} font-bold text-sm`}>{period.subject}</span>
-      <span className="text-sp-muted text-xs">{period.classroom}</span>
+      <span className={`${style.text} font-bold text-sm`}>{displayPeriod.subject}</span>
+      <span className="text-sp-muted text-xs">{displayPeriod.classroom}</span>
+      {isOverridden && override.reason && (
+        <span className="text-amber-400/70 text-[9px]">{override.reason}</span>
+      )}
     </div>
   );
 
@@ -722,13 +857,22 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
         className={`p-2 relative ${!isLastCol ? 'border-r border-sp-border' : ''} ${
           isToday ? 'bg-sp-accent/5' : ''
         }`}
+        onContextMenu={onContextMenu}
       >
         <div className="absolute inset-0 bg-amber-500/10 pointer-events-none animate-pulse" />
         <div
-          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20`}
+          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20 ${
+            isOverridden ? 'border-dashed' : ''
+          }`}
         >
           {cellContent}
-          <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
+          {isOverridden ? (
+            <span className="absolute -top-1 -right-1 text-amber-400">
+              <span className="material-symbols-outlined text-[14px]">push_pin</span>
+            </span>
+          ) : (
+            <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
+          )}
         </div>
       </td>
     );
@@ -739,11 +883,19 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
       className={`p-2 ${!isLastCol ? 'border-r border-sp-border' : ''} ${
         isToday ? 'bg-sp-accent/5' : ''
       }`}
+      onContextMenu={onContextMenu}
     >
       <div
-        className={`h-14 w-full rounded-lg ${style.bg} border ${style.border} flex items-center justify-center`}
+        className={`h-14 w-full rounded-lg ${style.bg} border ${
+          isOverridden ? 'border-dashed border-amber-400/30' : style.border
+        } flex items-center justify-center relative`}
       >
         {cellContent}
+        {isOverridden && (
+          <span className="absolute top-0.5 right-0.5 text-amber-400" title={`임시 변경: ${override.reason ?? ''}`}>
+            <span className="material-symbols-outlined text-[12px]">push_pin</span>
+          </span>
+        )}
       </div>
     </td>
   );

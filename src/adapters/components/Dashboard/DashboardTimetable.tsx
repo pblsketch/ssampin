@@ -10,7 +10,7 @@ import { getSubjectTextColor, getSubjectDotColor, getCellStyle, getCellDotColor 
 type TabType = 'class' | 'teacher';
 
 export function DashboardTimetable() {
-  const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
+  const { classSchedule, teacherSchedule, overrides, getEffectiveTeacherSchedule, load: loadSchedule } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
   const [tab, setTab] = useState<TabType>(() => {
     try {
@@ -63,11 +63,13 @@ export function DashboardTimetable() {
     return classSchedule[dayOfWeek] ?? [];
   }, [dayOfWeek, classSchedule]);
 
-  // 오늘의 교사 시간표
+  // 오늘의 교사 시간표 (오버라이드 적용)
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const todayTeacherPeriods: readonly (TeacherPeriod | null)[] = useMemo(() => {
     if (!dayOfWeek) return [];
-    return teacherSchedule[dayOfWeek] ?? [];
-  }, [dayOfWeek, teacherSchedule]);
+    return getEffectiveTeacherSchedule(todayStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayOfWeek, todayStr, teacherSchedule, overrides]);
 
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">

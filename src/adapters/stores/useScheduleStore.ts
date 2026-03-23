@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { ClassScheduleData, TeacherScheduleData, ClassPeriod } from '@domain/entities/Timetable';
+import type { ClassScheduleData, TeacherScheduleData, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
 import { createEmptyClassSchedule, createEmptyTeacherSchedule, migrateClassScheduleData } from '@domain/rules/timetableRules';
 import { scheduleRepository } from '@adapters/di/container';
+import { getDayOfWeek } from '@domain/rules/periodRules';
 
 /** 초기 빈 시간표 (저장된 데이터가 없을 때 사용) */
 const EMPTY_CLASS_SCHEDULE: ClassScheduleData = createEmptyClassSchedule(7);
@@ -21,6 +22,9 @@ interface ScheduleState {
   past: ScheduleSnapshot[];
   future: ScheduleSnapshot[];
 
+  /** 임시 시간표 변경 */
+  overrides: readonly TimetableOverride[];
+
   load: () => Promise<void>;
   updateClassSchedule: (data: ClassScheduleData) => Promise<void>;
   updateTeacherSchedule: (data: TeacherScheduleData) => Promise<void>;
@@ -29,6 +33,13 @@ interface ScheduleState {
   redo: () => Promise<void>;
   canUndo: () => boolean;
   canRedo: () => boolean;
+
+  addOverride: (override: Omit<TimetableOverride, 'id' | 'createdAt'>) => Promise<void>;
+  deleteOverride: (id: string) => Promise<void>;
+  /** 특정 날짜의 오버라이드가 적용된 교사 시간표 반환 */
+  getEffectiveTeacherSchedule: (date: string) => readonly (import('@domain/entities/Timetable').TeacherPeriod | null)[];
+  /** 특정 날짜의 오버라이드 목록 반환 */
+  getOverridesForDate: (date: string) => readonly TimetableOverride[];
 }
 
 export const useScheduleStore = create<ScheduleState>((set, get) => {
@@ -45,13 +56,15 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     loaded: false,
     past: [],
     future: [],
+    overrides: [],
 
     load: async () => {
       if (get().loaded) return;
       try {
-        const [classRaw, teacherSch] = await Promise.all([
+        const [classRaw, teacherSch, overridesData] = await Promise.all([
           scheduleRepository.getClassSchedule(),
           scheduleRepository.getTeacherSchedule(),
+          scheduleRepository.getTimetableOverrides(),
         ]);
         // 기존 string[] 포맷 → ClassPeriod[] 포맷 마이그레이션
         const classSch = classRaw
@@ -60,6 +73,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
         set({
           classSchedule: classSch ?? EMPTY_CLASS_SCHEDULE,
           teacherSchedule: teacherSch ?? EMPTY_TEACHER_SCHEDULE,
+          overrides: overridesData?.overrides ?? [],
           loaded: true,
         });
       } catch {
@@ -140,5 +154,52 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
 
     canUndo: () => get().past.length > 0,
     canRedo: () => get().future.length > 0,
+
+    addOverride: async (input) => {
+      const id = `ovr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const override: TimetableOverride = {
+        ...input,
+        id,
+        createdAt: new Date().toISOString(),
+      };
+      const newOverrides = [...get().overrides, override];
+      set({ overrides: newOverrides });
+      await scheduleRepository.saveTimetableOverrides({ overrides: newOverrides });
+    },
+
+    deleteOverride: async (id) => {
+      const newOverrides = get().overrides.filter((o) => o.id !== id);
+      set({ overrides: newOverrides });
+      await scheduleRepository.saveTimetableOverrides({ overrides: newOverrides });
+    },
+
+    getEffectiveTeacherSchedule: (date) => {
+      // date → 요일 변환
+      const d = new Date(date + 'T00:00:00');
+      const dayOfWeekVal = getDayOfWeek(d);
+      if (!dayOfWeekVal) return [];
+
+      const baseSchedule = get().teacherSchedule[dayOfWeekVal] ?? [];
+      const dayOverrides = get().overrides.filter((o) => o.date === date);
+
+      if (dayOverrides.length === 0) return baseSchedule;
+
+      const periods = [...baseSchedule];
+      for (const override of dayOverrides) {
+        const idx = override.period - 1;
+        if (idx >= 0 && idx < periods.length) {
+          if (override.subject) {
+            periods[idx] = { subject: override.subject, classroom: override.classroom ?? '' };
+          } else {
+            periods[idx] = null; // 공강/자습
+          }
+        }
+      }
+      return periods;
+    },
+
+    getOverridesForDate: (date) => {
+      return get().overrides.filter((o) => o.date === date);
+    },
   };
 });
