@@ -15,6 +15,7 @@ function OAuthErrorModal({
 }) {
   const isServerBlocked = error.code === 'SERVER_START_FAILED' || error.code === 'LOCALHOST_BLOCKED';
   const isTimeout = error.code === 'TIMEOUT';
+  const isAccessDenied = error.code === 'ACCESS_DENIED';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -24,11 +25,13 @@ function OAuthErrorModal({
       >
         {/* 헤더 */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-lg bg-red-500/10">
-            <span className="material-symbols-outlined text-red-400">error</span>
+          <div className={`p-2 rounded-lg ${isAccessDenied ? 'bg-amber-500/10' : 'bg-red-500/10'}`}>
+            <span className={`material-symbols-outlined ${isAccessDenied ? 'text-amber-400' : 'text-red-400'}`}>
+              {isAccessDenied ? 'info' : 'error'}
+            </span>
           </div>
           <h3 className="text-lg font-bold text-sp-text">
-            {isTimeout ? '인증 시간 초과' : 'Google 로그인 연결 실패'}
+            {isTimeout ? '인증 시간 초과' : isAccessDenied ? 'Google 연동 일시 제한' : 'Google 로그인 연결 실패'}
           </h3>
         </div>
 
@@ -55,7 +58,23 @@ function OAuthErrorModal({
           </p>
         )}
 
-        {!isServerBlocked && !isTimeout && (
+        {isAccessDenied && (
+          <div className="space-y-3">
+            <p className="text-sm text-sp-muted">
+              현재 구글 보안 심사가 진행 중이라 신규 사용자의 연동이 일시적으로 제한되고 있어요.
+            </p>
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 space-y-2">
+              <p className="text-sm font-medium text-amber-400">안내</p>
+              <ul className="list-disc list-inside space-y-1.5 text-sm text-sp-muted">
+                <li>구글 보안 심사가 완료되면 캘린더·드라이브 연동을 정상적으로 사용할 수 있습니다.</li>
+                <li>심사 기간 중에도 시간표, 좌석배치, 메모 등 핵심 기능은 모두 정상 동작합니다.</li>
+                <li>심사 완료 시 앱 업데이트를 통해 안내드리겠습니다.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {!isServerBlocked && !isTimeout && !isAccessDenied && (
           <p className="text-sm text-sp-muted">{error.message}</p>
         )}
 
@@ -237,6 +256,21 @@ export function CalendarSettings() {
           <p className="text-sm text-sp-muted">
             구글 계정을 연결하면 캘린더 동기화와 과제수합(드라이브) 기능을 사용할 수 있습니다.
           </p>
+          {/* 인증 심사 안내 배너 */}
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0">info</span>
+              <p className="text-sm font-medium text-amber-400">구글 연동 일시 제한 안내</p>
+            </div>
+            <p className="text-xs text-sp-muted leading-relaxed">
+              현재 구글 보안 심사가 진행 중이라 신규 사용자의 연동이 일시적으로 제한되고 있습니다.
+              로그인 시 &apos;확인되지 않은 앱&apos; 경고가 표시되거나 연결이 거부될 수 있습니다.
+            </p>
+            <p className="text-xs text-sp-muted leading-relaxed">
+              심사 완료 후 정상 이용 가능하며, 이미 연결된 사용자는 영향 없이 계속 사용할 수 있습니다.
+              시간표·좌석배치·메모 등 핵심 기능은 구글 연동 없이도 모두 동작합니다.
+            </p>
+          </div>
           <button
             onClick={() => void startAuth()}
             disabled={isLoading}

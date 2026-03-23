@@ -17,6 +17,7 @@ import { SurveyWidget } from './items/SurveyWidget';
 import { ConsultationWidget } from './items/ConsultationWidget';
 import { MemoFocus } from './items/MemoFocus';
 import { FavoriteTools } from './items/FavoriteTools';
+import { MiniCalendar } from './items/MiniCalendar';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -153,6 +154,22 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: Events,
+    navigateTo: 'schedule',
+    navigateLabel: '일정 전체 보기',
+  },
+  {
+    id: 'mini-calendar',
+    name: '미니 캘린더',
+    icon: '📅',
+    description: '월간 달력으로 일정을 한눈에 확인합니다',
+    category: 'admin',
+    defaultSize: { w: 1, h: 4 },
+    minSize: { w: 1, h: 3 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: MiniCalendar,
     navigateTo: 'schedule',
     navigateLabel: '일정 전체 보기',
   },
