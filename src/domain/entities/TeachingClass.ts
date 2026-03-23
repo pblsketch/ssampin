@@ -37,6 +37,7 @@ export interface TeachingClass {
   readonly subject: string;
   readonly students: readonly TeachingClassStudent[];
   readonly seating?: TeachingClassSeating;
+  readonly order?: number;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

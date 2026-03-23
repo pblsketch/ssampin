@@ -20,6 +20,7 @@ interface TeachingClassState {
   addClass: (name: string, subject: string, students: readonly TeachingClassStudent[]) => Promise<void>;
   updateClass: (cls: TeachingClass) => Promise<void>;
   deleteClass: (id: string) => Promise<void>;
+  reorderClasses: (orderedIds: string[]) => Promise<void>;
   addProgressEntry: (
     classId: string,
     date: string,
@@ -62,7 +63,14 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
           manageProgress.getAll(),
           manageAttendance.getAll(),
         ]);
-        set({ classes, progressEntries, attendanceRecords, loaded: true });
+        // order 기준 정렬 (order 없으면 생성순)
+        const sorted = [...classes].sort((a, b) => {
+          const orderA = a.order ?? Infinity;
+          const orderB = b.order ?? Infinity;
+          if (orderA !== orderB) return orderA - orderB;
+          return a.createdAt.localeCompare(b.createdAt);
+        });
+        set({ classes: sorted, progressEntries, attendanceRecords, loaded: true });
       } catch {
         set({ loaded: true });
       }
@@ -107,6 +115,21 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         attendanceRecords: attendanceToKeep,
         selectedClassId: state.selectedClassId === id ? null : state.selectedClassId,
       }));
+    },
+
+    reorderClasses: async (orderedIds) => {
+      const classes = get().classes;
+      const reordered: TeachingClass[] = orderedIds
+        .map((id, index) => {
+          const cls = classes.find((c) => c.id === id);
+          if (!cls) return null;
+          const updated: TeachingClass = { ...cls, order: index, updatedAt: new Date().toISOString() };
+          return updated;
+        })
+        .filter((c): c is TeachingClass => c !== null);
+
+      set({ classes: reordered });
+      await teachingClassRepository.saveClasses({ classes: reordered });
     },
 
     addProgressEntry: async (classId, date, period, unit, lesson, note = '') => {

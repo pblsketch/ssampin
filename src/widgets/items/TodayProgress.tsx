@@ -4,6 +4,53 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
+import type { TeachingClass } from '@domain/entities/TeachingClass';
+
+/**
+ * 시간표의 classroom과 수업 관리의 학급명을 유연하게 매칭
+ * "2-1" ↔ "2-1 국어", "2학년1반" ↔ "2-1" 등
+ */
+function findMatchingClass(
+  classes: readonly TeachingClass[],
+  classroom: string,
+  subject: string,
+): TeachingClass | null {
+  if (!classroom) return null;
+
+  // 1순위: 정확 일치
+  const exact = classes.find((cls) => cls.name === classroom);
+  if (exact) return exact;
+
+  // 2순위: classroom이 학급명에 포함되거나, 학급명이 classroom에 포함
+  const partial = classes.find(
+    (cls) => cls.name.includes(classroom) || classroom.includes(cls.name),
+  );
+  if (partial) return partial;
+
+  // 3순위: 숫자만 추출하여 비교 (학년-반 매칭)
+  const classroomNums = classroom.replace(/[^0-9-]/g, '');
+  if (classroomNums) {
+    const numMatch = classes.find((cls) => {
+      const clsNums = cls.name.replace(/[^0-9-]/g, '');
+      return clsNums === classroomNums;
+    });
+    if (numMatch) return numMatch;
+  }
+
+  // 4순위: 과목으로 매칭 (과목이 같은 학급이 하나뿐일 때)
+  if (subject) {
+    const subjectMatches = classes.filter((cls) => cls.subject === subject);
+    if (subjectMatches.length === 1) return subjectMatches[0]!;
+
+    // 과목 + classroom 부분 매칭
+    const subjectAndPartial = subjectMatches.find(
+      (cls) => cls.name.includes(classroom) || classroom.includes(cls.name),
+    );
+    if (subjectAndPartial) return subjectAndPartial;
+  }
+
+  return null;
+}
 
 /**
  * 오늘 수업 진도 위젯
@@ -17,6 +64,18 @@ export function TodayProgress() {
     void loadClasses();
     void loadSchedule();
   }, [loadClasses, loadSchedule]);
+
+  // 위젯 모드에서 30초마다 진도 데이터 리로드
+  useEffect(() => {
+    const isWidget = new URLSearchParams(window.location.search).get('mode') === 'widget';
+    if (!isWidget) return;
+
+    const interval = setInterval(() => {
+      void loadClasses();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [loadClasses]);
 
   const today = useMemo((): DayOfWeek | null => {
     const dayIndex = new Date().getDay(); // 0=Sun, 1=Mon...6=Sat
@@ -34,7 +93,7 @@ export function TodayProgress() {
       .map((period, index) => {
         if (period === null) return null;
         const periodNumber = index + 1;
-        const matchedClass = classes.find((cls) => cls.name === period.classroom) ?? null;
+        const matchedClass = findMatchingClass(classes, period.classroom, period.subject);
         const progress: ProgressEntry | null = matchedClass !== null
           ? (progressEntries.find(
               (e) =>
@@ -76,6 +135,7 @@ export function TodayProgress() {
           period: periodNumber,
           subject: period.subject,
           classroom: period.classroom,
+          matchedClass,
           progress,
           prevProgress,
           nextProgress,
@@ -126,7 +186,9 @@ export function TodayProgress() {
     <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       <div className="flex flex-col gap-2 flex-1 overflow-auto">
         {todayLessons.map((lesson) => {
-          const statusBadge = getStatusBadge(lesson.progress?.status ?? null);
+          const statusBadge = lesson.matchedClass === null
+            ? <span className="flex-shrink-0 text-[10px] text-sp-muted/40 italic">학급 미매칭</span>
+            : getStatusBadge(lesson.progress?.status ?? null);
           const hasPrev = lesson.prevProgress !== null;
           const hasNext = lesson.nextProgress !== null;
           const hasToday = lesson.progress !== null;
@@ -198,9 +260,13 @@ export function TodayProgress() {
                     </p>
                   )}
                 </div>
-              ) : (
+              ) : lesson.matchedClass === null ? (
                 <p className="ml-9 text-xs text-sp-muted/40 italic mt-1">
-                  진도가 등록되지 않았습니다
+                  수업 관리에서 학급을 등록해주세요
+                </p>
+              ) : (
+                <p className="ml-9 text-xs text-sp-muted/50 italic mt-1">
+                  📝 진도 미등록
                 </p>
               )}
             </div>
