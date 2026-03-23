@@ -15,4 +15,6 @@ export interface Student {
   readonly parentPhone2Label?: string;
   /** 결번 여부 (전학 등으로 빠진 번호) */
   readonly isVacant?: boolean;
+  /** 생년월일 (YYYY-MM-DD 형식) */
+  readonly birthDate?: string;
 }

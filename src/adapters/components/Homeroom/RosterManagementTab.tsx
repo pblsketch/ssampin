@@ -20,7 +20,7 @@ export function RosterManagementTab() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const rosterFileRef = useRef<HTMLInputElement>(null);
-  const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhone2?: string; isVacant: boolean }> | null>(null);
+  const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhone2?: string; birthDate?: string; isVacant: boolean }> | null>(null);
   // 보호자2 필드가 열려있는 학생 ID 세트
   const [showParent2, setShowParent2] = useState<Set<string>>(new Set());
   const showToast = useToastStore((s) => s.show);
@@ -239,7 +239,7 @@ export function RosterManagementTab() {
       <div className="flex-1 overflow-y-auto">
         <div className="w-full max-w-5xl mx-auto">
           {/* 테이블 헤더 */}
-          <div className="grid grid-cols-[50px_50px_1fr_160px_80px_160px_80px_160px_80px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
+          <div className="grid grid-cols-[50px_50px_1fr_160px_80px_160px_80px_160px_120px_80px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
             <span>번호</span>
             <span>학번</span>
             <span>이름</span>
@@ -248,6 +248,7 @@ export function RosterManagementTab() {
             <span>보호자1 연락처</span>
             <span>관계2</span>
             <span>보호자2 연락처</span>
+            <span>생년월일</span>
             <span className="text-center">결번</span>
           </div>
 
@@ -259,7 +260,7 @@ export function RosterManagementTab() {
               return (
                 <div
                   key={student.id}
-                  className={`grid grid-cols-[50px_50px_1fr_160px_80px_160px_80px_160px_80px] gap-2 px-4 py-3 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
+                  className={`grid grid-cols-[50px_50px_1fr_160px_80px_160px_80px_160px_120px_80px] gap-2 px-4 py-3 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
                 >
                   {/* 번호 */}
                   <span className="text-sm text-sp-muted font-mono">{idx + 1}</span>
@@ -425,6 +426,27 @@ export function RosterManagementTab() {
                     <span className="text-sm text-sp-muted">{student.parentPhone2 || '-'}</span>
                   )}
 
+                  {/* 생년월일 */}
+                  {isEditing && !isVacant ? (
+                    <input
+                      type="date"
+                      className="rounded bg-sp-bg border border-sp-border px-2 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                      defaultValue={student.birthDate ?? ''}
+                      onBlur={(e) => {
+                        const val = e.target.value;
+                        if (val !== (student.birthDate ?? '')) {
+                          void updateStudentField(student.id, 'birthDate', val);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className="text-sm text-sp-muted">
+                      {student.birthDate
+                        ? student.birthDate.replace(/-/g, '.')
+                        : '-'}
+                    </span>
+                  )}
+
                   {/* 결번 토글 */}
                   <div className="flex justify-center">
                     {isEditing ? (
@@ -488,6 +510,7 @@ export function RosterManagementTab() {
                       phone: p.phone,
                       parentPhone: p.parentPhone,
                       parentPhone2: p.parentPhone2 ?? '',
+                      birthDate: p.birthDate ?? '',
                       isVacant: p.isVacant,
                     }));
                     await updateStudents(newStudents);

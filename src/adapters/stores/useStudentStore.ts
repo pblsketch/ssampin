@@ -50,7 +50,7 @@ interface StudentState {
   updateStudentName: (id: string, name: string) => Promise<void>;
   updateStudentField: (
     studentId: string,
-    field: 'name' | 'phone' | 'parentPhone' | 'parentPhoneLabel' | 'parentPhone2' | 'parentPhone2Label' | 'studentNumber',
+    field: 'name' | 'phone' | 'parentPhone' | 'parentPhoneLabel' | 'parentPhone2' | 'parentPhone2Label' | 'studentNumber' | 'birthDate',
     value: string | number,
   ) => Promise<void>;
   toggleVacant: (studentId: string) => Promise<void>;
