@@ -491,18 +491,51 @@ export function RosterManagementTab() {
           <span>여기서 등록한 명렬은 자리배치, 과제수합, 학생기록 등 모든 기능에서 사용됩니다. 자리배치를 따로 설정하지 않아도 명렬만 등록하면 다른 기능을 이용할 수 있어요.</span>
         </div>
 
-        {/* 엑셀 가져오기 미리보기 */}
+        {/* 엑셀 가져오기 미리보기 모달 */}
         {previewStudents && (
-          <div className="max-w-5xl mx-auto mt-4 p-4 rounded-lg bg-sp-surface border border-sp-border">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-sp-text flex items-center gap-2">
-                <span className="material-symbols-outlined text-sp-accent" style={{ fontSize: '18px' }}>preview</span>
-                가져올 학생 미리보기 ({previewStudents.length}명)
-              </h4>
-              <div className="flex gap-2">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl flex flex-col max-h-[80vh]">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sp-accent">preview</span>
+                  가져올 학생 미리보기 ({previewStudents.length}명)
+                </h3>
                 <button
                   onClick={() => setPreviewStudents(null)}
-                  className="px-3 py-1.5 text-xs text-sp-muted border border-sp-border rounded-lg hover:bg-sp-card transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+                </button>
+              </div>
+              <p className="text-xs text-red-400 mb-4">주의: 적용 시 기존 명단이 모두 교체됩니다.</p>
+              <div className="flex-1 overflow-y-auto mb-4 text-xs">
+                <table className="w-full">
+                  <thead className="sticky top-0 bg-sp-card">
+                    <tr className="text-sp-muted border-b border-sp-border">
+                      <th className="py-1.5 text-left w-16">번호</th>
+                      <th className="py-1.5 text-left">이름</th>
+                      <th className="py-1.5 text-left">연락처</th>
+                      <th className="py-1.5 text-left">보호자1</th>
+                      <th className="py-1.5 text-left">보호자2</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewStudents.map((s) => (
+                      <tr key={s.studentNumber} className="border-b border-sp-border/30">
+                        <td className="py-1.5 text-sp-text font-mono">{s.studentNumber}</td>
+                        <td className="py-1.5 text-sp-text">{s.isVacant ? <span className="text-red-400 italic">결번</span> : s.name}</td>
+                        <td className="py-1.5 text-sp-muted">{s.phone || '-'}</td>
+                        <td className="py-1.5 text-sp-muted">{s.parentPhone || '-'}</td>
+                        <td className="py-1.5 text-sp-muted">{s.parentPhone2 || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end gap-3 shrink-0 pt-3 border-t border-sp-border">
+                <button
+                  onClick={() => setPreviewStudents(null)}
+                  className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
                 >
                   취소
                 </button>
@@ -524,36 +557,11 @@ export function RosterManagementTab() {
                     showToast(`${previewStudents.length}명의 학생을 가져왔습니다`, 'success');
                     setPreviewStudents(null);
                   }}
-                  className="px-3 py-1.5 text-xs text-white bg-sp-accent hover:bg-blue-600 rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
                 >
                   적용하기
                 </button>
               </div>
-            </div>
-            <p className="text-xs text-red-400 mb-3">주의: 적용 시 기존 명단이 모두 교체됩니다.</p>
-            <div className="max-h-[200px] overflow-y-auto text-xs">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-sp-muted border-b border-sp-border">
-                    <th className="py-1.5 text-left w-16">번호</th>
-                    <th className="py-1.5 text-left">이름</th>
-                    <th className="py-1.5 text-left">연락처</th>
-                    <th className="py-1.5 text-left">보호자1</th>
-                    <th className="py-1.5 text-left">보호자2</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewStudents.map((s) => (
-                    <tr key={s.studentNumber} className="border-b border-sp-border/30">
-                      <td className="py-1.5 text-sp-text font-mono">{s.studentNumber}</td>
-                      <td className="py-1.5 text-sp-text">{s.isVacant ? <span className="text-red-400 italic">결번</span> : s.name}</td>
-                      <td className="py-1.5 text-sp-muted">{s.phone || '-'}</td>
-                      <td className="py-1.5 text-sp-muted">{s.parentPhone || '-'}</td>
-                      <td className="py-1.5 text-sp-muted">{s.parentPhone2 || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
         )}

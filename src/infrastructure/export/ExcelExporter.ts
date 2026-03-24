@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
+import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod } from '@domain/entities/Timetable';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
@@ -119,6 +119,234 @@ export async function exportTeacherScheduleToExcel(
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
+}
+
+/* ── 교사 시간표 엑셀 업로드/다운로드 ── */
+
+/**
+ * 교사 시간표 빈 양식 다운로드
+ */
+export async function exportTeacherTimetableTemplate(
+  maxPeriods: number,
+  days: readonly string[] = DAYS,
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('교사 시간표');
+
+  const headerRow = ws.addRow(['교시', ...days]);
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+  ws.getColumn(1).width = 8;
+  for (let i = 2; i <= days.length + 1; i++) {
+    ws.getColumn(i).width = 16;
+  }
+
+  for (let p = 1; p <= maxPeriods; p++) {
+    const row = ws.addRow([p, ...days.map(() => '')]);
+    row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(1).font = { bold: true };
+  }
+
+  ws.addRow([]);
+  ws.addRow(['※ 입력 형식: "학반 과목" (예: 302 언매, 1-3 수학)']);
+  ws.addRow(['※ 공강은 빈 칸으로 두세요']);
+  ws.addRow(['※ 컴시간에서 내보내기한 파일도 업로드 가능합니다']);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer as ArrayBuffer;
+}
+
+/**
+ * 교사 시간표 엑셀 파싱 (쌤핀 양식 + 컴시간 양식 자동 감지)
+ */
+export async function parseTeacherTimetableFromExcel(
+  buffer: ArrayBuffer,
+): Promise<TeacherScheduleData> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  const ws = workbook.worksheets[0];
+  if (!ws) return {};
+
+  if (detectComTimeFormat(ws)) {
+    return parseComTimeFormat(ws);
+  }
+  return parseSsampinFormat(ws);
+}
+
+/** 컴시간 양식 감지: 교시 열에 "1(08:40)" 패턴 */
+function detectComTimeFormat(ws: ExcelJS.Worksheet): boolean {
+  const cell = String(ws.getRow(2).getCell(1).value ?? '');
+  return /^\d+\s*\(\d{2}:\d{2}\)/.test(cell);
+}
+
+/** 컴시간 양식 파싱 */
+function parseComTimeFormat(ws: ExcelJS.Worksheet): TeacherScheduleData {
+  const dayColMap: Record<string, number> = {};
+
+  ws.getRow(1).eachCell((cell, colNumber) => {
+    const val = String(cell.value ?? '').trim();
+    for (const d of ['월', '화', '수', '목', '금', '토']) {
+      if (val.startsWith(d)) dayColMap[d] = colNumber;
+    }
+  });
+
+  const days = ['월', '화', '수', '목', '금', '토'].filter((d) => d in dayColMap);
+  const data: Record<string, (TeacherPeriod | null)[]> = {};
+  for (const day of days) data[day] = [];
+
+  ws.eachRow((row, rowNumber) => {
+    if (rowNumber <= 1) return;
+
+    const periodRaw = String(row.getCell(1).value ?? '');
+    const periodMatch = periodRaw.match(/^(\d+)/);
+    if (!periodMatch) return;
+
+    const periodIdx = parseInt(periodMatch[1]!, 10) - 1;
+
+    for (const day of days) {
+      const colNum = dayColMap[day]!;
+      const cellValue = row.getCell(colNum).value;
+      let text = '';
+
+      if (typeof cellValue === 'object' && cellValue !== null && 'richText' in cellValue) {
+        text = (cellValue as { richText: { text: string }[] }).richText
+          .map((r) => r.text)
+          .join('');
+      } else {
+        text = String(cellValue ?? '').trim();
+      }
+
+      while (data[day]!.length <= periodIdx) data[day]!.push(null);
+
+      if (!text) {
+        data[day]![periodIdx] = null;
+      } else {
+        const parsed = parseTeacherCell(text);
+        data[day]![periodIdx] = parsed
+          ? { classroom: parsed.classroom, subject: parsed.subject }
+          : null;
+      }
+    }
+  });
+
+  return data as TeacherScheduleData;
+}
+
+/** 쌤핀 기본 양식 파싱 */
+function parseSsampinFormat(ws: ExcelJS.Worksheet): TeacherScheduleData {
+  const dayColMap: Record<string, number> = {};
+
+  ws.getRow(1).eachCell((cell, colNumber) => {
+    const val = String(cell.value ?? '').trim();
+    for (const d of ['월', '화', '수', '목', '금', '토']) {
+      if (val === d || val.startsWith(d)) dayColMap[d] = colNumber;
+    }
+  });
+
+  const days = Object.keys(dayColMap);
+  const data: Record<string, (TeacherPeriod | null)[]> = {};
+  for (const day of days) data[day] = [];
+
+  ws.eachRow((row, rowNumber) => {
+    if (rowNumber <= 1) return;
+
+    const periodRaw = row.getCell(1).value;
+    // "1교시" 또는 숫자
+    const periodStr = String(periodRaw ?? '').replace('교시', '').trim();
+    const period = parseInt(periodStr, 10);
+    if (isNaN(period) || period <= 0) return;
+
+    const periodIdx = period - 1;
+
+    for (const day of days) {
+      const cellValue = row.getCell(dayColMap[day]!).value;
+      let text = '';
+
+      if (typeof cellValue === 'object' && cellValue !== null && 'richText' in cellValue) {
+        text = (cellValue as { richText: { text: string }[] }).richText
+          .map((r) => r.text)
+          .join('');
+      } else {
+        text = String(cellValue ?? '').trim();
+      }
+
+      while (data[day]!.length <= periodIdx) data[day]!.push(null);
+
+      if (!text) {
+        data[day]![periodIdx] = null;
+      } else {
+        const parsed = parseTeacherCell(text);
+        data[day]![periodIdx] = parsed
+          ? { classroom: parsed.classroom, subject: parsed.subject }
+          : null;
+      }
+    }
+  });
+
+  return data as TeacherScheduleData;
+}
+
+/**
+ * 셀 텍스트에서 학반 + 과목 추출
+ *
+ * 지원 형태:
+ * - "301\nJ_심국" → classroom: "3-1", subject: "심국" (컴시간 줄바꿈)
+ * - "302 언매" → classroom: "3-2", subject: "언매" (쌤핀 양식)
+ * - "1-3 수학" → classroom: "1-3", subject: "수학"
+ * - "언매 (3-2)" → classroom: "3-2", subject: "언매" (기존 내보내기 형식)
+ */
+function parseTeacherCell(text: string): { classroom: string; subject: string } | null {
+  const trimmed = text.trim();
+
+  // 기존 내보내기 형식: "과목 (학급)"
+  const exportMatch = trimmed.match(/^(.+?)\s*\((.+?)\)$/);
+  if (exportMatch) {
+    const subject = exportMatch[1]!.trim();
+    const classroom = normalizeClassroom(exportMatch[2]!.trim());
+    if (subject) return { classroom, subject };
+  }
+
+  // 줄바꿈으로 분리 (컴시간)
+  const lines = trimmed.split(/[\n\r]+/).map((s) => s.trim()).filter(Boolean);
+
+  if (lines.length >= 2) {
+    const classroom = normalizeClassroom(lines[0]!);
+    const subject = normalizeSubject(lines[1]!);
+    return { classroom, subject };
+  }
+
+  if (lines.length === 1) {
+    // "302 언매" 또는 "1-3 수학"
+    const match = lines[0]!.match(/^(\d{3}|\d+-\d+)\s+(.+)$/);
+    if (match) {
+      return {
+        classroom: normalizeClassroom(match[1]!),
+        subject: normalizeSubject(match[2]!),
+      };
+    }
+  }
+
+  return null;
+}
+
+/** 학반 정규화: "301" → "3-1", "3-2" → "3-2" */
+function normalizeClassroom(raw: string): string {
+  const t = raw.trim();
+  if (/^\d+-\d+$/.test(t)) return t;
+  if (/^\d{3}$/.test(t)) {
+    const grade = t[0];
+    const cls = parseInt(t.substring(1), 10);
+    return `${grade}-${cls}`;
+  }
+  return t;
+}
+
+/** 과목명 정규화: "J_심국" → "심국", "언매" → "언매" */
+function normalizeSubject(raw: string): string {
+  const t = raw.trim();
+  const m = t.match(/^[A-Z]_(.+)$/i);
+  if (m) return m[1]!;
+  return t;
 }
 
 function formatSeatingTitle(className: string): string {
