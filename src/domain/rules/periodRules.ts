@@ -1,5 +1,5 @@
 import type { PeriodTime } from '../valueObjects/PeriodTime';
-import type { DayOfWeekWithSat } from '../valueObjects/DayOfWeek';
+import type { DayOfWeekFull, WeekendDay } from '../valueObjects/DayOfWeek';
 import type { SchoolLevel } from '../entities/Settings';
 
 /**
@@ -13,16 +13,16 @@ export function parseMinutes(timeStr: string): number {
 
 /**
  * Date 객체에서 한국어 요일 반환
- * enableSaturday가 true면 토요일도 반환, 아니면 토/일 = null
+ * weekendDays에 포함된 주말 요일만 반환, 나머지 주말은 null
  */
 export function getDayOfWeek(
   date: Date,
-  enableSaturday: boolean = false,
-): DayOfWeekWithSat | null {
+  weekendDays?: readonly WeekendDay[],
+): DayOfWeekFull | null {
   const jsDay = date.getDay(); // 0=일, 1=월, ..., 6=토
-  if (jsDay === 0) return null; // 일요일
-  if (jsDay === 6) return enableSaturday ? '토' : null; // 토요일
-  const weekdays: DayOfWeekWithSat[] = ['월', '화', '수', '목', '금'];
+  if (jsDay === 0) return weekendDays?.includes('일') ? '일' : null;
+  if (jsDay === 6) return weekendDays?.includes('토') ? '토' : null;
+  const weekdays: DayOfWeekFull[] = ['월', '화', '수', '목', '금'];
   return weekdays[jsDay - 1] ?? null;
 }
 

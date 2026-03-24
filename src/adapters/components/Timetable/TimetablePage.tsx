@@ -5,7 +5,7 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
-import type { DayOfWeekWithSat } from '@domain/valueObjects/DayOfWeek';
+import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { TeacherPeriod, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
@@ -90,10 +90,10 @@ export function TimetablePage() {
     return () => clearInterval(timer);
   }, []);
 
-  const enableSaturday = settings.enableSaturday ?? false;
-  const activeDays = useMemo(() => getActiveDays(enableSaturday), [enableSaturday]);
+  const weekendDays = settings.enableWeekendDays;
+  const activeDays = useMemo(() => getActiveDays(weekendDays), [weekendDays]);
 
-  const dayOfWeek = useMemo(() => getDayOfWeek(now, enableSaturday), [now, enableSaturday]);
+  const dayOfWeek = useMemo(() => getDayOfWeek(now, weekendDays), [now, weekendDays]);
   const currentPeriod = useMemo(
     () => (dayOfWeek ? getCurrentPeriod(settings.periodTimes, now) : null),
     [dayOfWeek, settings.periodTimes, now],
@@ -474,8 +474,8 @@ function TabButton({ active, onClick, label }: TabButtonProps) {
 }
 
 interface TimetableHeaderProps {
-  dayOfWeek: DayOfWeekWithSat | null;
-  activeDays: readonly DayOfWeekWithSat[];
+  dayOfWeek: DayOfWeekFull | null;
+  activeDays: readonly DayOfWeekFull[];
 }
 
 function TimetableHeader({ dayOfWeek, activeDays }: TimetableHeaderProps) {
@@ -516,7 +516,7 @@ function TimetableHeader({ dayOfWeek, activeDays }: TimetableHeaderProps) {
 interface PeriodRowProps {
   periodTime: PeriodTime;
   isCurrent: boolean;
-  dayOfWeek: DayOfWeekWithSat | null;
+  dayOfWeek: DayOfWeekFull | null;
   tab: TabType;
   classPeriods: (ClassPeriod | null)[];
   teacherPeriods: (TeacherPeriod | null)[];
@@ -527,7 +527,7 @@ interface PeriodRowProps {
   colorBy: 'subject' | 'classroom';
   weekDates: string[];
   overrideMap: Map<string, TimetableOverride>;
-  activeDays: readonly DayOfWeekWithSat[];
+  activeDays: readonly DayOfWeekFull[];
   onTempChange: (date: string, dayIdx: number, subject: string, classroom?: string) => void;
   onDeleteOverride: (id: string) => void;
 }

@@ -3,6 +3,7 @@ import type { ClassScheduleData, TeacherScheduleData, ClassPeriod, TimetableOver
 import { createEmptyClassSchedule, createEmptyTeacherSchedule, migrateClassScheduleData } from '@domain/rules/timetableRules';
 import { scheduleRepository } from '@adapters/di/container';
 import { getDayOfWeek } from '@domain/rules/periodRules';
+import type { WeekendDay } from '@domain/valueObjects/DayOfWeek';
 
 /** 초기 빈 시간표 (저장된 데이터가 없을 때 사용) */
 const EMPTY_CLASS_SCHEDULE: ClassScheduleData = createEmptyClassSchedule(7);
@@ -37,7 +38,7 @@ interface ScheduleState {
   addOverride: (override: Omit<TimetableOverride, 'id' | 'createdAt'>) => Promise<void>;
   deleteOverride: (id: string) => Promise<void>;
   /** 특정 날짜의 오버라이드가 적용된 교사 시간표 반환 */
-  getEffectiveTeacherSchedule: (date: string, enableSaturday?: boolean) => readonly (import('@domain/entities/Timetable').TeacherPeriod | null)[];
+  getEffectiveTeacherSchedule: (date: string, weekendDays?: readonly WeekendDay[]) => readonly (import('@domain/entities/Timetable').TeacherPeriod | null)[];
   /** 특정 날짜의 오버라이드 목록 반환 */
   getOverridesForDate: (date: string) => readonly TimetableOverride[];
 }
@@ -173,10 +174,10 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       await scheduleRepository.saveTimetableOverrides({ overrides: newOverrides });
     },
 
-    getEffectiveTeacherSchedule: (date, enableSaturday = false) => {
+    getEffectiveTeacherSchedule: (date, weekendDays) => {
       // date → 요일 변환
       const d = new Date(date + 'T00:00:00');
-      const dayOfWeekVal = getDayOfWeek(d, enableSaturday);
+      const dayOfWeekVal = getDayOfWeek(d, weekendDays);
       if (!dayOfWeekVal) return [];
 
       const baseSchedule = get().teacherSchedule[dayOfWeekVal] ?? [];

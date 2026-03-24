@@ -243,6 +243,6 @@ export interface Settings {
   readonly lunchEnd?: string;
   /** 학생 생일을 일정에 자동 등록 (기본 false) */
   readonly syncBirthdaysToSchedule?: boolean;
-  /** 토요수업 사용 (기본 false) — 시간표에 토요일 컬럼 추가 */
-  readonly enableSaturday?: boolean;
+  /** 주말 수업 요일 — 시간표에 토/일 컬럼 추가 (예: ['토'] 또는 ['토','일']) */
+  readonly enableWeekendDays?: readonly ('토' | '일')[];
 }

@@ -1,11 +1,12 @@
 import { getActiveDays } from '../valueObjects/DayOfWeek';
+import type { WeekendDay } from '../valueObjects/DayOfWeek';
 import type { ClassScheduleData, TeacherScheduleData, ClassPeriod } from '../entities/Timetable';
 
 /**
  * 비어있는 학급 시간표 생성 (순수 함수)
  */
-export function createEmptyClassSchedule(maxPeriods: number, enableSaturday: boolean = false): ClassScheduleData {
-  const activeDays = getActiveDays(enableSaturday);
+export function createEmptyClassSchedule(maxPeriods: number, weekendDays?: readonly WeekendDay[]): ClassScheduleData {
+  const activeDays = getActiveDays(weekendDays);
   const data: Record<string, ClassPeriod[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: maxPeriods }, () => ({ subject: '', teacher: '' }));
@@ -18,9 +19,9 @@ export function createEmptyClassSchedule(maxPeriods: number, enableSaturday: boo
  */
 export function migrateClassScheduleData(
   raw: Record<string, readonly (string | ClassPeriod)[]>,
-  enableSaturday: boolean = false,
+  weekendDays?: readonly WeekendDay[],
 ): ClassScheduleData {
-  const activeDays = getActiveDays(enableSaturday);
+  const activeDays = getActiveDays(weekendDays);
   const data: Record<string, ClassPeriod[]> = {};
   for (const day of activeDays) {
     const dayArr = raw[day] ?? [];
@@ -37,8 +38,8 @@ export function migrateClassScheduleData(
 /**
  * 비어있는 교사 시간표 생성 (순수 함수)
  */
-export function createEmptyTeacherSchedule(maxPeriods: number, enableSaturday: boolean = false): TeacherScheduleData {
-  const activeDays = getActiveDays(enableSaturday);
+export function createEmptyTeacherSchedule(maxPeriods: number, weekendDays?: readonly WeekendDay[]): TeacherScheduleData {
+  const activeDays = getActiveDays(weekendDays);
   const data: Record<string, (null)[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: maxPeriods }, () => null);

@@ -3,12 +3,12 @@
  * 순수 함수만 포함 (외부 의존 없음)
  */
 import { DAYS_OF_WEEK, getActiveDays } from '../valueObjects/DayOfWeek';
-import type { DayOfWeekWithSat } from '../valueObjects/DayOfWeek';
+import type { DayOfWeekFull, WeekendDay } from '../valueObjects/DayOfWeek';
 import type { ClassScheduleData, TeacherScheduleData, ClassPeriod, TeacherPeriod } from '../entities/Timetable';
 import type { NeisTimetableRow } from '../entities/NeisTimetable';
 
-/** YYYYMMDD → 요일 (월~금, enableSaturday면 토 포함) */
-function dateToDayOfWeek(yyyymmdd: string, enableSaturday: boolean = false): DayOfWeekWithSat | null {
+/** YYYYMMDD → 요일 (weekendDays에 포함된 주말 요일만 반환) */
+function dateToDayOfWeek(yyyymmdd: string, weekendDays?: readonly WeekendDay[]): DayOfWeekFull | null {
   const y = parseInt(yyyymmdd.substring(0, 4), 10);
   const m = parseInt(yyyymmdd.substring(4, 6), 10) - 1;
   const d = parseInt(yyyymmdd.substring(6, 8), 10);
@@ -17,9 +17,9 @@ function dateToDayOfWeek(yyyymmdd: string, enableSaturday: boolean = false): Day
   if (isNaN(date.getTime())) return null;
 
   const jsDay = date.getDay(); // 0=일, 1=월, ..., 6=토
-  if (jsDay === 0) return null; // 일요일은 항상 제외
-  if (jsDay === 6) return enableSaturday ? '토' : null;
-  return (DAYS_OF_WEEK[jsDay - 1] as DayOfWeekWithSat) ?? null;
+  if (jsDay === 0) return weekendDays?.includes('일') ? '일' : null;
+  if (jsDay === 6) return weekendDays?.includes('토') ? '토' : null;
+  return (DAYS_OF_WEEK[jsDay - 1] as DayOfWeekFull) ?? null;
 }
 
 /** 유효한 교시 번호인지 확인 (1~12) */
@@ -47,13 +47,13 @@ export function getMaxPeriod(rows: readonly NeisTimetableRow[]): number {
 export function transformToClassSchedule(
   rows: readonly NeisTimetableRow[],
   maxPeriods?: number,
-  enableSaturday: boolean = false,
+  weekendDays?: readonly WeekendDay[],
 ): ClassScheduleData {
   const effectiveMax = maxPeriods ?? getMaxPeriod(rows);
-  if (effectiveMax === 0) return createEmpty(effectiveMax, enableSaturday);
+  if (effectiveMax === 0) return createEmpty(effectiveMax, weekendDays);
 
   // 초기화: 빈 ClassPeriod 배열
-  const activeDays = getActiveDays(enableSaturday);
+  const activeDays = getActiveDays(weekendDays);
   const data: Record<string, ClassPeriod[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: effectiveMax }, () => ({ subject: '', teacher: '' }));
@@ -62,7 +62,7 @@ export function transformToClassSchedule(
   // 데이터 채우기
   for (const row of rows) {
     if (!isValidPeriod(row.PERIO)) continue;
-    const dayOfWeek = dateToDayOfWeek(row.ALL_TI_YMD, enableSaturday);
+    const dayOfWeek = dateToDayOfWeek(row.ALL_TI_YMD, weekendDays);
     if (!dayOfWeek) continue;
 
     const periodIdx = parseInt(row.PERIO, 10) - 1;
@@ -89,14 +89,14 @@ export function transformToTeacherSchedule(
   grade: string,
   className: string,
   maxPeriods?: number,
-  enableSaturday: boolean = false,
+  weekendDays?: readonly WeekendDay[],
 ): TeacherScheduleData {
   const effectiveMax = maxPeriods ?? getMaxPeriod(rows);
-  if (effectiveMax === 0) return createEmptyTeacher(effectiveMax, enableSaturday);
+  if (effectiveMax === 0) return createEmptyTeacher(effectiveMax, weekendDays);
 
   const classroom = `${grade}-${className}`;
 
-  const activeDays = getActiveDays(enableSaturday);
+  const activeDays = getActiveDays(weekendDays);
   const data: Record<string, (TeacherPeriod | null)[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: effectiveMax }, () => null);
@@ -104,7 +104,7 @@ export function transformToTeacherSchedule(
 
   for (const row of rows) {
     if (!isValidPeriod(row.PERIO)) continue;
-    const dayOfWeek = dateToDayOfWeek(row.ALL_TI_YMD, enableSaturday);
+    const dayOfWeek = dateToDayOfWeek(row.ALL_TI_YMD, weekendDays);
     if (!dayOfWeek) continue;
 
     const periodIdx = parseInt(row.PERIO, 10) - 1;
@@ -127,14 +127,14 @@ export function transformToTeacherSchedule(
 export function mergeClassTimetablesToTeacher(
   classResults: readonly { grade: string; className: string; rows: readonly NeisTimetableRow[] }[],
   maxPeriods?: number,
-  enableSaturday: boolean = false,
+  weekendDays?: readonly WeekendDay[],
 ): TeacherScheduleData {
   // 전체 데이터에서 최대 교시 계산
   const allRows = classResults.flatMap((r) => r.rows);
   const effectiveMax = maxPeriods ?? getMaxPeriod(allRows);
-  if (effectiveMax === 0) return createEmptyTeacher(effectiveMax, enableSaturday);
+  if (effectiveMax === 0) return createEmptyTeacher(effectiveMax, weekendDays);
 
-  const activeDays = getActiveDays(enableSaturday);
+  const activeDays = getActiveDays(weekendDays);
   const data: Record<string, (TeacherPeriod | null)[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: effectiveMax }, () => null);
@@ -145,7 +145,7 @@ export function mergeClassTimetablesToTeacher(
 
     for (const row of rows) {
       if (!isValidPeriod(row.PERIO)) continue;
-      const dayOfWeek = dateToDayOfWeek(row.ALL_TI_YMD, enableSaturday);
+      const dayOfWeek = dateToDayOfWeek(row.ALL_TI_YMD, weekendDays);
       if (!dayOfWeek) continue;
 
       const periodIdx = parseInt(row.PERIO, 10) - 1;
@@ -164,8 +164,8 @@ export function mergeClassTimetablesToTeacher(
 
 /* ── 헬퍼 ── */
 
-function createEmpty(maxPeriods: number, enableSaturday: boolean = false): ClassScheduleData {
-  const activeDays = getActiveDays(enableSaturday);
+function createEmpty(maxPeriods: number, weekendDays?: readonly WeekendDay[]): ClassScheduleData {
+  const activeDays = getActiveDays(weekendDays);
   const data: Record<string, ClassPeriod[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: maxPeriods }, () => ({ subject: '', teacher: '' }));
@@ -173,8 +173,8 @@ function createEmpty(maxPeriods: number, enableSaturday: boolean = false): Class
   return data as ClassScheduleData;
 }
 
-function createEmptyTeacher(maxPeriods: number, enableSaturday: boolean = false): TeacherScheduleData {
-  const activeDays = getActiveDays(enableSaturday);
+function createEmptyTeacher(maxPeriods: number, weekendDays?: readonly WeekendDay[]): TeacherScheduleData {
+  const activeDays = getActiveDays(weekendDays);
   const data: Record<string, (null)[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: maxPeriods }, () => null);

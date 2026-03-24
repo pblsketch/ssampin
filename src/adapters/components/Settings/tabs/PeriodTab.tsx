@@ -315,31 +315,45 @@ export function PeriodTab({ draft, patch }: Props) {
         </div>
       )}
 
-      {/* 토요수업 토글 */}
+      {/* 주말 수업 설정 */}
       <div className="mb-4 p-4 rounded-lg bg-sp-surface/60 border border-sp-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-base">📅</span>
-            <div>
-              <span className="text-sm font-bold text-sp-text">토요수업</span>
-              <p className="text-detail text-sp-muted mt-0.5">시간표에 토요일 컬럼을 추가합니다</p>
-            </div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-base">📅</span>
+          <div>
+            <span className="text-sm font-bold text-sp-text">주말 수업</span>
+            <p className="text-detail text-sp-muted mt-0.5">시간표에 토요일/일요일 컬럼을 추가합니다</p>
           </div>
-          <button
-            type="button"
-            onClick={() => patch({ enableSaturday: !(draft.enableSaturday ?? false) })}
-            className={`relative w-11 h-6 rounded-full transition-colors ${
-              (draft.enableSaturday ?? false)
-                ? 'bg-sp-accent'
-                : 'bg-sp-border'
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                (draft.enableSaturday ?? false) ? 'translate-x-5' : ''
-              }`}
-            />
-          </button>
+        </div>
+        <div className="flex items-center gap-4">
+          {(['토', '일'] as const).map((day) => {
+            const current = draft.enableWeekendDays ?? [];
+            const checked = current.includes(day);
+            return (
+              <label key={day} className="flex items-center gap-2 cursor-pointer select-none">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = checked
+                      ? current.filter((d) => d !== day)
+                      : [...current, day];
+                    patch({ enableWeekendDays: next.length > 0 ? next : undefined });
+                  }}
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                    checked
+                      ? 'bg-sp-accent border-sp-accent'
+                      : 'border-sp-border hover:border-sp-muted'
+                  }`}
+                >
+                  {checked && (
+                    <span className="material-symbols-outlined text-white text-[14px]">check</span>
+                  )}
+                </button>
+                <span className={`text-sm font-medium ${checked ? 'text-sp-text' : 'text-sp-muted'}`}>
+                  {day}요일
+                </span>
+              </label>
+            );
+          })}
         </div>
       </div>
 

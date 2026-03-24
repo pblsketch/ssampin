@@ -8,18 +8,21 @@ export const DAYS_OF_WEEK: readonly DayOfWeek[] = [
   '금',
 ] as const;
 
-/** 토요일 포함 요일 타입 (시간표용) */
-export type DayOfWeekWithSat = '월' | '화' | '수' | '목' | '금' | '토';
-
-export const DAYS_OF_WEEK_WITH_SAT: readonly DayOfWeekWithSat[] = [
-  '월', '화', '수', '목', '금', '토',
-] as const;
+/** 주말 수업 요일 타입 */
+export type WeekendDay = '토' | '일';
 
 /**
- * 토요수업 설정에 따라 활성 요일 목록 반환
+ * 주말 수업 설정에 따라 활성 요일 목록 반환
+ * weekendDays가 비어있거나 미지정이면 월~금만 반환
  */
-export function getActiveDays(enableSaturday: boolean): readonly DayOfWeekWithSat[] {
-  return enableSaturday ? DAYS_OF_WEEK_WITH_SAT : (DAYS_OF_WEEK as readonly DayOfWeekWithSat[]);
+export function getActiveDays(weekendDays?: readonly WeekendDay[]): readonly DayOfWeekFull[] {
+  if (!weekendDays || weekendDays.length === 0) {
+    return DAYS_OF_WEEK as readonly DayOfWeekFull[];
+  }
+  const days: DayOfWeekFull[] = ['월', '화', '수', '목', '금'];
+  if (weekendDays.includes('토')) days.push('토');
+  if (weekendDays.includes('일')) days.push('일');
+  return days;
 }
 
 /** 주말 포함 요일 타입 (일정/캘린더/대시보드용) */

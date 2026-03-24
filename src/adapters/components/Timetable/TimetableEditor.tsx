@@ -4,7 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
-import type { DayOfWeekWithSat } from '@domain/valueObjects/DayOfWeek';
+import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import { parseMinutes } from '@domain/rules/periodRules';
@@ -49,8 +49,8 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   } = useScheduleStore();
   const { settings, update: updateSettings } = useSettingsStore();
 
-  const enableSaturday = settings.enableSaturday ?? false;
-  const activeDays = useMemo(() => getActiveDays(enableSaturday), [enableSaturday]);
+  const weekendDays = settings.enableWeekendDays;
+  const activeDays = useMemo(() => getActiveDays(weekendDays), [weekendDays]);
 
   // 편집용 로컬 상태 — 문자열 2D 배열 [periodIdx][dayIdx]
   const [classGrid, setClassGrid] = useState<string[][]>([]);          // 학급: 과목
@@ -574,7 +574,7 @@ interface EditorPeriodRowProps {
   lunchTimeStr: string;
   subjectColors?: SubjectColorMap;
   onColorChange: (subject: string, colorId: SubjectColorId) => void;
-  activeDays: readonly DayOfWeekWithSat[];
+  activeDays: readonly DayOfWeekFull[];
 }
 
 function EditorPeriodRow({
