@@ -147,9 +147,9 @@ function AddClassModal({ onClose }: AddClassModalProps) {
       });
     }
 
-    // 이미 등록된 학급은 제외
-    const existingNames = new Set(existingClasses.map((c) => c.name));
-    return [...seen.values()].filter((item) => !existingNames.has(item.classroom));
+    // 이미 등록된 학급+과목 조합은 제외 (같은 반이라도 과목이 다르면 표시)
+    const existingKeys = new Set(existingClasses.map((c) => `${c.name}__${c.subject}`));
+    return [...seen.values()].filter((item) => !existingKeys.has(`${item.classroom}__${item.subject}`));
   }, [teacherSchedule, existingClasses]);
 
   // 선택 항목에서 학급 일괄 추가
