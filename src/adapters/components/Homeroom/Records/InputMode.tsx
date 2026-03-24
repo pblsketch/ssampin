@@ -189,6 +189,17 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
         </div>
         <div className="grid grid-cols-5 gap-2 overflow-y-auto flex-1">
           {students.map((student, idx) => {
+            if (student.isVacant) {
+              return (
+                <div
+                  key={student.id}
+                  className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30"
+                >
+                  {idx + 1}
+                  <div className="text-[10px] truncate">결번</div>
+                </div>
+              );
+            }
             const isSelected = selectedStudents.has(student.id);
             return (
               <button

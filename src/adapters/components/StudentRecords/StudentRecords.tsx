@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { Student } from '@domain/entities/Student';
@@ -289,6 +290,8 @@ function getMethodIcon(method: CounselingMethod | undefined): string {
 
 function InputMode({ students, records, categories, selectedDate }: InputModeProps) {
   const { addRecord, deleteRecord, updateRecord } = useStudentRecordsStore();
+  const { seating } = useSeatingStore();
+  const [studentViewMode, setStudentViewMode] = useState<'number' | 'seat'>('number');
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [editingCategory, setEditingCategory] = useState('');
@@ -424,31 +427,119 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
               ({selectedStudents.size}명 선택됨)
             </span>
           </h3>
-          <button
-            onClick={clearAll}
-            className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
-          >
-            모두 해제
-          </button>
-        </div>
-        <div className="grid grid-cols-5 gap-2 overflow-y-auto flex-1">
-          {students.map((student, idx) => {
-            const isSelected = selectedStudents.has(student.id);
-            return (
+          <div className="flex items-center gap-2">
+            {/* 뷰 토글 */}
+            <div className="flex items-center rounded-lg bg-sp-surface p-0.5 gap-0.5">
               <button
-                key={student.id}
-                onClick={() => toggleStudent(student.id)}
-                className={`px-2 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${isSelected
-                  ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
-                  : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
-                  }`}
+                onClick={() => setStudentViewMode('number')}
+                title="번호 순"
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                  studentViewMode === 'number'
+                    ? 'bg-sp-accent text-white'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
               >
-                {idx + 1}
-                {student.name}
+                <span className="material-symbols-outlined text-sm leading-none">format_list_numbered</span>
+                번호 순
               </button>
-            );
-          })}
+              <button
+                onClick={() => setStudentViewMode('seat')}
+                title="자리 배치"
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                  studentViewMode === 'seat'
+                    ? 'bg-sp-accent text-white'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm leading-none">grid_view</span>
+                자리 배치
+              </button>
+            </div>
+            <button
+              onClick={clearAll}
+              className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
+            >
+              모두 해제
+            </button>
+          </div>
         </div>
+
+        {studentViewMode === 'number' ? (
+          <div className="grid grid-cols-5 gap-2 overflow-y-auto flex-1">
+            {students.map((student, idx) => {
+              const isSelected = selectedStudents.has(student.id);
+              return (
+                <button
+                  key={student.id}
+                  onClick={() => toggleStudent(student.id)}
+                  className={`px-2 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${
+                    isSelected
+                      ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
+                      : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
+                  }`}
+                >
+                  {idx + 1}
+                  {student.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 overflow-y-auto flex-1">
+            {/* 교탁 표시 */}
+            <div className="flex justify-center mb-1">
+              <div className="px-4 py-1 rounded-md bg-sp-surface border border-sp-border text-xs text-sp-muted">
+                교탁
+              </div>
+            </div>
+            {/* 자리 배치 그리드 */}
+            <div
+              className="grid gap-2 flex-1"
+              style={{
+                gridTemplateColumns: `repeat(${seating.cols}, minmax(0, 1fr))`,
+              }}
+            >
+              {Array.from({ length: seating.rows }, (_, rowIdx) =>
+                Array.from({ length: seating.cols }, (_, colIdx) => {
+                  const cellId = seating.seats[rowIdx]?.[colIdx] ?? null;
+                  if (cellId === null) {
+                    return (
+                      <div
+                        key={`empty-${rowIdx}-${colIdx}`}
+                        className="rounded-lg bg-sp-surface/30 border border-sp-border/30 py-2.5"
+                      />
+                    );
+                  }
+                  const student = studentMap.get(cellId);
+                  if (!student) {
+                    return (
+                      <div
+                        key={`unknown-${rowIdx}-${colIdx}`}
+                        className="rounded-lg bg-sp-surface/30 border border-sp-border/30 py-2.5"
+                      />
+                    );
+                  }
+                  const idx = students.indexOf(student);
+                  const isSelected = selectedStudents.has(student.id);
+                  return (
+                    <button
+                      key={student.id}
+                      onClick={() => toggleStudent(student.id)}
+                      className={`px-1 py-2 rounded-lg text-xs font-medium transition-all text-center leading-tight ${
+                        isSelected
+                          ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
+                          : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
+                      }`}
+                    >
+                      <div className="text-[10px] opacity-70">{idx + 1}</div>
+                      <div>{student.name}</div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 우측 패널 */}
