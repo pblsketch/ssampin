@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
@@ -164,6 +165,23 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     return periods;
   }, [classId, classes, classSchedule, teacherSchedule, getDayOfWeek]);
 
+  // 수업이 있는 요일 인덱스 (JS getDay: 0=일, 1=월, ..., 6=토)
+  const lessonDayIndices = useMemo(() => {
+    const indices: number[] = [];
+    // 기준 주간의 각 요일에 대해 수업 존재 여부 확인
+    const ref = new Date();
+    const refDay = ref.getDay();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(ref);
+      d.setDate(d.getDate() + (i - refDay));
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (getMatchingPeriods(dateStr).length > 0) {
+        indices.push(i);
+      }
+    }
+    return indices;
+  }, [getMatchingPeriods]);
+
   // 날짜 변경 핸들러 (교시 자동 선택 포함)
   const handleDateChange = useCallback((newDate: string) => {
     setFormDate(newDate);
@@ -277,7 +295,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       for (const entry of toImport) {
         await addProgressEntry(
           classId,
-          importDateOverrides.get(entry.id) ?? entry.date,
+          importDateOverrides.get(entry.id) ?? (importDateShiftDays !== 0 ? shiftDate(entry.date, importDateShiftDays) : entry.date),
           entry.period,
           entry.unit,
           entry.lesson,
@@ -437,12 +455,10 @@ export function ProgressTab({ classId }: ProgressTabProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-sp-muted mb-1">날짜</label>
-              <input
-                type="date"
+              <CalendarPicker
                 value={formDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="w-full px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
-                           text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+                onChange={handleDateChange}
+                lessonDays={lessonDayIndices}
               />
             </div>
             <div>
@@ -542,12 +558,10 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                 /* ── 인라인 편집 모드 ── */
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
+                    <CalendarPicker
                       value={editDate}
-                      onChange={(e) => setEditDate(e.target.value)}
-                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+                      onChange={setEditDate}
+                      lessonDays={lessonDayIndices}
                     />
                     <select
                       value={editPeriod}
@@ -810,30 +824,10 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                                    text-sp-text text-sm focus:outline-none focus:border-sp-accent text-center"
                       />
                       <span className="text-xs text-sp-muted shrink-0">일</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (importDateShiftDays === 0) return;
-                          setImportDateOverrides((prev) => {
-                            const next = new Map(prev);
-                            for (const id of selectedImportIds) {
-                              const entry = sourceEntries.find((e) => e.id === id);
-                              if (!entry) continue;
-                              const base = next.get(id) ?? entry.date;
-                              next.set(id, shiftDate(base, importDateShiftDays));
-                            }
-                            return next;
-                          });
-                        }}
-                        className="px-3 py-1 bg-sp-accent/20 text-sp-accent text-xs rounded-lg
-                                   hover:bg-sp-accent/30 transition-colors font-medium"
-                      >
-                        적용
-                      </button>
-                      {importDateOverrides.size > 0 && (
+                      {(importDateOverrides.size > 0 || importDateShiftDays !== 0) && (
                         <button
                           type="button"
-                          onClick={() => setImportDateOverrides(new Map())}
+                          onClick={() => { setImportDateOverrides(new Map()); setImportDateShiftDays(0); }}
                           className="px-3 py-1 bg-sp-surface border border-sp-border text-sp-muted text-xs
                                      rounded-lg hover:text-sp-text transition-colors"
                         >
@@ -852,7 +846,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                     <div className="space-y-1 max-h-64 overflow-y-auto">
                       {sourceEntries.map((entry) => {
                         const isSelected = selectedImportIds.has(entry.id);
-                        const overriddenDate = importDateOverrides.get(entry.id) ?? entry.date;
+                        const overriddenDate = importDateOverrides.get(entry.id) ?? (importDateShiftDays !== 0 ? shiftDate(entry.date, importDateShiftDays) : entry.date);
                         return (
                           <div
                             key={entry.id}
@@ -875,18 +869,17 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                               </span>
                             </button>
                             <div className="shrink-0 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="date"
+                              <CalendarPicker
                                 value={overriddenDate}
-                                onChange={(e) => {
+                                onChange={(newDate) => {
                                   setImportDateOverrides((prev) => {
                                     const next = new Map(prev);
-                                    next.set(entry.id, e.target.value);
+                                    next.set(entry.id, newDate);
                                     return next;
                                   });
                                 }}
-                                className="w-32 px-2 py-0.5 bg-sp-card border border-sp-border rounded-lg
-                                           text-sp-text text-xs focus:outline-none focus:border-sp-accent"
+                                lessonDays={lessonDayIndices}
+                                compact
                               />
                               <span className="text-xs text-sp-muted text-center">{entry.period}교시</span>
                             </div>

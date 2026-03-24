@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod } from '@domain/entities/Timetable';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
+import { STUDENT_STATUS_LABELS } from '@domain/entities/Student';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { StudentRecord, AttendanceStats } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
@@ -605,8 +606,10 @@ export async function exportRosterToExcel(
 
   for (const student of sorted) {
     const numberStr = String(student.studentNumber ?? '').padStart(2, '0');
-    const remarks = student.isVacant ? '결번' : '';
-    const bgColor = student.isVacant ? 'FFEEEEEE' : undefined;
+    const remarks = student.status && student.status !== 'active'
+      ? STUDENT_STATUS_LABELS[student.status] + (student.statusNote ? ` (${student.statusNote})` : '')
+      : student.isVacant ? '결번' : '';
+    const bgColor = (student.status && student.status !== 'active') || student.isVacant ? 'FFEEEEEE' : undefined;
 
     const row = ws.addRow([
       gradeStr,

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { getSubjectDotColor } from '@adapters/presenters/timetablePresenter';
+import { getCellDotColor } from '@adapters/presenters/timetablePresenter';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import {
@@ -45,6 +45,8 @@ function SortableClassItem({
   onCancelDelete,
   menuRef,
   subjectColors,
+  classroomColors,
+  colorBy,
 }: {
   cls: TeachingClass;
   isSelected: boolean;
@@ -65,6 +67,8 @@ function SortableClassItem({
   onCancelDelete: () => void;
   menuRef: React.RefObject<HTMLDivElement | null>;
   subjectColors: SubjectColorMap | undefined;
+  classroomColors: SubjectColorMap | undefined;
+  colorBy: 'subject' | 'classroom';
 }) {
   const {
     attributes,
@@ -140,7 +144,7 @@ function SortableClassItem({
             : 'hover:bg-sp-text/5 border-l-2 border-transparent'
         }`}
       >
-        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getSubjectDotColor(cls.subject, subjectColors)}`} />
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getCellDotColor(cls.subject, cls.name, colorBy, subjectColors, classroomColors)}`} />
         <div className="flex-1 min-w-0">
           <p className={`text-sm font-medium truncate ${isSelected ? 'text-sp-text' : 'text-sp-muted'}`}>
             {cls.name}
@@ -225,6 +229,8 @@ export function ClassList({ onAddClass }: ClassListProps) {
   const deleteClass = useTeachingClassStore((s) => s.deleteClass);
   const reorderClasses = useTeachingClassStore((s) => s.reorderClasses);
   const subjectColors = useSettingsStore((s) => s.settings.subjectColors);
+  const classroomColors = useSettingsStore((s) => s.settings.classroomColors);
+  const colorBy = useSettingsStore((s) => s.settings.timetableColorBy ?? 'classroom');
 
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -345,6 +351,8 @@ export function ClassList({ onAddClass }: ClassListProps) {
                 onCancelDelete={() => setConfirmDeleteId(null)}
                 menuRef={menuRef}
                 subjectColors={subjectColors}
+                classroomColors={classroomColors}
+                colorBy={colorBy}
               />
             ))}
           </SortableContext>

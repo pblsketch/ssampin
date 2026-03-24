@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Student } from '@domain/entities/Student';
+import type { Student, StudentStatus } from '@domain/entities/Student';
 import { studentRepository } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -52,10 +52,12 @@ interface StudentState {
   updateStudentName: (id: string, name: string) => Promise<void>;
   updateStudentField: (
     studentId: string,
-    field: 'name' | 'phone' | 'parentPhone' | 'parentPhoneLabel' | 'parentPhone2' | 'parentPhone2Label' | 'studentNumber' | 'birthDate',
+    field: 'name' | 'phone' | 'parentPhone' | 'parentPhoneLabel' | 'parentPhone2' | 'parentPhone2Label' | 'studentNumber' | 'birthDate'
+      | 'status' | 'statusNote' | 'statusChangedAt',
     value: string | number,
   ) => Promise<void>;
   toggleVacant: (studentId: string) => Promise<void>;
+  changeStatus: (studentId: string, status: StudentStatus, note?: string) => Promise<void>;
   setStudentCount: (count: number) => Promise<void>;
 
   /** 파생 값 */
@@ -133,6 +135,34 @@ export const useStudentStore = create<StudentState>((set, get) => ({
     }
   },
 
+  changeStatus: async (studentId, status, note) => {
+    const { students } = get();
+    const today = new Date().toISOString().slice(0, 10);
+    const newStudents = students.map((s) =>
+      s.id === studentId
+        ? {
+            ...s,
+            status,
+            statusNote: note ?? '',
+            statusChangedAt: today,
+            isVacant: status !== 'active',
+          }
+        : s,
+    );
+    try {
+      await studentRepository.saveStudents(newStudents);
+      set({ students: newStudents });
+
+      // 상태 변경 시 생일 동기화 반영
+      const student = students.find((s) => s.id === studentId);
+      if (student?.birthDate && useSettingsStore.getState().settings.syncBirthdaysToSchedule) {
+        void useEventsStore.getState().syncBirthdayEvents(newStudents);
+      }
+    } catch {
+      // 무시
+    }
+  },
+
   setStudentCount: async (count) => {
     const clamped = Math.max(1, Math.min(50, count));
     const { students } = get();
@@ -168,5 +198,9 @@ export const useStudentStore = create<StudentState>((set, get) => ({
   },
 
   getStudent: (id) => (id !== null ? get().students.find((s) => s.id === id) : undefined),
-  activeStudents: () => get().students.filter((s) => !s.isVacant),
+  activeStudents: () => get().students.filter((s) => {
+    // 하위 호환: status 있으면 status 기준, 없으면 isVacant로 판단
+    if (s.status) return s.status === 'active';
+    return !s.isVacant;
+  }),
 }));

@@ -3,6 +3,8 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useBirthdaySync } from '@adapters/hooks/useBirthdaySync';
+import { STUDENT_STATUS_LABELS, isInactiveStatus } from '@domain/entities/Student';
+import type { StudentStatus } from '@domain/entities/Student';
 /* eslint-disable no-restricted-imports */
 import { exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
@@ -15,7 +17,7 @@ export function RosterManagementTab() {
     updateStudents,
     setStudentCount,
     updateStudentField,
-    toggleVacant,
+    changeStatus,
   } = useStudentStore();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -46,8 +48,14 @@ export function RosterManagementTab() {
     [students],
   );
 
-  const activeCount = useMemo(() => students.filter((s) => !s.isVacant).length, [students]);
-  const vacantCount = useMemo(() => students.filter((s) => s.isVacant).length, [students]);
+  const activeCount = useMemo(() => students.filter((s) => {
+    if (s.status) return s.status === 'active';
+    return !s.isVacant;
+  }).length, [students]);
+  const vacantCount = useMemo(() => students.filter((s) => {
+    if (s.status) return s.status !== 'active';
+    return !!s.isVacant;
+  }).length, [students]);
 
   const handleBulkImport = useCallback(async () => {
     if (!bulkText.trim()) return;
@@ -126,7 +134,7 @@ export function RosterManagementTab() {
           <div>
             <h2 className="text-xl font-bold text-sp-text tracking-tight">명렬 관리</h2>
             <p className="text-xs text-sp-muted">
-              총 {activeCount}명 (결번 {vacantCount}명)
+              총 {activeCount}명 (비활성 {vacantCount}명)
             </p>
           </div>
         </div>
@@ -242,9 +250,9 @@ export function RosterManagementTab() {
 
       {/* 명렬표 */}
       <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-5xl mx-auto overflow-x-auto">
+        <div className="w-full max-w-6xl mx-auto">
           {/* 테이블 헤더 */}
-          <div className="grid grid-cols-[50px_50px_minmax(100px,1fr)_160px_80px_160px_80px_160px_120px_80px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider min-w-[1040px]">
+          <div className="grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
             <span>번호</span>
             <span>학번</span>
             <span>이름</span>
@@ -254,18 +262,18 @@ export function RosterManagementTab() {
             <span>관계2</span>
             <span>보호자2 연락처</span>
             <span>생년월일</span>
-            <span className="text-center">결번</span>
+            <span className="text-center">상태</span>
           </div>
 
           {/* 학생 목록 */}
           <div className="divide-y divide-sp-border/50">
             {sortedStudents.map((student, idx) => {
-              const isVacant = !!student.isVacant;
+              const isVacant = isInactiveStatus(student.status) || !!student.isVacant;
               const hasParent2 = showParent2.has(student.id);
               return (
                 <div
                   key={student.id}
-                  className={`grid grid-cols-[50px_50px_minmax(100px,1fr)_160px_80px_160px_80px_160px_120px_80px] gap-2 px-4 py-3 items-center transition-colors min-w-[1040px] ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
+                  className={`grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-2.5 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
                 >
                   {/* 번호 */}
                   <span className="text-sm text-sp-muted font-mono">{idx + 1}</span>
@@ -279,7 +287,12 @@ export function RosterManagementTab() {
 
                   {/* 이름 */}
                   {isVacant ? (
-                    <span className="text-sm text-sp-muted italic line-through">결번</span>
+                    <span className="text-sm text-sp-muted flex items-center gap-1.5">
+                      {student.name ? (
+                        <span className="line-through">{student.name}</span>
+                      ) : null}
+                      <span className="italic text-xs text-red-400/60">결번</span>
+                    </span>
                   ) : isEditing ? (
                     <input
                       type="text"
@@ -452,25 +465,42 @@ export function RosterManagementTab() {
                     </span>
                   )}
 
-                  {/* 결번 토글 */}
+                  {/* 상태 드롭다운 */}
                   <div className="flex justify-center">
                     {isEditing ? (
-                      <button
-                        onClick={() => void toggleVacant(student.id)}
-                        className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${isVacant
-                          ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                          : 'bg-sp-border/20 text-sp-muted hover:bg-sp-border/40'
-                          }`}
-                        title={isVacant ? '결번 해제' : '결번 설정'}
+                      <select
+                        value={student.status ?? 'active'}
+                        onChange={(e) => {
+                          const newStatus = e.target.value as StudentStatus;
+                          if (newStatus !== 'active') {
+                            const note = prompt(`${STUDENT_STATUS_LABELS[newStatus]} 사유를 입력하세요 (선택):`);
+                            void changeStatus(student.id, newStatus, note ?? '');
+                          } else {
+                            void changeStatus(student.id, 'active');
+                          }
+                        }}
+                        className={`text-xs rounded px-1.5 py-1 border border-sp-border bg-sp-bg ${
+                          isVacant ? 'text-red-400' : 'text-sp-muted'
+                        }`}
                       >
-                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                          block
-                        </span>
-                      </button>
+                        {Object.entries(STUDENT_STATUS_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
                     ) : isVacant ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-full">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                        결번
+                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+                        student.status ? (() => {
+                          switch (student.status) {
+                            case 'transferred': return 'text-blue-400 bg-blue-500/10';
+                            case 'suspended': return 'text-amber-400 bg-amber-500/10';
+                            case 'expelled': case 'dropped': return 'text-red-400 bg-red-500/10';
+                            case 'withdrawn': return 'text-orange-400 bg-orange-500/10';
+                            default: return 'text-red-400 bg-red-500/10';
+                          }
+                        })() : 'text-red-400 bg-red-500/10'
+                      }`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                        {student.status ? STUDENT_STATUS_LABELS[student.status] : '결번'}
                       </span>
                     ) : null}
                   </div>
@@ -481,7 +511,7 @@ export function RosterManagementTab() {
 
           {/* 하단 요약 */}
           <div className="flex items-center gap-4 px-4 py-3 border-t border-sp-border text-xs text-sp-muted">
-            <span>총 {activeCount}명 (결번 {vacantCount}명)</span>
+            <span>총 {activeCount}명 (비활성 {vacantCount}명)</span>
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import type { Student } from '@domain/entities/Student';
+import { isInactiveStatus, STUDENT_STATUS_LABELS } from '@domain/entities/Student';
 
 /* ──────────────────────── 모드별 Props ──────────────────────── */
 
@@ -58,7 +59,7 @@ export function StudentGrid<T extends string = string>({
   className = '',
 }: StudentGridProps<T>) {
   const filteredStudents = useMemo(
-    () => (hideVacant ? students.filter((s) => !s.isVacant) : students),
+    () => (hideVacant ? students.filter((s) => !isInactiveStatus(s.status) && !s.isVacant) : students),
     [students, hideVacant],
   );
 
@@ -111,11 +112,12 @@ function StudentCell<T extends string>({
   gridMode,
   onClick,
 }: StudentCellProps<T>) {
-  if (student.isVacant) {
+  if (isInactiveStatus(student.status) || student.isVacant) {
+    const label = student.status ? STUDENT_STATUS_LABELS[student.status] : '결번';
     return (
       <div className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30">
         {displayNumber}
-        <div className="text-caption truncate">결번</div>
+        <div className="text-caption truncate">{label}</div>
       </div>
     );
   }
