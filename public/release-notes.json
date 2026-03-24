@@ -1,6 +1,53 @@
 {
   "versions": [
     {
+      "version": "1.6.4",
+      "date": "2026-03-24",
+      "highlights": "Notion 라이트 테마, 교사 시간표 엑셀 업로드, 담임메모 자리배치 뷰",
+      "changes": [
+        {
+          "type": "new",
+          "title": "Notion 라이트 테마 기본 적용",
+          "description": "기본 테마가 밝고 깔끔한 Notion 스타일 라이트 테마로 변경되었습니다. Pretendard 폰트와 부드러운 색상 팔레트가 적용됩니다."
+        },
+        {
+          "type": "new",
+          "title": "교사 시간표 엑셀 업로드/다운로드",
+          "description": "컴시간 양식을 자동으로 감지하여 교사 시간표를 엑셀로 업로드하고 다운로드할 수 있습니다."
+        },
+        {
+          "type": "new",
+          "title": "교사 주간시간표 위젯",
+          "description": "대시보드에 교사 주간시간표 위젯이 추가되었습니다. 교시 시간, 현재 수업 강조, 격자 실선, 공강 표시를 지원합니다."
+        },
+        {
+          "type": "new",
+          "title": "담임메모 자리배치 뷰",
+          "description": "담임메모에서 학생 선택 시 번호 순과 자리 배치(좌석도) 뷰를 토글할 수 있습니다."
+        },
+        {
+          "type": "improve",
+          "title": "명렬표 NEIS 호환 통합",
+          "description": "명렬표 양식이 NEIS 호환으로 통합되었으며, 가져오기 시 미리보기 모달이 표시됩니다."
+        },
+        {
+          "type": "improve",
+          "title": "결번 학생 표시 개선",
+          "description": "결번 학생이 비활성 상태로 명확하게 표시되어 혼동을 줄입니다."
+        },
+        {
+          "type": "fix",
+          "title": "온보딩 크래시 수정",
+          "description": "온보딩 완료 시 settings.neis가 undefined인 경우 발생하는 크래시를 수정했습니다."
+        },
+        {
+          "type": "fix",
+          "title": "상담예약 결번 번호 오류 수정",
+          "description": "상담예약에서 결번 학생 번호가 잘못 표시되는 오류를 수정했습니다."
+        }
+      ]
+    },
+    {
       "version": "1.6.3",
       "date": "2026-03-24",
       "highlights": "출결·진도 데이터 유실 방지, 명렬표 업로드 유연화, 챗봇 FAQ 확장",
