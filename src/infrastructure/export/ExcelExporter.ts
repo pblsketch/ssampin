@@ -418,12 +418,16 @@ export async function parseRosterFromExcel(
 
     const numRaw = row.getCell(numCol).value;
     const studentNumber = parseInt(String(numRaw ?? ''), 10);
-    if (isNaN(studentNumber) || studentNumber <= 0) return;
-
-    const remarks = String(row.getCell(remarksCol).value ?? '').trim();
-    const isVacant = remarks.includes('결번');
+    const hasValidNumber = !isNaN(studentNumber) && studentNumber > 0;
 
     const name = String(row.getCell(nameCol).value ?? '').trim();
+
+    // 번호도 없고 이름도 없으면 스킵
+    if (!hasValidNumber && !name) return;
+
+    // 이름 없이 번호만 있는 경우 (결번 가능성)
+    const remarks = String(row.getCell(remarksCol).value ?? '').trim();
+    const isVacant = remarks.includes('결번');
     if (!name && !isVacant) return;
 
     const phone = String(row.getCell(phoneCol).value ?? '').trim();
@@ -445,7 +449,7 @@ export async function parseRosterFromExcel(
 
     result.push({
       name,
-      studentNumber,
+      studentNumber: hasValidNumber ? studentNumber : -1,
       phone,
       parentPhone,
       ...(parentPhoneLabel ? { parentPhoneLabel } : {}),
@@ -455,6 +459,18 @@ export async function parseRosterFromExcel(
       isVacant,
     });
   });
+
+  // 번호 없는 학생(-1)에 자동 번호 부여
+  let autoNum = 1;
+  const usedNumbers = new Set(result.filter(s => s.studentNumber > 0).map(s => s.studentNumber));
+  for (const student of result) {
+    if (student.studentNumber === -1) {
+      while (usedNumbers.has(autoNum)) autoNum++;
+      student.studentNumber = autoNum;
+      usedNumbers.add(autoNum);
+      autoNum++;
+    }
+  }
 
   return result;
 }
