@@ -406,6 +406,12 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
     keywords: ['시간표', 'NEIS', '나이스', '불러오기', '바로', '편집'],
     category: 'timetable',
   },
+  {
+    question: '이 프로그램은 누가 만들었나요?',
+    answer: '쌤핀은 충남의 현직 국어 교사가 직접 만든 프로젝트예요. 자세한 개발자 소개는 여기서 확인하실 수 있어요: https://ssampin.com/about',
+    keywords: ['제작사', '개발자', '만든 사람', '누가 만들', '어디서 만든', '회사', '제작자', '개발사', '만든 곳'],
+    category: 'general',
+  },
 ];
 
 /**
