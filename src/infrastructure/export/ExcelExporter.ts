@@ -124,11 +124,13 @@ export async function exportTeacherScheduleToExcel(
 /* ── 교사 시간표 엑셀 업로드/다운로드 ── */
 
 /**
- * 교사 시간표 빈 양식 다운로드
+ * 교사 시간표 양식 다운로드
+ * schedule이 있으면 기존 데이터를 "학반 과목" 형태로 채워서 내보낸다.
  */
 export async function exportTeacherTimetableTemplate(
   maxPeriods: number,
   days: readonly string[] = DAYS,
+  schedule?: TeacherScheduleData,
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('교사 시간표');
@@ -140,8 +142,13 @@ export async function exportTeacherTimetableTemplate(
     ws.getColumn(i).width = 16;
   }
 
-  for (let p = 1; p <= maxPeriods; p++) {
-    const row = ws.addRow([p, ...days.map(() => '')]);
+  for (let p = 0; p < maxPeriods; p++) {
+    const cells = days.map((day) => {
+      const period = schedule?.[day]?.[p];
+      if (!period) return '';
+      return `${period.classroom} ${period.subject}`.trim();
+    });
+    const row = ws.addRow([p + 1, ...cells]);
     row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
     row.getCell(1).font = { bold: true };
   }

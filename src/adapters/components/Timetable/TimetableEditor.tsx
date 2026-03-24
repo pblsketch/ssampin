@@ -13,6 +13,13 @@ import {
   formatLunchBreakTime,
 } from '@adapters/presenters/timetablePresenter';
 import { NeisImportModal } from './NeisImportModal';
+import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
+/* eslint-disable no-restricted-imports */
+import {
+  exportTeacherTimetableTemplate,
+  parseTeacherTimetableFromExcel,
+} from '@infrastructure/export/ExcelExporter';
+/* eslint-enable no-restricted-imports */
 import type { SubjectColorId, SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { COLOR_PRESETS, getColorPreset, DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
 import { smartAutoAssignColors, extractSubjectsFromSchedule } from '@domain/rules/subjectColorRules';
@@ -60,6 +67,8 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   const [saving, setSaving] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showNeisImport, setShowNeisImport] = useState(false);
+  const [showExcelPreview, setShowExcelPreview] = useState(false);
+  const [previewSchedule, setPreviewSchedule] = useState<TeacherScheduleData | null>(null);
   const maxPeriods = settings.maxPeriods;
 
   // 로컬 교시 관리 상태
@@ -287,6 +296,110 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     [settings.neis, updateSettings],
   );
 
+  /* ── 교사 시간표 엑셀 양식 다운로드 ── */
+  const handleDownloadTemplate = useCallback(async () => {
+    try {
+      const days = activeDays as readonly string[];
+      const normalized = await exportTeacherTimetableTemplate(localMaxPeriods, days, teacherSchedule);
+
+      if (window.electronAPI) {
+        const filePath = await window.electronAPI.showSaveDialog({
+          title: '양식 다운로드',
+          defaultPath: '교사_시간표_양식.xlsx',
+          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+        });
+        if (filePath) {
+          await window.electronAPI.writeFile(filePath, normalized);
+          useToastStore.getState().show('양식이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(filePath),
+          });
+        }
+      } else {
+        const blob = new Blob([normalized], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '교사_시간표_양식.xlsx';
+        a.click();
+        URL.revokeObjectURL(url);
+        useToastStore.getState().show('양식이 다운로드되었습니다', 'success');
+      }
+    } catch {
+      useToastStore.getState().show('양식 다운로드 중 오류가 발생했습니다', 'error');
+    }
+  }, [localMaxPeriods, activeDays]);
+
+  /* ── 교사 시간표 엑셀 업로드 ── */
+  const handleExcelUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const parsed = await parseTeacherTimetableFromExcel(buffer);
+      const hasDays = Object.keys(parsed).length > 0;
+      const hasData = hasDays && Object.values(parsed).some(
+        (periods) => periods.some((p) => p !== null),
+      );
+      if (!hasData) {
+        useToastStore.getState().show('시간표 데이터를 찾을 수 없습니다. 양식을 확인해주세요.', 'error');
+        return;
+      }
+      setPreviewSchedule(parsed);
+      setShowExcelPreview(true);
+    } catch {
+      useToastStore.getState().show('엑셀 파일을 읽을 수 없습니다. 양식을 확인해주세요.', 'error');
+    }
+    e.target.value = '';
+  }, []);
+
+  /* ── 엑셀 미리보기 확인 → 그리드에 반영 ── */
+  const handleExcelConfirm = useCallback(async () => {
+    if (!previewSchedule) return;
+    await updateTeacherSchedule(previewSchedule);
+
+    // 교시 수 조정: 데이터에서 최대 교시 계산
+    const maxFromData = Math.max(
+      ...Object.values(previewSchedule).map((arr) => arr.length),
+      0,
+    );
+    if (maxFromData > 0 && maxFromData !== settings.maxPeriods) {
+      await updateSettings({ maxPeriods: maxFromData });
+    }
+
+    // 주말 요일 동기화: 데이터에 맞춰 토/일 자동 추가/제거
+    const currentWeekend = settings.enableWeekendDays ?? [];
+    const dataKeys = Object.keys(previewSchedule);
+    const newWeekend = (['토', '일'] as const).filter((d) => dataKeys.includes(d));
+    const weekendChanged =
+      newWeekend.length !== currentWeekend.length ||
+      newWeekend.some((d) => !currentWeekend.includes(d));
+    if (weekendChanged) {
+      await updateSettings({ enableWeekendDays: newWeekend });
+    }
+
+    // 과목 자동 색상 배정
+    const currentColors = settings.subjectColors ?? {};
+    const subjects = new Set<string>();
+    for (const periods of Object.values(previewSchedule)) {
+      for (const p of periods) {
+        if (p && p.subject.trim()) subjects.add(p.subject.trim());
+      }
+    }
+    const newSubjects = [...subjects].filter(
+      (s) => !(s in currentColors) && !(s in DEFAULT_SUBJECT_COLORS),
+    );
+    if (newSubjects.length > 0) {
+      const updated = smartAutoAssignColors(currentColors, newSubjects);
+      await updateSettings({ subjectColors: updated });
+    }
+
+    useToastStore.getState().show('교사 시간표가 업데이트되었습니다!', 'success');
+    setShowExcelPreview(false);
+    setPreviewSchedule(null);
+    onSaved();
+  }, [previewSchedule, updateTeacherSchedule, settings.maxPeriods, settings.subjectColors, updateSettings, onSaved]);
+
   const handleSave = async () => {
     setSaving(true);
     track('timetable_edit', { action: 'edit' });
@@ -383,6 +496,28 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                 <span className="material-symbols-outlined text-icon-lg">download</span>
                 <span>나이스에서 불러오기</span>
               </button>
+              <div className="w-px h-8 bg-sp-border" />
+            </>
+          )}
+          {tab === 'teacher' && (
+            <>
+              <button
+                onClick={handleDownloadTemplate}
+                className="flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-muted hover:text-sp-text hover:bg-sp-card transition-all active:scale-95"
+              >
+                <span className="material-symbols-outlined text-icon-lg">download</span>
+                <span>양식 다운로드</span>
+              </button>
+              <label className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95 cursor-pointer">
+                <span className="material-symbols-outlined text-icon-lg">file_open</span>
+                <span>엑셀 불러오기</span>
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={handleExcelUpload}
+                />
+              </label>
               <div className="w-px h-8 bg-sp-border" />
             </>
           )}
@@ -516,6 +651,17 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
         hasExistingData={hasExistingData}
         onEnableAutoSync={(grade, cls) => void handleEnableAutoSync(grade, cls)}
       />
+
+      {/* 엑셀 미리보기 모달 */}
+      {showExcelPreview && previewSchedule && (
+        <TeacherExcelPreviewModal
+          schedule={previewSchedule}
+          maxPeriods={localMaxPeriods}
+          activeDays={activeDays}
+          onConfirm={() => void handleExcelConfirm()}
+          onCancel={() => { setShowExcelPreview(false); setPreviewSchedule(null); }}
+        />
+      )}
 
       {/* 모두 삭제 확인 모달 */}
       {showClearConfirm && (
@@ -732,3 +878,4 @@ function EditorPeriodRow({
     </>
   );
 }
+
