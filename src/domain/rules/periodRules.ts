@@ -1,5 +1,5 @@
 import type { PeriodTime } from '../valueObjects/PeriodTime';
-import type { DayOfWeek } from '../valueObjects/DayOfWeek';
+import type { DayOfWeekWithSat } from '../valueObjects/DayOfWeek';
 import type { SchoolLevel } from '../entities/Settings';
 
 /**
@@ -12,18 +12,18 @@ export function parseMinutes(timeStr: string): number {
 }
 
 /**
- * Date 객체에서 한국어 요일 반환 (주말이면 null)
+ * Date 객체에서 한국어 요일 반환
+ * enableSaturday가 true면 토요일도 반환, 아니면 토/일 = null
  */
-export function getDayOfWeek(date: Date): DayOfWeek | null {
+export function getDayOfWeek(
+  date: Date,
+  enableSaturday: boolean = false,
+): DayOfWeekWithSat | null {
   const jsDay = date.getDay(); // 0=일, 1=월, ..., 6=토
-  const map: Record<number, DayOfWeek> = {
-    1: '월',
-    2: '화',
-    3: '수',
-    4: '목',
-    5: '금',
-  };
-  return map[jsDay] ?? null;
+  if (jsDay === 0) return null; // 일요일
+  if (jsDay === 6) return enableSaturday ? '토' : null; // 토요일
+  const weekdays: DayOfWeekWithSat[] = ['월', '화', '수', '목', '금'];
+  return weekdays[jsDay - 1] ?? null;
 }
 
 /**

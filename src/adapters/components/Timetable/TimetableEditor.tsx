@@ -3,7 +3,8 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
-import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
+import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
+import type { DayOfWeekWithSat } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import { parseMinutes } from '@domain/rules/periodRules';
@@ -48,6 +49,9 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
   } = useScheduleStore();
   const { settings, update: updateSettings } = useSettingsStore();
 
+  const enableSaturday = settings.enableSaturday ?? false;
+  const activeDays = useMemo(() => getActiveDays(enableSaturday), [enableSaturday]);
+
   // 편집용 로컬 상태 — 문자열 2D 배열 [periodIdx][dayIdx]
   const [classGrid, setClassGrid] = useState<string[][]>([]);          // 학급: 과목
   const [classTeacherGrid, setClassTeacherGrid] = useState<string[][]>([]); // 학급: 담당 교사
@@ -77,7 +81,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
       const tSubRow: string[] = [];
       const tClsRow: string[] = [];
 
-      for (const day of DAYS_OF_WEEK) {
+      for (const day of activeDays) {
         const cp = (classSchedule[day] ?? [])[p];
         cRow.push(cp?.subject ?? '');
         cTchRow.push(cp?.teacher ?? '');
@@ -96,7 +100,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     setClassTeacherGrid(cTchGrid);
     setTeacherSubjectGrid(tSubGrid);
     setTeacherClassroomGrid(tClsGrid);
-  }, [classSchedule, teacherSchedule, maxPeriods]);
+  }, [classSchedule, teacherSchedule, maxPeriods, activeDays]);
 
   // Ctrl+Z / Ctrl+Shift+Z 키보드 단축키 (input 포커스 시 제외)
   useEffect(() => {
@@ -214,14 +218,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
 
     // 그리드 행이 부족하면 추가
     if (classGrid.length < newCount) {
-      setClassGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
-      setClassTeacherGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
-      setTeacherSubjectGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
-      setTeacherClassroomGrid((prev) => [...prev, DAYS_OF_WEEK.map(() => '')]);
+      setClassGrid((prev) => [...prev, activeDays.map(() => '')]);
+      setClassTeacherGrid((prev) => [...prev, activeDays.map(() => '')]);
+      setTeacherSubjectGrid((prev) => [...prev, activeDays.map(() => '')]);
+      setTeacherClassroomGrid((prev) => [...prev, activeDays.map(() => '')]);
     }
 
     setLocalMaxPeriods(newCount);
-  }, [localMaxPeriods, localPeriodTimes, classGrid.length, settings.schoolLevel, track]);
+  }, [localMaxPeriods, localPeriodTimes, classGrid.length, settings.schoolLevel, track, activeDays]);
 
   // 교시 삭제
   const removePeriod = useCallback(() => {
@@ -232,10 +236,10 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
 
   /* ── 나이스 불러오기 핸들러 ── */
   const hasExistingData = useMemo(() => {
-    return DAYS_OF_WEEK.some((day) =>
+    return activeDays.some((day) =>
       (classSchedule[day] ?? []).some((cp) => cp.subject.trim() !== ''),
     );
-  }, [classSchedule]);
+  }, [classSchedule, activeDays]);
 
   const handleNeisImport = useCallback(
     async (data: ClassScheduleData, maxPeriods: number) => {
@@ -289,8 +293,8 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     try {
       if (tab === 'class') {
         const data: Record<string, ClassPeriod[]> = {};
-        for (let d = 0; d < DAYS_OF_WEEK.length; d++) {
-          const day = DAYS_OF_WEEK[d]!;
+        for (let d = 0; d < activeDays.length; d++) {
+          const day = activeDays[d]!;
           data[day] = classGrid.slice(0, localMaxPeriods).map((row, p) => ({
             subject: row[d] ?? '',
             teacher: (classTeacherGrid[p] ?? [])[d] ?? '',
@@ -310,8 +314,8 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
         }
       } else {
         const data: Record<string, (TeacherPeriod | null)[]> = {};
-        for (let d = 0; d < DAYS_OF_WEEK.length; d++) {
-          const day = DAYS_OF_WEEK[d]!;
+        for (let d = 0; d < activeDays.length; d++) {
+          const day = activeDays[d]!;
           data[day] = teacherSubjectGrid.slice(0, localMaxPeriods).map((row, p) => {
             const subject = row[d] ?? '';
             const classroom = (teacherClassroomGrid[p] ?? [])[d] ?? '';
@@ -438,10 +442,11 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                     <th className="px-4 py-3 text-center text-sp-text font-bold text-sm w-24 border-r border-sp-border">
                       시간
                     </th>
-                    {DAYS_OF_WEEK.map((day) => (
+                    {activeDays.map((day) => (
                       <th
                         key={day}
-                        className="px-4 py-3 text-center text-sp-text font-bold text-sm w-1/5 border-r border-sp-border"
+                        className="px-4 py-3 text-center text-sp-text font-bold text-sm border-r border-sp-border"
+                        style={{ width: `${100 / activeDays.length}%` }}
                       >
                         {day}
                       </th>
@@ -467,6 +472,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                       lunchTimeStr={lunchTimeStr}
                       subjectColors={settings.subjectColors}
                       onColorChange={handleColorChange}
+                      activeDays={activeDays}
                     />
                   ))}
                 </tbody>
@@ -568,6 +574,7 @@ interface EditorPeriodRowProps {
   lunchTimeStr: string;
   subjectColors?: SubjectColorMap;
   onColorChange: (subject: string, colorId: SubjectColorId) => void;
+  activeDays: readonly DayOfWeekWithSat[];
 }
 
 function EditorPeriodRow({
@@ -586,6 +593,7 @@ function EditorPeriodRow({
   lunchTimeStr,
   subjectColors,
   onColorChange,
+  activeDays,
 }: EditorPeriodRowProps) {
   const [colorPickerDay, setColorPickerDay] = useState<number | null>(null);
 
@@ -609,7 +617,7 @@ function EditorPeriodRow({
           </td>
           <td
             className="px-4 py-3 text-center text-sp-muted text-sm font-medium tracking-wide"
-            colSpan={5}
+            colSpan={activeDays.length}
           >
             🍽️ 점심시간 ({lunchTimeStr})
           </td>
@@ -623,7 +631,7 @@ function EditorPeriodRow({
         <td className="px-4 py-3 text-center text-sp-muted text-sm border-r border-sp-border font-mono">
           {periodTime.start}
         </td>
-        {DAYS_OF_WEEK.map((_, dayIdx) => {
+        {activeDays.map((_, dayIdx) => {
           const subjectValue = tab === 'class'
             ? (classRow[dayIdx] ?? '').trim()
             : (teacherSubjectRow[dayIdx] ?? '').trim();
@@ -635,7 +643,7 @@ function EditorPeriodRow({
           return (
             <td
               key={dayIdx}
-              className={`p-1.5 relative ${dayIdx < DAYS_OF_WEEK.length - 1 ? 'border-r border-sp-border' : ''}`}
+              className={`p-1.5 relative ${dayIdx < activeDays.length - 1 ? 'border-r border-sp-border' : ''}`}
             >
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-1">

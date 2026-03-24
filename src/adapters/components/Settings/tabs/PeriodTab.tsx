@@ -315,6 +315,34 @@ export function PeriodTab({ draft, patch }: Props) {
         </div>
       )}
 
+      {/* 토요수업 토글 */}
+      <div className="mb-4 p-4 rounded-lg bg-sp-surface/60 border border-sp-border">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-base">📅</span>
+            <div>
+              <span className="text-sm font-bold text-sp-text">토요수업</span>
+              <p className="text-detail text-sp-muted mt-0.5">시간표에 토요일 컬럼을 추가합니다</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => patch({ enableSaturday: !(draft.enableSaturday ?? false) })}
+            className={`relative w-11 h-6 rounded-full transition-colors ${
+              (draft.enableSaturday ?? false)
+                ? 'bg-sp-accent'
+                : 'bg-sp-border'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                (draft.enableSaturday ?? false) ? 'translate-x-5' : ''
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
       {/* 점심시간 설정 */}
       <div className="mb-4 p-4 rounded-lg bg-sp-surface/60 border border-sp-border">
         <div className="flex items-center gap-2 mb-3">

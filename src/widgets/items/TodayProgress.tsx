@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
-import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import type { DayOfWeekWithSat } from '@domain/valueObjects/DayOfWeek';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import { findMatchingClass } from '@domain/rules/matchingRules';
 import { getDayOfWeek } from '@domain/rules/periodRules';
@@ -13,6 +14,8 @@ import { getDayOfWeek } from '@domain/rules/periodRules';
 export function TodayProgress() {
   const { classes, progressEntries, load: loadClasses } = useTeachingClassStore();
   const { teacherSchedule, overrides, getEffectiveTeacherSchedule, load: loadSchedule } = useScheduleStore();
+  const { settings } = useSettingsStore();
+  const enableSaturday = settings.enableSaturday ?? false;
 
   useEffect(() => {
     void loadClasses();
@@ -39,14 +42,14 @@ export function TodayProgress() {
     return () => clearInterval(timer);
   }, []);
 
-  const today = useMemo((): DayOfWeek | null => getDayOfWeek(now), [now]);
+  const today = useMemo((): DayOfWeekWithSat | null => getDayOfWeek(now, enableSaturday), [now, enableSaturday]);
 
   const isWeekend = today === null;
 
   const todayLessons = useMemo(() => {
     if (today === null) return [];
     const todayStr = now.toISOString().slice(0, 10);
-    const periods = getEffectiveTeacherSchedule(todayStr);
+    const periods = getEffectiveTeacherSchedule(todayStr, enableSaturday);
     return periods
       .map((period, index) => {
         if (period === null) return null;
@@ -100,7 +103,7 @@ export function TodayProgress() {
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
-  }, [today, now, teacherSchedule, overrides, classes, progressEntries, getEffectiveTeacherSchedule]);
+  }, [today, now, teacherSchedule, overrides, classes, progressEntries, getEffectiveTeacherSchedule, enableSaturday]);
 
   const completedCount = useMemo(
     () => todayLessons.filter((l) => l.progress?.status === 'completed').length,

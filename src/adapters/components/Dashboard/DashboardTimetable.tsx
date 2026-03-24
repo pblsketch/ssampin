@@ -38,7 +38,8 @@ export function DashboardTimetable() {
     return () => clearInterval(timer);
   }, []);
 
-  const dayOfWeek = useMemo(() => getDayOfWeek(now), [now]);
+  const enableSaturday = settings.enableSaturday ?? false;
+  const dayOfWeek = useMemo(() => getDayOfWeek(now, enableSaturday), [now, enableSaturday]);
   const currentPeriod = useMemo(
     () => (dayOfWeek ? getCurrentPeriod(settings.periodTimes, now) : null),
     [dayOfWeek, settings.periodTimes, now],
@@ -67,7 +68,7 @@ export function DashboardTimetable() {
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const todayTeacherPeriods: readonly (TeacherPeriod | null)[] = useMemo(() => {
     if (!dayOfWeek) return [];
-    return getEffectiveTeacherSchedule(todayStr);
+    return getEffectiveTeacherSchedule(todayStr, enableSaturday);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayOfWeek, todayStr, teacherSchedule, overrides]);
 

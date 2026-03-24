@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
+import type { DayOfWeekWithSat } from '@domain/valueObjects/DayOfWeek';
 import { getCurrentPeriod, getDayOfWeek, parseMinutes } from '@domain/rules/periodRules';
 
 export interface CurrentPeriodInfo {
@@ -11,7 +11,7 @@ export interface CurrentPeriodInfo {
   isBreak: boolean;
   isBeforeSchool: boolean;
   isAfterSchool: boolean;
-  dayOfWeek: DayOfWeek;
+  dayOfWeek: DayOfWeekWithSat;
 }
 
 export function useCurrentPeriod(periodTimes: readonly PeriodTime[]): CurrentPeriodInfo {

@@ -37,7 +37,7 @@ interface ScheduleState {
   addOverride: (override: Omit<TimetableOverride, 'id' | 'createdAt'>) => Promise<void>;
   deleteOverride: (id: string) => Promise<void>;
   /** 특정 날짜의 오버라이드가 적용된 교사 시간표 반환 */
-  getEffectiveTeacherSchedule: (date: string) => readonly (import('@domain/entities/Timetable').TeacherPeriod | null)[];
+  getEffectiveTeacherSchedule: (date: string, enableSaturday?: boolean) => readonly (import('@domain/entities/Timetable').TeacherPeriod | null)[];
   /** 특정 날짜의 오버라이드 목록 반환 */
   getOverridesForDate: (date: string) => readonly TimetableOverride[];
 }
@@ -173,10 +173,10 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       await scheduleRepository.saveTimetableOverrides({ overrides: newOverrides });
     },
 
-    getEffectiveTeacherSchedule: (date) => {
+    getEffectiveTeacherSchedule: (date, enableSaturday = false) => {
       // date → 요일 변환
       const d = new Date(date + 'T00:00:00');
-      const dayOfWeekVal = getDayOfWeek(d);
+      const dayOfWeekVal = getDayOfWeek(d, enableSaturday);
       if (!dayOfWeekVal) return [];
 
       const baseSchedule = get().teacherSchedule[dayOfWeekVal] ?? [];

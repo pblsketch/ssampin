@@ -4,8 +4,8 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
-import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
-import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
+import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
+import type { DayOfWeekWithSat } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { TeacherPeriod, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
@@ -90,25 +90,28 @@ export function TimetablePage() {
     return () => clearInterval(timer);
   }, []);
 
-  const dayOfWeek = useMemo(() => getDayOfWeek(now), [now]);
+  const enableSaturday = settings.enableSaturday ?? false;
+  const activeDays = useMemo(() => getActiveDays(enableSaturday), [enableSaturday]);
+
+  const dayOfWeek = useMemo(() => getDayOfWeek(now, enableSaturday), [now, enableSaturday]);
   const currentPeriod = useMemo(
     () => (dayOfWeek ? getCurrentPeriod(settings.periodTimes, now) : null),
     [dayOfWeek, settings.periodTimes, now],
   );
 
-  // 이번 주 월~금 날짜 계산
+  // 이번 주 월~토(또는 금) 날짜 계산
   const weekDates = useMemo(() => {
     const d = new Date(now);
     const jsDay = d.getDay(); // 0=일 ... 6=토
     const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
     const monday = new Date(d);
     monday.setDate(d.getDate() + mondayOffset);
-    return DAYS_OF_WEEK.map((_, i) => {
+    return activeDays.map((_, i) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
       return date.toISOString().slice(0, 10);
     });
-  }, [now]);
+  }, [now, activeDays]);
 
   // 오버라이드 맵: 날짜+교시 → override
   const overrideMap = useMemo(() => {
@@ -220,10 +223,10 @@ export function TimetablePage() {
   const [showNeisImport, setShowNeisImport] = useState(false);
 
   const hasExistingData = useMemo(() => {
-    return DAYS_OF_WEEK.some((day) =>
+    return activeDays.some((day) =>
       (classSchedule[day] ?? []).some((cp) => cp.subject.trim() !== ''),
     );
-  }, [classSchedule]);
+  }, [classSchedule, activeDays]);
 
   const handleNeisImport = useCallback(
     async (data: ClassScheduleData, maxPeriods: number) => {
@@ -379,7 +382,7 @@ export function TimetablePage() {
           <div className="rounded-2xl border border-sp-border bg-sp-card overflow-hidden shadow-2xl shadow-black/20">
             <div className="w-full overflow-x-auto">
               <table className="w-full min-w-[800px] border-collapse">
-                <TimetableHeader dayOfWeek={dayOfWeek} />
+                <TimetableHeader dayOfWeek={dayOfWeek} activeDays={activeDays} />
                 <tbody>
                   {settings.periodTimes.slice(0, settings.maxPeriods).map((pt, idx) => {
                     const periodNum = pt.period;
@@ -392,10 +395,10 @@ export function TimetablePage() {
                         isCurrent={isCurrent}
                         dayOfWeek={dayOfWeek}
                         tab={tab}
-                        classPeriods={DAYS_OF_WEEK.map(
+                        classPeriods={activeDays.map(
                           (d) => (classSchedule[d] ?? [])[idx] ?? null,
                         )}
-                        teacherPeriods={DAYS_OF_WEEK.map(
+                        teacherPeriods={activeDays.map(
                           (d) => (teacherSchedule[d] ?? [])[idx] ?? null,
                         )}
                         lunchBefore={lunchIndex === idx}
@@ -405,6 +408,7 @@ export function TimetablePage() {
                         colorBy={colorBy}
                         weekDates={weekDates}
                         overrideMap={overrideMap}
+                        activeDays={activeDays}
                         onTempChange={(date, dayIdx, subject, classroom) =>
                           setTempChangeTarget({ date, period: periodNum, dayIdx, subject, classroom })
                         }
@@ -470,10 +474,11 @@ function TabButton({ active, onClick, label }: TabButtonProps) {
 }
 
 interface TimetableHeaderProps {
-  dayOfWeek: DayOfWeek | null;
+  dayOfWeek: DayOfWeekWithSat | null;
+  activeDays: readonly DayOfWeekWithSat[];
 }
 
-function TimetableHeader({ dayOfWeek }: TimetableHeaderProps) {
+function TimetableHeader({ dayOfWeek, activeDays }: TimetableHeaderProps) {
   return (
     <thead>
       <tr className="bg-sp-surface border-b border-sp-border">
@@ -483,14 +488,15 @@ function TimetableHeader({ dayOfWeek }: TimetableHeaderProps) {
         <th className="px-4 py-4 text-center text-sp-text font-bold text-sm w-24 border-r border-sp-border">
           시간
         </th>
-        {DAYS_OF_WEEK.map((day) => {
+        {activeDays.map((day) => {
           const isToday = day === dayOfWeek;
           return (
             <th
               key={day}
-              className={`px-4 py-4 text-center font-bold text-sm w-1/5 border-r border-sp-border relative ${
+              className={`px-4 py-4 text-center font-bold text-sm border-r border-sp-border relative ${
                 isToday ? 'text-sp-accent bg-sp-accent/10' : 'text-sp-text'
               }`}
+              style={{ width: `${100 / activeDays.length}%` }}
             >
               {isToday && (
                 <div className="absolute top-0 left-0 w-full h-1 bg-sp-accent" />
@@ -510,7 +516,7 @@ function TimetableHeader({ dayOfWeek }: TimetableHeaderProps) {
 interface PeriodRowProps {
   periodTime: PeriodTime;
   isCurrent: boolean;
-  dayOfWeek: DayOfWeek | null;
+  dayOfWeek: DayOfWeekWithSat | null;
   tab: TabType;
   classPeriods: (ClassPeriod | null)[];
   teacherPeriods: (TeacherPeriod | null)[];
@@ -521,6 +527,7 @@ interface PeriodRowProps {
   colorBy: 'subject' | 'classroom';
   weekDates: string[];
   overrideMap: Map<string, TimetableOverride>;
+  activeDays: readonly DayOfWeekWithSat[];
   onTempChange: (date: string, dayIdx: number, subject: string, classroom?: string) => void;
   onDeleteOverride: (id: string) => void;
 }
@@ -539,6 +546,7 @@ function PeriodRow({
   colorBy,
   weekDates,
   overrideMap,
+  activeDays,
   onTempChange,
   onDeleteOverride,
 }: PeriodRowProps) {
@@ -555,7 +563,7 @@ function PeriodRow({
           </td>
           <td
             className="px-4 py-3 text-center text-sp-muted text-sm font-medium tracking-wide"
-            colSpan={5}
+            colSpan={activeDays.length}
           >
             🍽️ 점심시간 ({lunchTimeStr})
           </td>
@@ -591,7 +599,7 @@ function PeriodRow({
         </td>
 
         {/* 요일별 과목 셀 */}
-        {DAYS_OF_WEEK.map((day, dayIdx) => {
+        {activeDays.map((day, dayIdx) => {
           const isToday = day === dayOfWeek;
           const dateStr = weekDates[dayIdx] ?? '';
           const override = overrideMap.get(`${dateStr}:${periodTime.period}`);
@@ -606,7 +614,7 @@ function PeriodRow({
                 subjectColors={subjectColors}
                 isToday={isToday}
                 isCurrent={isCurrent && isToday}
-                isLastCol={dayIdx === DAYS_OF_WEEK.length - 1}
+                isLastCol={dayIdx === activeDays.length - 1}
                 override={override}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -627,7 +635,7 @@ function PeriodRow({
               period={tp}
               isToday={isToday}
               isCurrent={isCurrent && isToday}
-              isLastCol={dayIdx === DAYS_OF_WEEK.length - 1}
+              isLastCol={dayIdx === activeDays.length - 1}
               subjectColors={subjectColors}
               classroomColors={classroomColors}
               colorBy={colorBy}
