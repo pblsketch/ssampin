@@ -18,7 +18,7 @@ export function useNeisAutoSync() {
 
   useEffect(() => {
     if (hasRun.current) return;
-    if (!settings.neis.autoSync?.enabled) return;
+    if (!settings.neis?.autoSync?.enabled) return;
     hasRun.current = true;
 
     void (async () => {

@@ -157,7 +157,7 @@ export function Onboarding() {
 
         const finalDraft: Partial<Settings> = {
             ...draft,
-            neis: neisWithAutoSync,
+            ...(neisWithAutoSync != null ? { neis: neisWithAutoSync } : {}),
             hiddenMenus,
             teacherRoles: selectedRoles.length > 0 ? selectedRoles : undefined,
         };

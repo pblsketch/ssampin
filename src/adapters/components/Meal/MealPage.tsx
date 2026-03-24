@@ -92,9 +92,9 @@ export function MealPage() {
     saveManualMeal, getMergedMealsForDate, importFromCSV,
   } = useMealStore();
   // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
-  const atptCode = settings.mealSchool?.atptCode || settings.neis.atptCode;
-  const schoolCode = settings.mealSchool?.schoolCode || settings.neis.schoolCode;
-  const schoolName = settings.neis.schoolName;
+  const atptCode = settings.mealSchool?.atptCode || settings.neis?.atptCode;
+  const schoolCode = settings.mealSchool?.schoolCode || settings.neis?.schoolCode;
+  const schoolName = settings.neis?.schoolName ?? '';
 
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
