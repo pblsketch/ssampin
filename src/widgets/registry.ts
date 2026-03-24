@@ -18,6 +18,7 @@ import { ConsultationWidget } from './items/ConsultationWidget';
 import { MemoFocus } from './items/MemoFocus';
 import { FavoriteTools } from './items/FavoriteTools';
 import { MiniCalendar } from './items/MiniCalendar';
+import { ImageSticker1, ImageSticker2, ImageSticker3, ImageSticker4 } from './items/ImageStickerWidget';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -310,6 +311,64 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     component: BookmarksWidget,
     navigateTo: 'bookmarks',
     navigateLabel: '즐겨찾기 전체 보기',
+  },
+
+  // ─── 이미지 스티커 ───
+  {
+    id: 'image-sticker-1',
+    name: '이미지 1',
+    icon: '🖼️',
+    description: '이미지를 넣어 대시보드를 꾸밀 수 있어요',
+    category: 'info',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: ImageSticker1,
+  },
+  {
+    id: 'image-sticker-2',
+    name: '이미지 2',
+    icon: '🖼️',
+    description: '이미지를 넣어 대시보드를 꾸밀 수 있어요',
+    category: 'info',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: ImageSticker2,
+  },
+  {
+    id: 'image-sticker-3',
+    name: '이미지 3',
+    icon: '🖼️',
+    description: '이미지를 넣어 대시보드를 꾸밀 수 있어요',
+    category: 'info',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: ImageSticker3,
+  },
+  {
+    id: 'image-sticker-4',
+    name: '이미지 4',
+    icon: '🖼️',
+    description: '이미지를 넣어 대시보드를 꾸밀 수 있어요',
+    category: 'info',
+    defaultSize: { w: 1, h: 3 },
+    minSize: { w: 1, h: 2 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: ImageSticker4,
   },
 ];
 
