@@ -6,6 +6,7 @@ import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
+import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -55,6 +56,16 @@ export function ProgressTab({ classId }: ProgressTabProps) {
 
   const { classSchedule, teacherSchedule } = useScheduleStore();
   const { settings } = useSettingsStore();
+
+  const subjectAccent = useMemo(() => {
+    const cls = classes.find((c: TeachingClass) => c.id === classId);
+    if (!cls) return undefined;
+    const colorBy = settings.timetableColorBy ?? 'classroom';
+    if (colorBy === 'classroom') {
+      return resolveClassroomPreset(cls.name, settings.classroomColors).tw;
+    }
+    return resolvePreset(cls.subject, settings.subjectColors).tw;
+  }, [classes, classId, settings.subjectColors, settings.classroomColors, settings.timetableColorBy]);
 
   const [showForm, setShowForm] = useState(false);
   const [formDate, setFormDate] = useState(todayString);
@@ -459,6 +470,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                 value={formDate}
                 onChange={handleDateChange}
                 lessonDays={lessonDayIndices}
+                accentColor={subjectAccent}
               />
             </div>
             <div>
@@ -558,52 +570,71 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                 /* ── 인라인 편집 모드 ── */
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <CalendarPicker
-                      value={editDate}
-                      onChange={setEditDate}
-                      lessonDays={lessonDayIndices}
-                    />
-                    <select
-                      value={editPeriod}
-                      onChange={(e) => setEditPeriod(Number(e.target.value))}
-                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-                    >
-                      {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map((p) => {
-                        const matching = getMatchingPeriods(editDate);
-                        const isMatch = matching.includes(p);
-                        return (
-                          <option key={p} value={p}>
-                            {p}교시{isMatch ? ' ✦' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <div>
+                      <label className="block text-xs text-sp-muted mb-1">날짜</label>
+                      <CalendarPicker
+                        value={editDate}
+                        onChange={setEditDate}
+                        lessonDays={lessonDayIndices}
+                        accentColor={subjectAccent}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-sp-muted mb-1">교시</label>
+                      <select
+                        value={editPeriod}
+                        onChange={(e) => setEditPeriod(Number(e.target.value))}
+                        className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                   text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+                      >
+                        {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map((p) => {
+                          const matching = getMatchingPeriods(editDate);
+                          const isMatch = matching.includes(p);
+                          return (
+                            <option key={p} value={p}>
+                              {p}교시{isMatch ? ' ✦' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
                   </div>
-                  <input
-                    type="text"
-                    value={editUnit}
-                    onChange={(e) => setEditUnit(e.target.value)}
-                    placeholder="단원"
-                    className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                               text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-                  />
-                  <input
-                    type="text"
-                    value={editLesson}
-                    onChange={(e) => setEditLesson(e.target.value)}
-                    placeholder="차시/주제"
-                    className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                               text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-                  />
-                  <input
-                    type="text"
-                    value={editNote}
-                    onChange={(e) => setEditNote(e.target.value)}
-                    placeholder="비고"
-                    className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                               text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-                  />
+                  <div>
+                    <label className="block text-xs text-sp-muted mb-1">단원</label>
+                    <input
+                      type="text"
+                      value={editUnit}
+                      onChange={(e) => setEditUnit(e.target.value)}
+                      placeholder="예: 1단원 - 문학의 이해"
+                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent
+                                 placeholder:text-sp-muted/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-sp-muted mb-1">차시/주제</label>
+                    <input
+                      type="text"
+                      value={editLesson}
+                      onChange={(e) => setEditLesson(e.target.value)}
+                      placeholder="예: 1차시 - 소설의 구성요소"
+                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent
+                                 placeholder:text-sp-muted/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-sp-muted mb-1">비고 (선택)</label>
+                    <input
+                      type="text"
+                      value={editNote}
+                      onChange={(e) => setEditNote(e.target.value)}
+                      placeholder="예: 모둠 활동 포함"
+                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent
+                                 placeholder:text-sp-muted/50"
+                    />
+                  </div>
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={cancelEdit}
@@ -880,6 +911,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
                                 }}
                                 lessonDays={lessonDayIndices}
                                 compact
+                                portal
+                                accentColor={subjectAccent}
                               />
                               <span className="text-xs text-sp-muted text-center">{entry.period}교시</span>
                             </div>
