@@ -15,6 +15,7 @@ interface TeachingClassState {
   attendanceRecords: readonly AttendanceRecord[];
   selectedClassId: string | null;
   loaded: boolean;
+  loadFailed: boolean;
   load: () => Promise<void>;
   selectClass: (id: string | null) => void;
   addClass: (name: string, subject: string, students: readonly TeachingClassStudent[]) => Promise<void>;
@@ -54,6 +55,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     attendanceRecords: [],
     selectedClassId: null,
     loaded: false,
+    loadFailed: false,
 
     load: async () => {
       if (get().loaded) return;
@@ -70,9 +72,10 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
           if (orderA !== orderB) return orderA - orderB;
           return a.createdAt.localeCompare(b.createdAt);
         });
-        set({ classes: sorted, progressEntries, attendanceRecords, loaded: true });
-      } catch {
-        set({ loaded: true });
+        set({ classes: sorted, progressEntries, attendanceRecords, loaded: true, loadFailed: false });
+      } catch (err) {
+        console.error('[TeachingClassStore] load failed:', err);
+        set({ loaded: true, loadFailed: true });
       }
     },
 
@@ -103,6 +106,10 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     deleteClass: async (id) => {
+      if (get().loadFailed) {
+        console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 삭제 차단');
+        return;
+      }
       await manageClasses.delete(id);
       // 해당 학급의 진도 기록과 출석 기록도 함께 삭제
       const progressToKeep = get().progressEntries.filter((e) => e.classId !== id);
@@ -317,6 +324,10 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     saveAttendanceRecord: async (record) => {
+      if (get().loadFailed) {
+        console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
+        return;
+      }
       const existing = get().attendanceRecords.find(
         (r) => r.classId === record.classId && r.date === record.date && r.period === record.period,
       );
