@@ -127,7 +127,7 @@ export function DashboardMemo() {
   return (
     <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-sp-text">메모</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📝</span>메모</h3>
         {layoutMode !== 'compact' && (
           <span className="text-xs text-sp-muted">{memos.length}개</span>
         )}

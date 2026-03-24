@@ -49,6 +49,11 @@ export function SurveyWidget() {
 
   return (
     <div className="flex flex-col gap-3 h-full">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between shrink-0">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📋</span>설문/체크리스트</h3>
+      </div>
+
       {activeSurveys.slice(0, 3).map((survey) => {
         const localData = useSurveyStore.getState().getLocalData(survey.id);
         const progress = survey.mode === 'teacher'

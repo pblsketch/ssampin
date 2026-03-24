@@ -64,6 +64,11 @@ export function ConsultationWidget() {
 
   return (
     <div className="flex flex-col gap-3 h-full">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between shrink-0">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📅</span>상담 예약</h3>
+      </div>
+
       {activeSchedules.slice(0, 3).map((schedule) => {
         const data = slotData.get(schedule.id);
         const percentage = data && data.total > 0

@@ -51,7 +51,7 @@ export function Seating() {
     return (
       <div ref={containerRef} className="rounded-xl bg-sp-card p-3 h-full flex flex-col gap-2 overflow-y-auto">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-sp-text">자리배치</h3>
+          <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>💺</span>자리배치</h3>
         </div>
         {groups.map((group) => {
           const groupStudents = group.studentIds
@@ -94,7 +94,7 @@ export function Seating() {
     return (
       <div ref={containerRef} className="rounded-xl bg-sp-card p-3 h-full flex flex-col gap-2">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-sp-text">자리배치</h3>
+          <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>💺</span>자리배치</h3>
         </div>
         <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
           sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-caption'
@@ -159,7 +159,7 @@ export function Seating() {
   return (
     <div ref={containerRef} className="rounded-xl bg-sp-card p-3 h-full flex flex-col gap-2">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-sp-text">자리배치</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>💺</span>자리배치</h3>
       </div>
       <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
         sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-caption'

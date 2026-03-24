@@ -110,6 +110,10 @@ export function MiniCalendar() {
 
   return (
     <div className="h-full flex flex-col">
+      {/* 위젯 제목 */}
+      <div className="mb-2 shrink-0">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📅</span>미니 캘린더</h3>
+      </div>
       {/* 헤더: 월 네비게이션 */}
       <div className="flex items-center justify-between mb-2">
         <button onClick={prevMonth} className="text-sp-muted hover:text-sp-text p-0.5">

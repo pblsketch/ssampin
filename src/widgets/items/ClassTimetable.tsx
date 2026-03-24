@@ -52,6 +52,9 @@ export function ClassTimetable() {
 
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col overflow-hidden">
+      <div className="mb-3 flex items-center justify-between shrink-0">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📋</span>학급 시간표</h3>
+      </div>
       <div className="flex-1 min-h-0 overflow-auto">
         <div
           className="grid gap-px bg-sp-border/20 h-full"

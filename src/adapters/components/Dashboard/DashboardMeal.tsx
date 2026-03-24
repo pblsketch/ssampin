@@ -49,8 +49,8 @@ export function DashboardMeal() {
   if (!schoolCode && mealSource !== 'manual') {
     return (
       <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
-        <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-2">
-          <span className="text-lg">🍚</span>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5 mb-2">
+          <span>🍱</span>
           오늘의 급식
         </h3>
         <div className="flex-1 flex items-center justify-center">
@@ -64,8 +64,8 @@ export function DashboardMeal() {
 
   return (
     <div className="rounded-xl bg-sp-card p-4 flex flex-col">
-      <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-2">
-        <span className="text-lg">🍚</span>
+      <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5 mb-2">
+        <span>🍱</span>
         오늘의 급식
       </h3>
 

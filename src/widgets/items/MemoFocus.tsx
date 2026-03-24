@@ -143,7 +143,7 @@ export function MemoFocus() {
       {/* 헤더: 이전/다음 네비게이션 + 편집 토글 */}
       <div className="mb-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold text-sp-text">메모</h3>
+          <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📄</span>메모</h3>
           {sortedMemos.length > 1 && (
             <div className="flex items-center gap-1">
               <button

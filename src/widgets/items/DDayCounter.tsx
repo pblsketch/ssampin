@@ -277,6 +277,11 @@ export function DDayCounter() {
 
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col min-h-0 overflow-auto">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between mb-2 shrink-0">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>🎯</span>D-Day 카운터</h3>
+      </div>
+
       {/* 추가 버튼 */}
       {!showForm && !editingItem && (
         <button

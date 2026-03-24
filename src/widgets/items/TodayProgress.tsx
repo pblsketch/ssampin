@@ -145,6 +145,14 @@ export function TodayProgress() {
 
   return (
     <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between mb-3 shrink-0">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📚</span>오늘 수업 진도</h3>
+        {todayLessons.length > 0 && (
+          <span className="text-xs text-sp-muted">{completedCount}/{todayLessons.length} 완료</span>
+        )}
+      </div>
+
       <div className="flex flex-col gap-2 flex-1 overflow-auto">
         {todayLessons.map((lesson) => {
           const statusBadge = lesson.matchedClass === null

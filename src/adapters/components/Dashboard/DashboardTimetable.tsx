@@ -76,7 +76,8 @@ export function DashboardTimetable() {
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-sp-text">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>🕐</span>
           오늘의 시간표
         </h3>
         <div className="flex rounded-lg bg-sp-surface p-0.5">

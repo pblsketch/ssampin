@@ -118,7 +118,7 @@ export function DashboardStudentRecords() {
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-sp-text">👩‍🏫 오늘 기록</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>👩‍🏫</span>오늘 기록</h3>
         {todayRecords.length > 0 && (
           <span className="text-xs text-sp-muted">{todayRecords.length}건</span>
         )}

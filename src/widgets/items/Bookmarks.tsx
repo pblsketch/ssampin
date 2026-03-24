@@ -126,7 +126,7 @@ export function BookmarksWidget() {
     <div className="h-full flex flex-col p-4">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-bold text-sp-text">즐겨찾기</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>⭐</span>즐겨찾기</h3>
         <button
           onClick={() => setShowPicker(!showPicker)}
           className="text-sp-muted hover:text-sp-text transition-colors"

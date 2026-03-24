@@ -4,11 +4,12 @@
  */
 export function Grades() {
   return (
-    <div className="rounded-xl bg-sp-card p-4">
-      <div className="flex flex-col items-center justify-center py-6 text-sp-muted">
-        <span className="mb-2 text-2xl">📊</span>
-        <p className="text-sm">성적 현황</p>
-        <p className="mt-1 text-xs">준비 중입니다</p>
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+      <div className="mb-3 shrink-0">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📊</span>성적 현황</h3>
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-center text-sp-muted">
+        <p className="text-sm">준비 중입니다</p>
       </div>
     </div>
   );

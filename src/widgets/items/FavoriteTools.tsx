@@ -26,7 +26,7 @@ export function FavoriteTools() {
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-bold text-sp-text">자주 쓰는 도구</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>🛠️</span>자주 쓰는 도구</h3>
         <button
           onClick={() => setShowPicker(!showPicker)}
           className="text-sp-muted hover:text-sp-text transition-colors"
