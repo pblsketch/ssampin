@@ -31,7 +31,7 @@ export function MobileAnnouncementBanner() {
   return (
     <>
       {/* 배너 */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
+      <div className="bg-sp-accent text-white px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
         <div className="flex items-center gap-2">
           <span className="text-base">📱</span>
           <span>

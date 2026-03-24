@@ -56,7 +56,6 @@ import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
-import { DomainMigrationBanner } from '@adapters/components/DomainMigrationBanner';
 import { ShareModal } from '@adapters/components/Share/ShareModal';
 import { SharePromptOverlay } from '@adapters/components/Share/SharePromptOverlay';
 import { recordActiveDay } from '@adapters/stores/useShareStore';
@@ -478,7 +477,6 @@ export function App() {
   return (
     <div className="flex flex-col h-screen bg-sp-bg">
       <MobileAnnouncementBanner />
-      <DomainMigrationBanner />
       <div className="flex flex-1 min-h-0">
       {!isFullscreen && (
         <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} onFeedback={() => setShowFeedback(true)} />
