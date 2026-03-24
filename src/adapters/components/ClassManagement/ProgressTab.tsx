@@ -113,15 +113,15 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     const currentClass = classes.find((c: TeachingClass) => c.id === classId);
     if (!currentClass) return [];
     const subjectName = currentClass.subject;
+    const className = currentClass.name;
     const dayOfWeek = getDayOfWeek(dateStr);
 
-    // 학급 시간표 먼저, 없으면 교사 시간표에서 찾기
     const dayScheduleClass = classSchedule[dayOfWeek];
     const dayScheduleTeacher = teacherSchedule?.[dayOfWeek];
 
     const periods: number[] = [];
 
-    // 학급 시간표에서 매칭
+    // 1단계: 학급 시간표에서 과목 매칭 (담임 학급인 경우)
     if (dayScheduleClass && dayScheduleClass.length > 0) {
       dayScheduleClass.forEach((slot, idx) => {
         if (slot.subject && isSubjectMatch(slot.subject, subjectName)) {
@@ -130,22 +130,32 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       });
     }
 
-    // 학급 시간표에서 못 찾았으면 교사 시간표에서 매칭
+    // 2단계: 교사 시간표에서 교실명 + 과목 동시 매칭
     if (periods.length === 0 && dayScheduleTeacher) {
       dayScheduleTeacher.forEach((slot, idx) => {
-        if (slot && isSubjectMatch(slot.subject, subjectName)) {
-          // 교실명으로도 학급 매칭 확인
-          if (slot.classroom.includes(currentClass.name) || currentClass.name.includes(slot.classroom)) {
-            periods.push(idx + 1);
-          }
+        if (!slot) return;
+        const classroomMatch =
+          slot.classroom === className ||
+          slot.classroom.includes(className) ||
+          className.includes(slot.classroom);
+        const subjectMatch = isSubjectMatch(slot.subject, subjectName);
+
+        if (classroomMatch && subjectMatch) {
+          periods.push(idx + 1);
         }
       });
     }
 
-    // 그래도 못 찾았으면 교사 시간표에서 과목만으로 매칭
+    // 3단계: 교실명만으로 매칭 (과목명이 약간 다른 경우 커버)
     if (periods.length === 0 && dayScheduleTeacher) {
       dayScheduleTeacher.forEach((slot, idx) => {
-        if (slot && isSubjectMatch(slot.subject, subjectName)) {
+        if (!slot) return;
+        const classroomMatch =
+          slot.classroom === className ||
+          slot.classroom.includes(className) ||
+          className.includes(slot.classroom);
+
+        if (classroomMatch) {
           periods.push(idx + 1);
         }
       });
