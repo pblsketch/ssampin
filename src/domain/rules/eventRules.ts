@@ -61,11 +61,20 @@ export function filterByCategory(
 
 /**
  * 날짜순 정렬 (오름차순)
+ * 같은 날짜 내에서는 sortOrder → id(생성순) 순으로 정렬
  */
 export function sortByDate(events: readonly SchoolEvent[]): readonly SchoolEvent[] {
-  return [...events].sort(
-    (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
-  );
+  return [...events].sort((a, b) => {
+    // 1차: 날짜순
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    // 2차: sortOrder (낮을수록 위)
+    const orderA = a.sortOrder ?? 0;
+    const orderB = b.sortOrder ?? 0;
+    if (orderA !== orderB) return orderA - orderB;
+    // 3차: ID (생성순 폴백)
+    return a.id.localeCompare(b.id);
+  });
 }
 
 /**

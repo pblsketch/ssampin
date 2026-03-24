@@ -97,6 +97,9 @@ interface EventsState {
   setShareFile: (file: EventsShareFile | null) => void;
   downloadTemplate: () => Promise<void>;
 
+  // 같은 날짜 내 이벤트 순서 변경
+  reorderEvents: (date: string, orderedIds: string[]) => Promise<void>;
+
   // 생일 동기화
   syncBirthdayEvents: (students: readonly Student[]) => Promise<void>;
   removeBirthdayEvents: () => Promise<void>;
@@ -684,6 +687,23 @@ export const useEventsStore = create<EventsState>((set) => {
       );
       await externalCalendarRepository.saveData({ sources });
       set({ externalSources: sources });
+    },
+
+    // 같은 날짜 내 이벤트 순서 변경
+    reorderEvents: async (date, orderedIds) => {
+      const state = useEventsStore.getState();
+      const updated = state.events.map((e) => {
+        if (e.date !== date) return e;
+        const idx = orderedIds.indexOf(e.id);
+        if (idx === -1) return e;
+        return { ...e, sortOrder: idx };
+      });
+      set({ events: updated });
+      // 변경된 이벤트만 저장
+      for (const id of orderedIds) {
+        const ev = updated.find((e) => e.id === id);
+        if (ev) await manageEvents.update(ev);
+      }
     },
 
     // 생일 동기화

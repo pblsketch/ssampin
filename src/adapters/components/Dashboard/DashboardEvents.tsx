@@ -86,9 +86,24 @@ function EventItem({ event, today, categories }: EventItemProps) {
   );
 }
 
+type EventDisplayMode = 'upcoming' | 'today';
+
 export function DashboardEvents() {
   const { events, categories, load } = useEventsStore();
   const [showAll, setShowAll] = useState(false);
+  const [displayMode, setDisplayMode] = useState<EventDisplayMode>(() => {
+    try {
+      const saved = localStorage.getItem('ssampin:event-widget-mode');
+      if (saved === 'today') return 'today';
+    } catch { /* ignore */ }
+    return 'upcoming';
+  });
+
+  const handleToggleMode = () => {
+    const next = displayMode === 'upcoming' ? 'today' : 'upcoming';
+    setDisplayMode(next);
+    try { localStorage.setItem('ssampin:event-widget-mode', next); } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     void load();
@@ -100,19 +115,34 @@ export function DashboardEvents() {
 
   const filtered = useMemo(() => {
     const todayMs = today.getTime();
-    const limitMs = todayMs + 14 * 24 * 60 * 60 * 1000; // today + 14일
 
+    const sortWithOrder = (a: SchoolEvent, b: SchoolEvent) => {
+      const dateCompare = parseDate(a.date).getTime() - parseDate(b.date).getTime();
+      if (dateCompare !== 0) return dateCompare;
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    };
+
+    if (displayMode === 'today') {
+      return [...events]
+        .filter((event) => !event.isHidden)
+        .filter((event) => {
+          const eventMs = parseDate(event.date).getTime();
+          const endMs = event.endDate ? parseDate(event.endDate).getTime() : eventMs;
+          return eventMs <= todayMs && endMs >= todayMs;
+        })
+        .sort(sortWithOrder);
+    }
+
+    const limitMs = todayMs + 14 * 24 * 60 * 60 * 1000;
     return [...events]
       .filter((event) => !event.isHidden)
       .filter((event) => {
         const eventMs = parseDate(event.date).getTime();
-        // 멀티데이 이벤트는 endDate 기준으로도 포함
         const endMs = event.endDate ? parseDate(event.endDate).getTime() : eventMs;
-        // 이벤트가 범위와 겹치면 포함 (시작일이 limit 이전, 종료일이 today 이후)
         return eventMs <= limitMs && endMs >= todayMs;
       })
-      .sort((a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime());
-  }, [events, today]);
+      .sort(sortWithOrder);
+  }, [events, today, displayMode]);
 
   const visible = filtered.slice(0, MAX_VISIBLE);
   const remaining = filtered.length - visible.length;
@@ -122,14 +152,24 @@ export function DashboardEvents() {
       <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
         {/* 헤더 */}
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📆</span>다가오는 일정</h3>
+          <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+            <span>📆</span>
+            {displayMode === 'upcoming' ? '다가오는 일정' : '오늘 일정'}
+          </h3>
+          <button
+            onClick={handleToggleMode}
+            className="text-[10px] text-sp-muted hover:text-sp-accent transition-colors px-2 py-0.5 rounded bg-sp-surface/50"
+            title={displayMode === 'upcoming' ? '오늘 일정만 보기' : '다가오는 일정 보기'}
+          >
+            {displayMode === 'upcoming' ? '오늘만' : '14일'}
+          </button>
         </div>
 
         {/* 콘텐츠 */}
         <div className="flex-1 min-h-0 overflow-auto">
           {filtered.length === 0 ? (
             <p className="py-6 text-center text-sm text-sp-muted">
-              등록된 일정이 없습니다
+              {displayMode === 'today' ? '오늘 일정이 없습니다' : '등록된 일정이 없습니다'}
             </p>
           ) : (
             <div className="space-y-0.5">
@@ -161,7 +201,9 @@ export function DashboardEvents() {
           >
             {/* 팝업 헤더 */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-sp-border shrink-0">
-              <h2 className="text-sm font-bold text-sp-text">다가오는 일정</h2>
+              <h2 className="text-sm font-bold text-sp-text">
+                {displayMode === 'upcoming' ? '다가오는 일정' : '오늘 일정'}
+              </h2>
               <button
                 type="button"
                 className="text-sp-muted hover:text-sp-text transition-colors text-lg leading-none"

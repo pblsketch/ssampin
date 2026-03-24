@@ -117,6 +117,8 @@ export interface SchoolEvent {
   };
   readonly isModified?: boolean;     // 사용자가 편집했으면 true → 동기화 시 보호
   readonly isHidden?: boolean;       // 숨기기 처리
+  /** 같은 날짜 내 수동 정렬 순서 (낮을수록 위에 표시, 미설정 시 0) */
+  readonly sortOrder?: number;
 }
 
 export interface SchoolEventsData {

@@ -26,6 +26,8 @@ interface EventListProps {
   onToggleSelect?: (id: string) => void;
   onSkipDate?: (eventId: string, date: string) => void;
   currentDate?: string; // "YYYY-MM-DD" — the date context for this event list
+  /** 각 이벤트 카드를 감싸는 래퍼 (드래그앤드롭 등) */
+  renderWrapper?: (id: string, children: React.ReactNode) => React.ReactNode;
 }
 
 function formatEventDate(dateStr: string, showYear?: boolean): string {
@@ -255,7 +257,7 @@ function HolidayCard({ holiday, showYear }: { holiday: HolidayInfo; showYear?: b
   );
 }
 
-export function EventList({ events, categories, holidays, allEvents, allHolidays, year, hideTitle, onEdit, onDelete, isSelectMode, selectedIds, onToggleSelect, onSkipDate, currentDate }: EventListProps) {
+export function EventList({ events, categories, holidays, allEvents, allHolidays, year, hideTitle, onEdit, onDelete, isSelectMode, selectedIds, onToggleSelect, onSkipDate, currentDate, renderWrapper }: EventListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchYear, setSearchYear] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -290,7 +292,12 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
     items.sort((a, b) => {
       const dateA = a.type === 'event' ? a.data.date : a.data.date;
       const dateB = b.type === 'event' ? b.data.date : b.data.date;
-      return dateA.localeCompare(dateB);
+      const dateCompare = dateA.localeCompare(dateB);
+      if (dateCompare !== 0) return dateCompare;
+      // 같은 날짜: 이벤트의 sortOrder 비교 (공휴일은 이벤트 뒤에)
+      const orderA = a.type === 'event' ? (a.data.sortOrder ?? 0) : 9999;
+      const orderB = b.type === 'event' ? (b.data.sortOrder ?? 0) : 9999;
+      return orderA - orderB;
     });
 
     return items;
@@ -334,7 +341,11 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
     items.sort((a, b) => {
       const dateA = a.type === 'event' ? a.data.date : a.data.date;
       const dateB = b.type === 'event' ? b.data.date : b.data.date;
-      return dateA.localeCompare(dateB);
+      const dateCompare = dateA.localeCompare(dateB);
+      if (dateCompare !== 0) return dateCompare;
+      const orderA = a.type === 'event' ? (a.data.sortOrder ?? 0) : 9999;
+      const orderB = b.type === 'event' ? (b.data.sortOrder ?? 0) : 9999;
+      return orderA - orderB;
     });
 
     return items;
@@ -418,25 +429,29 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
           </p>
         </div>
       ) : (
-        displayItems.map((item) =>
-          item.type === 'event' ? (
-            <EventCard
-              key={item.data.id}
-              event={item.data}
-              categories={categories}
-              showYear={isSearching}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              isSelectMode={isSelectMode}
-              isSelected={selectedIds?.has(item.data.id)}
-              onToggleSelect={onToggleSelect}
-              onSkipDate={onSkipDate}
-              currentDate={currentDate}
-            />
-          ) : (
+        displayItems.map((item) => {
+          if (item.type === 'event') {
+            const card = (
+              <EventCard
+                key={item.data.id}
+                event={item.data}
+                categories={categories}
+                showYear={isSearching}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                isSelectMode={isSelectMode}
+                isSelected={selectedIds?.has(item.data.id)}
+                onToggleSelect={onToggleSelect}
+                onSkipDate={onSkipDate}
+                currentDate={currentDate}
+              />
+            );
+            return renderWrapper ? renderWrapper(item.data.id, card) : card;
+          }
+          return (
             <HolidayCard key={`holiday-${item.data.date}`} holiday={item.data} showYear={isSearching} />
-          ),
-        )
+          );
+        })
       )}
     </div>
   );
