@@ -61,9 +61,9 @@ export async function autoSyncNeisTimetable(
     return { success: false, skipped: true };
   }
 
-  // 이미 이번 주 동기화 완료
-  const currentWeek = getCurrentISOWeek();
-  if (autoSync.lastSyncWeek === currentWeek) {
+  // 이미 오늘 동기화 완료
+  const today = new Date().toISOString().slice(0, 10);
+  if (autoSync.lastSyncDate === today) {
     return { success: false, skipped: true };
   }
 

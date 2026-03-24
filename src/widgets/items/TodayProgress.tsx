@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
-import { DAYS_OF_WEEK } from '@domain/valueObjects/DayOfWeek';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import { findMatchingClass } from '@domain/rules/matchingRules';
+import { getDayOfWeek } from '@domain/rules/periodRules';
 
 /**
  * 오늘 수업 진도 위젯
@@ -31,17 +31,21 @@ export function TodayProgress() {
     return () => clearInterval(interval);
   }, [loadClasses]);
 
-  const today = useMemo((): DayOfWeek | null => {
-    const dayIndex = new Date().getDay(); // 0=Sun, 1=Mon...6=Sat
-    if (dayIndex === 0 || dayIndex === 6) return null;
-    return DAYS_OF_WEEK[dayIndex - 1] ?? null;
+  // 현재 시각 상태 (1분마다 갱신 — DashboardTimetable과 동일 패턴)
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
   }, []);
+
+  const today = useMemo((): DayOfWeek | null => getDayOfWeek(now), [now]);
 
   const isWeekend = today === null;
 
   const todayLessons = useMemo(() => {
     if (today === null) return [];
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = now.toISOString().slice(0, 10);
     const periods = getEffectiveTeacherSchedule(todayStr);
     return periods
       .map((period, index) => {
@@ -96,8 +100,7 @@ export function TodayProgress() {
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [today, teacherSchedule, overrides, classes, progressEntries]);
+  }, [today, now, teacherSchedule, overrides, classes, progressEntries, getEffectiveTeacherSchedule]);
 
   const completedCount = useMemo(
     () => todayLessons.filter((l) => l.progress?.status === 'completed').length,

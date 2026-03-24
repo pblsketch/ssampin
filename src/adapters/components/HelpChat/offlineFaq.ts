@@ -269,6 +269,12 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
     category: 'troubleshoot',
   },
   {
+    question: '시간표가 자동으로 변경이 안 돼요',
+    answer: '시간표 자동 동기화는 하루 1회 앱 시작 시 실행됩니다. 즉시 갱신하려면 시간표 페이지에서 "NEIS 가져오기" 버튼을 눌러주세요.',
+    keywords: ['시간표', '자동', '변경', '동기화', '갱신', '안 바뀜'],
+    category: 'troubleshoot',
+  },
+  {
     question: 'NEIS 시간표가 안 나와요',
     answer: '인터넷 연결을 확인하고, 설정에서 학교 정보와 학년/반이 올바르게 입력됐는지 확인해주세요. NEIS API 점검 시간(보통 새벽)에는 일시적으로 연동이 안 될 수 있어요.',
     keywords: ['NEIS', '나이스', '시간표', '연동', '안 나', '안나'],
