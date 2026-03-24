@@ -114,8 +114,8 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       // 해당 학급의 진도 기록과 출석 기록도 함께 삭제
       const progressToKeep = get().progressEntries.filter((e) => e.classId !== id);
       const attendanceToKeep = get().attendanceRecords.filter((r) => r.classId !== id);
-      await manageProgress.saveAll(progressToKeep);
-      await manageAttendance.saveAll(attendanceToKeep);
+      await manageProgress.saveAll(progressToKeep, true);
+      await manageAttendance.saveAll(attendanceToKeep, true);
       set((state) => ({
         classes: state.classes.filter((c) => c.id !== id),
         progressEntries: progressToKeep,

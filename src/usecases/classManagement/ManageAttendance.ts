@@ -57,15 +57,17 @@ export class ManageAttendance {
     await this.repository.saveAttendance(updatedData);
   }
 
-  async saveAll(records: readonly AttendanceRecord[]): Promise<void> {
-    // 방어: 기존 데이터가 있는데 빈 배열로 덮어쓰려 하면 차단
-    const existing = await this.repository.getAttendance();
-    const existingCount = existing?.records?.length ?? 0;
-    if (existingCount > 0 && records.length === 0) {
-      console.warn(
-        `[ManageAttendance] 기존 출결 ${existingCount}건을 빈 배열로 덮어쓰기 시도 차단됨`,
-      );
-      return;
+  async saveAll(records: readonly AttendanceRecord[], force = false): Promise<void> {
+    // 방어: 기존 데이터가 있는데 빈 배열로 덮어쓰려 하면 차단 (force로 의도적 삭제 허용)
+    if (!force) {
+      const existing = await this.repository.getAttendance();
+      const existingCount = existing?.records?.length ?? 0;
+      if (existingCount > 0 && records.length === 0) {
+        console.warn(
+          `[ManageAttendance] 기존 출결 ${existingCount}건을 빈 배열로 덮어쓰기 시도 차단됨`,
+        );
+        return;
+      }
     }
 
     const updatedData: AttendanceData = { records };
