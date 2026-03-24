@@ -77,7 +77,7 @@ export function MorePage({ onNavigate }: Props) {
 
         {/* 버전 */}
         <div className="flex items-center justify-center py-4">
-          <p className="text-sp-muted text-xs">쌤핀 모바일 v1.6.4</p>
+          <p className="text-sp-muted text-xs">쌤핀 모바일 v1.7.0</p>
         </div>
       </div>
 
