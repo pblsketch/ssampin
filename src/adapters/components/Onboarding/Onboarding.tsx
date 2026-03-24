@@ -396,7 +396,21 @@ export function Onboarding() {
                                             </div>
 
                                             {searchError && searchResults.length === 0 && (
-                                                <p className="text-xs text-sp-muted mt-1">{searchError}</p>
+                                                <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                                                    <p className="text-xs text-sp-text font-medium">🔍 검색 결과가 없습니다</p>
+                                                    <p className="text-xs text-sp-muted leading-relaxed">
+                                                        유치원·학원·대안학교 등은 NEIS에 등록되어 있지 않아요.
+                                                        아래 버튼으로 학교 정보를 직접 입력할 수 있습니다.
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setManualSchoolInput(true); clearSearch(); setSchoolQuery(''); }}
+                                                        className="w-full py-2 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">edit</span>
+                                                        직접 입력하기
+                                                    </button>
+                                                </div>
                                             )}
 
                                             {searchResults.length > 0 && (

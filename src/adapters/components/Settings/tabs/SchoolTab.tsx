@@ -133,7 +133,33 @@ export function SchoolTab({ draft, patch }: Props) {
               </div>
 
               {searchError && searchResults.length === 0 && (
-                <p className="text-xs text-sp-muted mt-1">{searchError}</p>
+                <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                  <p className="text-xs text-sp-text font-medium">🔍 검색 결과가 없습니다</p>
+                  <p className="text-xs text-sp-muted leading-relaxed">
+                    유치원·학원·대안학교 등은 NEIS에 등록되어 있지 않아요.
+                    학교명을 직접 입력하시면 NEIS 연동 없이 쌤핀을 사용할 수 있습니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const manualName = schoolQuery.trim();
+                      if (manualName) {
+                        patch({
+                          schoolName: manualName,
+                          neis: { ...draft.neis, schoolName: manualName, schoolCode: '', atptCode: '' },
+                        });
+                        setSchoolQuery('');
+                        setShowSchoolSearch(false);
+                        clearSearch();
+                      }
+                    }}
+                    disabled={!schoolQuery.trim()}
+                    className="w-full py-2 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-sm">edit</span>
+                    &ldquo;{schoolQuery.trim()}&rdquo;(으)로 직접 설정하기
+                  </button>
+                </div>
               )}
 
               {searchResults.length > 0 && (
