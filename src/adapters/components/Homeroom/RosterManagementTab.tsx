@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useBirthdaySync } from '@adapters/hooks/useBirthdaySync';
 /* eslint-disable no-restricted-imports */
@@ -24,6 +25,7 @@ export function RosterManagementTab() {
   const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }> | null>(null);
   // 보호자2 필드가 열려있는 학생 ID 세트
   const [showParent2, setShowParent2] = useState<Set<string>>(new Set());
+  const settings = useSettingsStore((s) => s.settings);
   const showToast = useToastStore((s) => s.show);
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export function RosterManagementTab() {
 
   const handleExportRoster = useCallback(async () => {
     try {
-      const data = await exportRosterToExcel(students);
+      const data = await exportRosterToExcel(students, settings.grade, settings.className);
       const defaultFileName = '명렬표.xlsx';
 
       if (window.electronAPI) {
@@ -103,7 +105,7 @@ export function RosterManagementTab() {
     } catch {
       showToast('명렬표 내보내기 중 오류가 발생했습니다', 'error');
     }
-  }, [students, showToast]);
+  }, [students, settings.grade, settings.className, showToast]);
 
   if (!loaded) {
     return (
@@ -240,9 +242,9 @@ export function RosterManagementTab() {
 
       {/* 명렬표 */}
       <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-5xl mx-auto">
+        <div className="w-full max-w-5xl mx-auto overflow-x-auto">
           {/* 테이블 헤더 */}
-          <div className="grid grid-cols-[50px_50px_1fr_160px_80px_160px_80px_160px_120px_80px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
+          <div className="grid grid-cols-[50px_50px_minmax(100px,1fr)_160px_80px_160px_80px_160px_120px_80px] gap-2 px-4 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider min-w-[1040px]">
             <span>번호</span>
             <span>학번</span>
             <span>이름</span>
@@ -263,7 +265,7 @@ export function RosterManagementTab() {
               return (
                 <div
                   key={student.id}
-                  className={`grid grid-cols-[50px_50px_1fr_160px_80px_160px_80px_160px_120px_80px] gap-2 px-4 py-3 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
+                  className={`grid grid-cols-[50px_50px_minmax(100px,1fr)_160px_80px_160px_80px_160px_120px_80px] gap-2 px-4 py-3 items-center transition-colors min-w-[1040px] ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
                 >
                   {/* 번호 */}
                   <span className="text-sm text-sp-muted font-mono">{idx + 1}</span>

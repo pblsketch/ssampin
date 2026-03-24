@@ -178,6 +178,7 @@ export interface MealSchoolSettings {
 
 export interface Settings {
   readonly schoolName: string;
+  readonly grade?: string;
   readonly className: string;
   readonly teacherName: string;
   readonly subject: string;

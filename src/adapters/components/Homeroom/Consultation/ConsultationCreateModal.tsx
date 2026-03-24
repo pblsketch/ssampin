@@ -519,7 +519,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
             return [{ date, startTime, endTime }];
           }),
         targetClassName: '',
-        targetStudents: students.filter((s) => !s.isVacant).map((_, i) => ({ number: i + 1 })),
+        targetStudents: students.filter((s) => !s.isVacant).map((s) => ({ number: s.studentNumber ?? 0 })),
         message: message.trim() || undefined,
         customLinkCode: customLinkCode.trim() || undefined,
       });

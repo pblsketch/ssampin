@@ -328,22 +328,43 @@ export async function exportSeatingToExcel(
   return buffer as ArrayBuffer;
 }
 
-export async function exportRosterToExcel(students: readonly Student[]): Promise<ArrayBuffer> {
+export async function exportRosterToExcel(
+  students: readonly Student[],
+  grade?: string,
+  className?: string,
+): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('명렬표');
 
-  const headerRow = ws.addRow(['번호', '이름', '학생 연락처', '보호자1 관계', '보호자1 연락처', '보호자2 관계', '보호자2 연락처', '생년월일', '비고']);
+  const headerRow = ws.addRow([
+    '학년', '반', '번호', '성명',
+    '학생 연락처', '보호자1 관계', '보호자1 연락처',
+    '보호자2 관계', '보호자2 연락처', '생년월일', '비고',
+  ]);
   headerRow.eachCell((cell) => applyHeaderStyle(cell));
 
-  ws.getColumn(1).width = 8;
-  ws.getColumn(2).width = 16;
-  ws.getColumn(3).width = 18;
-  ws.getColumn(4).width = 12;
-  ws.getColumn(5).width = 18;
-  ws.getColumn(6).width = 12;
-  ws.getColumn(7).width = 18;
-  ws.getColumn(8).width = 14;
-  ws.getColumn(9).width = 10;
+  ws.getColumn(1).width = 8;   // 학년
+  ws.getColumn(2).width = 8;   // 반
+  ws.getColumn(3).width = 8;   // 번호
+  ws.getColumn(4).width = 16;  // 성명
+  ws.getColumn(5).width = 18;  // 학생 연락처
+  ws.getColumn(6).width = 12;  // 보호자1 관계
+  ws.getColumn(7).width = 18;  // 보호자1 연락처
+  ws.getColumn(8).width = 12;  // 보호자2 관계
+  ws.getColumn(9).width = 18;  // 보호자2 연락처
+  ws.getColumn(10).width = 14; // 생년월일
+  ws.getColumn(11).width = 10; // 비고
+
+  // "3학년 4반" 같은 합성 문자열에서 학년/반 숫자 분리
+  let gradeStr = grade ?? '';
+  let classStr = className ?? '';
+  if (!gradeStr && classStr) {
+    const m = classStr.match(/(\d+)\s*학년\s*(\d+)\s*반/);
+    if (m) {
+      gradeStr = m[1] ?? '';
+      classStr = m[2] ?? '';
+    }
+  }
 
   const sorted = [...students].sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
@@ -353,6 +374,8 @@ export async function exportRosterToExcel(students: readonly Student[]): Promise
     const bgColor = student.isVacant ? 'FFEEEEEE' : undefined;
 
     const row = ws.addRow([
+      gradeStr,
+      classStr,
       numberStr,
       student.name,
       student.phone ?? '',
@@ -372,16 +395,18 @@ export async function exportRosterToExcel(students: readonly Student[]): Promise
 
 export async function parseRosterFromExcel(
   buffer: ArrayBuffer,
-): Promise<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }>> {
+): Promise<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean; grade?: string; className?: string }>> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
   const ws = workbook.worksheets[0];
-  const result: Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }> = [];
+  const result: Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean; grade?: string; className?: string }> = [];
 
   if (!ws) return result;
 
   // ── 헤더 자동 감지 ──
+  let gradeCol = -1;
+  let classCol = -1;
   let numCol = 1;
   let nameCol = 2;
   let phoneCol = 3;
@@ -396,7 +421,9 @@ export async function parseRosterFromExcel(
   if (headerRow) {
     headerRow.eachCell((cell, colNumber) => {
       const val = String(cell.value ?? '').trim().replace(/\s/g, '');
-      if (/^(번호|No|no|#|학번)$/i.test(val)) numCol = colNumber;
+      if (/^(학년|grade)$/i.test(val)) gradeCol = colNumber;
+      else if (/^(반|학급|class|className)$/i.test(val)) classCol = colNumber;
+      else if (/^(번호|No|no|#|학번)$/i.test(val)) numCol = colNumber;
       else if (/^(이름|성명|학생명|name)$/i.test(val)) nameCol = colNumber;
       else if (/^(전화|연락처|학생연락처|학생전화|phone)$/i.test(val)) phoneCol = colNumber;
       else if (/^(보호자1?관계|관계|relationship)$/i.test(val)) parentPhoneLabelCol = colNumber;
@@ -425,10 +452,13 @@ export async function parseRosterFromExcel(
     // 번호도 없고 이름도 없으면 스킵
     if (!hasValidNumber && !name) return;
 
-    // 이름 없이 번호만 있는 경우 (결번 가능성)
+    // 이름 없이 번호만 있는 경우 — NEIS 양식은 성명 없이 번호만 있을 수 있음
     const remarks = String(row.getCell(remarksCol).value ?? '').trim();
     const isVacant = remarks.includes('결번');
-    if (!name && !isVacant) return;
+    if (!name && !isVacant && !hasValidNumber) return;
+
+    const rowGrade = gradeCol > 0 ? String(row.getCell(gradeCol).value ?? '').trim() : undefined;
+    const rowClassName = classCol > 0 ? String(row.getCell(classCol).value ?? '').trim() : undefined;
 
     const phone = String(row.getCell(phoneCol).value ?? '').trim();
     const parentPhoneLabel = String(row.getCell(parentPhoneLabelCol).value ?? '').trim();
@@ -457,6 +487,8 @@ export async function parseRosterFromExcel(
       ...(parentPhone2Label ? { parentPhone2Label } : {}),
       ...(birthDate ? { birthDate } : {}),
       isVacant,
+      ...(rowGrade !== undefined ? { grade: rowGrade } : {}),
+      ...(rowClassName !== undefined ? { className: rowClassName } : {}),
     });
   });
 
