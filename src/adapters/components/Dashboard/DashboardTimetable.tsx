@@ -192,13 +192,16 @@ function ClassTimetableList({
             key={period}
             className={`flex items-center rounded-lg px-3 py-2 transition-colors ${
               isCurrent
-                ? 'border-l-2 border-sp-highlight bg-sp-highlight/10'
+                ? 'border-l-[3px] border-sp-highlight bg-sp-highlight/15 ring-1 ring-sp-highlight/20 shadow-sm shadow-sp-highlight/10'
                 : 'hover:bg-sp-surface/50'
             }`}
           >
-            <span className={`w-12 text-xs font-medium ${isCurrent ? 'text-sp-highlight' : 'text-sp-muted'}`}>
+            <span className={`w-12 text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}>
               {period}교시
             </span>
+            {isCurrent && (
+              <span className="w-1.5 h-1.5 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />
+            )}
             <span className={`mr-1.5 h-2 w-2 rounded-full ${dotClass}`} />
             <span className={`flex-1 text-sm font-medium ${colorClass}`}>
               {subject}
@@ -262,13 +265,16 @@ function TeacherTimetableList({
             key={period}
             className={`flex items-center rounded-lg px-3 py-2 transition-colors ${
               isCurrent
-                ? 'border-l-2 border-sp-highlight bg-sp-highlight/10'
+                ? 'border-l-[3px] border-sp-highlight bg-sp-highlight/15 ring-1 ring-sp-highlight/20 shadow-sm shadow-sp-highlight/10'
                 : 'hover:bg-sp-surface/50'
             }`}
           >
-            <span className={`w-12 text-xs font-medium ${isCurrent ? 'text-sp-highlight' : 'text-sp-muted'}`}>
+            <span className={`w-12 text-xs ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted font-medium'}`}>
               {period}교시
             </span>
+            {isCurrent && (
+              <span className="w-1.5 h-1.5 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />
+            )}
             {tp ? (
               <>
                 <span className={`mr-1.5 h-2 w-2 rounded-full ${dotClass}`} />
