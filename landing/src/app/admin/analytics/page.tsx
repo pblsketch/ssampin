@@ -210,7 +210,7 @@ export default async function AdminAnalyticsPage({
   const hasData = weekly.length > 0 || daily.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
+    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* 헤더 */}
         <div className="space-y-3">
@@ -512,7 +512,7 @@ export default async function AdminAnalyticsPage({
                 return (
                   <div className="mb-6 rounded-lg bg-gray-800/50 p-4">
                     <h3 className="text-sm text-gray-400 mb-3">피드백 해결률</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-emerald-400">{fb.resolution_rate}%</div>
                         <div className="text-xs text-gray-400">해결률</div>
@@ -724,13 +724,13 @@ function BarChart<T extends Record<string, unknown>>({
         ))}
       </div>
       {/* items-stretch(기본값)로 자식이 h-48 전체를 차지 → bar height % 가 정상 동작 */}
-      <div className="flex gap-2 h-48 relative z-10">
+      <div className="flex gap-1 sm:gap-2 h-48 relative z-10 overflow-x-auto">
         {data.map((d, i) => {
           const val = Number(d[valueKey]) || 0;
           const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
           const label = String(d[labelKey]);
           return (
-            <div key={i} className="flex-1 min-w-[2.5rem] flex flex-col items-center gap-1 group">
+            <div key={i} className="flex-1 min-w-[1.5rem] sm:min-w-[2.5rem] flex flex-col items-center gap-1 group">
               {/* 값 라벨 */}
               <div className="relative shrink-0">
                 <span className="text-xs text-gray-300 group-hover:hidden">{val}</span>

@@ -452,7 +452,7 @@ export default function EventLog({ events }: { events: EventItem[] }) {
       {tab === 'insights' ? (
         <div className="space-y-6">
           {/* ── 요약 카드 ── */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-gray-800/50 rounded-lg p-3">
               <div className="text-xs text-gray-500 mb-1">접속 기기</div>
               <div className="text-xl font-bold text-gray-200">
@@ -487,7 +487,7 @@ export default function EventLog({ events }: { events: EventItem[] }) {
           </div>
 
           {/* ── 이벤트 분포 + 인기 페이지/도구 ── */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* 이벤트 유형 분포 */}
             <div className="bg-gray-800/30 rounded-lg p-4">
               <h4 className="text-sm font-medium text-gray-300 mb-3">이벤트 유형 분포</h4>
