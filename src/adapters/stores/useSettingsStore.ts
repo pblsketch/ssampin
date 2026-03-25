@@ -272,7 +272,24 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   update: async (patch) => {
-    const next = { ...get().settings, ...patch };
+    const current = get().settings;
+    const next = {
+      ...current,
+      ...patch,
+      // 중첩 객체는 명시적 딥 머지 (부분 업데이트 시 기존 값 보존)
+      weather: patch.weather
+        ? { ...current.weather, ...patch.weather }
+        : current.weather,
+      neis: patch.neis
+        ? { ...current.neis, ...patch.neis }
+        : current.neis,
+      widget: patch.widget
+        ? { ...current.widget, ...patch.widget }
+        : current.widget,
+      system: patch.system
+        ? { ...current.system, ...patch.system }
+        : current.system,
+    };
     set({ settings: next });
     await settingsRepository.saveSettings(next);
   },

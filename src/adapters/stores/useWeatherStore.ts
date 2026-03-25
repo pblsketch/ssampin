@@ -18,7 +18,10 @@ export const useWeatherStore = create<WeatherState>((set, get) => ({
   refresh: async () => {
     const { weather: weatherSettings } = useSettingsStore.getState().settings;
     if (!weatherSettings.location) {
-      set({ error: '날씨 설정이 필요합니다 (설정 → 날씨 지역)', loading: false });
+      // settings가 아직 로드 중일 수 있으므로 기존 에러가 없을 때만 설정 (깜빡임 방지)
+      if (!get().error) {
+        set({ error: '날씨 설정이 필요합니다 (설정 → 날씨 지역)', loading: false });
+      }
       return;
     }
 

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useWeatherStore } from '@adapters/stores/useWeatherStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { AirQualityGrade } from '@infrastructure/weather';
 
 const AIR_QUALITY_COLOR: Record<AirQualityGrade, string> = {
@@ -18,14 +19,17 @@ export function WeatherBar() {
   const loading = useWeatherStore((s) => s.loading);
   const error = useWeatherStore((s) => s.error);
   const refresh = useWeatherStore((s) => s.refresh);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const weatherLocation = useSettingsStore((s) => s.settings.weather.location);
 
   useEffect(() => {
+    if (!settingsLoaded) return; // settings 아직 로드 안 됐으면 대기
     void refresh();
 
     // 30분마다 자동 갱신
     const interval = setInterval(() => void refresh(), 30 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [refresh, settingsLoaded, weatherLocation]);
 
   if (loading && !weather) {
     return (
