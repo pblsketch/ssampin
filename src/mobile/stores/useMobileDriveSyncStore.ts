@@ -40,6 +40,8 @@ async function reloadAllStores(): Promise<void> {
     { useMobileTeachingClassStore },
     { useMobileStudentRecordsStore },
     { useMobileProgressStore },
+    { useMobileAssignmentStore },
+    { useMobileSurveyToolStore },
   ] = await Promise.all([
     import('@mobile/stores/useMobileSettingsStore'),
     import('@mobile/stores/useMobileScheduleStore'),
@@ -52,6 +54,8 @@ async function reloadAllStores(): Promise<void> {
     import('@mobile/stores/useMobileTeachingClassStore'),
     import('@mobile/stores/useMobileStudentRecordsStore'),
     import('@mobile/stores/useMobileProgressStore'),
+    import('@mobile/stores/useMobileAssignmentStore'),
+    import('@mobile/stores/useMobileSurveyToolStore'),
   ]);
 
   await Promise.all([
@@ -66,6 +70,8 @@ async function reloadAllStores(): Promise<void> {
     useMobileTeachingClassStore.getState().reload(),
     useMobileStudentRecordsStore.getState().reload(),
     useMobileProgressStore.getState().reload(),
+    useMobileAssignmentStore.getState().reload(),
+    useMobileSurveyToolStore.getState().reload(),
   ]);
   } catch (e) {
     // 배포 후 이전 SW 캐시가 stale 청크를 참조하는 경우 새로고침으로 복구

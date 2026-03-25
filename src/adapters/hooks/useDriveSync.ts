@@ -98,6 +98,11 @@ export async function reloadStores(downloadedFiles: string[]): Promise<void> {
           await useTeachingClassStore.getState().load();
           break;
         }
+        case 'assignments': {
+          const { useAssignmentStore } = await import('@adapters/stores/useAssignmentStore');
+          await useAssignmentStore.getState().loadAssignments();
+          break;
+        }
       }
     } catch (err) {
       console.error(`[DriveSync] Failed to reload store for ${file}:`, err);

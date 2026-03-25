@@ -15,7 +15,7 @@ async function computeChecksum(content: string): Promise<string> {
 export const SYNC_FILES = [
   'settings', 'class-schedule', 'teacher-schedule', 'students',
   'seating', 'events', 'memos', 'todos', 'student-records',
-  'bookmarks', 'surveys', 'seat-constraints', 'teaching-classes', 'dday',
+  'bookmarks', 'surveys', 'assignments', 'seat-constraints', 'teaching-classes', 'dday',
   'curriculum-progress', 'attendance', 'consultations', 'timetable-overrides',
   'manual-meals',
 ] as const;

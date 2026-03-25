@@ -40,6 +40,8 @@ import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeaching
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
 import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
+import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
+import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
 
 // === Storage ===
 export const storage: IStoragePort = new IndexedDBStorageAdapter();
@@ -59,6 +61,10 @@ export const teachingClassRepository: ITeachingClassRepository = new JsonTeachin
 export const bookmarkRepository: IBookmarkRepository = new JsonBookmarkRepository(storage);
 export const ddayRepository: IDDayRepository = new JsonDDayRepository(storage);
 export const driveSyncRepository: IDriveSyncRepository = new JsonDriveSyncRepository(storage);
+
+// === Supabase Clients (과제/설문 실시간 조회용) ===
+export const assignmentSupabaseClient = new AssignmentSupabaseClient();
+export const surveySupabaseClient = new SurveySupabaseClient();
 
 // === NEIS ===
 export const neisPort: INeisPort = new NeisApiClient();

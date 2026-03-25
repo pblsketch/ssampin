@@ -7,17 +7,21 @@ import { useMobileStudentStore } from './stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from './stores/useMobileStudentRecordsStore';
 import { TodayHub } from './components/Today/TodayHub';
 import { AttendanceCheckPage } from './pages/AttendanceCheckPage';
+import { AttendanceListPage } from './pages/AttendanceListPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { StudentsPage } from './pages/StudentsPage';
 import { TodoPage } from './pages/TodoPage';
 import { MorePage } from './pages/MorePage';
 import { MemoPage } from './pages/MemoPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ToolsOverviewPage } from './pages/ToolsOverviewPage';
+import { ToolAssignmentPage } from './pages/ToolAssignmentPage';
+import { ToolSurveyPage } from './pages/ToolSurveyPage';
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { InstallGuide } from './components/Onboarding/InstallGuide';
 import { InAppBrowserBanner } from './components/InAppBrowserBanner';
 
-type MobileTab = 'today' | 'schedule' | 'students' | 'todo' | 'memo' | 'more';
+type MobileTab = 'today' | 'schedule' | 'todo' | 'students' | 'attendance' | 'more';
 
 interface TabConfig {
   key: MobileTab;
@@ -28,9 +32,9 @@ interface TabConfig {
 const tabs: TabConfig[] = [
   { key: 'today', label: '오늘', icon: 'today' },
   { key: 'schedule', label: '일정', icon: 'event_note' },
-  { key: 'students', label: '학생', icon: 'people' },
   { key: 'todo', label: '할 일', icon: 'check_circle' },
-  { key: 'memo', label: '메모', icon: 'sticky_note_2' },
+  { key: 'students', label: '담임', icon: 'people' },
+  { key: 'attendance', label: '수업 출결', icon: 'fact_check' },
   { key: 'more', label: '더보기', icon: 'more_horiz' },
 ];
 
@@ -45,7 +49,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<MobileTab>('today');
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
   const [attendanceNav, setAttendanceNav] = useState<AttendanceNav | null>(null);
-  const [moreSub, setMoreSub] = useState<'settings' | null>(null);
+  const [moreSub, setMoreSub] = useState<'settings' | 'memo' | 'tools' | 'tool-assignment' | 'tool-survey' | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('onboarding-completed');
   });
@@ -277,14 +281,22 @@ export function App() {
           <TodayHub onNavigateAttendance={setAttendanceNav} />
         )}
         {activeTab === 'schedule' && <SchedulePage />}
-        {activeTab === 'students' && <StudentsPage />}
         {activeTab === 'todo' && <TodoPage />}
-        {activeTab === 'memo' && <MemoPage />}
+        {activeTab === 'students' && <StudentsPage />}
+        {activeTab === 'attendance' && <AttendanceListPage />}
         {activeTab === 'more' && (
           moreSub === 'settings' ? (
             <SettingsPage onBack={() => setMoreSub(null)} />
+          ) : moreSub === 'memo' ? (
+            <MemoPage onBack={() => setMoreSub(null)} />
+          ) : moreSub === 'tools' ? (
+            <ToolsOverviewPage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} onBack={() => setMoreSub(null)} />
+          ) : moreSub === 'tool-assignment' ? (
+            <ToolAssignmentPage onBack={() => setMoreSub('tools')} />
+          ) : moreSub === 'tool-survey' ? (
+            <ToolSurveyPage onBack={() => setMoreSub('tools')} />
           ) : (
-            <MorePage onNavigate={setMoreSub} />
+            <MorePage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} />
           )
         )}
       </main>

@@ -3,7 +3,7 @@ import { SyncStatus } from '@mobile/components/More/SyncStatus';
 import { MobileShareModal } from '@mobile/components/Share/MobileShareModal';
 
 interface Props {
-  onNavigate: (page: 'settings') => void;
+  onNavigate: (page: string) => void;
 }
 
 interface MenuItemProps {
@@ -51,6 +51,20 @@ export function MorePage({ onNavigate }: Props) {
             메뉴
           </h3>
           <div className="space-y-2">
+            <MenuItem
+              icon="sticky_note_2"
+              iconColor="text-yellow-500 bg-yellow-500/10"
+              label="메모"
+              description="포스트잇 메모 관리"
+              onClick={() => onNavigate('memo')}
+            />
+            <MenuItem
+              icon="build"
+              iconColor="text-indigo-400 bg-indigo-400/10"
+              label="쌤도구"
+              description="과제 수합 · 설문/체크리스트"
+              onClick={() => onNavigate('tools')}
+            />
             <MenuItem
               icon="settings"
               label="설정"
