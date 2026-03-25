@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "1.7.1",
+      "date": "2026-03-25",
+      "highlights": ["커스텀 폰트 업로드", "이미지 스티커 위젯", "할일 UX 개선"],
+      "changes": [
+        {
+          "type": "new",
+          "title": "커스텀 폰트 업로드",
+          "description": "설정에서 .woff2/.ttf/.otf 폰트 파일을 업로드하여 앱 전체에 적용"
+        },
+        {
+          "type": "new",
+          "title": "이미지 스티커 위젯",
+          "description": "대시보드에 이미지 스티커를 추가하여 나만의 대시보드 꾸미기 (다꾸 컨셉)"
+        },
+        {
+          "type": "improve",
+          "title": "할일 마감기한 UX 개선",
+          "description": "마감기한을 선택적으로 입력할 수 있도록 UX 개선"
+        }
+      ]
+    },
+    {
       "version": "1.7.0",
       "date": "2026-03-25",
       "highlights": "일정 수동 정렬, 교사 시간표 연동, 학생 상태 관리 개선",
