@@ -28,6 +28,25 @@ const EVENT_LABELS: Record<string, string> = {
   error: '에러',
   feature_discovery: '기능 발견',
   session_start: '세션 시작',
+  assignment_create: '과제 생성',
+  assignment_share: '과제 공유',
+  assignment_view: '과제 조회',
+  consultation_create: '상담 생성',
+  consultation_update: '상담 수정',
+  bookmark_add: '즐겨찾기 추가',
+  bookmark_click: '즐겨찾기 클릭',
+  feedback_submit: '피드백 제출',
+  settings_change: '설정 변경',
+  timetable_neis_sync: 'NEIS 동기화',
+  widget_layout_change: '위젯 레이아웃 변경',
+  onboarding_roles_selected: '역할 선택',
+  onboarding_widget_preset: '위젯 프리셋 선택',
+  chatbot_feedback: '챗봇 피드백',
+  chatbot_escalate: '챗봇 에스컬레이션',
+  share_modal_open: '공유 모달 열기',
+  share_click: '공유 클릭',
+  share_prompt_shown: '공유 안내 표시',
+  share_prompt_action: '공유 안내 응답',
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -44,6 +63,9 @@ const TOOL_LABELS: Record<string, string> = {
   survey: '설문조사',
   wordcloud: '워드클라우드',
   seat_picker: '자리뽑기',
+  assignment: '과제',
+  class_seating: '자리배치',
+  poll: '투표',
 };
 
 const PAGE_LABELS: Record<string, string> = {
@@ -70,6 +92,10 @@ const PAGE_LABELS: Record<string, string> = {
   'tool-survey': '설문조사',
   'tool-wordcloud': '워드클라우드',
   'tool-seat-picker': '자리뽑기',
+  'tool-poll': '투표',
+  'tool-assignment': '과제',
+  'tool-class-seating': '자리배치',
+  bookmarks: '즐겨찾기',
 };
 
 // ── 카테고리 정의 ──
@@ -114,7 +140,7 @@ const CATEGORIES: CategoryDef[] = [
     color: 'text-amber-400',
     bgBar: 'bg-amber-500',
     pillClasses: 'bg-amber-900/60 text-amber-300 border-amber-700/50',
-    events: ['timetable_edit', 'seating_shuffle', 'seating_drag', 'event_create', 'memo_create', 'todo_toggle', 'export', 'share_import'],
+    events: ['timetable_edit', 'seating_shuffle', 'seating_drag', 'event_create', 'memo_create', 'todo_toggle', 'export', 'share_import', 'assignment_create', 'assignment_share', 'assignment_view', 'consultation_create', 'consultation_update', 'bookmark_add', 'bookmark_click'],
   },
   {
     key: 'discover',
@@ -122,7 +148,7 @@ const CATEGORIES: CategoryDef[] = [
     color: 'text-purple-400',
     bgBar: 'bg-purple-500',
     pillClasses: 'bg-purple-900/60 text-purple-300 border-purple-700/50',
-    events: ['feature_discovery', 'onboarding_complete', 'update_installed', 'chatbot_open', 'chatbot_message', 'school_set', 'class_set'],
+    events: ['feature_discovery', 'onboarding_complete', 'update_installed', 'chatbot_open', 'chatbot_message', 'school_set', 'class_set', 'feedback_submit', 'settings_change', 'timetable_neis_sync', 'widget_layout_change', 'onboarding_roles_selected', 'onboarding_widget_preset', 'chatbot_feedback', 'chatbot_escalate', 'share_modal_open', 'share_click', 'share_prompt_shown', 'share_prompt_action'],
   },
   {
     key: 'error',
@@ -183,7 +209,8 @@ function getEventShortLabel(e: EventItem): string {
   }
   if (e.event === 'feature_discovery') {
     const feat = e.properties.feature ? String(e.properties.feature) : '?';
-    return `발견: ${feat}`;
+    const label = PAGE_LABELS[feat] || TOOL_LABELS[feat] || feat;
+    return `발견: ${label}`;
   }
   return EVENT_LABELS[e.event] || e.event;
 }
@@ -427,11 +454,12 @@ export default function EventLog({ events }: { events: EventItem[] }) {
           {/* ── 요약 카드 ── */}
           <div className="grid grid-cols-4 gap-3">
             <div className="bg-gray-800/50 rounded-lg p-3">
-              <div className="text-xs text-gray-500 mb-1">활성 기기</div>
+              <div className="text-xs text-gray-500 mb-1">접속 기기</div>
               <div className="text-xl font-bold text-gray-200">
                 {insights.activeDevices}
                 <span className="text-sm text-gray-500 ml-1">대</span>
               </div>
+              <div className="text-[10px] text-gray-600 mt-0.5">최근 {insights.totalEvents}건 중</div>
             </div>
             <div className="bg-gray-800/50 rounded-lg p-3">
               <div className="text-xs text-gray-500 mb-1">총 이벤트</div>
