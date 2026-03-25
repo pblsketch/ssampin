@@ -409,6 +409,7 @@ export function useHelpChat() {
     status,
     escalationType,
     isOnline,
+    sessionId: sessionIdRef.current,
     sendMessage,
     submitEscalation,
     cancelEscalation,

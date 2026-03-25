@@ -70,6 +70,7 @@ export function HelpChatPanel() {
       track('chatbot_feedback', {
         result: isImplicitPositive ? 'implicit_positive' : 'no_response',
         elapsed_ms: elapsed,
+        sessionId: chat.sessionId,
       });
       chat.hideAllPendingFeedback();
     }
@@ -84,13 +85,13 @@ export function HelpChatPanel() {
   /** 피드백: 해결됨 */
   const handleFeedbackResolved = useCallback((messageId: string) => {
     chat.setMessageFeedback(messageId, 'resolved');
-    track('chatbot_feedback', { result: 'resolved' });
+    track('chatbot_feedback', { result: 'resolved', sessionId: chat.sessionId });
   }, [chat, track]);
 
   /** 피드백: 미해결 */
   const handleFeedbackUnresolved = useCallback((messageId: string) => {
     chat.setMessageFeedback(messageId, 'unresolved');
-    track('chatbot_feedback', { result: 'unresolved' });
+    track('chatbot_feedback', { result: 'unresolved', sessionId: chat.sessionId });
   }, [chat, track]);
 
   /** 피드백: 더 질문하기 → 입력창 포커스 */
@@ -107,7 +108,7 @@ export function HelpChatPanel() {
   const handleFeedbackEscalate = useCallback((messageId: string) => {
     const msg = chat.messages.find((m) => m.id === messageId);
     const lastUser = chat.messages.filter((m) => m.role === 'user').pop();
-    track('chatbot_escalate', { questionText: lastUser?.content?.slice(0, 200) ?? '' });
+    track('chatbot_escalate', { questionText: lastUser?.content?.slice(0, 200) ?? '', sessionId: chat.sessionId });
     chat.escalateFromFeedback();
     // 피드백 상태는 ChatFeedback 컴포넌트 내에서 escalated 상태로 관리됨
     void msg; // unused but kept for clarity
