@@ -87,30 +87,25 @@ function ImageStickerContent({ widgetId }: { widgetId: string }) {
     );
   }
 
-  // 비율 스타일
-  const aspectStyle: React.CSSProperties = {};
-  if (widgetData.aspectRatio !== 'free') {
-    const [w, h] = widgetData.aspectRatio.split(':').map(Number);
-    if (w && h) aspectStyle.aspectRatio = `${w}/${h}`;
-  }
-
   return (
     <div className="h-full flex flex-col overflow-hidden group/img relative">
-      <div
-        className="flex-1 min-h-0 overflow-hidden"
-        style={{
-          borderRadius: `${widgetData.borderRadius}px`,
-          border: widgetData.showBorder ? '1px solid var(--sp-border)' : 'none',
-          ...aspectStyle,
-        }}
-      >
-        <img
-          src={widgetData.imageUrl}
-          alt={widgetData.caption ?? widgetData.fileName ?? '이미지'}
-          className="w-full h-full"
-          style={{ objectFit: widgetData.fitMode }}
-          draggable={false}
-        />
+      <div className={`${widgetData.aspectRatio === 'free' ? 'flex-1 min-h-0' : 'flex-1 min-h-0 flex items-center justify-center'} overflow-hidden`}>
+        <div
+          className={widgetData.aspectRatio === 'free' ? 'w-full h-full overflow-hidden' : 'max-w-full max-h-full overflow-hidden'}
+          style={{
+            borderRadius: `${widgetData.borderRadius}px`,
+            border: widgetData.showBorder ? '1px solid var(--sp-border)' : 'none',
+            ...(widgetData.aspectRatio !== 'free' ? { aspectRatio: widgetData.aspectRatio.replace(':', '/') } : {}),
+          }}
+        >
+          <img
+            src={widgetData.imageUrl}
+            alt={widgetData.caption ?? widgetData.fileName ?? '이미지'}
+            className="w-full h-full"
+            style={{ objectFit: widgetData.fitMode }}
+            draggable={false}
+          />
+        </div>
       </div>
 
       {/* 캡션 */}
@@ -165,8 +160,9 @@ function ImageSettingsPopover({
   onClose: () => void;
 }) {
   return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
     <div
-      className="absolute top-2 right-2 w-56 bg-sp-bg border border-sp-border rounded-xl shadow-xl p-3 z-10 space-y-3"
+      className="w-64 bg-sp-bg border border-sp-border rounded-xl shadow-2xl p-4 space-y-3 max-h-[80vh] overflow-y-auto"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between">
@@ -241,6 +237,7 @@ function ImageSettingsPopover({
           className="w-full bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-[11px] text-sp-text placeholder:text-sp-muted/50"
         />
       </div>
+    </div>
     </div>
   );
 }
