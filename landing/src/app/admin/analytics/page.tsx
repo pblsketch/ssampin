@@ -1,7 +1,9 @@
 import { Metadata } from 'next';
+import { Suspense } from 'react';
 import EventLog from './EventLog';
 import VersionDistribution from './VersionDistribution';
 import ChatConversations from './ChatConversations';
+import DateRangePicker from './DateRangePicker';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,16 +42,28 @@ function formatDuration(seconds: number): string {
 }
 
 // Supabase REST API 직접 호출 (서버 사이드)
-async function fetchView<T>(viewName: string, options?: { order?: string; limit?: number }): Promise<T[]> {
+async function fetchView<T>(viewName: string, options?: {
+  order?: string;
+  limit?: number;
+  dateColumn?: string;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}): Promise<T[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) return [];
 
-  const limit = options?.limit ?? 60;
+  const limit = options?.limit ?? 200;
   let queryUrl = `${url}/rest/v1/${viewName}?select=*&limit=${limit}`;
   if (options?.order) {
     queryUrl += `&order=${options.order}`;
+  }
+  if (options?.dateColumn && options?.dateFrom) {
+    queryUrl += `&${options.dateColumn}=gte.${options.dateFrom}`;
+  }
+  if (options?.dateColumn && options?.dateTo) {
+    queryUrl += `&${options.dateColumn}=lte.${options.dateTo}`;
   }
 
   const res = await fetch(queryUrl, {
@@ -141,7 +155,27 @@ async function fetchChatConversations(): Promise<Array<{
   return res.json();
 }
 
-export default async function AdminAnalyticsPage() {
+export default async function AdminAnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string; from?: string; to?: string }>;
+}) {
+  const params = await searchParams;
+  const days = params.days !== undefined ? Number(params.days) : (params.from || params.to ? null : 14);
+
+  let dateFrom: string | null = null;
+  let dateTo: string | null = null;
+
+  if (params.from || params.to) {
+    dateFrom = params.from || null;
+    dateTo = params.to || null;
+  } else if (days && days > 0) {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    dateFrom = d.toISOString().slice(0, 10);
+  }
+  // days === 0 means "전체" → no date filter
+
   const [weekly, daily, tools, exports, sessions, recentEvents, totals, toolsWeekly, versions, retention, chatDaily, chatTopics, chatDepth, chatEscalations, chatConfidence, chatConversations, chatFeedbackStats, chatFeedbackEscalations] = await Promise.all([
     fetchView<{
       week_start: string;
@@ -153,17 +187,17 @@ export default async function AdminAnalyticsPage() {
       exports: number;
       onboarding_completions: number;
       errors: number;
-    }>('analytics_weekly_summary', { order: 'week_start.desc' }),
-    fetchView<{ date: string; dau: number; events: number }>('analytics_daily_active', { order: 'date.desc' }),
+    }>('analytics_weekly_summary', { order: 'week_start.desc', dateColumn: 'week_start', dateFrom, dateTo }),
+    fetchView<{ date: string; dau: number; events: number }>('analytics_daily_active', { order: 'date.desc', dateColumn: 'date', dateFrom, dateTo }),
     fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking', { order: 'usage_count.desc' }),
     fetchView<{ format: string; count: number; unique_users: number }>('analytics_export_formats', { order: 'count.desc' }),
-    fetchView<{ date: string; sessions: number; avg_seconds: number; max_seconds: number; median_seconds: number }>('analytics_session_duration', { order: 'date.desc' }),
+    fetchView<{ date: string; sessions: number; avg_seconds: number; max_seconds: number; median_seconds: number }>('analytics_session_duration', { order: 'date.desc', dateColumn: 'date', dateFrom, dateTo }),
     fetchRecentEvents(),
     fetchTotals(),
     fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking_weekly', { order: 'usage_count.desc' }),
     fetchView<{ app_version: string; users: number; last_seen: string }>('analytics_version_distribution', { order: 'users.desc', limit: 50 }),
-    fetchView<{ cohort_date: string; cohort_size: number; day1: number; day3: number; day7: number; day1_pct: number; day3_pct: number; day7_pct: number }>('analytics_retention', { order: 'cohort_date.desc' }),
-    fetchView<{ date: string; user_messages: number; bot_responses: number; unique_sessions: number; avg_messages_per_session: number }>('chatbot_daily_stats', { order: 'date.desc' }),
+    fetchView<{ cohort_date: string; cohort_size: number; day1: number; day3: number; day7: number; day1_pct: number; day3_pct: number; day7_pct: number }>('analytics_retention', { order: 'cohort_date.desc', dateColumn: 'cohort_date', dateFrom, dateTo }),
+    fetchView<{ date: string; user_messages: number; bot_responses: number; unique_sessions: number; avg_messages_per_session: number }>('chatbot_daily_stats', { order: 'date.desc', dateColumn: 'date', dateFrom, dateTo }),
     fetchView<{ keyword: string; mention_count: number; unique_sessions: number }>('chatbot_popular_topics', { order: 'mention_count.desc' }),
     fetchView<{ depth_bucket: string; session_count: number; pct: number }>('chatbot_depth_distribution'),
     fetchView<{ id: string; type: string; summary: string; user_message_preview: string; created_at_kst: string }>('chatbot_recent_escalations', { order: 'created_at_kst.desc' }),
@@ -179,19 +213,24 @@ export default async function AdminAnalyticsPage() {
     <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* 헤더 */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">쌤핀 Analytics</h1>
-            <p className="text-gray-400 text-sm mt-1">
-              마지막 업데이트: {new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
-            </p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">쌤핀 Analytics</h1>
+              <p className="text-gray-400 text-sm mt-1">
+                마지막 업데이트: {new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
+              </p>
+            </div>
+            <a
+              href="/"
+              className="text-sm text-gray-400 hover:text-white transition"
+            >
+              ← 메인으로
+            </a>
           </div>
-          <a
-            href="/"
-            className="text-sm text-gray-400 hover:text-white transition"
-          >
-            ← 메인으로
-          </a>
+          <Suspense fallback={<div className="h-10" />}>
+            <DateRangePicker />
+          </Suspense>
         </div>
 
         {!hasData ? (
@@ -229,7 +268,7 @@ export default async function AdminAnalyticsPage() {
             {/* 일별 활성 사용자 (최근 14일) */}
             <Section title="일별 활성 사용자 (DAU)">
               <BarChart
-                data={daily.slice(0, 14).reverse()}
+                data={[...daily].reverse()}
                 labelKey="date"
                 valueKey="dau"
                 formatLabel={(d: string) => d.slice(5)} // MM-DD
@@ -254,7 +293,7 @@ export default async function AdminAnalyticsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {weekly.slice(0, 8).map((w) => (
+                    {weekly.map((w) => (
                       <tr key={w.week_start} className="border-b border-gray-800/50 hover:bg-gray-900/50">
                         <td className="py-2 px-3">{w.week_start}</td>
                         <td className="text-right py-2 px-3 font-medium">{w.weekly_active_users}</td>
@@ -362,7 +401,7 @@ export default async function AdminAnalyticsPage() {
             </div>
 
             {/* 세션 시간 통계 */}
-            <Section title="세션 시간 통계 (최근 14일)">
+            <Section title="세션 시간 통계">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -375,7 +414,7 @@ export default async function AdminAnalyticsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sessions.slice(0, 14).map((s) => (
+                    {sessions.map((s) => (
                       <tr key={s.date} className="border-b border-gray-800/50 hover:bg-gray-900/50">
                         <td className="py-2 px-3">{s.date}</td>
                         <td className="text-right py-2 px-3">{s.sessions}</td>
@@ -415,7 +454,7 @@ export default async function AdminAnalyticsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {retention.slice(0, 14).map((r) => (
+                      {retention.map((r) => (
                         <tr key={r.cohort_date} className="border-b border-gray-800/50 hover:bg-gray-900/50">
                           <td className="py-2 px-3">{r.cohort_date}</td>
                           <td className="text-right py-2 px-3 font-medium">{r.cohort_size}명</td>
@@ -506,7 +545,7 @@ export default async function AdminAnalyticsPage() {
                 <div className="mb-6">
                   <h3 className="text-sm text-gray-400 mb-3">일별 사용량</h3>
                   <BarChart
-                    data={chatDaily.slice(0, 14).reverse()}
+                    data={[...chatDaily].reverse()}
                     labelKey="date"
                     valueKey="user_messages"
                     formatLabel={(d: string) => d.slice(5)}
