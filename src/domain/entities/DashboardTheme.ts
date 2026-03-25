@@ -130,6 +130,7 @@ export const FONT_MAP: Record<FontFamily, string> = {
   'paperlogy': '"Paperlogy", "Noto Sans KR", sans-serif',
   'kakao-big': '"KakaoBig", "Noto Sans KR", sans-serif',
   'spoqa-han-sans': '"Spoqa Han Sans Neo", "Noto Sans KR", sans-serif',
+  'custom': '"SsampinCustomFont", "Noto Sans KR", sans-serif',
 };
 
 export const COLOR_SWATCHES: Record<string, readonly string[]> = {

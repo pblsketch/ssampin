@@ -26,6 +26,7 @@ interface ElectronAPI {
   printToPDF: () => Promise<ArrayBuffer | null>;
   openFile: (filePath: string) => Promise<void>;
   importAlarmAudio: () => Promise<{ name: string; dataUrl: string } | null>;
+  importFont: () => Promise<{ name: string; dataUrl: string; mimeType: string } | null>;
   importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
   onFileOpened: (callback: (filePath: string) => void) => () => void;
   openExternal: (url: string) => Promise<void>;

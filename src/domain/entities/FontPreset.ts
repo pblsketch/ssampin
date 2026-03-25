@@ -171,6 +171,19 @@ export const FONT_PRESETS: readonly FontPreset[] = [
     category: 'classic',
     isNew: true,
   },
+  {
+    id: 'custom',
+    name: '내 폰트',
+    nameEn: 'Custom Font',
+    cssFamily: "'SsampinCustomFont', sans-serif",
+    googleFontsUrl: null,
+    cdnUrl: null,
+    customCss: null,
+    weights: [400, 700],
+    description: '직접 업로드한 폰트',
+    preview: '가나다라 ABC 123',
+    category: 'friendly',
+  },
 ];
 
 export function getFontPreset(id: FontFamily): FontPreset {

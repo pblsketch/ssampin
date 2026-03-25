@@ -871,6 +871,37 @@ function registerIpcHandlers(): void {
     },
   );
 
+  // font:import — 커스텀 폰트 파일 가져오기
+  ipcMain.handle(
+    'font:import',
+    async (): Promise<{ name: string; dataUrl: string; mimeType: string } | null> => {
+      if (!mainWindow) return null;
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: '폰트 파일 선택',
+        filters: [
+          { name: '폰트 파일', extensions: ['woff2', 'woff', 'ttf', 'otf'] },
+        ],
+        properties: ['openFile'],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      const filePath = result.filePaths[0]!;
+      const stat = fs.statSync(filePath);
+      if (stat.size > 10 * 1024 * 1024) return null; // 10MB 제한
+      const name = path.basename(filePath);
+      const ext = path.extname(filePath).toLowerCase().slice(1);
+      const mimeMap: Record<string, string> = {
+        woff2: 'font/woff2',
+        woff: 'font/woff',
+        ttf: 'font/ttf',
+        otf: 'font/otf',
+      };
+      const mimeType = mimeMap[ext] ?? 'font/woff2';
+      const buf = fs.readFileSync(filePath);
+      const dataUrl = `data:${mimeType};base64,${buf.toString('base64')}`;
+      return { name, dataUrl, mimeType };
+    },
+  );
+
   // share:import — 일정 가져오기 (열기 대화상자 + 파일 읽기, .ssampin / .xlsx)
   ipcMain.handle(
     'share:import',

@@ -439,7 +439,7 @@ export function App() {
   useThemeApplier();
 
   // 글꼴 종류 적용
-  useFontApplier(settings.fontFamily ?? 'noto-sans');
+  useFontApplier(settings.fontFamily ?? 'noto-sans', settings.customFont);
 
   // 글꼴 크기: html 루트 font-size를 변경하여 모든 rem 기반 크기를 비례 스케일링
   useEffect(() => {

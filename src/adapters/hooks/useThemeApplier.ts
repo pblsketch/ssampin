@@ -122,6 +122,9 @@ function applyWidgetStyle(ws: WidgetStyleSettings | undefined): void {
  * 위젯 스타일에서 선택한 폰트의 stylesheet을 동적으로 로드
  */
 function loadFontStylesheet(fontFamily: FontFamily): void {
+  // 커스텀 폰트: @font-face 동적 생성 (useFontApplier에서 처리하므로 여기서는 스킵)
+  if (fontFamily === 'custom') return;
+
   if (fontFamily === 'noto-sans') return; // 기본 폰트는 이미 로드됨
 
   const preset = getFontPreset(fontFamily);

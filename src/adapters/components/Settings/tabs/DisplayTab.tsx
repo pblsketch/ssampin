@@ -133,6 +133,8 @@ export function DisplayTab({ draft, patch }: Props) {
         <FontSelector
           value={selectedFont}
           onChange={(font) => patch({ fontFamily: font })}
+          customFont={draft.customFont}
+          onCustomFontChange={(cf) => patch({ customFont: cf })}
         />
 
         {/* 글꼴 크기 설정 */}

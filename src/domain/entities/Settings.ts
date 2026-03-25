@@ -22,7 +22,22 @@ export type FontFamily =
   | 'wanted-sans'
   | 'paperlogy'
   | 'kakao-big'
-  | 'spoqa-han-sans';
+  | 'spoqa-han-sans'
+  | 'custom';
+
+/** 사용자 커스텀 폰트 설정 */
+export interface CustomFontSettings {
+  /** 폰트 표시 이름 (예: "나의 손글씨") */
+  readonly name: string;
+  /** 폰트 파일의 data URL (base64) */
+  readonly dataUrl: string;
+  /** 원본 파일명 */
+  readonly fileName: string;
+  /** MIME 타입 */
+  readonly mimeType: string;
+  /** CSS font-family 이름 */
+  readonly cssFamilyName: string;
+}
 
 export type ShadowLevel = 'none' | 'sm' | 'md' | 'lg';
 
@@ -246,4 +261,6 @@ export interface Settings {
   readonly syncBirthdaysToSchedule?: boolean;
   /** 주말 수업 요일 — 시간표에 토/일 컬럼 추가 (예: ['토'] 또는 ['토','일']) */
   readonly enableWeekendDays?: readonly ('토' | '일')[];
+  /** 사용자 커스텀 폰트 */
+  readonly customFont?: CustomFontSettings;
 }

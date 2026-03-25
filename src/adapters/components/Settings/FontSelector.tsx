@@ -1,14 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FONT_PRESETS, FONT_CATEGORIES } from '@domain/entities/FontPreset';
 import type { FontPreset, FontCategory } from '@domain/entities/FontPreset';
-import type { FontFamily } from '@domain/entities/Settings';
+import type { FontFamily, CustomFontSettings } from '@domain/entities/Settings';
 
 interface Props {
   value: FontFamily;
   onChange: (font: FontFamily) => void;
+  customFont?: CustomFontSettings;
+  onCustomFontChange?: (font: CustomFontSettings | undefined) => void;
 }
 
-export function FontSelector({ value, onChange }: Props) {
+/** MIME 타입 → CSS format() 값 */
+function getFontFormat(mimeType: string): string {
+  switch (mimeType) {
+    case 'font/woff2': return 'woff2';
+    case 'font/woff': return 'woff';
+    case 'font/ttf':
+    case 'application/x-font-ttf': return 'truetype';
+    case 'font/otf':
+    case 'application/x-font-opentype': return 'opentype';
+    default: return 'woff2';
+  }
+}
+
+const PRESET_FONTS = FONT_PRESETS.filter((f) => f.id !== 'custom');
+
+export function FontSelector({ value, onChange, customFont, onCustomFontChange }: Props) {
   const [categoryFilter, setCategoryFilter] = useState<FontCategory | 'all'>('all');
   const [expandedId, setExpandedId] = useState<FontFamily | null>(value);
 
@@ -16,9 +33,9 @@ export function FontSelector({ value, onChange }: Props) {
 
   // 확장된 항목의 폰트만 동적 로드 (미리보기용)
   useEffect(() => {
-    if (!expandedId || expandedId === 'noto-sans') return;
+    if (!expandedId || expandedId === 'noto-sans' || expandedId === 'custom') return;
 
-    const font = FONT_PRESETS.find((f) => f.id === expandedId);
+    const font = PRESET_FONTS.find((f) => f.id === expandedId);
     if (!font) return;
 
     const url = font.googleFontsUrl ?? font.cdnUrl;
@@ -41,9 +58,109 @@ export function FontSelector({ value, onChange }: Props) {
     }
   }, [expandedId]);
 
+  // 커스텀 폰트 미리보기용 @font-face
+  useEffect(() => {
+    if (!customFont?.dataUrl) return;
+    const styleId = 'ssp-custom-font-preview';
+    let style = document.querySelector(`#${styleId}`) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = styleId;
+      document.head.appendChild(style);
+    }
+    const fmt = getFontFormat(customFont.mimeType);
+    style.textContent = `
+      @font-face {
+        font-family: 'SsampinCustomFontPreview';
+        src: url('${customFont.dataUrl}') format('${fmt}');
+        font-weight: 400;
+        font-display: swap;
+      }
+    `;
+  }, [customFont?.dataUrl, customFont?.mimeType]);
+
   const filtered = categoryFilter === 'all'
-    ? FONT_PRESETS
-    : FONT_PRESETS.filter((f) => f.category === categoryFilter);
+    ? PRESET_FONTS
+    : PRESET_FONTS.filter((f) => f.category === categoryFilter);
+
+  const handleUploadFont = useCallback(async () => {
+    const api = window.electronAPI;
+
+    let fileName = '';
+    let dataUrl = '';
+    let mimeType = '';
+
+    if (api?.importFont) {
+      // Electron: 전용 IPC (10MB 제한, base64)
+      const result = await api.importFont();
+      if (!result) return;
+      fileName = result.name;
+      dataUrl = result.dataUrl;
+      mimeType = result.mimeType;
+    } else {
+      // 브라우저 폴백
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.woff2,.woff,.ttf,.otf';
+
+      const selected = await new Promise<File | null>((resolve) => {
+        input.onchange = () => resolve(input.files?.[0] ?? null);
+        input.click();
+      });
+
+      if (!selected) return;
+      fileName = selected.name;
+
+      // 10MB 제한
+      if (selected.size > 10 * 1024 * 1024) {
+        alert('폰트 파일은 10MB 이하만 지원합니다.');
+        return;
+      }
+
+      // File → dataURL
+      dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(selected);
+      });
+
+      const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+      const mimeMap: Record<string, string> = {
+        woff2: 'font/woff2',
+        woff: 'font/woff',
+        ttf: 'font/ttf',
+        otf: 'font/otf',
+      };
+      mimeType = mimeMap[ext] ?? 'font/woff2';
+    }
+
+    // 폰트 이름: 파일명에서 확장자 제거
+    const defaultName = fileName.replace(/\.[^.]+$/, '');
+    const fontName = prompt('폰트 이름을 입력하세요:', defaultName);
+    if (!fontName?.trim()) return;
+
+    const newCustomFont: CustomFontSettings = {
+      name: fontName.trim(),
+      dataUrl,
+      fileName,
+      mimeType,
+      cssFamilyName: 'SsampinCustomFont',
+    };
+
+    onCustomFontChange?.(newCustomFont);
+    onChange('custom');
+  }, [onChange, onCustomFontChange]);
+
+  const handleRemoveCustomFont = useCallback(() => {
+    onCustomFontChange?.(undefined);
+    if (value === 'custom') {
+      onChange('noto-sans');
+    }
+    // 동적 @font-face 제거
+    document.querySelector('#ssp-custom-font')?.remove();
+    document.querySelector('#ssp-custom-font-preview')?.remove();
+  }, [value, onChange, onCustomFontChange]);
 
   return (
     <div className="space-y-4">
@@ -55,7 +172,7 @@ export function FontSelector({ value, onChange }: Props) {
       <div className="flex bg-sp-surface/80 p-1 rounded-lg border border-sp-border">
         <CategoryTab
           label="전체"
-          count={FONT_PRESETS.length}
+          count={PRESET_FONTS.length}
           active={categoryFilter === 'all'}
           onClick={() => setCategoryFilter('all')}
         />
@@ -63,7 +180,7 @@ export function FontSelector({ value, onChange }: Props) {
           <CategoryTab
             key={cat.id}
             label={cat.label}
-            count={FONT_PRESETS.filter((f) => f.category === cat.id).length}
+            count={PRESET_FONTS.filter((f) => f.category === cat.id).length}
             active={categoryFilter === cat.id}
             onClick={() => setCategoryFilter(cat.id)}
           />
@@ -82,6 +199,50 @@ export function FontSelector({ value, onChange }: Props) {
             onToggleExpand={() => setExpandedId(expandedId === font.id ? null : font.id)}
           />
         ))}
+      </div>
+
+      {/* 내 폰트 업로드 섹션 */}
+      <div className="border-t border-sp-border/30 pt-3 mt-3">
+        <p className="text-xs text-sp-muted mb-2 font-medium">내 폰트</p>
+
+        {customFont ? (
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              type="button"
+              onClick={() => onChange('custom')}
+              className={`flex-1 px-3 py-2.5 rounded-xl text-left transition-all border-2 ${
+                value === 'custom'
+                  ? 'border-sp-accent bg-sp-accent/5'
+                  : 'border-sp-border hover:border-sp-muted/50'
+              }`}
+            >
+              <div
+                className="text-sm font-bold text-sp-text truncate"
+                style={{ fontFamily: "'SsampinCustomFontPreview', 'SsampinCustomFont', sans-serif" }}
+              >
+                {customFont.name}
+              </div>
+              <div className="text-[10px] text-sp-muted mt-0.5">{customFont.fileName}</div>
+            </button>
+            <button
+              type="button"
+              onClick={handleRemoveCustomFont}
+              className="text-sp-muted hover:text-red-400 p-1.5 transition-colors"
+              title="삭제"
+            >
+              <span className="material-symbols-outlined text-icon">delete</span>
+            </button>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={handleUploadFont}
+          className="w-full py-2.5 rounded-xl border-2 border-dashed border-sp-border text-xs text-sp-muted hover:text-sp-accent hover:border-sp-accent transition-colors flex items-center justify-center gap-1.5"
+        >
+          <span className="material-symbols-outlined text-icon-sm">upload_file</span>
+          {customFont ? '폰트 변경' : '폰트 파일 업로드 (.woff2, .ttf, .otf)'}
+        </button>
       </div>
     </div>
   );
