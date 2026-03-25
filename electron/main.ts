@@ -149,7 +149,14 @@ function createWindow(): void {
     if (!isQuitting) {
       e.preventDefault();
       const opts = readSettingsWidgetOptions();
-      if (opts.closeToWidget) {
+
+      if (opts.closeAction === 'ask') {
+        // 매번 물어보기 — 렌더러에 다이얼로그 요청
+        mainWindow?.webContents.send('close-action:ask');
+        return;
+      }
+
+      if (opts.closeAction === 'widget') {
         // X 버튼 → 위젯 모드로 전환
         if (!widgetWindow || widgetWindow.isDestroyed()) {
           // 위젯이 실제로 표시된 뒤 메인 창을 숨겨 "아무것도 안 보이는" gap 방지
@@ -159,7 +166,7 @@ function createWindow(): void {
           mainWindow?.hide();
         }
       } else {
-        // 위젯 전환 없이 트레이로만 숨김
+        // tray: 위젯 전환 없이 트레이로만 숨김
         mainWindow?.hide();
       }
     }
@@ -467,7 +474,7 @@ function createWidgetWindow(
   });
 }
 
-function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeToWidget: boolean; desktopMode: string } {
+function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeAction: 'widget' | 'tray' | 'ask'; desktopMode: string } {
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
@@ -480,18 +487,22 @@ function readSettingsWidgetOptions(): { width: number; height: number; startInWi
       const desktopMode = rawMode === 'floating' ? 'topmost'
         : (rawMode === 'auto' || rawMode === 'desktop' || rawMode === 'behind' || rawMode === 'above') ? 'normal'
         : rawMode;
+      // 하위 호환: closeAction 없으면 closeToWidget으로 판단
+      const closeAction: 'widget' | 'tray' | 'ask' =
+        (settings.widget as any)?.closeAction ??
+        (settings.widget?.closeToWidget === false ? 'tray' : 'widget');
       return {
         width: settings.widget?.width ?? 920,
         height: settings.widget?.height ?? 700,
         startInWidgetMode: settings.widget?.transparent ?? false,
-        closeToWidget: settings.widget?.closeToWidget ?? true,
+        closeAction,
         desktopMode,
       };
     }
   } catch {
     // fall through to defaults
   }
-  return { width: 920, height: 700, startInWidgetMode: false, closeToWidget: true, desktopMode: 'normal' };
+  return { width: 920, height: 700, startInWidgetMode: false, closeAction: 'widget', desktopMode: 'normal' };
 }
 
 function setupAutoUpdater(): void {
@@ -558,6 +569,21 @@ function setupAutoUpdater(): void {
 }
 
 function registerIpcHandlers(): void {
+  // 닫기 동작 선택 (매번 물어보기 모드)
+  ipcMain.on('close-action:respond', (_event, action: string) => {
+    const opts = readSettingsWidgetOptions();
+    if (action === 'widget') {
+      if (!widgetWindow || widgetWindow.isDestroyed()) {
+        createWidgetWindow(opts, () => mainWindow?.hide());
+      } else {
+        widgetWindow.show();
+        mainWindow?.hide();
+      }
+    } else {
+      mainWindow?.hide();
+    }
+  });
+
   // data:read — userData/data/{filename}.json 읽기
   ipcMain.handle('data:read', (_event, filename: string): string | null => {
     const filePath = path.join(getDataDir(), `${filename}.json`);

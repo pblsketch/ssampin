@@ -215,4 +215,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('analytics:flush', handler);
     return () => { ipcRenderer.removeListener('analytics:flush', handler); };
   },
+  // Close action dialog
+  onCloseActionAsk: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('close-action:ask', handler);
+    return () => { ipcRenderer.removeListener('close-action:ask', handler); };
+  },
+  respondCloseAction: (action: 'widget' | 'tray'): void => {
+    ipcRenderer.send('close-action:respond', action);
+  },
 });

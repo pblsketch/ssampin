@@ -102,6 +102,9 @@ interface ElectronAPI {
   resizeWidget: (edge: string, dx: number, dy: number) => Promise<void>;
   // Analytics
   onAnalyticsFlush: (callback: () => void) => () => void;
+  // Close action dialog
+  onCloseActionAsk: (callback: () => void) => () => void;
+  respondCloseAction: (action: 'widget' | 'tray') => void;
 }
 
 interface Window {

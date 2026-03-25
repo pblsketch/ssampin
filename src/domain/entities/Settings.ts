@@ -130,7 +130,8 @@ export interface WidgetSettings {
   readonly opacity: number;
   readonly cardOpacity: number;
   readonly alwaysOnTop: boolean;
-  readonly closeToWidget: boolean;
+  readonly closeToWidget: boolean;        // keep for backward compat
+  readonly closeAction?: 'widget' | 'tray' | 'ask';  // ADD THIS LINE
   readonly visibleSections: WidgetVisibleSections;
   readonly layoutMode: WidgetLayoutMode;
   readonly desktopMode: WidgetDesktopMode;

@@ -36,6 +36,7 @@ import { ToastContainer, useToastStore } from '@adapters/components/common/Toast
 import { UpdateNotification } from '@adapters/components/common/UpdateNotification';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { HelpChatPanel } from '@adapters/components/HelpChat';
+import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
@@ -505,6 +506,7 @@ export function App() {
       <ShareModal />
       <SharePromptOverlay />
       <HelpChatPanel />
+      <CloseActionDialog />
       </div>
     </div>
   );

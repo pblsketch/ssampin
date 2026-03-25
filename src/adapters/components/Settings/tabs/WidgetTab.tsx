@@ -48,12 +48,28 @@ export function WidgetTab({ draft, patch }: Props) {
             className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
           />
         </div>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-sp-text">닫기 시 위젯 전환</span>
-            <span className="text-xs text-sp-muted">X 버튼을 누르면 위젯 모드로 전환합니다.</span>
-          </div>
-          <Toggle checked={draft.widget.closeToWidget} onChange={(v) => patchWidget({ closeToWidget: v })} />
+        <div className="space-y-1.5">
+          <span className="text-sm font-medium text-sp-text">창 닫기 동작</span>
+          <p className="text-xs text-sp-muted mb-2">X 버튼을 누를 때의 동작을 선택합니다.</p>
+          {([
+            { value: 'widget' as const, label: '위젯 모드로 전환', desc: '작은 위젯 창으로 전환합니다' },
+            { value: 'tray' as const, label: '트레이로 최소화', desc: '시스템 트레이로 숨깁니다' },
+            { value: 'ask' as const, label: '매번 물어보기', desc: '닫을 때마다 선택합니다' },
+          ]).map((opt) => (
+            <label key={opt.value} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sp-surface/50 cursor-pointer transition-colors">
+              <input
+                type="radio"
+                name="closeAction"
+                checked={(draft.widget.closeAction ?? (draft.widget.closeToWidget ? 'widget' : 'tray')) === opt.value}
+                onChange={() => patchWidget({ closeAction: opt.value })}
+                className="w-3.5 h-3.5 text-sp-accent focus:ring-sp-accent"
+              />
+              <div>
+                <span className="text-xs font-medium text-sp-text">{opt.label}</span>
+                <p className="text-[10px] text-sp-muted">{opt.desc}</p>
+              </div>
+            </label>
+          ))}
         </div>
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
