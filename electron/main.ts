@@ -130,6 +130,7 @@ function createWindow(): void {
       nodeIntegration: false,
       webviewTag: true,
     },
+    backgroundColor: '#0a0e17',
     show: false,
   });
 
