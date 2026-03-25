@@ -309,7 +309,7 @@ function QuestionGrid({ question, students, valuesMap, onCycle }: QuestionGridPr
       return {
         mode: 'cycle',
         values: valuesMap,
-        cycle: ['', 'yes', 'no'],
+        cycle: ['yes', 'no', ''],
         renderValue: (v) => {
           if (v === 'yes') return '○';
           if (v === 'no') return '×';
@@ -326,7 +326,7 @@ function QuestionGrid({ question, students, valuesMap, onCycle }: QuestionGridPr
 
     // choice
     const options = question.options ?? [];
-    const cycle = ['', ...options];
+    const cycle = [...options, ''];
     return {
       mode: 'cycle',
       values: valuesMap,
