@@ -182,6 +182,7 @@ export function useChatbot() {
             sessionId: getSession(),
             history,
             source: 'landing',
+            isTest: typeof window !== 'undefined' && window.location.hostname === 'localhost',
             ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
           }),
         });
