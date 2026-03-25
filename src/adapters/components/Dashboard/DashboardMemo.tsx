@@ -91,9 +91,8 @@ export function DashboardMemo() {
   const recentMemos = useMemo(
     () =>
       [...memos]
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, config.count),
-    [memos, config.count],
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [memos],
   );
 
   const handleClosePopup = useCallback(() => {
