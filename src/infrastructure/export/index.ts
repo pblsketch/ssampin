@@ -9,6 +9,9 @@ export {
   parseRosterFromExcel,
   generateEventsTemplateExcel,
   parseEventsFromExcel,
+  exportAttendanceToExcel,
+  generateTeachingClassRosterTemplate,
+  parseTeachingClassRosterFromExcel,
 } from './ExcelExporter';
 export type { ParsedExcelEvent } from './ExcelExporter';
 

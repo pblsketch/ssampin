@@ -10,6 +10,9 @@ import { getAttendanceStats, filterByStudent, filterByCategory, sortByDateDesc }
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectArgb, getClassroomArgb } from '@domain/valueObjects/SubjectColor';
+import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
+import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
+import { studentKey } from '@domain/entities/TeachingClass';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -1264,4 +1267,332 @@ export async function exportRecordsForSchoolReport(
 
   const reportBuffer = await workbook.xlsx.writeBuffer();
   return reportBuffer as ArrayBuffer;
+}
+
+const ATTENDANCE_STATUS_LABEL: Record<AttendanceStatus, string> = {
+  present: '출석',
+  absent: '결석',
+  late: '지각',
+  earlyLeave: '조퇴',
+  classAbsence: '결과',
+};
+
+const ATTENDANCE_STATUS_BG: Record<AttendanceStatus, string> = {
+  present: 'FFD1FAE5',
+  absent: 'FFFEE2E2',
+  late: 'FFFEF3C7',
+  earlyLeave: 'FFFFEDD5',
+  classAbsence: 'FFEDE9FE',
+};
+
+export async function exportAttendanceToExcel(
+  records: readonly AttendanceRecord[],
+  students: readonly TeachingClassStudent[],
+  className: string,
+  period?: { start: string; end: string },
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+
+  const filtered = period
+    ? records.filter((r) => r.date >= period.start && r.date <= period.end)
+    : records;
+
+  const dates = [...new Set(filtered.map((r) => r.date))].sort();
+
+  const activeStudents = [...students]
+    .filter((s) => !s.isVacant)
+    .sort((a, b) => {
+      if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
+      if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
+      return a.number - b.number;
+    });
+
+  const sheetPrefix = className ? `${className} ` : '';
+
+  const ws1 = workbook.addWorksheet(`${sheetPrefix}출결 현황`.slice(0, 31));
+
+  const headers1 = [
+    '번호', '이름',
+    ...dates.map((d) => {
+      const m = parseInt(d.slice(5, 7), 10);
+      const day = parseInt(d.slice(8, 10), 10);
+      return `${m}/${day}`;
+    }),
+    '출석', '결석', '지각', '조퇴', '결과',
+  ];
+  const headerRow1 = ws1.addRow(headers1);
+  headerRow1.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws1.getColumn(1).width = 6;
+  ws1.getColumn(2).width = 10;
+  for (let i = 3; i <= dates.length + 2; i++) {
+    ws1.getColumn(i).width = 6;
+  }
+  for (let i = dates.length + 3; i <= dates.length + 7; i++) {
+    ws1.getColumn(i).width = 6;
+  }
+
+  for (const student of activeStudents) {
+    const stats: Record<AttendanceStatus, number> = {
+      present: 0, absent: 0, late: 0, earlyLeave: 0, classAbsence: 0,
+    };
+
+    const rowData: (string | number)[] = [student.number, student.name];
+
+    for (const date of dates) {
+      const dayRecords = filtered.filter((r) => r.date === date);
+      const studentRecord = dayRecords
+        .flatMap((r) => [...r.students])
+        .find((s) => studentKey(s) === studentKey(student));
+
+      if (studentRecord) {
+        const label = ATTENDANCE_STATUS_LABEL[studentRecord.status];
+        rowData.push(label);
+        stats[studentRecord.status]++;
+      } else {
+        rowData.push('');
+      }
+    }
+
+    rowData.push(stats.present, stats.absent, stats.late, stats.earlyLeave, stats.classAbsence);
+
+    const row = ws1.addRow(rowData);
+
+    for (let i = 0; i < dates.length; i++) {
+      const cell = row.getCell(i + 3);
+      const val = String(cell.value ?? '');
+      const statusEntry = Object.entries(ATTENDANCE_STATUS_LABEL).find(([, l]) => l === val);
+      if (statusEntry) {
+        const status = statusEntry[0] as AttendanceStatus;
+        applyCellStyle(cell, ATTENDANCE_STATUS_BG[status]);
+        cell.font = { size: 9 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      } else {
+        applyCellStyle(cell);
+      }
+    }
+
+    for (let i = dates.length; i < dates.length + 5; i++) {
+      applyCellStyle(row.getCell(i + 3));
+    }
+    applyCellStyle(row.getCell(1));
+    applyCellStyle(row.getCell(2));
+    row.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+  }
+
+  const ws2 = workbook.addWorksheet(`${sheetPrefix}통계 요약`.slice(0, 31));
+
+  const headers2 = ['번호', '이름', '총 수업일', '출석', '결석', '지각', '조퇴', '결과', '출석률'];
+  const headerRow2 = ws2.addRow(headers2);
+  headerRow2.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws2.getColumn(1).width = 6;
+  ws2.getColumn(2).width = 10;
+  for (let i = 3; i <= 9; i++) ws2.getColumn(i).width = 10;
+
+  for (const student of activeStudents) {
+    const allRecords = filtered
+      .flatMap((r) => [...r.students])
+      .filter((s) => studentKey(s) === studentKey(student));
+
+    const total = allRecords.length;
+    const stats: Record<AttendanceStatus, number> = {
+      present: 0, absent: 0, late: 0, earlyLeave: 0, classAbsence: 0,
+    };
+    for (const r of allRecords) stats[r.status]++;
+
+    const rate = total > 0 ? Math.round((stats.present / total) * 100) : 0;
+
+    const row = ws2.addRow([
+      student.number,
+      student.name,
+      total,
+      stats.present,
+      stats.absent,
+      stats.late,
+      stats.earlyLeave,
+      stats.classAbsence,
+      `${rate}%`,
+    ]);
+    row.eachCell((cell) => applyCellStyle(cell));
+    row.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+
+    if (rate < 80 && total > 0) {
+      row.getCell(9).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFEE2E2' },
+      };
+    }
+  }
+
+  const ws3 = workbook.addWorksheet(`${sheetPrefix}전체 기록`.slice(0, 31));
+
+  const headers3 = ['날짜', '교시', '번호', '이름', '상태', '사유', '메모'];
+  const headerRow3 = ws3.addRow(headers3);
+  headerRow3.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws3.getColumn(1).width = 12;
+  ws3.getColumn(2).width = 6;
+  ws3.getColumn(3).width = 6;
+  ws3.getColumn(4).width = 10;
+  ws3.getColumn(5).width = 8;
+  ws3.getColumn(6).width = 10;
+  ws3.getColumn(7).width = 20;
+
+  const sortedRecords = [...filtered].sort((a, b) => {
+    const dateCmp = a.date.localeCompare(b.date);
+    if (dateCmp !== 0) return dateCmp;
+    return a.period - b.period;
+  });
+
+  for (const record of sortedRecords) {
+    for (const sa of record.students) {
+      if (sa.status === 'present') continue;
+
+      const student = activeStudents.find((s) => studentKey(s) === studentKey(sa));
+      const row = ws3.addRow([
+        record.date,
+        `${record.period}교시`,
+        sa.number,
+        student?.name ?? '',
+        ATTENDANCE_STATUS_LABEL[sa.status],
+        sa.reason ?? '',
+        sa.memo ?? '',
+      ]);
+      row.eachCell((cell) => applyCellStyle(cell));
+      row.getCell(7).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+    }
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer as ArrayBuffer;
+}
+
+export async function generateTeachingClassRosterTemplate(): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('수업반 명렬표');
+
+  // Column widths
+  ws.getColumn(1).width = 8;  // 학년
+  ws.getColumn(2).width = 8;  // 반
+  ws.getColumn(3).width = 8;  // 번호
+  ws.getColumn(4).width = 16; // 이름
+  ws.getColumn(5).width = 12; // 비고
+
+  // Header row
+  const headers = ['학년', '반', '번호', '이름', '비고'];
+  const headerRow = ws.addRow(headers);
+  headerRow.height = 22;
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  // Example rows (light gray text)
+  const examples = [
+    [2, 3, 1, '홍길동', ''],
+    [2, 5, 2, '김철수', ''],
+    ['', '', 3, '', '결번'],
+  ];
+
+  for (const exampleData of examples) {
+    const row = ws.addRow(exampleData);
+    row.height = 20;
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      applyCellStyle(cell);
+      cell.font = { color: { argb: 'FFAAAAAA' }, italic: true };
+    });
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer as ArrayBuffer;
+}
+
+export async function parseTeachingClassRosterFromExcel(
+  buffer: ArrayBuffer,
+): Promise<TeachingClassStudent[]> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  const ws = workbook.worksheets[0];
+  const result: TeachingClassStudent[] = [];
+
+  if (!ws) return result;
+
+  // ── 헤더 자동 감지 ──
+  let numCol = 1;
+  let nameCol = 2;
+  let gradeCol = -1;
+  let classCol = -1;
+  let remarksCol = -1;
+
+  const headerRow = ws.getRow(1);
+  if (headerRow) {
+    headerRow.eachCell((cell, colNumber) => {
+      const val = String(cell.value ?? '').trim().replace(/\s/g, '');
+      if (/^(번호|No|no|#|학번)$/i.test(val)) numCol = colNumber;
+      else if (/^(이름|성명|학생명|name)$/i.test(val)) nameCol = colNumber;
+      else if (/^(학년|grade)$/i.test(val)) gradeCol = colNumber;
+      else if (/^(반|학급|class)$/i.test(val)) classCol = colNumber;
+      else if (/^(비고|remarks|메모|결번)$/i.test(val)) remarksCol = colNumber;
+    });
+  }
+
+  // ── 헤더 유무 판단 ──
+  const firstCellValue = String(headerRow?.getCell(numCol).value ?? '');
+  const hasHeader = isNaN(parseInt(firstCellValue, 10));
+  const startRow = hasHeader ? 2 : 1;
+
+  const mutableResult: Array<{
+    number: number;
+    name: string;
+    memo?: string;
+    grade?: number;
+    classNum?: number;
+    isVacant?: boolean;
+  }> = [];
+
+  ws.eachRow((row, rowNumber) => {
+    if (rowNumber < startRow) return;
+
+    const numRaw = row.getCell(numCol).value;
+    const parsedNumber = parseInt(String(numRaw ?? ''), 10);
+    const hasValidNumber = !isNaN(parsedNumber) && parsedNumber > 0;
+
+    const name = String(row.getCell(nameCol).value ?? '').trim();
+
+    // 번호도 없고 이름도 없으면 스킵
+    if (!hasValidNumber && !name) return;
+
+    const remarks = remarksCol > 0 ? String(row.getCell(remarksCol).value ?? '').trim() : '';
+    const isVacant = remarks.includes('결번') || (!name && hasValidNumber);
+
+    const gradeRaw = gradeCol > 0 ? parseInt(String(row.getCell(gradeCol).value ?? ''), 10) : NaN;
+    const classRaw = classCol > 0 ? parseInt(String(row.getCell(classCol).value ?? ''), 10) : NaN;
+
+    mutableResult.push({
+      number: hasValidNumber ? parsedNumber : -1,
+      name,
+      ...(remarks && !isVacant ? { memo: remarks } : {}),
+      ...(!isNaN(gradeRaw) && gradeRaw > 0 ? { grade: gradeRaw } : {}),
+      ...(!isNaN(classRaw) && classRaw > 0 ? { classNum: classRaw } : {}),
+      ...(isVacant ? { isVacant: true } : {}),
+    });
+  });
+
+  // 번호 없는 학생(-1)에 자동 번호 부여
+  let autoNum = 1;
+  const usedNumbers = new Set(mutableResult.filter(s => s.number > 0).map(s => s.number));
+  for (const student of mutableResult) {
+    if (student.number === -1) {
+      while (usedNumbers.has(autoNum)) autoNum++;
+      student.number = autoNum;
+      usedNumbers.add(autoNum);
+      autoNum++;
+    }
+  }
+
+  for (const s of mutableResult) {
+    result.push(s as TeachingClassStudent);
+  }
+
+  return result;
 }

@@ -2,6 +2,8 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { exportAttendanceToExcel } from '@infrastructure/export';
+import { useToastStore } from '@adapters/components/common/Toast';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -55,6 +57,8 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
   const [dismissedGuide, setDismissedGuide] = useState(
     () => localStorage.getItem('ssampin:attendance-guide-dismissed') === 'true',
   );
+
+  const showToast = useToastStore((s) => s.show);
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const allStudents = cls?.students ?? [];
@@ -160,6 +164,52 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     }
     setTimeout(() => setSaveStatus('idle'), 2000);
   }, [classId, date, period, localStudents, saveAttendanceRecord, dismissedGuide]);
+
+  const handleExport = useCallback(async () => {
+    if (!cls) return;
+    const allRecords = useTeachingClassStore.getState().attendanceRecords
+      .filter((r) => r.classId === classId);
+    if (allRecords.length === 0) {
+      showToast('내보낼 출결 기록이 없습니다', 'info');
+      return;
+    }
+    try {
+      const buffer = await exportAttendanceToExcel(
+        allRecords,
+        cls.students,
+        cls.name,
+      );
+      const defaultFileName = `${cls.name}_출결기록.xlsx`;
+      if (window.electronAPI) {
+        const filePath = await window.electronAPI.showSaveDialog({
+          title: '출결 기록 내보내기',
+          defaultPath: defaultFileName,
+          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+        });
+        if (filePath) {
+          const normalized: ArrayBuffer = buffer;
+          await window.electronAPI.writeFile(filePath, normalized);
+          showToast('파일이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(filePath),
+          });
+        }
+      } else {
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('파일이 다운로드되었습니다', 'success');
+      }
+    } catch {
+      showToast('내보내기 중 오류가 발생했습니다', 'error');
+    }
+  }, [cls, classId, showToast]);
 
   // 통계
   const stats = useMemo(() => {
@@ -274,6 +324,15 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
             </span>
           </div>
         ))}
+        <button
+          onClick={() => void handleExport()}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text
+                     bg-sp-card border border-sp-border rounded-lg transition-colors hover:border-sp-accent/50"
+          title="출결 기록을 엑셀로 내보내기"
+        >
+          <span className="material-symbols-outlined text-sm">download</span>
+          내보내기
+        </button>
         <div className="flex-1" />
         <span className="text-xs text-sp-muted">
           전체 {localStudents.length}명

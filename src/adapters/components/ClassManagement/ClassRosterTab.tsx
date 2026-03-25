@@ -3,6 +3,8 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
+import { exportAttendanceToExcel, generateTeachingClassRosterTemplate, parseTeachingClassRosterFromExcel } from '@infrastructure/export';
+import { useToastStore } from '@adapters/components/common/Toast';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -48,6 +50,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const updateClass = useTeachingClassStore((s) => s.updateClass);
   const getAttendanceRecord = useTeachingClassStore((s) => s.getAttendanceRecord);
   const saveAttendanceRecord = useTeachingClassStore((s) => s.saveAttendanceRecord);
+  const showToast = useToastStore((s) => s.show);
 
   const cls = classes.find((c) => c.id === classId);
   const students = cls?.students ?? [];
@@ -58,6 +61,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const [editStudents, setEditStudents] = useState<TeachingClassStudent[]>([]);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  const [excelPreview, setExcelPreview] = useState<TeachingClassStudent[] | null>(null);
+  const excelFileRef = useRef<HTMLInputElement>(null);
 
   const hasGradeInfo = useMemo(() => {
     // 편집 중이면 editStudents도 체크
@@ -180,6 +185,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     setSaveStatus('saved');
     setTimeout(() => setSaveStatus('idle'), 2000);
   }, [classId, date, period, localAttendance, saveAttendanceRecord]);
+
+  const [showExportModal, setShowExportModal] = useState(false);
 
   /* ── 출석 통계 ── */
   const stats = useMemo(() => {
@@ -387,6 +394,83 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     if (!isEditing) setIsEditing(true);
   }, [pasteText, isEditing]);
 
+  /* ── 엑셀 양식 다운로드 ── */
+  const handleDownloadTemplate = useCallback(async () => {
+    try {
+      const data = await generateTeachingClassRosterTemplate();
+      const defaultFileName = '수업반_명렬표_양식.xlsx';
+
+      if (window.electronAPI) {
+        const filePath = await window.electronAPI.showSaveDialog({
+          title: '명렬표 양식 다운로드',
+          defaultPath: defaultFileName,
+          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+        });
+        if (filePath) {
+          await window.electronAPI.writeFile(filePath, data);
+          showToast('양식이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(filePath),
+          });
+        }
+      } else {
+        const blob = new Blob([data], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('양식이 다운로드되었습니다', 'success');
+      }
+    } catch {
+      showToast('양식 다운로드 중 오류가 발생했습니다', 'error');
+    }
+  }, [showToast]);
+
+  /* ── 엑셀 파일 선택 ── */
+  const handleExcelFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
+      showToast('구형 엑셀(.xls) 파일은 지원되지 않습니다. Excel에서 .xlsx로 다시 저장해주세요.', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const parsed = await parseTeachingClassRosterFromExcel(buffer);
+      if (parsed.length === 0) {
+        showToast('엑셀에서 학생 데이터를 찾을 수 없습니다. 1열=번호, 2열=이름 순서인지 확인해주세요.', 'error');
+        e.target.value = '';
+        return;
+      }
+      setExcelPreview(parsed);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('End of data reached') || msg.includes('Unexpected')) {
+        showToast('파일 형식을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.', 'error');
+      } else {
+        showToast('엑셀 파일을 읽는 중 오류가 발생했습니다', 'error');
+      }
+    }
+    e.target.value = '';
+  }, [showToast]);
+
+  /* ── 엑셀 가져오기 적용 ── */
+  const applyExcelImport = useCallback(async () => {
+    if (!excelPreview || !cls) return;
+    await updateClass({ ...cls, students: excelPreview });
+    showToast(`${excelPreview.length}명의 학생을 가져왔습니다`, 'success');
+    setExcelPreview(null);
+    if (isEditing) {
+      setIsEditing(false);
+      setEditStudents([]);
+    }
+  }, [excelPreview, cls, updateClass, showToast, isEditing]);
+
   /* ── 붙여넣기 미리보기 ── */
   const parsedPreview = useMemo(() => {
     if (!pasteText.trim()) return [];
@@ -513,6 +597,14 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           {!isEditing ? (
             <>
               <button
+                onClick={() => setShowExportModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg hover:border-sp-accent/50 transition-colors"
+                title="출결 기록을 엑셀로 내보내기"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+                내보내기
+              </button>
+              <button
                 onClick={() => {
                   setShowPasteModal(true);
                   setPasteText('');
@@ -521,6 +613,20 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               >
                 <span className="material-symbols-outlined text-sm">content_paste</span>
                 붙여넣기로 입력
+              </button>
+              <button
+                onClick={() => void handleDownloadTemplate()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg hover:border-sp-accent/50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">description</span>
+                엑셀 양식
+              </button>
+              <button
+                onClick={() => excelFileRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg hover:border-sp-accent/50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">upload_file</span>
+                엑셀 가져오기
               </button>
               <button
                 onClick={startEdit}
@@ -543,6 +649,20 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 붙여넣기로 입력
               </button>
               <button
+                onClick={() => void handleDownloadTemplate()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg hover:border-sp-accent/50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">description</span>
+                엑셀 양식
+              </button>
+              <button
+                onClick={() => excelFileRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg hover:border-sp-accent/50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">upload_file</span>
+                엑셀 가져오기
+              </button>
+              <button
                 onClick={() => void saveEdit()}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white bg-sp-accent rounded-lg hover:bg-sp-accent/80 transition-colors"
               >
@@ -557,6 +677,13 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               </button>
             </>
           )}
+          <input
+            ref={excelFileRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={(e) => void handleExcelFileChange(e)}
+          />
         </div>
       </div>
 
@@ -912,6 +1039,16 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         </div>
       )}
 
+      {/* ── 출결 내보내기 모달 ── */}
+      {showExportModal && cls && (
+        <AttendanceExportModal
+          classId={classId}
+          className={cls.name}
+          students={cls.students}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
+
       {/* ── 붙여넣기 모달 ── */}
       {showPasteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -973,6 +1110,263 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           </div>
         </div>
       )}
+
+      {/* ── 엑셀 가져오기 미리보기 모달 ── */}
+      {excelPreview && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-sp-card border border-sp-border rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-base font-bold text-sp-text flex items-center gap-2">
+                <span className="material-symbols-outlined text-sp-accent">preview</span>
+                가져올 학생 미리보기 ({excelPreview.length}명)
+              </h3>
+              <button
+                onClick={() => setExcelPreview(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+              </button>
+            </div>
+            <p className="text-xs text-red-400 mb-4">주의: 적용 시 기존 명단이 모두 교체됩니다.</p>
+            <div className="flex-1 overflow-y-auto mb-4 text-xs">
+              <table className="w-full">
+                <thead className="sticky top-0 bg-sp-card">
+                  <tr className="text-sp-muted border-b border-sp-border">
+                    {excelPreview.some((s) => s.grade != null) && <th className="py-1.5 text-left">학년</th>}
+                    {excelPreview.some((s) => s.classNum != null) && <th className="py-1.5 text-left">반</th>}
+                    <th className="py-1.5 text-left w-16">번호</th>
+                    <th className="py-1.5 text-left">이름</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {excelPreview.map((s, i) => (
+                    <tr key={i} className="border-b border-sp-border/30">
+                      {excelPreview.some((ps) => ps.grade != null) && (
+                        <td className="py-1.5 text-sp-muted">{s.grade ?? '-'}</td>
+                      )}
+                      {excelPreview.some((ps) => ps.classNum != null) && (
+                        <td className="py-1.5 text-sp-muted">{s.classNum ?? '-'}</td>
+                      )}
+                      <td className="py-1.5 text-sp-text font-mono">{s.number}</td>
+                      <td className="py-1.5 text-sp-text">
+                        {s.isVacant ? <span className="text-red-400 italic">결번</span> : s.name}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-3 shrink-0 pt-3 border-t border-sp-border">
+              <button
+                onClick={() => setExcelPreview(null)}
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => void applyExcelImport()}
+                className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+              >
+                적용하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────── 출결 내보내기 모달 ──────────────────────── */
+
+type PeriodPreset = 'all' | 'semester' | 'month' | 'custom';
+
+function getSemesterRange(): { start: string; end: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const semesterStart = m >= 8 ? new Date(y, 8, 1) : new Date(y, 2, 1);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { start: fmt(semesterStart), end: fmt(now) };
+}
+
+function getMonthRange(): { start: string; end: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const start = new Date(y, m, 1);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { start: fmt(start), end: fmt(now) };
+}
+
+interface AttendanceExportModalProps {
+  classId: string;
+  className: string;
+  students: readonly TeachingClassStudent[];
+  onClose: () => void;
+}
+
+function AttendanceExportModal({ classId, className, students, onClose }: AttendanceExportModalProps) {
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+  const showToast = useToastStore((s) => s.show);
+
+  const period = useMemo<{ start: string; end: string } | undefined>(() => {
+    if (periodPreset === 'all') return undefined;
+    if (periodPreset === 'semester') return getSemesterRange();
+    if (periodPreset === 'month') return getMonthRange();
+    if (periodPreset === 'custom' && customStart && customEnd) {
+      return { start: customStart, end: customEnd };
+    }
+    return undefined;
+  }, [periodPreset, customStart, customEnd]);
+
+  const allRecords = useMemo(() => {
+    return useTeachingClassStore.getState().attendanceRecords
+      .filter((r) => r.classId === classId);
+  }, [classId]);
+
+  const filteredCount = useMemo(() => {
+    if (!period) return allRecords.length;
+    return allRecords.filter((r) => r.date >= period.start && r.date <= period.end).length;
+  }, [allRecords, period]);
+
+  const handleExport = useCallback(async () => {
+    if (filteredCount === 0) {
+      showToast('내보낼 출결 기록이 없습니다', 'info');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const buffer = await exportAttendanceToExcel(allRecords, students, className, period);
+      const defaultFileName = `${className}_출결기록.xlsx`;
+
+      if (window.electronAPI) {
+        const filePath = await window.electronAPI.showSaveDialog({
+          title: '출결 기록 내보내기',
+          defaultPath: defaultFileName,
+          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+        });
+        if (filePath) {
+          await window.electronAPI.writeFile(filePath, buffer);
+          showToast('파일이 저장되었습니다', 'success', {
+            label: '파일 열기',
+            onClick: () => window.electronAPI?.openFile(filePath),
+          });
+          onClose();
+        }
+      } else {
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('파일이 다운로드되었습니다', 'success');
+        onClose();
+      }
+    } catch {
+      showToast('내보내기 중 오류가 발생했습니다', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [allRecords, students, className, period, filteredCount, showToast, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div
+        className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-md mx-4"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-sp-accent">download</span>
+            <h3 className="text-sp-text font-semibold">출결 기록 내보내기</h3>
+          </div>
+          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div className="px-6 py-4 space-y-5">
+          <div>
+            <label className="text-sm text-sp-muted mb-2 block">기간</label>
+            <div className="flex gap-2 flex-wrap">
+              {([
+                { id: 'all' as const, label: '전체' },
+                { id: 'semester' as const, label: '이번 학기' },
+                { id: 'month' as const, label: '이번 달' },
+                { id: 'custom' as const, label: '직접 입력' },
+              ]).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setPeriodPreset(p.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    periodPreset === p.id
+                      ? 'bg-sp-accent text-white'
+                      : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {periodPreset === 'custom' && (
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="date"
+                  value={customStart}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="bg-sp-surface border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                />
+                <span className="text-sp-muted text-sm self-center">~</span>
+                <input
+                  type="date"
+                  value={customEnd}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="bg-sp-surface border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="bg-sp-surface border border-sp-border rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-sp-muted">출결 기록</span>
+              <span className="text-sp-text font-medium">{filteredCount}건</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 px-6 py-4 border-t border-sp-border">
+          <button
+            onClick={() => void handleExport()}
+            disabled={isExporting || filteredCount === 0}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium
+                       bg-sp-accent text-white hover:bg-sp-accent/80 transition-colors
+                       disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-base">
+              {isExporting ? 'hourglass_empty' : 'download'}
+            </span>
+            {isExporting ? '내보내는 중...' : '엑셀로 내보내기'}
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-lg text-sm text-sp-muted bg-sp-surface border border-sp-border hover:text-sp-text transition-colors"
+          >
+            취소
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
