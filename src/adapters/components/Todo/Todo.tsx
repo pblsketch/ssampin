@@ -52,7 +52,7 @@ const GROUP_LABELS: Record<string, string> = {
   tomorrow: '내일',
   thisWeek: '이번 주',
   later: '나중에',
-  noDueDate: '날짜 없음',
+  noDueDate: '기한 없음',
 };
 
 const GROUP_ORDER = ['overdue', 'today', 'tomorrow', 'thisWeek', 'later', 'noDueDate'];
@@ -154,6 +154,7 @@ export function Todo() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [newText, setNewText] = useState('');
   const [newDueDate, setNewDueDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [noDueDate, setNoDueDate] = useState(false);
   const [newPriority, setNewPriority] = useState<TodoPriority>('none');
   const [newRecurrenceIdx, setNewRecurrenceIdx] = useState(0);
   const [newCategory, setNewCategory] = useState('');
@@ -276,7 +277,7 @@ export function Todo() {
     const recurrence = RECURRENCE_PRESETS[newRecurrenceIdx]?.value ?? undefined;
     void addTodo(
       text,
-      newDueDate || undefined,
+      noDueDate ? undefined : (newDueDate || undefined),
       newPriority,
       newCategory || undefined,
       recurrence ?? undefined,
@@ -287,7 +288,9 @@ export function Todo() {
     setNewRecurrenceIdx(0);
     setNewCategory('');
     setNewTime('');
-  }, [newText, newDueDate, newPriority, newRecurrenceIdx, newCategory, newTime, addTodo]);
+    setNoDueDate(false);
+    setNewDueDate(new Date().toISOString().slice(0, 10));
+  }, [newText, newDueDate, noDueDate, newPriority, newRecurrenceIdx, newCategory, newTime, addTodo]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -464,12 +467,32 @@ export function Todo() {
               <div className="flex flex-col gap-3 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border">
                 {/* 첫 번째 줄: 날짜 + 텍스트 + 추가 버튼 */}
                 <div className="flex gap-3 items-center">
-                  <input
-                    type="date"
-                    value={newDueDate}
-                    onChange={(e) => setNewDueDate(e.target.value)}
-                    className="bg-sp-surface text-sp-text text-sm px-3 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
-                  />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="date"
+                      value={noDueDate ? '' : newDueDate}
+                      onChange={(e) => { setNewDueDate(e.target.value); setNoDueDate(false); }}
+                      disabled={noDueDate}
+                      className={`bg-sp-surface text-sm px-3 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors ${
+                        noDueDate ? 'opacity-40 cursor-not-allowed text-sp-muted' : 'text-sp-text'
+                      }`}
+                    />
+                    <label className="flex items-center gap-1.5 cursor-pointer shrink-0 select-none">
+                      <input
+                        type="checkbox"
+                        checked={noDueDate}
+                        onChange={(e) => {
+                          setNoDueDate(e.target.checked);
+                          if (e.target.checked) setNewDueDate('');
+                          else setNewDueDate(new Date().toISOString().slice(0, 10));
+                        }}
+                        className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent"
+                      />
+                      <span className={`text-xs whitespace-nowrap ${noDueDate ? 'text-sp-accent font-medium' : 'text-sp-muted'}`}>
+                        기한 없음
+                      </span>
+                    </label>
+                  </div>
                   <input
                     type="text"
                     value={newText}
@@ -1239,12 +1262,28 @@ function TodoItem({
           />
           <div className="flex gap-3 items-center flex-wrap">
             {/* Date input */}
-            <input
-              type="date"
-              value={editDueDate}
-              onChange={(e) => setEditDueDate(e.target.value)}
-              className="bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors"
-            />
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+                className={`bg-sp-surface text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors ${
+                  editDueDate ? 'text-sp-text' : 'text-sp-muted'
+                }`}
+              />
+              {editDueDate ? (
+                <button
+                  type="button"
+                  onClick={() => setEditDueDate('')}
+                  className="text-sp-muted hover:text-red-400 transition-colors"
+                  title="마감일 제거"
+                >
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
+              ) : (
+                <span className="text-xs text-sp-accent font-medium whitespace-nowrap">기한 없음</span>
+              )}
+            </div>
             {/* Time input */}
             <input
               type="time"
