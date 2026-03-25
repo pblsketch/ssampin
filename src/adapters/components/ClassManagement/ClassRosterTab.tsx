@@ -6,8 +6,10 @@ import { studentKey } from '@domain/entities/TeachingClass';
 import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { exportAttendanceToExcel, generateTeachingClassRosterTemplate, parseTeachingClassRosterFromExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
+import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -55,8 +57,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const saveAttendanceRecord = useTeachingClassStore((s) => s.saveAttendanceRecord);
   const showToast = useToastStore((s) => s.show);
   const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
-  const classSchedule = useScheduleStore((s) => s.classSchedule);
   const loadSchedule = useScheduleStore((s) => s.load);
+  const { settings } = useSettingsStore();
 
   useEffect(() => {
     void loadSchedule();
@@ -64,6 +66,16 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const cls = classes.find((c) => c.id === classId);
   const students = cls?.students ?? [];
+
+  // 과목 색상 (시간표 설정과 동일)
+  const subjectAccent = useMemo(() => {
+    if (!cls) return undefined;
+    const colorBy = settings.timetableColorBy ?? 'classroom';
+    if (colorBy === 'classroom') {
+      return resolveClassroomPreset(cls.name, settings.classroomColors).tw;
+    }
+    return resolvePreset(cls.subject, settings.subjectColors).tw;
+  }, [cls, settings.subjectColors, settings.classroomColors, settings.timetableColorBy]);
 
   /* ── 편집 모드 상태 ── */
   const [isEditing, setIsEditing] = useState(false);
@@ -124,49 +136,25 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     const dayOfWeek = DAYS[d.getDay()] ?? '';
     if (!dayOfWeek) return [];
 
-    const dayScheduleClass = classSchedule[dayOfWeek];
     const dayScheduleTeacher = teacherSchedule?.[dayOfWeek];
+    if (!dayScheduleTeacher) return [];
+
     const periods: number[] = [];
 
-    // 1단계: 학급 시간표에서 과목 매칭
-    if (dayScheduleClass && dayScheduleClass.length > 0) {
-      dayScheduleClass.forEach((slot, idx) => {
-        if (slot.subject && isSubjectMatch(slot.subject, cls.subject)) {
-          periods.push(idx + 1);
-        }
-      });
-    }
-
-    // 2단계: 교사 시간표에서 교실명 + 과목 매칭
-    if (periods.length === 0 && dayScheduleTeacher) {
-      dayScheduleTeacher.forEach((slot, idx) => {
-        if (!slot) return;
-        const classroomMatch =
-          slot.classroom === cls.name ||
-          slot.classroom.includes(cls.name) ||
-          cls.name.includes(slot.classroom);
-        if (classroomMatch && isSubjectMatch(slot.subject, cls.subject)) {
-          periods.push(idx + 1);
-        }
-      });
-    }
-
-    // 3단계: 교실명만으로 매칭
-    if (periods.length === 0 && dayScheduleTeacher) {
-      dayScheduleTeacher.forEach((slot, idx) => {
-        if (!slot) return;
-        const classroomMatch =
-          slot.classroom === cls.name ||
-          slot.classroom.includes(cls.name) ||
-          cls.name.includes(slot.classroom);
-        if (classroomMatch) {
-          periods.push(idx + 1);
-        }
-      });
-    }
+    // 1단계: 교사 시간표에서 교실명 + 과목 동시 매칭
+    dayScheduleTeacher.forEach((slot, idx) => {
+      if (!slot) return;
+      const classroomMatch =
+        slot.classroom === cls.name ||
+        slot.classroom.includes(cls.name) ||
+        cls.name.includes(slot.classroom);
+      if (classroomMatch && isSubjectMatch(slot.subject, cls.subject)) {
+        periods.push(idx + 1);
+      }
+    });
 
     return periods;
-  }, [cls, classSchedule, teacherSchedule]);
+  }, [cls, teacherSchedule]);
 
   const matchingPeriods = useMemo(
     () => new Set(getMatchingPeriods(date)),
@@ -646,6 +634,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               value={date}
               onChange={handleDateChange}
               lessonDays={lessonDayIndices}
+              accentColor={subjectAccent}
               portal
             />
           </div>
