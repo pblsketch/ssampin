@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
 
 const PRESETS = [
@@ -13,6 +13,7 @@ const PRESETS = [
 
 export default function DateRangePicker() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const activeDays = searchParams.get('days');
@@ -34,8 +35,9 @@ export default function DateRangePicker() {
     Object.entries(params).forEach(([k, v]) => {
       if (v) sp.set(k, v);
     });
-    router.replace(`?${sp.toString()}`, { scroll: false });
-  }, [router]);
+    const query = sp.toString();
+    router.push(`${pathname}${query ? `?${query}` : ''}`);
+  }, [router, pathname]);
 
   const handlePreset = (days: number) => {
     setParams(days === 0 ? { days: '0' } : { days: String(days) });
