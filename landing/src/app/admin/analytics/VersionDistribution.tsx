@@ -33,7 +33,7 @@ function compareSemver(a: string, b: string): number {
 }
 
 export default function VersionDistribution({ versions }: Props) {
-  const [sortMode, setSortMode] = useState<SortMode>('users');
+  const [sortMode, setSortMode] = useState<SortMode>('version');
 
   const sorted = [...versions].sort((a, b) => {
     if (sortMode === 'users') {
