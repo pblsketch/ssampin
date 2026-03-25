@@ -128,22 +128,21 @@ export function MiniCalendar() {
   }, [selectedDate, events]);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* 위젯 제목 */}
-      <div className="mb-2 shrink-0">
+    <div className="h-full flex flex-col p-4">
+      {/* 헤더: 제목 + 월 네비게이션 */}
+      <div className="flex items-center justify-between mb-3 shrink-0">
         <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📅</span>미니 캘린더</h3>
-      </div>
-      {/* 헤더: 월 네비게이션 */}
-      <div className="flex items-center justify-between mb-2">
-        <button onClick={prevMonth} className="text-sp-muted hover:text-sp-text p-0.5">
-          <span className="material-symbols-outlined text-sm">chevron_left</span>
-        </button>
-        <button onClick={goToday} className="text-xs font-bold text-sp-text hover:text-sp-accent">
-          {year}년 {month + 1}월
-        </button>
-        <button onClick={nextMonth} className="text-sp-muted hover:text-sp-text p-0.5">
-          <span className="material-symbols-outlined text-sm">chevron_right</span>
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={prevMonth} className="text-sp-muted hover:text-sp-text p-0.5">
+            <span className="material-symbols-outlined text-sm">chevron_left</span>
+          </button>
+          <button onClick={goToday} className="text-xs font-bold text-sp-text hover:text-sp-accent">
+            {year}년 {month + 1}월
+          </button>
+          <button onClick={nextMonth} className="text-sp-muted hover:text-sp-text p-0.5">
+            <span className="material-symbols-outlined text-sm">chevron_right</span>
+          </button>
+        </div>
       </div>
 
       {/* 요일 헤더 */}
