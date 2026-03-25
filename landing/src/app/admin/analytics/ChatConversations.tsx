@@ -95,17 +95,17 @@ export default function ChatConversations({ conversations }: { conversations: Co
               : '';
             return (
               <details key={sessionId} className="bg-gray-800/50 rounded-lg">
-                <summary className="px-4 py-2 cursor-pointer hover:bg-gray-800 rounded-lg flex items-center gap-3">
-                  <span className="text-xs text-gray-500">{dateStr}</span>
+                <summary className="px-4 py-2 cursor-pointer hover:bg-gray-800 rounded-lg flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
+                  <span className="text-xs text-gray-500 shrink-0">{dateStr}</span>
                   {isTest && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400 font-medium">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400 font-medium shrink-0">
                       TEST
                     </span>
                   )}
-                  <span className="text-sm text-gray-300 truncate flex-1">
+                  <span className="text-sm text-gray-300 truncate min-w-0 flex-1 basis-full sm:basis-auto">
                     {sorted.find((m) => m.role === 'user')?.content.slice(0, 80) ?? '(empty)'}
                   </span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-gray-500 shrink-0">
                     {sorted.filter((m) => m.role === 'user').length}턴
                   </span>
                 </summary>

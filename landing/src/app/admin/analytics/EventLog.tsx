@@ -598,7 +598,7 @@ export default function EventLog({ events }: { events: EventItem[] }) {
                 return (
                   <div key={session.deviceId} className="bg-gray-800/30 rounded-lg p-3">
                     {/* 세션 헤더 */}
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-2">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-mono text-gray-500">
                           {session.deviceId.slice(0, 8)}
@@ -677,8 +677,8 @@ export default function EventLog({ events }: { events: EventItem[] }) {
             ))}
           </div>
 
-          {/* 이벤트 테이블 */}
-          <div className="overflow-x-auto">
+          {/* 이벤트 테이블 — 데스크톱 */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-gray-400 border-b border-gray-800">
@@ -724,6 +724,38 @@ export default function EventLog({ events }: { events: EventItem[] }) {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* 이벤트 카드 — 모바일 */}
+          <div className="block md:hidden space-y-2">
+            {filtered.length === 0 ? (
+              <p className="py-8 text-center text-gray-500 text-sm">해당 이벤트가 없습니다</p>
+            ) : (
+              filtered.map((e, i) => (
+                <div key={i} className="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${getEventBadgeClass(e.event)}`}
+                    >
+                      <span className="font-mono">{e.event}</span>
+                      {EVENT_LABELS[e.event] && (
+                        <span className="opacity-70">({EVENT_LABELS[e.event]})</span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-gray-500 whitespace-nowrap shrink-0">
+                      {formatKSTTime(e.created_at)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-300 truncate">
+                    {formatProperties(e.event, e.properties)}
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-gray-500">
+                    <span className="font-mono">{e.device_id?.slice(0, 8)}</span>
+                    <span>v{e.app_version}</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           {/* 필터 결과 요약 */}

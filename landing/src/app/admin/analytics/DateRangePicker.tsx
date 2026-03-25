@@ -53,9 +53,9 @@ export default function DateRangePicker() {
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2">
       {/* Preset buttons */}
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1">
         {PRESETS.map(({ label, days }) => (
           <button
             key={days}
@@ -72,16 +72,16 @@ export default function DateRangePicker() {
       </div>
 
       {/* Divider */}
-      <div className="w-px h-6 bg-gray-700" />
+      <div className="hidden sm:block w-px h-6 bg-gray-700" />
 
       {/* Custom date inputs */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 w-full sm:w-auto">
         <input
           type="date"
           value={activeFrom || ''}
           max={activeTo || today}
           onChange={(e) => handleCustomDate('from', e.target.value)}
-          className={`bg-gray-800 border rounded-lg px-2 py-1.5 text-sm ${
+          className={`flex-1 sm:flex-none bg-gray-800 border rounded-lg px-2 py-1.5 text-sm ${
             isCustomActive ? 'border-blue-600 text-white' : 'border-gray-700 text-gray-400'
           }`}
         />
@@ -92,7 +92,7 @@ export default function DateRangePicker() {
           min={activeFrom || ''}
           max={today}
           onChange={(e) => handleCustomDate('to', e.target.value)}
-          className={`bg-gray-800 border rounded-lg px-2 py-1.5 text-sm ${
+          className={`flex-1 sm:flex-none bg-gray-800 border rounded-lg px-2 py-1.5 text-sm ${
             isCustomActive ? 'border-blue-600 text-white' : 'border-gray-700 text-gray-400'
           }`}
         />

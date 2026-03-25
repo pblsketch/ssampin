@@ -214,16 +214,16 @@ export default async function AdminAnalyticsPage({
       <div className="max-w-7xl mx-auto space-y-8">
         {/* 헤더 */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">쌤핀 Analytics</h1>
-              <p className="text-gray-400 text-sm mt-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold">쌤핀 Analytics</h1>
+              <p className="text-gray-400 text-xs sm:text-sm mt-1">
                 마지막 업데이트: {new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
               </p>
             </div>
             <a
               href="/"
-              className="text-sm text-gray-400 hover:text-white transition"
+              className="text-sm text-gray-400 hover:text-white transition shrink-0"
             >
               ← 메인으로
             </a>
@@ -243,7 +243,7 @@ export default async function AdminAnalyticsPage({
         ) : (
           <>
             {/* 요약 카드 */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
               <SummaryCard label="총 이벤트" value={totals.totalEvents.toLocaleString()} />
               <SummaryCard label="총 사용자" value={totals.totalUsers.toString()} />
               <SummaryCard label="오늘 DAU" value={daily[0]?.dau?.toString() || '0'} />
@@ -277,7 +277,28 @@ export default async function AdminAnalyticsPage({
 
             {/* 주간 요약 */}
             <Section title="주간 요약">
-              <div className="overflow-x-auto">
+              {/* 모바일 카드 */}
+              <div className="block md:hidden space-y-3">
+                {weekly.map((w) => (
+                  <div key={w.week_start} className="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{w.week_start}</span>
+                      <span className="text-sm font-bold text-blue-400">WAU {w.weekly_active_users}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-400">
+                      <div>이벤트: <span className="text-gray-300">{w.total_events}</span></div>
+                      <div>앱 열기: <span className="text-gray-300">{w.app_opens}</span></div>
+                      <div>좌석배치: <span className="text-gray-300">{w.seat_shuffles}</span></div>
+                      <div>도구: <span className="text-gray-300">{w.tool_uses}</span></div>
+                      <div>내보내기: <span className="text-gray-300">{w.exports}</span></div>
+                      <div>온보딩: <span className="text-gray-300">{w.onboarding_completions}</span></div>
+                      <div>에러: <span className="text-red-400">{w.errors}</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* 데스크톱 테이블 */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-gray-400 border-b border-gray-800">
@@ -320,7 +341,7 @@ export default async function AdminAnalyticsPage({
                   <div className="space-y-2">
                     {toolsWeekly.map((t) => (
                       <div key={t.tool_name} className="flex items-center gap-3">
-                        <span className="w-28 text-sm truncate" title={t.tool_name}>
+                        <span className="w-20 sm:w-28 text-sm truncate" title={t.tool_name}>
                           {TOOL_LABELS[t.tool_name] || t.tool_name}
                         </span>
                         <div className="flex-1 bg-gray-800 rounded-full h-5 overflow-hidden">
@@ -348,7 +369,7 @@ export default async function AdminAnalyticsPage({
                   <div className="mt-3 space-y-2">
                     {tools.map((t) => (
                       <div key={t.tool_name} className="flex items-center gap-3">
-                        <span className="w-28 text-sm truncate" title={t.tool_name}>
+                        <span className="w-20 sm:w-28 text-sm truncate" title={t.tool_name}>
                           {TOOL_LABELS[t.tool_name] || t.tool_name}
                         </span>
                         <div className="flex-1 bg-gray-800 rounded-full h-5 overflow-hidden">
@@ -402,7 +423,24 @@ export default async function AdminAnalyticsPage({
 
             {/* 세션 시간 통계 */}
             <Section title="세션 시간 통계">
-              <div className="overflow-x-auto">
+              {/* 모바일 카드 */}
+              <div className="block md:hidden space-y-3">
+                {sessions.map((s) => (
+                  <div key={s.date} className="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{s.date}</span>
+                      <span className="text-xs text-gray-400">세션 {s.sessions}개</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-2 text-xs text-gray-400">
+                      <div>평균: <span className="text-gray-300">{formatDuration(s.avg_seconds)}</span></div>
+                      <div>중간값: <span className="text-gray-300">{formatDuration(s.median_seconds)}</span></div>
+                      <div>최대: <span className="text-gray-300">{formatDuration(s.max_seconds)}</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* 데스크톱 테이블 */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-gray-400 border-b border-gray-800">
@@ -442,45 +480,82 @@ export default async function AdminAnalyticsPage({
               {retention.length === 0 ? (
                 <p className="text-gray-500 text-sm">데이터 없음</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-gray-400 border-b border-gray-800">
-                        <th className="text-left py-2 px-3">코호트 날짜</th>
-                        <th className="text-right py-2 px-3">신규</th>
-                        <th className="text-right py-2 px-3">Day 1</th>
-                        <th className="text-right py-2 px-3">Day 3</th>
-                        <th className="text-right py-2 px-3">Day 7</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {retention.map((r) => (
-                        <tr key={r.cohort_date} className="border-b border-gray-800/50 hover:bg-gray-900/50">
-                          <td className="py-2 px-3">{r.cohort_date}</td>
-                          <td className="text-right py-2 px-3 font-medium">{r.cohort_size}명</td>
-                          <td className="text-right py-2 px-3">
+                <>
+                  {/* 모바일 카드 */}
+                  <div className="block md:hidden space-y-3">
+                    {retention.map((r) => (
+                      <div key={r.cohort_date} className="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{r.cohort_date}</span>
+                          <span className="text-xs text-gray-400">신규 {r.cohort_size}명</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-x-2 text-xs text-gray-400">
+                          <div>
+                            Day 1:{' '}
                             <span className={r.day1_pct > 50 ? 'text-green-400' : r.day1_pct > 20 ? 'text-yellow-400' : 'text-red-400'}>
                               {r.day1_pct}%
                             </span>
-                            <span className="text-gray-600 ml-1">({r.day1})</span>
-                          </td>
-                          <td className="text-right py-2 px-3">
+                            <span className="text-gray-600 ml-0.5">({r.day1})</span>
+                          </div>
+                          <div>
+                            Day 3:{' '}
                             <span className={r.day3_pct > 30 ? 'text-green-400' : r.day3_pct > 10 ? 'text-yellow-400' : 'text-red-400'}>
                               {r.day3_pct}%
                             </span>
-                            <span className="text-gray-600 ml-1">({r.day3})</span>
-                          </td>
-                          <td className="text-right py-2 px-3">
+                            <span className="text-gray-600 ml-0.5">({r.day3})</span>
+                          </div>
+                          <div>
+                            Day 7:{' '}
                             <span className={r.day7_pct > 20 ? 'text-green-400' : r.day7_pct > 5 ? 'text-yellow-400' : 'text-red-400'}>
                               {r.day7_pct}%
                             </span>
-                            <span className="text-gray-600 ml-1">({r.day7})</span>
-                          </td>
+                            <span className="text-gray-600 ml-0.5">({r.day7})</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* 데스크톱 테이블 */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-gray-400 border-b border-gray-800">
+                          <th className="text-left py-2 px-3">코호트 날짜</th>
+                          <th className="text-right py-2 px-3">신규</th>
+                          <th className="text-right py-2 px-3">Day 1</th>
+                          <th className="text-right py-2 px-3">Day 3</th>
+                          <th className="text-right py-2 px-3">Day 7</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {retention.map((r) => (
+                          <tr key={r.cohort_date} className="border-b border-gray-800/50 hover:bg-gray-900/50">
+                            <td className="py-2 px-3">{r.cohort_date}</td>
+                            <td className="text-right py-2 px-3 font-medium">{r.cohort_size}명</td>
+                            <td className="text-right py-2 px-3">
+                              <span className={r.day1_pct > 50 ? 'text-green-400' : r.day1_pct > 20 ? 'text-yellow-400' : 'text-red-400'}>
+                                {r.day1_pct}%
+                              </span>
+                              <span className="text-gray-600 ml-1">({r.day1})</span>
+                            </td>
+                            <td className="text-right py-2 px-3">
+                              <span className={r.day3_pct > 30 ? 'text-green-400' : r.day3_pct > 10 ? 'text-yellow-400' : 'text-red-400'}>
+                                {r.day3_pct}%
+                              </span>
+                              <span className="text-gray-600 ml-1">({r.day3})</span>
+                            </td>
+                            <td className="text-right py-2 px-3">
+                              <span className={r.day7_pct > 20 ? 'text-green-400' : r.day7_pct > 5 ? 'text-yellow-400' : 'text-red-400'}>
+                                {r.day7_pct}%
+                              </span>
+                              <span className="text-gray-600 ml-1">({r.day7})</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </Section>
 
@@ -514,24 +589,24 @@ export default async function AdminAnalyticsPage({
                     <h3 className="text-sm text-gray-400 mb-3">피드백 해결률</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-emerald-400">{fb.resolution_rate}%</div>
+                        <div className="text-xl sm:text-2xl font-bold text-emerald-400">{fb.resolution_rate}%</div>
                         <div className="text-xs text-gray-400">해결률</div>
                         <div className="text-xs text-gray-500">({fb.resolved_count}/{fb.responded_total})</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-emerald-400">{fb.resolved_count}</div>
+                        <div className="text-xl sm:text-2xl font-bold text-emerald-400">{fb.resolved_count}</div>
                         <div className="text-xs text-gray-400">해결됨</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-red-400">{fb.unresolved_count}</div>
+                        <div className="text-xl sm:text-2xl font-bold text-red-400">{fb.unresolved_count}</div>
                         <div className="text-xs text-gray-400">미해결</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-amber-400">{esc}</div>
+                        <div className="text-xl sm:text-2xl font-bold text-amber-400">{esc}</div>
                         <div className="text-xs text-gray-400">에스컬레이션</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-400">{fb.no_response_count}</div>
+                        <div className="text-xl sm:text-2xl font-bold text-gray-400">{fb.no_response_count}</div>
                         <div className="text-xs text-gray-400">미응답</div>
                         <div className="text-xs text-gray-500">({fb.total_count > 0 ? Math.round(fb.no_response_count / fb.total_count * 100) : 0}%)</div>
                       </div>
@@ -672,16 +747,16 @@ export default async function AdminAnalyticsPage({
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 sm:p-4">
       <p className="text-gray-400 text-xs">{label}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
+      <p className="text-xl sm:text-2xl font-bold mt-1">{value}</p>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 sm:p-5">
       <h2 className="text-lg font-semibold mb-4">{title}</h2>
       {children}
     </div>
@@ -710,7 +785,7 @@ function BarChart<T extends Record<string, unknown>>({
   return (
     <div className={`relative ${data.length <= 5 ? 'max-w-lg' : 'w-full'}`}>
       {/* 그리드 라인 — bar 영역에 맞춰 위치 */}
-      <div className="absolute left-0 right-0 pointer-events-none" style={{ top: '1.5rem', bottom: '1.25rem' }}>
+      <div className="absolute left-0 right-0 pointer-events-none hidden sm:block" style={{ top: '1.5rem', bottom: '1.25rem' }}>
         {gridLines.map((val, i) => (
           <div
             key={i}
@@ -723,8 +798,10 @@ function BarChart<T extends Record<string, unknown>>({
           </div>
         ))}
       </div>
+      {/* overflow-x-auto wrapper ensures bars are scrollable on mobile when many data points */}
+      <div className="overflow-x-auto">
       {/* items-stretch(기본값)로 자식이 h-48 전체를 차지 → bar height % 가 정상 동작 */}
-      <div className="flex gap-1 sm:gap-2 h-48 relative z-10 overflow-x-auto">
+      <div className="flex gap-1 sm:gap-2 h-48 relative z-10" style={{ minWidth: data.length > 10 ? `${data.length * 2.5}rem` : undefined }}>
         {data.map((d, i) => {
           const val = Number(d[valueKey]) || 0;
           const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
@@ -753,6 +830,7 @@ function BarChart<T extends Record<string, unknown>>({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

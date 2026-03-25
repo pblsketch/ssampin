@@ -80,7 +80,7 @@ export default function VersionDistribution({ versions }: Props) {
           return (
             <div key={v.app_version} className="flex items-center gap-3">
               <span
-                className={`w-16 text-sm font-mono ${isTop ? 'text-green-400' : 'text-gray-400'}`}
+                className={`w-14 sm:w-16 text-xs sm:text-sm font-mono ${isTop ? 'text-green-400' : 'text-gray-400'}`}
               >
                 v{v.app_version}
               </span>
