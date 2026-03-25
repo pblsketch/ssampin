@@ -13,6 +13,7 @@ interface LayoutOption {
   mode: WidgetLayoutMode;
   label: string;
   icon: string; // SVG path
+  shortcut: string;
 }
 
 const LAYOUT_OPTIONS: LayoutOption[] = [
@@ -20,21 +21,25 @@ const LAYOUT_OPTIONS: LayoutOption[] = [
     mode: 'full',
     label: '전체화면',
     icon: 'M3 3h18v18H3z',
+    shortcut: 'Ctrl+1',
   },
   {
     mode: 'split-h',
     label: '좌우 분할',
     icon: 'M3 3h8v18H3zM13 3h8v18h-8z',
+    shortcut: 'Ctrl+2',
   },
   {
     mode: 'split-v',
     label: '상하 분할',
     icon: 'M3 3h18v8H3zM3 13h18v8H3z',
+    shortcut: 'Ctrl+3',
   },
   {
     mode: 'quad',
     label: '4분할',
     icon: 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z',
+    shortcut: 'Ctrl+4',
   },
 ];
 
@@ -131,6 +136,12 @@ export function LayoutSelector({ anchorRect, currentMode, onSelect, onClose }: L
               />
             </svg>
             <span className="flex-1 text-sm">{opt.label}</span>
+            <span className={[
+              'text-[11px] ml-auto',
+              isActive ? 'text-sp-accent/60' : 'text-sp-muted/50',
+            ].join(' ')}>
+              {opt.shortcut}
+            </span>
             {isActive && (
               <span
                 className="material-symbols-outlined text-sp-accent flex-shrink-0"
