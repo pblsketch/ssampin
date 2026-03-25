@@ -288,8 +288,9 @@ export function Todo() {
     setNewRecurrenceIdx(0);
     setNewCategory('');
     setNewTime('');
-    setNoDueDate(false);
-    setNewDueDate(new Date().toISOString().slice(0, 10));
+    if (!noDueDate) {
+      setNewDueDate(new Date().toISOString().slice(0, 10));
+    }
   }, [newText, newDueDate, noDueDate, newPriority, newRecurrenceIdx, newCategory, newTime, addTodo]);
 
   const handleKeyDown = useCallback(
