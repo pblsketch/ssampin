@@ -250,6 +250,7 @@ function applySystemSettings(): void {
         openAtLogin: autoLaunch,
         name: '쌤핀',
         enabled: autoLaunch,
+        path: app.getPath('exe'),
       });
     }
   } catch {
@@ -581,6 +582,7 @@ function registerIpcHandlers(): void {
             openAtLogin: autoLaunch,
             name: '쌤핀',
             enabled: autoLaunch,
+            path: app.getPath('exe'),
           });
         } catch {
           // ignore parsing error
