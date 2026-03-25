@@ -10,6 +10,7 @@ export function MiniCalendar() {
   const load = useEventsStore((s) => s.load);
 
   const [viewDate, setViewDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loaded) void load();
@@ -18,8 +19,8 @@ export function MiniCalendar() {
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
 
-  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
+  const prevMonth = () => { setViewDate(new Date(year, month - 1, 1)); setSelectedDate(null); };
+  const nextMonth = () => { setViewDate(new Date(year, month + 1, 1)); setSelectedDate(null); };
   const goToday = () => setViewDate(new Date());
 
   const calendarDays = useMemo(() => {
@@ -108,6 +109,24 @@ export function MiniCalendar() {
     return events.filter((e) => e.date.startsWith(prefix)).length;
   }, [events, year, month]);
 
+  const selectedEvents = useMemo(() => {
+    if (!selectedDate) return [];
+    return events
+      .filter((e) => !e.isHidden)
+      .filter((e) =>
+        e.date === selectedDate ||
+        (e.endDate && e.date <= selectedDate && e.endDate >= selectedDate)
+      )
+      .sort((a, b) => {
+        const timeA = a.startTime ?? a.time?.split(' - ')[0]?.trim() ?? '';
+        const timeB = b.startTime ?? b.time?.split(' - ')[0]?.trim() ?? '';
+        if (timeA && timeB) return timeA.localeCompare(timeB);
+        if (timeA) return -1;
+        if (timeB) return 1;
+        return a.title.localeCompare(b.title);
+      });
+  }, [selectedDate, events]);
+
   return (
     <div className="h-full flex flex-col">
       {/* 위젯 제목 */}
@@ -144,10 +163,23 @@ export function MiniCalendar() {
       {/* 날짜 그리드 */}
       <div className="grid grid-cols-7 flex-1">
         {calendarDays.map((day, idx) => (
-          <div
+          <button
             key={idx}
-            className={`relative flex flex-col items-center py-0.5 ${
+            type="button"
+            disabled={!day.isCurrentMonth || day.eventColors.length === 0}
+            onClick={() => {
+              if (day.isCurrentMonth && day.eventColors.length > 0) {
+                setSelectedDate(selectedDate === day.dateStr ? null : day.dateStr);
+              }
+            }}
+            className={`relative flex flex-col items-center py-0.5 transition-colors rounded ${
               !day.isCurrentMonth ? 'opacity-20' : ''
+            } ${
+              day.eventColors.length > 0 && day.isCurrentMonth
+                ? 'hover:bg-sp-accent/10 cursor-pointer'
+                : ''
+            } ${
+              selectedDate === day.dateStr ? 'bg-sp-accent/15 ring-1 ring-sp-accent/30' : ''
             }`}
           >
             <span
@@ -171,16 +203,59 @@ export function MiniCalendar() {
                 ))}
               </div>
             )}
-          </div>
+          </button>
         ))}
       </div>
 
-      {/* 하단: 이번 달 일정 수 */}
-      <div className="mt-1 pt-1 border-t border-sp-border/20 text-center">
-        <span className="text-caption text-sp-muted">
-          이번 달 일정 {monthEventCount}건
-        </span>
-      </div>
+      {/* 선택된 날짜의 일정 팝업 */}
+      {selectedDate && selectedEvents.length > 0 && (
+        <div className="mt-1 pt-1.5 border-t border-sp-border/30 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold text-sp-text">
+              {parseInt(selectedDate.slice(5, 7), 10)}/{parseInt(selectedDate.slice(8, 10), 10)}
+              {' '}
+              {['일', '월', '화', '수', '목', '금', '토'][new Date(selectedDate + 'T00:00:00').getDay()]}요일
+            </span>
+            <button
+              onClick={() => setSelectedDate(null)}
+              className="text-sp-muted hover:text-sp-text"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+            </button>
+          </div>
+          <div className="space-y-0.5 max-h-24 overflow-y-auto">
+            {selectedEvents.map((event) => {
+              const info = getCategoryInfo(event.category, categories);
+              const colors = getCategoryColors(info.color);
+              return (
+                <div
+                  key={event.id}
+                  className="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-sp-surface/50 transition-colors"
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors.dot}`} />
+                  <span className="text-[10px] text-sp-text truncate flex-1">
+                    {event.title}
+                  </span>
+                  {(event.startTime || event.time) && (
+                    <span className="text-tiny text-sp-muted shrink-0">
+                      {event.startTime ?? event.time?.split(' - ')[0]?.trim()}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 하단 — 팝업 열려있으면 숨김 */}
+      {!selectedDate && (
+        <div className="mt-1 pt-1 border-t border-sp-border/20 text-center">
+          <span className="text-caption text-sp-muted">
+            이번 달 일정 {monthEventCount}건
+          </span>
+        </div>
+      )}
     </div>
   );
 }
