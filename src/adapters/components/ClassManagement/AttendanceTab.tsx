@@ -1,9 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { exportAttendanceToExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { getDayOfWeek } from '@domain/rules/periodRules';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -60,6 +62,14 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
   const showToast = useToastStore((s) => s.show);
 
+  const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
+  const scheduleOverrides = useScheduleStore((s) => s.overrides);
+  const loadSchedule = useScheduleStore((s) => s.load);
+
+  useEffect(() => {
+    void loadSchedule();
+  }, [loadSchedule]);
+
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const allStudents = cls?.students ?? [];
   const students = useMemo(() => allStudents.filter((s) => !s.isVacant), [allStudents]);
@@ -76,6 +86,38 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
       return a.number - b.number;
     });
   }, [students, hasGradeInfo]);
+
+  const matchingPeriods = useMemo(() => {
+    if (!cls) return new Set<number>();
+
+    const d = new Date(date + 'T00:00:00');
+    const dayOfWeekVal = getDayOfWeek(d);
+    if (!dayOfWeekVal) return new Set<number>();
+
+    const baseSchedule = teacherSchedule[dayOfWeekVal] ?? [];
+    const dayOverrides = scheduleOverrides.filter((o) => o.date === date);
+
+    // Apply overrides to get effective schedule
+    const periods = [...baseSchedule];
+    for (const override of dayOverrides) {
+      const idx = override.period - 1;
+      if (idx >= 0 && idx < periods.length) {
+        if (override.subject) {
+          periods[idx] = { subject: override.subject, classroom: override.classroom ?? '' };
+        } else {
+          periods[idx] = null;
+        }
+      }
+    }
+
+    const matching = new Set<number>();
+    periods.forEach((slot, idx) => {
+      if (slot && slot.classroom === cls.name && slot.subject === cls.subject) {
+        matching.add(idx + 1); // convert 0-based index to 1-based period
+      }
+    });
+    return matching;
+  }, [cls, date, teacherSchedule, scheduleOverrides]);
 
   // 날짜/교시 변경 시 기존 기록 로드 또는 기본값 세팅
   const loadRecord = useCallback(
@@ -253,19 +295,28 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
         <div className="flex items-center gap-1.5">
           <label className="text-xs text-sp-muted">교시</label>
           <div className="flex gap-1">
-            {PERIODS.map((p) => (
-              <button
-                key={p}
-                onClick={() => handlePeriodChange(p)}
-                className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
-                  ${period === p
-                    ? 'bg-sp-accent text-white'
-                    : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-                  }`}
-              >
-                {p}
-              </button>
-            ))}
+            {PERIODS.map((p) => {
+              const isMatching = matchingPeriods.has(p);
+              return (
+                <button
+                  key={p}
+                  onClick={() => handlePeriodChange(p)}
+                  title={isMatching ? `${cls?.subject} 수업` : undefined}
+                  className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-colors
+                    ${period === p
+                      ? 'bg-sp-accent text-white'
+                      : isMatching
+                        ? 'bg-sp-accent/10 border border-sp-accent/50 text-sp-accent'
+                        : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                    }`}
+                >
+                  {p}
+                  {isMatching && period !== p && (
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-sp-accent" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

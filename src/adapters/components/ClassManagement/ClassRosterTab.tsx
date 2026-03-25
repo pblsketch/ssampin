@@ -1,10 +1,13 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { exportAttendanceToExcel, generateTeachingClassRosterTemplate, parseTeachingClassRosterFromExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
+import { isSubjectMatch } from '@domain/rules/matchingRules';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -51,6 +54,13 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const getAttendanceRecord = useTeachingClassStore((s) => s.getAttendanceRecord);
   const saveAttendanceRecord = useTeachingClassStore((s) => s.saveAttendanceRecord);
   const showToast = useToastStore((s) => s.show);
+  const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
+  const classSchedule = useScheduleStore((s) => s.classSchedule);
+  const loadSchedule = useScheduleStore((s) => s.load);
+
+  useEffect(() => {
+    void loadSchedule();
+  }, [loadSchedule]);
 
   const cls = classes.find((c) => c.id === classId);
   const students = cls?.students ?? [];
@@ -105,6 +115,79 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const [editingMemoKey, setEditingMemoKey] = useState<string | null>(null);
   const [editingMemoValue, setEditingMemoValue] = useState('');
   const memoInputRef = useRef<HTMLInputElement>(null);
+
+  /* ── 시간표 연동: 해당 날짜의 매칭 교시 ── */
+  const getMatchingPeriods = useCallback((dateStr: string): number[] => {
+    if (!cls) return [];
+    const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+    const d = new Date(dateStr + 'T00:00:00');
+    const dayOfWeek = DAYS[d.getDay()] ?? '';
+    if (!dayOfWeek) return [];
+
+    const dayScheduleClass = classSchedule[dayOfWeek];
+    const dayScheduleTeacher = teacherSchedule?.[dayOfWeek];
+    const periods: number[] = [];
+
+    // 1단계: 학급 시간표에서 과목 매칭
+    if (dayScheduleClass && dayScheduleClass.length > 0) {
+      dayScheduleClass.forEach((slot, idx) => {
+        if (slot.subject && isSubjectMatch(slot.subject, cls.subject)) {
+          periods.push(idx + 1);
+        }
+      });
+    }
+
+    // 2단계: 교사 시간표에서 교실명 + 과목 매칭
+    if (periods.length === 0 && dayScheduleTeacher) {
+      dayScheduleTeacher.forEach((slot, idx) => {
+        if (!slot) return;
+        const classroomMatch =
+          slot.classroom === cls.name ||
+          slot.classroom.includes(cls.name) ||
+          cls.name.includes(slot.classroom);
+        if (classroomMatch && isSubjectMatch(slot.subject, cls.subject)) {
+          periods.push(idx + 1);
+        }
+      });
+    }
+
+    // 3단계: 교실명만으로 매칭
+    if (periods.length === 0 && dayScheduleTeacher) {
+      dayScheduleTeacher.forEach((slot, idx) => {
+        if (!slot) return;
+        const classroomMatch =
+          slot.classroom === cls.name ||
+          slot.classroom.includes(cls.name) ||
+          cls.name.includes(slot.classroom);
+        if (classroomMatch) {
+          periods.push(idx + 1);
+        }
+      });
+    }
+
+    return periods;
+  }, [cls, classSchedule, teacherSchedule]);
+
+  const matchingPeriods = useMemo(
+    () => new Set(getMatchingPeriods(date)),
+    [date, getMatchingPeriods],
+  );
+
+  // 수업이 있는 요일 (CalendarPicker용)
+  const lessonDayIndices = useMemo(() => {
+    const indices: number[] = [];
+    const ref = new Date();
+    const refDay = ref.getDay();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(ref);
+      d.setDate(d.getDate() + (i - refDay));
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (getMatchingPeriods(ds).length > 0) {
+        indices.push(i);
+      }
+    }
+    return indices;
+  }, [getMatchingPeriods]);
 
   /* ──────────────────────── 출석 로드 ──────────────────────── */
 
@@ -559,30 +642,35 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <label className="text-xs text-sp-muted">날짜</label>
-            <input
-              type="date"
+            <CalendarPicker
               value={date}
-              onChange={(e) => handleDateChange(e.target.value)}
-              className="px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
-                         text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+              onChange={handleDateChange}
+              lessonDays={lessonDayIndices}
+              portal
             />
           </div>
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-sp-muted">교시</label>
             <div className="flex gap-1">
-              {PERIODS.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => handlePeriodChange(p)}
-                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
-                    ${period === p
-                      ? 'bg-sp-accent text-white'
-                      : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-                    }`}
-                >
-                  {p}
-                </button>
-              ))}
+              {PERIODS.map((p) => {
+                const isMatching = matchingPeriods.has(p);
+                return (
+                  <button
+                    key={p}
+                    onClick={() => handlePeriodChange(p)}
+                    title={isMatching ? `${cls?.subject} 수업` : undefined}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
+                      ${period === p
+                        ? 'bg-sp-accent text-white'
+                        : isMatching
+                          ? 'bg-sp-accent/20 border border-sp-accent text-sp-accent font-bold'
+                          : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                      }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
