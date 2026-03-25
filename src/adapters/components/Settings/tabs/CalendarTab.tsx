@@ -30,6 +30,39 @@ export function CalendarTab({ draft, patch }: Props) {
 
   return (
     <div>
+      {/* 대시보드 일정 위젯 */}
+      <SettingsSection
+        icon="date_range"
+        iconColor="bg-blue-500/10 text-blue-400"
+        title="대시보드 일정 위젯"
+      >
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-sp-text">일정 표시 기간</p>
+              <p className="text-xs text-sp-muted">대시보드 &quot;다가오는 일정&quot;에 표시할 범위</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={draft.eventWidgetRangeDays ?? 14}
+                onChange={(e) => {
+                  const val = Math.max(1, Math.min(365, Number(e.target.value) || 14));
+                  patch({ eventWidgetRangeDays: val });
+                }}
+                className="w-16 bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-sm text-sp-text text-center focus:outline-none focus:border-sp-accent"
+              />
+              <span className="text-xs text-sp-muted">일</span>
+            </div>
+          </div>
+          <p className="text-xs text-sp-muted">
+            D-Day로 설정한 일정은 기간에 관계없이 항상 표시됩니다
+          </p>
+        </div>
+      </SettingsSection>
+
       {/* 행사 알림 설정 */}
       <SettingsSection
         icon="notifications"

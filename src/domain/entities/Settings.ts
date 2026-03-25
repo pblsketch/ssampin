@@ -259,6 +259,8 @@ export interface Settings {
   readonly lunchEnd?: string;
   /** 학생 생일을 일정에 자동 등록 (기본 false) */
   readonly syncBirthdaysToSchedule?: boolean;
+  /** 대시보드 일정 위젯 표시 기간 (일 단위, 기본 14) */
+  readonly eventWidgetRangeDays?: number;
   /** 주말 수업 요일 — 시간표에 토/일 컬럼 추가 (예: ['토'] 또는 ['토','일']) */
   readonly enableWeekendDays?: readonly ('토' | '일')[];
   /** 사용자 커스텀 폰트 */
