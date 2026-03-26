@@ -162,6 +162,9 @@ export function Todo() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [sortMode, setSortMode] = useState<TodoSortMode>('priority');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showEditHint, setShowEditHint] = useState(() => {
+    return !localStorage.getItem('ssampin:todo-edit-hint-dismissed');
+  });
 
   const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
   const { events, load: loadEvents } = useEventsStore();
@@ -634,6 +637,24 @@ export function Todo() {
                         </div>
                       ))}
                   </div>
+                </div>
+              )}
+
+              {/* 1회성 편집 안내 */}
+              {showEditHint && viewMode === 'active' && totalCount > 0 && (
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sp-accent/10 border border-sp-accent/20 text-xs text-sp-accent">
+                  <span className="material-symbols-outlined text-sm">lightbulb</span>
+                  <span>할 일을 더블클릭하면 내용, 날짜, 우선순위를 바로 수정할 수 있어요!</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditHint(false);
+                      localStorage.setItem('ssampin:todo-edit-hint-dismissed', 'true');
+                    }}
+                    className="ml-auto text-sp-accent/50 hover:text-sp-accent transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
                 </div>
               )}
 
@@ -1458,6 +1479,25 @@ function TodoItem({
           >
             {todo.time}
           </span>
+        )}
+
+        {/* 편집 힌트 아이콘 (hover, incomplete only) */}
+        {!todo.completed && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDoubleClick();
+            }}
+            className={`p-1 rounded-lg transition-all ${
+              hovered
+                ? 'opacity-100 text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10'
+                : 'opacity-0'
+            }`}
+            title="클릭하여 수정"
+          >
+            <span className="material-symbols-outlined text-icon">edit</span>
+          </button>
         )}
 
         {/* Add subtask button (hover, incomplete only) */}
