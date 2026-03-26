@@ -149,7 +149,7 @@ export function EventFormModal({
       ...(location.trim() && { location: location.trim() }),
       ...(isDDay && { isDDay: true }),
       ...(alerts.length > 0 && { alerts }),
-      ...(period && { period }),
+      period: period || undefined,
       ...(recurrence && { recurrence }),
       ...(recurrence && excludeDates.length > 0 && { excludeDates }),
       ...(description.trim() && { description: description.trim() }),
