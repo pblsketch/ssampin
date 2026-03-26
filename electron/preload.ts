@@ -224,4 +224,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   respondCloseAction: (action: 'widget' | 'tray'): void => {
     ipcRenderer.send('close-action:respond', action);
   },
+  // Cross-window data sync
+  onDataChanged: (callback: (filename: string) => void): (() => void) => {
+    const handler = (_event: unknown, filename: string) => callback(filename);
+    ipcRenderer.on('data:changed', handler);
+    return () => { ipcRenderer.removeListener('data:changed', handler); };
+  },
 });

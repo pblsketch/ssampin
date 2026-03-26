@@ -105,6 +105,8 @@ interface ElectronAPI {
   // Close action dialog
   onCloseActionAsk: (callback: () => void) => () => void;
   respondCloseAction: (action: 'widget' | 'tray') => void;
+  // Cross-window data sync
+  onDataChanged: (callback: (filename: string) => void) => () => void;
 }
 
 interface Window {

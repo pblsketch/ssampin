@@ -296,6 +296,18 @@ export function App() {
     return unsubscribe;
   }, []);
 
+  // 다른 창에서 데이터 변경 시 스토어 리로드 (메인 ↔ 위젯 동기화)
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onDataChanged) return;
+
+    const unsubscribe = api.onDataChanged((filename: string) => {
+      void reloadStores([filename]);
+    });
+
+    return unsubscribe;
+  }, []);
+
   // 위젯 내 도구 클릭 → 해당 도구 페이지로 네비게이션
   useEffect(() => {
     const handler = (e: Event) => {

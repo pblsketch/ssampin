@@ -600,6 +600,13 @@ function registerIpcHandlers(): void {
       const filePath = path.join(getDataDir(), `${filename}.json`);
       fs.writeFileSync(filePath, data, 'utf-8');
 
+      // 다른 창에 데이터 변경 알림 (메인 ↔ 위젯 동기화)
+      for (const win of [mainWindow, widgetWindow]) {
+        if (win && !win.isDestroyed() && win.webContents.id !== _event.sender.id) {
+          win.webContents.send('data:changed', filename);
+        }
+      }
+
       if (filename === 'settings' && !process.env['VITE_DEV_SERVER_URL']) {
         try {
           const settings = JSON.parse(data);
