@@ -9,7 +9,6 @@ import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/cate
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { isUrlLike } from '@domain/rules/eventRules';
 
-const MAX_VISIBLE = 6;
 const RANGE_PRESETS = [7, 14, 30, 60, 90, 365] as const;
 
 /** "YYYY-MM-DD" → Date (로컬 자정 기준) */
@@ -155,6 +154,8 @@ export function DashboardEvents() {
   const rangeDays = settings.eventWidgetRangeDays ?? 14;
   const [showAll, setShowAll] = useState(false);
   const [showRangePicker, setShowRangePicker] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [maxVisible, setMaxVisible] = useState(6);
 
   const handleRangeChange = useCallback((v: number) => {
     void update({ eventWidgetRangeDays: v });
@@ -177,6 +178,20 @@ export function DashboardEvents() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height ?? 0;
+      // 헤더(~40px) + 하단 여백(~30px) 제외, 항목당 ~36px
+      const available = height - 70;
+      const count = Math.max(3, Math.floor(available / 36));
+      setMaxVisible(count);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useWidgetRefresh(load, { intervalMs: 5 * 60 * 1000 });
 
@@ -213,12 +228,12 @@ export function DashboardEvents() {
       .sort(sortWithOrder);
   }, [events, today, displayMode, rangeDays]);
 
-  const visible = filtered.slice(0, MAX_VISIBLE);
-  const remaining = filtered.length - visible.length;
+  const visible = showAll ? filtered : filtered.slice(0, maxVisible);
+  const remaining = filtered.length - Math.min(filtered.length, maxVisible);
 
   return (
     <>
-      <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+      <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
         {/* 헤더 */}
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
