@@ -65,7 +65,7 @@ export function DashboardTimetable() {
   }, [dayOfWeek, classSchedule]);
 
   // 오늘의 교사 시간표 (오버라이드 적용)
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayStr = useMemo(() => now.toISOString().slice(0, 10), [now]);
   const todayTeacherPeriods: readonly (TeacherPeriod | null)[] = useMemo(() => {
     if (!dayOfWeek) return [];
     return getEffectiveTeacherSchedule(todayStr, weekendDays);
