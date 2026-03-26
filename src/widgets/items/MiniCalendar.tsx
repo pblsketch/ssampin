@@ -128,7 +128,7 @@ export function MiniCalendar() {
   }, [selectedDate, events]);
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더: 제목 + 월 네비게이션 */}
       <div className="flex items-center justify-between mb-3 shrink-0">
         <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📅</span>미니 캘린더</h3>

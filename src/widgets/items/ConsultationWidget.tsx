@@ -47,7 +47,7 @@ export function ConsultationWidget() {
 
   if (!loaded) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="rounded-xl bg-sp-card p-4 flex items-center justify-center h-full">
         <p className="text-sp-muted text-xs">불러오는 중...</p>
       </div>
     );
@@ -55,7 +55,7 @@ export function ConsultationWidget() {
 
   if (activeSchedules.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-2 text-sp-muted">
+      <div className="rounded-xl bg-sp-card p-4 flex flex-col items-center justify-center h-full gap-2 text-sp-muted">
         <span className="text-2xl">📅</span>
         <p className="text-xs">진행 중인 상담 없음</p>
       </div>
@@ -63,7 +63,7 @@ export function ConsultationWidget() {
   }
 
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col gap-3">
       {/* 헤더 */}
       <div className="flex items-center justify-between shrink-0">
         <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>📅</span>상담 예약</h3>

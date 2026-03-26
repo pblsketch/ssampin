@@ -113,7 +113,7 @@ export function BookmarksWidget() {
   // 북마크가 아예 없으면 안내
   if (groups.length === 0 && bookmarks.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center p-4">
+      <div className="rounded-xl bg-sp-card h-full flex flex-col items-center justify-center text-center p-4">
         <span className="text-3xl mb-2">🔗</span>
         <p className="text-sm text-sp-muted">
           쌤도구에서 즐겨찾기를 추가해보세요
@@ -123,7 +123,7 @@ export function BookmarksWidget() {
   }
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>⭐</span>즐겨찾기</h3>
