@@ -584,21 +584,83 @@ function registerIpcHandlers(): void {
     }
   });
 
-  // data:read — userData/data/{filename}.json 읽기
+  // data:read — userData/data/{filename}.json 읽기 (손상 감지 + 백업 복구)
   ipcMain.handle('data:read', (_event, filename: string): string | null => {
-    const filePath = path.join(getDataDir(), `${filename}.json`);
-    if (!fs.existsSync(filePath)) {
-      return null;
+    const dataDir = getDataDir();
+    const filePath = path.join(dataDir, `${filename}.json`);
+    const backupPath = path.join(dataDir, `${filename}.backup.json`);
+
+    // 원본 읽기 시도
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        if (raw.length < 5) {
+          throw new Error('파일이 비어있음');
+        }
+        JSON.parse(raw); // JSON 유효성 검증
+        return raw;
+      }
+    } catch {
+      console.warn(`[data:read] 원본 손상 감지: ${filename}, 백업에서 복구 시도`);
+      // 백업에서 복구
+      try {
+        if (fs.existsSync(backupPath)) {
+          const backup = fs.readFileSync(backupPath, 'utf-8');
+          JSON.parse(backup); // 백업도 유효한지 검증
+          fs.writeFileSync(filePath, backup, 'utf-8');
+          console.log(`[data:read] 백업에서 복구 성공: ${filename}`);
+          return backup;
+        }
+      } catch {
+        console.error(`[data:read] 백업 복구도 실패: ${filename}`);
+      }
     }
-    return fs.readFileSync(filePath, 'utf-8');
+
+    return null;
   });
 
-  // data:write — JSON 파일 쓰기
+  // data:write — JSON 파일 쓰기 (백업 + atomic write + 검증)
   ipcMain.handle(
     'data:write',
     (_event, filename: string, data: string): void => {
-      const filePath = path.join(getDataDir(), `${filename}.json`);
-      fs.writeFileSync(filePath, data, 'utf-8');
+      const dataDir = getDataDir();
+      const filePath = path.join(dataDir, `${filename}.json`);
+      const backupPath = path.join(dataDir, `${filename}.backup.json`);
+
+      // Step 1: 기존 파일이 있으면 백업 생성
+      try {
+        if (fs.existsSync(filePath)) {
+          const existing = fs.readFileSync(filePath, 'utf-8');
+          if (existing.length > 10) {
+            fs.writeFileSync(backupPath, existing, 'utf-8');
+          }
+        }
+      } catch {
+        // 백업 실패해도 저장은 계속 진행
+      }
+
+      // Step 2: 임시 파일에 먼저 쓰기 (atomic write)
+      const tempPath = path.join(dataDir, `${filename}.tmp.json`);
+      try {
+        fs.writeFileSync(tempPath, data, 'utf-8');
+
+        // Step 3: 쓰기 검증 — 다시 읽어서 맞는지 확인
+        const verification = fs.readFileSync(tempPath, 'utf-8');
+        if (verification.length !== data.length) {
+          console.error(
+            `[data:write] 검증 실패: ${filename} (기대 ${data.length}바이트, 실제 ${verification.length}바이트)`,
+          );
+          try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
+          return;
+        }
+
+        // Step 4: 검증 통과 → 임시 파일을 원본으로 교체 (rename은 atomic)
+        fs.renameSync(tempPath, filePath);
+      } catch (writeErr) {
+        console.error(`[data:write] 저장 실패: ${filename}`, writeErr);
+        try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
+        return;
+      }
 
       // 다른 창에 데이터 변경 알림 (메인 ↔ 위젯 동기화)
       for (const win of [mainWindow, widgetWindow]) {
@@ -1018,6 +1080,31 @@ function registerIpcHandlers(): void {
   });
 }
 
+/** 앱 시작 시 중요 데이터 파일 백업 생성 */
+function createStartupBackups(): void {
+  const dataDir = getDataDir();
+  const criticalFiles = [
+    'attendance', 'teaching-classes', 'curriculum-progress',
+    'settings', 'memos', 'todos', 'events',
+  ];
+
+  for (const filename of criticalFiles) {
+    const filePath = path.join(dataDir, `${filename}.json`);
+    const backupPath = path.join(dataDir, `${filename}.backup.json`);
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        if (raw.length > 10) {
+          JSON.parse(raw); // 유효한 JSON인지 확인
+          fs.writeFileSync(backupPath, raw, 'utf-8');
+        }
+      }
+    } catch {
+      // 개별 파일 실패는 무시
+    }
+  }
+}
+
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -1037,6 +1124,7 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     applySystemSettings();
+    createStartupBackups();
     checkInstallation();
     registerIpcHandlers();
     registerSecureStorageHandlers();
