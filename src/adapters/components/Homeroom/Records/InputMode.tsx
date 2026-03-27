@@ -26,6 +26,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [editingContent, setEditingContent] = useState('');
   const [editingCategory, setEditingCategory] = useState('');
   const [editingSubcat, setEditingSubcat] = useState('');
+  const [editingReportedToNeis, setEditingReportedToNeis] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<{
     categoryId: string;
@@ -430,6 +431,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                               setEditingContent(record.content);
                               setEditingCategory(record.category);
                               setEditingSubcat(record.subcategory);
+                              setEditingReportedToNeis(record.reportedToNeis ?? false);
                             }}
                             className="text-sp-muted hover:text-sp-accent transition-colors"
                             title="수정"
@@ -468,11 +470,20 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                     setEditCategory={setEditingCategory}
                     editSubcategory={editingSubcat}
                     setEditSubcategory={setEditingSubcat}
+                    editReportedToNeis={editingReportedToNeis}
+                    setEditReportedToNeis={setEditingReportedToNeis}
                     onSave={() => {
-                      void updateRecord({ ...editingRecord, content: editingContent, category: editingCategory, subcategory: editingSubcat });
+                      void updateRecord({
+                        ...editingRecord,
+                        content: editingContent,
+                        category: editingCategory,
+                        subcategory: editingSubcat,
+                        reportedToNeis: editingRecord.category === 'attendance' ? editingReportedToNeis : editingRecord.reportedToNeis,
+                      });
                       setEditingRecordId(null);
+                      setEditingReportedToNeis(false);
                     }}
-                    onCancel={() => setEditingRecordId(null)}
+                    onCancel={() => { setEditingRecordId(null); setEditingReportedToNeis(false); }}
                   />
                 </div>
               );

@@ -19,6 +19,8 @@ export interface RecordEditProps {
   setEditCategory: (v: string) => void;
   editSubcategory: string;
   setEditSubcategory: (v: string) => void;
+  editReportedToNeis: boolean;
+  setEditReportedToNeis: (v: boolean) => void;
   onEditSave: (record: StudentRecord) => Promise<void>;
   onEditCancel: () => void;
 }

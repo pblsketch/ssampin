@@ -47,6 +47,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [editContent, setEditContent] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editSubcategory, setEditSubcategory] = useState('');
+  const [editReportedToNeis, setEditReportedToNeis] = useState(false);
   const [sortMode, setSortMode] = useState<RecordSortMode>('time');
 
   // debounce keyword
@@ -163,6 +164,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setEditContent(record.content);
     setEditCategory(record.category);
     setEditSubcategory(record.subcategory);
+    setEditReportedToNeis(record.reportedToNeis ?? false);
   }, []);
 
   const handleEditSave = useCallback(async (record: StudentRecord) => {
@@ -171,12 +173,14 @@ function SearchMode({ students, records, categories }: ModeProps) {
       content: editContent,
       category: editCategory,
       subcategory: editSubcategory,
+      reportedToNeis: record.category === 'attendance' ? editReportedToNeis : record.reportedToNeis,
     });
     setEditingId(null);
     setEditContent('');
     setEditCategory('');
     setEditSubcategory('');
-  }, [editContent, editCategory, editSubcategory, updateRecord]);
+    setEditReportedToNeis(false);
+  }, [editContent, editCategory, editSubcategory, editReportedToNeis, updateRecord]);
 
   const handleExportFiltered = useCallback(async () => {
     const targetStudents = selectedStudentId
@@ -418,8 +422,10 @@ function SearchMode({ students, records, categories }: ModeProps) {
           setEditCategory={setEditCategory}
           editSubcategory={editSubcategory}
           setEditSubcategory={setEditSubcategory}
+          editReportedToNeis={editReportedToNeis}
+          setEditReportedToNeis={setEditReportedToNeis}
           onEditSave={handleEditSave}
-          onEditCancel={() => setEditingId(null)}
+          onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); }}
         />
       ) : (
         <DefaultRecordListView
@@ -437,8 +443,10 @@ function SearchMode({ students, records, categories }: ModeProps) {
           setEditCategory={setEditCategory}
           editSubcategory={editSubcategory}
           setEditSubcategory={setEditSubcategory}
+          editReportedToNeis={editReportedToNeis}
+          setEditReportedToNeis={setEditReportedToNeis}
           onEditSave={handleEditSave}
-          onEditCancel={() => setEditingId(null)}
+          onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); }}
         />
       )}
     </div>

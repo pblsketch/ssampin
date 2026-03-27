@@ -14,6 +14,8 @@ export interface InlineRecordEditorProps {
   setEditCategory: (v: string) => void;
   editSubcategory: string;
   setEditSubcategory: (v: string) => void;
+  editReportedToNeis?: boolean;
+  setEditReportedToNeis?: (v: boolean) => void;
   onSave: () => void;
   onCancel: () => void;
   compact?: boolean;
@@ -27,6 +29,8 @@ export function InlineRecordEditor({
   setEditCategory,
   editSubcategory,
   setEditSubcategory,
+  editReportedToNeis,
+  setEditReportedToNeis,
   onSave,
   onCancel,
   compact,
@@ -165,6 +169,22 @@ export function InlineRecordEditor({
           className="w-full bg-sp-surface border border-sp-border rounded-lg text-sm text-sp-text px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-sp-accent"
         />
       </div>
+
+      {/* 나이스 반영 체크 (출결일 때만) */}
+      {isAttendance && setEditReportedToNeis && (
+        <label className="flex items-center gap-2 text-xs text-sp-muted cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={editReportedToNeis ?? false}
+            onChange={(e) => setEditReportedToNeis(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
+          />
+          <span className="flex items-center gap-1">
+            나이스 반영 완료
+            <span className="text-[10px] text-sp-muted/60">(나중에 변경 가능)</span>
+          </span>
+        </label>
+      )}
 
       {/* 액션 버튼 */}
       <div className="flex justify-end gap-2 mt-1">
