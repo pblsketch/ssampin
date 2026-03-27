@@ -14,6 +14,7 @@ export interface StudentRecord {
   readonly followUp?: string;
   readonly followUpDate?: string;
   readonly followUpDone?: boolean;
+  readonly reportedToNeis?: boolean;
 }
 
 export interface StudentRecordsData {

@@ -18,11 +18,12 @@ interface DefaultRecordListViewProps extends RecordEditProps {
   onEdit: (record: StudentRecord) => void;
   onDelete: (id: string) => Promise<void>;
   onToggleFollowUp: (id: string) => Promise<void>;
+  onToggleNeisReport: (id: string) => Promise<void>;
 }
 
 function DefaultRecordListView({
   grouped, categories, studentMap,
-  onEdit, onDelete, onToggleFollowUp,
+  onEdit, onDelete, onToggleFollowUp, onToggleNeisReport,
   editingId, editContent, setEditContent,
   editCategory, setEditCategory, editSubcategory, setEditSubcategory,
   onEditSave, onEditCancel,
@@ -71,6 +72,22 @@ function DefaultRecordListView({
                         title={`${record.followUp}${record.followUpDate ? ` (${formatDateKR(record.followUpDate)})` : ''}`}
                       >
                         {record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}
+                      </button>
+                    )}
+                    {record.category === 'attendance' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); void onToggleNeisReport(record.id); }}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex-shrink-0 ${
+                          record.reportedToNeis
+                            ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+                            : 'bg-red-500/10 text-red-400/70 hover:bg-red-500/20'
+                        }`}
+                        title={record.reportedToNeis ? '나이스 반영 완료 (클릭하여 취소)' : '나이스 미반영 (클릭하여 반영 처리)'}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
+                          {record.reportedToNeis ? 'check_circle' : 'pending'}
+                        </span>
+                        {record.reportedToNeis ? '나이스' : '미반영'}
                       </button>
                     )}
                     <span className="text-sm text-sp-text font-medium min-w-[60px] flex items-center gap-1.5">

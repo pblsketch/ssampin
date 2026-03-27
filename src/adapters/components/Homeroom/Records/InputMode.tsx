@@ -37,6 +37,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [followUp, setFollowUp] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
+  const [reportedToNeis, setReportedToNeis] = useState(false);
 
   /* ── prefill 적용 ── */
   useEffect(() => {
@@ -133,6 +134,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     const method = selectedSub.categoryId === 'counseling' ? selectedMethod : undefined;
     const fu = followUp.trim() || undefined;
     const fuDate = followUpDate || undefined;
+    const neisFlag = selectedSub.categoryId === 'attendance' ? reportedToNeis : undefined;
     const promises = Array.from(selectedStudents).map((studentId) =>
       addRecord(
         studentId,
@@ -143,6 +145,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
         method,
         fu,
         fuDate,
+        neisFlag,
       ),
     );
     await Promise.all(promises);
@@ -155,7 +158,8 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     setShowFollowUp(false);
     setFollowUp('');
     setFollowUpDate('');
-  }, [selectedStudents, selectedSub, memo, selectedDate, selectedMethod, followUp, followUpDate, addRecord]);
+    setReportedToNeis(false);
+  }, [selectedStudents, selectedSub, memo, selectedDate, selectedMethod, followUp, followUpDate, reportedToNeis, addRecord]);
 
   const dateRecords = useMemo(() => {
     return records.filter((r) => r.date === selectedDate);
@@ -376,6 +380,25 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
             )}
           </div>
         </div>
+
+        {/* 나이스 반영 체크 (출결일 때만) */}
+        {selectedSub?.categoryId === 'attendance' && (
+          <div className="rounded-xl bg-sp-card px-4 py-3">
+            <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={reportedToNeis}
+                onChange={(e) => setReportedToNeis(e.target.checked)}
+                className="w-4 h-4 rounded border-sp-border text-sp-accent
+                           focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
+              />
+              <span className="flex items-center gap-1">
+                나이스 반영 완료
+                <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
+              </span>
+            </label>
+          </div>
+        )}
 
         {/* 날짜 기록 미리보기 (기록 있을 때만) */}
         {dateRecords.length > 0 && (

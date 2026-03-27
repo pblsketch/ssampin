@@ -29,7 +29,7 @@ import {
 } from './recordUtils';
 
 function SearchMode({ students, records, categories }: ModeProps) {
-  const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone } =
+  const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone, toggleNeisReport } =
     useStudentRecordsStore();
   const showToast = useToastStore((s) => s.show);
   const [dismissedSearchGuide, setDismissedSearchGuide] = useState(
@@ -42,6 +42,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [followUpOnly, setFollowUpOnly] = useState(false);
+  const [unreportedOnly, setUnreportedOnly] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [editCategory, setEditCategory] = useState('');
@@ -80,7 +81,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
   // 필터 적용 여부
   const hasFilters = selectedStudentId || selectedCategory || selectedSubcategory ||
-    selectedMethod || debouncedKeyword || followUpOnly || periodFilter !== 'all';
+    selectedMethod || debouncedKeyword || followUpOnly || unreportedOnly || periodFilter !== 'all';
 
   const resetFilters = useCallback(() => {
     setSelectedStudentId('');
@@ -90,6 +91,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setKeyword('');
     setDebouncedKeyword('');
     setFollowUpOnly(false);
+    setUnreportedOnly(false);
     setPeriodFilter('all');
   }, [setPeriodFilter]);
 
@@ -114,6 +116,9 @@ function SearchMode({ students, records, categories }: ModeProps) {
     if (followUpOnly) {
       result = result.filter((r) => r.followUp && !r.followUpDone);
     }
+    if (unreportedOnly) {
+      result = result.filter((r) => r.category === 'attendance' && !r.reportedToNeis);
+    }
     if (periodFilter === 'week') {
       const { start, end } = getWeekRange();
       result = filterByDateRange(result, start, end) as StudentRecord[];
@@ -123,7 +128,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     }
 
     return sortByDateDesc(result);
-  }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, periodFilter]);
+  }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, unreportedOnly, periodFilter]);
 
   // 날짜별 그룹핑 + 정렬
   const grouped = useMemo(() => {
@@ -318,6 +323,18 @@ function SearchMode({ students, records, categories }: ModeProps) {
           {'\uD83D\uDCCC'} 미완료만
         </button>
 
+        {/* 나이스 미반영 필터 */}
+        <button
+          onClick={() => setUnreportedOnly(!unreportedOnly)}
+          className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+            unreportedOnly
+              ? 'bg-red-500 text-white'
+              : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
+          }`}
+        >
+          나이스 미반영
+        </button>
+
         {/* 기간 필터 */}
         <div className="flex gap-1 bg-sp-surface rounded-lg p-1 ml-auto">
           {([
@@ -393,6 +410,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
           onEdit={handleEdit}
           onDelete={deleteRecord}
           onToggleFollowUp={toggleFollowUpDone}
+          onToggleNeisReport={toggleNeisReport}
           editingId={editingId}
           editContent={editContent}
           setEditContent={setEditContent}
@@ -411,6 +429,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
           onEdit={handleEdit}
           onDelete={deleteRecord}
           onToggleFollowUp={toggleFollowUpDone}
+          onToggleNeisReport={toggleNeisReport}
           editingId={editingId}
           editContent={editContent}
           setEditContent={setEditContent}

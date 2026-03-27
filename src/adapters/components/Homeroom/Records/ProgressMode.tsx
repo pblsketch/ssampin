@@ -114,6 +114,12 @@ function ProgressMode({ students, records }: ModeProps) {
     { id: 'all', label: '전체' },
   ];
 
+  const unreportedCount = useMemo(() => {
+    return records.filter(
+      (r) => r.category === 'attendance' && !r.reportedToNeis,
+    ).length;
+  }, [records]);
+
   return (
     <div className="flex-1 flex flex-col gap-4 min-h-0">
       {/* 2-5: 요약 카드 */}
@@ -123,6 +129,15 @@ function ProgressMode({ students, records }: ModeProps) {
         <SummaryCard label="상담" value={summary.counseling} icon="psychology" color="text-blue-400" />
         <SummaryCard label="생활" value={summary.life} icon="school" color="text-green-400" />
       </div>
+
+      {/* 나이스 미반영 경고 */}
+      {unreportedCount > 0 && (
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg
+                        bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">
+          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>warning</span>
+          나이스 미반영 출결 기록 {unreportedCount}건
+        </div>
+      )}
 
       {/* 기간 필터 + 카테고리 탭 */}
       <div className="flex items-center gap-3 flex-wrap">
