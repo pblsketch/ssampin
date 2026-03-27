@@ -16,7 +16,7 @@ const koContent = {
   lang: 'ko',
   title: '개인정보처리방침',
   subtitle: '쌤핀 (SsamPin)',
-  lastUpdated: '최종 수정일: 2026년 3월 5일',
+  lastUpdated: '최종 수정일: 2026년 3월 26일',
   switchLang: 'View in English',
   switchHref: '?lang=en',
   sections: [
@@ -66,16 +66,18 @@ const koContent = {
             <li>
               <strong>직접 통신:</strong> 앱은 Google Calendar API와 사용자의 PC에서 직접 통신하며, 중간 서버를 거치지 않습니다.
             </li>
+            <li><strong>전송 보안:</strong> Google API와의 모든 통신은 HTTPS(TLS)를 통해 암호화되어 전송됩니다.</li>
           </ul>
         </>
       ),
     },
     {
       number: '4',
-      title: '정보 삭제',
+      title: '데이터 보존 및 삭제',
       content: (
         <>
           <ul>
+            <li>쌤핀은 구글 캘린더 연동이 활성화된 동안에만 데이터를 보존합니다. 연결 해제 또는 앱 삭제 시 즉시 삭제됩니다.</li>
             <li>구글 캘린더 연결을 해제하면 모든 OAuth 토큰 및 동기화 데이터가 즉시 삭제됩니다.</li>
             <li>앱을 삭제하면 로컬에 저장된 모든 데이터가 함께 삭제됩니다.</li>
             <li>
@@ -101,6 +103,8 @@ const koContent = {
           <ul>
             <li>사용자 데이터를 제3자에게 제공, 판매, 공유하지 않습니다.</li>
             <li>쌤핀은 Google Calendar API와만 직접 통신하며, 그 외 어떤 외부 서비스에도 데이터를 전달하지 않습니다.</li>
+            <li>사용자 데이터를 광고주, 데이터 브로커 또는 정보 재판매자에게 이전하지 않습니다.</li>
+            <li>사용자 데이터를 광고 제공, 신용 평가, 대출 심사 등의 목적으로 사용하지 않습니다.</li>
           </ul>
         </>
       ),
@@ -133,6 +137,25 @@ const koContent = {
         </>
       ),
     },
+    {
+      number: '8',
+      title: 'Google API 서비스 사용자 데이터 정책 준수',
+      content: (
+        <>
+          <p>
+            쌤핀이 Google API를 통해 수신한 정보를 다른 앱에 사용 및 전송하는 것은{' '}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google API 서비스 사용자 데이터 정책
+            </a>
+            (Limited Use 요구사항 포함)을 준수합니다.
+          </p>
+        </>
+      ),
+    },
   ],
 };
 
@@ -140,7 +163,7 @@ const enContent = {
   lang: 'en',
   title: 'Privacy Policy',
   subtitle: 'SsamPin',
-  lastUpdated: 'Last updated: March 5, 2026',
+  lastUpdated: 'Last updated: March 26, 2026',
   switchLang: '한국어로 보기',
   switchHref: '?lang=ko',
   sections: [
@@ -190,16 +213,18 @@ const enContent = {
             <li>
               <strong>Direct communication:</strong> The app communicates directly with the Google Calendar API from the user&apos;s PC, without passing through any intermediate servers.
             </li>
+            <li><strong>Transit security:</strong> All communication with Google APIs is encrypted in transit via HTTPS (TLS).</li>
           </ul>
         </>
       ),
     },
     {
       number: '4',
-      title: 'Data Deletion',
+      title: 'Data Retention and Deletion',
       content: (
         <>
           <ul>
+            <li>SsamPin retains data only while the Google Calendar integration is active. Data is immediately deleted upon disconnection or app uninstallation.</li>
             <li>When you disconnect Google Calendar, all OAuth tokens and synced data are immediately deleted.</li>
             <li>When you uninstall the app, all locally stored data is deleted.</li>
             <li>
@@ -225,6 +250,8 @@ const enContent = {
           <ul>
             <li>We do not share, sell, or provide your data to any third parties.</li>
             <li>SsamPin only communicates directly with the Google Calendar API, and no data is sent to any other external services.</li>
+            <li>We do not transfer user data to advertisers, data brokers, or information resellers.</li>
+            <li>We do not use user data for serving advertisements, credit assessment, lending decisions, or any other purposes beyond the app&apos;s core functionality.</li>
           </ul>
         </>
       ),
@@ -254,6 +281,25 @@ const enContent = {
               <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
             </li>
           </ul>
+        </>
+      ),
+    },
+    {
+      number: '8',
+      title: 'Google API Services User Data Policy Compliance',
+      content: (
+        <>
+          <p>
+            SsamPin&apos;s use and transfer of information received from Google APIs to any other app adheres to the{' '}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google API Services User Data Policy
+            </a>
+            , including the Limited Use requirements.
+          </p>
         </>
       ),
     },
@@ -363,8 +409,8 @@ export default async function PrivacyPage({ searchParams }: PageProps) {
         <div className="mt-10 text-center text-xs text-sp-muted/50">
           <p>
             {isEnglish
-              ? 'This privacy policy may be updated. Please check this page periodically for changes.'
-              : '본 개인정보처리방침은 변경될 수 있습니다. 변경 시 이 페이지에서 확인하세요.'}
+              ? 'This privacy policy may be updated. Changes will be posted on this page with an updated revision date.'
+              : '본 개인정보처리방침은 변경될 수 있습니다. 변경 시 이 페이지를 통해 고지하며, 최종 수정일이 업데이트됩니다.'}
           </p>
         </div>
       </main>
