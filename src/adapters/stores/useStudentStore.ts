@@ -149,17 +149,22 @@ export const useStudentStore = create<StudentState>((set, get) => ({
           }
         : s,
     );
+
+    // 낙관적 업데이트: UI 먼저 반영
+    set({ students: newStudents });
+
     try {
       await studentRepository.saveStudents(newStudents);
-      set({ students: newStudents });
 
       // 상태 변경 시 생일 동기화 반영
       const student = students.find((s) => s.id === studentId);
       if (student?.birthDate && useSettingsStore.getState().settings.syncBirthdaysToSchedule) {
         void useEventsStore.getState().syncBirthdayEvents(newStudents);
       }
-    } catch {
-      // 무시
+    } catch (err) {
+      // 저장 실패 시 롤백
+      set({ students });
+      console.error('[changeStatus] 저장 실패, 롤백:', err);
     }
   },
 

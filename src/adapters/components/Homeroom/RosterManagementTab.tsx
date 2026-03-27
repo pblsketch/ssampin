@@ -27,6 +27,12 @@ export function RosterManagementTab() {
   const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }> | null>(null);
   // 보호자2 필드가 열려있는 학생 ID 세트
   const [showParent2, setShowParent2] = useState<Set<string>>(new Set());
+  // 상태 변경 모달용 상태 (prompt() 대신 사용)
+  const [pendingStatusChange, setPendingStatusChange] = useState<{
+    studentId: string;
+    status: StudentStatus;
+  } | null>(null);
+  const [statusNote, setStatusNote] = useState('');
   const settings = useSettingsStore((s) => s.settings);
   const showToast = useToastStore((s) => s.show);
 
@@ -473,8 +479,8 @@ export function RosterManagementTab() {
                         onChange={(e) => {
                           const newStatus = e.target.value as StudentStatus;
                           if (newStatus !== 'active') {
-                            const note = prompt(`${STUDENT_STATUS_LABELS[newStatus]} 사유를 입력하세요 (선택):`);
-                            void changeStatus(student.id, newStatus, note ?? '');
+                            setPendingStatusChange({ studentId: student.id, status: newStatus });
+                            setStatusNote('');
                           } else {
                             void changeStatus(student.id, 'active');
                           }
@@ -630,6 +636,51 @@ export function RosterManagementTab() {
                 className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
               >
                 저장하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 상태 변경 사유 입력 모달 (window.prompt 대체) */}
+      {pendingStatusChange && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-sp-text mb-2">
+              {STUDENT_STATUS_LABELS[pendingStatusChange.status]} 처리
+            </h3>
+            <p className="text-sm text-sp-muted mb-4">
+              사유를 입력하세요 (선택)
+            </p>
+            <input
+              type="text"
+              className="w-full rounded-lg bg-sp-bg border border-sp-border px-3 py-2 text-sm text-sp-text focus:border-sp-accent focus:outline-none mb-4"
+              placeholder="예: 2026.3.27 OO학교로 전출"
+              value={statusNote}
+              onChange={(e) => setStatusNote(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  void changeStatus(pendingStatusChange.studentId, pendingStatusChange.status, statusNote);
+                  setPendingStatusChange(null);
+                }
+              }}
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setPendingStatusChange(null)}
+                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  void changeStatus(pendingStatusChange.studentId, pendingStatusChange.status, statusNote);
+                  setPendingStatusChange(null);
+                }}
+                className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+              >
+                확인
               </button>
             </div>
           </div>
