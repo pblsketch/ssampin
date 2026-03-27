@@ -31,7 +31,24 @@ export function WeeklyTimetable() {
     void loadSettings();
   }, [loadSchedule, loadSettings]);
 
-  useWidgetRefresh(loadSchedule, { intervalMs: 60 * 60 * 1000 });
+  useWidgetRefresh(loadSchedule);
+
+  // data:changed 이벤트 직접 구독 (위젯 창에서 즉시 반영)
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onDataChanged) return;
+    const unsub = api.onDataChanged((filename: string) => {
+      if (filename === 'teacher-schedule' || filename === 'settings') {
+        useScheduleStore.setState({ loaded: false });
+        void loadSchedule();
+        if (filename === 'settings') {
+          useSettingsStore.setState({ loaded: false });
+          void loadSettings();
+        }
+      }
+    });
+    return unsub;
+  }, [loadSchedule, loadSettings]);
 
   const [now, setNow] = useState(new Date());
 

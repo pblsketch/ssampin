@@ -27,6 +27,7 @@ interface ScheduleState {
   overrides: readonly TimetableOverride[];
 
   load: () => Promise<void>;
+  forceReload: () => Promise<void>;
   updateClassSchedule: (data: ClassScheduleData) => Promise<void>;
   updateTeacherSchedule: (data: TeacherScheduleData) => Promise<void>;
   clearAll: (maxPeriods: number) => Promise<void>;
@@ -80,6 +81,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       } catch {
         set({ loaded: true });
       }
+    },
+
+    forceReload: async () => {
+      set({ loaded: false });
+      await get().load();
     },
 
     updateClassSchedule: async (data) => {

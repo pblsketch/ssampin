@@ -32,6 +32,27 @@ export function DashboardTimetable() {
     void loadSettings();
   }, [loadSchedule, loadSettings]);
 
+  // data:changed 이벤트 직접 구독 (위젯 창에서 즉시 반영)
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onDataChanged) return;
+    const unsub = api.onDataChanged((filename: string) => {
+      if (
+        filename === 'teacher-schedule' ||
+        filename === 'class-schedule' ||
+        filename === 'settings'
+      ) {
+        useScheduleStore.setState({ loaded: false });
+        void loadSchedule();
+        if (filename === 'settings') {
+          useSettingsStore.setState({ loaded: false });
+          void loadSettings();
+        }
+      }
+    });
+    return unsub;
+  }, [loadSchedule, loadSettings]);
+
   // 1분마다 현재 시각 갱신
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
