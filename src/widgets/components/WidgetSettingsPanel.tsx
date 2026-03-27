@@ -283,6 +283,27 @@ function StyleTab() {
           onChange={(v) => updateStyle({ borderRadius: v })} />
         <SliderRow label="간격" min={4} max={32} step={2} value={ws.cardGap} unit="px" compact
           onChange={(v) => updateStyle({ cardGap: v })} />
+        <SliderRow label="행 높이" min={40} max={100} step={5} value={ws.gridRowHeight ?? 80} unit="px" compact
+          onChange={(v) => updateStyle({ gridRowHeight: v })} />
+        <div className="flex gap-1 mt-0.5">
+          {([
+            { label: '촘촘', value: 50 },
+            { label: '기본', value: 80 },
+            { label: '넓게', value: 100 },
+          ] as const).map((p) => (
+            <button
+              key={p.label}
+              onClick={() => updateStyle({ gridRowHeight: p.value })}
+              className={`flex-1 py-1 text-caption rounded-md border transition-all ${
+                (ws.gridRowHeight ?? 80) === p.value
+                  ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                  : 'border-sp-border text-sp-muted hover:text-sp-text'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
         <ToggleRow label="테두리" checked={ws.showBorder} compact
           onChange={(v) => updateStyle({ showBorder: v })} />
         {ws.showBorder && (

@@ -128,6 +128,7 @@ const DEFAULT_SETTINGS: Settings = {
     backgroundImage: null,
     backgroundImageOpacity: 0.15,
     fontFamily: 'pretendard',
+    gridRowHeight: 80,
   },
   seatingDefaultView: 'student',
   eventAlertEnabled: true,

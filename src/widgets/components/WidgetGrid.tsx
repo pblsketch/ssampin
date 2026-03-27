@@ -142,7 +142,7 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
         <SortableContext items={isEditMode ? widgetIds : filteredIds} strategy={rectSortingStrategy}>
           <div
             className="widget-grid grid grid-cols-1 md:grid-cols-4 grid-flow-row-dense"
-            style={{ gap: `${ws.cardGap}px`, gridAutoRows: '80px' }}
+            style={{ gap: `${ws.cardGap}px`, gridAutoRows: `${ws.gridRowHeight ?? 80}px` }}
           >
             {(isEditMode ? visibleWidgets : filteredWidgets).map((instance) => {
               const definition = getWidgetById(instance.widgetId);
@@ -175,7 +175,7 @@ export function WidgetGrid({ isEditMode, onNavigate }: WidgetGridProps) {
               className="ring-2 ring-sp-accent/50 shadow-lg shadow-sp-accent/20 overflow-hidden bg-sp-card"
               style={{
                 borderRadius: 'var(--sp-card-radius, 12px)',
-                maxHeight: activeWidget.instance.rowSpan * 80 + (activeWidget.instance.rowSpan - 1) * 16,
+                maxHeight: activeWidget.instance.rowSpan * (ws.gridRowHeight ?? 80) + (activeWidget.instance.rowSpan - 1) * ws.cardGap,
               }}
             >
               <WidgetCard definition={activeWidget.definition} />

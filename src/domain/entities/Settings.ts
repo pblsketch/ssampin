@@ -68,6 +68,8 @@ export interface WidgetStyleSettings {
   readonly backgroundImageOpacity: number;
   /** 폰트 */
   readonly fontFamily: FontFamily;
+  /** 그리드 행 높이 (40~100px, 기본 80) */
+  readonly gridRowHeight: number;
 }
 
 export type AlarmSoundId = 'beep' | 'school-bell' | 'alarm-clock' | 'gentle-chime' | 'buzzer' | 'custom';
