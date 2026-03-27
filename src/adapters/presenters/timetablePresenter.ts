@@ -12,6 +12,23 @@ export interface SubjectStyle {
 }
 
 /**
+ * 현재 테마가 라이트 모드인지 판별한다.
+ * CSS 변수 `--sp-bg`의 밝기를 기준으로 판정.
+ */
+export function isLightTheme(): boolean {
+  const bg = getComputedStyle(document.documentElement)
+    .getPropertyValue('--sp-bg').trim();
+  if (!bg) return false;
+  const hex = bg.replace('#', '');
+  if (hex.length !== 6) return false;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const luminance = (r * 299 + g * 587 + b * 114) / 1000;
+  return luminance > 150;
+}
+
+/**
  * 과목명 + 사용자 색상 설정으로 셀 스타일을 반환한다.
  * 매핑에 없는 과목(자율, 동아리, 진로 등)은 cyan 기본 스타일.
  */
@@ -20,7 +37,8 @@ export function getSubjectStyle(
   userColors?: SubjectColorMap,
 ): SubjectStyle {
   const p = resolvePreset(subject, userColors);
-  return { bg: p.tw.bg, border: p.tw.border, text: p.tw.text };
+  const light = isLightTheme();
+  return { bg: p.tw.bg, border: p.tw.border, text: light ? p.tw.textOnLight : p.tw.text };
 }
 
 /** 도트 색상 (대시보드, ClassList 등에서 사용) */
@@ -36,7 +54,8 @@ export function getSubjectTextColor(
   subject: string,
   userColors?: SubjectColorMap,
 ): string {
-  return resolvePreset(subject, userColors).tw.text;
+  const p = resolvePreset(subject, userColors);
+  return isLightTheme() ? p.tw.textOnLight : p.tw.text;
 }
 
 /** 위젯용 bg + textLight 합친 클래스 문자열 */
@@ -45,7 +64,7 @@ export function getSubjectWidgetStyle(
   userColors?: SubjectColorMap,
 ): string {
   const p = resolvePreset(subject, userColors);
-  return `${p.tw.bg} ${p.tw.textLight}`;
+  return `${p.tw.bg} ${isLightTheme() ? p.tw.textOnLight : p.tw.textLight}`;
 }
 
 /**
@@ -60,9 +79,10 @@ export function getCellStyle(
   userSubjectColors?: SubjectColorMap,
   userClassroomColors?: SubjectColorMap,
 ): SubjectStyle {
+  const light = isLightTheme();
   if (colorBy === 'classroom' && classroom) {
     const p = resolveClassroomPreset(classroom, userClassroomColors);
-    return { bg: p.tw.bg, border: p.tw.border, text: p.tw.text };
+    return { bg: p.tw.bg, border: p.tw.border, text: light ? p.tw.textOnLight : p.tw.text };
   }
   return getSubjectStyle(subject, userSubjectColors);
 }
@@ -93,9 +113,10 @@ export function getCellWidgetStyle(
   userSubjectColors?: SubjectColorMap,
   userClassroomColors?: SubjectColorMap,
 ): string {
+  const light = isLightTheme();
   if (colorBy === 'classroom' && classroom) {
     const p = resolveClassroomPreset(classroom, userClassroomColors);
-    return `${p.tw.bg} ${p.tw.textLight}`;
+    return `${p.tw.bg} ${light ? p.tw.textOnLight : p.tw.textLight}`;
   }
   return getSubjectWidgetStyle(subject, userSubjectColors);
 }

@@ -4,6 +4,11 @@ export default {
   safelist: [
     'col-span-1', 'col-span-2', 'col-span-3', 'col-span-4',
     'md:col-span-1', 'md:col-span-2', 'md:col-span-3', 'md:col-span-4',
+    // 라이트 모드 시간표 과목 텍스트 색상
+    'text-yellow-700', 'text-green-700', 'text-blue-700', 'text-purple-700',
+    'text-orange-700', 'text-red-700', 'text-pink-700', 'text-indigo-700',
+    'text-teal-700', 'text-emerald-700', 'text-cyan-700', 'text-violet-700',
+    'text-amber-700', 'text-lime-700', 'text-rose-700', 'text-slate-700',
   ],
   darkMode: 'class',
   theme: {
