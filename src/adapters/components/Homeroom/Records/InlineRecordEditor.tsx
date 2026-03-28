@@ -162,11 +162,14 @@ export function InlineRecordEditor({
       {/* 메모 */}
       <div>
         <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>메모</p>
-        <input
+        <textarea
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}
           placeholder="메모 (선택)"
-          className="w-full bg-sp-surface border border-sp-border rounded-lg text-sm text-sp-text px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-sp-accent"
+          rows={compact ? 2 : 3}
+          className={`w-full bg-sp-surface border border-sp-border rounded-lg text-sm text-sp-text px-3 py-2 resize-y focus:outline-none focus:ring-1 focus:ring-sp-accent ${
+            compact ? 'min-h-[44px]' : 'min-h-[60px]'
+          }`}
         />
       </div>
 

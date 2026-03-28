@@ -5,6 +5,7 @@ import type { CounselingMethod } from '@domain/entities/StudentRecord';
 import type { RecordPrefill } from '../HomeroomPage';
 import { DEFAULT_TEMPLATES } from '@domain/valueObjects/DefaultTemplates';
 import { InlineRecordEditor } from './InlineRecordEditor';
+import { StudentRecordReferencePanel } from './StudentRecordReferencePanel';
 import {
   type ModeProps,
   formatDateKR,
@@ -39,6 +40,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [followUp, setFollowUp] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
   const [reportedToNeis, setReportedToNeis] = useState(false);
+  const [showReferencePanel, setShowReferencePanel] = useState(false);
 
   /* ── prefill 적용 ── */
   useEffect(() => {
@@ -63,17 +65,28 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     onPrefillConsumed?.();
   }, [prefill, students, onPrefillConsumed]);
 
+  useEffect(() => {
+    if (!showReferencePanel) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowReferencePanel(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showReferencePanel]);
+
   const toggleStudent = useCallback((id: string) => {
     setSelectedStudents((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      if (next.size !== 1) setShowReferencePanel(false);
       return next;
     });
   }, []);
 
   const clearAll = useCallback(() => {
     setSelectedStudents(new Set());
+    setShowReferencePanel(false);
   }, []);
 
   const handleAttendanceTypeClick = useCallback((type: string) => {
@@ -185,12 +198,24 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
               ({selectedStudents.size}명 선택됨)
             </span>
           </h3>
-          <button
-            onClick={clearAll}
-            className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
-          >
-            모두 해제
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedStudents.size === 1 && (
+              <button
+                onClick={() => setShowReferencePanel(true)}
+                className="flex items-center gap-1 text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
+                title="선택한 학생의 이전 기록 보기"
+              >
+                <span className="material-symbols-outlined text-sm">history</span>
+                이전 기록
+              </button>
+            )}
+            <button
+              onClick={clearAll}
+              className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
+            >
+              모두 해제
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-5 gap-2 overflow-y-auto flex-1">
           {students.map((student, idx) => {
@@ -504,6 +529,20 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
           저장하기
         </button>
       </div>
+      {/* 학생 기록 참조 패널 */}
+      {showReferencePanel && selectedStudents.size === 1 && (() => {
+        const selectedId = Array.from(selectedStudents)[0];
+        const student = students.find((s) => s.id === selectedId);
+        if (!student) return null;
+        return (
+          <StudentRecordReferencePanel
+            student={student}
+            records={records}
+            categories={categories}
+            onClose={() => setShowReferencePanel(false)}
+          />
+        );
+      })()}
     </div>
   );
 }
