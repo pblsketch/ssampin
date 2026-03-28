@@ -6,6 +6,7 @@ import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
+import { getDayOfWeek } from '@domain/rules/periodRules';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
@@ -54,7 +55,7 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     deleteProgressEntry,
   } = useTeachingClassStore();
 
-  const { classSchedule, teacherSchedule } = useScheduleStore();
+  const { classSchedule, getEffectiveTeacherSchedule } = useScheduleStore();
   const { settings } = useSettingsStore();
 
   const subjectAccent = useMemo(() => {
@@ -112,13 +113,6 @@ export function ProgressTab({ classId }: ProgressTabProps) {
 
   /* ── 폼 핸들러 ── */
 
-  // 날짜 → 요일 변환
-  const getDayOfWeek = useCallback((dateStr: string): string => {
-    const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
-    const d = new Date(dateStr + 'T00:00:00');
-    return DAYS[d.getDay()] ?? '';
-  }, []);
-
   // 해당 학급(과목)의 시간표 교시 추출
   const getMatchingPeriods = useCallback((dateStr: string): number[] => {
     if (!dateStr) return [];
@@ -126,40 +120,28 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     if (!currentClass) return [];
     const subjectName = currentClass.subject;
     const className = currentClass.name;
-    const dayOfWeek = getDayOfWeek(dateStr);
 
-    const dayScheduleClass = classSchedule[dayOfWeek];
-    const dayScheduleTeacher = teacherSchedule?.[dayOfWeek];
+    const weekendDays = settings.enableWeekendDays;
+    const dayScheduleTeacher = getEffectiveTeacherSchedule(dateStr, weekendDays);
 
     const periods: number[] = [];
 
-    // 1단계: 학급 시간표에서 과목 매칭 (담임 학급인 경우)
-    if (dayScheduleClass && dayScheduleClass.length > 0) {
-      dayScheduleClass.forEach((slot, idx) => {
-        if (slot.subject && isSubjectMatch(slot.subject, subjectName)) {
-          periods.push(idx + 1);
-        }
-      });
-    }
+    // 1단계: 교사 시간표에서 교실명 + 과목 동시 매칭 (가장 정확)
+    dayScheduleTeacher.forEach((slot, idx) => {
+      if (!slot) return;
+      const classroomMatch =
+        slot.classroom === className ||
+        slot.classroom.includes(className) ||
+        className.includes(slot.classroom);
+      const subjectMatch = isSubjectMatch(slot.subject, subjectName);
 
-    // 2단계: 교사 시간표에서 교실명 + 과목 동시 매칭
-    if (periods.length === 0 && dayScheduleTeacher) {
-      dayScheduleTeacher.forEach((slot, idx) => {
-        if (!slot) return;
-        const classroomMatch =
-          slot.classroom === className ||
-          slot.classroom.includes(className) ||
-          className.includes(slot.classroom);
-        const subjectMatch = isSubjectMatch(slot.subject, subjectName);
+      if (classroomMatch && subjectMatch) {
+        periods.push(idx + 1);
+      }
+    });
 
-        if (classroomMatch && subjectMatch) {
-          periods.push(idx + 1);
-        }
-      });
-    }
-
-    // 3단계: 교실명만으로 매칭 (과목명이 약간 다른 경우 커버)
-    if (periods.length === 0 && dayScheduleTeacher) {
+    // 2단계: 교실명만으로 매칭 (과목명이 약간 다른 경우 커버)
+    if (periods.length === 0) {
       dayScheduleTeacher.forEach((slot, idx) => {
         if (!slot) return;
         const classroomMatch =
@@ -173,8 +155,21 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       });
     }
 
+    // 3단계: 담임반 시간표 폴백 (교사 시간표가 없는 경우)
+    if (periods.length === 0) {
+      const dayOfWeek = getDayOfWeek(new Date(dateStr + 'T00:00:00'), weekendDays);
+      const dayScheduleClass = dayOfWeek ? classSchedule[dayOfWeek] : undefined;
+      if (dayScheduleClass && dayScheduleClass.length > 0) {
+        dayScheduleClass.forEach((slot, idx) => {
+          if (slot.subject && isSubjectMatch(slot.subject, subjectName)) {
+            periods.push(idx + 1);
+          }
+        });
+      }
+    }
+
     return periods;
-  }, [classId, classes, classSchedule, teacherSchedule, getDayOfWeek]);
+  }, [classId, classes, classSchedule, getEffectiveTeacherSchedule, settings.enableWeekendDays]);
 
   // 수업이 있는 요일 인덱스 (JS getDay: 0=일, 1=월, ..., 6=토)
   const lessonDayIndices = useMemo(() => {

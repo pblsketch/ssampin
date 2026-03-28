@@ -27,6 +27,9 @@ import {
   getWeekRange,
   getMonthRange,
 } from './recordUtils';
+import { FilterSummaryStrip } from './FilterSummaryStrip';
+import { ActionDashboard } from './ActionDashboard';
+import { StudentJumpList } from './StudentJumpList';
 
 function SearchMode({ students, records, categories }: ModeProps) {
   const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone, toggleNeisReport } =
@@ -48,7 +51,11 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [editCategory, setEditCategory] = useState('');
   const [editSubcategory, setEditSubcategory] = useState('');
   const [editReportedToNeis, setEditReportedToNeis] = useState(false);
+  const [editFollowUp, setEditFollowUp] = useState('');
+  const [editFollowUpDate, setEditFollowUpDate] = useState('');
   const [sortMode, setSortMode] = useState<RecordSortMode>('time');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   // debounce keyword
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,7 +101,14 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setFollowUpOnly(false);
     setUnreportedOnly(false);
     setPeriodFilter('all');
+    setCustomStartDate('');
+    setCustomEndDate('');
   }, [setPeriodFilter]);
+
+  const handleSummaryCategoryClick = useCallback((categoryId: string) => {
+    setSelectedCategory((prev) => prev === categoryId ? '' : categoryId);
+    setSelectedSubcategory('');
+  }, []);
 
   const filtered = useMemo(() => {
     let result = [...records];
@@ -126,10 +140,14 @@ function SearchMode({ students, records, categories }: ModeProps) {
     } else if (periodFilter === 'month') {
       const { start, end } = getMonthRange();
       result = filterByDateRange(result, start, end) as StudentRecord[];
+    } else if (periodFilter === 'custom' && customStartDate) {
+      const start = new Date(customStartDate + 'T00:00:00');
+      const end = customEndDate ? new Date(customEndDate + 'T23:59:59') : new Date();
+      result = filterByDateRange(result, start, end) as StudentRecord[];
     }
 
     return sortByDateDesc(result);
-  }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, unreportedOnly, periodFilter]);
+  }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, unreportedOnly, periodFilter, customStartDate, customEndDate]);
 
   // 날짜별 그룹핑 + 정렬
   const grouped = useMemo(() => {
@@ -165,6 +183,8 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setEditCategory(record.category);
     setEditSubcategory(record.subcategory);
     setEditReportedToNeis(record.reportedToNeis ?? false);
+    setEditFollowUp(record.followUp ?? '');
+    setEditFollowUpDate(record.followUpDate ?? '');
   }, []);
 
   const handleEditSave = useCallback(async (record: StudentRecord) => {
@@ -174,13 +194,17 @@ function SearchMode({ students, records, categories }: ModeProps) {
       category: editCategory,
       subcategory: editSubcategory,
       reportedToNeis: record.category === 'attendance' ? editReportedToNeis : record.reportedToNeis,
+      followUp: editFollowUp.trim() || undefined,
+      followUpDate: editFollowUpDate || undefined,
     });
     setEditingId(null);
     setEditContent('');
     setEditCategory('');
     setEditSubcategory('');
     setEditReportedToNeis(false);
-  }, [editContent, editCategory, editSubcategory, editReportedToNeis, updateRecord]);
+    setEditFollowUp('');
+    setEditFollowUpDate('');
+  }, [editContent, editCategory, editSubcategory, editReportedToNeis, editFollowUp, editFollowUpDate, updateRecord]);
 
   const handleExportFiltered = useCallback(async () => {
     const targetStudents = selectedStudentId
@@ -340,11 +364,12 @@ function SearchMode({ students, records, categories }: ModeProps) {
         </button>
 
         {/* 기간 필터 */}
-        <div className="flex gap-1 bg-sp-surface rounded-lg p-1 ml-auto">
+        <div className="flex items-center gap-1 bg-sp-surface rounded-lg p-1 ml-auto">
           {([
             { id: 'week', label: '이번 주' },
             { id: 'month', label: '이번 달' },
             { id: 'all', label: '전체' },
+            { id: 'custom', label: '직접 지정' },
           ] as const).map((f) => (
             <button
               key={f.id}
@@ -358,6 +383,25 @@ function SearchMode({ students, records, categories }: ModeProps) {
             </button>
           ))}
         </div>
+
+        {/* 사용자 지정 날짜 범위 */}
+        {periodFilter === 'custom' && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            />
+            <span className="text-xs text-sp-muted">~</span>
+            <input
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            />
+          </div>
+        )}
 
         {/* 내보내기 + 필터 초기화 */}
         {filtered.length > 0 && (
@@ -381,6 +425,14 @@ function SearchMode({ students, records, categories }: ModeProps) {
         )}
       </div>
 
+      {/* FilterSummaryStrip */}
+      <FilterSummaryStrip
+        filtered={filtered}
+        students={students}
+        categories={categories}
+        onCategoryClick={handleSummaryCategoryClick}
+      />
+
       {/* 정렬 컨트롤 */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-sp-muted">정렬:</span>
@@ -403,52 +455,84 @@ function SearchMode({ students, records, categories }: ModeProps) {
         <span className="text-xs text-sp-muted ml-auto">{filtered.length}건</span>
       </div>
 
-      {/* 2-1: 학생 선택 시 타임라인 뷰, 아니면 기존 뷰 */}
-      {selectedStudentId && selectedStudent ? (
-        <StudentTimelineView
-          student={selectedStudent}
-          records={filtered}
-          categories={categories}
-          studentMap={studentMap}
-          stats={studentStats}
-          onEdit={handleEdit}
-          onDelete={deleteRecord}
-          onToggleFollowUp={toggleFollowUpDone}
-          onToggleNeisReport={toggleNeisReport}
-          editingId={editingId}
-          editContent={editContent}
-          setEditContent={setEditContent}
-          editCategory={editCategory}
-          setEditCategory={setEditCategory}
-          editSubcategory={editSubcategory}
-          setEditSubcategory={setEditSubcategory}
-          editReportedToNeis={editReportedToNeis}
-          setEditReportedToNeis={setEditReportedToNeis}
-          onEditSave={handleEditSave}
-          onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); }}
+      {/* 3-column body */}
+      <div className="flex-1 flex gap-3 min-h-0">
+        {/* Left: StudentJumpList */}
+        <StudentJumpList
+          students={students}
+          records={records}
+          selectedStudentId={selectedStudentId}
+          onSelect={setSelectedStudentId}
         />
-      ) : (
-        <DefaultRecordListView
-          grouped={grouped}
-          categories={categories}
-          studentMap={studentMap}
-          onEdit={handleEdit}
-          onDelete={deleteRecord}
-          onToggleFollowUp={toggleFollowUpDone}
-          onToggleNeisReport={toggleNeisReport}
-          editingId={editingId}
-          editContent={editContent}
-          setEditContent={setEditContent}
-          editCategory={editCategory}
-          setEditCategory={setEditCategory}
-          editSubcategory={editSubcategory}
-          setEditSubcategory={setEditSubcategory}
-          editReportedToNeis={editReportedToNeis}
-          setEditReportedToNeis={setEditReportedToNeis}
-          onEditSave={handleEditSave}
-          onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); }}
-        />
-      )}
+
+        {/* Center: Record list */}
+        <div className="flex-1 min-w-0 min-h-0">
+          {/* 2-1: 학생 선택 시 타임라인 뷰, 아니면 기존 뷰 */}
+          {selectedStudentId && selectedStudent ? (
+            <StudentTimelineView
+              student={selectedStudent}
+              records={filtered}
+              categories={categories}
+              studentMap={studentMap}
+              stats={studentStats}
+              onEdit={handleEdit}
+              onDelete={deleteRecord}
+              onToggleFollowUp={toggleFollowUpDone}
+              onToggleNeisReport={toggleNeisReport}
+              editingId={editingId}
+              editContent={editContent}
+              setEditContent={setEditContent}
+              editCategory={editCategory}
+              setEditCategory={setEditCategory}
+              editSubcategory={editSubcategory}
+              setEditSubcategory={setEditSubcategory}
+              editReportedToNeis={editReportedToNeis}
+              setEditReportedToNeis={setEditReportedToNeis}
+              editFollowUp={editFollowUp}
+              setEditFollowUp={setEditFollowUp}
+              editFollowUpDate={editFollowUpDate}
+              setEditFollowUpDate={setEditFollowUpDate}
+              onEditSave={handleEditSave}
+              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditFollowUp(''); setEditFollowUpDate(''); }}
+            />
+          ) : (
+            <DefaultRecordListView
+              grouped={grouped}
+              categories={categories}
+              studentMap={studentMap}
+              onEdit={handleEdit}
+              onDelete={deleteRecord}
+              onToggleFollowUp={toggleFollowUpDone}
+              onToggleNeisReport={toggleNeisReport}
+              editingId={editingId}
+              editContent={editContent}
+              setEditContent={setEditContent}
+              editCategory={editCategory}
+              setEditCategory={setEditCategory}
+              editSubcategory={editSubcategory}
+              setEditSubcategory={setEditSubcategory}
+              editReportedToNeis={editReportedToNeis}
+              setEditReportedToNeis={setEditReportedToNeis}
+              editFollowUp={editFollowUp}
+              setEditFollowUp={setEditFollowUp}
+              editFollowUpDate={editFollowUpDate}
+              setEditFollowUpDate={setEditFollowUpDate}
+              onEditSave={handleEditSave}
+              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditFollowUp(''); setEditFollowUpDate(''); }}
+            />
+          )}
+        </div>
+
+        {/* Right: ActionDashboard (only when no student selected) */}
+        {!selectedStudentId && (
+          <ActionDashboard
+            records={records}
+            students={students}
+            onFilterUnreported={() => setUnreportedOnly(true)}
+            onFilterFollowUp={() => setFollowUpOnly(true)}
+          />
+        )}
+      </div>
     </div>
   );
 }

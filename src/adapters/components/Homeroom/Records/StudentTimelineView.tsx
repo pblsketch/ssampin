@@ -31,6 +31,7 @@ function StudentTimelineView({
   editingId, editContent, setEditContent,
   editCategory, setEditCategory, editSubcategory, setEditSubcategory,
   editReportedToNeis, setEditReportedToNeis,
+  editFollowUp, setEditFollowUp, editFollowUpDate, setEditFollowUpDate,
   onEditSave, onEditCancel,
 }: StudentTimelineViewProps) {
   const studentIdx = student.studentNumber ?? 0;
@@ -138,6 +139,10 @@ function StudentTimelineView({
                               setEditSubcategory={setEditSubcategory}
                               editReportedToNeis={editReportedToNeis}
                               setEditReportedToNeis={setEditReportedToNeis}
+                              editFollowUp={editFollowUp}
+                              setEditFollowUp={setEditFollowUp}
+                              editFollowUpDate={editFollowUpDate}
+                              setEditFollowUpDate={setEditFollowUpDate}
                               onSave={() => void onEditSave(record)}
                               onCancel={onEditCancel}
                             />

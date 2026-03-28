@@ -67,7 +67,7 @@ export const RECORD_COLOR_MAP: Record<
 };
 
 type ViewMode = 'input' | 'progress' | 'search';
-type PeriodFilter = 'week' | 'month' | 'all';
+type PeriodFilter = 'week' | 'month' | 'all' | 'custom';
 
 interface StudentRecordsState {
   records: readonly StudentRecord[];

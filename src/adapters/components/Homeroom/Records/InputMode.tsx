@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { CounselingMethod } from '@domain/entities/StudentRecord';
@@ -21,6 +21,8 @@ export interface InputModeProps extends ModeProps {
   onPrefillConsumed?: () => void;
 }
 
+type RightTab = 'today' | 'history';
+
 function InputMode({ students, records, categories, selectedDate, prefill, onPrefillConsumed }: InputModeProps) {
   const { addRecord, deleteRecord, updateRecord } = useStudentRecordsStore();
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
@@ -40,7 +42,50 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [followUp, setFollowUp] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
   const [reportedToNeis, setReportedToNeis] = useState(false);
-  const [showReferencePanel, setShowReferencePanel] = useState(false);
+  const [rightTab, setRightTab] = useState<RightTab>('today');
+  const [showMemoModal, setShowMemoModal] = useState(false);
+
+  // 3컬럼 리사이즈 (퍼센트 기반)
+  const [leftPct, setLeftPct] = useState(38);
+  const [rightPct, setRightPct] = useState(24);
+  const draggingHandle = useRef<'left' | 'right' | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!draggingHandle.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+
+      if (draggingHandle.current === 'left') {
+        // 좌측 핸들: 좌측 영역 크기 조절 (최소 20%, 최대 = 100 - rightPct - 25)
+        setLeftPct(Math.min(100 - rightPct - 25, Math.max(20, pct)));
+      } else {
+        // 우측 핸들: 우측 영역 크기 조절 (100 - pct, 최소 18%, 최대 = 100 - leftPct - 25)
+        const newRight = 100 - pct;
+        setRightPct(Math.min(100 - leftPct - 25, Math.max(18, newRight)));
+      }
+    };
+    const handleMouseUp = () => {
+      draggingHandle.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [leftPct, rightPct]);
+
+  const startDrag = useCallback((handle: 'left' | 'right') => {
+    draggingHandle.current = handle;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const centerPct = 100 - leftPct - rightPct;
 
   /* ── prefill 적용 ── */
   useEffect(() => {
@@ -65,28 +110,18 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     onPrefillConsumed?.();
   }, [prefill, students, onPrefillConsumed]);
 
-  useEffect(() => {
-    if (!showReferencePanel) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowReferencePanel(false);
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showReferencePanel]);
 
   const toggleStudent = useCallback((id: string) => {
     setSelectedStudents((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      if (next.size !== 1) setShowReferencePanel(false);
       return next;
     });
   }, []);
 
   const clearAll = useCallback(() => {
     setSelectedStudents(new Set());
-    setShowReferencePanel(false);
   }, []);
 
   const handleAttendanceTypeClick = useCallback((type: string) => {
@@ -186,10 +221,17 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
 
   const canSave = selectedStudents.size > 0 && selectedSub !== null;
 
+  // 우측 패널에 표시할 학생 (1명 선택 시)
+  const singleSelectedStudent = useMemo(() => {
+    if (selectedStudents.size !== 1) return null;
+    const selectedId = Array.from(selectedStudents)[0];
+    return students.find((s) => s.id === selectedId) ?? null;
+  }, [selectedStudents, students]);
+
   return (
-    <div className="flex-1 flex gap-4 min-h-0">
-      {/* 좌측: 학생 선택 */}
-      <div className="flex-1 flex flex-col rounded-xl bg-sp-card p-5">
+    <div ref={containerRef} className="flex-1 flex min-h-0">
+      {/* ── 좌측: 학생 선택 ── */}
+      <div className="flex flex-col rounded-xl bg-sp-card p-5 min-w-0" style={{ width: `${leftPct}%` }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-base">group</span>
@@ -201,7 +243,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
           <div className="flex items-center gap-2">
             {selectedStudents.size === 1 && (
               <button
-                onClick={() => setShowReferencePanel(true)}
+                onClick={() => setRightTab('history')}
                 className="flex items-center gap-1 text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
                 title="선택한 학생의 이전 기록 보기"
               >
@@ -217,7 +259,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-5 gap-2 overflow-y-auto flex-1">
+        <div className="grid grid-cols-4 gap-2 overflow-y-auto flex-1">
           {students.map((student, idx) => {
             if (student.isVacant) {
               return (
@@ -248,10 +290,18 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
         </div>
       </div>
 
-      {/* 우측 패널 */}
-      <div className="w-[380px] flex flex-col gap-3 shrink-0 overflow-y-auto">
-        {/* 카드 1: 카테고리 선택 + 템플릿 */}
-        <div className="rounded-xl bg-sp-card p-4 flex-1 overflow-y-auto">
+      {/* 리사이즈 핸들 (좌↔중) */}
+      <div
+        onMouseDown={() => startDrag('left')}
+        className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-sp-accent/10 transition-colors"
+      >
+        <div className="w-0.5 h-8 rounded-full bg-sp-border group-hover:bg-sp-accent transition-colors" />
+      </div>
+
+      {/* ── 중앙: 카테고리 + 메모 입력 ── */}
+      <div className="flex flex-col min-h-0 relative min-w-0" style={{ width: `${centerPct}%` }}>
+        <div className="rounded-xl bg-sp-card p-5 flex-1 overflow-y-auto pb-20">
+          {/* 카테고리 헤더 + 템플릿 */}
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
               <span className="material-symbols-outlined text-base">category</span>
@@ -271,6 +321,8 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
               ))}
             </select>
           </div>
+
+          {/* 카테고리 목록 */}
           <div className="space-y-3">
             {categories.map((cat) => (
               <div key={cat.id}>
@@ -340,13 +392,13 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
               </div>
             ))}
           </div>
-        </div>
 
-        {/* 카드 2: 메모 + 상담방법 + 후속조치 통합 */}
-        <div className="rounded-xl bg-sp-card p-4 space-y-3">
-          {/* 상담 방법 (인라인, counseling일 때만) */}
+          {/* 구분선 */}
+          <div className="border-t border-sp-border my-4" />
+
+          {/* 상담 방법 (counseling일 때만) */}
           {selectedSub?.categoryId === 'counseling' && (
-            <div>
+            <div className="mb-3">
               <p className="text-xs text-sp-muted mb-1.5">상담 방법</p>
               <div className="flex flex-wrap gap-1.5">
                 {METHOD_OPTIONS.map((opt) => {
@@ -370,15 +422,43 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
           )}
 
           {/* 메모 */}
-          <textarea
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
-            placeholder="메모 입력 (선택사항)"
-            className="w-full h-20 bg-sp-surface border border-sp-border rounded-lg p-3 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
-          />
+          <div className="relative">
+            <textarea
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="메모 입력 (선택사항)"
+              className="w-full h-20 bg-sp-surface border border-sp-border rounded-lg p-3 pr-9 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            />
+            <button
+              onClick={() => setShowMemoModal(true)}
+              className="absolute top-2 right-2 p-1 rounded text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10 transition-colors"
+              title="크게 보기"
+            >
+              <span className="material-symbols-outlined text-base">open_in_full</span>
+            </button>
+          </div>
+
+          {/* 나이스 반영 체크 (출결일 때만) */}
+          {selectedSub?.categoryId === 'attendance' && (
+            <div className="mt-3">
+              <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={reportedToNeis}
+                  onChange={(e) => setReportedToNeis(e.target.checked)}
+                  className="w-4 h-4 rounded border-sp-border text-sp-accent
+                             focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
+                />
+                <span className="flex items-center gap-1">
+                  나이스 반영 완료
+                  <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* 후속 조치 (인라인 토글) */}
-          <div>
+          <div className="mt-3">
             <button
               onClick={() => setShowFollowUp(!showFollowUp)}
               className="flex items-center gap-1.5 text-xs text-sp-muted hover:text-sp-text transition-colors"
@@ -407,49 +487,122 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
           </div>
         </div>
 
-        {/* 나이스 반영 체크 (출결일 때만) */}
-        {selectedSub?.categoryId === 'attendance' && (
-          <div className="rounded-xl bg-sp-card px-4 py-3">
-            <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={reportedToNeis}
-                onChange={(e) => setReportedToNeis(e.target.checked)}
-                className="w-4 h-4 rounded border-sp-border text-sp-accent
-                           focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
-              />
-              <span className="flex items-center gap-1">
-                나이스 반영 완료
-                <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
-              </span>
-            </label>
-          </div>
-        )}
+        {/* 저장 버튼 (sticky) */}
+        <div className="sticky bottom-0 bg-gradient-to-t from-sp-card to-transparent pt-6 pb-1 px-5 -mt-16 rounded-b-xl">
+          <button
+            onClick={() => void handleSave()}
+            disabled={!canSave}
+            className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${canSave
+              ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
+              : 'bg-sp-surface text-sp-muted cursor-not-allowed'
+              }`}
+          >
+            <span className="material-symbols-outlined text-base">save</span>
+            저장하기
+          </button>
+        </div>
+      </div>
 
-        {/* 날짜 기록 미리보기 (기록 있을 때만) */}
-        {dateRecords.length > 0 && (
-          <div className="rounded-xl bg-sp-card px-4 py-3">
-            <p className="text-xs text-sp-muted mb-1.5">
-              {'\uD83D\uDCCB'} {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
-            </p>
-            <div className="space-y-1 max-h-32 overflow-y-auto">
-              {dateRecords.map((record) => {
-                const student = studentMap.get(record.studentId);
-                const isEditing = editingRecordId === record.id;
-                return (
-                  <div key={record.id} className={`group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors ${
-                    isEditing ? 'bg-sp-accent/10 ring-1 ring-sp-accent/30' : 'hover:bg-sp-surface/50'
-                  }`}>
-                    <span className={getRecordTagClass(record.category, categories)}>
-                      {record.subcategory}
-                    </span>
-                    <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
-                    {!isEditing && (
-                      <>
+      {/* 리사이즈 핸들 (중↔우) */}
+      <div
+        onMouseDown={() => startDrag('right')}
+        className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-sp-accent/10 transition-colors"
+      >
+        <div className="w-0.5 h-8 rounded-full bg-sp-border group-hover:bg-sp-accent transition-colors" />
+      </div>
+
+      {/* ── 우측: 오늘 기록 / 이전 기록 ── */}
+      <div className="rounded-xl bg-sp-card flex flex-col min-h-0 min-w-0" style={{ width: `${rightPct}%` }}>
+        {/* 탭 헤더 */}
+        <div className="flex border-b border-sp-border shrink-0">
+          <button
+            onClick={() => setRightTab('today')}
+            className={`flex-1 py-3 text-xs font-semibold text-center transition-colors ${
+              rightTab === 'today'
+                ? 'text-sp-accent border-b-2 border-sp-accent'
+                : 'text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            오늘 기록
+          </button>
+          {selectedStudents.size === 1 && (
+            <button
+              onClick={() => setRightTab('history')}
+              className={`flex-1 py-3 text-xs font-semibold text-center transition-colors ${
+                rightTab === 'history'
+                  ? 'text-sp-accent border-b-2 border-sp-accent'
+                  : 'text-sp-muted hover:text-sp-text'
+              }`}
+            >
+              이전 기록
+            </button>
+          )}
+        </div>
+
+        {/* 탭 콘텐츠 */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {rightTab === 'today' ? (
+            /* ── 오늘 기록 탭 ── */
+            editingRecordId ? (
+              /* 편집 모드 */
+              <div className="p-4 flex flex-col gap-3">
+                <button
+                  onClick={() => { setEditingRecordId(null); setEditingReportedToNeis(false); }}
+                  className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors self-start"
+                >
+                  <span className="material-symbols-outlined text-sm">arrow_back</span>
+                  목록으로
+                </button>
+                {(() => {
+                  const editingRecord = dateRecords.find((r) => r.id === editingRecordId);
+                  if (!editingRecord) return null;
+                  return (
+                    <InlineRecordEditor
+                      record={editingRecord}
+                      categories={categories}
+                      editContent={editingContent}
+                      setEditContent={setEditingContent}
+                      editCategory={editingCategory}
+                      setEditCategory={setEditingCategory}
+                      editSubcategory={editingSubcat}
+                      setEditSubcategory={setEditingSubcat}
+                      editReportedToNeis={editingReportedToNeis}
+                      setEditReportedToNeis={setEditingReportedToNeis}
+                      onSave={() => {
+                        void updateRecord({
+                          ...editingRecord,
+                          content: editingContent,
+                          category: editingCategory,
+                          subcategory: editingSubcat,
+                          reportedToNeis: editingRecord.category === 'attendance' ? editingReportedToNeis : editingRecord.reportedToNeis,
+                        });
+                        setEditingRecordId(null);
+                        setEditingReportedToNeis(false);
+                      }}
+                      onCancel={() => { setEditingRecordId(null); setEditingReportedToNeis(false); }}
+                    />
+                  );
+                })()}
+              </div>
+            ) : dateRecords.length > 0 ? (
+              /* 기록 목록 */
+              <div className="p-4">
+                <p className="text-xs text-sp-muted mb-2">
+                  {'\uD83D\uDCCB'} {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
+                </p>
+                <div className="space-y-1">
+                  {dateRecords.map((record) => {
+                    const student = studentMap.get(record.studentId);
+                    return (
+                      <div key={record.id} className="group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors hover:bg-sp-surface/50">
+                        <span className={getRecordTagClass(record.category, categories)}>
+                          {record.subcategory}
+                        </span>
+                        <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
                         {record.content && (
                           <span className="text-sp-muted truncate flex-1">{record.content}</span>
                         )}
-                        <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+                        <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => {
                               setEditingRecordId(record.id);
@@ -471,78 +624,89 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                             <span className="material-symbols-outlined text-sm">delete</span>
                           </button>
                         </div>
-                      </>
-                    )}
-                    {isEditing && (
-                      <span className="ml-auto text-caption text-sp-accent font-medium">수정 중</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {/* 편집 에디터: 기록 리스트 바깥에 별도 카드로 렌더링 */}
-            {editingRecordId && (() => {
-              const editingRecord = dateRecords.find((r) => r.id === editingRecordId);
-              if (!editingRecord) return null;
-              return (
-                <div className="mt-2">
-                  <InlineRecordEditor
-                    record={editingRecord}
-                    categories={categories}
-                    editContent={editingContent}
-                    setEditContent={setEditingContent}
-                    editCategory={editingCategory}
-                    setEditCategory={setEditingCategory}
-                    editSubcategory={editingSubcat}
-                    setEditSubcategory={setEditingSubcat}
-                    editReportedToNeis={editingReportedToNeis}
-                    setEditReportedToNeis={setEditingReportedToNeis}
-                    onSave={() => {
-                      void updateRecord({
-                        ...editingRecord,
-                        content: editingContent,
-                        category: editingCategory,
-                        subcategory: editingSubcat,
-                        reportedToNeis: editingRecord.category === 'attendance' ? editingReportedToNeis : editingRecord.reportedToNeis,
-                      });
-                      setEditingRecordId(null);
-                      setEditingReportedToNeis(false);
-                    }}
-                    onCancel={() => { setEditingRecordId(null); setEditingReportedToNeis(false); }}
-                  />
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* 저장 */}
-        <button
-          onClick={() => void handleSave()}
-          disabled={!canSave}
-          className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${canSave
-            ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
-            : 'bg-sp-surface text-sp-muted cursor-not-allowed'
-            }`}
-        >
-          <span className="material-symbols-outlined text-base">save</span>
-          저장하기
-        </button>
+              </div>
+            ) : (
+              /* 빈 상태 */
+              <div className="flex flex-col items-center justify-center py-12 text-sp-muted">
+                <span className="material-symbols-outlined text-3xl mb-2">note_add</span>
+                <p className="text-sm">오늘 기록이 없습니다</p>
+                <p className="text-xs mt-1">좌측에서 학생과 카테고리를 선택하세요</p>
+              </div>
+            )
+          ) : (
+            /* ── 이전 기록 탭 ── */
+            singleSelectedStudent ? (
+              <StudentRecordReferencePanel
+                student={singleSelectedStudent}
+                records={records}
+                categories={categories}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-sp-muted">
+                <span className="material-symbols-outlined text-3xl mb-2">person_search</span>
+                <p className="text-sm">학생 1명을 선택하세요</p>
+              </div>
+            )
+          )}
+        </div>
       </div>
-      {/* 학생 기록 참조 패널 */}
-      {showReferencePanel && selectedStudents.size === 1 && (() => {
-        const selectedId = Array.from(selectedStudents)[0];
-        const student = students.find((s) => s.id === selectedId);
-        if (!student) return null;
-        return (
-          <StudentRecordReferencePanel
-            student={student}
-            records={records}
-            categories={categories}
-            onClose={() => setShowReferencePanel(false)}
-          />
-        );
-      })()}
+      {/* 메모 확대 모달 */}
+      {showMemoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowMemoModal(false)}>
+          <div className="bg-sp-card rounded-2xl shadow-2xl w-[640px] max-w-[90vw] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
+              <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+                <span className="material-symbols-outlined text-base">edit_note</span>
+                메모 입력
+              </h3>
+              <div className="flex items-center gap-2">
+                <select
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    const tpl = DEFAULT_TEMPLATES.find((t) => t.id === e.target.value);
+                    if (tpl) setMemo(tpl.contentTemplate);
+                    e.target.value = '';
+                  }}
+                  defaultValue=""
+                  className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                >
+                  <option value="">{'\uD83D\uDCDD'} 템플릿</option>
+                  {DEFAULT_TEMPLATES.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setShowMemoModal(false)}
+                  className="p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 p-5">
+              <textarea
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                placeholder="메모를 입력하세요..."
+                autoFocus
+                className="w-full h-full min-h-[300px] bg-sp-surface border border-sp-border rounded-xl p-4 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-2 focus:ring-sp-accent"
+              />
+            </div>
+            <div className="flex justify-end px-5 py-3 border-t border-sp-border">
+              <button
+                onClick={() => setShowMemoModal(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/80 transition-colors"
+              >
+                완료
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

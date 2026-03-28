@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { filterByStudent, getAttendanceStats, sortByDateDesc } from '@domain/rules/studentRecordRules';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { StatItem } from './RecordStatCards';
 import {
   formatDateKR,
@@ -16,15 +17,18 @@ interface StudentRecordReferencePanelProps {
   student: Student;
   records: readonly StudentRecord[];
   categories: readonly RecordCategoryItem[];
-  onClose: () => void;
 }
 
 export function StudentRecordReferencePanel({
   student,
   records,
   categories,
-  onClose,
 }: StudentRecordReferencePanelProps) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const { updateRecord } = useStudentRecordsStore();
+
   const studentRecords = useMemo(() => {
     const filtered = filterByStudent(records, student.id);
     return sortByDateDesc(filtered);
@@ -48,34 +52,32 @@ export function StudentRecordReferencePanel({
     return { ...att, counseling, total: studentRecords.length };
   }, [records, student.id, studentRecords.length]);
 
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const studentIdx = student.studentNumber ?? 0;
 
   return (
-    <div
-      className="fixed right-0 top-0 bottom-0 w-[380px] max-w-[90vw] z-40 bg-sp-card border-l border-sp-border shadow-2xl flex flex-col animate-slide-in-right"
-    >
+    <div className="flex flex-col flex-1 min-h-0">
       {/* 헤더 */}
-      <div className="flex items-center justify-between p-4 border-b border-sp-border shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-sp-accent/20 flex items-center justify-center">
-            <span className="text-base font-bold text-sp-accent">
-              {student.name.charAt(0)}
-            </span>
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-sp-text">{student.name}</h3>
-            <p className="text-xs text-sp-muted">
-              {studentIdx}번 · 총 {studentRecords.length}건 기록
-            </p>
-          </div>
+      <div className="flex items-center gap-3 p-4 border-b border-sp-border shrink-0">
+        <div className="w-10 h-10 rounded-full bg-sp-accent/20 flex items-center justify-center">
+          <span className="text-base font-bold text-sp-accent">
+            {student.name.charAt(0)}
+          </span>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
-          title="닫기 (ESC)"
-        >
-          <span className="material-symbols-outlined text-lg">close</span>
-        </button>
+        <div>
+          <h3 className="text-sm font-bold text-sp-text">{student.name}</h3>
+          <p className="text-xs text-sp-muted">
+            {studentIdx}번 · 총 {studentRecords.length}건 기록
+          </p>
+        </div>
       </div>
 
       {/* 요약 통계 */}
@@ -112,10 +114,14 @@ export function StudentRecordReferencePanel({
                   {dateRecords.map((record) => (
                     <div key={record.id} className="relative">
                       <div
-                        className={`absolute -left-[23px] top-3 w-2.5 h-2.5 rounded-full ${getCategoryDotColor(record.category, categories)} z-10`}
+                        className={`absolute -left-[26px] top-3 w-2.5 h-2.5 rounded-full ${getCategoryDotColor(record.category, categories)} z-10`}
                       />
-                      <div className="rounded-lg bg-sp-surface/50 p-2.5">
-                        <div className="flex items-center gap-2 mb-1">
+                      <div className="rounded-lg bg-sp-surface/50">
+                        {/* Clickable header */}
+                        <button
+                          onClick={() => toggleExpand(record.id)}
+                          className="w-full flex items-center gap-2 p-2.5 text-left"
+                        >
                           <span className={getRecordTagClass(record.category, categories)}>
                             {record.subcategory}
                           </span>
@@ -127,16 +133,63 @@ export function StudentRecordReferencePanel({
                           <span className="text-[11px] text-sp-muted ml-auto">
                             {formatTimeKR(record.createdAt)}
                           </span>
-                        </div>
-                        {record.content && (
-                          <p className="text-sm text-sp-muted whitespace-pre-wrap">
-                            {record.content}
-                          </p>
-                        )}
-                        {record.followUp && (
-                          <div className="mt-1 text-xs text-sp-muted flex items-center gap-1">
-                            <span>{record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}</span>
-                            <span>{record.followUp}</span>
+                          <span className={`material-symbols-outlined text-sm text-sp-muted transition-transform ${expandedIds.has(record.id) ? 'rotate-180' : ''}`}>
+                            expand_more
+                          </span>
+                        </button>
+
+                        {/* Expandable content */}
+                        {expandedIds.has(record.id) && (
+                          <div className="px-2.5 pb-2.5 border-t border-sp-border/50">
+                            {editingId === record.id ? (
+                              // Edit mode
+                              <div className="mt-2 space-y-2">
+                                <textarea
+                                  value={editingContent}
+                                  onChange={(e) => setEditingContent(e.target.value)}
+                                  className="w-full bg-sp-bg border border-sp-border rounded-lg text-sm text-sp-text px-3 py-2 resize-y min-h-[60px] focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                                  rows={3}
+                                  autoFocus
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => setEditingId(null)}
+                                    className="px-2.5 py-1 rounded-lg text-xs text-sp-muted hover:text-sp-text"
+                                  >취소</button>
+                                  <button
+                                    onClick={() => {
+                                      void updateRecord({ ...record, content: editingContent });
+                                      setEditingId(null);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg text-xs bg-sp-accent text-white hover:bg-sp-accent/80"
+                                  >저장</button>
+                                </div>
+                              </div>
+                            ) : (
+                              // View mode
+                              <div className="mt-2">
+                                <p className={`text-sm whitespace-pre-wrap ${record.content ? 'text-sp-muted' : 'text-sp-muted/40 italic'}`}>
+                                  {record.content || '메모 없음'}
+                                </p>
+                                {record.followUp && (
+                                  <div className="mt-1.5 text-xs text-sp-muted flex items-center gap-1">
+                                    <span>{record.followUpDone ? '\u2705' : '\uD83D\uDCCC'}</span>
+                                    <span>{record.followUp}</span>
+                                  </div>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingId(record.id);
+                                    setEditingContent(record.content);
+                                  }}
+                                  className="mt-1.5 flex items-center gap-1 text-xs text-sp-muted hover:text-sp-accent transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-sm">edit</span>
+                                  수정
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -147,13 +200,6 @@ export function StudentRecordReferencePanel({
             ))}
           </div>
         )}
-      </div>
-
-      {/* 하단 안내 */}
-      <div className="px-4 py-2.5 border-t border-sp-border shrink-0">
-        <p className="text-[11px] text-sp-muted/60 text-center">
-          {'\uD83D\uDCCB'} 읽기 전용 — 수정은 조회 탭에서 가능합니다
-        </p>
       </div>
     </div>
   );

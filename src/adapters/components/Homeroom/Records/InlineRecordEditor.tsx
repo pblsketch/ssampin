@@ -16,6 +16,10 @@ export interface InlineRecordEditorProps {
   setEditSubcategory: (v: string) => void;
   editReportedToNeis?: boolean;
   setEditReportedToNeis?: (v: boolean) => void;
+  editFollowUp?: string;
+  setEditFollowUp?: (v: string) => void;
+  editFollowUpDate?: string;
+  setEditFollowUpDate?: (v: string) => void;
   onSave: () => void;
   onCancel: () => void;
   compact?: boolean;
@@ -31,6 +35,10 @@ export function InlineRecordEditor({
   setEditSubcategory,
   editReportedToNeis,
   setEditReportedToNeis,
+  editFollowUp,
+  setEditFollowUp,
+  editFollowUpDate,
+  setEditFollowUpDate,
   onSave,
   onCancel,
   compact,
@@ -187,6 +195,29 @@ export function InlineRecordEditor({
             <span className="text-[10px] text-sp-muted/60">(나중에 변경 가능)</span>
           </span>
         </label>
+      )}
+
+      {/* 후속 조치 */}
+      {setEditFollowUp && (
+        <div>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>후속 조치</p>
+          <div className="flex gap-2">
+            <input
+              value={editFollowUp ?? ''}
+              onChange={(e) => setEditFollowUp(e.target.value)}
+              placeholder="후속 조치 내용 (선택)"
+              className="flex-1 bg-sp-surface border border-sp-border rounded-lg text-sm text-sp-text px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            />
+            {setEditFollowUpDate && (
+              <input
+                type="date"
+                value={editFollowUpDate ?? ''}
+                onChange={(e) => setEditFollowUpDate(e.target.value)}
+                className="bg-sp-surface border border-sp-border rounded-lg text-xs text-sp-text px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sp-accent w-32"
+              />
+            )}
+          </div>
+        </div>
       )}
 
       {/* 액션 버튼 */}
