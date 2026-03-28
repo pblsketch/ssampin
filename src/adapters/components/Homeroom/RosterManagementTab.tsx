@@ -8,6 +8,7 @@ import type { StudentStatus } from '@domain/entities/Student';
 /* eslint-disable no-restricted-imports */
 import { exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
+import { FormatHint } from '../common/FormatHint';
 
 export function RosterManagementTab() {
   const {
@@ -175,17 +176,20 @@ export function RosterManagementTab() {
           </button>
 
           {/* 엑셀 가져오기 */}
-          <button
-            onClick={() => rosterFileRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-          >
-            <span className="material-symbols-outlined text-lg">upload_file</span>
-            <span>엑셀 가져오기</span>
-          </button>
+          <div className="flex flex-col items-start gap-1">
+            <button
+              onClick={() => rosterFileRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+            >
+              <span className="material-symbols-outlined text-lg">upload_file</span>
+              <span>엑셀 가져오기</span>
+            </button>
+            <FormatHint formats=".xlsx" />
+          </div>
           <input
             ref={rosterFileRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx"
             className="hidden"
             onChange={async (e) => {
               const file = e.target.files?.[0];

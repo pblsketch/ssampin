@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { FONT_PRESETS, FONT_CATEGORIES } from '@domain/entities/FontPreset';
 import type { FontPreset, FontCategory } from '@domain/entities/FontPreset';
 import type { FontFamily, CustomFontSettings } from '@domain/entities/Settings';
+import { useToastStore } from '@adapters/components/common/Toast';
 
 interface Props {
   value: FontFamily;
@@ -26,6 +27,7 @@ function getFontFormat(mimeType: string): string {
 const PRESET_FONTS = FONT_PRESETS.filter((f) => f.id !== 'custom');
 
 export function FontSelector({ value, onChange, customFont, onCustomFontChange }: Props) {
+  const showToast = useToastStore((s) => s.show);
   const [categoryFilter, setCategoryFilter] = useState<FontCategory | 'all'>('all');
   const [expandedId, setExpandedId] = useState<FontFamily | null>(value);
 
@@ -113,7 +115,7 @@ export function FontSelector({ value, onChange, customFont, onCustomFontChange }
 
       // 10MB 제한
       if (selected.size > 10 * 1024 * 1024) {
-        alert('폰트 파일은 10MB 이하만 지원합니다.');
+        showToast('폰트 파일은 10MB 이하만 지원합니다.', 'error');
         return;
       }
 

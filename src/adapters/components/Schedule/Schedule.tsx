@@ -21,6 +21,8 @@ import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { NeisSchedulePanel } from './NeisSchedulePanel';
+import { useToastStore } from '@adapters/components/common/Toast';
+import { FormatHint } from '../common/FormatHint';
 
 type ScheduleView = 'month' | 'semester' | 'year';
 type SourceFilter = 'all' | 'ssampin' | 'google' | 'neis';
@@ -40,6 +42,7 @@ function formatDateStr(date: Date): string {
 
 export function Schedule() {
   const { track } = useAnalytics();
+  const showToast = useToastStore((s) => s.show);
   const {
     events,
     categories,
@@ -241,10 +244,14 @@ export function Schedule() {
   }
 
   async function handleImportClick() {
-    const file = await triggerImport();
-    if (file) {
-      setShareFile(file);
-      setShowImportModal(true);
+    try {
+      const file = await triggerImport();
+      if (file) {
+        setShareFile(file);
+        setShowImportModal(true);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '파일을 불러올 수 없습니다', 'error');
     }
   }
 
@@ -408,6 +415,11 @@ export function Schedule() {
           </button>
         </div>
       </header>
+
+      {/* 가져오기 지원 형식 힌트 */}
+      <div className="shrink-0 px-8 py-1.5 border-b border-sp-border/50">
+        <FormatHint formats=".ssampin, .xlsx" />
+      </div>
 
       {/* 구글 캘린더 오류 인라인 안내 */}
       {googleConnected && googleError && dismissedGoogleError !== googleError && (

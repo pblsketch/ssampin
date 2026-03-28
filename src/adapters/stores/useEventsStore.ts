@@ -483,14 +483,19 @@ export const useEventsStore = create<EventsState>((set) => {
             const u8 = new Uint8Array(result.content as unknown as ArrayBuffer);
             buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
           }
-          return excelBufferToShareFile(buf);
+          const excelResult = excelBufferToShareFile(buf);
+          if (!excelResult) throw new Error('엑셀 파일을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.');
+          return excelResult;
         }
 
         try {
           const parsed: unknown = JSON.parse(result.content as string);
-          return validateShareFile(parsed);
-        } catch {
-          return null;
+          const validated = validateShareFile(parsed);
+          if (!validated) throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.');
+          return validated;
+        } catch (e) {
+          if (e instanceof Error && e.message.includes('올바른')) throw e;
+          throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.');
         }
       }
 
@@ -522,15 +527,20 @@ export const useEventsStore = create<EventsState>((set) => {
 
       // .xlsx file → parse Excel and convert to EventsShareFile
       if (fileResult.name.endsWith('.xlsx')) {
-        return excelBufferToShareFile(fileResult.content as ArrayBuffer);
+        const excelResult = excelBufferToShareFile(fileResult.content as ArrayBuffer);
+        if (!excelResult) throw new Error('엑셀 파일을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.');
+        return excelResult;
       }
 
       // .ssampin file → parse JSON
       try {
         const parsed: unknown = JSON.parse(fileResult.content as string);
-        return validateShareFile(parsed);
-      } catch {
-        return null;
+        const validated = validateShareFile(parsed);
+        if (!validated) throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.');
+        return validated;
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('올바른')) throw e;
+        throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.');
       }
     },
 

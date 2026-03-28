@@ -5,6 +5,7 @@ import { formatTime, formatTimeMs, shouldTriggerPreWarning } from '@domain/rules
 import type { AlarmSoundId, PreWarningSoundId, PreWarningSettings } from '@domain/entities/Settings';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToastStore } from '@adapters/components/common/Toast';
 
 interface ToolTimerProps {
   onBack: () => void;
@@ -668,6 +669,7 @@ function TimerMode() {
   // 알람음 설정 (from store)
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.update);
+  const showToast = useToastStore((s) => s.show);
   const { selectedSound, customAudioName, volume, boost, preWarning } = settings.alarmSound;
 
   // 커스텀 오디오 dataUrl (메모리)
@@ -856,8 +858,9 @@ function TimerMode() {
   const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('5MB 이하의 파일만 등록할 수 있습니다.');
+    const MAX_AUDIO_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_AUDIO_SIZE) {
+      showToast('파일 크기가 너무 큽니다. 5MB 이하의 파일을 사용해주세요.', 'error');
       return;
     }
     const reader = new FileReader();
@@ -876,7 +879,7 @@ function TimerMode() {
     reader.readAsDataURL(file);
     // reset input
     e.target.value = '';
-  }, [updateSettings, settings.alarmSound]);
+  }, [updateSettings, settings.alarmSound, showToast]);
 
   const handleDeleteCustom = useCallback(async () => {
     setCustomDataUrl(null);
@@ -945,7 +948,7 @@ function TimerMode() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="audio/*"
+        accept=".mp3,.wav,.ogg,.m4a,.webm"
         className="hidden"
         onChange={handleFileInputChange}
       />

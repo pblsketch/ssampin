@@ -10,6 +10,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
+import { FormatHint } from '../common/FormatHint';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -757,10 +758,11 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           <input
             ref={excelFileRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx"
             className="hidden"
             onChange={(e) => void handleExcelFileChange(e)}
           />
+          <FormatHint formats=".xlsx" />
         </div>
       </div>
 

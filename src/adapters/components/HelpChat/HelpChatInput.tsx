@@ -174,7 +174,7 @@ export function HelpChatInput({ onSend, disabled, onInputRef }: Props) {
           disabled={disabled || !canAttach}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sp-muted transition-colors hover:bg-sp-card hover:text-sp-text disabled:opacity-40 disabled:cursor-not-allowed"
           aria-label="이미지 첨부"
-          title={canAttach ? '이미지 첨부 (최대 3장)' : '이미지 첨부 한도 초과'}
+          title={canAttach ? '이미지 첨부 (jpg, png, gif, webp · 최대 3장)' : '이미지 첨부 한도 초과'}
         >
           <span className="material-symbols-outlined text-xl">attach_file</span>
         </button>

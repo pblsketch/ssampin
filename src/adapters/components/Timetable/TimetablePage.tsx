@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { FormatHint } from '../common/FormatHint';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -421,16 +422,19 @@ export function TimetablePage() {
                 <span className="material-symbols-outlined text-icon-lg">download</span>
                 <span>양식 다운로드</span>
               </button>
-              <label className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95 cursor-pointer">
-                <span className="material-symbols-outlined text-icon-lg">file_open</span>
-                <span>엑셀 불러오기</span>
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  className="hidden"
-                  onChange={(e) => void handleExcelUpload(e)}
-                />
-              </label>
+              <div className="flex flex-col items-start gap-1">
+                <label className="flex items-center gap-2 rounded-xl bg-sp-accent/10 border border-sp-accent/30 px-4 py-2.5 text-sm font-bold text-sp-accent hover:bg-sp-accent/20 transition-all active:scale-95 cursor-pointer">
+                  <span className="material-symbols-outlined text-icon-lg">file_open</span>
+                  <span>엑셀 불러오기</span>
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    className="hidden"
+                    onChange={(e) => void handleExcelUpload(e)}
+                  />
+                </label>
+                <FormatHint formats=".xlsx" />
+              </div>
             </>
           )}
 
