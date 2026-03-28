@@ -17,6 +17,15 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ToolsOverviewPage } from './pages/ToolsOverviewPage';
 import { ToolAssignmentPage } from './pages/ToolAssignmentPage';
 import { ToolSurveyPage } from './pages/ToolSurveyPage';
+import { ToolTrafficLight } from '@adapters/components/Tools/ToolTrafficLight';
+import { ToolDice } from '@adapters/components/Tools/ToolDice';
+import { ToolCoin } from '@adapters/components/Tools/ToolCoin';
+import { ToolScoreboard } from '@adapters/components/Tools/ToolScoreboard';
+import { ToolTimer } from '@adapters/components/Tools/ToolTimer';
+import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
+import { ToolRandom } from '@adapters/components/Tools/ToolRandom';
+import { ToolRoulette } from '@adapters/components/Tools/ToolRoulette';
+import { ToolQRCode } from '@adapters/components/Tools/ToolQRCode';
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { InstallGuide } from './components/Onboarding/InstallGuide';
 import { InAppBrowserBanner } from './components/InAppBrowserBanner';
@@ -49,7 +58,12 @@ export function App() {
   const [activeTab, setActiveTab] = useState<MobileTab>('today');
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
   const [attendanceNav, setAttendanceNav] = useState<AttendanceNav | null>(null);
-  const [moreSub, setMoreSub] = useState<'settings' | 'memo' | 'tools' | 'tool-assignment' | 'tool-survey' | null>(null);
+  const [moreSub, setMoreSub] = useState<
+    'settings' | 'memo' | 'tools' | 'tool-assignment' | 'tool-survey'
+    | 'tool-traffic-light' | 'tool-dice' | 'tool-coin' | 'tool-scoreboard'
+    | 'tool-timer' | 'tool-work-symbols' | 'tool-random' | 'tool-roulette' | 'tool-qrcode'
+    | null
+  >(null);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('onboarding-completed');
   });
@@ -295,6 +309,24 @@ export function App() {
             <ToolAssignmentPage onBack={() => setMoreSub('tools')} />
           ) : moreSub === 'tool-survey' ? (
             <ToolSurveyPage onBack={() => setMoreSub('tools')} />
+          ) : moreSub === 'tool-traffic-light' ? (
+            <ToolTrafficLight onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          ) : moreSub === 'tool-dice' ? (
+            <ToolDice onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          ) : moreSub === 'tool-coin' ? (
+            <ToolCoin onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          ) : moreSub === 'tool-scoreboard' ? (
+            <ToolScoreboard onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          ) : moreSub === 'tool-timer' ? (
+            <ToolTimer onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          ) : moreSub === 'tool-work-symbols' ? (
+            <ToolWorkSymbols onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          ) : moreSub === 'tool-random' ? (
+            <ToolRandom onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          ) : moreSub === 'tool-roulette' ? (
+            <ToolRoulette onBack={() => setMoreSub('tools')} isFullscreen={false} />
+          ) : moreSub === 'tool-qrcode' ? (
+            <ToolQRCode onBack={() => setMoreSub('tools')} isFullscreen={false} />
           ) : (
             <MorePage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} />
           )
