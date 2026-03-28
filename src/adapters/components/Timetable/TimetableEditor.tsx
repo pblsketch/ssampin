@@ -205,6 +205,30 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
     [],
   );
 
+  // 교시 시간 변경
+  const handlePeriodTimeChange = useCallback(
+    (periodIdx: number, newStart: string) => {
+      if (!newStart) return;
+      setLocalPeriodTimes((prev) => {
+        const arr = [...prev];
+        const existing = arr[periodIdx];
+        if (!existing) return prev;
+        const dur = settings.schoolLevel === 'custom' && settings.customPeriodDuration
+          ? settings.customPeriodDuration
+          : (PERIOD_DURATION_MAP[settings.schoolLevel] ?? 45);
+        const startMin = parseMinutes(newStart);
+        const endMin = startMin + dur;
+        arr[periodIdx] = {
+          period: existing.period,
+          start: newStart,
+          end: formatTimeFromMinutes(endMin),
+        };
+        return arr;
+      });
+    },
+    [settings.schoolLevel, settings.customPeriodDuration],
+  );
+
   // 교시 추가
   const addPeriod = useCallback(() => {
     if (localMaxPeriods >= MAX_PERIODS_LIMIT) return;
@@ -456,7 +480,14 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
       }
 
       // 교시 수가 변경된 경우 설정도 업데이트
-      if (localMaxPeriods !== maxPeriods) {
+      const periodTimesChanged =
+        localMaxPeriods !== maxPeriods ||
+        localPeriodTimes.some((pt, i) => {
+          const orig = settings.periodTimes[i];
+          return !orig || pt.start !== orig.start || pt.end !== orig.end;
+        });
+
+      if (periodTimesChanged) {
         await updateSettings({
           maxPeriods: localMaxPeriods,
           periodTimes: localPeriodTimes.slice(0, localMaxPeriods),
@@ -608,6 +639,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
                       subjectColors={settings.subjectColors}
                       onColorChange={handleColorChange}
                       activeDays={activeDays}
+                      onPeriodTimeChange={handlePeriodTimeChange}
                     />
                   ))}
                 </tbody>
@@ -721,6 +753,7 @@ interface EditorPeriodRowProps {
   subjectColors?: SubjectColorMap;
   onColorChange: (subject: string, colorId: SubjectColorId) => void;
   activeDays: readonly DayOfWeekFull[];
+  onPeriodTimeChange: (periodIdx: number, newStart: string) => void;
 }
 
 function EditorPeriodRow({
@@ -740,6 +773,7 @@ function EditorPeriodRow({
   subjectColors,
   onColorChange,
   activeDays,
+  onPeriodTimeChange,
 }: EditorPeriodRowProps) {
   const [colorPickerDay, setColorPickerDay] = useState<number | null>(null);
 
@@ -775,7 +809,12 @@ function EditorPeriodRow({
           {periodTime.period}교시
         </td>
         <td className="px-4 py-3 text-center text-sp-muted text-sm border-r border-sp-border font-mono">
-          {periodTime.start}
+          <input
+            type="time"
+            value={periodTime.start}
+            onChange={(e) => onPeriodTimeChange(periodIdx, e.target.value)}
+            className="w-full bg-transparent text-center text-sp-muted text-sm font-mono focus:text-sp-text focus:outline-none [color-scheme:dark]"
+          />
         </td>
         {activeDays.map((_, dayIdx) => {
           const subjectValue = tab === 'class'
