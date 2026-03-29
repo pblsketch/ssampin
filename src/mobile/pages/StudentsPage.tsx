@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { generateUUID } from '@mobile/utils/uuid';
 import { format, addDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { SeatingData } from '@domain/entities/Seating';
@@ -1220,7 +1221,7 @@ function RecordsSubTab({ studentId }: { studentId: string; studentName: string }
     setSaving(true);
     const now = new Date();
     const record: StudentRecord = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       studentId,
       category: selectedCategoryId,
       subcategory: selectedSubcategory,

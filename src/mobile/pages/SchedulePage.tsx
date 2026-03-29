@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { generateUUID } from '@mobile/utils/uuid';
 import { useMobileEventsStore } from '@mobile/stores/useMobileEventsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
@@ -155,7 +156,7 @@ export function SchedulePage() {
   const handleAdd = async () => {
     if (!newTitle.trim() || !newDate) return;
     const event: SchoolEvent = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       title: newTitle.trim(),
       date: newDate,
       category: newCategory,

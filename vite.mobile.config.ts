@@ -78,6 +78,7 @@ export default defineConfig(({ mode }) => {
   root: '.',
   build: {
     outDir: 'dist-mobile',
+    target: ['es2020', 'safari14'],
     rollupOptions: {
       input: path.resolve(__dirname, 'mobile.html'),
     },

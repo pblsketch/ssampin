@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { generateUUID } from '@mobile/utils/uuid';
 import { useMobileTodoStore } from '@mobile/stores/useMobileTodoStore';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 
@@ -47,7 +48,7 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
     if (!trimmed) return;
 
     const newTodo: Todo = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       text: trimmed,
       completed: false,
       createdAt: new Date().toISOString(),

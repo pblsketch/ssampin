@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateUUID } from '@mobile/utils/uuid';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
 import { teachingClassRepository } from '@mobile/di/container';
@@ -63,7 +64,7 @@ export const useMobileProgressStore = create<MobileProgressState>((set, get) => 
 
   addEntry: async (classId, date, period, unit, lesson, note) => {
     const entry: ProgressEntry = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       classId,
       date,
       period,

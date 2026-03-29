@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateUUID } from '@mobile/utils/uuid';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import { SyncToCloud } from '@usecases/sync/SyncToCloud';
 import { SyncFromCloud } from '@usecases/sync/SyncFromCloud';
@@ -15,7 +16,7 @@ function getMobileDeviceId(): string {
     // localStorage unavailable
   }
   if (!id) {
-    id = `mobile-${crypto.randomUUID()}`;
+    id = `mobile-${generateUUID()}`;
     try {
       localStorage.setItem(KEY, id);
     } catch {

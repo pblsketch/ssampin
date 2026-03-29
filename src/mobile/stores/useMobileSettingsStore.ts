@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateUUID } from '@mobile/utils/uuid';
 import type { Settings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@mobile/di/container';
@@ -73,7 +74,7 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
         let syncDeviceId = (s as unknown as { sync?: { deviceId?: string } }).sync?.deviceId ?? '';
         // 모바일은 항상 mobile- 접두사 deviceId를 사용 (PC settings 다운로드로 인한 오염 방지)
         if (!syncDeviceId || !syncDeviceId.startsWith('mobile-')) {
-          syncDeviceId = `mobile-${crypto.randomUUID()}`;
+          syncDeviceId = `mobile-${generateUUID()}`;
           const patched = { ...s, sync: { ...(s as unknown as { sync?: Record<string, unknown> }).sync, deviceId: syncDeviceId } };
           await settingsRepository.saveSettings(patched as Settings);
         }
