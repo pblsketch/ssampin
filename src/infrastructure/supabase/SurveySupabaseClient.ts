@@ -60,6 +60,12 @@ export class SurveySupabaseClient {
     this.anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
   }
 
+  private ensureConfigured(): void {
+    if (!this.baseUrl || !this.anonKey) {
+      throw new Error('Supabase is not configured');
+    }
+  }
+
   private headers(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
@@ -83,6 +89,7 @@ export class SurveySupabaseClient {
     pinProtection?: boolean;
     studentPinHashes?: Record<string, string>;
   }): Promise<void> {
+    this.ensureConfigured();
     const res = await fetch(`${this.baseUrl}/rest/v1/surveys`, {
       method: 'POST',
       headers: {
@@ -113,6 +120,7 @@ export class SurveySupabaseClient {
    * 설문 공개 정보 조회
    */
   async getSurvey(id: string): Promise<SurveyPublic | null> {
+    this.ensureConfigured();
     const res = await fetch(
       `${this.baseUrl}/rest/v1/surveys?id=eq.${id}&select=id,title,description,questions,due_date,target_count,is_closed`,
       { headers: this.headers() },
@@ -138,6 +146,7 @@ export class SurveySupabaseClient {
    * 응답 목록 조회 (교사용)
    */
   async getResponses(surveyId: string): Promise<SurveyResponsePublic[]> {
+    this.ensureConfigured();
     const res = await fetch(
       `${this.baseUrl}/rest/v1/survey_responses?survey_id=eq.${surveyId}&order=student_number.asc`,
       { headers: this.headers() },
@@ -163,6 +172,7 @@ export class SurveySupabaseClient {
     studentNumber: number,
     answers: ReadonlyArray<{ questionId: string; value: string | boolean }>,
   ): Promise<{ success: boolean; message: string }> {
+    this.ensureConfigured();
     const res = await fetch(`${this.baseUrl}/rest/v1/survey_responses`, {
       method: 'POST',
       headers: {
@@ -193,6 +203,7 @@ export class SurveySupabaseClient {
     surveyId: string,
     studentNumber: number,
   ): Promise<boolean> {
+    this.ensureConfigured();
     const res = await fetch(
       `${this.baseUrl}/rest/v1/survey_responses?survey_id=eq.${surveyId}&student_number=eq.${studentNumber}&select=id`,
       { headers: this.headers() },

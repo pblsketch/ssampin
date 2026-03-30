@@ -105,6 +105,12 @@ export class ConsultationSupabaseClient {
     this.anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
   }
 
+  private ensureConfigured(): void {
+    if (!this.baseUrl || !this.anonKey) {
+      throw new Error('Supabase is not configured');
+    }
+  }
+
   private headers(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
@@ -129,6 +135,7 @@ export class ConsultationSupabaseClient {
     adminKey: string;
     blockedSlots?: ReadonlyArray<{ date: string; startTime: string }>;
   }): Promise<void> {
+    this.ensureConfigured();
     const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules`, {
       method: 'POST',
       headers: {
@@ -205,6 +212,7 @@ export class ConsultationSupabaseClient {
    * 상담 일정 조회
    */
   async getSchedule(id: string): Promise<SchedulePublic | null> {
+    this.ensureConfigured();
     const res = await fetch(
       `${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,admin_key,is_archived,created_at`,
       { headers: this.headers() },
@@ -235,6 +243,7 @@ export class ConsultationSupabaseClient {
    * 슬롯 목록 조회 (날짜·시작시간 순)
    */
   async getSlots(scheduleId: string): Promise<SlotPublic[]> {
+    this.ensureConfigured();
     const res = await fetch(
       `${this.baseUrl}/rest/v1/consultation_slots?schedule_id=eq.${scheduleId}&order=date.asc,start_time.asc`,
       { headers: this.headers() },
@@ -257,6 +266,7 @@ export class ConsultationSupabaseClient {
    * 예약 목록 조회 (학생 번호 순)
    */
   async getBookings(scheduleId: string): Promise<BookingPublic[]> {
+    this.ensureConfigured();
     const res = await fetch(
       `${this.baseUrl}/rest/v1/consultation_bookings?schedule_id=eq.${scheduleId}&order=student_number.asc`,
       { headers: this.headers() },
@@ -288,6 +298,7 @@ export class ConsultationSupabaseClient {
     method: 'face' | 'phone' | 'video';
     memoEncrypted?: string;
   }): Promise<{ success: boolean; message: string }> {
+    this.ensureConfigured();
     const res = await fetch(`${this.baseUrl}/rest/v1/rpc/book_consultation_slot`, {
       method: 'POST',
       headers: this.headers(),
@@ -315,6 +326,7 @@ export class ConsultationSupabaseClient {
    * 예약 취소 — 예약 삭제 후 슬롯 상태를 available로 복구
    */
   async cancelBooking(bookingId: string, scheduleId: string): Promise<void> {
+    this.ensureConfigured();
     // 예약 정보에서 slotId 확인
     const bookingRes = await fetch(
       `${this.baseUrl}/rest/v1/consultation_bookings?id=eq.${bookingId}&schedule_id=eq.${scheduleId}&select=id,slot_id`,

@@ -55,6 +55,9 @@ export class ShortLinkClient {
     params: string,
     options?: { method?: string; body?: unknown },
   ): Promise<T | null> {
+    if (!this.baseUrl || !this.anonKey) {
+      throw new Error('Supabase is not configured');
+    }
     const url = `${this.baseUrl}/rest/v1/${table}?${params}`;
     const method = options?.method ?? 'GET';
 
@@ -105,6 +108,7 @@ export class ShortLinkClient {
    * @returns 축약된 URL (예: "https://ssampin.com/s/Xk3mP9")
    */
   async createShortLink(fullUrl: string, customCode?: string, expiresAt?: string): Promise<string> {
+    if (!this.baseUrl || !this.anonKey) return fullUrl;
     const expires = expiresAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
     const targetPath = fullUrl.replace(BASE_URL, '');
 

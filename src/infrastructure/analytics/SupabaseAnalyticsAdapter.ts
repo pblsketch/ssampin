@@ -21,7 +21,7 @@ interface AnalyticsRecord {
 }
 
 export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
-  private readonly supabase: SupabaseClient;
+  private readonly supabase: SupabaseClient | null;
   private buffer: AnalyticsRecord[] = [];
   private deviceId = '';
   private appVersion = '';
@@ -29,9 +29,11 @@ export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    this.supabase = SUPABASE_URL && SUPABASE_ANON_KEY
+      ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
     this.osInfo = this.detectOsInfo();
-    this.startTimer();
+    if (this.supabase) this.startTimer();
   }
 
   setDeviceId(id: string): void {
@@ -43,6 +45,8 @@ export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
   }
 
   track(event: string, properties: Record<string, unknown> = {}): void {
+    if (!this.supabase) return;
+
     // 개발 환경에서는 추적 건너뜀 (강제 플래그 없으면)
     const isDev = import.meta.env.DEV ||
       (typeof window !== 'undefined' && window.location.hostname === 'localhost');
@@ -72,6 +76,8 @@ export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
 
   async flush(): Promise<void> {
     this.stopTimer();
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
     const offlineQueue = this.loadOfflineQueue();
     const toSend = [...offlineQueue, ...this.buffer];
     this.buffer = [];
@@ -130,6 +136,8 @@ export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
   }
 
   private async sendBatch(): Promise<void> {
+    if (!this.supabase) return;
+
     const offlineQueue = this.loadOfflineQueue();
     const toSend = [...offlineQueue, ...this.buffer];
     this.buffer = [];

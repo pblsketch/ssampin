@@ -48,6 +48,9 @@ export class AssignmentSupabaseClient {
     body: unknown,
     headers?: Record<string, string>,
   ): Promise<T> {
+    if (!this.baseUrl || !this.anonKey) {
+      throw new Error('Supabase is not configured');
+    }
     const url = `${this.baseUrl}/functions/v1/${functionName}`;
 
     const res = await fetch(url, {
