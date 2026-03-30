@@ -9,7 +9,7 @@ import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { TeacherPeriod, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
-import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
+import type { SubjectColorMap, SubjectColorId } from '@domain/valueObjects/SubjectColor';
 import { DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
 import {
   getSubjectStyle,
@@ -22,6 +22,7 @@ import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import { TimetableEditor } from './TimetableEditor';
 import { TempChangeModal } from './TempChangeModal';
+import { InlineColorPalette } from './InlineColorPalette';
 import { NeisImportModal } from './NeisImportModal';
 import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
 /* eslint-disable no-restricted-imports */
@@ -147,6 +148,12 @@ export function TimetablePage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
+  // 색상 팔레트 상태: 어떤 셀이 열려있는지 (day index + period number)
+  const [openPalette, setOpenPalette] = useState<{ dayIdx: number; period: number } | null>(null);
+
+  // 색상 팔레트 외부 클릭 등으로 닫힐 때 사용
+  const closePalette = useCallback(() => setOpenPalette(null), []);
+
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
     if (!showExportMenu) return;
@@ -222,6 +229,23 @@ export function TimetablePage() {
 
   const updateSettings = useSettingsStore((s) => s.update);
   const updateClassSchedule = useScheduleStore((s) => s.updateClassSchedule);
+
+  // 보기 모드 색상 변경 핸들러
+  const handleViewColorChange = useCallback(
+    (key: string, colorId: SubjectColorId) => {
+      if (colorBy === 'classroom') {
+        void updateSettings({
+          classroomColors: { ...settings.classroomColors, [key]: colorId },
+        });
+      } else {
+        void updateSettings({
+          subjectColors: { ...settings.subjectColors, [key]: colorId },
+        });
+      }
+      setOpenPalette(null);
+    },
+    [settings.subjectColors, settings.classroomColors, colorBy, updateSettings],
+  );
 
   // ── 나이스 불러오기 모달 ──
   const [showNeisImport, setShowNeisImport] = useState(false);
@@ -542,6 +566,10 @@ export function TimetablePage() {
                           setTempChangeTarget({ date, period: periodNum, dayIdx, subject, classroom })
                         }
                         onDeleteOverride={(id) => void deleteOverride(id)}
+                        openPalette={openPalette}
+                        onOpenPalette={setOpenPalette}
+                        onClosePalette={closePalette}
+                        onViewColorChange={handleViewColorChange}
                       />
                     );
                   })}
@@ -670,6 +698,10 @@ interface PeriodRowProps {
   activeDays: readonly DayOfWeekFull[];
   onTempChange: (date: string, dayIdx: number, subject: string, classroom?: string) => void;
   onDeleteOverride: (id: string) => void;
+  openPalette: { dayIdx: number; period: number } | null;
+  onOpenPalette: (palette: { dayIdx: number; period: number }) => void;
+  onClosePalette: () => void;
+  onViewColorChange: (key: string, colorId: SubjectColorId) => void;
 }
 
 function PeriodRow({
@@ -689,6 +721,10 @@ function PeriodRow({
   activeDays,
   onTempChange,
   onDeleteOverride,
+  openPalette,
+  onOpenPalette,
+  onClosePalette,
+  onViewColorChange,
 }: PeriodRowProps) {
   return (
     <>
@@ -764,6 +800,11 @@ function PeriodRow({
                     onTempChange(dateStr, dayIdx, cp?.subject ?? '', undefined);
                   }
                 }}
+                isColorPaletteOpen={openPalette?.dayIdx === dayIdx && openPalette?.period === periodTime.period}
+                onOpenColorPalette={() => onOpenPalette({ dayIdx, period: periodTime.period })}
+                onCloseColorPalette={onClosePalette}
+                onColorChange={onViewColorChange}
+                colorBy="subject"
               />
             );
           }
@@ -788,6 +829,10 @@ function PeriodRow({
                   onTempChange(dateStr, dayIdx, tp?.subject ?? '', tp?.classroom ?? '');
                 }
               }}
+              isColorPaletteOpen={openPalette?.dayIdx === dayIdx && openPalette?.period === periodTime.period}
+              onOpenColorPalette={() => onOpenPalette({ dayIdx, period: periodTime.period })}
+              onCloseColorPalette={onClosePalette}
+              onColorChange={onViewColorChange}
             />
           );
         })}
@@ -805,9 +850,14 @@ interface SubjectCellProps {
   subjectColors?: SubjectColorMap;
   override?: TimetableOverride;
   onContextMenu: (e: React.MouseEvent) => void;
+  isColorPaletteOpen: boolean;
+  onOpenColorPalette: () => void;
+  onCloseColorPalette: () => void;
+  onColorChange: (key: string, colorId: SubjectColorId) => void;
+  colorBy: 'subject' | 'classroom';
 }
 
-function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectColors, override, onContextMenu }: SubjectCellProps) {
+function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectColors, override, onContextMenu, isColorPaletteOpen, onOpenColorPalette, onCloseColorPalette, onColorChange, colorBy: _colorBy }: SubjectCellProps) {
   const isOverridden = override != null;
   const displaySubject = isOverridden ? (override.subject || '') : subject;
   const displayTeacher = isOverridden ? '' : teacher;
@@ -856,9 +906,10 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
       >
         <div className="absolute inset-0 bg-amber-500/10 pointer-events-none animate-pulse" />
         <div
-          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20 ${
+          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20 cursor-pointer ${
             isOverridden ? 'border-dashed' : ''
           }`}
+          onClick={onOpenColorPalette}
         >
           {cellContent}
           {isOverridden ? (
@@ -869,13 +920,21 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
             <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
           )}
         </div>
+        {isColorPaletteOpen && (
+          <InlineColorPalette
+            label={displaySubject}
+            currentColorId={(subjectColors?.[displaySubject] ?? 'cyan') as SubjectColorId}
+            onSelect={(colorId) => onColorChange(displaySubject, colorId)}
+            onClose={onCloseColorPalette}
+          />
+        )}
       </td>
     );
   }
 
   return (
     <td
-      className={`p-2 ${!isLastCol ? 'border-r border-sp-border' : ''} ${
+      className={`p-2 relative ${!isLastCol ? 'border-r border-sp-border' : ''} ${
         isToday ? 'bg-sp-accent/5' : ''
       }`}
       onContextMenu={onContextMenu}
@@ -883,7 +942,8 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
       <div
         className={`h-14 w-full rounded-lg ${style.bg} border ${
           isOverridden ? 'border-dashed border-amber-400/30' : style.border
-        } flex items-center justify-center relative`}
+        } flex items-center justify-center relative cursor-pointer`}
+        onClick={onOpenColorPalette}
       >
         {cellContent}
         {isOverridden && (
@@ -892,6 +952,14 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
           </span>
         )}
       </div>
+      {isColorPaletteOpen && (
+        <InlineColorPalette
+          label={displaySubject}
+          currentColorId={(subjectColors?.[displaySubject] ?? 'cyan') as SubjectColorId}
+          onSelect={(colorId) => onColorChange(displaySubject, colorId)}
+          onClose={onCloseColorPalette}
+        />
+      )}
     </td>
   );
 }
@@ -906,9 +974,13 @@ interface TeacherCellProps {
   colorBy: 'subject' | 'classroom';
   override?: TimetableOverride;
   onContextMenu: (e: React.MouseEvent) => void;
+  isColorPaletteOpen: boolean;
+  onOpenColorPalette: () => void;
+  onCloseColorPalette: () => void;
+  onColorChange: (key: string, colorId: SubjectColorId) => void;
 }
 
-function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, classroomColors, colorBy, override, onContextMenu }: TeacherCellProps) {
+function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, classroomColors, colorBy, override, onContextMenu, isColorPaletteOpen, onOpenColorPalette, onCloseColorPalette, onColorChange }: TeacherCellProps) {
   const isOverridden = override != null;
 
   // 오버라이드된 경우 override 데이터로 표시
@@ -939,6 +1011,8 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
   }
 
   const style = getCellStyle(displayPeriod.subject, displayPeriod.classroom, colorBy, subjectColors, classroomColors);
+  const colorKey = colorBy === 'classroom' ? displayPeriod.classroom : displayPeriod.subject;
+  const colorMap = colorBy === 'classroom' ? classroomColors : subjectColors;
 
   const cellContent = (
     <div className="flex flex-col items-center justify-center gap-0.5">
@@ -960,9 +1034,10 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
       >
         <div className="absolute inset-0 bg-amber-500/10 pointer-events-none animate-pulse" />
         <div
-          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20 ${
+          className={`h-14 w-full rounded-lg ${style.bg} border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center justify-center relative z-20 cursor-pointer ${
             isOverridden ? 'border-dashed' : ''
           }`}
+          onClick={onOpenColorPalette}
         >
           {cellContent}
           {isOverridden ? (
@@ -973,13 +1048,21 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
             <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
           )}
         </div>
+        {isColorPaletteOpen && (
+          <InlineColorPalette
+            label={colorKey}
+            currentColorId={(colorMap?.[colorKey] ?? 'cyan') as SubjectColorId}
+            onSelect={(colorId) => onColorChange(colorKey, colorId)}
+            onClose={onCloseColorPalette}
+          />
+        )}
       </td>
     );
   }
 
   return (
     <td
-      className={`p-2 ${!isLastCol ? 'border-r border-sp-border' : ''} ${
+      className={`p-2 relative ${!isLastCol ? 'border-r border-sp-border' : ''} ${
         isToday ? 'bg-sp-accent/5' : ''
       }`}
       onContextMenu={onContextMenu}
@@ -987,7 +1070,8 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
       <div
         className={`h-14 w-full rounded-lg ${style.bg} border ${
           isOverridden ? 'border-dashed border-amber-400/30' : style.border
-        } flex items-center justify-center relative`}
+        } flex items-center justify-center relative cursor-pointer`}
+        onClick={onOpenColorPalette}
       >
         {cellContent}
         {isOverridden && (
@@ -996,6 +1080,14 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
           </span>
         )}
       </div>
+      {isColorPaletteOpen && (
+        <InlineColorPalette
+          label={colorKey}
+          currentColorId={(colorMap?.[colorKey] ?? 'cyan') as SubjectColorId}
+          onSelect={(colorId) => onColorChange(colorKey, colorId)}
+          onClose={onCloseColorPalette}
+        />
+      )}
     </td>
   );
 }
