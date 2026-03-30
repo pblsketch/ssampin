@@ -71,6 +71,7 @@ export function EventFormModal({
   const [isDDay, setIsDDay] = useState(false);
   const [alerts, setAlerts] = useState<AlertTiming[]>([]);
   const [period, setPeriod] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
   const [recurrence, setRecurrence] = useState<Recurrence | ''>('');
   const [description, setDescription] = useState('');
   const [customValue, setCustomValue] = useState('');
@@ -88,6 +89,7 @@ export function EventFormModal({
       setLocation(editEvent.location ?? '');
       setIsDDay(editEvent.isDDay ?? false);
       setPeriod(editEvent.period ?? '');
+      setPeriodEnd(editEvent.periodEnd ?? '');
       setAlerts([...(editEvent.alerts ?? [])]);
       setRecurrence(editEvent.recurrence ?? '');
       setDescription(editEvent.description ?? '');
@@ -151,6 +153,9 @@ export function EventFormModal({
       ...(isDDay && { isDDay: true }),
       ...(alerts.length > 0 && { alerts }),
       period: period || undefined,
+      ...(period && periodEnd && periodEnd !== period && /^[1-7]$/.test(period) && {
+        periodEnd,
+      }),
       ...(recurrence && { recurrence }),
       ...(recurrence && excludeDates.length > 0 && { excludeDates }),
       ...(description.trim() && { description: description.trim() }),
@@ -293,20 +298,51 @@ export function EventFormModal({
               </select>
             </div>
 
-            {/* 교시 */}
+            {/* 교시 (시작 ~ 종료) */}
             <div>
               <label className="block text-sm font-medium text-sp-muted mb-1.5">교시</label>
-              <select
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
-              >
-                {PERIOD_OPTIONS.map(({ key, label }) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              <div className={`grid gap-3 ${/^[1-7]$/.test(period) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <select
+                  value={period}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setPeriod(v);
+                    // 숫자가 아닌 값이면 종료 교시 초기화
+                    if (!/^[1-7]$/.test(v)) {
+                      setPeriodEnd('');
+                    } else if (periodEnd && parseInt(periodEnd, 10) < parseInt(v, 10)) {
+                      // 시작이 종료보다 크면 종료를 시작으로 리셋
+                      setPeriodEnd(v);
+                    }
+                  }}
+                  className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                >
+                  {PERIOD_OPTIONS.map(({ key, label }) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                {/^[1-7]$/.test(period) && (
+                  <select
+                    value={periodEnd || period}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setPeriodEnd(v === period ? '' : v);
+                    }}
+                    className="w-full bg-sp-bg border border-sp-border rounded-xl px-4 py-2.5 text-sm text-sp-text focus:outline-none focus:ring-2 focus:ring-sp-accent focus:border-transparent"
+                  >
+                    {Array.from({ length: 7 - parseInt(period, 10) + 1 }, (_, i) => {
+                      const n = parseInt(period, 10) + i;
+                      return (
+                        <option key={n} value={String(n)}>
+                          {n === parseInt(period, 10) ? `${n}교시 (종료)` : `${n}교시`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
             </div>
 
             {/* 시간 / 장소 */}

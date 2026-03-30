@@ -93,6 +93,7 @@ export interface SchoolEvent {
   /** 반복 일정에서 제외할 날짜 목록 (YYYY-MM-DD) */
   readonly excludeDates?: readonly string[];
   readonly period?: string;  // "1"~"7", "afterSchool", "allDay" 또는 undefined
+  readonly periodEnd?: string;  // 종료 교시: "1"~"7" (period가 숫자일 때만 유효)
 
   // 구글 캘린더 동기화 필드 (모두 optional, 하위 호환성 유지)
   readonly googleEventId?: string;

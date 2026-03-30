@@ -198,7 +198,7 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
         {event.period && (
           <div className="flex items-center gap-1">
             <span className="material-symbols-outlined text-icon-sm">class</span>
-            {periodToLabel(event.period)}
+            {periodToLabel(event.period, event.periodEnd)}
           </div>
         )}
         {event.time && (

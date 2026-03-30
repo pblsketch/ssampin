@@ -44,6 +44,7 @@ interface AddEventParams {
   alerts?: readonly AlertTiming[];
   recurrence?: Recurrence;
   period?: string;
+  periodEnd?: string;
 }
 
 interface EventsState {
@@ -272,6 +273,7 @@ export const useEventsStore = create<EventsState>((set) => {
         ...(params.alerts !== undefined && params.alerts.length > 0 && { alerts: params.alerts }),
         ...(params.recurrence !== undefined && { recurrence: params.recurrence }),
         ...(params.period !== undefined && { period: params.period }),
+        ...(params.periodEnd !== undefined && { periodEnd: params.periodEnd }),
       };
       await manageEvents.add(event);
       set((state) => ({ events: [...state.events, event] }));
