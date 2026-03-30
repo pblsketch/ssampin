@@ -1,4 +1,4 @@
-export type ToolPresetType = 'roulette' | 'random';
+export type ToolPresetType = 'roulette' | 'random' | 'wordcloud';
 
 export interface ToolPreset {
   readonly id: string;

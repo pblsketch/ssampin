@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { ToolLayout } from './ToolLayout';
+import { PresetSelector } from './PresetSelector';
 import type { KeyboardShortcut } from './types';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -46,6 +47,20 @@ interface CreateViewProps {
 function CreateView({ isFullscreen, onStart }: CreateViewProps) {
   const [question, setQuestion] = useState('');
   const [maxSubmissions, setMaxSubmissions] = useState(5);
+  const [savedQuestions, setSavedQuestions] = useState<readonly string[]>(EXAMPLE_QUESTIONS);
+
+  const handleLoadPreset = useCallback((items: readonly string[]) => {
+    setSavedQuestions(items);
+  }, []);
+
+  const currentItems = useMemo(() => {
+    const items = [...savedQuestions];
+    const q = question.trim();
+    if (q && !items.includes(q)) {
+      items.push(q);
+    }
+    return items;
+  }, [savedQuestions, question]);
 
   const handleStart = () => {
     const q = question.trim();
@@ -68,17 +83,27 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
         />
       </div>
 
-      {/* Example questions */}
-      <div className="flex flex-wrap gap-2 max-w-xl justify-center">
-        {EXAMPLE_QUESTIONS.map((eq) => (
-          <button
-            key={eq}
-            onClick={() => setQuestion(eq)}
-            className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 text-sm transition-all"
-          >
-            {eq}
-          </button>
-        ))}
+      {/* 프리셋 저장/불러오기 + 자주 쓰는 질문 */}
+      <div className="w-full max-w-xl">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sp-muted text-sm">자주 쓰는 질문</span>
+          <PresetSelector
+            type="wordcloud"
+            currentItems={currentItems}
+            onLoad={handleLoadPreset}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {savedQuestions.map((eq) => (
+            <button
+              key={eq}
+              onClick={() => setQuestion(eq)}
+              className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 text-sm transition-all"
+            >
+              {eq}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Settings */}
