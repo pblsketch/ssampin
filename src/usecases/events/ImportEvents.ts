@@ -7,6 +7,7 @@ import type {
   DuplicateStrategy,
 } from '@domain/entities/EventsShareFile';
 import { detectDuplicates } from '@domain/rules/shareRules';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 export class ImportEvents {
   constructor(private readonly eventsRepository: IEventsRepository) {}
@@ -29,7 +30,7 @@ export class ImportEvents {
         categoryIdMap.set(mapping.sourceId, mapping.targetId);
       } else {
         const newCat: CategoryItem = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           name: mapping.targetName || mapping.sourceName,
           color: mapping.sourceColor,
         };
@@ -42,7 +43,7 @@ export class ImportEvents {
     // 2. Remap incoming events' category IDs and assign new IDs
     const remappedEvents: SchoolEvent[] = shareFile.events.map((e) => ({
       ...e,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       category: categoryIdMap.get(e.category) ?? e.category,
     }));
 

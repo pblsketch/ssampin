@@ -12,6 +12,7 @@ import { DEFAULT_CATEGORIES } from '@domain/entities/SchoolEvent';
 import { ExportEvents } from '@usecases/events/ExportEvents';
 import { ImportEvents } from '@usecases/events/ImportEvents';
 import { validateShareFile } from '@domain/rules/shareRules';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import type {
   EventsShareFile,
   ExportOptions,
@@ -160,7 +161,7 @@ async function excelBufferToShareFile(buffer: ArrayBuffer): Promise<EventsShareF
         catMap.set(name, existing);
       } else {
         catMap.set(name, {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           name,
           color: availableColors[colorIdx % availableColors.length] ?? 'gray',
         });
@@ -170,7 +171,7 @@ async function excelBufferToShareFile(buffer: ArrayBuffer): Promise<EventsShareF
 
     const categories = Array.from(catMap.values());
     const events: SchoolEvent[] = parsedEvents.map((pe) => ({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       title: pe.title,
       date: pe.date,
       category: catMap.get(pe.categoryName)?.id ?? 'etc',
@@ -259,7 +260,7 @@ export const useEventsStore = create<EventsState>((set) => {
 
     addEvent: async (params) => {
       const event: SchoolEvent = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         title: params.title,
         date: params.date,
         category: params.category,
@@ -398,7 +399,7 @@ export const useEventsStore = create<EventsState>((set) => {
 
     addCategory: async (name, color) => {
       const category: CategoryItem = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         name,
         color,
       };
@@ -595,7 +596,7 @@ export const useEventsStore = create<EventsState>((set) => {
 
     addExternalSource: async (name, url, categoryId) => {
       const source: ExternalCalendarSource = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         name,
         url,
         type: 'google-ical',

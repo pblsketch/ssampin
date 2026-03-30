@@ -4,6 +4,7 @@ import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import { studentRecordsRepository } from '@adapters/di/container';
 import { ManageStudentRecords } from '@usecases/studentRecords/ManageStudentRecords';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 /** 카테고리 색상 → Tailwind 클래스 매핑 */
 export const RECORD_COLOR_MAP: Record<
@@ -133,7 +134,7 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
 
       addRecord: async (studentId, category, subcategory, content, date, method?, followUp?, followUpDate?, reportedToNeis?) => {
         const newRecord: StudentRecord = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           studentId,
           category,
           subcategory,
@@ -191,7 +192,7 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
 
       addCategory: async (name, color) => {
         const newCat: RecordCategoryItem = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           name,
           color,
           subcategories: [],

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { generateUUID } from '@mobile/utils/uuid';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import { format, addDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { SeatingData } from '@domain/entities/Seating';

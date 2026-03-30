@@ -4,6 +4,7 @@ import type {
   ConsultationsData,
 } from '@domain/entities/Consultation';
 import { consultationRepository, shortLinkClient } from '@adapters/di/container';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import { SITE_URL } from '@config/siteUrl';
 
 const SHARE_BASE_URL = `${SITE_URL}/booking`;
@@ -35,8 +36,8 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
 
   createSchedule: async (params) => {
     const { customLinkCode, ...scheduleParams } = params;
-    const id = crypto.randomUUID();
-    const adminKey = crypto.randomUUID().slice(0, 8);
+    const id = generateUUID();
+    const adminKey = generateUUID().slice(0, 8);
     const shareUrl = `${SHARE_BASE_URL}/${id}#key=${encodeURIComponent(adminKey)}`;
     const createdAt = new Date().toISOString();
 

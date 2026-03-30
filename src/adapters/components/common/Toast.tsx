@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface ToastData {
   id: string;
@@ -20,7 +21,7 @@ interface ToastState {
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   show: (message, type = 'success', action) => {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     set((state) => ({
       toasts: [...state.toasts, { id, message, type, action }],
     }));

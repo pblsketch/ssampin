@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { generateUUID } from '@mobile/utils/uuid';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import { SyncToCloud } from '@usecases/sync/SyncToCloud';
 import { SyncFromCloud } from '@usecases/sync/SyncFromCloud';

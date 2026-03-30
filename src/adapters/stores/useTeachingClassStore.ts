@@ -8,6 +8,7 @@ import { teachingClassRepository } from '@adapters/di/container';
 import { ManageTeachingClasses } from '@usecases/classManagement/ManageTeachingClasses';
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
 import { ManageAttendance } from '@usecases/classManagement/ManageAttendance';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface TeachingClassState {
   classes: readonly TeachingClass[];
@@ -86,7 +87,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     addClass: async (name, subject, students) => {
       const now = new Date().toISOString();
       const newClass: TeachingClass = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         name,
         subject,
         students,
@@ -141,7 +142,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
 
     addProgressEntry: async (classId, date, period, unit, lesson, note = '') => {
       const entry: ProgressEntry = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         classId,
         date,
         period,

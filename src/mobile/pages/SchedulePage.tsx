@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { generateUUID } from '@mobile/utils/uuid';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import { useMobileEventsStore } from '@mobile/stores/useMobileEventsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';

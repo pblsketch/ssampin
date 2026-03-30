@@ -1,6 +1,7 @@
 import type { Todo, TodoCategory, TodosData, SubTask } from '@domain/entities/Todo';
 import type { ITodoRepository } from '@domain/repositories/ITodoRepository';
 import { calculateNextDueDate } from '@domain/rules/todoRules';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 export class ManageTodos {
   constructor(private readonly todoRepository: ITodoRepository) {}
@@ -63,7 +64,7 @@ export class ManageTodos {
       // 종료일 체크
       if (!target.recurrence.endDate || nextDueDate <= target.recurrence.endDate) {
         const nextTodo: Todo = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           text: target.text,
           completed: false,
           priority: target.priority,
@@ -104,7 +105,7 @@ export class ManageTodos {
   async addSubTask(todoId: string, text: string): Promise<SubTask> {
     const data = await this.todoRepository.getTodos();
     const todos = data?.todos ?? [];
-    const subTask: SubTask = { id: crypto.randomUUID(), text, completed: false };
+    const subTask: SubTask = { id: generateUUID(), text, completed: false };
 
     const updated = todos.map((todo) =>
       todo.id === todoId

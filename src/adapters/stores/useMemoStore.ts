@@ -4,6 +4,7 @@ import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_SIZE } from '@domain/rules/memoRules';
 import { memoRepository } from '@adapters/di/container';
 import { ManageMemos } from '@usecases/memo/ManageMemos';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface MemoState {
   memos: readonly Memo[];
@@ -54,7 +55,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
       const x = 40 + (existing.length % 4) * 220 + Math.random() * 40;
       const y = 40 + Math.floor(existing.length / 4) * 200 + Math.random() * 40;
       const newMemo: Memo = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         content,
         color,
         x,

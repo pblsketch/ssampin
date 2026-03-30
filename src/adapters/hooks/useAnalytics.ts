@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef } from 'react';
 import { analyticsPort } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { AnalyticsEventName, AnalyticsEventProperties } from '@domain/valueObjects/AnalyticsEvent';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 const DEVICE_ID_KEY = 'ssampin_device_id';
 
 function getOrCreateDeviceId(): string {
   let id = localStorage.getItem(DEVICE_ID_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    id = generateUUID();
     localStorage.setItem(DEVICE_ID_KEY, id);
   }
   return id;

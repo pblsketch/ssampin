@@ -11,6 +11,7 @@ import {
   NEIS_SCHEDULE_CATEGORY,
 } from '@domain/entities/NeisSchedule';
 import type { NeisScheduleEvent } from '@domain/entities/NeisSchedule';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 export interface SyncResult {
   readonly added: number;
@@ -215,7 +216,7 @@ export class SyncNeisSchedule {
   /** API 데이터로 새 SchoolEvent 생성 */
   private createNewNeisEvent(apiEv: NeisScheduleEvent, syncTime: string): SchoolEvent {
     return {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       title: apiEv.title,
       date: apiEv.date,
       category: NEIS_SCHEDULE_CATEGORY.id,

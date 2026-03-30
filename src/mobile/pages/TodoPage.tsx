@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { generateUUID } from '@mobile/utils/uuid';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import { useMobileTodoStore } from '@mobile/stores/useMobileTodoStore';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 

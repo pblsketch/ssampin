@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import type { ClassRoster, ClassRostersData } from '@domain/entities/ClassRoster';
 
 const STORAGE_KEY = 'class-rosters';
@@ -55,7 +56,7 @@ export const useClassRosterStore = create<ClassRosterState>((set, get) => ({
   addRoster: async (name, studentNames) => {
     const now = new Date().toISOString();
     const newRoster: ClassRoster = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name,
       studentNames,
       createdAt: now,

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { generateUUID } from '@mobile/utils/uuid';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import type { Settings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@mobile/di/container';

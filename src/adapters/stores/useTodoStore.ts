@@ -3,6 +3,7 @@ import type { Todo, TodoCategory, TodoPriority, TodoRecurrence, SubTask } from '
 import { DEFAULT_TODO_CATEGORIES } from '@domain/entities/Todo';
 import { todoRepository } from '@adapters/di/container';
 import { ManageTodos } from '@usecases/todo/ManageTodos';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface TodoState {
   todos: readonly Todo[];
@@ -65,7 +66,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
 
     addTodo: async (text, dueDate, priority, category, recurrence, time) => {
       const newTodo: Todo = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         text,
         completed: false,
         createdAt: new Date().toISOString(),
@@ -113,7 +114,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
     },
 
     addSubTask: async (todoId, text) => {
-      const subTask: SubTask = { id: crypto.randomUUID(), text, completed: false };
+      const subTask: SubTask = { id: generateUUID(), text, completed: false };
       set((state) => ({
         todos: state.todos.map((todo) =>
           todo.id === todoId

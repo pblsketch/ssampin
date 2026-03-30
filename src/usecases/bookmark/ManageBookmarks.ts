@@ -1,6 +1,7 @@
 import type { Bookmark, BookmarkGroup, BookmarkData } from '@domain/entities/Bookmark';
 import type { IBookmarkRepository } from '@domain/repositories/IBookmarkRepository';
 import { getDefaultPresets, isDuplicateUrl } from '@domain/rules/bookmarkRules';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 export class ManageBookmarks {
   constructor(private readonly repo: IBookmarkRepository) {}
@@ -21,7 +22,7 @@ export class ManageBookmarks {
     const now = new Date().toISOString();
     const bookmark: Bookmark = {
       ...input,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       createdAt: now,
       updatedAt: now,
     };
@@ -60,7 +61,7 @@ export class ManageBookmarks {
     const data = await this.loadAll();
     const group: BookmarkGroup = {
       ...input,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       createdAt: new Date().toISOString(),
     };
     await this.saveData({

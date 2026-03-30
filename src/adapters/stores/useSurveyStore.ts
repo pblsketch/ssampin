@@ -7,6 +7,7 @@ import type {
 } from '@domain/entities/Survey';
 import { surveyRepository, shortLinkClient } from '@adapters/di/container';
 import { SITE_URL } from '@config/siteUrl';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 const SHARE_BASE_URL = `${SITE_URL}/check`;
 
@@ -50,7 +51,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
 
   createSurvey: async (params) => {
     const { customLinkCode, ...surveyParams } = params;
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const createdAt = new Date().toISOString();
     const shareUrl = surveyParams.mode === 'student' ? `${SHARE_BASE_URL}/${id}` : undefined;
 
@@ -74,7 +75,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
       createdAt,
       shareUrl,
       shortUrl,
-      adminKey: params.mode === 'student' ? crypto.randomUUID().slice(0, 8) : undefined,
+      adminKey: params.mode === 'student' ? generateUUID().slice(0, 8) : undefined,
     };
 
     const { surveys, localData } = get();

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { generateUUID } from '@mobile/utils/uuid';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
 import { teachingClassRepository } from '@mobile/di/container';

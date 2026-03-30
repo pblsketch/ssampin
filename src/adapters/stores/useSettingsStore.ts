@@ -3,6 +3,7 @@ import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, D
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
 import { detectLunchFromPeriods, getDefaultLunchTime } from '@domain/rules/periodRules';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 export const DEFAULT_WORK_SYMBOLS: readonly WorkSymbolItem[] = [
   { id: 'silence', emoji: '🤫', name: '조용히', description: '소리 내지 않고 혼자 활동합니다', bgGradient: 'from-blue-950/30 to-transparent' },
@@ -148,7 +149,7 @@ const DEFAULT_SETTINGS: Settings = {
     autoSyncIntervalMin: 0,
     conflictPolicy: 'latest' as const,
     lastSyncedAt: null,
-    deviceId: '',  // 런타임에 crypto.randomUUID()로 초기화
+    deviceId: '',  // 런타임에 generateUUID()로 초기화
   },
 };
 
@@ -256,7 +257,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         if (!corrected.sync?.deviceId) {
           const syncWithId = {
             ...(corrected.sync ?? DEFAULT_SETTINGS.sync!),
-            deviceId: crypto.randomUUID(),
+            deviceId: generateUUID(),
           };
           corrected = { ...corrected, sync: syncWithId } as Settings;
           // deviceId 생성 즉시 저장

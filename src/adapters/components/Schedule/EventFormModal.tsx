@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { SchoolEvent, CategoryItem, AlertTiming, AlertTimingPreset, Recurrence } from '@domain/entities/SchoolEvent';
 import { isCustomAlert, alertTimingToLabel } from '@domain/entities/SchoolEvent';
 import { getGradeBadgeText } from '@domain/entities/NeisSchedule';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface EventFormModalProps {
   categories: readonly CategoryItem[];
@@ -140,7 +141,7 @@ export function EventFormModal({
     if (!title.trim() || !date) return;
 
     const event: SchoolEvent = {
-      id: editEvent?.id ?? crypto.randomUUID(),
+      id: editEvent?.id ?? generateUUID(),
       title: title.trim(),
       date,
       category,

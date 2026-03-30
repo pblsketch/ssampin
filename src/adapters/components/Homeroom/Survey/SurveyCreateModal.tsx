@@ -7,6 +7,7 @@ import { SITE_DISPLAY } from '@config/siteUrl';
 import type { SurveyMode, QuestionType } from '@domain/entities/Survey';
 import { generateStudentPins } from '@domain/rules/surveyRules';
 import { hashPin } from '@infrastructure/crypto/pinHash';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 /* ──────────────── 타입 ──────────────── */
 
@@ -43,7 +44,7 @@ const QUESTION_TYPES: { value: QuestionType; label: string; icon: string }[] = [
 ];
 
 function newQuestion(): QuestionDraft {
-  return { id: crypto.randomUUID(), type: 'yesno', label: '', options: [], required: true };
+  return { id: generateUUID(), type: 'yesno', label: '', options: [], required: true };
 }
 
 /* ──────────────── 컴포넌트 ──────────────── */

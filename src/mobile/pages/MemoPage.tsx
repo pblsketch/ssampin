@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMobileMemoStore } from '@mobile/stores/useMobileMemoStore';
-import { generateUUID } from '@mobile/utils/uuid';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';

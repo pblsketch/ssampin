@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { IAnalyticsPort } from '@domain/ports/IAnalyticsPort';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
@@ -54,7 +55,7 @@ export class SupabaseAnalyticsAdapter implements IAnalyticsPort {
     }
 
     const record: AnalyticsRecord = {
-      event_id: crypto.randomUUID(),
+      event_id: generateUUID(),
       event,
       properties,
       app_version: this.appVersion,

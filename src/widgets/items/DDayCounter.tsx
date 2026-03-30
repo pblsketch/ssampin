@@ -7,6 +7,7 @@ import {
   type DDayItem,
   type DDayColor,
 } from '@domain/entities/DDay';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 /* ─── 상수 ─── */
 
@@ -244,7 +245,7 @@ export function DDayCounter() {
     async (data: Omit<DDayItem, 'id' | 'createdAt'>) => {
       const newItem: DDayItem = {
         ...data,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         createdAt: new Date().toISOString(),
       };
       await add(newItem);

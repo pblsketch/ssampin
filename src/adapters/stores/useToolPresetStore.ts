@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateUUID } from '@infrastructure/utils/uuid';
 import type { ToolPreset, ToolPresetType, ToolPresetsData } from '@domain/entities/ToolPreset';
 
 const STORAGE_KEY = 'tool-presets';
@@ -57,7 +58,7 @@ export const useToolPresetStore = create<ToolPresetState>((set, get) => ({
   addPreset: async (name, type, items) => {
     const now = new Date().toISOString();
     const newPreset: ToolPreset = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name,
       type,
       items,
