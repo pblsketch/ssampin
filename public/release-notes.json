@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "1.8.1",
+      "date": "2026-03-30",
+      "highlights": ["🎉 Google 인증 승인 완료!", "일정 교시 범위 선택", "iOS Safari 안정화"],
+      "changes": [
+        {
+          "type": "new",
+          "title": "🎉 Google 공식 인증 승인 완료",
+          "description": "구글 제3자 데이터 안전팀의 보안 심사를 통과했습니다! Google Drive 동기화와 Google 캘린더 연동을 안심하고 사용하세요."
+        },
+        {
+          "type": "new",
+          "title": "일정 교시 범위 선택",
+          "description": "일정 추가 시 시작~종료 교시를 범위로 선택할 수 있습니다."
+        },
+        {
+          "type": "new",
+          "title": "시간표 과목 색상 빠른 변경",
+          "description": "시간표 보기 모드에서 과목 셀을 클릭하면 바로 색상을 변경할 수 있습니다."
+        },
+        {
+          "type": "fix",
+          "title": "iOS Safari 안정화",
+          "description": "iOS Safari에서 하얀 화면이 뜨거나 크래시가 발생하던 문제를 완전히 해결했습니다."
+        },
+        {
+          "type": "improve",
+          "title": "진도 목록 날짜별 그룹 헤더",
+          "description": "진도 기록이 날짜별로 그룹화되어 정렬이 더 명확해졌습니다."
+        },
+        {
+          "type": "improve",
+          "title": "모바일 쌤도구 로딩 속도 개선",
+          "description": "React.lazy 동적 import로 초기 번들 크기를 줄여 더 빠르게 로딩됩니다."
+        }
+      ]
+    },
+    {
       "version": "1.8.0",
       "date": "2026-03-29",
       "highlights": ["담임메모 전면 개편", "모바일 쌤도구 9개 확장", "시간표 교시 시간 편집"],
