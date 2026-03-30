@@ -131,7 +131,7 @@ const DEFAULT_SETTINGS: Settings = {
     fontFamily: 'pretendard',
     gridRowHeight: 80,
   },
-  seatingDefaultView: 'student',
+  seatingDefaultView: 'teacher',
   eventAlertEnabled: true,
   showChatbot: true,
   analytics: {

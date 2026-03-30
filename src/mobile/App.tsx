@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useSyncTrigger } from './hooks/useSyncTrigger';
 import { useMobileDriveSyncStore } from './stores/useMobileDriveSyncStore';
@@ -17,18 +17,51 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ToolsOverviewPage } from './pages/ToolsOverviewPage';
 import { ToolAssignmentPage } from './pages/ToolAssignmentPage';
 import { ToolSurveyPage } from './pages/ToolSurveyPage';
-import { ToolTrafficLight } from '@adapters/components/Tools/ToolTrafficLight';
-import { ToolDice } from '@adapters/components/Tools/ToolDice';
-import { ToolCoin } from '@adapters/components/Tools/ToolCoin';
-import { ToolScoreboard } from '@adapters/components/Tools/ToolScoreboard';
-import { ToolTimer } from '@adapters/components/Tools/ToolTimer';
-import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
-import { ToolRandom } from '@adapters/components/Tools/ToolRandom';
-import { ToolRoulette } from '@adapters/components/Tools/ToolRoulette';
-import { ToolQRCode } from '@adapters/components/Tools/ToolQRCode';
+// 쌤도구 PC 컴포넌트 — 동적 import (코드 스플리팅)
+const ToolTrafficLight = React.lazy(() =>
+  import('@adapters/components/Tools/ToolTrafficLight').then(m => ({ default: m.ToolTrafficLight }))
+);
+const ToolDice = React.lazy(() =>
+  import('@adapters/components/Tools/ToolDice').then(m => ({ default: m.ToolDice }))
+);
+const ToolCoin = React.lazy(() =>
+  import('@adapters/components/Tools/ToolCoin').then(m => ({ default: m.ToolCoin }))
+);
+const ToolScoreboard = React.lazy(() =>
+  import('@adapters/components/Tools/ToolScoreboard').then(m => ({ default: m.ToolScoreboard }))
+);
+const ToolTimer = React.lazy(() =>
+  import('@adapters/components/Tools/ToolTimer').then(m => ({ default: m.ToolTimer }))
+);
+const ToolWorkSymbols = React.lazy(() =>
+  import('@adapters/components/Tools/ToolWorkSymbols').then(m => ({ default: m.ToolWorkSymbols }))
+);
+const ToolRandom = React.lazy(() =>
+  import('@adapters/components/Tools/ToolRandom').then(m => ({ default: m.ToolRandom }))
+);
+const ToolRoulette = React.lazy(() =>
+  import('@adapters/components/Tools/ToolRoulette').then(m => ({ default: m.ToolRoulette }))
+);
+const ToolQRCode = React.lazy(() =>
+  import('@adapters/components/Tools/ToolQRCode').then(m => ({ default: m.ToolQRCode }))
+);
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { InstallGuide } from './components/Onboarding/InstallGuide';
 import { InAppBrowserBanner } from './components/InAppBrowserBanner';
+
+/** 쌤도구 동적 로딩 시 표시할 폴백 스피너 */
+function ToolLoadingFallback() {
+  return (
+    <div className="flex items-center justify-center h-full mobile-bg">
+      <div className="text-center">
+        <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">
+          progress_activity
+        </span>
+        <p className="text-sp-muted mt-2 text-sm">도구 불러오는 중...</p>
+      </div>
+    </div>
+  );
+}
 
 type MobileTab = 'today' | 'schedule' | 'todo' | 'students' | 'attendance' | 'more';
 
@@ -310,23 +343,41 @@ export function App() {
           ) : moreSub === 'tool-survey' ? (
             <ToolSurveyPage onBack={() => setMoreSub('tools')} />
           ) : moreSub === 'tool-traffic-light' ? (
-            <ToolTrafficLight onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolTrafficLight onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : moreSub === 'tool-dice' ? (
-            <ToolDice onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolDice onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : moreSub === 'tool-coin' ? (
-            <ToolCoin onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolCoin onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : moreSub === 'tool-scoreboard' ? (
-            <ToolScoreboard onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolScoreboard onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : moreSub === 'tool-timer' ? (
-            <ToolTimer onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolTimer onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : moreSub === 'tool-work-symbols' ? (
-            <ToolWorkSymbols onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolWorkSymbols onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : moreSub === 'tool-random' ? (
-            <ToolRandom onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolRandom onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : moreSub === 'tool-roulette' ? (
-            <ToolRoulette onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolRoulette onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : moreSub === 'tool-qrcode' ? (
-            <ToolQRCode onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <ToolQRCode onBack={() => setMoreSub('tools')} isFullscreen={false} />
+            </Suspense>
           ) : (
             <MorePage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} />
           )

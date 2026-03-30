@@ -195,52 +195,63 @@ export function isMultiDayEvent(event: SchoolEvent): boolean {
 
 const DAY_MS = 86400000;
 
+export interface WeekBarsResult {
+  readonly bars: CalendarBar[];
+  /** 각 열(0-6)에서 표시되지 못한(overflow) 이벤트 수 */
+  readonly overflowCounts: readonly number[];
+}
+
 /**
  * 특정 주(week)의 다일 이벤트 바 목록을 계산
  * @param events 전체 이벤트
  * @param weekStart 해당 주의 첫 날 (일요일)
  * @param weekEnd 해당 주의 마지막 날 (토요일)
- * @returns 해당 주에 표시할 바 목록 (최대 3행)
+ * @returns 해당 주에 표시할 바 목록 (최대 2행, 1일 일정 포함) 및 열별 overflow 카운트
  */
 export function getMultiDayBarsForWeek(
   events: readonly SchoolEvent[],
   weekStart: Date,
   weekEnd: Date,
-): CalendarBar[] {
+): WeekBarsResult {
   const weekStartMs = weekStart.getTime();
   const weekEndMs = weekEnd.getTime();
 
-  // 다일 이벤트 중 이 주와 겹치는 것만 필터
-  const multiDayEvents = events.filter((e) => {
-    if (!isMultiDayEvent(e)) return false;
+  // 모든 이벤트 중 이 주와 겹치는 것을 필터 (1일 일정 포함)
+  const weekEvents = events.filter((e) => {
     const eStart = parseLocalDate(e.date).getTime();
-    const eEnd = parseLocalDate(e.endDate!).getTime();
+    const eEnd = e.endDate ? parseLocalDate(e.endDate).getTime() : eStart;
     return eStart <= weekEndMs && eEnd >= weekStartMs;
   });
 
   // 시작일 오름차순, 같으면 기간 긴 것 우선
-  const sorted = [...multiDayEvents].sort((a, b) => {
+  const sorted = [...weekEvents].sort((a, b) => {
     const diff = parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime();
     if (diff !== 0) return diff;
-    const aDur = parseLocalDate(a.endDate!).getTime() - parseLocalDate(a.date).getTime();
-    const bDur = parseLocalDate(b.endDate!).getTime() - parseLocalDate(b.date).getTime();
+    const aEnd = a.endDate ? parseLocalDate(a.endDate).getTime() : parseLocalDate(a.date).getTime();
+    const bEnd = b.endDate ? parseLocalDate(b.endDate).getTime() : parseLocalDate(b.date).getTime();
+    const aDur = aEnd - parseLocalDate(a.date).getTime();
+    const bDur = bEnd - parseLocalDate(b.date).getTime();
     return bDur - aDur;
   });
 
   // 각 행의 열 점유 상태
   const rows: boolean[][] = [];
   const bars: CalendarBar[] = [];
-  const MAX_ROWS = 3;
+  const overflowCounts = Array(7).fill(0) as number[];
+  const MAX_ROWS = 2;
 
   for (const event of sorted) {
     const eStartMs = Math.max(parseLocalDate(event.date).getTime(), weekStartMs);
-    const eEndMs = Math.min(parseLocalDate(event.endDate!).getTime(), weekEndMs);
+    const eEndMs = Math.min(
+      event.endDate ? parseLocalDate(event.endDate).getTime() : parseLocalDate(event.date).getTime(),
+      weekEndMs,
+    );
     const startCol = Math.round((eStartMs - weekStartMs) / DAY_MS);
     const endCol = Math.round((eEndMs - weekStartMs) / DAY_MS);
     const span = endCol - startCol + 1;
 
     const isContinuation = parseLocalDate(event.date).getTime() < weekStartMs;
-    const isContinued = parseLocalDate(event.endDate!).getTime() > weekEndMs;
+    const isContinued = (event.endDate ? parseLocalDate(event.endDate).getTime() : parseLocalDate(event.date).getTime()) > weekEndMs;
 
     // 겹치지 않는 행 찾기
     let assignedRow = -1;
@@ -256,7 +267,13 @@ export function getMultiDayBarsForWeek(
       }
     }
 
-    if (assignedRow === -1) continue; // 최대 행 초과
+    if (assignedRow === -1) {
+      // 표시되지 못한 이벤트 — 해당 열들의 overflow 카운트 증가
+      for (let c = startCol; c < startCol + span; c++) {
+        overflowCounts[c] = (overflowCounts[c] ?? 0) + 1;
+      }
+      continue;
+    }
 
     bars.push({
       eventId: event.id,
@@ -270,7 +287,7 @@ export function getMultiDayBarsForWeek(
     });
   }
 
-  return bars;
+  return { bars, overflowCounts };
 }
 
 /**

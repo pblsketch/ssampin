@@ -609,7 +609,7 @@ export function Schedule() {
 
               {/* 분할 레이아웃: 캘린더(60%) + 이벤트리스트(40%) */}
               <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
-                <div className="lg:w-[60%]">
+                <div className="lg:w-[60%] min-h-0 flex flex-col">
                   <CalendarView
                     year={year}
                     month={month}

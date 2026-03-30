@@ -8,6 +8,7 @@ import type { AttendanceStatus, AttendanceReason } from '@domain/entities/Attend
 import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
@@ -352,7 +353,8 @@ interface SeatingViewProps {
 }
 
 function SeatingView({ seatingData, studentMap, onStudentTap, dateStr, getRecordForDate }: SeatingViewProps) {
-  const [isTeacherView, setIsTeacherView] = useState(true);
+  const seatingDefaultView = useSettingsStore((s) => s.settings.seatingDefaultView);
+  const [isTeacherView, setIsTeacherView] = useState(seatingDefaultView === 'teacher');
   const settings = useMobileSettingsStore((s) => s.settings);
   const record = getRecordForDate(settings.className || 'homeroom', 0, dateStr);
 
@@ -507,7 +509,8 @@ interface TeachingSeatingViewProps {
 }
 
 function TeachingSeatingView({ teachingClass, onStudentTap, dateStr, getRecordForDate }: TeachingSeatingViewProps) {
-  const [isTeacherView, setIsTeacherView] = useState(true);
+  const seatingDefaultView = useSettingsStore((s) => s.settings.seatingDefaultView);
+  const [isTeacherView, setIsTeacherView] = useState(seatingDefaultView === 'teacher');
   const record = getRecordForDate(teachingClass.id, 0, dateStr);
 
   const seating = teachingClass.seating;

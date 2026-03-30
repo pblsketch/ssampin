@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
 export function Seating() {
   const { seating, load } = useSeatingStore();
   const { students, load: loadStudents } = useStudentStore();
+  const seatingDefaultView = useSettingsStore((s) => s.settings.seatingDefaultView);
+  const isTeacherView = seatingDefaultView === 'teacher';
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [sizeMode, setSizeMode] = useState<'sm' | 'md' | 'lg'>('sm');
@@ -87,6 +90,12 @@ export function Seating() {
     );
   }
 
+  const podiumEl = (
+    <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
+      sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-caption'
+    }`}>교탁</div>
+  );
+
   if (pairMode) {
     const mode = oddColumnMode ?? 'single';
     const basePairs = buildPairGroups(cols, cols % 2 !== 0 ? mode : 'single');
@@ -96,25 +105,29 @@ export function Seating() {
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>💺</span>자리배치</h3>
         </div>
-        <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
-          sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-caption'
-        }`}>교탁</div>
+        {!isTeacherView && podiumEl}
 
         <div className={`flex flex-col ${sizeMode === 'lg' ? 'gap-2' : sizeMode === 'md' ? 'gap-1.5' : 'gap-1'}`}>
           {Array.from({ length: rows }, (_, r) => {
-            const row = seats[r]!;
+            const ri = isTeacherView ? rows - 1 - r : r;
+            const row = seats[ri]!;
             const pairs = (mode === 'triple' && cols % 2 === 0)
               ? adjustPairGroupsForRow(basePairs, row)
               : basePairs;
+            const orderedPairs = isTeacherView ? [...pairs].reverse() : pairs;
 
             return (
               <div key={r} className={`flex items-center ${
                 sizeMode === 'lg' ? 'gap-4' : sizeMode === 'md' ? 'gap-3' : 'gap-2'
               }`}>
-                {pairs.map((pair, pi) => {
+                {orderedPairs.map((pair, pi) => {
                   const isSingle = pair.startCol === pair.endCol;
                   const colRange: number[] = [];
-                  for (let c = pair.startCol; c <= pair.endCol; c++) colRange.push(c);
+                  if (isTeacherView) {
+                    for (let c = pair.endCol; c >= pair.startCol; c--) colRange.push(c);
+                  } else {
+                    for (let c = pair.startCol; c <= pair.endCol; c++) colRange.push(c);
+                  }
 
                   return (
                     <div
@@ -152,6 +165,7 @@ export function Seating() {
             );
           })}
         </div>
+        {isTeacherView && podiumEl}
       </div>
     );
   }
@@ -161,9 +175,7 @@ export function Seating() {
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>💺</span>자리배치</h3>
       </div>
-      <div className={`rounded bg-sp-border/30 py-0.5 text-center text-sp-muted ${
-        sizeMode === 'lg' ? 'text-sm' : sizeMode === 'md' ? 'text-xs' : 'text-caption'
-      }`}>교탁</div>
+      {!isTeacherView && podiumEl}
 
       <div
         className={`grid w-full ${sizeMode === 'lg' ? 'gap-2' : sizeMode === 'md' ? 'gap-1.5' : 'gap-1'}`}
@@ -171,7 +183,9 @@ export function Seating() {
       >
         {Array.from({ length: rows }).map((_, r) =>
           Array.from({ length: cols }).map((_, c) => {
-            const studentId = seats[r]?.[c] ?? null;
+            const ri = isTeacherView ? rows - 1 - r : r;
+            const ci = isTeacherView ? cols - 1 - c : c;
+            const studentId = seats[ri]?.[ci] ?? null;
             const student = studentId ? studentMap.get(studentId) : undefined;
             const hasStudent = studentId !== null;
 
@@ -196,6 +210,7 @@ export function Seating() {
           })
         )}
       </div>
+      {isTeacherView && podiumEl}
     </div>
   );
 }
