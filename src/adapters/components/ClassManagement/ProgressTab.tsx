@@ -40,6 +40,12 @@ const STATUS_BAR_COLORS: Record<ProgressStatus, string> = {
   skipped: 'bg-amber-500',
 };
 
+const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+function getDayLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return DAY_LABELS[d.getDay()]!;
+}
+
 /* ──────────────────────── 컴포넌트 ──────────────────────── */
 
 interface ProgressTabProps {
@@ -100,6 +106,19 @@ export function ProgressTab({ classId }: ProgressTabProps) {
         return a.period - b.period;
       });
   }, [progressEntries, classId]);
+
+  const groupedEntries = useMemo(() => {
+    const groups: { date: string; items: typeof entries }[] = [];
+    let currentDate = '';
+    for (const entry of entries) {
+      if (entry.date !== currentDate) {
+        currentDate = entry.date;
+        groups.push({ date: currentDate, items: [] });
+      }
+      groups[groups.length - 1]!.items.push(entry);
+    }
+    return groups;
+  }, [entries]);
 
   // 진도 통계
   const stats = useMemo(() => {
@@ -554,171 +573,180 @@ export function ProgressTab({ classId }: ProgressTabProps) {
           </p>
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {entries.map((entry) => (
-            <div
-              key={entry.id}
-              className="group bg-sp-surface border border-sp-border rounded-xl px-4 py-3
-                         hover:border-sp-accent/30 transition-colors"
-            >
-              {editingId === entry.id ? (
-                /* ── 인라인 편집 모드 ── */
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs text-sp-muted mb-1">날짜</label>
-                      <CalendarPicker
-                        value={editDate}
-                        onChange={setEditDate}
-                        lessonDays={lessonDayIndices}
-                        accentColor={subjectAccent}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-sp-muted mb-1">교시</label>
-                      <select
-                        value={editPeriod}
-                        onChange={(e) => setEditPeriod(Number(e.target.value))}
-                        className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                                   text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-                      >
-                        {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map((p) => {
-                          const matching = getMatchingPeriods(editDate);
-                          const isMatch = matching.includes(p);
-                          return (
-                            <option key={p} value={p}>
-                              {p}교시{isMatch ? ' ✦' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-sp-muted mb-1">단원</label>
-                    <input
-                      type="text"
-                      value={editUnit}
-                      onChange={(e) => setEditUnit(e.target.value)}
-                      placeholder="예: 1단원 - 문학의 이해"
-                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent
-                                 placeholder:text-sp-muted/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-sp-muted mb-1">차시/주제</label>
-                    <input
-                      type="text"
-                      value={editLesson}
-                      onChange={(e) => setEditLesson(e.target.value)}
-                      placeholder="예: 1차시 - 소설의 구성요소"
-                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent
-                                 placeholder:text-sp-muted/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-sp-muted mb-1">비고 (선택)</label>
-                    <input
-                      type="text"
-                      value={editNote}
-                      onChange={(e) => setEditNote(e.target.value)}
-                      placeholder="예: 모둠 활동 포함"
-                      className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
-                                 text-sp-text text-sm focus:outline-none focus:border-sp-accent
-                                 placeholder:text-sp-muted/50"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={cancelEdit}
-                      className="px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
-                    >
-                      취소
-                    </button>
-                    <button
-                      onClick={() => void saveEdit(entry)}
-                      disabled={!editUnit.trim() || !editLesson.trim()}
-                      className="px-3 py-1 bg-sp-accent text-white text-xs rounded-lg
-                                 hover:bg-sp-accent/80 transition-colors
-                                 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      저장
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* ── 표시 모드 ── */
-                <div className="flex items-center gap-3">
-                  {/* 날짜·교시 */}
-                  <div className="flex items-center gap-2 text-xs text-sp-muted shrink-0 w-28">
-                    <span>{entry.date}</span>
-                    <span className="text-sp-border">|</span>
-                    <span>{entry.period}교시</span>
-                  </div>
-
-                  {/* 단원 > 차시 */}
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm text-sp-text truncate block">
-                      {entry.unit}
-                      <span className="text-sp-muted mx-1.5">&gt;</span>
-                      {entry.lesson}
-                    </span>
-                    {entry.note && (
-                      <span className="text-xs text-sp-muted/70 block truncate mt-0.5">
-                        {entry.note}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* 상태 배지 */}
-                  <button
-                    onClick={() => void handleStatusCycle(entry)}
-                    className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium cursor-pointer
-                               transition-colors ${STATUS_CONFIG[entry.status].badge}`}
-                    title="클릭하여 상태 변경"
-                  >
-                    {STATUS_CONFIG[entry.status].label}
-                  </button>
-
-                  {/* 액션 버튼 */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button
-                      onClick={() => startEdit(entry)}
-                      className="p-1 text-sp-muted hover:text-sp-accent transition-colors rounded"
-                      title="편집"
-                    >
-                      <span className="material-symbols-outlined text-base">edit</span>
-                    </button>
-                    {confirmDeleteId === entry.id ? (
-                      <div className="flex items-center gap-1">
+        <div className="space-y-1">
+          {groupedEntries.map((group, gi) => (
+            <div key={group.date} className="space-y-1.5">
+              <div className={`flex items-center gap-2 pb-1 ${gi > 0 ? 'pt-3' : ''}`}>
+                <span className="text-xs font-medium text-sp-muted">
+                  {group.date} ({getDayLabel(group.date)})
+                </span>
+                <div className="flex-1 h-px bg-sp-border/50" />
+                <span className="text-xs text-sp-muted/60">{group.items.length}건</span>
+              </div>
+              {group.items.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="group bg-sp-surface border border-sp-border rounded-xl px-4 py-3
+                             hover:border-sp-accent/30 transition-colors"
+                >
+                  {editingId === entry.id ? (
+                    /* ── 인라인 편집 모드 ── */
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs text-sp-muted mb-1">날짜</label>
+                          <CalendarPicker
+                            value={editDate}
+                            onChange={setEditDate}
+                            lessonDays={lessonDayIndices}
+                            accentColor={subjectAccent}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-sp-muted mb-1">교시</label>
+                          <select
+                            value={editPeriod}
+                            onChange={(e) => setEditPeriod(Number(e.target.value))}
+                            className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                       text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+                          >
+                            {Array.from({ length: settings.maxPeriods ?? 8 }, (_, i) => i + 1).map((p) => {
+                              const matching = getMatchingPeriods(editDate);
+                              const isMatch = matching.includes(p);
+                              return (
+                                <option key={p} value={p}>
+                                  {p}교시{isMatch ? ' ✦' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-sp-muted mb-1">단원</label>
+                        <input
+                          type="text"
+                          value={editUnit}
+                          onChange={(e) => setEditUnit(e.target.value)}
+                          placeholder="예: 1단원 - 문학의 이해"
+                          className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                     text-sp-text text-sm focus:outline-none focus:border-sp-accent
+                                     placeholder:text-sp-muted/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-sp-muted mb-1">차시/주제</label>
+                        <input
+                          type="text"
+                          value={editLesson}
+                          onChange={(e) => setEditLesson(e.target.value)}
+                          placeholder="예: 1차시 - 소설의 구성요소"
+                          className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                     text-sp-text text-sm focus:outline-none focus:border-sp-accent
+                                     placeholder:text-sp-muted/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-sp-muted mb-1">비고 (선택)</label>
+                        <input
+                          type="text"
+                          value={editNote}
+                          onChange={(e) => setEditNote(e.target.value)}
+                          placeholder="예: 모둠 활동 포함"
+                          className="w-full px-2.5 py-1 bg-sp-card border border-sp-border rounded-lg
+                                     text-sp-text text-sm focus:outline-none focus:border-sp-accent
+                                     placeholder:text-sp-muted/50"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => void handleDelete(entry.id)}
-                          className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded
-                                     hover:bg-red-500/30 transition-colors"
-                        >
-                          삭제
-                        </button>
-                        <button
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="px-2 py-0.5 text-sp-muted text-xs hover:text-sp-text transition-colors"
+                          onClick={cancelEdit}
+                          className="px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
                         >
                           취소
                         </button>
+                        <button
+                          onClick={() => void saveEdit(entry)}
+                          disabled={!editUnit.trim() || !editLesson.trim()}
+                          className="px-3 py-1 bg-sp-accent text-white text-xs rounded-lg
+                                     hover:bg-sp-accent/80 transition-colors
+                                     disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          저장
+                        </button>
                       </div>
-                    ) : (
+                    </div>
+                  ) : (
+                    /* ── 표시 모드 ── */
+                    <div className="flex items-center gap-3">
+                      {/* 교시 */}
+                      <div className="text-xs text-sp-muted shrink-0 w-14">
+                        <span>{entry.period}교시</span>
+                      </div>
+
+                      {/* 단원 > 차시 */}
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-sp-text truncate block">
+                          {entry.unit}
+                          <span className="text-sp-muted mx-1.5">&gt;</span>
+                          {entry.lesson}
+                        </span>
+                        {entry.note && (
+                          <span className="text-xs text-sp-muted/70 block truncate mt-0.5">
+                            {entry.note}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 상태 배지 */}
                       <button
-                        onClick={() => setConfirmDeleteId(entry.id)}
-                        className="p-1 text-sp-muted hover:text-red-400 transition-colors rounded"
-                        title="삭제"
+                        onClick={() => void handleStatusCycle(entry)}
+                        className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium cursor-pointer
+                                   transition-colors ${STATUS_CONFIG[entry.status].badge}`}
+                        title="클릭하여 상태 변경"
                       >
-                        <span className="material-symbols-outlined text-base">delete</span>
+                        {STATUS_CONFIG[entry.status].label}
                       </button>
-                    )}
-                  </div>
+
+                      {/* 액션 버튼 */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          onClick={() => startEdit(entry)}
+                          className="p-1 text-sp-muted hover:text-sp-accent transition-colors rounded"
+                          title="편집"
+                        >
+                          <span className="material-symbols-outlined text-base">edit</span>
+                        </button>
+                        {confirmDeleteId === entry.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => void handleDelete(entry.id)}
+                              className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded
+                                         hover:bg-red-500/30 transition-colors"
+                            >
+                              삭제
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="px-2 py-0.5 text-sp-muted text-xs hover:text-sp-text transition-colors"
+                            >
+                              취소
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(entry.id)}
+                            className="p-1 text-sp-muted hover:text-red-400 transition-colors rounded"
+                            title="삭제"
+                          >
+                            <span className="material-symbols-outlined text-base">delete</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
           ))}
         </div>
