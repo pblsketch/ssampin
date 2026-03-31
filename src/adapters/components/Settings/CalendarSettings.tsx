@@ -187,6 +187,65 @@ function PKCEFallbackModal({
   );
 }
 
+/** 콜백 미수신 → PKCE 폴백 제안 모달 */
+function FallbackSuggestionModal({
+  data,
+  onAccept,
+  onDismiss,
+}: {
+  data: { reason: string; message: string; elapsedSec: number };
+  onAccept: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onDismiss}>
+      <div
+        className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-amber-500/10">
+            <span className="material-symbols-outlined text-amber-400">wifi_off</span>
+          </div>
+          <h3 className="text-lg font-bold text-sp-text">연결이 안 되시나요?</h3>
+        </div>
+
+        {/* 본문 */}
+        <div className="space-y-3">
+          <p className="text-sm text-sp-muted">
+            Google 로그인은 완료했지만 앱과의 연결이 {data.elapsedSec}초째 대기 중이에요.
+            보안 프로그램이 연결을 차단하고 있을 수 있습니다.
+          </p>
+          <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4">
+            <p className="text-sm font-medium text-blue-400 mb-1">수동 인증 방식으로 전환할까요?</p>
+            <p className="text-xs text-sp-muted">
+              Google이 표시하는 인증 코드를 직접 입력하는 방식입니다.
+              보안 프로그램의 영향을 받지 않아요.
+            </p>
+          </div>
+        </div>
+
+        {/* 액션 버튼 */}
+        <div className="flex items-center justify-end gap-2 mt-6">
+          <button
+            onClick={onDismiss}
+            className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface"
+          >
+            좀 더 기다릴게요
+          </button>
+          <button
+            onClick={onAccept}
+            className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80"
+          >
+            수동 인증으로 전환
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CalendarSettings() {
   const {
     isConnected,
@@ -195,6 +254,8 @@ export function CalendarSettings() {
     error,
     oauthError,
     showPKCEFallback,
+    showFallbackSuggestion,
+    fallbackSuggestionData,
     syncState,
     mappings,
     syncInterval,
@@ -208,6 +269,8 @@ export function CalendarSettings() {
     disconnect,
     setOAuthError,
     setShowPKCEFallback,
+    setShowFallbackSuggestion,
+    acceptFallback,
     setSyncInterval,
     setSyncOnStart,
     setSyncOnFocus,
@@ -461,6 +524,15 @@ export function CalendarSettings() {
         onClose={() => setShowCalendarPicker(false)}
         isInitialSetup={mappings.length === 0}
       />
+
+      {/* 콜백 미수신 → 폴백 제안 모달 */}
+      {showFallbackSuggestion && fallbackSuggestionData && (
+        <FallbackSuggestionModal
+          data={fallbackSuggestionData}
+          onAccept={() => void acceptFallback()}
+          onDismiss={() => setShowFallbackSuggestion(false)}
+        />
+      )}
 
       {/* OAuth 에러 모달 */}
       {oauthError && (

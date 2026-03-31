@@ -74,10 +74,17 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
         oauthServer = null;
       }
 
+      // 콜백 수신 여부 추적 (30초 폴백 타이머용)
+      let callbackReceived = false;
+      let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
       const server = http.createServer((req, res) => {
         const parsedUrl = url.parse(req.url ?? '', true);
 
         if (parsedUrl.pathname === '/callback') {
+          callbackReceived = true;
+          if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+
           const code = parsedUrl.query['code'] as string | undefined;
           const error = parsedUrl.query['error'] as string | undefined;
 
@@ -131,6 +138,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
       // 서버 에러 핸들러 (포트 바인딩 실패 등)
       server.on('error', (err) => {
         oauthServer = null;
+        if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
         // 렌더러에 에러 전달 → UI에서 안내 표시
         getMainWindow()?.webContents.send('oauth:error', {
           code: 'SERVER_START_FAILED',
@@ -162,6 +170,19 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
 
         // 렌더러에 redirect_uri 전달 (토큰 교환 시 필요)
         getMainWindow()?.webContents.send('oauth:redirect-uri', redirectUri);
+
+        // 30초 콜백 미수신 → PKCE 폴백 제안
+        // 브라우저→localhost 접근이 보안 프로그램에 의해 차단된 경우를 감지한다.
+        // 서버는 종료하지 않음 — 사용자가 폴백을 거부하고 기다릴 수 있으므로.
+        fallbackTimer = setTimeout(() => {
+          if (!callbackReceived && oauthServer) {
+            getMainWindow()?.webContents.send('oauth:fallback-needed', {
+              reason: 'CALLBACK_TIMEOUT',
+              message: '30초 동안 인증 응답이 없습니다. 보안 프로그램이 연결을 차단하고 있을 수 있어요.',
+              elapsedSec: 30,
+            });
+          }
+        }, 30_000);
       });
 
       // 10분 타임아웃 (학교 Google Workspace 계정의 추가 인증 단계 고려)
@@ -169,6 +190,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
         if (oauthServer) {
           oauthServer.close();
           oauthServer = null;
+          if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
           getMainWindow()?.webContents.send('oauth:error', {
             code: 'TIMEOUT',
             message: '인증 시간이 초과되었습니다.',

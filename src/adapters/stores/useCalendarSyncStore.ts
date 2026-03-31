@@ -24,6 +24,10 @@ interface CalendarSyncState {
   // PKCE 폴백 모달 표시
   showPKCEFallback: boolean;
 
+  // OAuth 콜백 대기 중 폴백 제안 상태
+  showFallbackSuggestion: boolean;
+  fallbackSuggestionData: { reason: string; message: string; elapsedSec: number } | null;
+
   // 동기화 상태
   syncState: SyncState;
   mappings: readonly CalendarMapping[];
@@ -51,6 +55,8 @@ interface CalendarSyncState {
   setError: (error: string | null) => void;
   setOAuthError: (error: OAuthError | null) => void;
   setShowPKCEFallback: (show: boolean) => void;
+  setShowFallbackSuggestion: (show: boolean) => void;
+  acceptFallback: () => Promise<void>;
   setSyncStatus: (status: SyncStatus) => void;
   setMappings: (mappings: readonly CalendarMapping[]) => void;
   setSyncInterval: (minutes: number) => void;
@@ -76,6 +82,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   error: null,
   oauthError: null,
   showPKCEFallback: false,
+  showFallbackSuggestion: false,
+  fallbackSuggestionData: null,
   syncState: {
     status: 'idle',
     pendingChanges: 0,
@@ -111,7 +119,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   },
 
   startAuth: async (forceAccountSelect?: boolean) => {
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, showFallbackSuggestion: false, fallbackSuggestionData: null });
     try {
       const api = window.electronAPI;
       if (!api?.startOAuth) {
@@ -136,13 +144,27 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         }
       });
 
-      // Electron IPC: 로컬 서버 시작 + 브라우저 열기 + 코드 수신
-      const [code, actualRedirectUri] = await Promise.all([
-        api.startOAuth(authUrl),
-        redirectUriPromise,
-      ]);
+      // 콜백 미수신 → PKCE 폴백 제안 이벤트 리스너
+      let fallbackCleanup: (() => void) | null = null;
+      if (api.onOAuthFallbackNeeded) {
+        fallbackCleanup = api.onOAuthFallbackNeeded((data) => {
+          set({ showFallbackSuggestion: true, fallbackSuggestionData: data });
+        });
+      }
 
-      await get().completeAuth(code, actualRedirectUri);
+      try {
+        // Electron IPC: 로컬 서버 시작 + 브라우저 열기 + 코드 수신
+        const [code, actualRedirectUri] = await Promise.all([
+          api.startOAuth(authUrl),
+          redirectUriPromise,
+        ]);
+
+        // 성공 → 폴백 제안 숨기기
+        set({ showFallbackSuggestion: false, fallbackSuggestionData: null });
+        await get().completeAuth(code, actualRedirectUri);
+      } finally {
+        fallbackCleanup?.();
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.';
       // access_denied 에러 시 사용자 한도 안내
@@ -302,6 +324,18 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   setError: (error) => set({ error }),
   setOAuthError: (oauthError) => set({ oauthError }),
   setShowPKCEFallback: (showPKCEFallback) => set({ showPKCEFallback }),
+  setShowFallbackSuggestion: (show) => set({ showFallbackSuggestion: show, ...(!show && { fallbackSuggestionData: null }) }),
+  acceptFallback: async () => {
+    // 1. 로컬 서버 OAuth 취소
+    const api = window.electronAPI;
+    if (api?.cancelOAuth) {
+      await api.cancelOAuth();
+    }
+    // 2. 폴백 제안 닫기
+    set({ showFallbackSuggestion: false, fallbackSuggestionData: null, isLoading: false });
+    // 3. PKCE 폴백 시작
+    await get().startPKCEFallback();
+  },
   setSyncStatus: (status) => set((state) => ({
     syncState: { ...state.syncState, status },
   })),

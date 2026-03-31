@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
 import { SyncResultSummary } from '@adapters/components/common/SyncResultSummary';
@@ -11,7 +11,19 @@ const INTERVAL_OPTIONS = [0, 5, 10, 15, 30] as const;
 
 export function SyncTab() {
   const { settings, update } = useSettingsStore();
-  const { isConnected, email, startAuth, disconnect, isLoading } = useCalendarSyncStore();
+  const {
+    isConnected, email, startAuth, disconnect, isLoading,
+    showFallbackSuggestion, fallbackSuggestionData, acceptFallback, setShowFallbackSuggestion,
+    oauthError, setOAuthError, showPKCEFallback, setShowPKCEFallback,
+    startPKCEFallback, completePKCEAuth, error: authError,
+  } = useCalendarSyncStore();
+
+  // OAuth 에러 이벤트 수신 (SyncTab에서도 startAuth() 호출하므로 필요)
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onOAuthError) return;
+    return api.onOAuthError((err) => setOAuthError(err));
+  }, [setOAuthError]);
   const { status, syncToCloud, syncFromCloud, deleteCloudData, lastSyncResult } = useDriveSyncStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -299,6 +311,111 @@ export function SyncTab() {
           </SettingsSection>
         </>
       )}
+
+      {/* OAuth 폴백 제안 모달 (30초 콜백 미수신 시) */}
+      {showFallbackSuggestion && fallbackSuggestionData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowFallbackSuggestion(false)}>
+          <div className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-amber-500/10">
+                <span className="material-symbols-outlined text-amber-400">wifi_off</span>
+              </div>
+              <h3 className="text-lg font-bold text-sp-text">연결이 안 되시나요?</h3>
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm text-sp-muted">
+                Google 로그인은 완료했지만 앱과의 연결이 {fallbackSuggestionData.elapsedSec}초째 대기 중이에요.
+                보안 프로그램이 연결을 차단하고 있을 수 있습니다.
+              </p>
+              <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4">
+                <p className="text-sm font-medium text-blue-400 mb-1">수동 인증 방식으로 전환할까요?</p>
+                <p className="text-xs text-sp-muted">
+                  Google이 표시하는 인증 코드를 직접 입력하는 방식입니다.
+                  보안 프로그램의 영향을 받지 않아요.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-6">
+              <button onClick={() => setShowFallbackSuggestion(false)} className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface">
+                좀 더 기다릴게요
+              </button>
+              <button onClick={() => void acceptFallback()} className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80">
+                수동 인증으로 전환
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OAuth 에러 모달 */}
+      {oauthError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setOAuthError(null)}>
+          <div className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-red-500/10">
+                <span className="material-symbols-outlined text-red-400">error</span>
+              </div>
+              <h3 className="text-lg font-bold text-sp-text">Google 로그인 연결 실패</h3>
+            </div>
+            <p className="text-sm text-sp-muted">{oauthError.message}</p>
+            <div className="flex items-center justify-end gap-2 mt-6">
+              {(oauthError.code === 'SERVER_START_FAILED' || oauthError.code === 'LOCALHOST_BLOCKED') && (
+                <button onClick={() => { setOAuthError(null); void startPKCEFallback(); }} className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80">
+                  수동 인증으로 시도
+                </button>
+              )}
+              <button onClick={() => setOAuthError(null)} className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface">닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PKCE 수동 인증 코드 입력 모달 */}
+      {showPKCEFallback && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowPKCEFallback(false)}>
+          <div className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-blue-500/10">
+                <span className="material-symbols-outlined text-blue-400">key</span>
+              </div>
+              <h3 className="text-lg font-bold text-sp-text">수동 인증</h3>
+            </div>
+            <p className="text-sm text-sp-muted mb-4">브라우저에서 Google 로그인 후 표시된 인증 코드를 아래에 붙여넣어 주세요.</p>
+            {authError && (
+              <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-400 mb-4">{authError}</div>
+            )}
+            <PKCECodeInput isLoading={isLoading} onSubmit={(code) => void completePKCEAuth(code)} />
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button onClick={() => setShowPKCEFallback(false)} disabled={isLoading} className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface disabled:opacity-50">취소</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** PKCE 인증 코드 입력 필드 (SyncTab 내부 전용) */
+function PKCECodeInput({ isLoading, onSubmit }: { isLoading: boolean; onSubmit: (code: string) => void }) {
+  const [code, setCode] = useState('');
+  return (
+    <div className="flex gap-2">
+      <input
+        type="text"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        placeholder="인증 코드 입력..."
+        className="flex-1 rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none"
+        autoFocus
+        onKeyDown={(e) => { if (e.key === 'Enter' && code.trim()) onSubmit(code.trim()); }}
+      />
+      <button
+        onClick={() => code.trim() && onSubmit(code.trim())}
+        disabled={isLoading || !code.trim()}
+        className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80 disabled:opacity-50"
+      >
+        {isLoading ? '인증 중...' : '인증'}
+      </button>
     </div>
   );
 }

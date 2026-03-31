@@ -54,6 +54,8 @@ interface ElectronAPI {
   cancelOAuth: () => Promise<void>;
   onOAuthRedirectUri: (callback: (uri: string) => void) => () => void;
   onOAuthError: (callback: (error: { code: string; message: string }) => void) => () => void;
+  // OAuth 콜백 미수신 → PKCE 폴백 제안
+  onOAuthFallbackNeeded: (callback: (data: { reason: string; message: string; elapsedSec: number }) => void) => () => void;
   // Google OAuth PKCE 폴백 (로컬 서버 실패 시)
   startPKCEAuth: (authUrl: string) => Promise<{ verifier: string }>;
   exchangePKCECode: () => Promise<string>;
