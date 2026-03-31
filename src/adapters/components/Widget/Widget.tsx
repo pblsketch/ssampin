@@ -18,6 +18,7 @@ import { getSpanClass } from '@widgets/utils/getSpanClass';
 import { triggerRefreshAll } from '@widgets/hooks/useWidgetRefresh';
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
+import { WidgetWeatherBar } from '@widgets/components/WidgetWeatherBar';
 import type { WidgetLayoutMode } from '@domain/entities/Settings';
 
 interface ContextMenuState {
@@ -199,6 +200,10 @@ export function Widget() {
               {clock.time}
             </span>
           </div>
+          {/* 날씨 정보 */}
+          {settings.widget.showWeather !== false && (
+            <WidgetWeatherBar />
+          )}
 
           {/* 헤더 우측 버튼 그룹 */}
           <div

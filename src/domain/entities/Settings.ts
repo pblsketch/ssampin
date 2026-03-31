@@ -137,6 +137,8 @@ export interface WidgetSettings {
   readonly visibleSections: WidgetVisibleSections;
   readonly layoutMode: WidgetLayoutMode;
   readonly desktopMode: WidgetDesktopMode;
+  /** 위젯 헤더에 날씨 정보 표시 여부 (기본 true) */
+  readonly showWeather?: boolean;
 }
 
 export interface SystemSettings {
