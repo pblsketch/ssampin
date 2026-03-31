@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.8.2",
+      "date": "2026-03-31",
+      "highlights": ["위젯 절전 복귀 자동 복원", "OAuth PKCE 폴백 개선"],
+      "changes": [
+        {
+          "type": "fix",
+          "title": "위젯 모드 절전/화면보호기 복귀 시 자동 복원",
+          "description": "절전 모드나 화면보호기 실행 후 복귀했을 때 위젯이 사라지던 문제를 해결했습니다. 재부팅 없이 자동으로 위젯이 복원됩니다."
+        },
+        {
+          "type": "fix",
+          "title": "OAuth 콜백 차단 시 PKCE 폴백 자동 제안",
+          "description": "Google 로그인 시 브라우저가 콜백을 차단하는 경우 30초 후 자동으로 PKCE 폴백 방식을 안내합니다."
+        }
+      ]
+    },
+    {
       "version": "1.8.1",
       "date": "2026-03-30",
       "highlights": ["🎉 Google 인증 승인 완료!", "일정 교시 범위 선택", "iOS Safari 안정화"],

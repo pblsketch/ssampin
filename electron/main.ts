@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
@@ -13,6 +13,7 @@ declare const __dirname: string;
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
+let widgetWasActive = false;
 let savePositionTimer: ReturnType<typeof setTimeout> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -346,6 +347,78 @@ function ensureWidgetOnScreen(): void {
   }
 }
 
+// ─── 절전/화면보호기 복귀 시 위젯 복원 ───
+let restoreDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function restoreWidgetAfterSleep(): void {
+  if (isQuitting) return;
+
+  // resume + unlock-screen 연속 발동 시 중복 방지
+  if (restoreDebounceTimer) {
+    clearTimeout(restoreDebounceTimer);
+  }
+  restoreDebounceTimer = setTimeout(() => {
+    restoreDebounceTimer = null;
+    doRestoreWidget();
+  }, 300);
+}
+
+function doRestoreWidget(): void {
+  if (isQuitting) return;
+
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    // 창이 살아있는 경우: hide → show로 GPU 컨텍스트 강제 리프레시
+    console.log('[widget] 절전 복귀 — 위젯 리프레시 시도');
+    const bounds = widgetWindow.getBounds();
+
+    widgetWindow.hide();
+
+    setTimeout(() => {
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+
+      widgetWindow.show();
+
+      // 위치가 리셋됐을 수 있으므로 복원
+      widgetWindow.setBounds(bounds);
+
+      if (currentDesktopMode === 'topmost') {
+        widgetWindow.setAlwaysOnTop(true);
+      }
+
+      // WebContents 갱신 (렌더러가 freeze 상태일 수 있음)
+      widgetWindow.webContents.invalidate();
+
+      console.log('[widget] 절전 복귀 — 위젯 리프레시 완료');
+
+      // 500ms 뒤 실제로 보이는지 검증, 안 보이면 재생성
+      setTimeout(() => {
+        if (!widgetWindow || widgetWindow.isDestroyed()) return;
+        if (!widgetWindow.isVisible()) {
+          console.log('[widget] 절전 복귀 — 리프레시 실패, 재생성');
+          recreateWidget();
+        }
+      }, 500);
+    }, 200);
+  } else if (widgetWasActive) {
+    // 위젯이 파괴됐지만 절전 전에 활성 상태였으면 재생성
+    console.log('[widget] 절전 복귀 — 위젯이 파괴됨, 재생성');
+    recreateWidget();
+  }
+}
+
+function recreateWidget(): void {
+  // 기존 위젯 정리
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    stopWinDRecovery();
+    widgetWindow.destroy();
+  }
+  widgetWindow = null;
+
+  const opts = readSettingsWidgetOptions();
+  createWidgetWindow(opts);
+  widgetWasActive = true;
+}
+
 function createWidgetWindow(
   options: { width: number; height: number; desktopMode?: string },
   onReady?: () => void,
@@ -433,6 +506,7 @@ function createWidgetWindow(
       widgetWindow.show();
     }
 
+    widgetWasActive = true;
     onReady?.();
   };
 
@@ -463,6 +537,7 @@ function createWidgetWindow(
       e.preventDefault();
       stopWinDRecovery();
       widgetWindow?.hide();
+      widgetWasActive = false;
       mainWindow?.show();
     }
   });
@@ -471,6 +546,9 @@ function createWidgetWindow(
     stopWinDRecovery();
     widgetWindow = null;
     currentDesktopMode = 'normal';
+    if (!isQuitting) {
+      widgetWasActive = false;
+    }
   });
 }
 
@@ -1157,7 +1235,13 @@ if (!gotTheLock) {
     screen.on('display-added', () => ensureWidgetOnScreen());
     screen.on('display-removed', () => ensureWidgetOnScreen());
     screen.on('display-metrics-changed', () => {
-      setTimeout(() => ensureWidgetOnScreen(), 500);
+      setTimeout(() => {
+        ensureWidgetOnScreen();
+        // 절전 복귀로 인한 DPI 변경 시에도 위젯 리프레시
+        if (widgetWindow && !widgetWindow.isDestroyed()) {
+          widgetWindow.webContents.invalidate();
+        }
+      }, 500);
     });
 
     // Start in widget mode if the setting is enabled
@@ -1172,6 +1256,19 @@ if (!gotTheLock) {
       const content = fs.readFileSync(fileArg, 'utf-8');
       mainWindow?.webContents.once('did-finish-load', () => {
         mainWindow?.webContents.send('share:file-opened', content);
+      });
+    }
+
+    // ─── 절전/화면보호기 복귀 시 위젯 복원 (Windows) ───
+    if (process.platform === 'win32') {
+      powerMonitor.on('resume', () => {
+        console.log('[power] 시스템 resume 감지');
+        setTimeout(() => restoreWidgetAfterSleep(), 1000);
+      });
+
+      powerMonitor.on('unlock-screen', () => {
+        console.log('[power] 화면 잠금 해제 감지');
+        setTimeout(() => restoreWidgetAfterSleep(), 500);
       });
     }
   });
