@@ -107,7 +107,7 @@ export function WeeklyTimetable() {
           className="grid border border-sp-border/40 h-full"
           style={{
             gridTemplateColumns: `4.5rem repeat(${DAYS.length}, 1fr)`,
-            gridTemplateRows: `auto repeat(${periods.length}, 1fr)`,
+            gridTemplateRows: `auto repeat(${periods.length}, minmax(0, 1fr))`,
           }}
         >
           {/* 헤더 행 */}
@@ -129,7 +129,7 @@ export function WeeklyTimetable() {
             const isLastRow = rowIdx === periods.length - 1;
             return (
               <Fragment key={period}>
-                <div className={`bg-sp-card flex flex-col items-center justify-center border-r border-sp-border/30 ${!isLastRow ? 'border-b' : ''} ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted'}`}>
+                <div className={`bg-sp-card flex flex-col items-center justify-center overflow-hidden border-r border-sp-border/30 ${!isLastRow ? 'border-b' : ''} ${isCurrent ? 'text-sp-highlight font-bold' : 'text-sp-muted'}`}>
                   <span className="text-detail">{period}</span>
                   {pt && (
                     <span className="text-tiny opacity-60 whitespace-nowrap">
@@ -149,9 +149,9 @@ export function WeeklyTimetable() {
                   const cellBorder = `${!isLastRow ? 'border-b' : ''} ${!isLastCol ? 'border-r' : ''} border-sp-border/30`;
 
                   return (
-                    <div key={key} className={`bg-sp-card p-0.5 ${cellBorder}`}>
+                    <div key={key} className={`bg-sp-card p-0.5 overflow-hidden ${cellBorder}`}>
                       {tp ? (
-                        <div className={`rounded h-full flex flex-col items-center justify-center text-detail font-medium ${colorClass} ${isCurrentCell ? 'ring-2 ring-sp-highlight shadow-sm shadow-sp-highlight/20' : ''}`}>
+                        <div className={`rounded h-full overflow-hidden min-h-0 flex flex-col items-center justify-center text-detail font-medium ${colorClass} ${isCurrentCell ? 'ring-2 ring-sp-highlight shadow-sm shadow-sp-highlight/20' : ''}`}>
                           <span>{tp.subject}</span>
                           {tp.classroom && (
                             <span className="text-tiny opacity-60">{tp.classroom}</span>
@@ -161,7 +161,7 @@ export function WeeklyTimetable() {
                           )}
                         </div>
                       ) : (
-                        <div className={`rounded h-full flex items-center justify-center text-tiny text-sp-muted/40 ${isCurrentCell ? 'ring-2 ring-sp-highlight/50' : ''}`}>
+                        <div className={`rounded h-full overflow-hidden min-h-0 flex items-center justify-center text-tiny text-sp-muted/40 ${isCurrentCell ? 'ring-2 ring-sp-highlight/50' : ''}`}>
                           공강
                         </div>
                       )}
