@@ -92,6 +92,7 @@ export default defineConfig(({ mode }) => {
       '@infrastructure': path.resolve(__dirname, 'src/infrastructure'),
       '@mobile': path.resolve(__dirname, 'src/mobile'),
       '@widgets': path.resolve(__dirname, 'src/widgets'),
+      '@shared': path.resolve(__dirname, 'src/shared'),
     },
   },
   server: {

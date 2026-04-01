@@ -6,6 +6,7 @@ import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import { findMatchingClass } from '@domain/rules/matchingRules';
 import { getDayOfWeek } from '@domain/rules/periodRules';
+import { toLocalDateString } from '@shared/utils/localDate';
 
 /**
  * 오늘 수업 진도 위젯
@@ -39,8 +40,19 @@ export function TodayProgress() {
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
+
+    // Electron 절전 복귀 시 즉시 갱신
+    const unsubResume = window.electronAPI?.onSystemResume?.(() => {
+      setNow(new Date());
+      void loadClasses();
+      void loadSchedule();
+    });
+
+    return () => {
+      clearInterval(timer);
+      unsubResume?.();
+    };
+  }, [loadClasses, loadSchedule]);
 
   const today = useMemo((): DayOfWeekFull | null => getDayOfWeek(now, weekendDays), [now, weekendDays]);
 
@@ -48,7 +60,7 @@ export function TodayProgress() {
 
   const todayLessons = useMemo(() => {
     if (today === null) return [];
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = toLocalDateString(now);
     const periods = getEffectiveTeacherSchedule(todayStr, weekendDays);
     return periods
       .map((period, index) => {

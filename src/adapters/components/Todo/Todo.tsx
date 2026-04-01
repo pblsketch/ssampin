@@ -4,6 +4,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { toLocalDateString } from '@shared/utils/localDate';
 import type { Todo as TodoType, TodoPriority, TodoCategory } from '@domain/entities/Todo';
 import type { TodoSortMode } from '@domain/rules/todoRules';
 import {
@@ -153,7 +154,7 @@ export function Todo() {
   const [filter, setFilter] = useState<DateFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [newText, setNewText] = useState('');
-  const [newDueDate, setNewDueDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [newDueDate, setNewDueDate] = useState(() => toLocalDateString());
   const [noDueDate, setNoDueDate] = useState(false);
   const [newPriority, setNewPriority] = useState<TodoPriority>('none');
   const [newRecurrenceIdx, setNewRecurrenceIdx] = useState(0);
@@ -201,7 +202,7 @@ export function Todo() {
 
     const items: TimelineItem[] = [];
     const todayKey = getDayOfWeek(now) ?? '';
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = toLocalDateString(now);
 
     // 시간표 수업
     if (showTimetable) {
@@ -292,7 +293,7 @@ export function Todo() {
     setNewCategory('');
     setNewTime('');
     if (!noDueDate) {
-      setNewDueDate(new Date().toISOString().slice(0, 10));
+      setNewDueDate(toLocalDateString());
     }
   }, [newText, newDueDate, noDueDate, newPriority, newRecurrenceIdx, newCategory, newTime, addTodo]);
 
@@ -488,7 +489,7 @@ export function Todo() {
                         onChange={(e) => {
                           setNoDueDate(e.target.checked);
                           if (e.target.checked) setNewDueDate('');
-                          else setNewDueDate(new Date().toISOString().slice(0, 10));
+                          else setNewDueDate(toLocalDateString());
                         }}
                         className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent"
                       />
@@ -1562,7 +1563,7 @@ function TodoItem({
                       onClick={(e) => {
                         e.stopPropagation();
                         setShowCustomDate(true);
-                        setCustomDate(todo.dueDate ?? new Date().toISOString().slice(0, 10));
+                        setCustomDate(todo.dueDate ?? toLocalDateString());
                       }}
                       className="w-full text-left px-3 py-1.5 text-xs text-sp-accent hover:bg-sp-surface transition-colors"
                     >

@@ -6,6 +6,7 @@ import {
   getCurrentAcademicYear,
   getCurrentSemester,
 } from '@domain/entities/NeisTimetable';
+import { toLocalDateString } from '@shared/utils/localDate';
 import {
   transformToClassSchedule,
   getMaxPeriod,
@@ -62,7 +63,7 @@ export async function autoSyncNeisTimetable(
   }
 
   // 이미 오늘 동기화 완료
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalDateString();
   if (autoSync.lastSyncDate === today) {
     return { success: false, skipped: true };
   }

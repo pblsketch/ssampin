@@ -3,6 +3,7 @@ import type { Student, StudentStatus } from '@domain/entities/Student';
 import { studentRepository } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { toLocalDateString } from '@shared/utils/localDate';
 
 /** 샘플 한국 학생 35명 (학번: 1학년 2반) */
 const SAMPLE_STUDENTS: readonly Student[] = [
@@ -137,7 +138,7 @@ export const useStudentStore = create<StudentState>((set, get) => ({
 
   changeStatus: async (studentId, status, note) => {
     const { students } = get();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toLocalDateString();
     const newStudents = students.map((s) =>
       s.id === studentId
         ? {

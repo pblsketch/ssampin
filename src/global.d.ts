@@ -109,6 +109,8 @@ interface ElectronAPI {
   respondCloseAction: (action: 'widget' | 'tray') => void;
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void) => () => void;
+  // 절전/잠금 복귀 알림
+  onSystemResume?: (callback: () => void) => () => void;
 }
 
 interface Window {

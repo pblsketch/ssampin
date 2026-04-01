@@ -180,7 +180,6 @@ export function Widget() {
         onContextMenu={handleContextMenu}
         style={{
           fontFamily: 'inherit',
-          zoom: settings.dashboardFontScale ?? 1,
           backgroundColor: `rgba(var(--sp-widget-rgb), ${settings.widget.opacity})`,
           '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
         } as React.CSSProperties}
@@ -188,7 +187,7 @@ export function Widget() {
         {/* ── 헤더 (드래그 영역) ── */}
         <div
           className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+          style={{ WebkitAppRegion: 'drag', zoom: settings.dashboardFontScale ?? 1 } as React.CSSProperties}
           onDoubleClick={handleHeaderDoubleClick}
         >
           {/* 날짜 + 시간 */}
@@ -269,7 +268,7 @@ export function Widget() {
 
         {/* ── 메시지 배너 ── */}
         {message && (
-          <div className="flex-shrink-0 mx-4 mt-3">
+          <div className="flex-shrink-0 mx-4 mt-3" style={{ zoom: settings.dashboardFontScale ?? 1 }}>
             <div className="bg-sp-accent/10 border border-sp-accent/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
               <span className="material-symbols-outlined text-sp-accent flex-shrink-0" style={{ fontSize: 16 }}>
                 campaign
@@ -280,7 +279,7 @@ export function Widget() {
         )}
 
         {/* ── 대시보드 카드 ── */}
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex min-h-0" style={{ zoom: settings.dashboardFontScale ?? 1 }}>
           <div className="flex-1 overflow-hidden px-4 py-3 min-h-0">
             {visibleWidgets.length === 0 && !isEditMode ? (
               <div className="flex flex-col items-center justify-center h-full text-sp-muted">

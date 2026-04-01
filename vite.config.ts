@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
         '@adapters': path.resolve(__dirname, 'src/adapters'),
         '@infrastructure': path.resolve(__dirname, 'src/infrastructure'),
         '@widgets': path.resolve(__dirname, 'src/widgets'),
+        '@shared': path.resolve(__dirname, 'src/shared'),
       },
     },
     base: './',

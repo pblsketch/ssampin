@@ -8,6 +8,7 @@ import type {
   AlertTiming,
   Recurrence,
 } from '@domain/entities/SchoolEvent';
+import { toLocalDateString } from '@shared/utils/localDate';
 import { DEFAULT_CATEGORIES } from '@domain/entities/SchoolEvent';
 import { ExportEvents } from '@usecases/events/ExportEvents';
 import { ImportEvents } from '@usecases/events/ImportEvents';
@@ -452,7 +453,7 @@ export const useEventsStore = create<EventsState>((set) => {
       if (api?.showSaveDialog && api.writeFile) {
         const filePath = await api.showSaveDialog({
           title: '일정 내보내기',
-          defaultPath: `일정공유_${new Date().toISOString().slice(0, 10)}.ssampin`,
+          defaultPath: `일정공유_${toLocalDateString()}.ssampin`,
           filters: [{ name: '쌤핀 일정 파일', extensions: ['ssampin'] }],
         });
         if (!filePath) return false;
@@ -464,7 +465,7 @@ export const useEventsStore = create<EventsState>((set) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `일정공유_${new Date().toISOString().slice(0, 10)}.ssampin`;
+      a.download = `일정공유_${toLocalDateString()}.ssampin`;
       a.click();
       URL.revokeObjectURL(url);
       return true;

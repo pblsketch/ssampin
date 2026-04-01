@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { differenceInCalendarDays } from 'date-fns';
+import { toLocalDateString } from '@shared/utils/localDate';
 
 /* ─── 상태 타입 ─── */
 
@@ -83,7 +84,7 @@ function getActiveDays(n: number): number {
 
 /** 오늘 날짜를 활성일로 기록 (앱 시작 시 1회 호출) */
 export function recordActiveDay(): void {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const today = toLocalDateString(); // YYYY-MM-DD
   try {
     const raw = localStorage.getItem(ACTIVE_DAYS_KEY);
     const days: string[] = raw ? JSON.parse(raw) as string[] : [];

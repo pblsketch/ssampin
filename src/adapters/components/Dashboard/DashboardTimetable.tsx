@@ -6,6 +6,7 @@ import type { TeacherPeriod, ClassPeriod } from '@domain/entities/Timetable';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectTextColor, getSubjectDotColor, getCellStyle, getCellDotColor } from '@adapters/presenters/timetablePresenter';
+import { toLocalDateString } from '@shared/utils/localDate';
 
 type TabType = 'class' | 'teacher';
 
@@ -53,11 +54,22 @@ export function DashboardTimetable() {
     return unsub;
   }, [loadSchedule, loadSettings]);
 
-  // 1분마다 현재 시각 갱신
+  // 1분마다 현재 시각 갱신 + Electron 절전 복귀 시 즉시 갱신
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
+
+    // Electron 절전 복귀 시 즉시 갱신 (위젯 창에서 visibilitychange가 안 발동하므로)
+    const unsubResume = window.electronAPI?.onSystemResume?.(() => {
+      setNow(new Date());
+      void loadSchedule();
+      void loadSettings();
+    });
+
+    return () => {
+      clearInterval(timer);
+      unsubResume?.();
+    };
+  }, [loadSchedule, loadSettings]);
 
   const weekendDays = settings.enableWeekendDays;
   const dayOfWeek = useMemo(() => getDayOfWeek(now, weekendDays), [now, weekendDays]);
@@ -86,7 +98,7 @@ export function DashboardTimetable() {
   }, [dayOfWeek, classSchedule]);
 
   // 오늘의 교사 시간표 (오버라이드 적용)
-  const todayStr = useMemo(() => now.toISOString().slice(0, 10), [now]);
+  const todayStr = useMemo(() => toLocalDateString(now), [now]);
   const todayTeacherPeriods: readonly (TeacherPeriod | null)[] = useMemo(() => {
     if (!dayOfWeek) return [];
     return getEffectiveTeacherSchedule(todayStr, weekendDays);

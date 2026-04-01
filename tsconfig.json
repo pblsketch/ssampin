@@ -25,7 +25,8 @@
       "@adapters/*": ["src/adapters/*"],
       "@infrastructure/*": ["src/infrastructure/*"],
       "@widgets/*": ["src/widgets/*"],
-      "@mobile/*": ["src/mobile/*"]
+      "@mobile/*": ["src/mobile/*"],
+      "@shared/*": ["src/shared/*"]
     }
   },
   "include": ["src"],

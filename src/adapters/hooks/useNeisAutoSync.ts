@@ -5,6 +5,7 @@ import { neisPort } from '@adapters/di/container';
 import { NEIS_API_KEY } from '@domain/entities/Meal';
 import { autoSyncNeisTimetable, getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 import { smartAutoAssignColors } from '@domain/rules/subjectColorRules';
+import { toLocalDateString } from '@shared/utils/localDate';
 
 /**
  * 앱 시작 시 NEIS 시간표 자동 동기화 훅
@@ -53,7 +54,7 @@ export function useNeisAutoSync() {
           ...settings.neis,
           autoSync: {
             ...settings.neis.autoSync!,
-            lastSyncDate: new Date().toISOString().slice(0, 10),
+            lastSyncDate: toLocalDateString(),
             lastSyncWeek: currentWeek,
           },
         },

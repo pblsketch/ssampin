@@ -17,3 +17,9 @@ NUL
 # 개발 도구 상태 파일
 .claude/
 .omc/
+
+# 카드뉴스 생성 출력
+card-news-output/
+
+# 에이전트 작업 중간 산출물
+_workspace/

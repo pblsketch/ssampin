@@ -14,6 +14,7 @@ declare const __dirname: string;
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
+let widgetActiveBeforeSleep = false;  // suspend 시점의 스냅샷
 let savePositionTimer: ReturnType<typeof setTimeout> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -254,12 +255,14 @@ function applySystemSettings(): void {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const settings = JSON.parse(raw);
       const autoLaunch = settings.system?.autoLaunch ?? false;
-      app.setLoginItemSettings({
-        openAtLogin: autoLaunch,
-        name: '쌤핀',
-        enabled: autoLaunch,
-        path: app.getPath('exe'),
-      });
+
+      // 이전 버전에서 name/path로 잘못 등록된 레지스트리 항목 정리
+      app.setLoginItemSettings({ openAtLogin: false });
+
+      // 올바른 설정으로 재등록 (Electron이 현재 exe 경로를 자동 사용)
+      if (autoLaunch) {
+        app.setLoginItemSettings({ openAtLogin: true });
+      }
     }
   } catch {
     // fall through
@@ -359,51 +362,94 @@ function restoreWidgetAfterSleep(): void {
   }
   restoreDebounceTimer = setTimeout(() => {
     restoreDebounceTimer = null;
-    doRestoreWidget();
+    doRestoreWidget().catch((err) => {
+      console.error('[widget] 절전 복귀 오류:', err);
+    });
   }, 300);
 }
 
-function doRestoreWidget(): void {
+async function doRestoreWidget(): Promise<void> {
   if (isQuitting) return;
 
+  const shouldRestore = widgetWasActive || widgetActiveBeforeSleep;
+
   if (widgetWindow && !widgetWindow.isDestroyed()) {
-    // 창이 살아있는 경우: hide → show로 GPU 컨텍스트 강제 리프레시
+    // ── 케이스 A: 창이 살아있는 경우 ──
     console.log('[widget] 절전 복귀 — 위젯 리프레시 시도');
     const bounds = widgetWindow.getBounds();
 
     widgetWindow.hide();
 
-    setTimeout(() => {
-      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    await new Promise<void>((resolve) => {
+      setTimeout(async () => {
+        if (!widgetWindow || widgetWindow.isDestroyed()) { resolve(); return; }
 
-      widgetWindow.show();
+        widgetWindow.show();
+        widgetWindow.setBounds(bounds);
 
-      // 위치가 리셋됐을 수 있으므로 복원
-      widgetWindow.setBounds(bounds);
-
-      if (currentDesktopMode === 'topmost') {
-        widgetWindow.setAlwaysOnTop(true);
-      }
-
-      // WebContents 갱신 (렌더러가 freeze 상태일 수 있음)
-      widgetWindow.webContents.invalidate();
-
-      console.log('[widget] 절전 복귀 — 위젯 리프레시 완료');
-
-      // 500ms 뒤 실제로 보이는지 검증, 안 보이면 재생성
-      setTimeout(() => {
-        if (!widgetWindow || widgetWindow.isDestroyed()) return;
-        if (!widgetWindow.isVisible()) {
-          console.log('[widget] 절전 복귀 — 리프레시 실패, 재생성');
-          recreateWidget();
+        if (currentDesktopMode === 'topmost') {
+          widgetWindow.setAlwaysOnTop(true);
         }
-      }, 500);
-    }, 200);
-  } else if (widgetWasActive) {
-    // 위젯이 파괴됐지만 절전 전에 활성 상태였으면 재생성
-    console.log('[widget] 절전 복귀 — 위젯이 파괴됨, 재생성');
+
+        widgetWindow.webContents.invalidate();
+
+        // widgetWasActive 복원 (close 이벤트가 false로 만들었을 수 있음)
+        if (widgetActiveBeforeSleep) {
+          widgetWasActive = true;
+        }
+
+        console.log('[widget] 절전 복귀 — 위젯 리프레시 완료');
+
+        // 렌더러에 시스템 복귀 알림 (날짜/데이터 갱신용)
+        for (const win of [mainWindow, widgetWindow]) {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('system:resume');
+          }
+        }
+
+        // 500ms 뒤 렌더러 실제 동작 검증
+        setTimeout(async () => {
+          if (!widgetWindow || widgetWindow.isDestroyed()) { resolve(); return; }
+
+          // 검증 1: visibility
+          if (!widgetWindow.isVisible()) {
+            console.log('[widget] 절전 복귀 — invisible, 재생성');
+            recreateWidget();
+            resolve(); return;
+          }
+
+          // 검증 2: 렌더러 크래시
+          if (widgetWindow.webContents.isCrashed()) {
+            console.log('[widget] 절전 복귀 — 렌더러 크래시, 재생성');
+            recreateWidget();
+            resolve(); return;
+          }
+
+          // 검증 3: 렌더러 응답 (3초 타임아웃)
+          try {
+            await Promise.race([
+              widgetWindow.webContents.executeJavaScript('1+1'),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+            ]);
+            console.log('[widget] 절전 복귀 — 렌더러 응답 정상');
+          } catch {
+            console.log('[widget] 절전 복귀 — 렌더러 freeze, 재생성');
+            recreateWidget();
+          }
+
+          resolve();
+        }, 500);
+      }, 200);
+    });
+
+  } else if (shouldRestore) {
+    // ── 케이스 B: 창 파괴됨 + 절전 전 활성이었음 ──
+    console.log('[widget] 절전 복귀 — 위젯 파괴됨, 재생성');
     recreateWidget();
   }
+
+  // 스냅샷 초기화
+  widgetActiveBeforeSleep = false;
 }
 
 function recreateWidget(): void {
@@ -753,9 +799,6 @@ function registerIpcHandlers(): void {
           const autoLaunch = settings.system?.autoLaunch ?? false;
           app.setLoginItemSettings({
             openAtLogin: autoLaunch,
-            name: '쌤핀',
-            enabled: autoLaunch,
-            path: app.getPath('exe'),
           });
         } catch {
           // ignore parsing error
@@ -1261,6 +1304,12 @@ if (!gotTheLock) {
 
     // ─── 절전/화면보호기 복귀 시 위젯 복원 (Windows) ───
     if (process.platform === 'win32') {
+      powerMonitor.on('suspend', () => {
+        console.log('[power] 시스템 suspend 감지');
+        widgetActiveBeforeSleep = widgetWasActive ||
+          (widgetWindow !== null && !widgetWindow.isDestroyed());
+      });
+
       powerMonitor.on('resume', () => {
         console.log('[power] 시스템 resume 감지');
         setTimeout(() => restoreWidgetAfterSleep(), 1000);

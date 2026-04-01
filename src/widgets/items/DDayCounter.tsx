@@ -8,6 +8,7 @@ import {
   type DDayColor,
 } from '@domain/entities/DDay';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import { toLocalDateString } from '@shared/utils/localDate';
 
 /* ─── 상수 ─── */
 
@@ -39,7 +40,7 @@ interface DDayFormProps {
 function DDayForm({ initial, onSave, onCancel }: DDayFormProps) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [targetDate, setTargetDate] = useState(
-    initial?.targetDate ?? new Date().toISOString().slice(0, 10),
+    initial?.targetDate ?? toLocalDateString(),
   );
   const [emoji, setEmoji] = useState(initial?.emoji ?? '📌');
   const [color, setColor] = useState<DDayColor>(initial?.color ?? 'blue');

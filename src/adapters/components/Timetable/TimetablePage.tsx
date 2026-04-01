@@ -4,6 +4,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { toLocalDateString } from '@shared/utils/localDate';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
@@ -114,7 +115,7 @@ export function TimetablePage() {
     return activeDays.map((_, i) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
-      return date.toISOString().slice(0, 10);
+      return toLocalDateString(date);
     });
   }, [now, activeDays]);
 
@@ -284,7 +285,7 @@ export function TimetablePage() {
             enabled: true,
             grade,
             className: className_,
-            lastSyncDate: new Date().toISOString().slice(0, 10),
+            lastSyncDate: toLocalDateString(),
             lastSyncWeek: getCurrentISOWeek(),
             syncTarget: 'class',
           },

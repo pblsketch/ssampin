@@ -3,6 +3,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { toLocalDateString } from '@shared/utils/localDate';
 import { getActiveDays } from '@domain/valueObjects/DayOfWeek';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
@@ -309,7 +310,7 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
             enabled: true,
             grade,
             className,
-            lastSyncDate: new Date().toISOString().slice(0, 10),
+            lastSyncDate: toLocalDateString(),
             lastSyncWeek: getCurrentISOWeek(),
             syncTarget: 'class',
           },

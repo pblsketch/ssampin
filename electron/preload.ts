@@ -236,4 +236,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('data:changed', handler);
     return () => { ipcRenderer.removeListener('data:changed', handler); };
   },
+  // 절전/잠금 복귀 알림 (렌더러에서 날짜/데이터 갱신용)
+  onSystemResume: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('system:resume', handler);
+    return () => { ipcRenderer.removeListener('system:resume', handler); };
+  },
 });

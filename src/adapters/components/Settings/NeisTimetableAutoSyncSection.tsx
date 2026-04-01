@@ -4,6 +4,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { neisPort } from '@adapters/di/container';
 import { NEIS_API_KEY } from '@domain/entities/Meal';
+import { toLocalDateString } from '@shared/utils/localDate';
 import {
   settingsLevelToNeisLevel,
   getGradeRange,
@@ -163,7 +164,7 @@ export function NeisTimetableAutoSyncSection() {
           ...settings.neis,
           autoSync: {
             ...autoSync,
-            lastSyncDate: new Date().toISOString().slice(0, 10),
+            lastSyncDate: toLocalDateString(),
             lastSyncWeek: getCurrentISOWeek(),
           },
         },
