@@ -309,8 +309,9 @@ export function SyncTab() {
             </div>
             <div className="space-y-3">
               <p className="text-sm text-sp-muted">
-                Google 로그인은 완료했지만 앱과의 연결이 {fallbackSuggestionData.elapsedSec}초째 대기 중이에요.
-                보안 프로그램이 연결을 차단하고 있을 수 있습니다.
+                {fallbackSuggestionData.reason === 'LOCALHOST_BLOCKED'
+                  ? '학교 보안 프로그램이 구글 연결을 차단하고 있어요. 아래 방법으로 연결할 수 있습니다.'
+                  : `Google 로그인은 완료했지만 앱과의 연결이 ${fallbackSuggestionData.elapsedSec}초째 대기 중이에요. 보안 프로그램이 연결을 차단하고 있을 수 있습니다.`}
               </p>
               <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4">
                 <p className="text-sm font-medium text-blue-400 mb-1">수동 인증 방식으로 전환할까요?</p>

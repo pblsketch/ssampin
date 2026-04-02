@@ -167,12 +167,14 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.';
-      // access_denied 에러 시 사용자 한도 안내
       if (msg.includes('access_denied')) {
         set({
-          error: '구글 연결에 실패했습니다. 학교 컴퓨터에서는 보안 프로그램이 차단할 수 있어요. "Google 계정 연결" 클릭 후 30초 기다리면 다른 방법으로 연결할 수 있습니다.',
+          error: '구글 인증이 거부되었습니다. 다시 시도해주세요.',
           isLoading: false,
         });
+      } else if (msg.includes('localhost blocked') || msg.includes('PKCE fallback offered')) {
+        // PKCE 폴백으로 처리 중 — 에러 표시하지 않음 (모달이 대신 안내)
+        set({ isLoading: false });
       } else {
         set({ error: msg, isLoading: false });
       }

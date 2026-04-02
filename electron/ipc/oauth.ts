@@ -60,11 +60,21 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
     // 로컬 서버 바인딩 가능 여부 사전 확인
     const canBind = await canBindLocalhost();
     if (!canBind) {
-      getMainWindow()?.webContents.send('oauth:error', {
-        code: 'LOCALHOST_BLOCKED',
-        message: '보안 프로그램이 로컬 연결을 차단하고 있습니다.',
+      // localhost 차단 → 즉시 PKCE 폴백 제안 (30초 대기 없이)
+      console.log('[oauth] localhost 바인딩 불가 — PKCE 폴백 즉시 제안');
+      getMainWindow()?.webContents.send('oauth:fallback-needed', {
+        reason: 'LOCALHOST_BLOCKED',
+        message: '학교 보안 프로그램이 연결을 차단하고 있어요. 다른 방법으로 로그인할 수 있습니다.',
+        elapsedSec: 0,
       });
-      throw new Error('Cannot bind to localhost — security software may be blocking');
+      // throw하지 않고 Promise를 유지 — PKCE 폴백이 처리하므로
+      // 렌더러의 startAuth에서 fallbackCleanup이 이벤트를 수신하여 모달 표시
+      // 10분 타임아웃으로 자연 종료
+      return new Promise<string>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('OAuth timeout — localhost blocked, PKCE fallback offered'));
+        }, 10 * 60 * 1000);
+      });
     }
 
     return new Promise<string>((resolve, reject) => {
