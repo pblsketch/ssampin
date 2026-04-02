@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "1.8.5",
+      "date": "2026-04-02",
+      "highlights": ["구글 보안 심사 완료", "PKCE 폴백 개선", "챗봇 FAQ 업데이트"],
+      "changes": [
+        {
+          "type": "improve",
+          "title": "구글 보안 심사 완료 반영",
+          "description": "구글 OAuth 보안 심사가 완료되어 '심사 중' 안내 배너 및 관련 에러 메시지를 제거했습니다."
+        },
+        {
+          "type": "fix",
+          "title": "localhost 바인딩 차단 시 PKCE 폴백 즉시 제안",
+          "description": "학교 컴퓨터 등에서 localhost 포트 바인딩이 차단된 경우, PKCE 방식 인증을 즉시 제안하여 구글 캘린더 연동이 원활해졌습니다."
+        },
+        {
+          "type": "improve",
+          "title": "챗봇 구글 연동 FAQ 업데이트",
+          "description": "구글 보안 심사 완료를 반영하고, 학교 컴퓨터 PKCE 인증 안내를 추가했습니다."
+        }
+      ]
+    },
+    {
       "version": "1.8.4",
       "date": "2026-04-02",
       "highlights": ["날짜 표시 버그 수정", "절전 복귀 안정성 강화", "위젯 시간표 오버플로 수정"],
