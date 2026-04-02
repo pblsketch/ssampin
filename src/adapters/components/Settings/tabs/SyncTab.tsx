@@ -109,21 +109,6 @@ export function SyncTab() {
               </div>
             ) : (
               <div className="space-y-3">
-                {/* 인증 심사 안내 배너 */}
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-amber-400 text-icon-md shrink-0">info</span>
-                    <p className="text-sm font-medium text-amber-400">구글 연동 일시 제한 안내</p>
-                  </div>
-                  <p className="text-xs text-sp-muted leading-relaxed">
-                    현재 구글 보안 심사가 진행 중이라 신규 사용자의 연동이 일시적으로 제한되고 있습니다.
-                    로그인 시 &apos;확인되지 않은 앱&apos; 경고가 표시되거나 연결이 거부될 수 있습니다.
-                  </p>
-                  <p className="text-xs text-sp-muted leading-relaxed">
-                    심사 완료 후 정상 이용 가능하며, 이미 연결된 사용자는 영향 없이 계속 사용할 수 있습니다.
-                    시간표·좌석배치·메모 등 핵심 기능은 구글 연동 없이도 모두 동작합니다.
-                  </p>
-                </div>
                 <button
                   type="button"
                   onClick={() => void startAuth()}
