@@ -320,6 +320,7 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
           survey={survey}
           onBack={handleBack}
           supabaseClient={surveySupabaseClient}
+          students={studentLikes}
         />
       );
     }

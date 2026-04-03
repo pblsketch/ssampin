@@ -12,18 +12,24 @@ import { getStudentResponseProgress } from '@domain/rules/surveyRules';
 import type { SurveySupabaseClient, SurveyResponsePublic } from '@infrastructure/supabase/SurveySupabaseClient';
 import { shortLinkClient } from '@adapters/di/container';
 
+/* ──────────────── 타입 ──────────────── */
+
+type StudentLike = { readonly id: string; readonly name: string; readonly isVacant?: boolean };
+
 /* ──────────────── Props ──────────────── */
 
 interface SurveyStudentDetailProps {
   survey: Survey;
   onBack: () => void;
   supabaseClient?: SurveySupabaseClient;
+  students?: readonly StudentLike[];
 }
 
 /* ──────────────── 컴포넌트 ──────────────── */
 
-export function SurveyStudentDetail({ survey, onBack, supabaseClient }: SurveyStudentDetailProps) {
-  const { students } = useStudentStore();
+export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: studentsProp }: SurveyStudentDetailProps) {
+  const storeStudents = useStudentStore((s) => s.students);
+  const students = (studentsProp ?? storeStudents) as readonly StudentLike[];
   const { archiveSurvey, deleteSurvey } = useSurveyStore();
   const showToast = useToastStore((s) => s.show);
 
