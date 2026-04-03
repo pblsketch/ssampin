@@ -32,7 +32,7 @@ import { ActionDashboard } from './ActionDashboard';
 import { StudentJumpList } from './StudentJumpList';
 
 function SearchMode({ students, records, categories }: ModeProps) {
-  const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone, toggleNeisReport } =
+  const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone, toggleNeisReport, toggleDocumentSubmitted } =
     useStudentRecordsStore();
   const showToast = useToastStore((s) => s.show);
   const [dismissedSearchGuide, setDismissedSearchGuide] = useState(
@@ -46,6 +46,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [followUpOnly, setFollowUpOnly] = useState(false);
   const [unreportedOnly, setUnreportedOnly] = useState(false);
+  const [docUnsubmittedOnly, setDocUnsubmittedOnly] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [editCategory, setEditCategory] = useState('');
@@ -90,7 +91,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
   // 필터 적용 여부
   const hasFilters = selectedStudentId || selectedCategory || selectedSubcategory ||
-    selectedMethod || debouncedKeyword || followUpOnly || unreportedOnly || periodFilter !== 'all';
+    selectedMethod || debouncedKeyword || followUpOnly || unreportedOnly || docUnsubmittedOnly || periodFilter !== 'all';
 
   const resetFilters = useCallback(() => {
     setSelectedStudentId('');
@@ -101,6 +102,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setDebouncedKeyword('');
     setFollowUpOnly(false);
     setUnreportedOnly(false);
+    setDocUnsubmittedOnly(false);
     setPeriodFilter('all');
     setCustomStartDate('');
     setCustomEndDate('');
@@ -135,6 +137,9 @@ function SearchMode({ students, records, categories }: ModeProps) {
     if (unreportedOnly) {
       result = result.filter((r) => r.category === 'attendance' && !r.reportedToNeis);
     }
+    if (docUnsubmittedOnly) {
+      result = result.filter((r) => r.category === 'attendance' && !r.documentSubmitted);
+    }
     if (periodFilter === 'week') {
       const { start, end } = getWeekRange();
       result = filterByDateRange(result, start, end) as StudentRecord[];
@@ -148,7 +153,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     }
 
     return sortByDateDesc(result);
-  }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, unreportedOnly, periodFilter, customStartDate, customEndDate]);
+  }, [records, selectedStudentId, selectedCategory, selectedSubcategory, selectedMethod, debouncedKeyword, followUpOnly, unreportedOnly, docUnsubmittedOnly, periodFilter, customStartDate, customEndDate]);
 
   // 날짜별 그룹핑 + 정렬
   const grouped = useMemo(() => {
@@ -352,7 +357,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
           }`}
         >
-          {'\uD83D\uDCCC'} 미완료만
+          {'\uD83D\uDCCC'} 후속조치 미완료
         </button>
 
         {/* 나이스 미반영 필터 */}
@@ -365,6 +370,18 @@ function SearchMode({ students, records, categories }: ModeProps) {
           }`}
         >
           나이스 미반영
+        </button>
+
+        {/* 서류 미제출 필터 */}
+        <button
+          onClick={() => setDocUnsubmittedOnly(!docUnsubmittedOnly)}
+          className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+            docUnsubmittedOnly
+              ? 'bg-orange-500 text-white'
+              : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
+          }`}
+        >
+          서류 미제출
         </button>
 
         {/* 기간 필터 */}
@@ -483,6 +500,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               onDelete={deleteRecord}
               onToggleFollowUp={toggleFollowUpDone}
               onToggleNeisReport={toggleNeisReport}
+              onToggleDocumentSubmitted={toggleDocumentSubmitted}
               editingId={editingId}
               editContent={editContent}
               setEditContent={setEditContent}
@@ -510,6 +528,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
               onDelete={deleteRecord}
               onToggleFollowUp={toggleFollowUpDone}
               onToggleNeisReport={toggleNeisReport}
+              onToggleDocumentSubmitted={toggleDocumentSubmitted}
               editingId={editingId}
               editContent={editContent}
               setEditContent={setEditContent}
@@ -537,6 +556,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
             records={records}
             students={students}
             onFilterUnreported={() => setUnreportedOnly(true)}
+            onFilterDocUnsubmitted={() => setDocUnsubmittedOnly(true)}
             onFilterFollowUp={() => setFollowUpOnly(true)}
           />
         )}
