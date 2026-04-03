@@ -22,6 +22,8 @@ interface QuestionDraft {
 interface SurveyCreateModalProps {
   onClose: () => void;
   classId?: string;
+  /** 교과반 학생 수 (미전달 시 useStudentStore fallback) */
+  targetCount?: number;
 }
 
 /* ──────────────── 상수 ──────────────── */
@@ -49,9 +51,10 @@ function newQuestion(): QuestionDraft {
 
 /* ──────────────── 컴포넌트 ──────────────── */
 
-export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) {
+export function SurveyCreateModal({ onClose, classId, targetCount: targetCountProp }: SurveyCreateModalProps) {
   const { createSurvey } = useSurveyStore();
   const showToast = useToastStore((s) => s.show);
+  const resolvedTargetCount = targetCountProp ?? 30;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -165,8 +168,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
       // PIN 생성 (사칭 방지 모드 + 학생 응답 모드일 때)
       let studentPins: Record<number, string> | undefined;
       if (pinProtection && mode === 'student') {
-        const targetCount = 30; // targetCount가 없으면 기본값 30
-        studentPins = generateStudentPins(targetCount);
+        studentPins = generateStudentPins(resolvedTargetCount);
       }
 
       const survey = await createSurvey({
@@ -178,6 +180,7 @@ export function SurveyCreateModal({ onClose, classId }: SurveyCreateModalProps) 
         categoryColor: color,
         isArchived: false,
         classId,
+        targetCount: resolvedTargetCount,
         customLinkCode: mode === 'student' && customLinkCode.trim() ? customLinkCode.trim() : undefined,
         pinProtection: mode === 'student' ? pinProtection : undefined,
         studentPins: studentPins,

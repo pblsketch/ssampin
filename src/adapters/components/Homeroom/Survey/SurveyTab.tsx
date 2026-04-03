@@ -376,7 +376,7 @@ export function SurveyTab() {
       </div>
 
       {showCreateModal && (
-        <SurveyCreateModal onClose={() => setShowCreateModal(false)} />
+        <SurveyCreateModal onClose={() => setShowCreateModal(false)} targetCount={totalStudents || undefined} />
       )}
 
       {shareSurvey && (

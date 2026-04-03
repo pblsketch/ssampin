@@ -405,6 +405,7 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
         <SurveyCreateModal
           onClose={() => setShowCreateModal(false)}
           classId={classId}
+          targetCount={totalStudents}
         />
       )}
 
