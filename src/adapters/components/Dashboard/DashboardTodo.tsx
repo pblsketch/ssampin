@@ -7,6 +7,7 @@ import type { Todo } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
+import { TodoPopup } from '@adapters/components/Todo/TodoPopup';
 
 const MAX_VISIBLE = 20;
 
@@ -20,6 +21,7 @@ interface TimelineEntry {
 
 export function DashboardTodo() {
   const { todos, load, toggleTodo } = useTodoStore();
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
   const { teacherSchedule, classSchedule, load: loadSchedule } = useScheduleStore();
   const { events, load: loadEvents } = useEventsStore();
   const { settings } = useSettingsStore();
@@ -172,7 +174,10 @@ export function DashboardTodo() {
   return (
     <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
-      <div className="mb-4 flex items-center justify-between">
+      <div
+        className="mb-4 flex items-center justify-between cursor-pointer hover:bg-sp-surface/30 rounded-lg -mx-1 px-1 py-0.5 transition-colors"
+        onClick={() => setIsPopupOpen(true)}
+      >
         <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>✅</span>할 일 목록</h3>
         {totalCount > 0 && (
           <span className="text-xs text-sp-muted">
@@ -183,8 +188,11 @@ export function DashboardTodo() {
 
       {/* 콘텐츠 */}
       {totalCount === 0 && timelineEntries.length === 0 ? (
-        <div className="flex items-center justify-center py-6">
-          <p className="text-sm text-sp-muted">할 일이 없습니다</p>
+        <div
+          className="flex items-center justify-center py-6 cursor-pointer"
+          onClick={() => setIsPopupOpen(true)}
+        >
+          <p className="text-sm text-sp-muted">클릭하여 할 일을 추가하세요</p>
         </div>
       ) : showWideLayout ? (
         /* 가로 레이아웃: 시간표/일정 | 할 일 */
@@ -209,6 +217,7 @@ export function DashboardTodo() {
           {todoList}
         </div>
       )}
+      <TodoPopup open={isPopupOpen} onClose={() => setIsPopupOpen(false)} />
     </div>
   );
 }
