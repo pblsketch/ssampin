@@ -7,6 +7,7 @@ import {
   getCategorySummary,
   getWarningStudents,
 } from '@domain/rules/studentRecordRules';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { SummaryCard, StatBadge } from './RecordStatCards';
 import { type ModeProps, getWeekRange, getMonthRange, METHOD_OPTIONS, formatDateKR } from './recordUtils';
 
@@ -21,6 +22,7 @@ function toDateInputString(d: Date): string {
 }
 
 function ProgressMode({ students, records, categories }: ModeProps) {
+  const { bulkMarkDocumentSubmitted } = useStudentRecordsStore();
   const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>('all');
   const [statsTab, setStatsTab] = useState<StatsTab>('attendance');
   const [sortKey, setSortKey] = useState<SortKey>('number');
@@ -106,6 +108,29 @@ function ProgressMode({ students, records, categories }: ModeProps) {
     })).filter(d => d.student);
   }, [records, students]);
 
+  // Document-not-submitted detail data
+  const [showDocDetail, setShowDocDetail] = useState(false);
+
+  const docUnsubmittedCount = useMemo(() => {
+    return records.filter(
+      (r) => r.category === 'attendance' && !r.documentSubmitted,
+    ).length;
+  }, [records]);
+
+  const docDetail = useMemo(() => {
+    const unsubmitted = records.filter(r => r.category === 'attendance' && !r.documentSubmitted);
+    const byStudent = new Map<string, StudentRecord[]>();
+    for (const r of unsubmitted) {
+      const arr = byStudent.get(r.studentId) ?? [];
+      arr.push(r as StudentRecord);
+      byStudent.set(r.studentId, arr);
+    }
+    return Array.from(byStudent.entries()).map(([studentId, recs]) => ({
+      student: students.find(s => s.id === studentId),
+      records: recs,
+    })).filter(d => d.student);
+  }, [records, students]);
+
   // Feature 3: Life subcategories from categories prop (string[])
   const lifeSubcategories = useMemo(() => {
     const lifeCat = categories.find(c => c.id === 'life');
@@ -156,6 +181,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
       // Feature 2: Per-student NEIS data
       const attendanceTotal = studentRecs.filter(r => r.category === 'attendance').length;
       const neisReported = studentRecs.filter(r => r.category === 'attendance' && r.reportedToNeis).length;
+      const docSubmitted = studentRecs.filter(r => r.category === 'attendance' && r.documentSubmitted).length;
 
       // Feature 3: Counseling method breakdown
       const methodCounts: Record<string, number> = {};
@@ -171,7 +197,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
         subCounts[sub] = (subCounts[sub] ?? 0) + 1;
       }
 
-      return { student, stats, counselingCount, lifeCount, totalRecords, idx, attendanceTotal, neisReported, methodCounts, subCounts };
+      return { student, stats, counselingCount, lifeCount, totalRecords, idx, attendanceTotal, neisReported, docSubmitted, methodCounts, subCounts };
     });
 
     // Sort
@@ -253,6 +279,50 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                   <div className="flex flex-wrap gap-1">
                     {recs.map(r => (
                       <span key={r.id} className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+                        {formatDateKR(r.date)} {r.subcategory}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Document not-submitted warning - clickable drill-down */}
+      {docUnsubmittedCount > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowDocDetail(!showDocDetail)}
+              className="flex-1 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs text-left"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>description</span>
+              서류 미제출 출결 기록 {docUnsubmittedCount}건
+              <span className={`material-symbols-outlined text-sm ml-auto transition-transform ${showDocDetail ? 'rotate-180' : ''}`}>expand_more</span>
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm(`서류 미제출 출결 기록 ${docUnsubmittedCount}건을 모두 제출 완료로 처리하시겠습니까?`))
+                  void bulkMarkDocumentSubmitted(
+                    records.filter(r => r.category === 'attendance' && !r.documentSubmitted).map(r => r.id)
+                  );
+              }}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-xs hover:bg-green-500/20 transition-colors whitespace-nowrap"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>done_all</span>
+              전체 제출 완료
+            </button>
+          </div>
+          {showDocDetail && (
+            <div className="rounded-lg bg-sp-card p-3 space-y-2 border border-sp-border">
+              {docDetail.map(({ student, records: recs }) => (
+                <div key={student!.id} className="flex items-center gap-3 text-xs">
+                  <span className="font-medium text-sp-text min-w-[60px]">{student!.name}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {recs.map(r => (
+                      <span key={r.id} className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">
                         {formatDateKR(r.date)} {r.subcategory}
                       </span>
                     ))}
@@ -394,6 +464,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                   <SortHeader label="칭찬" sortId="praise" className="text-center border-l" />
                   {/* Feature 2: NEIS column */}
                   <th className="p-3 font-medium border-b text-center border-l text-sp-muted">나이스</th>
+                  <th className="p-3 font-medium border-b text-center border-l text-sp-muted">서류</th>
                 </>
               )}
               {statsTab === 'counseling' && (
@@ -420,7 +491,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
             </tr>
           </thead>
           <tbody>
-            {statsRows.map(({ student, stats, counselingCount, lifeCount, totalRecords, idx, attendanceTotal, neisReported, methodCounts, subCounts }) => (
+            {statsRows.map(({ student, stats, counselingCount, lifeCount, totalRecords, idx, attendanceTotal, neisReported, docSubmitted, methodCounts, subCounts }) => (
               <tr key={student.id} className="hover:bg-sp-surface/30 transition-colors">
                 <td className="p-3 text-sp-muted border-b">{idx + 1}</td>
                 <td className="p-3 text-sp-text font-medium border-b">{student.name}</td>
@@ -434,6 +505,10 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                     {/* Feature 2: NEIS reported/total */}
                     <td className={`text-center p-3 border-b border-l text-xs ${neisReported < attendanceTotal ? 'text-red-400 font-medium' : 'text-green-400'}`}>
                       {attendanceTotal > 0 ? `${neisReported}/${attendanceTotal}` : '-'}
+                    </td>
+                    {/* Document submitted/total */}
+                    <td className={`text-center p-3 border-b border-l text-xs ${docSubmitted < attendanceTotal ? 'text-orange-400 font-medium' : 'text-green-400'}`}>
+                      {attendanceTotal > 0 ? `${docSubmitted}/${attendanceTotal}` : '-'}
                     </td>
                   </>
                 )}

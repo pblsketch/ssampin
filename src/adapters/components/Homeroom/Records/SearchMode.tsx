@@ -51,6 +51,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [editCategory, setEditCategory] = useState('');
   const [editSubcategory, setEditSubcategory] = useState('');
   const [editReportedToNeis, setEditReportedToNeis] = useState(false);
+  const [editDocumentSubmitted, setEditDocumentSubmitted] = useState(false);
   const [editFollowUp, setEditFollowUp] = useState('');
   const [editFollowUpDate, setEditFollowUpDate] = useState('');
   const [sortMode, setSortMode] = useState<RecordSortMode>('time');
@@ -183,6 +184,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setEditCategory(record.category);
     setEditSubcategory(record.subcategory);
     setEditReportedToNeis(record.reportedToNeis ?? false);
+    setEditDocumentSubmitted(record.documentSubmitted ?? false);
     setEditFollowUp(record.followUp ?? '');
     setEditFollowUpDate(record.followUpDate ?? '');
   }, []);
@@ -194,6 +196,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
       category: editCategory,
       subcategory: editSubcategory,
       reportedToNeis: record.category === 'attendance' ? editReportedToNeis : record.reportedToNeis,
+      documentSubmitted: record.category === 'attendance' ? editDocumentSubmitted : record.documentSubmitted,
       followUp: editFollowUp.trim() || undefined,
       followUpDate: editFollowUpDate || undefined,
     });
@@ -202,9 +205,10 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setEditCategory('');
     setEditSubcategory('');
     setEditReportedToNeis(false);
+    setEditDocumentSubmitted(false);
     setEditFollowUp('');
     setEditFollowUpDate('');
-  }, [editContent, editCategory, editSubcategory, editReportedToNeis, editFollowUp, editFollowUpDate, updateRecord]);
+  }, [editContent, editCategory, editSubcategory, editReportedToNeis, editDocumentSubmitted, editFollowUp, editFollowUpDate, updateRecord]);
 
   const handleExportFiltered = useCallback(async () => {
     const targetStudents = selectedStudentId
@@ -488,12 +492,14 @@ function SearchMode({ students, records, categories }: ModeProps) {
               setEditSubcategory={setEditSubcategory}
               editReportedToNeis={editReportedToNeis}
               setEditReportedToNeis={setEditReportedToNeis}
+              editDocumentSubmitted={editDocumentSubmitted}
+              setEditDocumentSubmitted={setEditDocumentSubmitted}
               editFollowUp={editFollowUp}
               setEditFollowUp={setEditFollowUp}
               editFollowUpDate={editFollowUpDate}
               setEditFollowUpDate={setEditFollowUpDate}
               onEditSave={handleEditSave}
-              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditFollowUp(''); setEditFollowUpDate(''); }}
+              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditDocumentSubmitted(false); setEditFollowUp(''); setEditFollowUpDate(''); }}
             />
           ) : (
             <DefaultRecordListView
@@ -513,12 +519,14 @@ function SearchMode({ students, records, categories }: ModeProps) {
               setEditSubcategory={setEditSubcategory}
               editReportedToNeis={editReportedToNeis}
               setEditReportedToNeis={setEditReportedToNeis}
+              editDocumentSubmitted={editDocumentSubmitted}
+              setEditDocumentSubmitted={setEditDocumentSubmitted}
               editFollowUp={editFollowUp}
               setEditFollowUp={setEditFollowUp}
               editFollowUpDate={editFollowUpDate}
               setEditFollowUpDate={setEditFollowUpDate}
               onEditSave={handleEditSave}
-              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditFollowUp(''); setEditFollowUpDate(''); }}
+              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditDocumentSubmitted(false); setEditFollowUp(''); setEditFollowUpDate(''); }}
             />
           )}
         </div>

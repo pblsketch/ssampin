@@ -16,6 +16,8 @@ export interface InlineRecordEditorProps {
   setEditSubcategory: (v: string) => void;
   editReportedToNeis?: boolean;
   setEditReportedToNeis?: (v: boolean) => void;
+  editDocumentSubmitted?: boolean;
+  setEditDocumentSubmitted?: (v: boolean) => void;
   editFollowUp?: string;
   setEditFollowUp?: (v: string) => void;
   editFollowUpDate?: string;
@@ -35,6 +37,8 @@ export function InlineRecordEditor({
   setEditSubcategory,
   editReportedToNeis,
   setEditReportedToNeis,
+  editDocumentSubmitted,
+  setEditDocumentSubmitted,
   editFollowUp,
   setEditFollowUp,
   editFollowUpDate,
@@ -181,7 +185,7 @@ export function InlineRecordEditor({
         />
       </div>
 
-      {/* 나이스 반영 체크 (출결일 때만) */}
+      {/* 나이스 반영 & 서류 제출 체크 (출결일 때만) */}
       {isAttendance && setEditReportedToNeis && (
         <label className="flex items-center gap-2 text-xs text-sp-muted cursor-pointer select-none">
           <input
@@ -192,6 +196,20 @@ export function InlineRecordEditor({
           />
           <span className="flex items-center gap-1">
             나이스 반영 완료
+            <span className="text-[10px] text-sp-muted/60">(나중에 변경 가능)</span>
+          </span>
+        </label>
+      )}
+      {isAttendance && setEditDocumentSubmitted && (
+        <label className="flex items-center gap-2 text-xs text-sp-muted cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={editDocumentSubmitted ?? false}
+            onChange={(e) => setEditDocumentSubmitted(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
+          />
+          <span className="flex items-center gap-1">
+            출결 서류 제출 확인
             <span className="text-[10px] text-sp-muted/60">(나중에 변경 가능)</span>
           </span>
         </label>

@@ -21,6 +21,8 @@ export interface RecordEditProps {
   setEditSubcategory: (v: string) => void;
   editReportedToNeis: boolean;
   setEditReportedToNeis: (v: boolean) => void;
+  editDocumentSubmitted: boolean;
+  setEditDocumentSubmitted: (v: boolean) => void;
   editFollowUp: string;
   setEditFollowUp: (v: string) => void;
   editFollowUpDate: string;

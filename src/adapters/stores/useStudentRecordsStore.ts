@@ -88,11 +88,14 @@ interface StudentRecordsState {
     followUp?: string,
     followUpDate?: string,
     reportedToNeis?: boolean,
+    documentSubmitted?: boolean,
   ) => Promise<void>;
   updateRecord: (record: StudentRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
   toggleFollowUpDone: (recordId: string) => Promise<void>;
   toggleNeisReport: (recordId: string) => Promise<void>;
+  toggleDocumentSubmitted: (recordId: string) => Promise<void>;
+  bulkMarkDocumentSubmitted: (recordIds: readonly string[]) => Promise<void>;
   setViewMode: (mode: ViewMode) => void;
   setPeriodFilter: (filter: PeriodFilter) => void;
 
@@ -132,7 +135,7 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
         }
       },
 
-      addRecord: async (studentId, category, subcategory, content, date, method?, followUp?, followUpDate?, reportedToNeis?) => {
+      addRecord: async (studentId, category, subcategory, content, date, method?, followUp?, followUpDate?, reportedToNeis?, documentSubmitted?) => {
         const newRecord: StudentRecord = {
           id: generateUUID(),
           studentId,
@@ -143,7 +146,7 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
           createdAt: new Date().toISOString(),
           ...(method ? { method } : {}),
           ...(followUp ? { followUp, followUpDate, followUpDone: false } : {}),
-          ...(category === 'attendance' ? { reportedToNeis: reportedToNeis ?? false } : {}),
+          ...(category === 'attendance' ? { reportedToNeis: reportedToNeis ?? false, documentSubmitted: documentSubmitted ?? false } : {}),
         };
         await manageRecords.add(newRecord);
         set((state) => ({ records: [...state.records, newRecord] }));
@@ -182,6 +185,31 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
         await manageRecords.update(updated);
         set((state) => ({
           records: state.records.map((r) => (r.id === recordId ? updated : r)),
+        }));
+      },
+
+      toggleDocumentSubmitted: async (recordId) => {
+        const record = get().records.find((r) => r.id === recordId);
+        if (!record || record.category !== 'attendance') return;
+        const updated = { ...record, documentSubmitted: !record.documentSubmitted };
+        await manageRecords.update(updated);
+        set((state) => ({
+          records: state.records.map((r) => (r.id === recordId ? updated : r)),
+        }));
+      },
+
+      bulkMarkDocumentSubmitted: async (recordIds) => {
+        const idSet = new Set(recordIds);
+        const targets = get().records.filter(
+          (r) => idSet.has(r.id) && r.category === 'attendance' && !r.documentSubmitted,
+        );
+        const updatedRecords = targets.map((r) => ({ ...r, documentSubmitted: true }));
+        await Promise.all(updatedRecords.map((r) => manageRecords.update(r)));
+        const updatedIds = new Set(updatedRecords.map((r) => r.id));
+        set((state) => ({
+          records: state.records.map((r) =>
+            updatedIds.has(r.id) ? { ...r, documentSubmitted: true } : r,
+          ),
         }));
       },
 

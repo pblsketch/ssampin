@@ -27,6 +27,7 @@ function DefaultRecordListView({
   editingId, editContent, setEditContent,
   editCategory, setEditCategory, editSubcategory, setEditSubcategory,
   editReportedToNeis, setEditReportedToNeis,
+  editDocumentSubmitted, setEditDocumentSubmitted,
   editFollowUp, setEditFollowUp, editFollowUpDate, setEditFollowUpDate,
   onEditSave, onEditCancel,
 }: DefaultRecordListViewProps) {
@@ -115,6 +116,8 @@ function DefaultRecordListView({
                         setEditSubcategory={setEditSubcategory}
                         editReportedToNeis={editReportedToNeis}
                         setEditReportedToNeis={setEditReportedToNeis}
+                        editDocumentSubmitted={editDocumentSubmitted}
+                        setEditDocumentSubmitted={setEditDocumentSubmitted}
                         editFollowUp={editFollowUp}
                         setEditFollowUp={setEditFollowUp}
                         editFollowUpDate={editFollowUpDate}

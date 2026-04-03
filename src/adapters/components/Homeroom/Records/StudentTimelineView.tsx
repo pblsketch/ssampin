@@ -31,6 +31,7 @@ function StudentTimelineView({
   editingId, editContent, setEditContent,
   editCategory, setEditCategory, editSubcategory, setEditSubcategory,
   editReportedToNeis, setEditReportedToNeis,
+  editDocumentSubmitted, setEditDocumentSubmitted,
   editFollowUp, setEditFollowUp, editFollowUpDate, setEditFollowUpDate,
   onEditSave, onEditCancel,
 }: StudentTimelineViewProps) {
@@ -139,6 +140,8 @@ function StudentTimelineView({
                               setEditSubcategory={setEditSubcategory}
                               editReportedToNeis={editReportedToNeis}
                               setEditReportedToNeis={setEditReportedToNeis}
+                              editDocumentSubmitted={editDocumentSubmitted}
+                              setEditDocumentSubmitted={setEditDocumentSubmitted}
                               editFollowUp={editFollowUp}
                               setEditFollowUp={setEditFollowUp}
                               editFollowUpDate={editFollowUpDate}

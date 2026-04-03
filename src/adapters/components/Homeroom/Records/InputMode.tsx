@@ -30,6 +30,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [editingCategory, setEditingCategory] = useState('');
   const [editingSubcat, setEditingSubcat] = useState('');
   const [editingReportedToNeis, setEditingReportedToNeis] = useState(false);
+  const [editingDocumentSubmitted, setEditingDocumentSubmitted] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<{
     categoryId: string;
@@ -42,8 +43,10 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [followUp, setFollowUp] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
   const [reportedToNeis, setReportedToNeis] = useState(false);
+  const [documentSubmitted, setDocumentSubmitted] = useState(false);
   const [rightTab, setRightTab] = useState<RightTab>('today');
   const [showMemoModal, setShowMemoModal] = useState(false);
+  const [studentView, setStudentView] = useState<'default' | 'roster'>('default');
 
   // 3컬럼 리사이즈 (퍼센트 기반)
   const [leftPct, setLeftPct] = useState(38);
@@ -184,6 +187,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     const fu = followUp.trim() || undefined;
     const fuDate = followUpDate || undefined;
     const neisFlag = selectedSub.categoryId === 'attendance' ? reportedToNeis : undefined;
+    const docFlag = selectedSub.categoryId === 'attendance' ? documentSubmitted : undefined;
     const promises = Array.from(selectedStudents).map((studentId) =>
       addRecord(
         studentId,
@@ -195,6 +199,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
         fu,
         fuDate,
         neisFlag,
+        docFlag,
       ),
     );
     await Promise.all(promises);
@@ -208,7 +213,8 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     setFollowUp('');
     setFollowUpDate('');
     setReportedToNeis(false);
-  }, [selectedStudents, selectedSub, memo, selectedDate, selectedMethod, followUp, followUpDate, reportedToNeis, addRecord]);
+    setDocumentSubmitted(false);
+  }, [selectedStudents, selectedSub, memo, selectedDate, selectedMethod, followUp, followUpDate, reportedToNeis, documentSubmitted, addRecord]);
 
   const dateRecords = useMemo(() => {
     return records.filter((r) => r.date === selectedDate);
@@ -241,6 +247,31 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
             </span>
           </h3>
           <div className="flex items-center gap-2">
+            {/* 보기 전환 토글 */}
+            <div className="flex items-center bg-sp-surface rounded-lg p-0.5">
+              <button
+                onClick={() => setStudentView('default')}
+                className={`p-1 rounded transition-colors ${
+                  studentView === 'default'
+                    ? 'bg-sp-accent/20 text-sp-accent'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+                title="기본 보기"
+              >
+                <span className="material-symbols-outlined text-sm">grid_view</span>
+              </button>
+              <button
+                onClick={() => setStudentView('roster')}
+                className={`p-1 rounded transition-colors ${
+                  studentView === 'roster'
+                    ? 'bg-sp-accent/20 text-sp-accent'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+                title="명렬표 보기"
+              >
+                <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+              </button>
+            </div>
             {selectedStudents.size === 1 && (
               <button
                 onClick={() => setRightTab('history')}
@@ -259,35 +290,92 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-2 overflow-y-auto flex-1">
-          {students.map((student, idx) => {
-            if (student.isVacant) {
+        {studentView === 'default' ? (
+          /* ── 기본 보기 ── */
+          <div className="grid grid-cols-4 gap-2 overflow-y-auto flex-1">
+            {students.map((student, idx) => {
+              if (student.isVacant) {
+                return (
+                  <div
+                    key={student.id}
+                    className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30"
+                  >
+                    {idx + 1}
+                    <div className="text-[10px] truncate">결번</div>
+                  </div>
+                );
+              }
+              const isSelected = selectedStudents.has(student.id);
               return (
-                <div
+                <button
                   key={student.id}
-                  className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30"
+                  onClick={() => toggleStudent(student.id)}
+                  className={`px-2 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${isSelected
+                    ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
+                    : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
+                    }`}
                 >
                   {idx + 1}
-                  <div className="text-[10px] truncate">결번</div>
-                </div>
+                  {student.name}
+                </button>
               );
-            }
-            const isSelected = selectedStudents.has(student.id);
-            return (
-              <button
-                key={student.id}
-                onClick={() => toggleStudent(student.id)}
-                className={`px-2 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${isSelected
-                  ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
-                  : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
-                  }`}
-              >
-                {idx + 1}
-                {student.name}
-              </button>
-            );
-          })}
-        </div>
+            })}
+          </div>
+        ) : (
+          /* ── 명렬표 보기 (2단 리스트) ── */
+          <div className="overflow-y-auto flex-1">
+            <div className="grid grid-cols-2 gap-x-3">
+              {[0, 1].map((col) => {
+                const half = Math.ceil(students.length / 2);
+                const slice = students.slice(col * half, (col + 1) * half);
+                const offset = col * half;
+                return (
+                  <div key={col} className="flex flex-col">
+                    {slice.map((student, i) => {
+                      const num = offset + i + 1;
+                      if (student.isVacant) {
+                        return (
+                          <div
+                            key={student.id}
+                            className="flex items-center gap-2 px-2 py-1.5 border-l-2 border-transparent opacity-30"
+                          >
+                            <span className="w-7 text-right text-sm font-bold tabular-nums text-sp-muted shrink-0">
+                              {num}
+                            </span>
+                            <span className="text-xs text-sp-muted italic">결번</span>
+                          </div>
+                        );
+                      }
+                      const isSelected = selectedStudents.has(student.id);
+                      return (
+                        <button
+                          key={student.id}
+                          onClick={() => toggleStudent(student.id)}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-md transition-all text-left w-full border-l-2 ${
+                            isSelected
+                              ? 'bg-sp-accent/15 border-sp-accent'
+                              : 'hover:bg-sp-surface/60 border-transparent'
+                          }`}
+                        >
+                          <span className={`w-7 text-right text-base font-bold tabular-nums shrink-0 leading-none ${
+                            isSelected ? 'text-sp-accent' : 'text-sp-muted/50'
+                          }`}>
+                            {num}
+                          </span>
+                          <span className={`text-sm font-medium leading-none ${
+                            isSelected ? 'text-sp-text' : 'text-sp-text/80'
+                          }`}>
+                            {student.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 리사이즈 핸들 (좌↔중) */}
@@ -438,9 +526,9 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
             </button>
           </div>
 
-          {/* 나이스 반영 체크 (출결일 때만) */}
+          {/* 나이스 반영 & 서류 제출 체크 (출결일 때만) */}
           {selectedSub?.categoryId === 'attendance' && (
-            <div className="mt-3">
+            <div className="mt-3 space-y-2">
               <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -451,6 +539,19 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                 />
                 <span className="flex items-center gap-1">
                   나이스 반영 완료
+                  <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={documentSubmitted}
+                  onChange={(e) => setDocumentSubmitted(e.target.checked)}
+                  className="w-4 h-4 rounded border-sp-border text-sp-accent
+                             focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
+                />
+                <span className="flex items-center gap-1">
+                  출결 서류 제출 확인
                   <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
                 </span>
               </label>
@@ -547,7 +648,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
               /* 편집 모드 */
               <div className="p-4 flex flex-col gap-3">
                 <button
-                  onClick={() => { setEditingRecordId(null); setEditingReportedToNeis(false); }}
+                  onClick={() => { setEditingRecordId(null); setEditingReportedToNeis(false); setEditingDocumentSubmitted(false); }}
                   className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors self-start"
                 >
                   <span className="material-symbols-outlined text-sm">arrow_back</span>
@@ -568,6 +669,8 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                       setEditSubcategory={setEditingSubcat}
                       editReportedToNeis={editingReportedToNeis}
                       setEditReportedToNeis={setEditingReportedToNeis}
+                      editDocumentSubmitted={editingDocumentSubmitted}
+                      setEditDocumentSubmitted={setEditingDocumentSubmitted}
                       onSave={() => {
                         void updateRecord({
                           ...editingRecord,
@@ -575,11 +678,13 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                           category: editingCategory,
                           subcategory: editingSubcat,
                           reportedToNeis: editingRecord.category === 'attendance' ? editingReportedToNeis : editingRecord.reportedToNeis,
+                          documentSubmitted: editingRecord.category === 'attendance' ? editingDocumentSubmitted : editingRecord.documentSubmitted,
                         });
                         setEditingRecordId(null);
                         setEditingReportedToNeis(false);
+                        setEditingDocumentSubmitted(false);
                       }}
-                      onCancel={() => { setEditingRecordId(null); setEditingReportedToNeis(false); }}
+                      onCancel={() => { setEditingRecordId(null); setEditingReportedToNeis(false); setEditingDocumentSubmitted(false); }}
                     />
                   );
                 })()}
@@ -610,6 +715,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                               setEditingCategory(record.category);
                               setEditingSubcat(record.subcategory);
                               setEditingReportedToNeis(record.reportedToNeis ?? false);
+                              setEditingDocumentSubmitted(record.documentSubmitted ?? false);
                             }}
                             className="text-sp-muted hover:text-sp-accent transition-colors"
                             title="수정"
