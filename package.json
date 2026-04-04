@@ -20,7 +20,9 @@
     "test:chatbot": "tsx scripts/test-chatbot.ts",
     "dev:mobile": "vite --config vite.mobile.config.ts --port 5174",
     "build:mobile": "vite build --config vite.mobile.config.ts",
-    "preview:mobile": "vite preview --config vite.mobile.config.ts"
+    "preview:mobile": "vite preview --config vite.mobile.config.ts",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:mac:dmg": "npm run build && electron-builder --mac dmg"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -81,17 +81,25 @@ function getDefaultWidgetBounds(width: number): { x: number; y: number } {
 }
 
 function getAppIcon(): Electron.NativeImage {
-  const candidates = [
-    path.join(__dirname, '../build/icon.ico'),
-    path.join(__dirname, '../public/favicon.ico'),
-    path.join(process.resourcesPath || '', 'icon.ico'),
-  ];
+  const isMac = process.platform === 'darwin';
+  const candidates = isMac
+    ? [
+        path.join(__dirname, '../build/icon.icns'),
+        path.join(__dirname, '../build/icon.png'),
+        path.join(process.resourcesPath || '', 'icon.icns'),
+      ]
+    : [
+        path.join(__dirname, '../build/icon.ico'),
+        path.join(__dirname, '../public/favicon.ico'),
+        path.join(process.resourcesPath || '', 'icon.ico'),
+      ];
   const found = candidates.find((p) => fs.existsSync(p));
   return found ? nativeImage.createFromPath(found) : nativeImage.createEmpty();
 }
 
 /** Setup.exe를 직접 실행하고 있는지 감지 → 경고 다이얼로그 표시 */
 function checkInstallation(): void {
+  if (process.platform !== 'win32') return;
   const exePath = app.getPath('exe');
   const tempDir = app.getPath('temp');
   const downloadsPatterns = ['Downloads', 'download', '다운로드'];
@@ -181,7 +189,19 @@ function createWindow(): void {
 
 function createTray(): void {
   try {
-    const trayIcon = getAppIcon().resize({ width: 16, height: 16 });
+    let trayIcon: Electron.NativeImage;
+    if (process.platform === 'darwin') {
+      // macOS: 템플릿 이미지 사용 (다크/라이트 모드 자동 대응)
+      const templatePath = path.join(__dirname, '../build/iconTemplate.png');
+      if (fs.existsSync(templatePath)) {
+        trayIcon = nativeImage.createFromPath(templatePath);
+        trayIcon.setTemplateImage(true);
+      } else {
+        trayIcon = getAppIcon().resize({ width: 16, height: 16 });
+      }
+    } else {
+      trayIcon = getAppIcon().resize({ width: 16, height: 16 });
+    }
     tray = new Tray(trayIcon);
 
     const contextMenu = Menu.buildFromTemplate([
@@ -1302,24 +1322,22 @@ if (!gotTheLock) {
       });
     }
 
-    // ─── 절전/화면보호기 복귀 시 위젯 복원 (Windows) ───
-    if (process.platform === 'win32') {
-      powerMonitor.on('suspend', () => {
-        console.log('[power] 시스템 suspend 감지');
-        widgetActiveBeforeSleep = widgetWasActive ||
-          (widgetWindow !== null && !widgetWindow.isDestroyed());
-      });
+    // ─── 절전/화면보호기 복귀 시 위젯 복원 (Windows, macOS) ───
+    powerMonitor.on('suspend', () => {
+      console.log('[power] 시스템 suspend 감지');
+      widgetActiveBeforeSleep = widgetWasActive ||
+        (widgetWindow !== null && !widgetWindow.isDestroyed());
+    });
 
-      powerMonitor.on('resume', () => {
-        console.log('[power] 시스템 resume 감지');
-        setTimeout(() => restoreWidgetAfterSleep(), 1000);
-      });
+    powerMonitor.on('resume', () => {
+      console.log('[power] 시스템 resume 감지');
+      setTimeout(() => restoreWidgetAfterSleep(), 1000);
+    });
 
-      powerMonitor.on('unlock-screen', () => {
-        console.log('[power] 화면 잠금 해제 감지');
-        setTimeout(() => restoreWidgetAfterSleep(), 500);
-      });
-    }
+    powerMonitor.on('unlock-screen', () => {
+      console.log('[power] 화면 잠금 해제 감지');
+      setTimeout(() => restoreWidgetAfterSleep(), 500);
+    });
   });
 }
 

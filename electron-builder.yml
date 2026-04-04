@@ -36,3 +36,28 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: 쌤핀
   artifactName: ssampin-Setup.${ext}
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.png
+  category: public.app-category.education
+  fileAssociations:
+    - ext: ssampin
+      name: SsamPin 일정 파일
+      role: Editor
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  artifactName: ssampin-${version}-${arch}.${ext}
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
