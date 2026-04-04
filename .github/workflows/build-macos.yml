@@ -26,7 +26,7 @@ jobs:
         run: npm run typecheck
 
       - name: Build macOS DMG
-        run: npm run build:mac
+        run: npm run build && npx electron-builder --mac --publish never
         env:
           VITE_DEV_SERVER_URL: ""
 
