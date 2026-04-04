@@ -532,6 +532,24 @@ export const OFFLINE_FAQ: readonly FaqItem[] = [
     keywords: ['일정 교시', '교시 지정', '교시 설정', '교시 입력', '몇 교시'],
     category: 'schedule',
   },
+  {
+    question: 'macOS(맥)에서 사용할 수 있나요?',
+    answer: '네, macOS도 지원해요! ssampin.com에서 macOS용 DMG 파일을 다운로드하세요. Apple Silicon(M1~M4)과 Intel Mac 모두 지원합니다.',
+    keywords: ['mac', 'macOS', '맥', '맥북', 'Mac', 'MacBook', '맥os', 'DMG', 'dmg'],
+    category: 'general',
+  },
+  {
+    question: 'macOS에서 "개발자를 확인할 수 없음" 경고가 떠요',
+    answer: '개인 개발 앱이라 Apple 인증서가 아직 없어서 경고가 표시돼요. 시스템 설정 → 개인정보 보호 및 보안에서 "확인 없이 열기"를 클릭하세요. 또는 앱을 Control+클릭 → "열기"를 선택하세요.',
+    keywords: ['개발자', '확인', '열기', 'Gatekeeper', '게이트키퍼', '차단', '맥', 'mac', '보안'],
+    category: 'troubleshoot',
+  },
+  {
+    question: 'macOS에서 DMG 파일이 열리지 않아요',
+    answer: '터미널을 열고 xattr -cr ~/Downloads/ssampin-arm64.dmg 명령을 실행한 후 다시 DMG를 더블클릭하세요. 다운로드 시 붙는 보안 속성을 제거하면 정상적으로 마운트됩니다.',
+    keywords: ['DMG', 'dmg', '마운트', '추출', '디스크', '열리지', '설치', '맥', 'mac', '손상'],
+    category: 'troubleshoot',
+  },
 ];
 
 /**

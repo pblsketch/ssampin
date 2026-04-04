@@ -48,12 +48,10 @@ mac:
     - ext: ssampin
       name: SsamPin 일정 파일
       role: Editor
-  hardenedRuntime: true
   gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
   artifactName: ssampin-${arch}.${ext}
 dmg:
+  format: UDZO
   contents:
     - x: 130
       y: 220
