@@ -225,7 +225,7 @@ function ClassTimetableList({
             key={period}
             className={`flex items-center rounded-lg px-3 py-2 transition-colors ${
               isCurrent
-                ? 'border-l-[3px] border-sp-highlight bg-sp-highlight/15 ring-1 ring-sp-highlight/20 shadow-sm shadow-sp-highlight/10'
+                ? 'border-l-4 border-sp-highlight bg-sp-highlight/15 ring-2 ring-sp-highlight/30 shadow-md shadow-sp-highlight/15'
                 : 'hover:bg-sp-surface/50'
             }`}
           >
@@ -233,7 +233,7 @@ function ClassTimetableList({
               {period}교시
             </span>
             {isCurrent && (
-              <span className="w-1.5 h-1.5 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />
             )}
             <span className={`mr-1.5 h-2 w-2 rounded-full ${dotClass}`} />
             <span className={`flex-1 text-sm font-medium ${colorClass}`}>
@@ -298,7 +298,7 @@ function TeacherTimetableList({
             key={period}
             className={`flex items-center rounded-lg px-3 py-2 transition-colors ${
               isCurrent
-                ? 'border-l-[3px] border-sp-highlight bg-sp-highlight/15 ring-1 ring-sp-highlight/20 shadow-sm shadow-sp-highlight/10'
+                ? 'border-l-4 border-sp-highlight bg-sp-highlight/15 ring-2 ring-sp-highlight/30 shadow-md shadow-sp-highlight/15'
                 : 'hover:bg-sp-surface/50'
             }`}
           >
@@ -306,7 +306,7 @@ function TeacherTimetableList({
               {period}교시
             </span>
             {isCurrent && (
-              <span className="w-1.5 h-1.5 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-sp-highlight animate-pulse mr-1.5 shrink-0" />
             )}
             {tp ? (
               <>

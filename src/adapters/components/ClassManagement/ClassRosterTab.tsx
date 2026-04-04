@@ -649,15 +649,18 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                     key={p}
                     onClick={() => handlePeriodChange(p)}
                     title={isMatching ? `${cls?.subject} 수업` : undefined}
-                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
+                    className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-all
                       ${period === p
-                        ? 'bg-sp-accent text-white'
+                        ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40 shadow-md shadow-sp-accent/20'
                         : isMatching
-                          ? 'bg-sp-accent/20 border border-sp-accent text-sp-accent font-bold'
+                          ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
                           : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
                       }`}
                   >
                     {p}
+                    {isMatching && period !== p && (
+                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sp-accent" />
+                    )}
                   </button>
                 );
               })}
