@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { CounselingMethod } from '@domain/entities/StudentRecord';
 import type { RecordPrefill } from '../HomeroomPage';
@@ -9,6 +10,7 @@ import { StudentRecordReferencePanel } from './StudentRecordReferencePanel';
 import {
   type ModeProps,
   formatDateKR,
+  createDateRange,
   METHOD_OPTIONS,
   getSubcategoryChipClass,
   getCategoryLabelColor,
@@ -25,6 +27,7 @@ type RightTab = 'today' | 'history';
 
 function InputMode({ students, records, categories, selectedDate, prefill, onPrefillConsumed }: InputModeProps) {
   const { addRecord, deleteRecord, updateRecord } = useStudentRecordsStore();
+  const showToast = useToastStore((s) => s.show);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [editingCategory, setEditingCategory] = useState('');
@@ -47,6 +50,30 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [rightTab, setRightTab] = useState<RightTab>('today');
   const [showMemoModal, setShowMemoModal] = useState(false);
   const [studentView, setStudentView] = useState<'default' | 'roster'>('default');
+
+  // ── 여러 날(범위) 등록 ──
+  const [dateRangeMode, setDateRangeMode] = useState(false);
+  const [endDate, setEndDate] = useState(selectedDate);
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
+
+  // selectedDate 변경 시 endDate 동기화
+  useEffect(() => {
+    setEndDate(selectedDate);
+  }, [selectedDate]);
+
+  // 범위 모드 날짜 리스트 + 유효성
+  const rangeDates = useMemo(() => {
+    if (!dateRangeMode) return [selectedDate];
+    if (endDate < selectedDate) return [];
+    return createDateRange(selectedDate, endDate);
+  }, [dateRangeMode, selectedDate, endDate]);
+
+  const rangeError = dateRangeMode && endDate < selectedDate
+    ? '종료일이 시작일보다 빠릅니다'
+    : dateRangeMode && rangeDates.length > 30
+      ? '30일을 초과하는 범위는 등록할 수 없습니다'
+      : null;
 
   // 3컬럼 리사이즈 (퍼센트 기반)
   const [leftPct, setLeftPct] = useState(38);
@@ -180,21 +207,37 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     setMemo(tpl.contentTemplate);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (selectedStudents.size === 0 || selectedSub === null) return;
+  // 단일 날짜 저장 (기존 로직)
+  const saveForDate = useCallback(async (date: string) => {
+    if (selectedStudents.size === 0 || selectedSub === null) return 0;
 
     const method = selectedSub.categoryId === 'counseling' ? selectedMethod : undefined;
     const fu = followUp.trim() || undefined;
     const fuDate = followUpDate || undefined;
     const neisFlag = selectedSub.categoryId === 'attendance' ? reportedToNeis : undefined;
     const docFlag = selectedSub.categoryId === 'attendance' ? documentSubmitted : undefined;
-    const promises = Array.from(selectedStudents).map((studentId) =>
+
+    // 중복 감지: 해당 날짜에 같은 학생+카테고리+서브카테고리 기록이 있으면 건너뜀
+    const existingSet = new Set(
+      records
+        .filter(
+          (r) =>
+            r.date === date &&
+            r.category === selectedSub.categoryId &&
+            r.subcategory === selectedSub.subcategory,
+        )
+        .map((r) => r.studentId),
+    );
+    const newStudents = Array.from(selectedStudents).filter((id) => !existingSet.has(id));
+    if (newStudents.length === 0) return 0;
+
+    const promises = newStudents.map((studentId) =>
       addRecord(
         studentId,
         selectedSub.categoryId,
         selectedSub.subcategory,
         memo,
-        selectedDate,
+        date,
         method,
         fu,
         fuDate,
@@ -203,7 +246,10 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
       ),
     );
     await Promise.all(promises);
+    return newStudents.length;
+  }, [selectedStudents, selectedSub, memo, records, selectedMethod, followUp, followUpDate, reportedToNeis, documentSubmitted, addRecord]);
 
+  const resetForm = useCallback(() => {
     setSelectedStudents(new Set());
     setSelectedSub(null);
     setAttendanceType(null);
@@ -214,7 +260,44 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     setFollowUpDate('');
     setReportedToNeis(false);
     setDocumentSubmitted(false);
-  }, [selectedStudents, selectedSub, memo, selectedDate, selectedMethod, followUp, followUpDate, reportedToNeis, documentSubmitted, addRecord]);
+    setDateRangeMode(false);
+  }, []);
+
+  // 단일 날짜 저장
+  const handleSave = useCallback(async () => {
+    await saveForDate(selectedDate);
+    resetForm();
+  }, [saveForDate, selectedDate, resetForm]);
+
+  // 여러 날 일괄 저장 (확인 모달에서 호출)
+  const handleBatchSave = useCallback(async () => {
+    if (rangeDates.length === 0 || rangeError) return;
+    setBatchSaving(true);
+    let totalCreated = 0;
+    let skippedDays = 0;
+    for (const date of rangeDates) {
+      const created = await saveForDate(date);
+      if (created === 0) skippedDays++;
+      else totalCreated += created;
+    }
+    setBatchSaving(false);
+    setShowBatchConfirm(false);
+    resetForm();
+
+    const msg = skippedDays > 0
+      ? `${rangeDates.length}일 중 ${rangeDates.length - skippedDays}일 등록 완료 (중복 ${skippedDays}일 제외)`
+      : `${rangeDates.length}일 출결이 등록되었습니다`;
+    showToast(msg, totalCreated > 0 ? 'success' : 'info');
+  }, [rangeDates, rangeError, saveForDate, resetForm, showToast]);
+
+  // 저장 버튼 클릭 핸들러: 범위 모드면 확인 모달, 아니면 바로 저장
+  const handleSaveClick = useCallback(() => {
+    if (dateRangeMode && rangeDates.length > 1) {
+      setShowBatchConfirm(true);
+    } else {
+      void handleSave();
+    }
+  }, [dateRangeMode, rangeDates.length, handleSave]);
 
   const dateRecords = useMemo(() => {
     return records.filter((r) => r.date === selectedDate);
@@ -225,7 +308,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     [students],
   );
 
-  const canSave = selectedStudents.size > 0 && selectedSub !== null;
+  const canSave = selectedStudents.size > 0 && selectedSub !== null && !rangeError;
 
   // 우측 패널에 표시할 학생 (1명 선택 시)
   const singleSelectedStudent = useMemo(() => {
@@ -558,6 +641,58 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
             </div>
           )}
 
+          {/* ── 여러 날 등록 (출결일 때만) ── */}
+          {selectedSub?.categoryId === 'attendance' && (
+            <div className="mt-3 p-3 bg-sp-surface/50 border border-sp-border rounded-xl space-y-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={dateRangeMode}
+                  onChange={(e) => setDateRangeMode(e.target.checked)}
+                  className="w-4 h-4 rounded border-sp-border text-sp-accent
+                             focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
+                />
+                <span className="flex items-center gap-1 text-sp-text font-medium">
+                  <span className="material-symbols-outlined text-sm">date_range</span>
+                  여러 날 한 번에 등록
+                </span>
+                <span className="text-xs text-sp-muted">(교외체험학습 등)</span>
+              </label>
+
+              {dateRangeMode && (
+                <div className="ml-6 space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-sp-muted text-xs w-12">시작일</span>
+                    <span className="text-sp-text font-medium">{formatDateKR(selectedDate)}</span>
+                    <span className="text-sp-muted text-xs">(상단 날짜)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-sp-muted text-xs w-12">종료일</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      min={selectedDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="px-2 py-1 bg-sp-bg border border-sp-border rounded-lg text-sm text-sp-text
+                                 focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                    />
+                  </div>
+                  {rangeError ? (
+                    <p className="text-xs text-red-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {rangeError}
+                    </p>
+                  ) : rangeDates.length > 1 && (
+                    <p className="text-xs text-sp-accent flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">info</span>
+                      {formatDateKR(selectedDate)} ~ {formatDateKR(endDate)} ({rangeDates.length}일)
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 후속 조치 (인라인 토글) */}
           <div className="mt-3">
             <button
@@ -591,7 +726,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
         {/* 저장 버튼 (sticky) */}
         <div className="sticky bottom-0 bg-gradient-to-t from-sp-card to-transparent pt-6 pb-1 px-5 -mt-16 rounded-b-xl">
           <button
-            onClick={() => void handleSave()}
+            onClick={handleSaveClick}
             disabled={!canSave}
             className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${canSave
               ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
@@ -599,9 +734,68 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
               }`}
           >
             <span className="material-symbols-outlined text-base">save</span>
-            저장하기
+            {dateRangeMode && rangeDates.length > 1
+              ? `${rangeDates.length}일 일괄 저장`
+              : '저장하기'}
           </button>
         </div>
+
+        {/* ── 여러 날 일괄 등록 확인 모달 ── */}
+        {showBatchConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-sp-card border border-sp-border rounded-2xl p-6 w-96 shadow-2xl">
+              <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-4">
+                <span className="material-symbols-outlined text-sp-accent">date_range</span>
+                여러 날 일괄 등록
+              </h3>
+              <div className="space-y-2 mb-4">
+                <p className="text-sm text-sp-text">
+                  <span className="font-medium">{formatDateKR(selectedDate)}</span>
+                  {' ~ '}
+                  <span className="font-medium">{formatDateKR(endDate)}</span>
+                  {' '}
+                  <span className="text-sp-accent font-bold">({rangeDates.length}일)</span>
+                </p>
+                <p className="text-sm text-sp-muted">
+                  선택 학생 <span className="text-sp-text font-medium">{selectedStudents.size}명</span>
+                  {' × '}
+                  {rangeDates.length}일 = 총 <span className="text-sp-text font-bold">{selectedStudents.size * rangeDates.length}건</span> 등록
+                </p>
+                <p className="text-xs text-sp-muted">
+                  이미 등록된 날짜는 자동으로 건너뜁니다.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowBatchConfirm(false)}
+                  disabled={batchSaving}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-sp-surface text-sp-muted
+                             hover:text-sp-text hover:bg-sp-surface/80 transition-all"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() => void handleBatchSave()}
+                  disabled={batchSaving}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-sp-accent text-white
+                             hover:bg-sp-accent/90 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {batchSaving ? (
+                    <>
+                      <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                      등록 중...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-sm">check</span>
+                      등록하기
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 리사이즈 핸들 (중↔우) */}

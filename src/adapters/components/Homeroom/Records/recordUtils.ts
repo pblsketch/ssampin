@@ -57,6 +57,24 @@ export function getMonthRange(): { start: Date; end: Date } {
   return { start, end };
 }
 
+/**
+ * 시작일~종료일 사이의 날짜 배열 생성 (로컬 기준, UTC 밀림 없음)
+ * @returns YYYY-MM-DD 문자열 배열 (시작일·종료일 포함)
+ */
+export function createDateRange(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const d = new Date(start + 'T00:00:00');
+  const endDate = new Date(end + 'T00:00:00');
+
+  while (d <= endDate) {
+    dates.push(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    );
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
 export function formatDateKR(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   return `${d.getMonth() + 1}월 ${d.getDate()}일`;

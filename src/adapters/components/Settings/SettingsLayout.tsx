@@ -15,6 +15,7 @@ import { DisplayTab } from './tabs/DisplayTab';
 import { SystemTab } from './tabs/SystemTab';
 import { AboutTab } from './tabs/AboutTab';
 import { SyncTab } from './tabs/SyncTab';
+import { AccountTab } from './tabs/AccountTab';
 interface Props {
   activeTab: SettingsTabId;
   onTabChange: (tab: SettingsTabId) => void;
@@ -131,6 +132,7 @@ function TabContent({ activeTab, draft, patch, setDraft }: {
   setDraft: React.Dispatch<React.SetStateAction<Settings>>;
 }) {
   switch (activeTab) {
+    case 'account':   return <AccountTab />;
     case 'school':    return <SchoolTab draft={draft} patch={patch} />;
     case 'period':    return <PeriodTab draft={draft} patch={patch} />;
     case 'widget':    return <WidgetTab draft={draft} patch={patch} />;

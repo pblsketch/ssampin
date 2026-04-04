@@ -8,6 +8,7 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
+  { id: 'account',  icon: 'person',                label: '계정 연동',  color: 'bg-purple-500/10 text-purple-400' },
   { id: 'school',   icon: 'school',                label: '학교 정보',  color: 'bg-blue-500/10 text-blue-400' },
   { id: 'period',   icon: 'schedule',              label: '교시 시간',  color: 'bg-emerald-500/10 text-emerald-400' },
   { id: 'widget',   icon: 'widgets',               label: '위젯',      color: 'bg-indigo-500/10 text-indigo-400' },
