@@ -1209,7 +1209,12 @@ function registerIpcHandlers(): void {
   });
 
   // update:download — 업데이트 다운로드
+  // macOS: 코드서명 없이는 인앱 업데이트가 차단되므로 릴리즈 페이지로 안내
   ipcMain.handle('update:download', (): void => {
+    if (process.platform === 'darwin') {
+      shell.openExternal('https://github.com/pblsketch/ssampin/releases/latest');
+      return;
+    }
     autoUpdater.downloadUpdate().catch((err: Error) => {
       console.error('[autoUpdater] downloadUpdate error:', err);
     });
@@ -1217,6 +1222,7 @@ function registerIpcHandlers(): void {
 
   // update:install — 업데이트 설치 및 재시작
   ipcMain.handle('update:install', (): void => {
+    if (process.platform === 'darwin') return;
     autoUpdater.quitAndInstall();
   });
 }

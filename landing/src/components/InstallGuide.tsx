@@ -121,7 +121,7 @@ export default function InstallGuide() {
           <FadeIn className="mt-6" delay={0.05}>
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-center">
               <p className="text-sm font-medium text-blue-300">
-                아래 안내는 PC(Windows) 전용이에요
+                아래 안내는 PC(Windows/macOS) 전용이에요
               </p>
               <p className="mt-1 text-xs text-sp-muted">
                 교무실 PC에서 이 페이지를 열어 설치를 진행하세요
@@ -130,38 +130,56 @@ export default function InstallGuide() {
           </FadeIn>
         )}
 
-        {os === 'mac' && (
-          <FadeIn className="mt-6" delay={0.05}>
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-center">
-              <p className="text-sm font-medium text-blue-300">
-                macOS 설치 안내
-              </p>
-            </div>
-          </FadeIn>
-        )}
-
-        <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
-          {(os === 'mac' ? macSteps : steps).map((step, i) => (
-            <FadeIn key={step.number} delay={i * 0.1}>
-              <div className="rounded-xl bg-sp-card p-7">
-                <div className="mb-4 text-2xl font-extrabold tracking-tight text-sp-accent/50">
-                  {step.number}
+        {/* 감지된 OS 설치 안내 */}
+        <div className="mt-12">
+          <h3 className="mb-4 text-lg font-semibold text-sp-text">
+            {os === 'mac' ? '🍎 macOS 설치' : '📥 Windows 설치'}
+          </h3>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            {(os === 'mac' ? macSteps : steps).map((step, i) => (
+              <FadeIn key={step.number} delay={i * 0.1}>
+                <div className="rounded-xl bg-sp-card p-7">
+                  <div className="mb-4 text-2xl font-extrabold tracking-tight text-sp-accent/50">
+                    {step.number}
+                  </div>
+                  <h3 className="text-base font-bold text-white">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-sp-muted">{step.description}</p>
                 </div>
-                <h3 className="text-base font-bold text-white">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-sp-muted">{step.description}</p>
-              </div>
-            </FadeIn>
-          ))}
+              </FadeIn>
+            ))}
+          </div>
         </div>
 
-        {/* 트러블슈팅 섹션 */}
-        {os !== 'mac' ? (
-          <FadeIn className="mt-10" delay={0.3}>
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-6">
-              <p className="text-lg font-semibold text-amber-200">
-                설치가 안 되시나요?
+        {/* 다른 OS 설치 안내 */}
+        {os !== 'mobile' && (
+          <div className="mt-10">
+            <h3 className="mb-4 text-lg font-semibold text-sp-muted">
+              {os === 'mac' ? '📥 Windows 설치' : '🍎 macOS 설치'}
+            </h3>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              {(os === 'mac' ? steps : macSteps).map((step, i) => (
+                <FadeIn key={`alt-${step.number}`} delay={i * 0.1}>
+                  <div className="rounded-xl bg-sp-card/60 p-7">
+                    <div className="mb-4 text-2xl font-extrabold tracking-tight text-sp-accent/30">
+                      {step.number}
+                    </div>
+                    <h3 className="text-base font-bold text-white/70">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-sp-muted/70">{step.description}</p>
+                  </div>
+                </FadeIn>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 트러블슈팅 섹션 — Windows */}
+        {os !== 'mobile' && (
+          <FadeIn className={os === 'mac' ? 'mt-6' : 'mt-10'} delay={os === 'mac' ? 0.35 : 0.3}>
+            <div className={`rounded-xl border border-amber-500/20 p-6 ${os === 'mac' ? 'bg-amber-500/5' : 'bg-amber-500/10'}`}>
+              <p className={`text-lg font-semibold text-amber-200 ${os === 'mac' ? 'opacity-70' : ''}`}>
+                📥 Windows 설치가 안 되시나요?
               </p>
-              <p className="mt-1.5 text-sm text-amber-200/70">
+              <p className={`mt-1.5 text-sm text-amber-200/70 ${os === 'mac' ? 'opacity-70' : ''}`}>
                 증상을 선택하면 해결 방법을 알려드려요!
               </p>
 
@@ -229,13 +247,16 @@ export default function InstallGuide() {
               </p>
             </div>
           </FadeIn>
-        ) : (
-          <FadeIn className="mt-10" delay={0.3}>
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-6">
-              <p className="text-lg font-semibold text-amber-200">
-                &quot;개발자를 확인할 수 없음&quot; 경고가 뜨나요?
+        )}
+
+        {/* 트러블슈팅 섹션 — macOS */}
+        {os !== 'mobile' && (
+          <FadeIn className={os === 'mac' ? 'mt-10' : 'mt-6'} delay={os === 'mac' ? 0.3 : 0.35}>
+            <div className={`rounded-xl border border-amber-500/20 p-6 ${os === 'mac' ? 'bg-amber-500/10' : 'bg-amber-500/5'}`}>
+              <p className={`text-lg font-semibold text-amber-200 ${os === 'mac' ? '' : 'opacity-70'}`}>
+                🍎 &quot;개발자를 확인할 수 없음&quot; 경고가 뜨나요?
               </p>
-              <p className="mt-1.5 text-sm text-amber-200/70">
+              <p className={`mt-1.5 text-sm text-amber-200/70 ${os === 'mac' ? '' : 'opacity-70'}`}>
                 개인 개발 앱이라 아직 Apple 인증서가 없어서 표시되는 경고예요.
               </p>
               <div className="mt-4 rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">

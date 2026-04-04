@@ -97,26 +97,40 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
   }
 
   const isPrimary = variant === 'primary';
+  const primaryOs = os; // 'windows' | 'mac'
 
-  if (os === 'mac') {
-    return (
-      <div className="flex flex-col items-center gap-3">
-        <a
-          href={DOWNLOAD_URL_MAC_ARM}
-          className={`inline-flex items-center gap-2 rounded-xl px-8 py-4 text-lg font-bold transition-all hover:-translate-y-0.5 ${
-            isPrimary
-              ? 'bg-sp-accent text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 hover:shadow-blue-500/30'
-              : 'bg-white text-blue-700 shadow-lg hover:bg-blue-50'
-          }`}
-        >
-          <span>🍎</span>
-          <span>
-            {isPrimary ? `macOS 다운로드 (v${VERSION})` : '무료 다운로드 (macOS)'}
-          </span>
-        </a>
+  return (
+    <div className="flex flex-col items-center gap-3">
+      {/* Primary 버튼 (감지된 OS) */}
+      <a
+        href={primaryOs === 'mac' ? DOWNLOAD_URL_MAC_ARM : DOWNLOAD_URL}
+        className={`inline-flex items-center gap-2 rounded-xl px-8 py-4 text-lg font-bold transition-all hover:-translate-y-0.5 ${
+          isPrimary
+            ? 'bg-sp-accent text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 hover:shadow-blue-500/30'
+            : 'bg-white text-blue-700 shadow-lg hover:bg-blue-50'
+        }`}
+      >
+        <span>{primaryOs === 'mac' ? '🍎' : '📥'}</span>
+        <span>
+          {isPrimary
+            ? `${primaryOs === 'mac' ? 'macOS' : 'Windows'} 다운로드 (v${VERSION})`
+            : `무료 다운로드 (${primaryOs === 'mac' ? 'macOS' : 'Windows'})`}
+        </span>
+      </a>
+
+      {/* Primary OS 부가 정보 */}
+      {primaryOs === 'mac' ? (
         <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
           무료 · Apple Silicon (M1/M2/M3/M4) · {FILE_SIZE_MAC}
         </p>
+      ) : (
+        <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
+          무료 · Windows 10/11 · 설치 파일 {FILE_SIZE}
+        </p>
+      )}
+
+      {/* macOS Intel 링크 (macOS일 때만) */}
+      {primaryOs === 'mac' && (
         <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
           Intel Mac을 사용하시나요?{' '}
           <a
@@ -128,33 +142,49 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
             Intel 버전 받기 →
           </a>
         </p>
+      )}
+
+      {/* Secondary 버튼 (다른 OS) */}
+      <a
+        href={primaryOs === 'mac' ? DOWNLOAD_URL : DOWNLOAD_URL_MAC_ARM}
+        className={`inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all hover:-translate-y-0.5 ${
+          isPrimary
+            ? 'border border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
+            : 'border border-blue-100/20 text-blue-100/70 hover:border-blue-100/40 hover:text-blue-100'
+        }`}
+      >
+        <span>{primaryOs === 'mac' ? '📥' : '🍎'}</span>
+        <span>{primaryOs === 'mac' ? 'Windows 버전 받기' : 'macOS 버전 받기'}</span>
+      </a>
+
+      {/* Windows fallback 링크 (Windows일 때만) */}
+      {primaryOs === 'windows' && (
         <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
-          Windows를 사용하시나요?{' '}
+          다운로드가 안 되시나요?{' '}
           <a
-            href={DOWNLOAD_URL}
+            href={FALLBACK_DOWNLOAD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
               isPrimary ? 'text-sp-muted/80 hover:text-sp-muted' : 'text-blue-100/70 hover:text-blue-100'
             }`}
           >
-            Windows 버전 받기 →
+            여기서 받으세요 →
           </a>
         </p>
+      )}
 
-        {showSmartScreenFaq && (
+      {/* 보안 경고 FAQ */}
+      {showSmartScreenFaq && (
+        primaryOs === 'mac' ? (
           <details className="group mt-3 w-full max-w-md rounded-xl border border-amber-500/20 bg-amber-500/5 text-left">
             <summary className="flex min-h-[44px] cursor-pointer items-center gap-2 px-4 py-3 text-[0.85rem] font-medium text-amber-200/90 select-none">
               <span>⚠️</span>
               <span className="flex-1">&quot;개발자를 확인할 수 없음&quot; 경고가 뜨나요?</span>
-              <span className="shrink-0 text-amber-200/50 transition-transform duration-200 group-open:rotate-45">
-                +
-              </span>
+              <span className="shrink-0 text-amber-200/50 transition-transform duration-200 group-open:rotate-45">+</span>
             </summary>
             <div className="border-t border-amber-500/10 px-4 pb-4 pt-3 text-[0.8rem] leading-relaxed text-amber-200/70">
-              <p>
-                걱정 마세요! 쌤핀은 안전한 프로그램입니다.
-                <br />
-                개인 개발 앱이라 아직 Apple 인증서가 없어서 경고가 표시돼요.
-              </p>
+              <p>걱정 마세요! 쌤핀은 안전한 프로그램입니다.<br />개인 개발 앱이라 아직 Apple 인증서가 없어서 경고가 표시돼요.</p>
               <div className="mt-3 rounded-lg bg-amber-500/5 p-3">
                 <p className="text-xs font-semibold text-amber-300">해결 방법</p>
                 <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
@@ -170,133 +200,86 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
               </div>
             </div>
           </details>
-        )}
-      </div>
-    );
-  }
+        ) : (
+          <details className="group mt-3 w-full max-w-md rounded-xl border border-amber-500/20 bg-amber-500/5 text-left">
+            <summary className="flex min-h-[44px] cursor-pointer items-center gap-2 px-4 py-3 text-[0.85rem] font-medium text-amber-200/90 select-none">
+              <span>⚠️</span>
+              <span className="flex-1">다운로드 시 보안 경고가 뜨나요?</span>
+              <span className="shrink-0 text-amber-200/50 transition-transform duration-200 group-open:rotate-45">
+                +
+              </span>
+            </summary>
 
-  return (
-    <div className="flex flex-col items-center gap-3">
-      <a
-        href={DOWNLOAD_URL}
-        className={`inline-flex items-center gap-2 rounded-xl px-8 py-4 text-lg font-bold transition-all hover:-translate-y-0.5 ${
-          isPrimary
-            ? 'bg-sp-accent text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 hover:shadow-blue-500/30'
-            : 'bg-white text-blue-700 shadow-lg hover:bg-blue-50'
-        }`}
-      >
-        <span>📥</span>
-        <span>
-          {isPrimary ? `Windows 다운로드 (v${VERSION})` : '무료 다운로드 (Windows)'}
-        </span>
-      </a>
-      <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
-        무료 · Windows 10/11 · 설치 파일 {FILE_SIZE}
-      </p>
-      <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
-        다운로드가 안 되시나요?{' '}
-        <a
-          href={FALLBACK_DOWNLOAD_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
-            isPrimary ? 'text-sp-muted/80 hover:text-sp-muted' : 'text-blue-100/70 hover:text-blue-100'
-          }`}
-        >
-          여기서 받으세요 →
-        </a>
-      </p>
-      <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
-        macOS를 사용하시나요?{' '}
-        <a
-          href={DOWNLOAD_URL_MAC_ARM}
-          className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
-            isPrimary ? 'text-sp-muted/80 hover:text-sp-muted' : 'text-blue-100/70 hover:text-blue-100'
-          }`}
-        >
-          macOS 버전 받기 →
-        </a>
-      </p>
+            <div className="border-t border-amber-500/10 px-4 pb-4 pt-3 text-[0.8rem] leading-relaxed text-amber-200/70">
+              <p>
+                걱정 마세요! 쌤핀은 안전한 프로그램입니다.
+                <br />
+                개인 개발 앱이라 아직 Microsoft 인증서가 없어서 경고가 표시돼요.
+              </p>
 
-      {showSmartScreenFaq && (
-        <details className="group mt-3 w-full max-w-md rounded-xl border border-amber-500/20 bg-amber-500/5 text-left">
-          <summary className="flex min-h-[44px] cursor-pointer items-center gap-2 px-4 py-3 text-[0.85rem] font-medium text-amber-200/90 select-none">
-            <span>⚠️</span>
-            <span className="flex-1">다운로드 시 보안 경고가 뜨나요?</span>
-            <span className="shrink-0 text-amber-200/50 transition-transform duration-200 group-open:rotate-45">
-              +
-            </span>
-          </summary>
+              <div className="mt-3 space-y-2">
+                <div className="rounded-lg bg-amber-500/5 p-3">
+                  <p className="text-xs font-semibold text-amber-300">
+                    A. &quot;Windows의 PC 보호&quot; 화면이 뜰 때
+                  </p>
+                  <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
+                    <li className="flex items-start gap-2">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
+                      <span><strong className="text-amber-200/80">&quot;추가 정보&quot;</strong>를 클릭합니다</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
+                      <span><strong className="text-amber-200/80">&quot;실행&quot;</strong> 버튼을 클릭합니다</span>
+                    </li>
+                  </ol>
+                </div>
 
-          <div className="border-t border-amber-500/10 px-4 pb-4 pt-3 text-[0.8rem] leading-relaxed text-amber-200/70">
-            <p>
-              걱정 마세요! 쌤핀은 안전한 프로그램입니다.
-              <br />
-              개인 개발 앱이라 아직 Microsoft 인증서가 없어서 경고가 표시돼요.
-            </p>
-
-            <div className="mt-3 space-y-2">
-              <div className="rounded-lg bg-amber-500/5 p-3">
-                <p className="text-xs font-semibold text-amber-300">
-                  A. &quot;Windows의 PC 보호&quot; 화면이 뜰 때
-                </p>
-                <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
-                  <li className="flex items-start gap-2">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
-                    <span><strong className="text-amber-200/80">&quot;추가 정보&quot;</strong>를 클릭합니다</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
-                    <span><strong className="text-amber-200/80">&quot;실행&quot;</strong> 버튼을 클릭합니다</span>
-                  </li>
-                </ol>
+                <div className="rounded-lg bg-amber-500/5 p-3">
+                  <p className="text-xs font-semibold text-amber-300">
+                    B. &quot;스마트 앱 컨트롤이 차단&quot; 화면이 뜰 때 (Win 11)
+                  </p>
+                  <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
+                    <li className="flex items-start gap-2">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
+                      <span>설치 파일 우클릭 → <strong className="text-amber-200/80">&quot;속성&quot;</strong></span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
+                      <span>하단 <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크 → 확인</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">3</span>
+                      <span>설치 파일 다시 실행</span>
+                    </li>
+                  </ol>
+                </div>
+                <div className="rounded-lg bg-amber-500/5 p-3">
+                  <p className="text-xs font-semibold text-amber-300">
+                    C. 더블클릭해도 아무 반응이 없을 때
+                  </p>
+                  <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
+                    <li className="flex items-start gap-2">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
+                      <span>백신(V3, 알약 등)의 <strong className="text-amber-200/80">&quot;실시간 감시&quot;</strong>를 일시 중지</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
+                      <span>설치 파일 다시 더블클릭</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">3</span>
+                      <span>설치 완료 후 <strong className="text-amber-200/80">실시간 감시 다시 켜기</strong></span>
+                    </li>
+                  </ol>
+                </div>
               </div>
 
-              <div className="rounded-lg bg-amber-500/5 p-3">
-                <p className="text-xs font-semibold text-amber-300">
-                  B. &quot;스마트 앱 컨트롤이 차단&quot; 화면이 뜰 때 (Win 11)
-                </p>
-                <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
-                  <li className="flex items-start gap-2">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
-                    <span>설치 파일 우클릭 → <strong className="text-amber-200/80">&quot;속성&quot;</strong></span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
-                    <span>하단 <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크 → 확인</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">3</span>
-                    <span>설치 파일 다시 실행</span>
-                  </li>
-                </ol>
-              </div>
-              <div className="rounded-lg bg-amber-500/5 p-3">
-                <p className="text-xs font-semibold text-amber-300">
-                  C. 더블클릭해도 아무 반응이 없을 때
-                </p>
-                <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
-                  <li className="flex items-start gap-2">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
-                    <span>백신(V3, 알약 등)의 <strong className="text-amber-200/80">&quot;실시간 감시&quot;</strong>를 일시 중지</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
-                    <span>설치 파일 다시 더블클릭</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">3</span>
-                    <span>설치 완료 후 <strong className="text-amber-200/80">실시간 감시 다시 켜기</strong></span>
-                  </li>
-                </ol>
-              </div>
+              <p className="mt-3 text-[0.7rem] text-amber-200/40">
+                사용자가 늘어나면 이 경고는 자연스럽게 사라집니다.
+              </p>
             </div>
-
-            <p className="mt-3 text-[0.7rem] text-amber-200/40">
-              사용자가 늘어나면 이 경고는 자연스럽게 사라집니다.
-            </p>
-          </div>
-        </details>
+          </details>
+        )
       )}
     </div>
   );

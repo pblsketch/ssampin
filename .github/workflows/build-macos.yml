@@ -1,6 +1,8 @@
 name: Build macOS
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
@@ -32,15 +34,23 @@ jobs:
 
       - name: Verify build output
         run: |
-          echo "## Build Output" >> $GITHUB_STEP_SUMMARY
-          ls -lh release/*.dmg >> $GITHUB_STEP_SUMMARY 2>&1 || true
           ls -lh release/
           if ! ls release/*.dmg 1>/dev/null 2>&1; then
             echo "::error::No .dmg files found in release/"
             exit 1
           fi
 
-      - name: Upload DMG artifact
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.dmg
+            release/*.blockmap
+            release/latest-mac.yml
+
+      - name: Upload artifact (manual run)
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: ssampin-macos-${{ github.sha }}
@@ -55,11 +65,10 @@ jobs:
         if: success()
         run: |
           echo "## macOS Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "### Files" >> $GITHUB_STEP_SUMMARY
           for f in release/*.dmg; do
             echo "- \`$(basename $f)\` ($(du -h "$f" | cut -f1))" >> $GITHUB_STEP_SUMMARY
           done
