@@ -86,6 +86,14 @@ export class SyncToCloud {
         continue;
       }
 
+      // 리모트가 우리 마지막 동기화 이후 변경되었으면 업로드 스킵 (다른 기기가 올린 최신 데이터 보호)
+      const remoteChecksum = remoteManifest?.files[filename]?.checksum;
+      if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
+        console.log(`[SyncToCloud]   ${filename}: SKIP (remote changed: local-manifest=${manifestChecksum.slice(0, 8)} remote=${remoteChecksum.slice(0, 8)}, 다음 syncFromCloud에서 다운로드)`);
+        skipped.push(filename);
+        continue;
+      }
+
       console.log(`[SyncToCloud]   ${filename}: UPLOAD (checksum ${manifestChecksum?.slice(0, 8) ?? 'NONE'} → ${checksum.slice(0, 8)})`);
       const result = await this.drivePort.uploadSyncFile(folder.id, `${filename}.json`, content);
       updatedFiles[filename] = {

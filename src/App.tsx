@@ -413,6 +413,48 @@ export function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.sync?.enabled, settings.sync?.autoSyncOnSave]);
 
+  // Google Drive: 창 포커스 복귀 시 syncFromCloud → syncToCloud
+  useEffect(() => {
+    const syncSettings = useSettingsStore.getState().settings.sync;
+    if (!syncSettings?.enabled) return;
+
+    let lastFocusSyncAt = 0;
+    const COOLDOWN_MS = 10_000;
+
+    const onFocus = async () => {
+      const calState = useCalendarSyncStore.getState();
+      if (!calState.isConnected) return;
+
+      const now = Date.now();
+      if (now - lastFocusSyncAt < COOLDOWN_MS) return;
+      lastFocusSyncAt = now;
+
+      const { syncFromCloud, syncToCloud } = useDriveSyncStore.getState();
+      const result = await syncFromCloud();
+      if (result.downloaded.length > 0) {
+        await reloadStores(result.downloaded);
+      }
+      await syncToCloud();
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void onFocus();
+      }
+    };
+
+    const onWindowFocus = () => { void onFocus(); };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onWindowFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onWindowFocus);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.sync?.enabled]);
+
   // Google Drive 충돌 상태 구독
   const driveConflicts = useDriveSyncStore((s) => s.conflicts);
 

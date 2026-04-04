@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type { Todo } from '@domain/entities/Todo';
+import type { Todo, TodoCategory } from '@domain/entities/Todo';
 import { todoRepository } from '@mobile/di/container';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
 
 interface MobileTodoState {
   todos: readonly Todo[];
+  categories: readonly TodoCategory[];
   loaded: boolean;
   load: () => Promise<void>;
   reload: () => Promise<void>;
@@ -15,6 +16,7 @@ interface MobileTodoState {
 
 export const useMobileTodoStore = create<MobileTodoState>((set, get) => ({
   todos: [],
+  categories: [],
   loaded: false,
 
   load: async () => {
@@ -22,7 +24,7 @@ export const useMobileTodoStore = create<MobileTodoState>((set, get) => ({
     try {
       const data = await todoRepository.getTodos();
       if (data?.todos) {
-        set({ todos: data.todos, loaded: true });
+        set({ todos: data.todos, categories: data.categories ?? [], loaded: true });
       } else {
         set({ loaded: true });
       }
@@ -39,7 +41,7 @@ export const useMobileTodoStore = create<MobileTodoState>((set, get) => ({
   addTodo: async (todo) => {
     const todos = [...get().todos, todo];
     set({ todos });
-    await todoRepository.saveTodos({ todos });
+    await todoRepository.saveTodos({ todos, categories: get().categories });
     useMobileDriveSyncStore.getState().triggerSaveSync();
   },
 
@@ -48,14 +50,14 @@ export const useMobileTodoStore = create<MobileTodoState>((set, get) => ({
       t.id === id ? { ...t, completed: !t.completed } : t,
     );
     set({ todos });
-    await todoRepository.saveTodos({ todos });
+    await todoRepository.saveTodos({ todos, categories: get().categories });
     useMobileDriveSyncStore.getState().triggerSaveSync();
   },
 
   deleteTodo: async (id) => {
     const todos = get().todos.filter((t) => t.id !== id);
     set({ todos });
-    await todoRepository.saveTodos({ todos });
+    await todoRepository.saveTodos({ todos, categories: get().categories });
     useMobileDriveSyncStore.getState().triggerSaveSync();
   },
 }));
