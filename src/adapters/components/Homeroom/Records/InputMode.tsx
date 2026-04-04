@@ -377,13 +377,14 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
           /* ── 기본 보기 ── */
           <div className="grid grid-cols-4 gap-2 overflow-y-auto flex-1">
             {students.map((student, idx) => {
+              const num = student.studentNumber ?? (idx + 1);
               if (student.isVacant) {
                 return (
                   <div
                     key={student.id}
                     className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30"
                   >
-                    {idx + 1}
+                    {num}
                     <div className="text-[10px] truncate">결번</div>
                   </div>
                 );
@@ -398,7 +399,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                     : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
                     }`}
                 >
-                  {idx + 1}
+                  {num}
                   {student.name}
                 </button>
               );
@@ -415,7 +416,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                 return (
                   <div key={col} className="flex flex-col">
                     {slice.map((student, i) => {
-                      const num = offset + i + 1;
+                      const num = student.studentNumber ?? (offset + i + 1);
                       if (student.isVacant) {
                         return (
                           <div

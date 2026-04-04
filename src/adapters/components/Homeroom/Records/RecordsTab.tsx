@@ -26,7 +26,7 @@ interface RecordsTabProps {
 export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
   const { records, loaded, load, viewMode, setViewMode, categories } =
     useStudentRecordsStore();
-  const { students, load: loadStudents, loaded: studentsLoaded } =
+  const { students, load: loadStudents, loaded: studentsLoaded, activeStudents } =
     useStudentStore();
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -44,10 +44,13 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
     setSelectedDate(prefill.date);
   }, [prefill, setViewMode]);
 
+  // 담임업무에서는 비활성 학생 제외 (Q명렬과 일관성 유지)
+  const activeStudentsList = useMemo(() => activeStudents(), [students]);
+
   // 담임 반 학생 ID로 필터링 — 다른 학급 학생 기록 제외
   const studentIds = useMemo(
-    () => new Set(students.map((s) => s.id)),
-    [students],
+    () => new Set(activeStudentsList.map((s) => s.id)),
+    [activeStudentsList],
   );
   const filteredRecords = useMemo(
     () => records.filter((r) => studentIds.has(r.studentId)),
@@ -106,13 +109,13 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
       )}
 
       {viewMode === 'input' && (
-        <InputMode students={students} records={filteredRecords} categories={categories} selectedDate={selectedDate} prefill={prefill} onPrefillConsumed={onPrefillConsumed} />
+        <InputMode students={activeStudentsList} records={filteredRecords} categories={categories} selectedDate={selectedDate} prefill={prefill} onPrefillConsumed={onPrefillConsumed} />
       )}
       {viewMode === 'progress' && (
-        <ProgressMode students={students} records={filteredRecords} categories={categories} />
+        <ProgressMode students={activeStudentsList} records={filteredRecords} categories={categories} />
       )}
       {viewMode === 'search' && (
-        <SearchMode students={students} records={filteredRecords} categories={categories} />
+        <SearchMode students={activeStudentsList} records={filteredRecords} categories={categories} />
       )}
 
       {showCategoryModal && (
@@ -121,7 +124,7 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
       {showExportModal && (
         <RecordsExportModal
           records={filteredRecords}
-          students={students}
+          students={activeStudentsList}
           categories={categories}
           onClose={() => setShowExportModal(false)}
         />
