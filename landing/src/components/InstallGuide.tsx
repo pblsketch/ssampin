@@ -21,6 +21,24 @@ const steps = [
   },
 ];
 
+const macSteps = [
+  {
+    number: '01',
+    title: '다운로드',
+    description: '.dmg 파일을 받으세요. Apple Silicon(M1~M4)과 Intel 버전이 있어요.',
+  },
+  {
+    number: '02',
+    title: '설치',
+    description: '.dmg를 열고 쌤핀 아이콘을 응용 프로그램 폴더로 드래그하세요.',
+  },
+  {
+    number: '03',
+    title: '시작',
+    description: 'Launchpad 또는 응용 프로그램에서 쌤핀을 실행하세요.',
+  },
+];
+
 const troubleshootCases = [
   {
     id: 'smartscreen',
@@ -74,10 +92,15 @@ const troubleshootCases = [
 
 export default function InstallGuide() {
   const [openCase, setOpenCase] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [os, setOs] = useState<'windows' | 'mac' | 'mobile'>('windows');
 
   useEffect(() => {
-    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod|Android/i.test(ua)) {
+      setOs('mobile');
+    } else if (/Macintosh|MacIntel|MacPPC|Mac68K/i.test(ua)) {
+      setOs('mac');
+    }
   }, []);
 
   const toggleCase = (id: string) => {
@@ -94,7 +117,7 @@ export default function InstallGuide() {
           <p className="mt-3 text-base text-sp-muted">다운로드부터 실행까지 1분 이내</p>
         </FadeIn>
 
-        {isMobile && (
+        {os === 'mobile' && (
           <FadeIn className="mt-6" delay={0.05}>
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-center">
               <p className="text-sm font-medium text-blue-300">
@@ -107,8 +130,18 @@ export default function InstallGuide() {
           </FadeIn>
         )}
 
+        {os === 'mac' && (
+          <FadeIn className="mt-6" delay={0.05}>
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-center">
+              <p className="text-sm font-medium text-blue-300">
+                macOS 설치 안내
+              </p>
+            </div>
+          </FadeIn>
+        )}
+
         <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
-          {steps.map((step, i) => (
+          {(os === 'mac' ? macSteps : steps).map((step, i) => (
             <FadeIn key={step.number} delay={i * 0.1}>
               <div className="rounded-xl bg-sp-card p-7">
                 <div className="mb-4 text-2xl font-extrabold tracking-tight text-sp-accent/50">
@@ -122,79 +155,111 @@ export default function InstallGuide() {
         </div>
 
         {/* 트러블슈팅 섹션 */}
-        <FadeIn className="mt-10" delay={0.3}>
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-6">
-            <p className="text-lg font-semibold text-amber-200">
-              설치가 안 되시나요?
-            </p>
-            <p className="mt-1.5 text-sm text-amber-200/70">
-              증상을 선택하면 해결 방법을 알려드려요!
-            </p>
+        {os !== 'mac' ? (
+          <FadeIn className="mt-10" delay={0.3}>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-6">
+              <p className="text-lg font-semibold text-amber-200">
+                설치가 안 되시나요?
+              </p>
+              <p className="mt-1.5 text-sm text-amber-200/70">
+                증상을 선택하면 해결 방법을 알려드려요!
+              </p>
 
-            {/* 증상 선택 버튼 그리드 */}
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {/* 증상 선택 버튼 그리드 */}
+              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {troubleshootCases.map((tc) => (
+                  <button
+                    key={tc.id}
+                    type="button"
+                    onClick={() => toggleCase(tc.id)}
+                    className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-left text-sm font-medium transition-all ${
+                      openCase === tc.id
+                        ? 'border-amber-400/40 bg-amber-500/15 text-amber-200'
+                        : 'border-amber-500/15 bg-amber-500/5 text-amber-200/70 hover:border-amber-500/25 hover:bg-amber-500/10 hover:text-amber-200/90'
+                    }`}
+                  >
+                    <span className="text-base">{tc.icon}</span>
+                    <span>{tc.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* 선택된 케이스 해결법 */}
               {troubleshootCases.map((tc) => (
-                <button
+                <div
                   key={tc.id}
-                  type="button"
-                  onClick={() => toggleCase(tc.id)}
-                  className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-left text-sm font-medium transition-all ${
-                    openCase === tc.id
-                      ? 'border-amber-400/40 bg-amber-500/15 text-amber-200'
-                      : 'border-amber-500/15 bg-amber-500/5 text-amber-200/70 hover:border-amber-500/25 hover:bg-amber-500/10 hover:text-amber-200/90'
+                  className={`overflow-hidden transition-all duration-300 ${
+                    openCase === tc.id ? 'mt-4 max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
                   }`}
                 >
-                  <span className="text-base">{tc.icon}</span>
-                  <span>{tc.label}</span>
-                </button>
-              ))}
-            </div>
+                  <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
+                    <p className="text-sm font-semibold text-amber-300">
+                      {tc.icon} {tc.title}
+                    </p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-amber-200/60">
+                      {tc.description}
+                    </p>
 
-            {/* 선택된 케이스 해결법 */}
-            {troubleshootCases.map((tc) => (
-              <div
-                key={tc.id}
-                className={`overflow-hidden transition-all duration-300 ${
-                  openCase === tc.id ? 'mt-4 max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
-                }`}
-              >
-                <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
-                  <p className="text-sm font-semibold text-amber-300">
-                    {tc.icon} {tc.title}
-                  </p>
-                  <p className="mt-1.5 text-xs leading-relaxed text-amber-200/60">
-                    {tc.description}
-                  </p>
-
-                  <ol className="mt-3 space-y-2">
-                    {tc.steps.map((step, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-xs text-amber-200/70">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">
-                          {i + 1}
-                        </span>
-                        <span className="pt-0.5">{step.text}</span>
-                      </li>
-                    ))}
-                  </ol>
-
-                  {tc.extraTip && (
-                    <div className="mt-3 rounded-md bg-amber-500/5 px-3 py-2">
-                      {tc.extraTip.split('\n').map((line, i) => (
-                        <p key={i} className="text-[0.7rem] text-amber-200/50">
-                          💡 {line}
-                        </p>
+                    <ol className="mt-3 space-y-2">
+                      {tc.steps.map((step, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-xs text-amber-200/70">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">
+                            {i + 1}
+                          </span>
+                          <span className="pt-0.5">{step.text}</span>
+                        </li>
                       ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+                    </ol>
 
-            <p className="mt-4 text-xs text-amber-200/40">
-              코드 서명 인증서를 준비 중이며, 곧 경고 없이 설치하실 수 있게 됩니다.
-            </p>
-          </div>
-        </FadeIn>
+                    {tc.extraTip && (
+                      <div className="mt-3 rounded-md bg-amber-500/5 px-3 py-2">
+                        {tc.extraTip.split('\n').map((line, i) => (
+                          <p key={i} className="text-[0.7rem] text-amber-200/50">
+                            💡 {line}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              <p className="mt-4 text-xs text-amber-200/40">
+                코드 서명 인증서를 준비 중이며, 곧 경고 없이 설치하실 수 있게 됩니다.
+              </p>
+            </div>
+          </FadeIn>
+        ) : (
+          <FadeIn className="mt-10" delay={0.3}>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-6">
+              <p className="text-lg font-semibold text-amber-200">
+                &quot;개발자를 확인할 수 없음&quot; 경고가 뜨나요?
+              </p>
+              <p className="mt-1.5 text-sm text-amber-200/70">
+                개인 개발 앱이라 아직 Apple 인증서가 없어서 표시되는 경고예요.
+              </p>
+              <div className="mt-4 rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
+                <ol className="space-y-2">
+                  <li className="flex items-start gap-2.5 text-xs text-amber-200/70">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">1</span>
+                    <span className="pt-0.5"><strong className="text-amber-200/80">시스템 설정 → 개인정보 보호 및 보안</strong>으로 이동하세요</span>
+                  </li>
+                  <li className="flex items-start gap-2.5 text-xs text-amber-200/70">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">2</span>
+                    <span className="pt-0.5">&quot;쌤핀이(가) 차단되었습니다&quot; 옆의 <strong className="text-amber-200/80">&quot;확인 없이 열기&quot;</strong>를 클릭하세요</span>
+                  </li>
+                  <li className="flex items-start gap-2.5 text-xs text-amber-200/70">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">3</span>
+                    <span className="pt-0.5">또는: 앱을 <strong className="text-amber-200/80">Control+클릭 → &quot;열기&quot;</strong>를 선택하세요</span>
+                  </li>
+                </ol>
+              </div>
+              <p className="mt-4 text-xs text-amber-200/40">
+                Apple 코드 서명 인증서를 준비 중이며, 곧 경고 없이 설치하실 수 있게 됩니다.
+              </p>
+            </div>
+          </FadeIn>
+        )}
       </div>
     </section>
   );

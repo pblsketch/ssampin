@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DOWNLOAD_URL, VERSION, FILE_SIZE, FALLBACK_DOWNLOAD_URL, MOBILE_URL } from '@/config';
+import { DOWNLOAD_URL, DOWNLOAD_URL_MAC_ARM, DOWNLOAD_URL_MAC_X64, VERSION, FILE_SIZE, FILE_SIZE_MAC, FALLBACK_DOWNLOAD_URL, MOBILE_URL } from '@/config';
 
 interface DownloadButtonProps {
   variant?: 'primary' | 'white';
@@ -9,12 +9,17 @@ interface DownloadButtonProps {
 }
 
 export default function DownloadButton({ variant = 'primary', showSmartScreenFaq = false }: DownloadButtonProps) {
-  const [isMobile, setIsMobile] = useState(false);
+  const [os, setOs] = useState<'windows' | 'mac' | 'mobile'>('windows');
   const [showMobileInstall, setShowMobileInstall] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod|Android/i.test(ua)) {
+      setOs('mobile');
+    } else if (/Macintosh|MacIntel|MacPPC|Mac68K/i.test(ua)) {
+      setOs('mac');
+    }
   }, []);
 
   const handleCopyUrl = async () => {
@@ -27,7 +32,7 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
     }
   };
 
-  if (isMobile) {
+  if (os === 'mobile') {
     return (
       <div className="flex flex-col items-center gap-4">
         {!showMobileInstall ? (
@@ -93,6 +98,83 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
 
   const isPrimary = variant === 'primary';
 
+  if (os === 'mac') {
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <a
+          href={DOWNLOAD_URL_MAC_ARM}
+          className={`inline-flex items-center gap-2 rounded-xl px-8 py-4 text-lg font-bold transition-all hover:-translate-y-0.5 ${
+            isPrimary
+              ? 'bg-sp-accent text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 hover:shadow-blue-500/30'
+              : 'bg-white text-blue-700 shadow-lg hover:bg-blue-50'
+          }`}
+        >
+          <span>🍎</span>
+          <span>
+            {isPrimary ? `macOS 다운로드 (v${VERSION})` : '무료 다운로드 (macOS)'}
+          </span>
+        </a>
+        <p className={`text-sm ${isPrimary ? 'text-sp-muted' : 'text-blue-100/70'}`}>
+          무료 · Apple Silicon (M1/M2/M3/M4) · {FILE_SIZE_MAC}
+        </p>
+        <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
+          Intel Mac을 사용하시나요?{' '}
+          <a
+            href={DOWNLOAD_URL_MAC_X64}
+            className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
+              isPrimary ? 'text-sp-muted/80 hover:text-sp-muted' : 'text-blue-100/70 hover:text-blue-100'
+            }`}
+          >
+            Intel 버전 받기 →
+          </a>
+        </p>
+        <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
+          Windows를 사용하시나요?{' '}
+          <a
+            href={DOWNLOAD_URL}
+            className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
+              isPrimary ? 'text-sp-muted/80 hover:text-sp-muted' : 'text-blue-100/70 hover:text-blue-100'
+            }`}
+          >
+            Windows 버전 받기 →
+          </a>
+        </p>
+
+        {showSmartScreenFaq && (
+          <details className="group mt-3 w-full max-w-md rounded-xl border border-amber-500/20 bg-amber-500/5 text-left">
+            <summary className="flex min-h-[44px] cursor-pointer items-center gap-2 px-4 py-3 text-[0.85rem] font-medium text-amber-200/90 select-none">
+              <span>⚠️</span>
+              <span className="flex-1">&quot;개발자를 확인할 수 없음&quot; 경고가 뜨나요?</span>
+              <span className="shrink-0 text-amber-200/50 transition-transform duration-200 group-open:rotate-45">
+                +
+              </span>
+            </summary>
+            <div className="border-t border-amber-500/10 px-4 pb-4 pt-3 text-[0.8rem] leading-relaxed text-amber-200/70">
+              <p>
+                걱정 마세요! 쌤핀은 안전한 프로그램입니다.
+                <br />
+                개인 개발 앱이라 아직 Apple 인증서가 없어서 경고가 표시돼요.
+              </p>
+              <div className="mt-3 rounded-lg bg-amber-500/5 p-3">
+                <p className="text-xs font-semibold text-amber-300">해결 방법</p>
+                <ol className="mt-1.5 space-y-1 text-xs text-amber-200/60">
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">1</span>
+                    <span><strong className="text-amber-200/80">시스템 설정 → 개인정보 보호 및 보안</strong>으로 이동</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.6rem] font-bold text-amber-300">2</span>
+                    <span>&quot;쌤핀이(가) 차단되었습니다&quot; 옆의 <strong className="text-amber-200/80">&quot;확인 없이 열기&quot;</strong> 클릭</span>
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </details>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-3">
       <a
@@ -122,6 +204,17 @@ export default function DownloadButton({ variant = 'primary', showSmartScreenFaq
           }`}
         >
           여기서 받으세요 →
+        </a>
+      </p>
+      <p className={`text-xs ${isPrimary ? 'text-sp-muted/60' : 'text-blue-100/50'}`}>
+        macOS를 사용하시나요?{' '}
+        <a
+          href={DOWNLOAD_URL_MAC_ARM}
+          className={`underline underline-offset-2 hover:opacity-100 transition-opacity ${
+            isPrimary ? 'text-sp-muted/80 hover:text-sp-muted' : 'text-blue-100/70 hover:text-blue-100'
+          }`}
+        >
+          macOS 버전 받기 →
         </a>
       </p>
 
