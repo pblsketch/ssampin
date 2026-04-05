@@ -61,9 +61,20 @@ export function TodoCategoryModal({ onClose }: TodoCategoryModalProps) {
   }, []);
 
   const handleSave = useCallback(() => {
-    void saveCategories(editCategories);
+    let finalCategories = editCategories;
+    const pendingName = newName.trim();
+    if (pendingName) {
+      const pendingCat: TodoCategory = {
+        id: `cat_${Date.now()}`,
+        name: pendingName,
+        color: newColor,
+        icon: newIcon,
+      };
+      finalCategories = [...finalCategories, pendingCat];
+    }
+    void saveCategories(finalCategories);
     onClose();
-  }, [editCategories, saveCategories, onClose]);
+  }, [editCategories, newName, newColor, newIcon, saveCategories, onClose]);
 
   return (
     <>

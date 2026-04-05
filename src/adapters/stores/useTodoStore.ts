@@ -18,10 +18,11 @@ interface TodoState {
     category?: string,
     recurrence?: TodoRecurrence,
     time?: string,
+    startDate?: string,
   ) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
-  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder' | 'time' | 'status' | 'completed'>>) => Promise<void>;
+  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'startDate' | 'subTasks' | 'sortOrder' | 'time' | 'status' | 'completed'>>) => Promise<void>;
 
   // 서브태스크
   addSubTask: (todoId: string, text: string) => Promise<void>;
@@ -57,14 +58,17 @@ export const useTodoStore = create<TodoState>((set, get) => {
           ...todo,
           priority: todo.priority ?? 'none' as TodoPriority,
         }));
-        const categories = data.categories ?? [...DEFAULT_TODO_CATEGORIES];
+        const categories = (data.categories ?? [...DEFAULT_TODO_CATEGORIES]).map((cat) => ({
+          ...cat,
+          icon: cat.icon || '📌',
+        }));
         set({ todos: migrated, categories, loaded: true });
       } catch {
         set({ loaded: true });
       }
     },
 
-    addTodo: async (text, dueDate, priority, category, recurrence, time) => {
+    addTodo: async (text, dueDate, priority, category, recurrence, time, startDate) => {
       const newTodo: Todo = {
         id: generateUUID(),
         text,
@@ -75,6 +79,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
         ...(category !== undefined ? { category } : {}),
         ...(recurrence !== undefined ? { recurrence } : {}),
         ...(time !== undefined ? { time } : {}),
+        ...(startDate !== undefined ? { startDate } : {}),
       };
       await manageTodos.add(newTodo);
       set((state) => ({ todos: [...state.todos, newTodo] }));

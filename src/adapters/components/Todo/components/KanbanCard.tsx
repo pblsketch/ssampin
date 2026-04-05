@@ -10,12 +10,14 @@ interface KanbanCardProps {
   todo: Todo;
   columnKey: TodoStatus;
   categories: readonly TodoCategory[];
+  onEdit?: (todo: Todo) => void;
 }
 
 export const KanbanCard = React.memo(function KanbanCard({
   todo,
   columnKey,
   categories,
+  onEdit,
 }: KanbanCardProps) {
   const {
     attributes,
@@ -54,16 +56,26 @@ export const KanbanCard = React.memo(function KanbanCard({
       {...listeners}
       className={`bg-sp-card rounded-lg p-3 ring-1 ring-sp-border/50 border-l-2 ${borderColor}
                  hover:ring-sp-accent/30 cursor-grab active:cursor-grabbing
-                 transition-shadow`}
+                 transition-shadow group`}
     >
       {/* 우선순위 + 텍스트 */}
       <div className="flex items-start gap-2">
         {priorityConfig && (
           <span className="text-xs mt-0.5">{priorityConfig.icon}</span>
         )}
-        <span className={`text-sm text-sp-text leading-snug ${todo.completed ? 'line-through opacity-50' : ''}`}>
+        <span className={`text-sm text-sp-text leading-snug flex-1 ${todo.completed ? 'line-through opacity-50' : ''}`}>
           {todo.text}
         </span>
+        {onEdit && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onEdit(todo); }}
+            className="text-sp-muted hover:text-sp-text opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          >
+            <span className="material-symbols-outlined text-base">edit</span>
+          </button>
+        )}
       </div>
 
       {/* 메타 정보 */}

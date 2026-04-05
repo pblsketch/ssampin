@@ -28,6 +28,7 @@ import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { RECURRENCE_PRESETS, getRecurrenceLabel } from '@domain/valueObjects/TodoRecurrence';
 import { TodoCategoryModal } from './TodoCategoryModal';
+import { DatePopover } from './components/DatePopover';
 import {
   DndContext,
   closestCenter,
@@ -168,6 +169,7 @@ export function Todo() {
   const [newRecurrenceIdx, setNewRecurrenceIdx] = useState(0);
   const [newCategory, setNewCategory] = useState('');
   const [newTime, setNewTime] = useState('');
+  const [newStartDate, setNewStartDate] = useState<string | undefined>(undefined);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [sortMode, setSortMode] = useState<TodoSortMode>('priority');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -182,6 +184,7 @@ export function Todo() {
   // 프로 모드 상태
   const todoSettings = settings.todoSettings ?? DEFAULT_TODO_SETTINGS;
   const isProMode = todoSettings.mode === 'pro';
+  const proLayout = isProMode ? (todoSettings.proLayout ?? 'default') : 'default';
   const [proViewMode, setProViewMode] = useState<TodoViewMode>(
     todoSettings.lastView ?? todoSettings.defaultView ?? 'todo',
   );
@@ -306,16 +309,18 @@ export function Todo() {
       newCategory || undefined,
       recurrence ?? undefined,
       newTime || undefined,
+      newStartDate,
     );
     setNewText('');
     setNewPriority('none');
     setNewRecurrenceIdx(0);
     setNewCategory('');
     setNewTime('');
+    setNewStartDate(undefined);
     if (!noDueDate) {
       setNewDueDate(toLocalDateString());
     }
-  }, [newText, newDueDate, noDueDate, newPriority, newRecurrenceIdx, newCategory, newTime, addTodo]);
+  }, [newText, newDueDate, noDueDate, newPriority, newRecurrenceIdx, newCategory, newTime, newStartDate, addTodo]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -386,7 +391,9 @@ export function Todo() {
 
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-3xl mx-auto flex flex-col gap-6">
+        <div className={`mx-auto flex flex-col gap-6 ${
+          proLayout === 'wide' || proLayout === 'dual' ? 'max-w-full' : 'max-w-3xl'
+        }`}>
           {viewMode === 'active' ? (
             <>
               {/* 필터 탭 */}
@@ -495,43 +502,90 @@ export function Todo() {
 
               {/* 프로 모드 뷰 분기 */}
               {isProMode && proViewMode !== 'todo' ? (
-                <Suspense fallback={<div className="flex items-center justify-center py-16 text-sp-muted">뷰 로딩 중...</div>}>
-                  {proViewMode === 'kanban' && <KanbanView categoryFilter={categoryFilter} />}
-                  {proViewMode === 'list' && <ListView categoryFilter={categoryFilter} />}
-                  {proViewMode === 'timeline' && <TimelineView categoryFilter={categoryFilter} />}
-                </Suspense>
+                proLayout === 'dual' ? (
+                  <div className="flex gap-6 min-h-[500px]">
+                    <div className="flex-1 min-w-0">
+                      <Suspense fallback={<div className="flex items-center justify-center py-16 text-sp-muted">뷰 로딩 중...</div>}>
+                        {proViewMode === 'kanban' && <KanbanView categoryFilter={categoryFilter} />}
+                        {proViewMode === 'list' && <ListView categoryFilter={categoryFilter} />}
+                        {proViewMode === 'timeline' && <TimelineView categoryFilter={categoryFilter} />}
+                      </Suspense>
+                    </div>
+                    <div className="w-80 shrink-0 flex flex-col gap-4 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border overflow-y-auto">
+                      <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+                        <span className="material-symbols-outlined text-icon">list</span>
+                        할 일 목록
+                      </h3>
+                      {filtered.map(todo => (
+                        <div
+                          key={todo.id}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
+                            todo.completed ? 'text-sp-muted line-through' : 'text-sp-text'
+                          } hover:bg-sp-surface transition-colors`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={todo.completed}
+                            onChange={() => void toggleTodo(todo.id)}
+                            className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent shrink-0"
+                          />
+                          <span className="truncate">{todo.text}</span>
+                          {todo.dueDate && (
+                            <span className="shrink-0 text-sp-muted text-[10px]">
+                              {todo.dueDate.slice(5).replace('-', '/')}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <Suspense fallback={<div className="flex items-center justify-center py-16 text-sp-muted">뷰 로딩 중...</div>}>
+                    {proViewMode === 'kanban' && <KanbanView categoryFilter={categoryFilter} />}
+                    {proViewMode === 'list' && <ListView categoryFilter={categoryFilter} />}
+                    {proViewMode === 'timeline' && <TimelineView categoryFilter={categoryFilter} />}
+                  </Suspense>
+                )
               ) : (
+
               <>
               {/* 추가 폼 */}
               <div className="flex flex-col gap-3 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border">
                 {/* 첫 번째 줄: 날짜 + 텍스트 + 추가 버튼 */}
                 <div className="flex gap-3 items-center">
-                  <div className="flex items-center gap-2 shrink-0">
-                    <input
-                      type="date"
-                      value={noDueDate ? '' : newDueDate}
-                      onChange={(e) => { setNewDueDate(e.target.value); setNoDueDate(false); }}
-                      disabled={noDueDate}
-                      className={`bg-sp-surface text-sm px-3 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors ${
-                        noDueDate ? 'opacity-40 cursor-not-allowed text-sp-muted' : 'text-sp-text'
-                      }`}
-                    />
-                    <label className="flex items-center gap-1.5 cursor-pointer shrink-0 select-none">
-                      <input
-                        type="checkbox"
-                        checked={noDueDate}
-                        onChange={(e) => {
-                          setNoDueDate(e.target.checked);
-                          if (e.target.checked) setNewDueDate('');
-                          else setNewDueDate(toLocalDateString());
-                        }}
-                        className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent"
-                      />
-                      <span className={`text-xs whitespace-nowrap ${noDueDate ? 'text-sp-accent font-medium' : 'text-sp-muted'}`}>
-                        기한 없음
-                      </span>
-                    </label>
-                  </div>
+                  <DatePopover
+                    date={newDueDate}
+                    endDate={newStartDate ? newDueDate : undefined}
+                    noDueDate={noDueDate}
+                    onDateChange={(d) => {
+                      if (newStartDate) {
+                        setNewStartDate(d);
+                      } else {
+                        setNewDueDate(d);
+                        setNoDueDate(false);
+                      }
+                    }}
+                    onEndDateChange={(endDate) => {
+                      if (endDate) {
+                        setNewStartDate(newDueDate);
+                        setNewDueDate(endDate);
+                      } else {
+                        setNewStartDate(undefined);
+                      }
+                    }}
+                    onNoDueDateChange={(nd) => {
+                      setNoDueDate(nd);
+                      if (nd) { setNewDueDate(''); setNewStartDate(undefined); }
+                      else setNewDueDate(toLocalDateString());
+                    }}
+                  >
+                    <div className={`flex items-center gap-2 shrink-0 bg-sp-surface text-sm px-3 py-2 rounded-lg border border-sp-border hover:border-sp-accent transition-colors ${
+                      noDueDate ? 'opacity-40 text-sp-muted' : 'text-sp-text'
+                    }`}>
+                      <span className="material-symbols-outlined text-icon">calendar_today</span>
+                      {noDueDate ? '기한 없음' : newStartDate ? `${newStartDate} → ${newDueDate}` : (newDueDate || '날짜 선택')}
+                    </div>
+                  </DatePopover>
                   <input
                     type="text"
                     value={newText}
@@ -908,7 +962,7 @@ interface TodoGroupProps {
   now: Date;
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'startDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
@@ -1070,7 +1124,7 @@ interface SortableTodoItemProps {
   categories: readonly TodoCategory[];
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'startDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
@@ -1116,7 +1170,7 @@ interface TodoItemProps {
   categories: readonly TodoCategory[];
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
+  onUpdate: (id: string, changes: Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'startDate' | 'subTasks' | 'sortOrder'>>) => Promise<void>;
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
@@ -1142,12 +1196,11 @@ function TodoItem({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(todo.text);
   const [editDueDate, setEditDueDate] = useState(todo.dueDate ?? '');
+  const [editStartDate, setEditStartDate] = useState(todo.startDate ?? '');
   const [editTime, setEditTime] = useState(todo.time ?? '');
   const [editPriority, setEditPriority] = useState<TodoPriority>(todo.priority ?? 'none');
   const [editCategory, setEditCategory] = useState(todo.category ?? '');
   const [showPostpone, setShowPostpone] = useState(false);
-  const [showCustomDate, setShowCustomDate] = useState(false);
-  const [customDate, setCustomDate] = useState('');
   const [showSubTaskInput, setShowSubTaskInput] = useState(false);
   const [subTaskText, setSubTaskText] = useState('');
 
@@ -1201,7 +1254,6 @@ function TodoItem({
     const handleClickOutside = (e: MouseEvent) => {
       if (postponeRef.current && !postponeRef.current.contains(e.target as Node)) {
         setShowPostpone(false);
-        setShowCustomDate(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1220,18 +1272,20 @@ function TodoItem({
     if (editPriority !== (todo.priority ?? 'none')) changes.priority = editPriority;
     if (editCategory !== (todo.category ?? '')) changes.category = editCategory || undefined;
     if (editDueDate !== (todo.dueDate ?? '')) changes.dueDate = editDueDate || undefined;
+    if (editStartDate !== (todo.startDate ?? '')) changes.startDate = editStartDate || undefined;
     if (editTime !== (todo.time ?? '')) changes.time = editTime || undefined;
 
     if (Object.keys(changes).length > 0) {
-      void onUpdate(todo.id, changes as Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'dueDate' | 'time'>>);
+      void onUpdate(todo.id, changes as Partial<Pick<TodoType, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time'>>);
     }
     setEditing(false);
-  }, [editText, editPriority, editCategory, editDueDate, editTime, todo, onUpdate]);
+  }, [editText, editPriority, editCategory, editDueDate, editStartDate, editTime, todo, onUpdate]);
 
   const handleDoubleClick = useCallback(() => {
     if (todo.completed) return;
     setEditText(todo.text);
     setEditDueDate(todo.dueDate ?? '');
+    setEditStartDate(todo.startDate ?? '');
     setEditTime(todo.time ?? '');
     setEditPriority(todo.priority ?? 'none');
     setEditCategory(todo.category ?? '');
@@ -1255,7 +1309,6 @@ function TodoItem({
     (newDate: string) => {
       void onUpdate(todo.id, { dueDate: newDate });
       setShowPostpone(false);
-      setShowCustomDate(false);
     },
     [todo.id, onUpdate],
   );
@@ -1321,28 +1374,32 @@ function TodoItem({
           />
           <div className="flex gap-3 items-center flex-wrap">
             {/* Date input */}
-            <div className="flex items-center gap-1.5">
-              <input
-                type="date"
-                value={editDueDate}
-                onChange={(e) => setEditDueDate(e.target.value)}
-                className={`bg-sp-surface text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors ${
-                  editDueDate ? 'text-sp-text' : 'text-sp-muted'
-                }`}
-              />
-              {editDueDate ? (
-                <button
-                  type="button"
-                  onClick={() => setEditDueDate('')}
-                  className="text-sp-muted hover:text-red-400 transition-colors"
-                  title="마감일 제거"
-                >
-                  <span className="material-symbols-outlined text-base">close</span>
-                </button>
-              ) : (
-                <span className="text-xs text-sp-accent font-medium whitespace-nowrap">기한 없음</span>
-              )}
-            </div>
+            <DatePopover
+              date={editStartDate || editDueDate}
+              endDate={editStartDate ? editDueDate : undefined}
+              onDateChange={(d) => {
+                if (editStartDate) {
+                  setEditStartDate(d);
+                } else {
+                  setEditDueDate(d);
+                }
+              }}
+              onEndDateChange={(endDate) => {
+                if (endDate) {
+                  setEditStartDate(editDueDate);
+                  setEditDueDate(endDate);
+                } else {
+                  setEditStartDate('');
+                }
+              }}
+            >
+              <div className={`flex items-center gap-1.5 bg-sp-surface text-xs px-2 py-1.5 rounded-lg border border-sp-border hover:border-sp-accent transition-colors cursor-pointer ${
+                editDueDate ? 'text-sp-text' : 'text-sp-muted'
+              }`}>
+                <span className="material-symbols-outlined text-base">calendar_today</span>
+                {editStartDate ? `${editStartDate} → ${editDueDate}` : editDueDate || '기한 없음'}
+              </div>
+            </DatePopover>
             {/* Time input */}
             <input
               type="time"
@@ -1493,7 +1550,7 @@ function TodoItem({
         )}
 
         {/* 날짜 라벨 */}
-        {todo.dueDate && (
+        {(todo.dueDate || todo.startDate) && (
           <span
             className={`text-xs font-medium px-2 py-0.5 rounded ${
               overdue
@@ -1503,7 +1560,9 @@ function TodoItem({
                   : 'text-sp-muted'
             }`}
           >
-            {formatDueDate(todo.dueDate)}
+            {todo.startDate && todo.dueDate
+              ? `${formatDueDate(todo.startDate)}~${formatDueDate(todo.dueDate)}`
+              : formatDueDate(todo.dueDate ?? todo.startDate!)}
           </span>
         )}
 
@@ -1564,7 +1623,6 @@ function TodoItem({
               onClick={(e) => {
                 e.stopPropagation();
                 setShowPostpone((prev) => !prev);
-                setShowCustomDate(false);
               }}
               className={`p-1 rounded-lg transition-all ${
                 hovered || showPostpone
@@ -1592,40 +1650,31 @@ function TodoItem({
                     {opt.label}
                   </button>
                 ))}
-                <div className="border-t border-sp-border/50 mt-1 pt-1">
-                  {!showCustomDate ? (
+                <div className="border-t border-sp-border/50 mt-1 pt-1 px-1">
+                  <DatePopover
+                    date={todo.dueDate ?? toLocalDateString()}
+                    endDate={todo.startDate ? todo.dueDate : undefined}
+                    onDateChange={(d) => {
+                      handlePostpone(d);
+                      setShowPostpone(false);
+                    }}
+                    onEndDateChange={(endDate) => {
+                      if (endDate) {
+                        void onUpdate(todo.id, { startDate: todo.dueDate, dueDate: endDate });
+                        setShowPostpone(false);
+                      } else {
+                        void onUpdate(todo.id, { startDate: undefined });
+                      }
+                    }}
+                  >
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowCustomDate(true);
-                        setCustomDate(todo.dueDate ?? toLocalDateString());
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-xs text-sp-accent hover:bg-sp-surface transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full text-left px-2 py-1.5 text-xs text-sp-accent hover:bg-sp-surface transition-colors rounded"
                     >
-                      날짜 선택...
+                      📅 달력에서 선택...
                     </button>
-                  ) : (
-                    <div className="px-3 py-1.5 flex gap-2 items-center">
-                      <input
-                        type="date"
-                        value={customDate}
-                        onChange={(e) => setCustomDate(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="bg-sp-surface text-sp-text text-xs px-2 py-1 rounded border border-sp-border focus:border-sp-accent focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (customDate) handlePostpone(customDate);
-                        }}
-                        className="text-xs text-sp-accent hover:text-blue-400 font-medium"
-                      >
-                        확인
-                      </button>
-                    </div>
-                  )}
+                  </DatePopover>
                 </div>
               </div>
             )}

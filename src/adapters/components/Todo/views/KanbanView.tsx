@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -7,7 +7,7 @@ import {
 } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
-import type { TodoStatus } from '@domain/entities/Todo';
+import type { Todo, TodoStatus } from '@domain/entities/Todo';
 import {
   inferStatus,
   applyStatusChange,
@@ -15,6 +15,7 @@ import {
   filterByCategory,
 } from '@domain/rules/todoRules';
 import { KanbanColumn } from '../components/KanbanColumn';
+import { TodoEditModal } from '../components/TodoEditModal';
 
 const KANBAN_COLUMNS: { key: TodoStatus; label: string; colorClass: string }[] = [
   { key: 'todo', label: '할 일', colorClass: 'bg-blue-500' },
@@ -28,6 +29,7 @@ interface KanbanViewProps {
 
 export function KanbanView({ categoryFilter }: KanbanViewProps) {
   const { todos, categories, updateTodo } = useTodoStore();
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -73,6 +75,15 @@ export function KanbanView({ categoryFilter }: KanbanViewProps) {
   }, [activeTodos, updateTodo]);
 
   return (
+    <>
+    {editingTodo && (
+      <TodoEditModal
+        todo={editingTodo}
+        categories={categories}
+        onUpdate={(id, changes) => void updateTodo(id, changes)}
+        onClose={() => setEditingTodo(null)}
+      />
+    )}
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="flex gap-4 h-[calc(100vh-320px)] min-h-[400px]">
         {KANBAN_COLUMNS.map(col => (
@@ -84,9 +95,11 @@ export function KanbanView({ categoryFilter }: KanbanViewProps) {
             todos={columns[col.key]}
             count={columns[col.key].length}
             categories={categories}
+            onEdit={(t) => setEditingTodo(t)}
           />
         ))}
       </div>
     </DndContext>
+    </>
   );
 }

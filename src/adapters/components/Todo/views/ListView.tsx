@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import type { Todo } from '@domain/entities/Todo';
 import type { TodoCategory } from '@domain/entities/Todo';
+import { TodoEditModal } from '../components/TodoEditModal';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import {
   inferStatus,
@@ -52,6 +53,7 @@ export function ListView({ categoryFilter }: ListViewProps) {
   const [groupBy, setGroupBy] = useState<ListGroupBy>(defaultGroupBy);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
 
   const toggleGroup = useCallback((key: string) => {
     setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }));
@@ -127,7 +129,7 @@ export function ListView({ categoryFilter }: ListViewProps) {
                 expand_more
               </span>
               <span className="text-xs font-bold text-sp-text">
-                {groupName} ({items.length})
+                {groupName === 'undefined' ? '📌 미분류' : groupName} ({items.length})
               </span>
             </button>
             {!isCollapsed && items.map(todo => (
@@ -137,6 +139,7 @@ export function ListView({ categoryFilter }: ListViewProps) {
                 categories={categories}
                 onToggle={toggleTodo}
                 onStatusChange={(id, status) => void updateTodo(id, { status })}
+                onEdit={(t) => setEditingTodo(t)}
               />
             ))}
           </div>
@@ -152,6 +155,15 @@ export function ListView({ categoryFilter }: ListViewProps) {
           </div>
         </div>
       )}
+
+      {editingTodo && (
+        <TodoEditModal
+          todo={editingTodo}
+          categories={categories}
+          onUpdate={(id, changes) => void updateTodo(id, changes)}
+          onClose={() => setEditingTodo(null)}
+        />
+      )}
     </div>
   );
 }
@@ -163,18 +175,19 @@ interface ListViewRowProps {
   categories: readonly TodoCategory[];
   onToggle: (id: string) => void;
   onStatusChange: (id: string, status: 'todo' | 'inProgress' | 'done') => void;
+  onEdit: (todo: Todo) => void;
 }
 
-function ListViewRow({ todo, categories, onToggle, onStatusChange }: ListViewRowProps) {
+function ListViewRow({ todo, categories, onToggle, onStatusChange, onEdit }: ListViewRowProps) {
   const category = categories.find(c => c.id === todo.category);
   const priority = todo.priority && todo.priority !== 'none' ? PRIORITY_CONFIG[todo.priority] : null;
   const status = inferStatus(todo);
   const overdue = isOverdue(todo);
 
   return (
-    <div className="flex items-center px-4 py-2.5 border-b border-sp-border/20 hover:bg-sp-surface/30 transition-colors group">
+    <div className="flex items-center px-4 py-2.5 border-b border-sp-border/20 hover:bg-sp-surface/30 transition-colors group cursor-pointer" onClick={() => onEdit(todo)}>
       {/* 체크박스 */}
-      <div className="w-8">
+      <div className="w-8" onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={todo.completed}
@@ -221,7 +234,7 @@ function ListViewRow({ todo, categories, onToggle, onStatusChange }: ListViewRow
       </div>
 
       {/* 상태 */}
-      <div className="flex-1">
+      <div className="flex-1" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-1">
           {([
             { key: 'todo' as const, label: '할 일' },
