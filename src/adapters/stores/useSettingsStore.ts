@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, DashboardThemeSettings, WidgetStyleSettings } from '@domain/entities/Settings';
+import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
 import { detectLunchFromPeriods, getDefaultLunchTime } from '@domain/rules/periodRules';
@@ -291,6 +292,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       system: patch.system
         ? { ...current.system, ...patch.system }
         : current.system,
+      todoSettings: patch.todoSettings
+        ? { ...(current.todoSettings ?? DEFAULT_TODO_SETTINGS), ...patch.todoSettings }
+        : current.todoSettings,
     };
     set({ settings: next });
     await settingsRepository.saveSettings(next);
