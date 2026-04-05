@@ -226,7 +226,7 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
           </button>
           <div ref={scrollRef} className="overflow-x-auto overflow-y-auto bg-sp-card rounded-xl ring-1 ring-sp-border h-full">
           {/* 날짜 헤더 */}
-          <div className="flex sticky top-0 z-30 bg-sp-bg">
+          <div className="flex sticky top-0 z-30 bg-sp-bg min-w-max">
             <div className="w-64 shrink-0 px-4 flex items-center text-xs font-bold text-sp-muted border-b border-r border-sp-border h-14 sticky left-0 z-20 bg-sp-bg">
               할 일
             </div>
