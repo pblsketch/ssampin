@@ -223,11 +223,12 @@ export function groupByCategory(
   for (const cat of categories) {
     const items = todos.filter(t => t.category === cat.id);
     if (items.length > 0) {
-      groups[`${cat.icon} ${cat.name}`] = items;
+      groups[`${cat.icon || '📁'} ${cat.name}`] = items;
     }
   }
 
-  const uncategorized = todos.filter(t => !t.category);
+  const categoryIds = new Set(categories.map(c => c.id));
+  const uncategorized = todos.filter(t => !t.category || !categoryIds.has(t.category));
   if (uncategorized.length > 0) {
     groups['📌 미분류'] = uncategorized;
   }
