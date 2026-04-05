@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -6,7 +6,15 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { toLocalDateString } from '@shared/utils/localDate';
 import type { Todo as TodoType, TodoPriority, TodoCategory } from '@domain/entities/Todo';
+import type { TodoViewMode } from '@domain/entities/TodoSettings';
+import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import type { TodoSortMode } from '@domain/rules/todoRules';
+import { ViewToggle } from './components/ViewToggle';
+
+// 프로 모드 뷰 — lazy 로딩 (기본 모드에서는 import 안 됨)
+const KanbanView = lazy(() => import('./views/KanbanView').then(m => ({ default: m.KanbanView })));
+const ListView = lazy(() => import('./views/ListView').then(m => ({ default: m.ListView })));
+const TimelineView = lazy(() => import('./views/TimelineView').then(m => ({ default: m.TimelineView })));
 import {
   sortTodos,
   filterByDateRange,
@@ -170,6 +178,18 @@ export function Todo() {
   const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
   const { events, load: loadEvents } = useEventsStore();
   const { settings, update: updateSettings } = useSettingsStore();
+
+  // 프로 모드 상태
+  const todoSettings = settings.todoSettings ?? DEFAULT_TODO_SETTINGS;
+  const isProMode = todoSettings.mode === 'pro';
+  const [proViewMode, setProViewMode] = useState<TodoViewMode>(
+    todoSettings.lastView ?? todoSettings.defaultView ?? 'todo',
+  );
+
+  const handleProViewChange = useCallback((view: TodoViewMode) => {
+    setProViewMode(view);
+    void updateSettings({ todoSettings: { ...todoSettings, lastView: view } });
+  }, [todoSettings, updateSettings]);
 
   useEffect(() => {
     void load();
@@ -444,8 +464,13 @@ export function Todo() {
                   </button>
                 </div>
 
-                {/* 타임라인 통합 토글 */}
-                <div className="flex items-center gap-3 text-xs">
+                {/* 프로 모드: 뷰 전환 토글 */}
+                {isProMode && (
+                  <ViewToggle currentView={proViewMode} onViewChange={handleProViewChange} />
+                )}
+
+                {/* 타임라인 통합 토글 (기본 모드 또는 프로 모드의 todo 뷰에서만) */}
+                {(!isProMode || proViewMode === 'todo') && <div className="flex items-center gap-3 text-xs">
                   <span className="text-sp-muted">통합 보기</span>
                   <label className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input
@@ -465,9 +490,18 @@ export function Todo() {
                     />
                     <span className="text-sp-muted hover:text-sp-text transition-colors">📅 일정</span>
                   </label>
-                </div>
+                </div>}
               </div>
 
+              {/* 프로 모드 뷰 분기 */}
+              {isProMode && proViewMode !== 'todo' ? (
+                <Suspense fallback={<div className="flex items-center justify-center py-16 text-sp-muted">뷰 로딩 중...</div>}>
+                  {proViewMode === 'kanban' && <KanbanView categoryFilter={categoryFilter} />}
+                  {proViewMode === 'list' && <ListView categoryFilter={categoryFilter} />}
+                  {proViewMode === 'timeline' && <TimelineView categoryFilter={categoryFilter} />}
+                </Suspense>
+              ) : (
+              <>
               {/* 추가 폼 */}
               <div className="flex flex-col gap-3 bg-sp-card rounded-xl p-4 ring-1 ring-sp-border">
                 {/* 첫 번째 줄: 날짜 + 텍스트 + 추가 버튼 */}
@@ -743,6 +777,8 @@ export function Todo() {
                     완료 항목 모두 아카이브 ({completedCount}건)
                   </button>
                 </div>
+              )}
+            </>
               )}
             </>
           ) : (
