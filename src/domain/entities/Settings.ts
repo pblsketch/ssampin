@@ -3,6 +3,7 @@ import type { PinSettings } from './PinSettings';
 import type { NeisScheduleSettings } from './NeisSchedule';
 import type { PresetThemeId, ThemeColors } from './DashboardTheme';
 import type { SubjectColorMap } from '../valueObjects/SubjectColor';
+import type { TodoSettings } from './TodoSettings';
 
 export interface DashboardThemeSettings {
   readonly presetId: PresetThemeId | 'custom';
@@ -270,4 +271,6 @@ export interface Settings {
   readonly enableWeekendDays?: readonly ('토' | '일')[];
   /** 사용자 커스텀 폰트 */
   readonly customFont?: CustomFontSettings;
+  /** 할 일 모드 설정 (프로 모드) */
+  readonly todoSettings?: TodoSettings;
 }
