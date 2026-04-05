@@ -30,6 +30,7 @@ export function TodoTab({ draft, patch }: Props) {
         iconColor="bg-green-500/10 text-green-500"
         title="할 일 모드"
         description="프로 모드를 켜면 칸반, 테이블, 타임라인 뷰를 사용할 수 있습니다."
+        actions={<span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 ring-1 ring-yellow-500/20">Beta</span>}
       >
         <div className="space-y-4">
           {/* 프로 모드 토글 */}
