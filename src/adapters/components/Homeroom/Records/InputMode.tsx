@@ -394,13 +394,13 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                 <button
                   key={student.id}
                   onClick={() => toggleStudent(student.id)}
-                  className={`px-2 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${isSelected
+                  className={`px-1.5 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${isSelected
                     ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
                     : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
                     }`}
                 >
-                  {num}
-                  {student.name}
+                  <div className="text-[10px] opacity-60 tabular-nums">{num}</div>
+                  <div className="truncate">{student.name}</div>
                 </button>
               );
             })}
@@ -423,7 +423,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                             key={student.id}
                             className="flex items-center gap-2 px-2 py-1.5 border-l-2 border-transparent opacity-30"
                           >
-                            <span className="w-7 text-right text-sm font-bold tabular-nums text-sp-muted shrink-0">
+                            <span className="min-w-[2rem] text-right text-sm font-bold tabular-nums text-sp-muted shrink-0">
                               {num}
                             </span>
                             <span className="text-xs text-sp-muted italic">결번</span>
@@ -441,12 +441,12 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                               : 'hover:bg-sp-surface/60 border-transparent'
                           }`}
                         >
-                          <span className={`w-7 text-right text-base font-bold tabular-nums shrink-0 leading-none ${
+                          <span className={`min-w-[2rem] text-right text-sm font-bold tabular-nums shrink-0 leading-none ${
                             isSelected ? 'text-sp-accent' : 'text-sp-muted/50'
                           }`}>
                             {num}
                           </span>
-                          <span className={`text-sm font-medium leading-none ${
+                          <span className={`text-sm font-medium leading-none truncate ${
                             isSelected ? 'text-sp-text' : 'text-sp-text/80'
                           }`}>
                             {student.name}

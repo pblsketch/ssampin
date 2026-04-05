@@ -465,20 +465,20 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
         </div>
 
         {studentViewMode === 'number' ? (
-          <div className="grid grid-cols-5 gap-2 overflow-y-auto flex-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 overflow-y-auto flex-1">
             {students.map((student, idx) => {
               const isSelected = selectedStudents.has(student.id);
               return (
                 <button
                   key={student.id}
                   onClick={() => toggleStudent(student.id)}
-                  className={`px-2 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${
+                  className={`px-3 py-2.5 rounded-lg text-xs font-medium transition-all text-left whitespace-nowrap ${
                     isSelected
                       ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
                       : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
                   }`}
                 >
-                  {idx + 1}
+                  <span className="text-[10px] opacity-60 mr-1">{idx + 1}</span>
                   {student.name}
                 </button>
               );
