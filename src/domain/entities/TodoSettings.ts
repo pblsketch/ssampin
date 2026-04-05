@@ -1,6 +1,6 @@
 export type TodoMode = 'default' | 'pro';
 export type TodoViewMode = 'todo' | 'kanban' | 'list' | 'timeline';
-export type TodoProLayout = 'default' | 'wide' | 'dual';
+export type TodoProLayout = 'wide' | 'dual';
 
 export interface TodoSettings {
   /** 기능 모드 (기본: 'default') */

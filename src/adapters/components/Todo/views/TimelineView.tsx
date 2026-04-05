@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { toLocalDateString } from '@shared/utils/localDate';
 import type { Todo } from '@domain/entities/Todo';
 import {
   filterActive,
@@ -39,9 +40,10 @@ function getMonthStart(d: Date): Date {
 }
 
 export function TimelineView({ categoryFilter }: TimelineViewProps) {
-  const { todos, categories, updateTodo } = useTodoStore();
+  const { todos, categories, updateTodo, addTodo } = useTodoStore();
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('day');
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [quickAddText, setQuickAddText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollTimeline = (direction: 'left' | 'right') => {
@@ -147,6 +149,26 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
     zoomLevel === 'day' ? 'w-12' : zoomLevel === 'week' ? 'w-16' : 'w-20';
 
   return (
+    <>
+    <div className="flex items-center gap-2 mb-3">
+      <input
+        type="text"
+        value={quickAddText}
+        onChange={(e) => setQuickAddText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && quickAddText.trim()) { void addTodo(quickAddText.trim(), toLocalDateString()); setQuickAddText(''); }}}
+        placeholder="새 할 일 추가... (오늘 날짜로 타임라인에 표시됩니다)"
+        className="flex-1 bg-sp-surface text-sp-text text-sm px-3 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none placeholder:text-sp-muted"
+      />
+      <button
+        type="button"
+        onClick={() => { if (quickAddText.trim()) { void addTodo(quickAddText.trim(), toLocalDateString()); setQuickAddText(''); }}}
+        disabled={!quickAddText.trim()}
+        className="flex items-center gap-1.5 bg-sp-accent hover:bg-blue-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+      >
+        <span className="material-symbols-outlined text-icon">add</span>
+        추가
+      </button>
+    </div>
     <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
       {/* 줌 레벨 토글 */}
       <div className="flex items-center justify-between mb-2">
@@ -204,8 +226,8 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
           </button>
           <div ref={scrollRef} className="overflow-x-auto overflow-y-auto bg-sp-card rounded-xl ring-1 ring-sp-border h-full">
           {/* 날짜 헤더 */}
-          <div className="flex sticky top-0 z-10 bg-sp-bg">
-            <div className="w-64 shrink-0 px-4 flex items-center text-xs font-bold text-sp-muted border-b border-r border-sp-border h-14">
+          <div className="flex sticky top-0 z-30 bg-sp-bg">
+            <div className="w-64 shrink-0 px-4 flex items-center text-xs font-bold text-sp-muted border-b border-r border-sp-border h-14 sticky left-0 z-20 bg-sp-bg">
               할 일
             </div>
             {days.map(day => {
@@ -302,5 +324,6 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
         />
       )}
     </div>
+    </>
   );
 }

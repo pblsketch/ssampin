@@ -48,12 +48,17 @@ export const KanbanCard = React.memo(function KanbanCard({
     : columnKey === 'inProgress' ? 'border-l-yellow-500'
     : 'border-l-blue-500';
 
+  const handleClick = () => {
+    if (!isDragging && onEdit) onEdit(todo);
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
+      onClick={handleClick}
       className={`bg-sp-card rounded-lg p-3 ring-1 ring-sp-border/50 border-l-2 ${borderColor}
                  hover:ring-sp-accent/30 cursor-grab active:cursor-grabbing
                  transition-shadow group`}
@@ -66,16 +71,6 @@ export const KanbanCard = React.memo(function KanbanCard({
         <span className={`text-sm text-sp-text leading-snug flex-1 ${todo.completed ? 'line-through opacity-50' : ''}`}>
           {todo.text}
         </span>
-        {onEdit && (
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onEdit(todo); }}
-            className="text-sp-muted hover:text-sp-text opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          >
-            <span className="material-symbols-outlined text-base">edit</span>
-          </button>
-        )}
       </div>
 
       {/* 메타 정보 */}

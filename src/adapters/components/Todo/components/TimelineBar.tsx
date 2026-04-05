@@ -49,7 +49,7 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
     <div className="flex items-center">
       {/* 할 일 이름 */}
       <div
-        className={`w-64 shrink-0 px-4 h-10 flex items-center truncate text-sm border-r border-b border-sp-border/30 cursor-pointer hover:bg-sp-surface/30 ${isDone ? 'text-sp-muted line-through' : 'text-sp-text'}`}
+        className={`w-64 shrink-0 px-4 h-10 flex items-center truncate text-sm border-r border-b border-sp-border/30 cursor-pointer hover:bg-sp-surface/30 sticky left-0 z-10 bg-sp-card ${isDone ? 'text-sp-muted line-through' : 'text-sp-text'}`}
         title={todo.text}
         onClick={onEdit}
       >

@@ -28,8 +28,9 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ categoryFilter }: KanbanViewProps) {
-  const { todos, categories, updateTodo, archiveCompleted } = useTodoStore();
+  const { todos, categories, updateTodo, archiveCompleted, addTodo } = useTodoStore();
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [quickAddText, setQuickAddText] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -84,6 +85,25 @@ export function KanbanView({ categoryFilter }: KanbanViewProps) {
         onClose={() => setEditingTodo(null)}
       />
     )}
+    <div className="flex items-center gap-2 mb-3">
+      <input
+        type="text"
+        value={quickAddText}
+        onChange={(e) => setQuickAddText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && quickAddText.trim()) { void addTodo(quickAddText.trim()); setQuickAddText(''); }}}
+        placeholder="새 할 일 추가..."
+        className="flex-1 bg-sp-surface text-sp-text text-sm px-3 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none placeholder:text-sp-muted"
+      />
+      <button
+        type="button"
+        onClick={() => { if (quickAddText.trim()) { void addTodo(quickAddText.trim()); setQuickAddText(''); }}}
+        disabled={!quickAddText.trim()}
+        className="flex items-center gap-1.5 bg-sp-accent hover:bg-blue-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+      >
+        <span className="material-symbols-outlined text-icon">add</span>
+        추가
+      </button>
+    </div>
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="flex gap-4 h-[calc(100vh-320px)] min-h-[400px]">
         {KANBAN_COLUMNS.map(col => (

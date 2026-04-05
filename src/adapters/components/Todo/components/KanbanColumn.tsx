@@ -41,7 +41,7 @@ export function KanbanColumn({ columnKey, label, colorClass, todos, count, categ
           <div className="flex flex-col items-center justify-center py-8 text-sp-muted text-xs
                           border-2 border-dashed border-sp-border/30 rounded-lg m-1">
             <span className="material-symbols-outlined text-2xl mb-1 opacity-30">add_circle_outline</span>
-            <span>드래그하여 추가</span>
+            <span>드래그하여 이동</span>
           </div>
         )}
       </div>

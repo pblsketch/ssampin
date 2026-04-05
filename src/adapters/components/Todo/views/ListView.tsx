@@ -38,7 +38,8 @@ interface ListViewProps {
 }
 
 export function ListView({ categoryFilter }: ListViewProps) {
-  const { todos, categories, toggleTodo, updateTodo, archiveCompleted } = useTodoStore();
+  const { todos, categories, toggleTodo, updateTodo, archiveCompleted, addTodo } = useTodoStore();
+  const [quickAddText, setQuickAddText] = useState('');
 
   const activeTodos = useMemo(() => {
     let filtered = filterActive(todos);
@@ -85,6 +86,26 @@ export function ListView({ categoryFilter }: ListViewProps) {
   }, [activeTodos, categories, groupBy]);
 
   return (
+    <>
+    <div className="flex items-center gap-2 mb-3">
+      <input
+        type="text"
+        value={quickAddText}
+        onChange={(e) => setQuickAddText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && quickAddText.trim()) { void addTodo(quickAddText.trim()); setQuickAddText(''); }}}
+        placeholder="새 할 일 추가..."
+        className="flex-1 bg-sp-surface text-sp-text text-sm px-3 py-2 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none placeholder:text-sp-muted"
+      />
+      <button
+        type="button"
+        onClick={() => { if (quickAddText.trim()) { void addTodo(quickAddText.trim()); setQuickAddText(''); }}}
+        disabled={!quickAddText.trim()}
+        className="flex items-center gap-1.5 bg-sp-accent hover:bg-blue-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+      >
+        <span className="material-symbols-outlined text-icon">add</span>
+        추가
+      </button>
+    </div>
     <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
       {/* 그룹핑 선택 */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-sp-border/50 bg-sp-surface">
@@ -179,6 +200,7 @@ export function ListView({ categoryFilter }: ListViewProps) {
         />
       )}
     </div>
+    </>
   );
 }
 

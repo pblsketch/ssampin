@@ -16,7 +16,6 @@ const VIEW_OPTIONS: { key: TodoViewMode; label: string; icon: string }[] = [
 ];
 
 const LAYOUT_OPTIONS: { key: TodoProLayout; label: string; icon: string; desc: string }[] = [
-  { key: 'default', label: '기본', icon: 'crop_square', desc: '중앙 정렬 (max-w-3xl)' },
   { key: 'wide', label: '와이드', icon: 'width_wide', desc: '전체 폭 사용' },
   { key: 'dual', label: '듀얼 패널', icon: 'view_sidebar', desc: '좌우 분할 뷰' },
 ];
@@ -110,7 +109,7 @@ export function TodoTab({ draft, patch }: Props) {
                   type="button"
                   onClick={() => updateTodoSettings({ proLayout: key })}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border transition-all text-left ${
-                    (todoSettings.proLayout ?? 'default') === key
+                    (todoSettings.proLayout ?? 'wide') === key
                       ? 'border-sp-accent bg-sp-accent/10 text-sp-accent'
                       : 'border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
                   }`}

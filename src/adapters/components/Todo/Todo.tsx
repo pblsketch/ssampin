@@ -28,6 +28,7 @@ import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { RECURRENCE_PRESETS, getRecurrenceLabel } from '@domain/valueObjects/TodoRecurrence';
 import { TodoCategoryModal } from './TodoCategoryModal';
+import { TodoEditModal } from './components/TodoEditModal';
 import { DatePopover } from './components/DatePopover';
 import {
   DndContext,
@@ -46,6 +47,8 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { formatDistanceToNow, isToday, isThisWeek, isThisMonth, parseISO } from 'date-fns';
+import { ko } from 'date-fns/locale';
 
 type DateFilter = 'all' | 'today' | 'week';
 type ViewMode = 'active' | 'archive';
@@ -184,7 +187,8 @@ export function Todo() {
   // 프로 모드 상태
   const todoSettings = settings.todoSettings ?? DEFAULT_TODO_SETTINGS;
   const isProMode = todoSettings.mode === 'pro';
-  const proLayout = isProMode ? (todoSettings.proLayout ?? 'default') : 'default';
+  const proLayout = isProMode ? (todoSettings.proLayout ?? 'wide') : 'wide';
+  const [dualEditTodo, setDualEditTodo] = useState<TodoType | null>(null);
   const [proViewMode, setProViewMode] = useState<TodoViewMode>(
     todoSettings.lastView ?? todoSettings.defaultView ?? 'todo',
   );
@@ -391,9 +395,7 @@ export function Todo() {
 
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto p-8">
-        <div className={`mx-auto flex flex-col gap-6 ${
-          proLayout === 'wide' || proLayout === 'dual' ? 'max-w-full' : 'max-w-3xl'
-        }`}>
+        <div className="mx-auto flex flex-col gap-6 max-w-full">
           {viewMode === 'active' ? (
             <>
               {/* 필터 탭 */}
@@ -503,6 +505,7 @@ export function Todo() {
               {/* 프로 모드 뷰 분기 */}
               {isProMode && proViewMode !== 'todo' ? (
                 proLayout === 'dual' ? (
+                  <>
                   <div className="flex gap-6 min-h-[500px]">
                     <div className="flex-1 min-w-0">
                       <Suspense fallback={<div className="flex items-center justify-center py-16 text-sp-muted">뷰 로딩 중...</div>}>
@@ -519,7 +522,8 @@ export function Todo() {
                       {filtered.map(todo => (
                         <div
                           key={todo.id}
-                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
+                          onClick={() => setDualEditTodo(todo)}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer ${
                             todo.completed ? 'text-sp-muted line-through' : 'text-sp-text'
                           } hover:bg-sp-surface transition-colors`}
                         >
@@ -527,6 +531,7 @@ export function Todo() {
                             type="checkbox"
                             checked={todo.completed}
                             onChange={() => void toggleTodo(todo.id)}
+                            onClick={e => e.stopPropagation()}
                             className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent shrink-0"
                           />
                           <span className="truncate">{todo.text}</span>
@@ -539,6 +544,15 @@ export function Todo() {
                       ))}
                     </div>
                   </div>
+                  {dualEditTodo && (
+                    <TodoEditModal
+                      todo={dualEditTodo}
+                      categories={categories}
+                      onUpdate={(id, changes) => { void updateTodo(id, changes); }}
+                      onClose={() => setDualEditTodo(null)}
+                    />
+                  )}
+                  </>
                 ) : (
                   <Suspense fallback={<div className="flex items-center justify-center py-16 text-sp-muted">뷰 로딩 중...</div>}>
                     {proViewMode === 'kanban' && <KanbanView categoryFilter={categoryFilter} />}
@@ -868,9 +882,146 @@ interface ArchiveViewProps {
   onBack: () => void;
 }
 
+type ArchiveDateGroup = '오늘' | '이번 주' | '이번 달' | '그 이전';
+
+function getArchiveDateGroup(archivedAt: string | undefined): ArchiveDateGroup {
+  if (!archivedAt) return '그 이전';
+  const date = parseISO(archivedAt);
+  if (isToday(date)) return '오늘';
+  if (isThisWeek(date, { weekStartsOn: 1 })) return '이번 주';
+  if (isThisMonth(date)) return '이번 달';
+  return '그 이전';
+}
+
+const ARCHIVE_GROUP_ORDER: ArchiveDateGroup[] = ['오늘', '이번 주', '이번 달', '그 이전'];
+
 function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBack }: ArchiveViewProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+
+  type ArchiveDateFilter = 'all' | 'today' | 'thisWeek' | 'thisMonth' | 'custom';
+  const [dateFilter, setDateFilter] = useState<ArchiveDateFilter>('all');
+  const [customDateFrom, setCustomDateFrom] = useState('');
+  const [customDateTo, setCustomDateTo] = useState('');
+
+  // Filter
+  const filteredTodos = useMemo(() => {
+    let result = [...todos];
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((t) => t.text.toLowerCase().includes(q));
+    }
+    if (selectedCategoryId) {
+      result = result.filter((t) => t.category === selectedCategoryId);
+    }
+    if (dateFilter !== 'all') {
+      result = result.filter((t) => {
+        if (!t.archivedAt) return false;
+        const date = parseISO(t.archivedAt);
+        if (dateFilter === 'today') return isToday(date);
+        if (dateFilter === 'thisWeek') return isThisWeek(date, { weekStartsOn: 1 });
+        if (dateFilter === 'thisMonth') return isThisMonth(date);
+        if (dateFilter === 'custom') {
+          const dateStr = t.archivedAt.slice(0, 10);
+          if (customDateFrom && customDateTo) return dateStr >= customDateFrom && dateStr <= customDateTo;
+          if (customDateFrom) return dateStr >= customDateFrom;
+          if (customDateTo) return dateStr <= customDateTo;
+        }
+        return true;
+      });
+    }
+    // Sort by archivedAt descending
+    result.sort((a, b) => {
+      const aTime = a.archivedAt ? new Date(a.archivedAt).getTime() : 0;
+      const bTime = b.archivedAt ? new Date(b.archivedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+    return result;
+  }, [todos, searchQuery, selectedCategoryId, dateFilter, customDateFrom, customDateTo]);
+
+  // Group by archive date
+  const grouped = useMemo(() => {
+    const groups = new Map<ArchiveDateGroup, TodoType[]>();
+    for (const todo of filteredTodos) {
+      const group = getArchiveDateGroup(todo.archivedAt);
+      const arr = groups.get(group);
+      if (arr) arr.push(todo);
+      else groups.set(group, [todo]);
+    }
+    return groups;
+  }, [filteredTodos]);
+
+  // Categories that have archived items
+  const activeCategories = useMemo(() => {
+    const catIds = new Set(todos.map((t) => t.category).filter(Boolean));
+    return categories.filter((c) => catIds.has(c.id));
+  }, [todos, categories]);
+
+  // Selection helpers
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(filteredTodos.map((t) => t.id)));
+  }, [filteredTodos]);
+
+  const deselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const allSelected = filteredTodos.length > 0 && selectedIds.size === filteredTodos.length;
+
+  // Batch actions
+  const handleBatchRestore = useCallback(() => {
+    for (const id of selectedIds) {
+      onRestore(id);
+    }
+    setSelectedIds(new Set());
+  }, [selectedIds, onRestore]);
+
+  const handleBatchDelete = useCallback(() => {
+    for (const id of selectedIds) {
+      onDelete(id);
+    }
+    setSelectedIds(new Set());
+    setConfirmBatchDelete(false);
+  }, [selectedIds, onDelete]);
+
+  const handleDeleteSingle = useCallback((id: string) => {
+    onDelete(id);
+    setConfirmDeleteId(null);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, [onDelete]);
+
+  const handleDeleteAll = useCallback(() => {
+    onDeleteAll();
+    setSelectedIds(new Set());
+    setConfirmDeleteAll(false);
+  }, [onDeleteAll]);
+
+  const priorityDotColor: Record<string, string> = {
+    high: 'bg-red-400',
+    medium: 'bg-amber-400',
+    low: 'bg-blue-400',
+  };
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-16">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -885,65 +1036,345 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
         <span className="text-sm text-sp-muted">({todos.length}건)</span>
       </div>
 
-      {todos.length === 0 ? (
+      {/* Search bar */}
+      <div className="relative">
+        <span className="material-symbols-outlined text-icon-md text-sp-muted absolute left-3 top-1/2 -translate-y-1/2">
+          search
+        </span>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="아카이브 검색..."
+          className="w-full pl-10 pr-4 py-2 rounded-lg bg-sp-surface ring-1 ring-sp-border text-sm text-sp-text placeholder:text-sp-muted/50 focus:outline-none focus:ring-sp-accent transition-colors"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-sp-muted hover:text-sp-text"
+          >
+            <span className="material-symbols-outlined text-icon-sm">close</span>
+          </button>
+        )}
+      </div>
+
+      {/* Date filter */}
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              { key: 'all', label: '전체' },
+              { key: 'today', label: '오늘' },
+              { key: 'thisWeek', label: '이번 주' },
+              { key: 'thisMonth', label: '이번 달' },
+              { key: 'custom', label: '직접 설정' },
+            ] as { key: 'all' | 'today' | 'thisWeek' | 'thisMonth' | 'custom'; label: string }[]
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setDateFilter(key)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                dateFilter === key
+                  ? 'bg-sp-accent/20 text-sp-accent ring-1 ring-sp-accent/40'
+                  : 'bg-sp-surface text-sp-muted ring-1 ring-sp-border hover:text-sp-text'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          {dateFilter !== 'all' && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateFilter('all');
+                setCustomDateFrom('');
+                setCustomDateTo('');
+              }}
+              className="ml-1 text-sp-muted hover:text-sp-text transition-colors"
+              title="날짜 필터 초기화"
+            >
+              <span className="material-symbols-outlined text-icon-sm">close</span>
+            </button>
+          )}
+        </div>
+        {dateFilter === 'custom' && (
+          <div className="flex items-center gap-2 bg-sp-surface/50 rounded-lg px-3 py-2 ring-1 ring-sp-border">
+            <span className="text-xs text-sp-muted flex-shrink-0">시작일</span>
+            <input
+              type="date"
+              value={customDateFrom}
+              onChange={(e) => setCustomDateFrom(e.target.value)}
+              style={{ colorScheme: 'dark' }}
+              className="flex-1 min-w-0 bg-sp-surface rounded px-2 py-1 text-xs text-sp-text ring-1 ring-sp-border focus:outline-none focus:ring-sp-accent transition-colors"
+            />
+            <span className="text-xs text-sp-muted flex-shrink-0">—</span>
+            <span className="text-xs text-sp-muted flex-shrink-0">종료일</span>
+            <input
+              type="date"
+              value={customDateTo}
+              onChange={(e) => setCustomDateTo(e.target.value)}
+              style={{ colorScheme: 'dark' }}
+              className="flex-1 min-w-0 bg-sp-surface rounded px-2 py-1 text-xs text-sp-text ring-1 ring-sp-border focus:outline-none focus:ring-sp-accent transition-colors"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Category filter chips */}
+      {activeCategories.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedCategoryId(null)}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+              selectedCategoryId === null
+                ? 'bg-sp-accent/20 text-sp-accent ring-1 ring-sp-accent/40'
+                : 'bg-sp-surface text-sp-muted ring-1 ring-sp-border hover:text-sp-text'
+            }`}
+          >
+            전체
+          </button>
+          {activeCategories.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setSelectedCategoryId(selectedCategoryId === cat.id ? null : cat.id)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                selectedCategoryId === cat.id
+                  ? `${CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'} ring-1 ring-current`
+                  : 'bg-sp-surface text-sp-muted ring-1 ring-sp-border hover:text-sp-text'
+              }`}
+            >
+              {cat.icon} {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      {filteredTodos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
           <span className="material-symbols-outlined text-5xl mb-3 opacity-40">
             inventory_2
           </span>
-          <p className="text-lg">아카이브가 비어있습니다</p>
+          <p className="text-lg">
+            {todos.length === 0
+              ? '아카이브가 비어있습니다'
+              : dateFilter !== 'all' || searchQuery || selectedCategoryId
+              ? '필터 조건에 맞는 항목이 없습니다'
+              : '검색 결과가 없습니다'}
+          </p>
         </div>
       ) : (
-        <>
-          <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
-            {todos.map((todo) => {
-              const cat = categories.find((c) => c.id === todo.category);
-              return (
-                <div
-                  key={todo.id}
-                  className="flex items-center gap-3 px-4 py-2.5 border-t border-sp-border/50 first:border-t-0"
-                >
-                  <Checkbox checked={true} />
-                  <span className="flex-1 text-sm text-sp-muted line-through opacity-50">
-                    {todo.text}
+        <div className="flex flex-col gap-3">
+          {ARCHIVE_GROUP_ORDER.map((groupLabel) => {
+            const items = grouped.get(groupLabel);
+            if (!items || items.length === 0) return null;
+            return (
+              <div key={groupLabel}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold text-sp-muted uppercase tracking-wider">
+                    {groupLabel}
                   </span>
-                  {cat && (
-                    <span className={`text-caption px-1.5 py-0.5 rounded ${CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'}`}>
-                      {cat.icon}
-                    </span>
-                  )}
-                  {todo.dueDate && (
-                    <span className="text-xs text-sp-muted/50">{formatDueDate(todo.dueDate)}</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onRestore(todo.id)}
-                    className="px-2 py-1 rounded-lg text-xs font-medium text-sp-accent hover:bg-sp-accent/10 transition-colors"
-                  >
-                    복원
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(todo.id)}
-                    className="px-2 py-1 rounded-lg text-xs font-medium text-red-400 hover:bg-red-400/10 transition-colors"
-                  >
-                    삭제
-                  </button>
+                  <span className="text-xs text-sp-muted/50">({items.length})</span>
+                  <div className="flex-1 h-px bg-sp-border/50" />
                 </div>
-              );
-            })}
-          </div>
+                <div className="bg-sp-card rounded-xl ring-1 ring-sp-border overflow-hidden">
+                  {items.map((todo) => {
+                    const cat = categories.find((c) => c.id === todo.category);
+                    const isConfirming = confirmDeleteId === todo.id;
+                    const subTaskCount = todo.subTasks?.length ?? 0;
 
-          <div className="flex justify-center">
+                    return (
+                      <div
+                        key={todo.id}
+                        className={`flex items-center gap-3 px-4 py-2.5 border-t border-sp-border/50 first:border-t-0 transition-colors ${
+                          selectedIds.has(todo.id) ? 'bg-sp-accent/5' : ''
+                        }`}
+                      >
+                        {/* Selection checkbox */}
+                        <button
+                          type="button"
+                          onClick={() => toggleSelect(todo.id)}
+                          className="flex-shrink-0"
+                        >
+                          <div
+                            className={`flex h-[18px] w-[18px] items-center justify-center rounded transition-colors ${
+                              selectedIds.has(todo.id)
+                                ? 'border border-sp-accent bg-sp-accent'
+                                : 'border border-sp-border hover:border-sp-accent'
+                            }`}
+                          >
+                            {selectedIds.has(todo.id) && (
+                              <svg viewBox="0 0 10 8" fill="none" className="h-2.5 w-2.5">
+                                <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+
+                        {/* Priority dot */}
+                        {todo.priority && todo.priority !== 'none' && (
+                          <span className={`h-2 w-2 rounded-full flex-shrink-0 ${priorityDotColor[todo.priority] ?? ''}`} />
+                        )}
+
+                        {/* Todo text */}
+                        <span className="flex-1 text-sm text-sp-muted line-through opacity-50 truncate">
+                          {todo.text}
+                        </span>
+
+                        {/* Subtask count */}
+                        {subTaskCount > 0 && (
+                          <span className="text-xs text-sp-muted/50 flex items-center gap-0.5 flex-shrink-0">
+                            <span className="material-symbols-outlined text-[14px]">subdirectory_arrow_right</span>
+                            하위 {subTaskCount}건
+                          </span>
+                        )}
+
+                        {/* Category badge */}
+                        {cat && (
+                          <span className={`text-caption px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_COLORS[cat.color] ?? 'bg-gray-500/20 text-gray-400'}`}>
+                            {cat.icon} {cat.name}
+                          </span>
+                        )}
+
+                        {/* Due date */}
+                        {todo.dueDate && (
+                          <span className="text-xs text-sp-muted/50 flex-shrink-0">{formatDueDate(todo.dueDate)}</span>
+                        )}
+
+                        {/* Archived date */}
+                        {todo.archivedAt && (
+                          <span className="text-xs text-sp-muted/40 flex-shrink-0">
+                            {formatDistanceToNow(parseISO(todo.archivedAt), { addSuffix: true, locale: ko })}
+                          </span>
+                        )}
+
+                        {/* Actions */}
+                        {isConfirming ? (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <span className="text-xs text-red-400 mr-1">삭제?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSingle(todo.id)}
+                              className="px-2 py-1 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                            >
+                              확인
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="px-2 py-1 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text transition-colors"
+                            >
+                              취소
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => onRestore(todo.id)}
+                              className="px-2 py-1 rounded-lg text-xs font-medium text-sp-accent hover:bg-sp-accent/10 transition-colors"
+                            >
+                              복원
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(todo.id)}
+                              className="px-2 py-1 rounded-lg text-xs font-medium text-red-400 hover:bg-red-400/10 transition-colors"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Batch actions bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-xl bg-sp-card ring-1 ring-sp-border shadow-2xl shadow-black/40">
+          <span className="text-sm text-sp-text font-medium">{selectedIds.size}건 선택됨</span>
+          <div className="w-px h-5 bg-sp-border" />
+          <button
+            type="button"
+            onClick={allSelected ? deselectAll : selectAll}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+          >
+            {allSelected ? '선택 해제' : '전체 선택'}
+          </button>
+          <button
+            type="button"
+            onClick={handleBatchRestore}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-sp-accent bg-sp-accent/10 hover:bg-sp-accent/20 transition-colors"
+          >
+            일괄 복원
+          </button>
+          {confirmBatchDelete ? (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-red-400">삭제?</span>
+              <button
+                type="button"
+                onClick={handleBatchDelete}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+              >
+                확인
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmBatchDelete(false)}
+                className="px-2 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={onDeleteAll}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-red-400 hover:bg-red-400/10 ring-1 ring-red-400/30 transition-colors"
+              onClick={() => setConfirmBatchDelete(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 bg-red-400/10 hover:bg-red-400/20 transition-colors"
             >
-              <span className="material-symbols-outlined text-icon-md">delete_forever</span>
+              일괄 삭제
+            </button>
+          )}
+          <div className="w-px h-5 bg-sp-border" />
+          {confirmDeleteAll ? (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-red-400">전체?</span>
+              <button
+                type="button"
+                onClick={handleDeleteAll}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+              >
+                확인
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteAll(false)}
+                className="px-2 py-1.5 rounded-lg text-xs font-medium text-sp-muted hover:text-sp-text transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteAll(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-400/10 ring-1 ring-red-400/30 transition-colors"
+            >
+              <span className="material-symbols-outlined text-icon-sm align-middle mr-1">delete_forever</span>
               전체 삭제
             </button>
-          </div>
-        </>
+          )}
+        </div>
       )}
     </div>
   );
