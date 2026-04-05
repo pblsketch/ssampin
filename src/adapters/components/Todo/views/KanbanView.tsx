@@ -28,7 +28,7 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ categoryFilter }: KanbanViewProps) {
-  const { todos, categories, updateTodo } = useTodoStore();
+  const { todos, categories, updateTodo, archiveCompleted } = useTodoStore();
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
 
   const sensors = useSensors(
@@ -100,6 +100,20 @@ export function KanbanView({ categoryFilter }: KanbanViewProps) {
         ))}
       </div>
     </DndContext>
+
+    {/* 완료 항목 아카이브 */}
+    {columns.done.length > 0 && (
+      <div className="flex justify-center mt-4">
+        <button
+          type="button"
+          onClick={() => void archiveCompleted()}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-sp-muted hover:text-sp-text bg-sp-card hover:bg-sp-surface ring-1 ring-sp-border transition-colors"
+        >
+          <span className="text-base">📦</span>
+          완료 항목 모두 아카이브 ({columns.done.length}건)
+        </button>
+      </div>
+    )}
     </>
   );
 }
