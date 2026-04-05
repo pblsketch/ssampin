@@ -88,10 +88,16 @@ export const useTodoStore = create<TodoState>((set, get) => {
     toggleTodo: async (id) => {
       // 즉시 UI 업데이트 (낙관적)
       const target = get().todos.find((t) => t.id === id);
+      const nextCompleted = target ? !target.completed : true;
       set((state) => ({
-        todos: state.todos.map((todo) =>
-          todo.id === id ? { ...todo, completed: !todo.completed } : todo,
-        ),
+        todos: state.todos.map((todo) => {
+          if (todo.id !== id) return todo;
+          // 서브태스크가 있으면 모두 동기화
+          const subTasks = (todo.subTasks && todo.subTasks.length > 0)
+            ? todo.subTasks.map((st) => ({ ...st, completed: nextCompleted }))
+            : todo.subTasks;
+          return { ...todo, completed: nextCompleted, subTasks };
+        }),
       }));
 
       const nextTodo = await manageTodos.toggleTodo(id);
@@ -145,7 +151,11 @@ export const useTodoStore = create<TodoState>((set, get) => {
           const subTasks = (todo.subTasks ?? []).map((st) =>
             st.id === subTaskId ? { ...st, completed: !st.completed } : st,
           );
-          return { ...todo, subTasks };
+          const allDone = subTasks.length > 0 && subTasks.every((st) => st.completed);
+          const anyUndone = subTasks.some((st) => !st.completed);
+          const completed = allDone ? true : anyUndone ? false : todo.completed;
+          const status = allDone ? 'done' as const : anyUndone && todo.status === 'done' ? 'todo' as const : todo.status;
+          return { ...todo, subTasks, completed, status };
         }),
       }));
       await manageTodos.toggleSubTask(todoId, subTaskId);

@@ -28,7 +28,7 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ categoryFilter }: KanbanViewProps) {
-  const { todos, categories, updateTodo, archiveCompleted, addTodo } = useTodoStore();
+  const { todos, categories, updateTodo, archiveCompleted, addTodo, toggleSubTask } = useTodoStore();
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [quickAddText, setQuickAddText] = useState('');
 
@@ -116,6 +116,7 @@ export function KanbanView({ categoryFilter }: KanbanViewProps) {
             count={columns[col.key].length}
             categories={categories}
             onEdit={(t) => setEditingTodo(t)}
+            onToggleSubTask={toggleSubTask}
           />
         ))}
       </div>

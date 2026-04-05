@@ -38,7 +38,7 @@ interface ListViewProps {
 }
 
 export function ListView({ categoryFilter }: ListViewProps) {
-  const { todos, categories, toggleTodo, updateTodo, archiveCompleted, addTodo } = useTodoStore();
+  const { todos, categories, toggleTodo, toggleSubTask, updateTodo, archiveCompleted, addTodo } = useTodoStore();
   const [quickAddText, setQuickAddText] = useState('');
 
   const activeTodos = useMemo(() => {
@@ -159,6 +159,7 @@ export function ListView({ categoryFilter }: ListViewProps) {
                 todo={todo}
                 categories={categories}
                 onToggle={toggleTodo}
+                onToggleSubTask={toggleSubTask}
                 onStatusChange={(id, status) => void updateTodo(id, { status })}
                 onEdit={(t) => setEditingTodo(t)}
               />
@@ -210,88 +211,137 @@ interface ListViewRowProps {
   todo: Todo;
   categories: readonly TodoCategory[];
   onToggle: (id: string) => void;
+  onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onStatusChange: (id: string, status: 'todo' | 'inProgress' | 'done') => void;
   onEdit: (todo: Todo) => void;
 }
 
-function ListViewRow({ todo, categories, onToggle, onStatusChange, onEdit }: ListViewRowProps) {
+function ListViewRow({ todo, categories, onToggle, onToggleSubTask, onStatusChange, onEdit }: ListViewRowProps) {
   const category = categories.find(c => c.id === todo.category);
   const priority = todo.priority && todo.priority !== 'none' ? PRIORITY_CONFIG[todo.priority] : null;
   const status = inferStatus(todo);
   const overdue = isOverdue(todo);
+  const [expanded, setExpanded] = useState(false);
+
+  const hasSubTasks = todo.subTasks && todo.subTasks.length > 0;
+  const completedCount = hasSubTasks ? todo.subTasks!.filter(s => s.completed).length : 0;
+  const totalCount = hasSubTasks ? todo.subTasks!.length : 0;
+  const progressRatio = totalCount > 0 ? completedCount / totalCount : 0;
 
   return (
-    <div className="flex items-center px-4 py-2.5 border-b border-sp-border/20 hover:bg-sp-surface/30 transition-colors group cursor-pointer" onClick={() => onEdit(todo)}>
-      {/* 체크박스 */}
-      <div className="w-8" onClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          checked={todo.completed}
-          onChange={() => onToggle(todo.id)}
-          className="w-4 h-4 rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface cursor-pointer"
-        />
-      </div>
+    <div className="border-b border-sp-border/20">
+      <div className="flex items-center px-4 py-2.5 hover:bg-sp-surface/30 transition-colors group cursor-pointer" onClick={() => onEdit(todo)}>
+        {/* 체크박스 */}
+        <div className="w-8" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={todo.completed}
+            onChange={() => onToggle(todo.id)}
+            className="w-4 h-4 rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface cursor-pointer"
+          />
+        </div>
 
-      {/* 할 일 텍스트 */}
-      <div className="flex-[3] min-w-0">
-        <span className={`text-sm truncate ${todo.completed ? 'line-through text-sp-muted' : 'text-sp-text'}`}>
-          {todo.text}
-        </span>
-        {todo.subTasks && todo.subTasks.length > 0 && (
-          <span className="text-xs text-sp-muted ml-2">
-            ✓ {todo.subTasks.filter(s => s.completed).length}/{todo.subTasks.length}
+        {/* 할 일 텍스트 */}
+        <div className="flex-[3] min-w-0 flex items-center gap-1">
+          <span className={`text-sm truncate ${todo.completed ? 'line-through text-sp-muted' : 'text-sp-text'}`}>
+            {todo.text}
           </span>
-        )}
-      </div>
-
-      {/* 카테고리 */}
-      <div className="flex-1 hidden sm:block">
-        {category && (
-          <span className="text-xs px-1.5 py-0.5 rounded-full bg-sp-surface text-sp-muted">
-            {category.icon} {category.name}
-          </span>
-        )}
-      </div>
-
-      {/* 마감일 */}
-      <div className="flex-1">
-        {todo.dueDate && (
-          <span className={`text-xs ${overdue ? 'text-red-400 font-medium' : 'text-sp-muted'}`}>
-            {todo.dueDate.slice(5)}
-          </span>
-        )}
-      </div>
-
-      {/* 우선순위 */}
-      <div className="flex-1 hidden sm:block">
-        {priority && (
-          <span className="text-xs">{priority.icon} {priority.label}</span>
-        )}
-      </div>
-
-      {/* 상태 */}
-      <div className="flex-1" onClick={(e) => e.stopPropagation()}>
-        <div className="flex gap-1">
-          {([
-            { key: 'todo' as const, label: '할 일' },
-            { key: 'inProgress' as const, label: '진행 중' },
-            { key: 'done' as const, label: '완료' },
-          ]).map(s => (
+          {hasSubTasks && (
             <button
-              key={s.key}
               type="button"
-              onClick={() => onStatusChange(todo.id, s.key)}
-              className={`text-[10px] px-1.5 py-0.5 rounded-full transition-colors ${
-                status === s.key
-                  ? 'bg-sp-accent/20 text-sp-accent font-medium'
-                  : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-              }`}
+              onClick={(e) => { e.stopPropagation(); setExpanded(prev => !prev); }}
+              className="flex items-center gap-0.5 text-xs text-sp-muted hover:text-sp-accent transition-colors shrink-0 ml-1"
             >
-              {s.label}
+              <span className="material-symbols-outlined transition-transform duration-200" style={{ fontSize: '14px', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                expand_more
+              </span>
+              <span>✓ {completedCount}/{totalCount}</span>
             </button>
-          ))}
+          )}
+        </div>
+
+        {/* 카테고리 */}
+        <div className="flex-1 hidden sm:block">
+          {category && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-sp-surface text-sp-muted">
+              {category.icon} {category.name}
+            </span>
+          )}
+        </div>
+
+        {/* 마감일 */}
+        <div className="flex-1">
+          {todo.dueDate && (
+            <span className={`text-xs ${overdue ? 'text-red-400 font-medium' : 'text-sp-muted'}`}>
+              {todo.dueDate.slice(5)}
+            </span>
+          )}
+        </div>
+
+        {/* 우선순위 */}
+        <div className="flex-1 hidden sm:block">
+          {priority && (
+            <span className="text-xs">{priority.icon} {priority.label}</span>
+          )}
+        </div>
+
+        {/* 상태 */}
+        <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+          <div className="flex gap-1">
+            {([
+              { key: 'todo' as const, label: '할 일' },
+              { key: 'inProgress' as const, label: '진행 중' },
+              { key: 'done' as const, label: '완료' },
+            ]).map(s => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => onStatusChange(todo.id, s.key)}
+                className={`text-[10px] px-1.5 py-0.5 rounded-full transition-colors ${
+                  status === s.key
+                    ? 'bg-sp-accent/20 text-sp-accent font-medium'
+                    : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* 서브태스크 확장 패널 */}
+      {hasSubTasks && (
+        <div
+          className="overflow-hidden transition-all duration-200"
+          style={{ maxHeight: expanded ? `${totalCount * 32 + 20}px` : '0px' }}
+        >
+          <div className="pl-12 pr-4 pb-2 bg-sp-surface/20 border-l-2 border-sp-accent/30">
+            {/* 진행 바 */}
+            <div className="h-1 rounded-full bg-sp-border mb-2 mt-1.5">
+              <div
+                className="h-1 rounded-full bg-sp-accent transition-all duration-300"
+                style={{ width: `${progressRatio * 100}%` }}
+              />
+            </div>
+            {/* 서브태스크 목록 */}
+            {todo.subTasks!.map(st => (
+              <div key={st.id} className="flex items-center gap-2 py-0.5">
+                <input
+                  type="checkbox"
+                  checked={st.completed}
+                  onChange={(e) => { e.stopPropagation(); void onToggleSubTask(todo.id, st.id); }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent/30 bg-sp-surface cursor-pointer shrink-0"
+                />
+                <span className={`text-xs ${st.completed ? 'line-through text-sp-muted/50' : 'text-sp-muted'}`}>
+                  {st.text}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

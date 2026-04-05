@@ -11,9 +11,10 @@ interface KanbanColumnProps {
   count: number;
   categories: readonly TodoCategory[];
   onEdit?: (todo: Todo) => void;
+  onToggleSubTask?: (todoId: string, subTaskId: string) => Promise<void>;
 }
 
-export function KanbanColumn({ columnKey, label, colorClass, todos, count, categories, onEdit }: KanbanColumnProps) {
+export function KanbanColumn({ columnKey, label, colorClass, todos, count, categories, onEdit, onToggleSubTask }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${columnKey}`,
     data: { columnKey },
@@ -34,7 +35,7 @@ export function KanbanColumn({ columnKey, label, colorClass, todos, count, categ
       <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[100px]">
         <SortableContext items={todos.map(t => t.id)} strategy={verticalListSortingStrategy}>
           {todos.map(todo => (
-            <KanbanCard key={todo.id} todo={todo} columnKey={columnKey} categories={categories} onEdit={onEdit} />
+            <KanbanCard key={todo.id} todo={todo} columnKey={columnKey} categories={categories} onEdit={onEdit} onToggleSubTask={onToggleSubTask} />
           ))}
         </SortableContext>
         {todos.length === 0 && (

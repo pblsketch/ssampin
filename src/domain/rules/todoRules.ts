@@ -197,12 +197,17 @@ export function inferStatus(todo: Todo): TodoStatus {
 
 /** 프로 모드에서 상태 변경 시 양쪽 필드 모두 업데이트 */
 export function applyStatusChange(
-  _todo: Todo,
+  todo: Todo,
   newStatus: TodoStatus,
 ): Partial<Todo> {
+  const completed = newStatus === 'done';
+  const subTasks = (todo.subTasks && todo.subTasks.length > 0)
+    ? todo.subTasks.map((st) => ({ ...st, completed }))
+    : todo.subTasks;
   return {
     status: newStatus,
-    completed: newStatus === 'done',
+    completed,
+    subTasks,
   };
 }
 
