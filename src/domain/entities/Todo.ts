@@ -1,3 +1,6 @@
+/** 프로 모드 진행 상태 */
+export type TodoStatus = 'todo' | 'inProgress' | 'done';
+
 /** 우선순위 레벨 */
 export type TodoPriority = 'high' | 'medium' | 'low' | 'none';
 
@@ -45,6 +48,10 @@ export interface Todo {
   readonly archivedAt?: string;       // ISO 8601 — 아카이브 시각
   readonly subTasks?: readonly SubTask[];
   readonly sortOrder?: number;        // 수동 정렬 순서
+
+  // === 프로 모드용 신규 필드 ===
+  /** 프로 모드 진행 상태. optional이므로 기존 데이터와 100% 호환. */
+  readonly status?: TodoStatus;
 }
 
 export interface TodosData {

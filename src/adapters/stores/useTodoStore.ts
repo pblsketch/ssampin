@@ -21,7 +21,7 @@ interface TodoState {
   ) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
-  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder' | 'time'>>) => Promise<void>;
+  updateTodo: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'recurrence' | 'dueDate' | 'subTasks' | 'sortOrder' | 'time' | 'status' | 'completed'>>) => Promise<void>;
 
   // 서브태스크
   addSubTask: (todoId: string, text: string) => Promise<void>;
@@ -105,12 +105,20 @@ export const useTodoStore = create<TodoState>((set, get) => {
     },
 
     updateTodo: async (id, changes) => {
+      // status ↔ completed 동기화
+      let syncedChanges = { ...changes };
+      if (syncedChanges.status !== undefined) {
+        syncedChanges = { ...syncedChanges, completed: syncedChanges.status === 'done' };
+      } else if (syncedChanges.completed !== undefined) {
+        syncedChanges = { ...syncedChanges, status: syncedChanges.completed ? 'done' : 'todo' };
+      }
+
       set((state) => ({
         todos: state.todos.map((todo) =>
-          todo.id === id ? { ...todo, ...changes } : todo,
+          todo.id === id ? { ...todo, ...syncedChanges } : todo,
         ),
       }));
-      await manageTodos.updateTodo(id, changes);
+      await manageTodos.updateTodo(id, syncedChanges);
     },
 
     addSubTask: async (todoId, text) => {

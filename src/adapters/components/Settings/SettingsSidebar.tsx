@@ -18,6 +18,7 @@ const TABS: TabDef[] = [
   { id: 'weather',  icon: 'cloud',                 label: '날씨',      color: 'bg-sky-500/10 text-sky-500' },
   { id: 'display',  icon: 'palette',               label: '디스플레이', color: 'bg-yellow-500/10 text-yellow-500' },
   { id: 'sidebar',  icon: 'menu',                  label: '사이드바',   color: 'bg-sp-surface text-sp-muted' },
+  { id: 'todo',     icon: 'checklist',             label: '할 일',     color: 'bg-green-500/10 text-green-400' },
   { id: 'sync',     icon: 'cloud_sync',            label: '구글 드라이브 동기화', color: 'bg-cyan-500/10 text-cyan-400' },
   { id: 'system',   icon: 'settings_applications', label: '시스템',     color: 'bg-gray-500/10 text-gray-400' },
   { id: 'about',    icon: 'info',                  label: '앱 정보',   color: 'bg-violet-500/10 text-violet-400' },

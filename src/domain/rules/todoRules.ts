@@ -1,4 +1,4 @@
-import type { Todo, TodoRecurrence } from '@domain/entities/Todo';
+import type { Todo, TodoRecurrence, TodoStatus, TodoCategory } from '@domain/entities/Todo';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 
 /** 할 일 정렬 모드 */
@@ -185,6 +185,84 @@ export function calculateNextDueDate(
   }
 
   return formatDate(date);
+}
+
+// ─── 프로 모드: 상태 동기화 ───
+
+/** completed로부터 status 값을 유추 (기존 데이터 호환용) */
+export function inferStatus(todo: Todo): TodoStatus {
+  if (todo.status) return todo.status;
+  return todo.completed ? 'done' : 'todo';
+}
+
+/** 프로 모드에서 상태 변경 시 양쪽 필드 모두 업데이트 */
+export function applyStatusChange(
+  _todo: Todo,
+  newStatus: TodoStatus,
+): Partial<Todo> {
+  return {
+    status: newStatus,
+    completed: newStatus === 'done',
+  };
+}
+
+/** status로부터 completed 값을 동기화 */
+export function syncStatusToCompleted(status: TodoStatus): boolean {
+  return status === 'done';
+}
+
+// ─── 프로 모드: 그룹핑 헬퍼 ───
+
+/** 카테고리별 그룹핑 — 미분류 항목 포함 */
+export function groupByCategory(
+  todos: readonly Todo[],
+  categories: readonly TodoCategory[],
+): Record<string, readonly Todo[]> {
+  const groups: Record<string, Todo[]> = {};
+
+  for (const cat of categories) {
+    const items = todos.filter(t => t.category === cat.id);
+    if (items.length > 0) {
+      groups[`${cat.icon} ${cat.name}`] = items;
+    }
+  }
+
+  const uncategorized = todos.filter(t => !t.category);
+  if (uncategorized.length > 0) {
+    groups['📌 미분류'] = uncategorized;
+  }
+
+  return groups;
+}
+
+/** 우선순위별 그룹핑 */
+export function groupByPriority(todos: readonly Todo[]): Record<string, readonly Todo[]> {
+  const groups: Record<string, readonly Todo[]> = {};
+  const high = todos.filter(t => t.priority === 'high');
+  const medium = todos.filter(t => t.priority === 'medium');
+  const low = todos.filter(t => t.priority === 'low');
+  const none = todos.filter(t => !t.priority || t.priority === 'none');
+
+  if (high.length > 0) groups['🔴 높음'] = high;
+  if (medium.length > 0) groups['🟡 보통'] = medium;
+  if (low.length > 0) groups['🔵 낮음'] = low;
+  if (none.length > 0) groups['⚪ 없음'] = none;
+
+  return groups;
+}
+
+/** 상태별 그룹핑 */
+export function groupByStatus(todos: readonly Todo[]): Record<string, readonly Todo[]> {
+  const groups: Record<string, readonly Todo[]> = {};
+  const todoItems = todos.filter(t => inferStatus(t) === 'todo');
+  const inProgressItems = todos.filter(t => inferStatus(t) === 'inProgress');
+  const doneItems = todos.filter(t => inferStatus(t) === 'done');
+
+  if (todoItems.length > 0) groups['📋 할 일'] = todoItems;
+  if (inProgressItems.length > 0) groups['🔄 진행 중'] = inProgressItems;
+  if (doneItems.length > 0) groups['✅ 완료'] = doneItems;
+
+  return groups;
 }
 
 /** Date → "YYYY-MM-DD" */

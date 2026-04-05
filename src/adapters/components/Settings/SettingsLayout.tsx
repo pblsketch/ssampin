@@ -16,6 +16,7 @@ import { SystemTab } from './tabs/SystemTab';
 import { AboutTab } from './tabs/AboutTab';
 import { SyncTab } from './tabs/SyncTab';
 import { AccountTab } from './tabs/AccountTab';
+import { TodoTab } from './tabs/TodoTab';
 interface Props {
   activeTab: SettingsTabId;
   onTabChange: (tab: SettingsTabId) => void;
@@ -142,6 +143,7 @@ function TabContent({ activeTab, draft, patch, setDraft }: {
     case 'weather':   return <WeatherTab draft={draft} patch={patch} />;
     case 'display':   return <DisplayTab draft={draft} patch={patch} />;
     case 'sidebar':   return <SidebarTab draft={draft} patch={patch} />;
+    case 'todo':      return <TodoTab draft={draft} patch={patch} />;
     case 'sync':      return <SyncTab />;
     case 'system':    return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
     case 'about':     return <AboutTab />;

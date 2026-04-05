@@ -8,7 +8,7 @@ import { SettingsLayout } from './SettingsLayout';
 
 export type SettingsTabId =
   | 'account' | 'school' | 'period' | 'widget' | 'seat' | 'security'
-  | 'calendar' | 'weather' | 'display' | 'sidebar' | 'sync' | 'system' | 'about';
+  | 'calendar' | 'weather' | 'display' | 'sidebar' | 'todo' | 'sync' | 'system' | 'about';
 
 export function SettingsPage() {
   const { track } = useAnalytics();
