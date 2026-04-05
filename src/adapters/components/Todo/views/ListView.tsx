@@ -222,15 +222,26 @@ function ListViewRow({ todo, categories, onToggle, onStatusChange }: ListViewRow
 
       {/* 상태 */}
       <div className="flex-1">
-        <select
-          value={status}
-          onChange={(e) => onStatusChange(todo.id, e.target.value as 'todo' | 'inProgress' | 'done')}
-          className="text-xs bg-sp-surface text-sp-text px-1.5 py-1 rounded border border-sp-border/50 focus:border-sp-accent focus:outline-none cursor-pointer"
-        >
-          <option value="todo">할 일</option>
-          <option value="inProgress">진행 중</option>
-          <option value="done">완료</option>
-        </select>
+        <div className="flex gap-1">
+          {([
+            { key: 'todo' as const, label: '할 일' },
+            { key: 'inProgress' as const, label: '진행 중' },
+            { key: 'done' as const, label: '완료' },
+          ]).map(s => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => onStatusChange(todo.id, s.key)}
+              className={`text-[10px] px-1.5 py-0.5 rounded-full transition-colors ${
+                status === s.key
+                  ? 'bg-sp-accent/20 text-sp-accent font-medium'
+                  : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

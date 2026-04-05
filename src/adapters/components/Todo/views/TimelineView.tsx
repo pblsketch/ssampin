@@ -97,7 +97,7 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
         <div className="flex-1 overflow-x-auto overflow-y-auto bg-sp-card rounded-xl ring-1 ring-sp-border">
           {/* 날짜 헤더 */}
           <div className="flex sticky top-0 z-10 bg-sp-bg">
-            <div className="w-52 shrink-0 px-4 py-2 text-xs font-bold text-sp-muted border-b border-r border-sp-border">
+            <div className="w-64 shrink-0 px-4 py-2 text-xs font-bold text-sp-muted border-b border-r border-sp-border">
               할 일
             </div>
             {days.map(day => {
@@ -109,18 +109,21 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
               return (
                 <div
                   key={day}
-                  className={`w-10 shrink-0 border-b border-r border-sp-border/30 text-center py-1 ${
+                  className={`w-12 shrink-0 border-b border-r border-sp-border/30 text-center py-1 relative ${
                     isToday ? 'bg-sp-accent/10' : isWeekend ? 'bg-sp-surface/50' : ''
                   }`}
                 >
-                  <div className={`text-[9px] ${isToday ? 'text-sp-accent font-bold' : 'text-sp-muted'}`}>
+                  {isToday && (
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sp-accent" />
+                  )}
+                  <div className={`text-[10px] ${isToday ? 'text-sp-accent font-bold' : 'text-sp-muted'}`}>
                     {DAY_NAMES[date.getDay()]}
                   </div>
-                  <div className={`text-[11px] ${isToday ? 'text-sp-accent font-bold' : isMonday ? 'text-sp-text' : 'text-sp-muted'}`}>
+                  <div className={`text-xs ${isToday ? 'text-sp-accent font-bold' : isMonday ? 'text-sp-text' : 'text-sp-muted'}`}>
                     {date.getDate()}
                   </div>
                   {(date.getDate() === 1 || isMonday) && (
-                    <div className="text-[8px] text-sp-muted">
+                    <div className="text-[9px] text-sp-muted">
                       {date.getMonth() + 1}월
                     </div>
                   )}

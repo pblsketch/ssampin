@@ -42,15 +42,19 @@ export const KanbanCard = React.memo(function KanbanCard({
   const category = categories.find(c => c.id === todo.category);
   const overdue = isOverdue(todo);
 
+  const borderColor = columnKey === 'done' ? 'border-l-green-500'
+    : columnKey === 'inProgress' ? 'border-l-yellow-500'
+    : 'border-l-blue-500';
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className="bg-sp-card rounded-lg p-3 ring-1 ring-sp-border/50
+      className={`bg-sp-card rounded-lg p-3 ring-1 ring-sp-border/50 border-l-2 ${borderColor}
                  hover:ring-sp-accent/30 cursor-grab active:cursor-grabbing
-                 transition-shadow"
+                 transition-shadow`}
     >
       {/* 우선순위 + 텍스트 */}
       <div className="flex items-start gap-2">

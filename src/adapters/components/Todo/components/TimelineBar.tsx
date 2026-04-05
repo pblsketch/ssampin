@@ -32,29 +32,38 @@ export function TimelineBar({ todo, days, category }: TimelineBarProps) {
     ? (CATEGORY_COLORS[category.color] ?? 'bg-sp-accent')
     : 'bg-sp-accent';
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   return (
-    <div className="flex items-center min-h-[36px] border-b border-sp-border/20">
+    <div className="flex items-center min-h-[40px] border-b border-sp-border/20">
       {/* 할 일 이름 */}
-      <div className={`w-52 shrink-0 px-4 py-1.5 truncate text-sm ${isDone ? 'text-sp-muted line-through' : 'text-sp-text'}`}>
+      <div
+        className={`w-64 shrink-0 px-4 py-1.5 truncate text-sm ${isDone ? 'text-sp-muted line-through' : 'text-sp-text'}`}
+        title={todo.text}
+      >
         {todo.text}
       </div>
 
       {/* 타임라인 셀 */}
       {days.map((day, idx) => {
-        const isToday = day === new Date().toISOString().slice(0, 10);
+        const isToday = day === todayStr;
         const isInRange = dueDateIdx >= 0 && idx >= startIdx && idx <= dueDateIdx;
         const isDueDate = idx === dueDateIdx;
 
         return (
           <div
             key={day}
-            className={`w-10 shrink-0 h-9 border-r border-sp-border/10 relative ${
+            className={`w-12 shrink-0 h-10 border-r border-sp-border/10 relative ${
               isToday ? 'bg-sp-accent/5' : ''
             }`}
           >
+            {/* 오늘 마커 라인 */}
+            {isToday && (
+              <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-sp-accent/30 z-10" />
+            )}
             {isInRange && (
               <div
-                className={`absolute top-1/2 -translate-y-1/2 h-3 rounded-full ${barColor} ${
+                className={`absolute top-1/2 -translate-y-1/2 h-4 rounded-full ${barColor} ${
                   isDone ? 'opacity-30' : 'opacity-70'
                 } ${idx === startIdx ? 'left-1 rounded-l-full' : 'left-0'} ${
                   isDueDate ? 'right-1 rounded-r-full' : 'right-0'

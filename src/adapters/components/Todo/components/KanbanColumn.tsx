@@ -37,8 +37,10 @@ export function KanbanColumn({ columnKey, label, colorClass, todos, count, categ
           ))}
         </SortableContext>
         {todos.length === 0 && (
-          <div className="flex items-center justify-center py-8 text-sp-muted text-xs">
-            비어 있음
+          <div className="flex flex-col items-center justify-center py-8 text-sp-muted text-xs
+                          border-2 border-dashed border-sp-border/30 rounded-lg m-1">
+            <span className="material-symbols-outlined text-2xl mb-1 opacity-30">add_circle_outline</span>
+            <span>드래그하여 추가</span>
           </div>
         )}
       </div>
