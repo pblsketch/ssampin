@@ -31,6 +31,7 @@ export type PageId =
   | 'tool-pblsketch'
   | 'tool-assignment'
   | 'tool-assignment-detail'
+  | 'tool-grouping'
   | 'settings';
 
 import { useState, useMemo, useCallback } from 'react';

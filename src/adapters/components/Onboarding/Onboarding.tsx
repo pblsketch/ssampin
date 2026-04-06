@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
+import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Settings, SchoolLevel, NeisSettings } from '@domain/entities/Settings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
@@ -129,11 +130,11 @@ export function Onboarding() {
         }));
     }, [recommendedMenuIds]);
 
-    const nextStep = () => setStep((s) => Math.min(5, s + 1));
+    const nextStep = () => setStep((s) => Math.min(6, s + 1));
     const prevStep = () => setStep((s) => Math.max(1, s - 1));
 
     const handleFinish = async () => {
-        track('onboarding_complete', { step: 5 });
+        track('onboarding_complete', { step: 6 });
 
         // hiddenMenus 계산
         const hiddenMenus = NAV_ITEMS
@@ -298,7 +299,7 @@ export function Onboarding() {
             <div className="bg-sp-card w-full max-w-2xl rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden flex flex-col min-h-[500px]">
                 {/* Indicators */}
                 <div className="flex justify-center gap-2 pt-8 pb-4">
-                    {[1, 2, 3, 4, 5].map((i) => (
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
                         <div
                             key={i}
                             className={`w-2.5 h-2.5 rounded-full transition-all ${i === step ? 'bg-sp-accent w-6' : i < step ? 'bg-sp-accent/50' : 'bg-sp-surface'
@@ -442,7 +443,7 @@ export function Onboarding() {
                                     <>
                                         <div className="col-span-2 flex items-start gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
                                             <span className="material-symbols-outlined text-blue-400 text-icon mt-0.5">info</span>
-                                            <p className="text-detail text-blue-200/70">
+                                            <p className="text-detail text-blue-300">
                                                 학년/반을 선택하면 NEIS 시간표가 자동으로 연동됩니다. 건너뛰어도 나중에 설정할 수 있어요.
                                             </p>
                                         </div>
@@ -492,7 +493,7 @@ export function Onboarding() {
                                         {neisGrade && neisClass && (
                                             <div className="col-span-2 flex items-start gap-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 animate-in fade-in duration-300">
                                                 <span className="material-symbols-outlined text-emerald-400 text-icon-md mt-0.5">auto_awesome</span>
-                                                <p className="text-xs text-emerald-200/80">
+                                                <p className="text-xs text-emerald-300">
                                                     NEIS에 등록된 {neisGrade}학년 {neisClass}반 시간표가 대시보드에 자동으로 표시됩니다.
                                                 </p>
                                             </div>
@@ -751,7 +752,9 @@ export function Onboarding() {
                         </div>
                     )}
 
-                    {step === 5 && (
+                    {step === 5 && <AccountLinkingStep />}
+
+                    {step === 6 && (
                         <div className="text-center animate-in zoom-in-95 duration-500">
                             <div className="mx-auto w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6">
                                 <span className="material-symbols-outlined text-6xl text-emerald-400">check_circle</span>
@@ -772,7 +775,7 @@ export function Onboarding() {
                 </div>
 
                 {/* Action Bar */}
-                {step > 1 && step < 5 && (
+                {step > 1 && step < 6 && (
                     <div className="bg-sp-bg/50 p-6 flex justify-between border-t border-sp-border">
                         <button
                             type="button"
@@ -786,7 +789,7 @@ export function Onboarding() {
                             onClick={nextStep}
                             className="px-6 py-2.5 rounded-lg bg-sp-accent hover:bg-blue-600 text-white transition-colors font-semibold shadow-md shadow-sp-accent/20"
                         >
-                            다음 단계
+                            {step === 5 ? '건너뛰기' : '다음 단계'}
                         </button>
                     </div>
                 )}

@@ -59,7 +59,8 @@ export type ToolName =
   | 'wordcloud'
   | 'seat_picker'
   | 'assignment'
-  | 'class_seating';
+  | 'class_seating'
+  | 'grouping';
 
 /** 이벤트별 properties 타입 매핑 */
 export interface AnalyticsEventProperties {

@@ -26,6 +26,7 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-survey', emoji: '📝', name: '주관식 설문', description: '자유롭게 의견을 들어봐요' },
   { id: 'tool-wordcloud', emoji: '☁️', name: '워드클라우드', description: '떠오르는 단어를 모아봐요' },
   { id: 'tool-seat-picker', emoji: '🪑', name: '자리 뽑기', description: '내 손으로 뽑는 내 자리' },
+  { id: 'tool-grouping', emoji: '👥', name: '모둠 편성기', description: '조건에 맞게 모둠을 편성' },
   { id: 'tool-assignment', emoji: '📋', name: '과제수합', description: '과제를 수합하고 제출 현황을 확인합니다' },
   { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진', externalUrl: 'https://supsori.com' },
   { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구', externalUrl: 'https://pblsketch.xyz' },
