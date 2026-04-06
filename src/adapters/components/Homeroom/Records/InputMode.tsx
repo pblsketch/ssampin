@@ -56,6 +56,8 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [endDate, setEndDate] = useState(selectedDate);
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [skippedDates, setSkippedDates] = useState<string[]>([]);
 
   // selectedDate 변경 시 endDate 동기화
   useEffect(() => {
@@ -273,19 +275,26 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const handleBatchSave = useCallback(async () => {
     if (rangeDates.length === 0 || rangeError) return;
     setBatchSaving(true);
+    setBatchProgress({ current: 0, total: rangeDates.length });
+    setSkippedDates([]);
     let totalCreated = 0;
-    let skippedDays = 0;
-    for (const date of rangeDates) {
+    const newSkipped: string[] = [];
+    for (let i = 0; i < rangeDates.length; i++) {
+      const date = rangeDates[i]!;
       const created = await saveForDate(date);
-      if (created === 0) skippedDays++;
+      if (created === 0) newSkipped.push(date);
       else totalCreated += created;
+      setBatchProgress({ current: i + 1, total: rangeDates.length });
     }
     setBatchSaving(false);
+    setBatchProgress(null);
+    setSkippedDates(newSkipped);
     setShowBatchConfirm(false);
     resetForm();
 
-    const msg = skippedDays > 0
-      ? `${rangeDates.length}일 중 ${rangeDates.length - skippedDays}일 등록 완료 (중복 ${skippedDays}일 제외)`
+    const registeredDays = rangeDates.length - newSkipped.length;
+    const msg = newSkipped.length > 0
+      ? `${rangeDates.length}일 중 ${registeredDays}일 등록 완료 (중복 ${newSkipped.length}일 제외)`
       : `${rangeDates.length}일 출결이 등록되었습니다`;
     showToast(msg, totalCreated > 0 ? 'success' : 'info');
   }, [rangeDates, rangeError, saveForDate, resetForm, showToast]);
@@ -689,6 +698,18 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                       {formatDateKR(selectedDate)} ~ {formatDateKR(endDate)} ({rangeDates.length}일)
                     </p>
                   )}
+                  {/* 직전 등록에서 중복으로 건너뜀 날짜 안내 */}
+                  {skippedDates.length > 0 && (
+                    <div className="mt-1 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                      <p className="text-xs text-amber-400 flex items-center gap-1 mb-1">
+                        <span className="material-symbols-outlined text-sm">warning</span>
+                        중복으로 건너뜀 ({skippedDates.length}일)
+                      </p>
+                      <p className="text-xs text-sp-muted leading-relaxed">
+                        {skippedDates.map((d) => formatDateKR(d)).join(', ')}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -766,12 +787,29 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                   이미 등록된 날짜는 자동으로 건너뜁니다.
                 </p>
               </div>
+
+              {/* 진행률 바 (저장 중일 때만, 10일 이상이면 항상 표시) */}
+              {batchSaving && batchProgress && (
+                <div className="mb-4 space-y-1.5">
+                  <div className="flex justify-between text-xs text-sp-muted">
+                    <span>등록 중...</span>
+                    <span>{batchProgress.current} / {batchProgress.total}일</span>
+                  </div>
+                  <div className="h-2 bg-sp-surface rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-sp-accent rounded-full transition-all duration-300"
+                      style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowBatchConfirm(false)}
                   disabled={batchSaving}
                   className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-sp-surface text-sp-muted
-                             hover:text-sp-text hover:bg-sp-surface/80 transition-all"
+                             hover:text-sp-text hover:bg-sp-surface/80 transition-all disabled:opacity-50"
                 >
                   취소
                 </button>
@@ -784,7 +822,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                   {batchSaving ? (
                     <>
                       <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                      등록 중...
+                      {batchProgress ? `${batchProgress.current}/${batchProgress.total}일` : '등록 중...'}
                     </>
                   ) : (
                     <>
