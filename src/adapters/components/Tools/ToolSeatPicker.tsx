@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -8,8 +8,11 @@ import { shuffleArray } from '@domain/rules/randomRules';
 import { validateConstraints } from '@domain/rules/seatRules';
 import { seatingRepository } from '@adapters/di/container';
 import { useSeatConstraintsStore } from '@adapters/stores/useSeatConstraintsStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { studentKey } from '@domain/entities/TeachingClass';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
+import type { TeachingClassSeating } from '@domain/entities/TeachingClass';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -21,6 +24,7 @@ interface ToolSeatPickerProps {
 type Phase = 'setup' | 'picking' | 'complete';
 type OrderMode = 'number' | 'random' | 'direct';
 type AdvanceMode = 'manual' | 'auto';
+type SeatDataSource = 'homeroom' | 'teachingClass';
 
 interface SeatPosition {
   row: number;
@@ -46,15 +50,23 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const loaded = useSeatingStore((s) => s.loaded);
   const loadSeating = useSeatingStore((s) => s.load);
   const resizeGrid = useSeatingStore((s) => s.resizeGrid);
+  const teachingClasses = useTeachingClassStore((s) => s.classes);
+  const tcLoaded = useTeachingClassStore((s) => s.loaded);
+  const loadTc = useTeachingClassStore((s) => s.load);
+  const updateClass = useTeachingClassStore((s) => s.updateClass);
 
   /* ─── Setup state ─── */
   const [phase, setPhase] = useState<Phase>('setup');
   const [orderMode, setOrderMode] = useState<OrderMode>('number');
   const [advanceMode, setAdvanceMode] = useState<AdvanceMode>('manual');
+  const [seatDataSource, setSeatDataSource] = useState<SeatDataSource>('homeroom');
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
 
   /* ─── Picking state ─── */
   const [studentOrder, setStudentOrder] = useState<Student[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [pickingRows, setPickingRows] = useState(0);
+  const [pickingCols, setPickingCols] = useState(0);
   const [assignments, setAssignments] = useState<Map<string, Assignment>>(new Map());
   const [shuffledSeats, setShuffledSeats] = useState<SeatPosition[]>([]);
   const [flippedCards, setFlippedCards] = useState<Set<number>>(new Set());
@@ -74,10 +86,9 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
   /* ─── Load seating on mount ─── */
   useEffect(() => {
-    if (!loaded) {
-      loadSeating();
-    }
-  }, [loaded, loadSeating]);
+    if (!loaded) loadSeating();
+    if (!tcLoaded) loadTc();
+  }, [loaded, loadSeating, tcLoaded, loadTc]);
 
   /* ─── Cleanup timers ─── */
   useEffect(() => {
@@ -89,11 +100,35 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   }, []);
 
   /* ─── Derived values ─── */
-  const activeStudents = students.filter((s) => !s.isVacant);
-  const totalSeats = seating.rows * seating.cols;
-  const hasSeatingData = seating.rows > 0 && seating.cols > 0;
-  const studentShortage = activeStudents.length > totalSeats;
-  const canStart = hasSeatingData && activeStudents.length > 0 && !studentShortage;
+  const selectedTc = teachingClasses.find((c) => c.id === selectedClassId) ?? null;
+
+  const tcStudentsAsStudents = useMemo((): Student[] => {
+    if (!selectedTc) return [];
+    return selectedTc.students
+      .filter((s) => !s.isVacant)
+      .map((s) => ({
+        id: `tc-${selectedTc.id}-${s.number}`,
+        studentNumber: s.number,
+        name: s.name?.trim() ? s.name : `${s.number}번`,
+        isVacant: false,
+      }));
+  }, [selectedTc]);
+
+  const tcSeatingRows = selectedTc?.seating?.rows ?? 0;
+  const tcSeatingCols = selectedTc?.seating?.cols ?? 0;
+
+  const activeStudents = seatDataSource === 'homeroom'
+    ? students.filter((s) => !s.isVacant)
+    : tcStudentsAsStudents;
+  const effectiveRows = seatDataSource === 'homeroom' ? seating.rows : tcSeatingRows;
+  const effectiveCols = seatDataSource === 'homeroom' ? seating.cols : tcSeatingCols;
+  const totalSeats = effectiveRows * effectiveCols;
+  const hasSeatingData = effectiveRows > 0 && effectiveCols > 0;
+  const needsAutoGrid = seatDataSource === 'teachingClass' && selectedTc !== null && !selectedTc.seating && activeStudents.length > 0;
+  const studentShortage = !needsAutoGrid && activeStudents.length > totalSeats;
+  const canStart = seatDataSource === 'homeroom'
+    ? hasSeatingData && activeStudents.length > 0 && !studentShortage
+    : selectedTc !== null && activeStudents.length > 0 && (hasSeatingData || needsAutoGrid);
 
   const assignedCount = assignments.size;
   const totalStudents = studentOrder.length;
@@ -110,15 +145,25 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
       );
     }
 
+    // For teaching class with no seating, auto-generate grid
+    let rows = effectiveRows;
+    let cols = effectiveCols;
+    if (needsAutoGrid) {
+      cols = Math.max(1, Math.ceil(Math.sqrt(ordered.length)));
+      rows = Math.max(1, Math.ceil(ordered.length / cols));
+    }
+
     // Generate all seat positions and shuffle for card assignment
     const allSeats: SeatPosition[] = [];
-    for (let r = 0; r < seating.rows; r++) {
-      for (let c = 0; c < seating.cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
         allSeats.push({ row: r, col: c });
       }
     }
     const shuffled = shuffleArray(allSeats);
 
+    setPickingRows(rows);
+    setPickingCols(cols);
     setStudentOrder(ordered);
     setCurrentIndex(0);
     setAssignments(new Map());
@@ -129,7 +174,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     setWaitingForNext(false);
     setIsPaused(false);
     setPhase('picking');
-  }, [activeStudents, orderMode, seating.rows, seating.cols]);
+  }, [activeStudents, orderMode, effectiveRows, effectiveCols, needsAutoGrid]);
 
   /* ─── Handle card click ─── */
   const handleCardClick = useCallback(
@@ -203,13 +248,15 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     (row: number, col: number): { studentId: string; student: Student } | null => {
       for (const [studentId, pos] of assignments.entries()) {
         if (pos.row === row && pos.col === col) {
-          const student = getStudent(studentId);
+          const student = getStudent(studentId)
+            ?? tcStudentsAsStudents.find((s) => s.id === studentId)
+            ?? null;
           if (student) return { studentId, student };
         }
       }
       return null;
     },
-    [assignments, getStudent],
+    [assignments, getStudent, tcStudentsAsStudents],
   );
 
   /* ─── Handle direct seat click (direct mode) ─── */
@@ -276,57 +323,69 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     setShowPopup(false);
     setWaitingForNext(false);
     setIsPaused(false);
+    setPickingRows(0);
+    setPickingCols(0);
   }, []);
 
   /* ─── Save to seating store ─── */
   const handleSave = useCallback(async () => {
+    const rows = pickingRows || (seatDataSource === 'homeroom' ? seating.rows : tcSeatingRows);
+    const cols = pickingCols || (seatDataSource === 'homeroom' ? seating.cols : tcSeatingCols);
+
     const newSeats: (string | null)[][] = [];
-    for (let r = 0; r < seating.rows; r++) {
+    for (let r = 0; r < rows; r++) {
       const row: (string | null)[] = [];
-      for (let c = 0; c < seating.cols; c++) {
+      for (let c = 0; c < cols; c++) {
         row.push(null);
       }
       newSeats.push(row);
     }
 
-    assignments.forEach((pos, studentId) => {
-      const r = newSeats[pos.row];
-      if (r) {
-        r[pos.col] = studentId;
+    if (seatDataSource === 'homeroom') {
+      assignments.forEach((pos, studentId) => {
+        const r = newSeats[pos.row];
+        if (r) r[pos.col] = studentId;
+      });
+
+      const newSeating: SeatingData = { rows, cols, seats: newSeats };
+      const constraints = useSeatConstraintsStore.getState().constraints;
+      const { valid } = validateConstraints(newSeating.seats, constraints, rows, cols);
+
+      try {
+        await seatingRepository.saveSeating(newSeating);
+        useSeatingStore.setState({ seating: newSeating });
+        if (!valid) {
+          useToastStore.getState().show('일부 배치 조건을 만족하지 못한 좌석이 있습니다', 'info');
+        } else {
+          useToastStore.getState().show('학급 자리 배치가 업데이트되었습니다', 'success');
+        }
+        setShowSaveModal(false);
+      } catch {
+        useToastStore.getState().show('저장에 실패했습니다', 'error');
       }
-    });
+    } else if (selectedTc) {
+      assignments.forEach((pos, syntheticId) => {
+        const parts = syntheticId.split('-');
+        const num = parseInt(parts[parts.length - 1] ?? '0', 10);
+        const student = selectedTc.students.find((s) => s.number === num);
+        if (student) {
+          const r = newSeats[pos.row];
+          if (r) r[pos.col] = studentKey(student);
+        }
+      });
 
-    const newSeating: SeatingData = {
-      rows: seating.rows,
-      cols: seating.cols,
-      seats: newSeats,
-    };
+      const tcSeating: TeachingClassSeating = { rows, cols, seats: newSeats };
+      const updated = { ...selectedTc, seating: tcSeating, updatedAt: new Date().toISOString() };
 
-    // 조건 위반 검증 (학생 이름 없이 경고)
-    const constraints = useSeatConstraintsStore.getState().constraints;
-    const { valid } = validateConstraints(
-      newSeating.seats,
-      constraints,
-      newSeating.rows,
-      newSeating.cols,
-    );
-
-    try {
-      await seatingRepository.saveSeating(newSeating);
-      useSeatingStore.setState({ seating: newSeating });
-      if (!valid) {
-        useToastStore.getState().show(
-          '일부 배치 조건을 만족하지 못한 좌석이 있습니다',
-          'info',
-        );
-      } else {
-        useToastStore.getState().show('학급 자리 배치가 업데이트되었습니다', 'success');
+      try {
+        await updateClass(updated);
+        useToastStore.getState().show(`${selectedTc.name} 자리 배치가 업데이트되었습니다`, 'success');
+        setShowSaveModal(false);
+      } catch {
+        useToastStore.getState().show('저장에 실패했습니다', 'error');
       }
-      setShowSaveModal(false);
-    } catch {
-      useToastStore.getState().show('저장에 실패했습니다', 'error');
     }
-  }, [assignments, seating.rows, seating.cols]);
+  }, [assignments, seatDataSource, seating.rows, seating.cols, tcSeatingRows, tcSeatingCols, pickingRows, pickingCols, selectedTc, updateClass]);
 
   /* ─── Fullscreen toggle ─── */
   const handleFullscreen = useCallback(() => {
@@ -342,7 +401,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   }, []);
 
   /* ─── Loading state ─── */
-  if (!loaded) {
+  if (!loaded || !tcLoaded) {
     return (
       <ToolLayout title="자리 뽑기" emoji="🪑" onBack={onBack} isFullscreen={isFullscreen}>
         <div className="flex-1 flex items-center justify-center">
@@ -369,7 +428,74 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
               </p>
             </div>
 
-            {!hasSeatingData ? (
+            {/* Data source selector */}
+            <div className="bg-sp-card border border-sp-border rounded-xl p-5">
+              <p className="text-sp-text font-medium mb-3">학생 데이터</p>
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => { setSeatDataSource('homeroom'); setSelectedClassId(null); }}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+                    seatDataSource === 'homeroom'
+                      ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                      : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
+                  }`}
+                >
+                  <span>👩‍🎓</span>
+                  <span>학급 자리 배치</span>
+                </button>
+                <button
+                  onClick={() => setSeatDataSource('teachingClass')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+                    seatDataSource === 'teachingClass'
+                      ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                      : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
+                  }`}
+                >
+                  <span>📚</span>
+                  <span>수업반</span>
+                </button>
+              </div>
+              {seatDataSource === 'teachingClass' && (
+                <div>
+                  {teachingClasses.length === 0 ? (
+                    <div className="text-center py-3 text-sp-muted text-sm">
+                      수업관리에서 먼저 반을 등록하세요
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {teachingClasses.map((tc) => {
+                        const activeCount = tc.students.filter((s) => !s.isVacant).length;
+                        return (
+                          <button
+                            key={tc.id}
+                            onClick={() => setSelectedClassId(tc.id)}
+                            className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                              selectedClassId === tc.id
+                                ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                                : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
+                            }`}
+                          >
+                            {tc.name}
+                            {tc.subject && <span className="text-sp-muted/70"> · {tc.subject}</span>}
+                            <span className="text-sp-muted/70 ml-1">({activeCount}명)</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {seatDataSource === 'teachingClass' && !selectedTc ? (
+              <div className="bg-sp-card border border-amber-500/30 rounded-xl p-6 text-center">
+                <p className="text-amber-400 text-sm">위에서 수업반을 선택해주세요</p>
+              </div>
+            ) : seatDataSource === 'teachingClass' && activeStudents.length === 0 ? (
+              <div className="bg-sp-card border border-amber-500/30 rounded-xl p-6 text-center">
+                <p className="text-amber-400 text-sm">수업관리에서 먼저 학생을 등록하세요</p>
+              </div>
+            ) : !hasSeatingData && !needsAutoGrid ? (
               /* No seating data */
               <div className="bg-sp-card border border-amber-500/30 rounded-xl p-6 text-center">
                 <p className="text-amber-400 text-sm">
@@ -398,8 +524,10 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       </div>
                       <div>
                         <p className="text-sp-text font-medium">좌석 수</p>
-                        <p className="text-green-400 text-lg font-bold">
-                          {seating.rows}행 &times; {seating.cols}열 = {totalSeats}석
+                        <p className={`${needsAutoGrid ? 'text-blue-300' : 'text-green-400'} text-lg font-bold`}>
+                          {needsAutoGrid
+                            ? '자동 생성'
+                            : `${effectiveRows}행 × ${effectiveCols}열 = ${totalSeats}석`}
                         </p>
                       </div>
                     </div>
@@ -409,14 +537,15 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       좌석이 부족합니다 (학생 {activeStudents.length}명 &gt; 좌석 {totalSeats}석)
                     </div>
                   )}
-                  {!studentShortage && activeStudents.length < totalSeats && (
+                  {!studentShortage && !needsAutoGrid && activeStudents.length < totalSeats && (
                     <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2.5 text-blue-300 text-sm">
                       {totalSeats - activeStudents.length}개 좌석이 비게 됩니다
                     </div>
                   )}
                 </div>
 
-                {/* Row/Col adjustment */}
+                {/* Row/Col adjustment (homeroom only) */}
+                {seatDataSource === 'homeroom' && (
                 <div className="bg-sp-card border border-sp-border rounded-xl p-5">
                   <p className="text-sp-text font-medium mb-3">좌석 행/열 조절</p>
                   <div className="flex items-center justify-center gap-8">
@@ -458,6 +587,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Student order */}
                 <div className="bg-sp-card border border-sp-border rounded-xl p-5">
@@ -601,12 +731,12 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                 <div
                   className="grid gap-1.5 mx-auto"
                   style={{
-                    gridTemplateColumns: `repeat(${seating.cols}, minmax(0, 1fr))`,
-                    maxWidth: `${seating.cols * 72}px`,
+                    gridTemplateColumns: `repeat(${pickingCols || effectiveCols}, minmax(0, 1fr))`,
+                    maxWidth: `${(pickingCols || effectiveCols) * 72}px`,
                   }}
                 >
-                  {Array.from({ length: seating.rows }, (_, r) =>
-                    Array.from({ length: seating.cols }, (_, c) => {
+                  {Array.from({ length: pickingRows || effectiveRows }, (_, r) =>
+                    Array.from({ length: pickingCols || effectiveCols }, (_, c) => {
                       const assigned = getAssignmentForSeat(r, c);
                       const isLastAssigned =
                         assigned !== null && assigned.studentId === lastAssigned;
@@ -886,12 +1016,12 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
           <div
             className="grid gap-1.5 mx-auto"
             style={{
-              gridTemplateColumns: `repeat(${seating.cols}, minmax(0, 1fr))`,
-              maxWidth: `${seating.cols * 72}px`,
+              gridTemplateColumns: `repeat(${pickingCols || effectiveCols}, minmax(0, 1fr))`,
+              maxWidth: `${(pickingCols || effectiveCols) * 72}px`,
             }}
           >
-            {Array.from({ length: seating.rows }, (_, r) =>
-              Array.from({ length: seating.cols }, (_, c) => {
+            {Array.from({ length: pickingRows || effectiveRows }, (_, r) =>
+              Array.from({ length: pickingCols || effectiveCols }, (_, c) => {
                 const assigned = getAssignmentForSeat(r, c);
                 return (
                   <div
@@ -958,7 +1088,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
             onClick={() => setShowSaveModal(true)}
             className="flex-1 min-w-[180px] py-3 rounded-xl bg-gradient-to-r from-sp-accent to-blue-400 text-white font-bold text-sm hover:from-blue-400 hover:to-sp-accent transition-all active:scale-[0.98]"
           >
-            💾 학급 자리 배치에 저장
+            {seatDataSource === 'homeroom' ? '💾 학급 자리 배치에 저장' : `💾 ${selectedTc?.name ?? '수업반'} 자리 배치에 저장`}
           </button>
           <button
             onClick={handleReset}
@@ -978,9 +1108,13 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
         {showSaveModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
-              <p className="text-sp-text text-lg font-bold mb-2">학급 자리 배치 저장</p>
+              <p className="text-sp-text text-lg font-bold mb-2">
+                {seatDataSource === 'homeroom' ? '학급 자리 배치 저장' : `${selectedTc?.name ?? '수업반'} 자리 배치 저장`}
+              </p>
               <p className="text-sp-muted text-sm mb-6">
-                현재 학급 자리 배치를 덮어씌울까요? 이 작업은 되돌릴 수 없습니다.
+                {seatDataSource === 'homeroom'
+                  ? '현재 학급 자리 배치를 덮어씌울까요? 이 작업은 되돌릴 수 없습니다.'
+                  : `${selectedTc?.name ?? '수업반'}의 자리 배치를 덮어씌울까요?`}
               </p>
               <div className="flex gap-3">
                 <button

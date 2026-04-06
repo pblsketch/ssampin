@@ -3,6 +3,7 @@ import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
 import { PresetSelector } from './PresetSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 interface ToolRouletteProps {
@@ -45,7 +46,12 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [items, setItems] = useState<string[]>(['항목 1', '항목 2', '항목 3']);
-  const [inputMode, setInputMode] = useState<'students' | 'custom'>('custom');
+  const [inputMode, setInputMode] = useState<'students' | 'teachingClass' | 'custom'>('custom');
+  const [showTcDropdown, setShowTcDropdown] = useState(false);
+  const tcClasses = useTeachingClassStore((s) => s.classes);
+  const tcLoaded = useTeachingClassStore((s) => s.loaded);
+  const loadTc = useTeachingClassStore((s) => s.load);
+  const tcDropdownRef = useRef<HTMLDivElement>(null);
   const [newItemText, setNewItemText] = useState('');
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -66,14 +72,72 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     };
   }, []);
 
+  // Load teaching classes on mount
+  useEffect(() => {
+    if (!tcLoaded) loadTc();
+  }, [tcLoaded, loadTc]);
+
+  // Close TC dropdown on outside click
+  useEffect(() => {
+    if (!showTcDropdown) return;
+    const handleClick = (e: MouseEvent) => {
+      if (tcDropdownRef.current && !tcDropdownRef.current.contains(e.target as Node)) {
+        setShowTcDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showTcDropdown]);
+
   const loadStudents = useCallback(() => {
     const students = useStudentStore.getState().students.filter((s) => !s.isVacant);
     const names = students.map((s) => s.name).filter((n) => n.trim() !== '');
     if (names.length >= 2) {
       setItems(names.slice(0, 20));
       setInputMode('students');
+      setWinner(null);
+      setWinnerIndex(null);
+      setHistory([]);
     }
   }, []);
+
+  const handleTcButtonClick = useCallback(() => {
+    if (tcClasses.length === 0) return;
+    if (tcClasses.length === 1) {
+      // Only one class, load it directly
+      const cls = tcClasses[0]!;
+      const names = cls.students
+        .filter((s) => !s.isVacant)
+        .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
+        .filter((n) => n.trim() !== '');
+      if (names.length >= 2) {
+        setItems(names.slice(0, 20));
+        setInputMode('teachingClass');
+        setWinner(null);
+        setWinnerIndex(null);
+        setHistory([]);
+      }
+    } else {
+      setShowTcDropdown((v) => !v);
+    }
+  }, [tcClasses]);
+
+  const loadTeachingClass = useCallback((classId: string) => {
+    const cls = tcClasses.find((c) => c.id === classId);
+    if (!cls) return;
+    const names = cls.students
+      .filter((s) => !s.isVacant)
+      .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
+      .filter((n) => n.trim() !== '');
+    if (names.length >= 2) {
+      setItems(names.slice(0, 20));
+      setInputMode('teachingClass');
+      setWinner(null);
+      setWinnerIndex(null);
+      setHistory([]);
+    }
+    setShowTcDropdown(false);
+  }, [tcClasses]);
 
   const switchToCustom = useCallback(() => {
     setInputMode('custom');
@@ -191,18 +255,59 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
             <PresetSelector type="roulette" currentItems={items} onLoad={handleLoadPreset} />
 
             {/* Mode buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <button
                 onClick={loadStudents}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text hover:border-sp-accent hover:text-sp-accent transition-all text-sm font-medium"
+                className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg border text-xs font-medium transition-all ${
+                  inputMode === 'students'
+                    ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                    : 'bg-sp-surface border-sp-border text-sp-text hover:border-sp-accent hover:text-sp-accent'
+                }`}
                 title="우리 반 학생 불러오기"
               >
                 <span>👩‍🎓</span>
-                <span>우리 반 학생</span>
+                <span>우리 반</span>
               </button>
+              <div className="relative flex-1" ref={tcDropdownRef}>
+                <button
+                  onClick={handleTcButtonClick}
+                  disabled={tcClasses.length === 0}
+                  className={`w-full flex items-center justify-center gap-1 px-2 py-2 rounded-lg border text-xs font-medium transition-all ${
+                    inputMode === 'teachingClass'
+                      ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                      : 'bg-sp-surface border-sp-border text-sp-text hover:border-sp-accent hover:text-sp-accent'
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                  title={tcClasses.length === 0 ? '수업관리에서 먼저 반을 등록하세요' : '수업반 학생 불러오기'}
+                >
+                  <span>📚</span>
+                  <span>수업반</span>
+                </button>
+                {showTcDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-48 overflow-y-auto">
+                    {tcClasses.map((tc) => {
+                      const activeCount = tc.students.filter((s) => !s.isVacant).length;
+                      return (
+                        <button
+                          key={tc.id}
+                          onClick={() => loadTeachingClass(tc.id)}
+                          className="w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left transition-colors"
+                        >
+                          <span className="text-sm text-sp-text truncate">
+                            {tc.name}
+                            {tc.subject && <span className="text-sp-muted"> · {tc.subject}</span>}
+                          </span>
+                          <span className="text-caption text-sp-muted ml-2 shrink-0">
+                            {activeCount}명
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={switchToCustom}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg border text-xs font-medium transition-all ${
                   inputMode === 'custom'
                     ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                     : 'bg-sp-surface border-sp-border text-sp-text hover:border-sp-accent hover:text-sp-accent'

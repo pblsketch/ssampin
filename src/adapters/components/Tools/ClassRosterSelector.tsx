@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 
 interface ClassRosterSelectorProps {
   selectedRosterId: string | null;
@@ -11,6 +12,8 @@ interface ClassRosterSelectorProps {
 
 type EditorMode = 'idle' | 'creating' | 'editing';
 
+const TC_PREFIX = 'tc:';
+
 export function ClassRosterSelector({
   selectedRosterId,
   onSelectRoster,
@@ -19,6 +22,9 @@ export function ClassRosterSelector({
   pickedItems,
 }: ClassRosterSelectorProps) {
   const { rosters, loaded, load, addRoster, updateRoster, deleteRoster } = useClassRosterStore();
+  const teachingClasses = useTeachingClassStore((s) => s.classes);
+  const tcLoaded = useTeachingClassStore((s) => s.loaded);
+  const loadTc = useTeachingClassStore((s) => s.load);
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>('idle');
@@ -29,7 +35,8 @@ export function ClassRosterSelector({
 
   useEffect(() => {
     if (!loaded) load();
-  }, [loaded, load]);
+    if (!tcLoaded) loadTc();
+  }, [loaded, load, tcLoaded, loadTc]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -45,12 +52,42 @@ export function ClassRosterSelector({
 
   // If selected roster was deleted externally, reset
   useEffect(() => {
-    if (selectedRosterId && !rosters.find((r) => r.id === selectedRosterId)) {
-      onSelectRoster(null);
+    if (!selectedRosterId) return;
+    if (selectedRosterId.startsWith(TC_PREFIX)) {
+      const tcId = selectedRosterId.slice(TC_PREFIX.length);
+      if (!teachingClasses.find((c) => c.id === tcId)) onSelectRoster(null);
+    } else {
+      if (!rosters.find((r) => r.id === selectedRosterId)) onSelectRoster(null);
     }
-  }, [rosters, selectedRosterId, onSelectRoster]);
+  }, [rosters, teachingClasses, selectedRosterId, onSelectRoster]);
 
-  const selectedRoster = rosters.find((r) => r.id === selectedRosterId) ?? null;
+  const isTeachingClassSelected = selectedRosterId?.startsWith(TC_PREFIX) ?? false;
+  const selectedRoster = isTeachingClassSelected
+    ? null
+    : rosters.find((r) => r.id === selectedRosterId) ?? null;
+  const selectedTeachingClass = isTeachingClassSelected
+    ? teachingClasses.find((c) => c.id === selectedRosterId!.slice(TC_PREFIX.length)) ?? null
+    : null;
+
+  // Convert teaching class students to name array
+  const tcStudentNames = useMemo(() => {
+    if (!selectedTeachingClass) return [];
+    return selectedTeachingClass.students
+      .filter((s) => !s.isVacant)
+      .map((s) => s.name?.trim() ? s.name : `${s.number}번`);
+  }, [selectedTeachingClass]);
+
+  // Unified display label and names for selected item
+  const selectedLabel = selectedTeachingClass
+    ? `${selectedTeachingClass.name}${selectedTeachingClass.subject ? ` · ${selectedTeachingClass.subject}` : ''}`
+    : selectedRoster
+      ? selectedRoster.name
+      : null;
+  const selectedNames: readonly string[] = selectedTeachingClass
+    ? tcStudentNames
+    : selectedRoster
+      ? selectedRoster.studentNames
+      : [];
 
   const handleSelect = useCallback((id: string) => {
     onSelectRoster(id);
@@ -163,9 +200,9 @@ export function ClassRosterSelector({
             onClick={() => setIsDropdownOpen((v) => !v)}
             className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sm hover:border-sp-accent transition-all"
           >
-            <span className={selectedRoster ? 'text-sp-text' : 'text-sp-muted'}>
-              {selectedRoster
-                ? `${selectedRoster.name} (${selectedRoster.studentNames.length}명)`
+            <span className={selectedLabel ? 'text-sp-text' : 'text-sp-muted'}>
+              {selectedLabel
+                ? `${selectedLabel} (${selectedNames.length}명)`
                 : '반을 선택하세요'}
             </span>
             <span className="material-symbols-outlined text-icon text-sp-muted">
@@ -174,26 +211,75 @@ export function ClassRosterSelector({
           </button>
 
           {isDropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-48 overflow-y-auto">
-              {rosters.length === 0 ? (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-56 overflow-y-auto">
+              {teachingClasses.length === 0 && rosters.length === 0 ? (
                 <div className="px-3 py-3 text-xs text-sp-muted text-center">
                   등록된 반이 없습니다
                 </div>
               ) : (
-                rosters.map((roster) => (
-                  <button
-                    key={roster.id}
-                    onClick={() => handleSelect(roster.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left transition-colors ${
-                      roster.id === selectedRosterId ? 'bg-sp-accent/10' : ''
-                    }`}
-                  >
-                    <span className="text-sm text-sp-text truncate">{roster.name}</span>
-                    <span className="text-caption text-sp-muted ml-2 shrink-0">
-                      {roster.studentNames.length}명
-                    </span>
-                  </button>
-                ))
+                <>
+                  {/* 수업반 섹션 */}
+                  {teachingClasses.length > 0 && (
+                    <>
+                      {rosters.length > 0 && (
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-sp-muted/70 uppercase tracking-wider">
+                          📚 수업반
+                        </div>
+                      )}
+                      {teachingClasses.map((tc) => {
+                        const activeCount = tc.students.filter((s) => !s.isVacant).length;
+                        const tcRosterId = `${TC_PREFIX}${tc.id}`;
+                        return (
+                          <button
+                            key={tcRosterId}
+                            onClick={() => handleSelect(tcRosterId)}
+                            className={`w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left transition-colors ${
+                              tcRosterId === selectedRosterId ? 'bg-sp-accent/10' : ''
+                            }`}
+                          >
+                            <span className="text-sm text-sp-text truncate">
+                              {tc.name}
+                              {tc.subject && <span className="text-sp-muted"> · {tc.subject}</span>}
+                            </span>
+                            <span className="text-caption text-sp-muted ml-2 shrink-0">
+                              {activeCount}명
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+
+                  {/* 구분선 */}
+                  {teachingClasses.length > 0 && rosters.length > 0 && (
+                    <div className="mx-2 my-1 border-t border-sp-border/50" />
+                  )}
+
+                  {/* 사용자 명단 섹션 */}
+                  {rosters.length > 0 && (
+                    <>
+                      {teachingClasses.length > 0 && (
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-sp-muted/70 uppercase tracking-wider">
+                          📝 사용자 명단
+                        </div>
+                      )}
+                      {rosters.map((roster) => (
+                        <button
+                          key={roster.id}
+                          onClick={() => handleSelect(roster.id)}
+                          className={`w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left transition-colors ${
+                            roster.id === selectedRosterId ? 'bg-sp-accent/10' : ''
+                          }`}
+                        >
+                          <span className="text-sm text-sp-text truncate">{roster.name}</span>
+                          <span className="text-caption text-sp-muted ml-2 shrink-0">
+                            {roster.studentNames.length}명
+                          </span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -203,12 +289,12 @@ export function ClassRosterSelector({
         <button
           onClick={handleStartCreate}
           className="flex items-center gap-1 px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent transition-all shrink-0"
-          title="새 반 등록"
+          title="사용자 명단 추가"
         >
           <span className="material-symbols-outlined text-icon-sm">add</span>
-          <span>새 반</span>
+          <span>명단 추가</span>
         </button>
-        {selectedRoster && (
+        {selectedRoster && !isTeachingClassSelected && (
           <>
             <button
               onClick={handleStartEdit}
@@ -229,45 +315,44 @@ export function ClassRosterSelector({
       </div>
 
       {/* Student Grid */}
-      {selectedRoster ? (
+      {selectedNames.length > 0 ? (
         <div>
-          {selectedRoster.studentNames.length === 0 ? (
-            <div className="text-center py-4 text-sp-muted text-sm">
-              학생이 등록되지 않았습니다. ✏️ 버튼으로 명단을 추가하세요.
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
-              {selectedRoster.studentNames.map((name, idx) => {
-                const isExcluded = excludedNames.has(name);
-                const isPicked = pickedItems.includes(name);
-                return (
-                  <button
-                    key={`${name}-${idx}`}
-                    onClick={() => onToggleExclusion(name)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                      isExcluded
-                        ? 'bg-sp-surface text-sp-muted/50 line-through border border-sp-border/50'
-                        : isPicked
-                          ? 'bg-sp-surface text-sp-muted line-through border border-sp-border'
-                          : 'bg-sp-accent/10 text-sp-accent border border-sp-accent/30 hover:bg-sp-accent/20'
-                    }`}
-                  >
-                    {name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {selectedRoster.studentNames.length > 0 && (
-            <div className="mt-2 text-xs text-sp-muted text-center">
-              클릭하여 제외/포함 ({selectedRoster.studentNames.length - excludedNames.size}명 참여)
-            </div>
-          )}
+          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+            {selectedNames.map((name, idx) => {
+              const isExcluded = excludedNames.has(name);
+              const isPicked = pickedItems.includes(name);
+              const isPlaceholder = name.endsWith('번') && /^\d+번$/.test(name);
+              return (
+                <button
+                  key={`${name}-${idx}`}
+                  onClick={() => onToggleExclusion(name)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    isExcluded
+                      ? 'bg-sp-surface text-sp-muted/50 line-through border border-sp-border/50'
+                      : isPicked
+                        ? 'bg-sp-surface text-sp-muted line-through border border-sp-border'
+                        : 'bg-sp-accent/10 text-sp-accent border border-sp-accent/30 hover:bg-sp-accent/20'
+                  } ${isPlaceholder ? 'italic' : ''}`}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 text-xs text-sp-muted text-center">
+            클릭하여 제외/포함 ({selectedNames.length - excludedNames.size}명 참여)
+          </div>
+        </div>
+      ) : (selectedRoster || selectedTeachingClass) ? (
+        <div className="text-center py-4 text-sp-muted text-sm">
+          {selectedTeachingClass
+            ? '수업관리에서 먼저 학생을 등록하세요.'
+            : '학생이 등록되지 않았습니다. ✏️ 버튼으로 명단을 추가하세요.'}
         </div>
       ) : (
         <div className="text-center py-4 text-sp-muted text-sm">
-          {rosters.length === 0
-            ? '아직 등록된 반이 없습니다. [+ 새 반] 버튼으로 시작하세요.'
+          {teachingClasses.length === 0 && rosters.length === 0
+            ? '수업관리에서 반을 등록하거나, [명단 추가] 버튼으로 시작하세요.'
             : '위 드롭다운에서 반을 선택하세요.'}
         </div>
       )}

@@ -5,6 +5,7 @@ import { PresetSelector } from './PresetSelector';
 import { ClassRosterSelector } from './ClassRosterSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { shuffleArray, pickRandom } from '@domain/rules/randomRules';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
@@ -50,6 +51,11 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const rosterLoaded = useClassRosterStore((s) => s.loaded);
   const loadRosters = useClassRosterStore((s) => s.load);
 
+  // --- Teaching Class Store ---
+  const teachingClasses = useTeachingClassStore((s) => s.classes);
+  const tcLoaded = useTeachingClassStore((s) => s.loaded);
+  const loadTc = useTeachingClassStore((s) => s.load);
+
   // --- Pick State ---
   const [pickedItems, setPickedItems] = useState<string[]>([]);
   const [excludePicked, setExcludePicked] = useState(true);
@@ -71,7 +77,8 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   useEffect(() => {
     if (!loaded) loadStudents();
     if (!rosterLoaded) loadRosters();
-  }, [loaded, loadStudents, rosterLoaded, loadRosters]);
+    if (!tcLoaded) loadTc();
+  }, [loaded, loadStudents, rosterLoaded, loadRosters, tcLoaded, loadTc]);
 
   // Cleanup animation on unmount
   useEffect(() => {
@@ -105,13 +112,24 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
           .filter((line) => line.length > 0);
       }
       case 'classRoster': {
+        // Teaching class selection (prefixed with "tc:")
+        if (selectedRosterId?.startsWith('tc:')) {
+          const tcId = selectedRosterId.slice(3);
+          const tc = teachingClasses.find((c) => c.id === tcId);
+          if (!tc) return [];
+          return tc.students
+            .filter((s) => !s.isVacant)
+            .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
+            .filter((name) => !rosterExcludedNames.has(name));
+        }
+        // Regular class roster
         const roster = rosters.find((r) => r.id === selectedRosterId);
         if (!roster) return [];
         return roster.studentNames
           .filter((name) => name.trim().length > 0 && !rosterExcludedNames.has(name));
       }
     }
-  }, [dataSource, students, excludedIds, rangeConfig, customText, rosters, selectedRosterId, rosterExcludedNames]);
+  }, [dataSource, students, excludedIds, rangeConfig, customText, rosters, selectedRosterId, rosterExcludedNames, teachingClasses]);
 
   // Reset state when mode or data source changes
   useEffect(() => {
