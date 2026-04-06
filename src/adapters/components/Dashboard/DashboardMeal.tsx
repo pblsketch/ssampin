@@ -1,12 +1,20 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { useWidgetRefresh } from '@widgets/hooks/useWidgetRefresh';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useDashboardConfig } from '@widgets/useDashboardConfig';
+import { DateNavigator } from '@adapters/components/common/DateNavigator';
 
-function isWeekend(): boolean {
-  const day = new Date().getDay();
+function isWeekendDate(date: Date): boolean {
+  const day = date.getDay();
   return day === 0 || day === 6;
+}
+
+function toMealDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
 }
 
 export function DashboardMeal() {
@@ -14,14 +22,22 @@ export function DashboardMeal() {
   const {
     todayLoading, todayError, loadTodayMeals,
     manualLoaded, loadManualMeals, mealSource,
-    getMergedTodayMeals,
+    getMergedMealsForDate, getMergedTodayMeals,
   } = useMealStore();
   // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
   const atptCode = settings.mealSchool?.atptCode || settings.neis?.atptCode;
   const schoolCode = settings.mealSchool?.schoolCode || settings.neis?.schoolCode;
 
-  // 병합된 오늘의 급식
-  const todayMeals = getMergedTodayMeals();
+  // 날짜 탐색 상태
+  const [viewDate, setViewDate] = useState(new Date());
+  const viewDateStr = toMealDateString(viewDate);
+  const todayStr = toMealDateString(new Date());
+  const isViewingToday = viewDateStr === todayStr;
+
+  // 표시할 급식 데이터 — 오늘: todayMeals 스토어, 기타: 캐시 기반 (캐시 없으면 빈 배열)
+  const displayMeals = isViewingToday
+    ? getMergedTodayMeals()
+    : getMergedMealsForDate(viewDateStr);
 
   // 자신의 colSpan 읽기 (가로 배열 판정용)
   const config = useDashboardConfig((s) => s.config);
@@ -45,14 +61,24 @@ export function DashboardMeal() {
 
   useWidgetRefresh(reloadMeal, { intervalMs: 30 * 60 * 1000 });
 
+  // 공통 헤더 렌더링 헬퍼
+  const renderHeader = () => (
+    <div className="mb-2 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>🍱</span>
+          급식
+        </h3>
+      </div>
+      <DateNavigator date={viewDate} onDateChange={setViewDate} />
+    </div>
+  );
+
   // 학교 미설정 (수동 모드에서는 허용)
   if (!schoolCode && mealSource !== 'manual') {
     return (
       <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5 mb-2">
-          <span>🍱</span>
-          오늘의 급식
-        </h3>
+        {renderHeader()}
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sp-muted text-sm text-center">
             설정에서 학교를 등록해주세요
@@ -62,39 +88,41 @@ export function DashboardMeal() {
     );
   }
 
+  // 오늘 외 날짜: 로딩/에러는 오늘 데이터 기준, 캐시만 표시
+  const showLoading = isViewingToday && todayLoading;
+  const showError = isViewingToday && todayError;
+  const isEmpty = !showLoading && !showError && displayMeals.length === 0;
+
   return (
     <div className="rounded-xl bg-sp-card p-4 flex flex-col">
-      <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5 mb-2">
-        <span>🍱</span>
-        오늘의 급식
-      </h3>
+      {renderHeader()}
 
       <div className="flex-1 overflow-y-auto">
-        {todayLoading && (
+        {showLoading && (
           <div className="flex items-center justify-center py-8">
             <div className="w-5 h-5 border-2 border-sp-accent border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
-        {todayError && (
+        {showError && (
           <p className="text-red-400 text-sm text-center py-4">{todayError}</p>
         )}
 
-        {!todayLoading && !todayError && todayMeals.length === 0 && (
+        {isEmpty && (
           <div className="flex items-center justify-center py-8">
             <p className="text-sp-muted text-sm text-center">
-              {isWeekend() ? '오늘은 급식이 없어요 🎉' : '급식 정보가 없습니다'}
+              {isWeekendDate(viewDate) ? '급식이 없는 날이에요 🎉' : '급식 정보가 없습니다'}
             </p>
           </div>
         )}
 
         {/* 넓은 카드(3~4칸): 가로 배열 / 좁은 카드(1~2칸): 세로 배열 */}
-        {!todayLoading && todayMeals.length > 0 && (
+        {!showLoading && displayMeals.length > 0 && (
           <div className={isWide
-            ? `grid gap-4 ${todayMeals.length >= 3 ? 'grid-cols-3' : todayMeals.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`
+            ? `grid gap-4 ${displayMeals.length >= 3 ? 'grid-cols-3' : displayMeals.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`
             : 'space-y-3'
           }>
-            {todayMeals.map((meal, idx) => (
+            {displayMeals.map((meal, idx) => (
               <div key={idx} className={isWide ? 'border-r border-sp-border last:border-r-0 pr-4 last:pr-0 space-y-2' : 'border-b border-sp-border last:border-b-0 pb-3 last:pb-0 space-y-2'}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-sp-accent uppercase tracking-wider">

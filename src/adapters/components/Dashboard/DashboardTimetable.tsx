@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
@@ -7,6 +7,7 @@ import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectTextColor, getSubjectDotColor, getCellStyle, getCellDotColor } from '@adapters/presenters/timetablePresenter';
 import { toLocalDateString } from '@shared/utils/localDate';
+import { DateNavigator, isSameDay } from '@adapters/components/common/DateNavigator';
 
 type TabType = 'class' | 'teacher';
 
@@ -26,6 +27,13 @@ export function DashboardTimetable() {
     try { localStorage.setItem('ssampin:timetable-tab', newTab); } catch { /* ignore */ }
   };
   const [now, setNow] = useState(new Date());
+  // 날짜 탐색: 기본값은 오늘, 사용자가 이동하면 해당 날짜 시간표 표시
+  const [viewDate, setViewDate] = useState(new Date());
+  const isViewingToday = isSameDay(viewDate, now);
+
+  const handleDateChange = useCallback((date: Date) => {
+    setViewDate(date);
+  }, []);
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -72,10 +80,12 @@ export function DashboardTimetable() {
   }, [loadSchedule, loadSettings]);
 
   const weekendDays = settings.enableWeekendDays;
-  const dayOfWeek = useMemo(() => getDayOfWeek(now, weekendDays), [now, weekendDays]);
+  // viewDate 기준 요일 — 날짜 탐색 시 해당 날짜 요일 사용
+  const dayOfWeek = useMemo(() => getDayOfWeek(viewDate, weekendDays), [viewDate, weekendDays]);
+  // currentPeriod는 오늘을 볼 때만 의미 있음
   const currentPeriod = useMemo(
-    () => (dayOfWeek ? getCurrentPeriod(settings.periodTimes, now) : null),
-    [dayOfWeek, settings.periodTimes, now],
+    () => (dayOfWeek && isViewingToday ? getCurrentPeriod(settings.periodTimes, now) : null),
+    [dayOfWeek, isViewingToday, settings.periodTimes, now],
   );
 
   const colorBy = settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
@@ -91,39 +101,46 @@ export function DashboardTimetable() {
     return map;
   }, [settings.periodTimes]);
 
-  // 오늘의 학급 시간표
+  // 해당 날짜의 학급 시간표
   const todayClassPeriods: readonly ClassPeriod[] = useMemo(() => {
     if (!dayOfWeek) return [];
     return classSchedule[dayOfWeek] ?? [];
   }, [dayOfWeek, classSchedule]);
 
-  // 오늘의 교사 시간표 (오버라이드 적용)
-  const todayStr = useMemo(() => toLocalDateString(now), [now]);
+  // 해당 날짜의 교사 시간표 (오버라이드 적용)
+  const viewDateStr = useMemo(() => toLocalDateString(viewDate), [viewDate]);
   const todayTeacherPeriods: readonly (TeacherPeriod | null)[] = useMemo(() => {
     if (!dayOfWeek) return [];
-    return getEffectiveTeacherSchedule(todayStr, weekendDays);
+    return getEffectiveTeacherSchedule(viewDateStr, weekendDays);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayOfWeek, todayStr, teacherSchedule, overrides]);
+  }, [dayOfWeek, viewDateStr, teacherSchedule, overrides]);
 
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
-          <span>🕐</span>
-          오늘의 시간표
-        </h3>
-        <div className="flex rounded-lg bg-sp-surface p-0.5">
-          <TabButton
-            active={tab === 'teacher'}
-            onClick={() => handleTabChange('teacher')}
-            label="교사"
-          />
-          <TabButton
-            active={tab === 'class'}
-            onClick={() => handleTabChange('class')}
-            label="학급"
-          />
+      <div className="mb-4 flex flex-col gap-2">
+        {/* 상단 행: 제목 + 탭 */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+            <span>🕐</span>
+            시간표
+          </h3>
+          <div className="flex rounded-lg bg-sp-surface p-0.5">
+            <TabButton
+              active={tab === 'teacher'}
+              onClick={() => handleTabChange('teacher')}
+              label="교사"
+            />
+            <TabButton
+              active={tab === 'class'}
+              onClick={() => handleTabChange('class')}
+              label="학급"
+            />
+          </div>
+        </div>
+        {/* 하단 행: 날짜 탐색 */}
+        <div className="flex items-center justify-between">
+          <DateNavigator date={viewDate} onDateChange={handleDateChange} />
         </div>
       </div>
 
