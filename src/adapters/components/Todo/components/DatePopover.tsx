@@ -97,7 +97,7 @@ export function DatePopover({
     }
   }, [date]);
 
-  const sundayStart = useSettingsStore((s) => s.settings.weekdayStart) === 'sunday';
+  const sundayStart = (useSettingsStore((s) => s.settings.weekdayStart) ?? 'sunday') === 'sunday';
   const dayNames = sundayStart ? DAY_NAMES_SUNDAY : DAY_NAMES_MONDAY;
   const cells = useMemo(() => getMonthDays(viewYear, viewMonth, sundayStart), [viewYear, viewMonth, sundayStart]);
 

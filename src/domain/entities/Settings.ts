@@ -273,6 +273,6 @@ export interface Settings {
   readonly customFont?: CustomFontSettings;
   /** 할 일 모드 설정 (프로 모드) */
   readonly todoSettings?: TodoSettings;
-  /** 요일 시작 요일: 'monday'(월~일) | 'sunday'(일~토). 기본 'monday' */
+  /** 요일 시작 요일: 'monday'(월~일) | 'sunday'(일~토). 기본 'sunday' */
   readonly weekdayStart?: 'monday' | 'sunday';
 }

@@ -85,7 +85,7 @@ export function TodoTab({ draft, patch }: Props) {
               type="button"
               onClick={() => patch({ weekdayStart: key })}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                (draft.weekdayStart ?? 'monday') === key
+                (draft.weekdayStart ?? 'sunday') === key
                   ? 'bg-sp-accent text-white'
                   : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-card'
               }`}
