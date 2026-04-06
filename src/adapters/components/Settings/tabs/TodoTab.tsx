@@ -69,6 +69,33 @@ export function TodoTab({ draft, patch }: Props) {
         </div>
       </SettingsSection>
 
+      <SettingsSection
+        icon="calendar_today"
+        iconColor="bg-indigo-500/10 text-indigo-500"
+        title="요일 시작 요일"
+        description="달력과 요일 표시의 시작 요일을 선택합니다."
+      >
+        <div className="flex gap-2">
+          {([
+            { key: 'monday' as const, label: '월요일 시작 (월~일)' },
+            { key: 'sunday' as const, label: '일요일 시작 (일~토)' },
+          ]).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => patch({ weekdayStart: key })}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                (draft.weekdayStart ?? 'monday') === key
+                  ? 'bg-sp-accent text-white'
+                  : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-card'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </SettingsSection>
+
       {isProMode && (
         <>
           <SettingsSection

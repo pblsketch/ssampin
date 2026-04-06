@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 
 interface DatePopoverProps {
   /** 시작일 (dueDate) */
@@ -14,13 +15,20 @@ interface DatePopoverProps {
   children: React.ReactNode;
 }
 
-const DAY_NAMES = ['월', '화', '수', '목', '금', '토', '일'];
+const DAY_NAMES_MONDAY = ['월', '화', '수', '목', '금', '토', '일'];
+const DAY_NAMES_SUNDAY = ['일', '월', '화', '수', '목', '금', '토'];
 
-function getMonthDays(year: number, month: number) {
+function getMonthDays(year: number, month: number, sundayStart: boolean) {
   const firstDay = new Date(year, month, 1);
-  // Monday-based: 0=Mon, 6=Sun
-  let startDow = firstDay.getDay() - 1;
-  if (startDow < 0) startDow = 6;
+  let startDow: number;
+  if (sundayStart) {
+    // Sunday-based: 0=Sun, 6=Sat
+    startDow = firstDay.getDay();
+  } else {
+    // Monday-based: 0=Mon, 6=Sun
+    startDow = firstDay.getDay() - 1;
+    if (startDow < 0) startDow = 6;
+  }
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
 
@@ -89,7 +97,9 @@ export function DatePopover({
     }
   }, [date]);
 
-  const cells = useMemo(() => getMonthDays(viewYear, viewMonth), [viewYear, viewMonth]);
+  const sundayStart = useSettingsStore((s) => s.settings.weekdayStart) === 'sunday';
+  const dayNames = sundayStart ? DAY_NAMES_SUNDAY : DAY_NAMES_MONDAY;
+  const cells = useMemo(() => getMonthDays(viewYear, viewMonth, sundayStart), [viewYear, viewMonth, sundayStart]);
 
   const todayStr = useMemo(() => {
     const t = new Date();
@@ -168,7 +178,7 @@ export function DatePopover({
 
           {/* 요일 헤더 */}
           <div className="grid grid-cols-7 gap-0.5 mb-1">
-            {DAY_NAMES.map(d => (
+            {dayNames.map(d => (
               <div key={d} className="text-center text-[10px] font-medium text-gray-400 py-1">
                 {d}
               </div>
