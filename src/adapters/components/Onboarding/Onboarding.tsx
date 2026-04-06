@@ -797,3 +797,182 @@ export function Onboarding() {
         </div>
     );
 }
+
+function AccountLinkingStep() {
+    const {
+        isConnected, email, isLoading,
+        startAuth, disconnect,
+        showFallbackSuggestion, fallbackSuggestionData, acceptFallback, setShowFallbackSuggestion,
+        oauthError, setOAuthError, showPKCEFallback, setShowPKCEFallback,
+        startPKCEFallback, completePKCEAuth, error: authError,
+    } = useCalendarSyncStore();
+    const [pkceCode, setPkceCode] = useState('');
+
+    useEffect(() => {
+        const api = window.electronAPI;
+        if (!api?.onOAuthError) return;
+        return api.onOAuthError((err) => setOAuthError(err));
+    }, [setOAuthError]);
+
+    return (
+        <div className="animate-in fade-in slide-in-from-right-8 duration-300 flex flex-col items-center w-full">
+            <h2 className="text-2xl font-bold text-sp-text mb-2 text-center">Google 계정 연동</h2>
+            <p className="text-sp-muted text-center mb-6">다른 PC에서도 데이터를 이어 쓰려면 계정을 연결하세요. 나중에 설정에서도 할 수 있어요.</p>
+
+            <div className="w-full max-w-md space-y-4">
+                {isConnected ? (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-4 rounded-xl bg-sp-surface p-4">
+                            <div className="w-12 h-12 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined text-green-400 text-2xl">check_circle</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-base font-semibold text-sp-text">Google 계정 연결됨</p>
+                                <p className="text-sm text-sp-muted truncate">{email}</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="flex items-center gap-2 rounded-lg border border-sp-border p-3">
+                                <span className="material-symbols-outlined text-cyan-400 text-icon-md">cloud_sync</span>
+                                <span className="text-sp-text">드라이브 동기화</span>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-lg border border-sp-border p-3">
+                                <span className="material-symbols-outlined text-pink-400 text-icon-md">event</span>
+                                <span className="text-sp-text">캘린더 연동</span>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => void disconnect()}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-icon">link_off</span>
+                            연결 해제
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="rounded-xl bg-sp-surface border border-sp-border p-5 space-y-3">
+                            <p className="text-sm font-semibold text-sp-muted uppercase tracking-wider">연결하면 사용할 수 있는 기능</p>
+                            <ul className="space-y-2 text-sm text-sp-muted">
+                                <li className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-icon text-cyan-400">cloud_sync</span>
+                                    여러 기기 간 데이터 자동 동기화
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-icon text-pink-400">event</span>
+                                    Google 캘린더와 일정 연동
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-icon text-emerald-400">folder_open</span>
+                                    과제수합 (Google 드라이브)
+                                </li>
+                            </ul>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => void startAuth()}
+                            disabled={isLoading}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-sp-accent hover:bg-blue-600 text-white font-medium text-sm transition-all shadow-lg shadow-sp-accent/25 disabled:opacity-50"
+                        >
+                            {isLoading ? (
+                                <>
+                                    <span className="material-symbols-outlined animate-spin text-icon-md">progress_activity</span>
+                                    연결 중...
+                                </>
+                            ) : (
+                                <>
+                                    <span className="material-symbols-outlined text-icon-md">login</span>
+                                    Google 계정 연결
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* OAuth fallback suggestion modal */}
+            {showFallbackSuggestion && fallbackSuggestionData && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowFallbackSuggestion(false)}>
+                    <div className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 rounded-lg bg-amber-500/10">
+                                <span className="material-symbols-outlined text-amber-400">wifi_off</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-sp-text">연결이 안 되시나요?</h3>
+                        </div>
+                        <p className="text-sm text-sp-muted">
+                            {fallbackSuggestionData.reason === 'LOCALHOST_BLOCKED'
+                                ? '학교 보안 프로그램이 구글 연결을 차단하고 있어요. 수동 인증 방식으로 연결할 수 있습니다.'
+                                : `Google 로그인 후 앱 연결이 ${fallbackSuggestionData.elapsedSec}초째 대기 중이에요.`}
+                        </p>
+                        <div className="flex items-center justify-end gap-2 mt-6">
+                            <button onClick={() => setShowFallbackSuggestion(false)} className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface">좀 더 기다릴게요</button>
+                            <button onClick={() => void acceptFallback()} className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80">수동 인증으로 전환</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OAuth error modal */}
+            {oauthError && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setOAuthError(null)}>
+                    <div className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 rounded-lg bg-red-500/10">
+                                <span className="material-symbols-outlined text-red-400">error</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-sp-text">Google 로그인 연결 실패</h3>
+                        </div>
+                        <p className="text-sm text-sp-muted">{oauthError.message}</p>
+                        <div className="flex items-center justify-end gap-2 mt-6">
+                            {(oauthError.code === 'SERVER_START_FAILED' || oauthError.code === 'LOCALHOST_BLOCKED') && (
+                                <button onClick={() => { setOAuthError(null); void startPKCEFallback(); }} className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80">수동 인증으로 시도</button>
+                            )}
+                            <button onClick={() => setOAuthError(null)} className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface">닫기</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PKCE manual auth */}
+            {showPKCEFallback && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowPKCEFallback(false)}>
+                    <div className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 rounded-lg bg-blue-500/10">
+                                <span className="material-symbols-outlined text-blue-400">key</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-sp-text">수동 인증</h3>
+                        </div>
+                        <p className="text-sm text-sp-muted mb-4">브라우저에서 Google 로그인 후 표시된 인증 코드를 아래에 붙여넣어 주세요.</p>
+                        {authError && (
+                            <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-400 mb-4">{authError}</div>
+                        )}
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={pkceCode}
+                                onChange={(e) => setPkceCode(e.target.value)}
+                                placeholder="인증 코드 입력..."
+                                className="flex-1 rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none"
+                                autoFocus
+                                onKeyDown={(e) => { if (e.key === 'Enter' && pkceCode.trim()) void completePKCEAuth(pkceCode.trim()); }}
+                            />
+                            <button
+                                onClick={() => pkceCode.trim() && void completePKCEAuth(pkceCode.trim())}
+                                disabled={isLoading || !pkceCode.trim()}
+                                className="rounded-lg bg-sp-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sp-accent/80 disabled:opacity-50"
+                            >
+                                {isLoading ? '인증 중...' : '인증'}
+                            </button>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 mt-4">
+                            <button onClick={() => setShowPKCEFallback(false)} disabled={isLoading} className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface disabled:opacity-50">취소</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
