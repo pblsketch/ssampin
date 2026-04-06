@@ -12,6 +12,7 @@ export {
   exportAttendanceToExcel,
   generateTeachingClassRosterTemplate,
   parseTeachingClassRosterFromExcel,
+  exportGroupingToExcel,
 } from './ExcelExporter';
 export type { ParsedExcelEvent } from './ExcelExporter';
 
@@ -22,4 +23,5 @@ export {
   exportTeacherScheduleToHwpx,
   exportSeatingToHwpx,
   exportStudentRecordsToHwpx,
+  exportGroupingToHwpx,
 } from './HwpxExporter';

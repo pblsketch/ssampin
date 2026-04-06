@@ -5,6 +5,7 @@ import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
+import type { GroupResult } from '@domain/rules/groupingRules';
 import {
   getAttendanceStats,
   sortByDateDesc,
@@ -1096,6 +1097,85 @@ export async function exportStudentRecordsToHwpx(
   });
   for (let c = 0; c < ATTENDANCE_COLS; c++) {
     applyCellStyle(attendanceTable, 0, c, { charPrId: headerCharId, paraPrId: centerParaId });
+  }
+
+  return doc.save();
+}
+
+/**
+ * 모둠 편성 결과를 HWPX(한글)로 내보내기
+ */
+export async function exportGroupingToHwpx(
+  groups: readonly GroupResult[],
+): Promise<Uint8Array> {
+  const doc = await createDoc();
+
+  const titleCharId = doc.ensureRunStyle({ bold: true, fontSize: 16 });
+  const centerParaId = doc.ensureParaStyle({ alignment: 'CENTER' });
+  const headerCharId = doc.ensureRunStyle({ bold: true, fontSize: 10 });
+  const bodyCharId = doc.ensureRunStyle({ fontSize: 10 });
+  const leaderCharId = doc.ensureRunStyle({ bold: true, fontSize: 10 });
+
+  while (doc.paragraphs.length > 0) {
+    doc.removeParagraph(0, 0);
+  }
+
+  doc.addParagraph('모둠 편성 결과', {
+    charPrIdRef: titleCharId,
+    paraPrIdRef: centerParaId,
+  });
+
+  doc.addParagraph();
+
+  // 테이블: 헤더 행 + 인원수 행 + 최대 멤버 수 행
+  const maxMembers = Math.max(...groups.map((g) => g.members.length));
+  const totalRows = 2 + maxMembers;
+  const totalCols = groups.length;
+
+  const tablePara = doc.addParagraph();
+  const table = tablePara.addTable(totalRows, totalCols);
+
+  // 헤더 행: 모둠 이름
+  for (let c = 0; c < totalCols; c++) {
+    const g = groups[c]!;
+    const label = g.leaderName
+      ? `${g.label} (모둠장: ${g.leaderName})`
+      : g.label;
+    table.setCellText(0, c, label);
+  }
+
+  // 인원수 행
+  for (let c = 0; c < totalCols; c++) {
+    table.setCellText(1, c, `${groups[c]!.members.length}명`);
+  }
+
+  // 멤버 행
+  for (let r = 0; r < maxMembers; r++) {
+    for (let c = 0; c < totalCols; c++) {
+      const member = groups[c]!.members[r];
+      if (!member) continue;
+      const prefix = member.number != null ? `${member.number}번 ` : '';
+      const suffix = member.name === groups[c]!.leaderName ? ' ★' : '';
+      const roleSuffix = member.role ? ` (${member.role})` : '';
+      table.setCellText(r + 2, c, `${prefix}${member.name}${suffix}${roleSuffix}`);
+    }
+  }
+
+  // 스타일 적용
+  applyStyleToAllCells(table, totalRows, totalCols, {
+    charPrId: bodyCharId,
+    paraPrId: centerParaId,
+  });
+  for (let c = 0; c < totalCols; c++) {
+    applyCellStyle(table, 0, c, { charPrId: headerCharId, paraPrId: centerParaId });
+  }
+  for (let r = 0; r < maxMembers; r++) {
+    for (let c = 0; c < totalCols; c++) {
+      const member = groups[c]!.members[r];
+      if (member?.name === groups[c]!.leaderName) {
+        applyCellStyle(table, r + 2, c, { charPrId: leaderCharId });
+      }
+    }
   }
 
   return doc.save();

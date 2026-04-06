@@ -13,6 +13,7 @@ import { getSubjectArgb, getClassroomArgb } from '@domain/valueObjects/SubjectCo
 import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
+import type { GroupResult } from '@domain/rules/groupingRules';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -1595,4 +1596,81 @@ export async function parseTeachingClassRosterFromExcel(
   }
 
   return result;
+}
+
+/**
+ * 모둠 편성 결과를 Excel로 내보내기
+ */
+export async function exportGroupingToExcel(
+  groups: readonly GroupResult[],
+): Promise<ArrayBuffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('모둠 편성');
+
+  // 제목
+  const titleRow = ws.addRow(['모둠 편성 결과']);
+  titleRow.font = { bold: true, size: 16 };
+  ws.mergeCells(1, 1, 1, groups.length);
+  titleRow.alignment = { horizontal: 'center' };
+  ws.addRow([]);
+
+  // 모둠 헤더
+  const headerRow = ws.addRow(groups.map((g) => g.leaderName ? `${g.label} (모둠장: ${g.leaderName})` : g.label));
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
+    cell.alignment = { horizontal: 'center' };
+    cell.border = {
+      top: { style: 'thin' },
+      bottom: { style: 'thin' },
+      left: { style: 'thin' },
+      right: { style: 'thin' },
+    };
+  });
+
+  // 인원수 행
+  const countRow = ws.addRow(groups.map((g) => `${g.members.length}명`));
+  countRow.eachCell((cell) => {
+    cell.font = { size: 10, color: { argb: 'FF666666' } };
+    cell.alignment = { horizontal: 'center' };
+    cell.border = {
+      bottom: { style: 'thin' },
+      left: { style: 'thin' },
+      right: { style: 'thin' },
+    };
+  });
+
+  // 멤버 행들
+  const maxMembers = Math.max(...groups.map((g) => g.members.length));
+  for (let row = 0; row < maxMembers; row++) {
+    const dataRow = ws.addRow(groups.map((g) => {
+      const m = g.members[row];
+      if (!m) return '';
+      const prefix = m.number != null ? `${m.number}번 ` : '';
+      const suffix = m.name === g.leaderName ? ' ★' : '';
+      const roleSuffix = m.role ? ` (${m.role})` : '';
+      return `${prefix}${m.name}${suffix}${roleSuffix}`;
+    }));
+    dataRow.eachCell((cell, colNumber) => {
+      const group = groups[colNumber - 1];
+      const member = group?.members[row];
+      cell.alignment = { horizontal: 'center' };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+        left: { style: 'thin' },
+        right: { style: 'thin' },
+      };
+      if (member?.name === group?.leaderName) {
+        cell.font = { bold: true, color: { argb: 'FFD97706' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7ED' } };
+      }
+    });
+  }
+
+  // 열 너비 자동 조정
+  for (let i = 1; i <= groups.length; i++) {
+    ws.getColumn(i).width = 18;
+  }
+
+  return await wb.xlsx.writeBuffer() as ArrayBuffer;
 }
