@@ -140,8 +140,8 @@ function SortableClassItem({
         onClick={() => onSelect(cls.id)}
         className={`w-full flex items-center gap-3 pl-7 pr-10 py-2.5 rounded-xl transition-all text-left ${
           isSelected
-            ? 'bg-sp-accent/10 border-l-2 border-sp-accent'
-            : 'hover:bg-sp-text/5 border-l-2 border-transparent'
+            ? 'bg-sp-accent/15 border-l-[3px] border-sp-accent ring-1 ring-sp-accent/25'
+            : 'hover:bg-sp-text/5 border-l-[3px] border-transparent'
         }`}
       >
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getCellDotColor(cls.subject, cls.name, colorBy, subjectColors, classroomColors)}`} />
@@ -151,9 +151,18 @@ function SortableClassItem({
           </p>
           <p className="text-xs text-sp-muted/70 truncate">{cls.subject}</p>
         </div>
-        <span className="text-caption text-sp-muted bg-sp-bg px-1.5 py-0.5 rounded-full shrink-0">
-          {cls.students.length}명
-        </span>
+        {isSelected ? (
+          <span className="flex items-center gap-1 shrink-0">
+            <span className="material-symbols-outlined text-sp-accent" style={{ fontSize: '14px' }}>check_circle</span>
+            <span className="text-caption text-sp-accent font-medium bg-sp-accent/10 px-1.5 py-0.5 rounded-full">
+              {cls.students.length}명
+            </span>
+          </span>
+        ) : (
+          <span className="text-caption text-sp-muted bg-sp-bg px-1.5 py-0.5 rounded-full shrink-0">
+            {cls.students.length}명
+          </span>
+        )}
       </button>
 
       {/* 더보기 버튼 */}
