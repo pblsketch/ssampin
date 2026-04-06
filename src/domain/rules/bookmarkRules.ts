@@ -125,6 +125,7 @@ export function getDefaultPresets(): BookmarkData {
     { id: 'preset-b-12', name: '띵커벨', url: 'https://www.tkbell.co.kr', iconType: 'emoji', iconValue: '🔔', groupId: 'preset-tools', order: 2, createdAt: now, updatedAt: now },
     { id: 'preset-b-13', name: '캔바', url: 'https://www.canva.com', iconType: 'emoji', iconValue: '🎨', groupId: 'preset-tools', order: 3, createdAt: now, updatedAt: now },
     { id: 'preset-b-14', name: '미리캔버스', url: 'https://www.miricanvas.com', iconType: 'emoji', iconValue: '🖼️', groupId: 'preset-tools', order: 4, createdAt: now, updatedAt: now },
+    { id: 'preset-b-21', name: '킹수학', url: 'https://xn--9p4bn1ysod.com/', iconType: 'emoji', iconValue: '👑', groupId: 'preset-tools', order: 5, createdAt: now, updatedAt: now },
 
     // 🤖 AI·에듀테크
     { id: 'preset-b-15', name: '뤼튼', url: 'https://wrtn.ai', iconType: 'emoji', iconValue: '✨', groupId: 'preset-ai', order: 0, createdAt: now, updatedAt: now },
