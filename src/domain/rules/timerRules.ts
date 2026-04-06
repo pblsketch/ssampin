@@ -18,6 +18,13 @@ export function shouldTriggerPreWarning(
   return !alreadyTriggered && remaining <= secondsBefore && remaining > 0;
 }
 
+/** 발표 타이머 경고 레벨 판정 */
+export function getPresentationWarningLevel(remaining: number): 'none' | 'yellow' | 'red' {
+  if (remaining <= 5) return 'red';
+  if (remaining <= 10) return 'yellow';
+  return 'none';
+}
+
 /** "01:23.45" 형식 (스톱워치용, ms 단위 입력) */
 export function formatTimeMs(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);

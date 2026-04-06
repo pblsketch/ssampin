@@ -4,13 +4,16 @@ import { PresetSelector } from './PresetSelector';
 import type { KeyboardShortcut } from './types';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import type { WordCloudSession, WordCloudGroup } from '@domain/entities/WordCloudSession';
+import { useWordCloudHistoryStore } from '@adapters/stores/useWordCloudHistoryStore';
+import { OrganizeView } from './WordCloud/OrganizeView';
 
 interface ToolWordCloudProps {
   onBack: () => void;
   isFullscreen: boolean;
 }
 
-type ViewMode = 'create' | 'live';
+type ViewMode = 'create' | 'live' | 'organize' | 'history';
 
 const WORD_COLORS = [
   '#60a5fa', '#f87171', '#34d399', '#fbbf24', '#a78bfa',
@@ -42,9 +45,10 @@ function normalizeWord(word: string): string {
 interface CreateViewProps {
   isFullscreen: boolean;
   onStart: (question: string, maxSubmissions: number) => void;
+  onShowHistory: () => void;
 }
 
-function CreateView({ isFullscreen, onStart }: CreateViewProps) {
+function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
   const [question, setQuestion] = useState('');
   const [maxSubmissions, setMaxSubmissions] = useState(5);
   const [savedQuestions, setSavedQuestions] = useState<readonly string[]>(EXAMPLE_QUESTIONS);
@@ -126,14 +130,23 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
         </div>
       </div>
 
-      {/* Start button */}
-      <button
-        onClick={handleStart}
-        disabled={!question.trim()}
-        className="px-8 py-4 rounded-xl bg-sp-accent hover:bg-blue-600 disabled:bg-sp-border disabled:text-sp-muted text-white font-bold text-lg transition-all"
-      >
-        ☁️ 워드클라우드 시작!
-      </button>
+      {/* Start + History buttons */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleStart}
+          disabled={!question.trim()}
+          className="px-8 py-4 rounded-xl bg-sp-accent hover:bg-blue-600 disabled:bg-sp-border disabled:text-sp-muted text-white font-bold text-lg transition-all"
+        >
+          ☁️ 워드클라우드 시작!
+        </button>
+        <button
+          onClick={onShowHistory}
+          className="px-4 py-4 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40 transition-all flex items-center gap-2"
+        >
+          <span className="material-symbols-outlined text-icon-lg">history</span>
+          <span className="text-sm font-medium">세션 기록</span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -360,6 +373,82 @@ function WordCloudDisplay({ words, question, isFullscreen, totalSubmissions }: W
 
 /* ───────────────── Main Component ───────────────── */
 
+function generateSessionId(): string {
+  return `wc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/* ───────────────── History View ───────────────── */
+
+interface HistoryViewProps {
+  isFullscreen: boolean;
+  onLoadSession: (session: WordCloudSession) => void;
+  onBack: () => void;
+}
+
+function HistoryView({ isFullscreen, onLoadSession, onBack }: HistoryViewProps) {
+  const sessions = useWordCloudHistoryStore((s) => s.sessions);
+  const loaded = useWordCloudHistoryStore((s) => s.loaded);
+  const load = useWordCloudHistoryStore((s) => s.load);
+  const deleteSession = useWordCloudHistoryStore((s) => s.deleteSession);
+
+  useEffect(() => {
+    if (!loaded) load();
+  }, [loaded, load]);
+
+  return (
+    <div className={`flex flex-col gap-4 ${isFullscreen ? 'px-12 py-8' : 'px-6 py-4'}`}>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-sp-text">세션 기록</h2>
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-all"
+        >
+          <span className="material-symbols-outlined text-icon-md">arrow_back</span>
+          돌아가기
+        </button>
+      </div>
+
+      {sessions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
+          <span className="material-symbols-outlined text-[48px] opacity-20 mb-3">history</span>
+          <p>저장된 세션이 없습니다</p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center gap-4 p-4 bg-sp-card border border-sp-border rounded-xl hover:border-sp-accent/40 transition-all cursor-pointer"
+              onClick={() => onLoadSession(s)}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sp-text font-medium truncate">{s.question}</p>
+                <p className="text-sp-muted text-xs mt-1">
+                  {s.words.length}개 단어 · {s.groups.length}개 그룹 · {new Date(s.createdAt).toLocaleDateString('ko-KR')}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteSession(s.id);
+                  }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  title="삭제"
+                >
+                  <span className="material-symbols-outlined text-icon-md">delete</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────── Main Component ───────────────── */
+
 export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
   const { track } = useAnalytics();
   useEffect(() => {
@@ -370,6 +459,11 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
   const [question, setQuestion] = useState('');
   const [words, setWords] = useState<WordEntry[]>([]);
   const [totalSubmissions, setTotalSubmissions] = useState(0);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentGroups, setCurrentGroups] = useState<WordCloudGroup[]>([]);
+
+  const addSession = useWordCloudHistoryStore((s) => s.addSession);
+  const updateSession = useWordCloudHistoryStore((s) => s.updateSession);
 
   // Live mode state
   const [isLiveMode, setIsLiveMode] = useState(false);
@@ -437,7 +531,49 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
     setTotalSubmissions(0);
     setLiveError(null);
     colorIndexRef.current = 0;
+    setCurrentSessionId(null);
+    setCurrentGroups([]);
   }, [handleStopLive]);
+
+  const handleOrganize = useCallback(() => {
+    handleStopLive();
+    setViewMode('organize');
+  }, [handleStopLive]);
+
+  const handleSaveGroups = useCallback(async (groups: WordCloudGroup[]) => {
+    setCurrentGroups(groups);
+    const session: WordCloudSession = {
+      id: currentSessionId ?? generateSessionId(),
+      question,
+      words: words.map((w) => ({ word: w.word, normalized: w.normalized, count: w.count })),
+      groups,
+      totalSubmissions,
+      createdAt: new Date().toISOString(),
+    };
+    if (currentSessionId) {
+      await updateSession(session);
+    } else {
+      setCurrentSessionId(session.id);
+      await addSession(session);
+    }
+  }, [currentSessionId, question, words, totalSubmissions, addSession, updateSession]);
+
+  const handleLoadSession = useCallback((session: WordCloudSession) => {
+    setQuestion(session.question);
+    setWords(
+      session.words.map((w, i) => ({
+        word: w.word,
+        normalized: w.normalized,
+        count: w.count,
+        color: WORD_COLORS[i % WORD_COLORS.length]!,
+        rotation: Math.round((Math.random() - 0.5) * 24),
+      })),
+    );
+    setTotalSubmissions(session.totalSubmissions);
+    setCurrentSessionId(session.id);
+    setCurrentGroups([...session.groups.map((g) => ({ ...g, words: [...g.words] }))]);
+    setViewMode('organize');
+  }, []);
 
   const handleStartTunnel = useCallback(async () => {
     if (!window.electronAPI?.wordcloudTunnelStart) {
@@ -535,7 +671,7 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
     >
       <div className="flex flex-col h-full">
         {viewMode === 'create' && (
-          <CreateView isFullscreen={isFullscreen} onStart={handleStart} />
+          <CreateView isFullscreen={isFullscreen} onStart={handleStart} onShowHistory={() => setViewMode('history')} />
         )}
 
         {viewMode === 'live' && (
@@ -582,6 +718,15 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
             {/* Bottom controls */}
             {!liveError && (
               <div className="flex items-center justify-center gap-3 py-2">
+                {words.length > 0 && (
+                  <button
+                    onClick={handleOrganize}
+                    className="px-4 py-2 rounded-lg bg-sp-accent text-white text-sm font-medium hover:bg-sp-accent/80 transition-all flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-icon-md">category</span>
+                    정리하기
+                  </button>
+                )}
                 <button
                   onClick={handleReset}
                   className="px-4 py-2 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-all"
@@ -591,6 +736,25 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
               </div>
             )}
           </div>
+        )}
+        {viewMode === 'organize' && (
+          <OrganizeView
+            words={words}
+            question={question}
+            totalSubmissions={totalSubmissions}
+            isFullscreen={isFullscreen}
+            initialGroups={currentGroups}
+            onSave={handleSaveGroups}
+            onBack={() => setViewMode(words.length > 0 ? 'live' : 'create')}
+          />
+        )}
+
+        {viewMode === 'history' && (
+          <HistoryView
+            isFullscreen={isFullscreen}
+            onLoadSession={handleLoadSession}
+            onBack={() => setViewMode('create')}
+          />
         )}
       </div>
     </ToolLayout>

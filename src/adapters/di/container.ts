@@ -31,6 +31,7 @@ import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
 import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncRepository';
 import type { IManualMealRepository } from '@domain/repositories/IManualMealRepository';
 import type { IImageWidgetRepository } from '@domain/repositories/IImageWidgetRepository';
+import type { IWordCloudRepository } from '@domain/repositories/IWordCloudRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -63,6 +64,7 @@ import { JsonSurveyRepository } from '@adapters/repositories/JsonSurveyRepositor
 import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRepository';
 import { JsonManualMealRepository } from '@adapters/repositories/JsonManualMealRepository';
 import { JsonImageWidgetRepository } from '@adapters/repositories/JsonImageWidgetRepository';
+import { JsonWordCloudRepository } from '@adapters/repositories/JsonWordCloudRepository';
 import { DriveSyncAdapter } from '@infrastructure/google/DriveSyncAdapter';
 import { ConsultationSupabaseClient } from '@infrastructure/supabase/ConsultationSupabaseClient';
 import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
@@ -131,6 +133,9 @@ export const manualMealRepository: IManualMealRepository =
 
 export const imageWidgetRepository: IImageWidgetRepository =
   new JsonImageWidgetRepository(storage);
+
+export const wordCloudRepository: IWordCloudRepository =
+  new JsonWordCloudRepository(storage);
 
 export const neisPort: INeisPort = new NeisApiClient();
 

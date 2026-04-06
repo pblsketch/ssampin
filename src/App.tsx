@@ -15,7 +15,7 @@ import { Widget } from '@adapters/components/Widget/Widget';
 import { Export } from '@adapters/components/Export/Export';
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
 import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
-import { ToolTimer } from '@adapters/components/Tools/ToolTimer';
+import { ToolTimer } from '@adapters/components/Tools/Timer';
 import { ToolRandom } from '@adapters/components/Tools/ToolRandom';
 import { ToolTrafficLight } from '@adapters/components/Tools/ToolTrafficLight';
 import { ToolScoreboard } from '@adapters/components/Tools/ToolScoreboard';
@@ -28,6 +28,7 @@ import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
 import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
+import { ToolGrouping } from '@adapters/components/Tools/ToolGrouping';
 import { AssignmentTool } from '@adapters/components/Tools/Assignment/AssignmentTool';
 import { AssignmentDetail } from '@adapters/components/Tools/Assignment/AssignmentDetail';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
@@ -149,6 +150,9 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   }
   if (page === 'tool-seat-picker') {
     return <ToolSeatPicker onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-grouping') {
+    return <ToolGrouping onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
   }
   if (page === 'tool-assignment') {
     return (
