@@ -869,6 +869,11 @@ function AccountLinkingStep() {
                                 </li>
                             </ul>
                         </div>
+                        {authError && (
+                            <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-400">
+                                {authError}
+                            </div>
+                        )}
                         <button
                             type="button"
                             onClick={() => void startAuth()}
