@@ -5,10 +5,23 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { useBirthdaySync } from '@adapters/hooks/useBirthdaySync';
 import { STUDENT_STATUS_LABELS, isInactiveStatus } from '@domain/entities/Student';
 import type { StudentStatus } from '@domain/entities/Student';
+import type { Student } from '@domain/entities/Student';
 /* eslint-disable no-restricted-imports */
 import { exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
 import { FormatHint } from '../common/FormatHint';
+import {
+  parseClipboardText,
+  validateRows,
+  toImportStudents,
+  generateSampleData,
+} from '@domain/rules/rosterImportRules';
+import type {
+  ParseResult,
+  ColumnMapping,
+  ColumnType,
+  ValidationSummary,
+} from '@domain/rules/rosterImportRules';
 
 export function RosterManagementTab() {
   const {
@@ -24,6 +37,13 @@ export function RosterManagementTab() {
   const [isEditing, setIsEditing] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  // 3-step wizard state
+  const [bulkStep, setBulkStep] = useState<1 | 2 | 3>(1);
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [columnMappings, setColumnMappings] = useState<ColumnMapping[]>([]);
+  const [useFirstRowAsHeader, setUseFirstRowAsHeader] = useState(true);
+  const [validationResult, setValidationResult] = useState<ValidationSummary | null>(null);
+  const prevStudentsRef = useRef<readonly Student[]>([]);
   const rosterFileRef = useRef<HTMLInputElement>(null);
   const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }> | null>(null);
   // 보호자2 필드가 열려있는 학생 ID 세트
@@ -64,6 +84,15 @@ export function RosterManagementTab() {
     return !!s.isVacant;
   }).length, [students]);
 
+  const resetBulkImport = useCallback(() => {
+    setBulkText('');
+    setBulkStep(1);
+    setParseResult(null);
+    setColumnMappings([]);
+    setUseFirstRowAsHeader(true);
+    setValidationResult(null);
+  }, []);
+
   const handleBulkImport = useCallback(async () => {
     if (!bulkText.trim()) return;
 
@@ -83,11 +112,89 @@ export function RosterManagementTab() {
       isVacant: false,
     }));
 
+    prevStudentsRef.current = students;
     await updateStudents(newStudents);
-    setBulkText('');
+    resetBulkImport();
     setShowBulkImport(false);
-    showToast(`${names.length}명의 학생을 등록했습니다`, 'success');
-  }, [bulkText, updateStudents, showToast]);
+    showToast(`${names.length}명의 학생을 등록했습니다`, 'success', {
+      label: '실행 취소',
+      onClick: () => void updateStudents([...prevStudentsRef.current]),
+    });
+  }, [bulkText, updateStudents, showToast, students, resetBulkImport]);
+
+  /** Step 1 → Step 2: 텍스트 파싱 후 분기 */
+  const handleBulkNext = useCallback(() => {
+    const text = bulkText.trim();
+    if (!text) return;
+
+    const result = parseClipboardText(text);
+
+    // 단일 열이고 헤더 없음 → 이름만 모드 (구 동작)
+    if (result.columns.length === 1 && !result.hasHeader) {
+      void handleBulkImport();
+      return;
+    }
+
+    setParseResult(result);
+    setColumnMappings(result.columns);
+    setUseFirstRowAsHeader(result.hasHeader);
+
+    const summary = validateRows(result.rows, result.columns);
+    setValidationResult(summary);
+    setBulkStep(2);
+  }, [bulkText, handleBulkImport]);
+
+  /** Step 2에서 컬럼 타입 변경 */
+  const handleColumnTypeChange = useCallback((colIdx: number, type: ColumnType) => {
+    setColumnMappings((prev) => {
+      const next = prev.map((m, i) => (i === colIdx ? { ...m, type } : m));
+      if (parseResult) {
+        setValidationResult(validateRows(parseResult.rows, next));
+      }
+      return next;
+    });
+  }, [parseResult, useFirstRowAsHeader]);
+
+  /** Step 2에서 헤더 토글 변경 */
+  const handleHeaderToggle = useCallback((checked: boolean) => {
+    setUseFirstRowAsHeader(checked);
+    if (parseResult) {
+      setValidationResult(validateRows(parseResult.rows, columnMappings));
+    }
+  }, [parseResult, columnMappings]);
+
+  /** Step 2 → Step 3 */
+  const handleBulkStep2Next = useCallback(() => {
+    setBulkStep(3);
+  }, []);
+
+  /** Step 3 적용 */
+  const handleBulkApply = useCallback(async () => {
+    if (!parseResult) return;
+    const imported = toImportStudents(parseResult.rows, columnMappings);
+
+    const newStudents = imported.map((p, idx) => ({
+      id: `s${Date.now()}_${idx}`,
+      name: p.name,
+      studentNumber: p.studentNumber,
+      phone: p.phone,
+      parentPhone: p.parentPhone,
+      parentPhoneLabel: p.parentPhoneLabel,
+      parentPhone2: p.parentPhone2,
+      parentPhone2Label: p.parentPhone2Label,
+      birthDate: p.birthDate,
+      isVacant: p.isVacant,
+    }));
+
+    prevStudentsRef.current = students;
+    await updateStudents(newStudents);
+    resetBulkImport();
+    setShowBulkImport(false);
+    showToast(`${newStudents.length}명의 학생을 등록했습니다`, 'success', {
+      label: '실행 취소',
+      onClick: () => void updateStudents([...prevStudentsRef.current]),
+    });
+  }, [parseResult, useFirstRowAsHeader, columnMappings, students, updateStudents, resetBulkImport, showToast]);
 
   const handleExportRoster = useCallback(async () => {
     try {
@@ -168,7 +275,7 @@ export function RosterManagementTab() {
           </div>
 
           <button
-            onClick={() => setShowBulkImport(true)}
+            onClick={() => { resetBulkImport(); setShowBulkImport(true); }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-lg">group_add</span>
@@ -607,42 +714,305 @@ export function RosterManagementTab() {
         )}
       </div>
 
-      {/* 일괄 입력 모달 */}
+      {/* 일괄 입력 모달 — 3단계 마법사 */}
       {showBulkImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl flex flex-col max-h-[80vh]">
-            <h3 className="text-lg font-bold text-sp-text mb-2">학생 일괄 입력</h3>
-            <p className="text-sm text-sp-muted mb-4">
-              엑셀, 한글 파일 등에서 학생 이름 목록을 복사하여 붙여넣으세요.<br />
-              이름은 줄바꿈, 쉼표, 또는 탭으로 구분됩니다.<br />
-              <span className="text-red-400 font-bold mt-1 inline-block">주의: 저장 시 기존 명단이 모두 교체됩니다!</span>
-            </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          {/* ── Step 1: 붙여넣기 ─────────────────────────────────────────── */}
+          {bulkStep === 1 && (
+            <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl flex flex-col max-h-[85vh]">
+              {/* 헤더 */}
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sp-accent">content_paste</span>
+                  학생 일괄 입력
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-sp-muted">
+                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">1</span>
+                  <span>/</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-surface">2</span>
+                  <span>/</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-surface">3</span>
+                </div>
+              </div>
+              <p className="text-xs text-sp-muted mb-4">엑셀이나 구글 시트에서 복사한 데이터를 붙여넣으세요.</p>
 
-            <textarea
-              className="flex-1 w-full min-h-[200px] bg-sp-bg border border-sp-border rounded-lg p-3 text-sm text-sp-text focus:border-sp-accent focus:outline-none resize-none mb-6"
-              placeholder="홍길동, 김철수, 이영희..."
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-            />
+              <textarea
+                className="w-full min-h-[240px] bg-sp-bg border border-sp-border rounded-lg p-3 text-sm text-sp-text focus:border-sp-accent focus:outline-none resize-none mb-3 font-mono"
+                placeholder={'엑셀이나 구글 시트에서 학생 데이터를 복사하여 붙여넣으세요.\n\n번호  이름  학생연락처  보호자관계  보호자연락처\n1  홍길동  010-1234-5678  어머니  010-9876-5432'}
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                autoFocus
+              />
 
-            <div className="flex justify-end gap-3 shrink-0">
               <button
-                onClick={() => {
-                  setBulkText('');
-                  setShowBulkImport(false);
-                }}
-                className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
+                onClick={() => setBulkText(generateSampleData())}
+                className="self-start text-xs text-sp-accent hover:underline mb-4"
               >
-                취소
+                예시 데이터 입력
               </button>
-              <button
-                onClick={() => void handleBulkImport()}
-                className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
-              >
-                저장하기
-              </button>
+
+              <div className="flex justify-end gap-3 shrink-0">
+                <button
+                  onClick={() => { resetBulkImport(); setShowBulkImport(false); }}
+                  className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleBulkNext}
+                  disabled={!bulkText.trim()}
+                  className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                >
+                  다음
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* ── Step 2: 컬럼 매핑 & 미리보기 ──────────────────────────────── */}
+          {bulkStep === 2 && parseResult && (
+            <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-4xl w-full mx-4 shadow-2xl flex flex-col max-h-[90vh]">
+              {/* 헤더 */}
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sp-accent">table_chart</span>
+                  컬럼 설정 및 미리보기
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-sp-muted">
+                  <span className="px-2 py-0.5 rounded-full bg-sp-surface">1</span>
+                  <span>/</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">2</span>
+                  <span>/</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-surface">3</span>
+                </div>
+              </div>
+              <p className="text-xs text-sp-muted mb-3">
+                각 열의 데이터 종류를 확인하고 수정하세요. 신뢰도가 낮은 열은 황색으로 표시됩니다.
+              </p>
+
+              {/* 헤더 토글 */}
+              {parseResult.hasHeader && (
+                <label className="flex items-center gap-2 mb-3 cursor-pointer select-none w-fit">
+                  <input
+                    type="checkbox"
+                    checked={useFirstRowAsHeader}
+                    onChange={(e) => handleHeaderToggle(e.target.checked)}
+                    className="w-4 h-4 accent-sp-accent"
+                  />
+                  <span className="text-sm text-sp-text">첫 번째 행을 헤더로 사용</span>
+                </label>
+              )}
+
+              {/* 테이블 미리보기 */}
+              <div className="flex-1 overflow-auto mb-3 rounded-lg border border-sp-border">
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0 bg-sp-surface z-10">
+                    <tr>
+                      {columnMappings.map((mapping, colIdx) => {
+                        const isLowConf = mapping.confidence === 'low';
+                        return (
+                          <th
+                            key={colIdx}
+                            className={`px-3 py-2 text-left border-b border-sp-border font-normal ${isLowConf ? 'border border-amber-500/50' : ''}`}
+                          >
+                            <div className="text-sp-muted text-[10px] mb-1 truncate max-w-[120px]">{mapping.headerText}</div>
+                            <select
+                              value={mapping.type}
+                              onChange={(e) => handleColumnTypeChange(colIdx, e.target.value as ColumnType)}
+                              className={`w-full rounded bg-sp-bg px-1.5 py-1 text-xs text-sp-text border focus:outline-none focus:border-sp-accent ${isLowConf ? 'border-amber-500/60' : 'border-sp-border'}`}
+                            >
+                              <option value="number">번호</option>
+                              <option value="name">이름</option>
+                              <option value="phone">학생연락처</option>
+                              <option value="parentPhoneLabel">보호자1관계</option>
+                              <option value="parentPhone">보호자1연락처</option>
+                              <option value="parentPhone2Label">보호자2관계</option>
+                              <option value="parentPhone2">보호자2연락처</option>
+                              <option value="birthDate">생년월일</option>
+                              <option value="remarks">비고</option>
+                              <option value="skip">건너뛰기</option>
+                            </select>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const dataRows = parseResult.rows;
+                      const previewRows = dataRows.slice(0, 10);
+                      const extra = dataRows.length - previewRows.length;
+                      return (
+                        <>
+                          {previewRows.map((row, rowIdx) => {
+                            const rowErr = validationResult?.errors.find((e) => e.rowIndex === rowIdx);
+                            const rowClass = rowErr
+                              ? rowErr.errors.some((e) => e.severity === 'error')
+                                ? 'bg-red-500/10'
+                                : 'bg-amber-500/5'
+                              : '';
+                            return (
+                              <tr key={rowIdx} className={`border-b border-sp-border/40 hover:bg-sp-surface/50 ${rowClass}`}>
+                                {row.cells.map((cell, colIdx) => {
+                                  const cellErr = rowErr?.errors.find((e) => e.columnIndex === colIdx);
+                                  const cellClass = cellErr
+                                    ? cellErr.severity === 'error' ? 'bg-red-500/15 text-red-300'
+                                    : 'bg-amber-500/10 text-amber-300'
+                                    : 'text-sp-text';
+                                  return (
+                                    <td
+                                      key={colIdx}
+                                      className={`px-3 py-1.5 border-r border-sp-border/30 last:border-r-0 ${cellClass}`}
+                                      title={cellErr?.message}
+                                    >
+                                      {cell || <span className="text-sp-muted/50 italic">-</span>}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
+                          {extra > 0 && (
+                            <tr>
+                              <td colSpan={columnMappings.length} className="px-3 py-2 text-center text-sp-muted italic">
+                                ... 외 {extra}명
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 유효성 요약 */}
+              {validationResult && (
+                <div className="flex items-center gap-3 text-xs mb-3 px-1">
+                  <span className="text-sp-muted">총 {validationResult.totalRows}명</span>
+                  {validationResult.errorRows > 0 && (
+                    <span className="text-red-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>error</span>
+                      {validationResult.errorRows}명 오류
+                    </span>
+                  )}
+                  {validationResult.warningRows > 0 && (
+                    <span className="text-amber-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>warning</span>
+                      {validationResult.warningRows}명 주의
+                    </span>
+                  )}
+                  {validationResult.errorRows === 0 && validationResult.warningRows === 0 && (
+                    <span className="text-green-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>check_circle</span>
+                      모두 정상
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-between gap-3 shrink-0">
+                <button
+                  onClick={() => setBulkStep(1)}
+                  className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_back</span>
+                  이전
+                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { resetBulkImport(); setShowBulkImport(false); }}
+                    className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleBulkStep2Next}
+                    className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-1"
+                  >
+                    다음
+                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 3: 확인 & 적용 ──────────────────────────────────────── */}
+          {bulkStep === 3 && parseResult && (
+            <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl flex flex-col max-h-[85vh]">
+              {/* 헤더 */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sp-accent">fact_check</span>
+                  확인 및 적용
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-sp-muted">
+                  <span className="px-2 py-0.5 rounded-full bg-sp-surface">1</span>
+                  <span>/</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-surface">2</span>
+                  <span>/</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">3</span>
+                </div>
+              </div>
+
+              {/* 요약 */}
+              {(() => {
+                const imported = toImportStudents(parseResult.rows, columnMappings);
+                return (
+                  <>
+                    <p className="text-sm text-sp-text mb-3">
+                      총 <span className="font-bold text-sp-accent">{imported.length}명</span>의 학생을 등록합니다.
+                    </p>
+
+                    {/* 경고 박스 */}
+                    <div className="flex items-start gap-2 border border-red-500/40 bg-red-500/10 rounded-lg px-4 py-3 mb-4">
+                      <span className="material-symbols-outlined text-red-400 mt-0.5" style={{ fontSize: '18px' }}>warning</span>
+                      <p className="text-xs text-red-300 leading-relaxed">
+                        주의: 기존 명단이 모두 교체됩니다. 이 작업은 되돌릴 수 없습니다.<br />
+                        <span className="text-red-400/70">(적용 후 토스트의 '실행 취소'로 복원 가능)</span>
+                      </p>
+                    </div>
+
+                    {/* 학생 목록 */}
+                    <div className="flex-1 overflow-y-auto border border-sp-border rounded-lg divide-y divide-sp-border/40 mb-4 max-h-[240px]">
+                      {imported.map((s, idx) => (
+                        <div key={idx} className="flex items-center gap-3 px-3 py-2 text-sm">
+                          <span className="text-sp-muted font-mono text-xs w-6 shrink-0">{s.studentNumber}</span>
+                          <span className="text-sp-text font-medium">{s.name}</span>
+                          {s.phone && <span className="text-xs text-sp-muted">{s.phone}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+
+              <div className="flex justify-between gap-3 shrink-0">
+                <button
+                  onClick={() => setBulkStep(2)}
+                  className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_back</span>
+                  이전
+                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { resetBulkImport(); setShowBulkImport(false); }}
+                    className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={() => void handleBulkApply()}
+                    className="px-5 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-bold transition-colors"
+                  >
+                    적용하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
