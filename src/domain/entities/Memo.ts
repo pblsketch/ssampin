@@ -11,6 +11,7 @@ export interface Memo {
   readonly rotation: number;   // degrees (-3 ~ 3)
   readonly createdAt: string;  // ISO 8601
   readonly updatedAt: string;  // ISO 8601
+  readonly archived: boolean;
 }
 
 export interface MemosData {

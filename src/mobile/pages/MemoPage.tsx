@@ -223,6 +223,7 @@ export function MemoPage({ onBack = undefined }: Props) {
       rotation: 0,
       createdAt: now,
       updatedAt: now,
+      archived: false,
     });
   };
 

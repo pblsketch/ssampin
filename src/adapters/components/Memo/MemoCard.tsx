@@ -41,10 +41,11 @@ interface MemoCardProps {
   onBringToFront: (id: string) => void;
   onDelete: (id: string) => void;
   onOpenDetail?: (memo: Memo) => void;
+  onArchive?: (id: string) => void;
   canvasRef: RefObject<HTMLDivElement | null>;
 }
 
-export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, canvasRef }: MemoCardProps) {
+export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, onArchive, canvasRef }: MemoCardProps) {
   const { updateMemo, updatePosition, updateColor, updateSize } = useMemoStore();
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(memo.content);
@@ -269,12 +270,26 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
             />
           ))}
         </div>
-        <button
-          onClick={handleDelete}
-          className="text-slate-500 opacity-0 transition-opacity hover:text-slate-900 group-hover:opacity-100"
-        >
-          <span className="material-symbols-outlined text-icon-md">close</span>
-        </button>
+        <div className="flex items-center gap-0.5">
+          {onArchive && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive(memo.id);
+              }}
+              className="text-slate-500 opacity-0 transition-opacity hover:text-slate-900 group-hover:opacity-100"
+              title="보관"
+            >
+              <span className="material-symbols-outlined text-icon-md">archive</span>
+            </button>
+          )}
+          <button
+            onClick={handleDelete}
+            className="text-slate-500 opacity-0 transition-opacity hover:text-slate-900 group-hover:opacity-100"
+          >
+            <span className="material-symbols-outlined text-icon-md">close</span>
+          </button>
+        </div>
       </div>
 
       {/* Content */}

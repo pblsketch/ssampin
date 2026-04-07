@@ -16,6 +16,8 @@ interface MemoState {
   updateColor: (id: string, color: MemoColor) => Promise<void>;
   updateSize: (id: string, width: number, height: number) => Promise<void>;
   deleteMemo: (id: string) => Promise<void>;
+  archiveMemo: (id: string) => Promise<void>;
+  unarchiveMemo: (id: string) => Promise<void>;
   bringToFront: (id: string) => void;
   arrangeInGrid: (canvasWidth: number) => Promise<void>;
 }
@@ -42,6 +44,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
           width: m.width ?? MEMO_SIZE.DEFAULT_WIDTH,
           height: m.height ?? MEMO_SIZE.DEFAULT_HEIGHT,
           rotation: m.rotation ?? randomRotation(),
+          archived: m.archived ?? false,
         }));
         set({ memos: migrated, loaded: true });
       } catch {
@@ -65,6 +68,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
         rotation: randomRotation(),
         createdAt: now,
         updatedAt: now,
+        archived: false,
       };
       await manageMemos.add(newMemo);
       set((state) => ({ memos: [...state.memos, newMemo] }));
@@ -127,6 +131,32 @@ export const useMemoStore = create<MemoState>((set, get) => {
       set((state) => ({
         memos: state.memos.filter((memo) => memo.id !== id),
       }));
+    },
+
+    archiveMemo: async (id) => {
+      const updatedAt = new Date().toISOString();
+      set((state) => ({
+        memos: state.memos.map((memo) =>
+          memo.id === id ? { ...memo, archived: true, updatedAt } : memo,
+        ),
+      }));
+      const existing = get().memos.find((memo) => memo.id === id);
+      if (existing !== undefined) {
+        await manageMemos.update({ ...existing, archived: true, updatedAt });
+      }
+    },
+
+    unarchiveMemo: async (id) => {
+      const updatedAt = new Date().toISOString();
+      set((state) => ({
+        memos: state.memos.map((memo) =>
+          memo.id === id ? { ...memo, archived: false, updatedAt } : memo,
+        ),
+      }));
+      const existing = get().memos.find((memo) => memo.id === id);
+      if (existing !== undefined) {
+        await manageMemos.update({ ...existing, archived: false, updatedAt });
+      }
     },
 
     bringToFront: (id) => {

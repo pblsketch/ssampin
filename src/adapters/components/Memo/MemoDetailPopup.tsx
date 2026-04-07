@@ -33,6 +33,7 @@ interface MemoDetailPopupProps {
   onUpdate?: (id: string, content: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onColorChange?: (id: string, color: MemoColor) => Promise<void>;
+  onArchive?: (id: string) => Promise<void>;
 }
 
 export function MemoDetailPopup({
@@ -41,6 +42,7 @@ export function MemoDetailPopup({
   onUpdate,
   onDelete,
   onColorChange,
+  onArchive,
 }: MemoDetailPopupProps) {
   const isEmpty = memo.content.trim() === '';
   const [isEditing, setIsEditing] = useState(isEmpty);
@@ -102,6 +104,13 @@ export function MemoDetailPopup({
     }
     onClose();
   }, [memo.id, onDelete, onClose]);
+
+  const handleArchive = useCallback(async () => {
+    if (onArchive) {
+      await onArchive(memo.id);
+    }
+    onClose();
+  }, [memo.id, onArchive, onClose]);
 
   const handleToggleEdit = useCallback(() => {
     setIsEditing((prev) => !prev);
@@ -174,6 +183,16 @@ export function MemoDetailPopup({
             >
               <span className="material-symbols-outlined text-icon-md">edit</span>
             </button>
+            {onArchive && (
+              <button
+                onClick={() => void handleArchive()}
+                className="rounded-md p-1 text-slate-500 transition-colors hover:text-slate-700"
+                aria-label="보관"
+                title="보관"
+              >
+                <span className="material-symbols-outlined text-icon-md">archive</span>
+              </button>
+            )}
             <button
               onClick={() => void handleDelete()}
               className="rounded-md p-1 text-slate-500 transition-colors hover:text-slate-700"
