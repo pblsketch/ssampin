@@ -5,6 +5,12 @@ export interface PollOption {
   readonly color: string;
 }
 
+export interface PollQuestion {
+  readonly id: string;
+  readonly question: string;
+  readonly options: PollOption[];
+}
+
 export interface Poll {
   readonly id: string;
   readonly question: string;
