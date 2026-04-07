@@ -1,13 +1,14 @@
 import { useState, useCallback } from 'react';
 import type { Todo, TodoPriority, TodoCategory, TodoStatus } from '@domain/entities/Todo';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
+import { RECURRENCE_PRESETS } from '@domain/valueObjects/TodoRecurrence';
 import { DatePopover } from './DatePopover';
 import { toLocalDateString } from '@shared/utils/localDate';
 
 interface TodoEditModalProps {
   todo: Todo;
   categories: readonly TodoCategory[];
-  onUpdate: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time' | 'status'>>) => void;
+  onUpdate: (id: string, changes: Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time' | 'status' | 'recurrence'>>) => void;
   onClose: () => void;
 }
 
@@ -26,6 +27,13 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
   const [priority, setPriority] = useState<TodoPriority>(todo.priority ?? 'none');
   const [category, setCategory] = useState(todo.category ?? '');
   const [status, setStatus] = useState<TodoStatus>(todo.status ?? 'todo');
+  const [recurrenceIdx, setRecurrenceIdx] = useState(() => {
+    if (!todo.recurrence) return 0;
+    const idx = RECURRENCE_PRESETS.findIndex(
+      (p) => p.value && p.value.type === todo.recurrence!.type && p.value.interval === todo.recurrence!.interval,
+    );
+    return idx >= 0 ? idx : 0;
+  });
 
   const handleSave = useCallback(() => {
     const changes: Record<string, unknown> = {};
@@ -37,11 +45,18 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     if (category !== (todo.category ?? '')) changes.category = category || undefined;
     if (status !== (todo.status ?? 'todo')) changes.status = status;
 
+    const newRecurrence = RECURRENCE_PRESETS[recurrenceIdx]?.value ?? undefined;
+    const oldType = todo.recurrence?.type;
+    const oldInterval = todo.recurrence?.interval;
+    if (newRecurrence?.type !== oldType || newRecurrence?.interval !== oldInterval) {
+      changes.recurrence = newRecurrence;
+    }
+
     if (Object.keys(changes).length > 0) {
-      onUpdate(todo.id, changes as Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time' | 'status'>>);
+      onUpdate(todo.id, changes as Partial<Pick<Todo, 'text' | 'priority' | 'category' | 'dueDate' | 'startDate' | 'time' | 'status' | 'recurrence'>>);
     }
     onClose();
-  }, [text, dueDate, startDate, time, priority, category, status, todo, onUpdate, onClose]);
+  }, [text, dueDate, startDate, time, priority, category, status, recurrenceIdx, todo, onUpdate, onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -144,6 +159,22 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
             <option value="">없음</option>
             {categories.map(c => (
               <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* 반복 */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs text-sp-muted">🔁</span>
+          <select
+            value={recurrenceIdx}
+            onChange={(e) => setRecurrenceIdx(Number(e.target.value))}
+            className="bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none"
+          >
+            {RECURRENCE_PRESETS.map((preset, idx) => (
+              <option key={idx} value={idx}>
+                {preset.label}
+              </option>
             ))}
           </select>
         </div>
