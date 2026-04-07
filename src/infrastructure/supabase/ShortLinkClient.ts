@@ -112,14 +112,15 @@ export class ShortLinkClient {
     const expires = expiresAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
     const targetPath = fullUrl.replace(BASE_URL, '');
 
-    // 이미 존재하는 숏링크 확인
-    const existing = await this.query<Array<{ code: string }>>(
-      'short_links',
-      `target_path=eq.${encodeURIComponent(targetPath)}&select=code&limit=1`,
-    );
-
-    if (existing && existing.length > 0 && existing[0]) {
-      return `${BASE_URL}/s/${existing[0].code}`;
+    // 커스텀 코드가 없을 때만 기존 숏링크 재사용
+    if (!customCode) {
+      const existing = await this.query<Array<{ code: string }>>(
+        'short_links',
+        `target_path=eq.${encodeURIComponent(targetPath)}&select=code&limit=1`,
+      );
+      if (existing && existing.length > 0 && existing[0]) {
+        return `${BASE_URL}/s/${existing[0].code}`;
+      }
     }
 
     // 커스텀 코드가 있으면 사용
