@@ -3,6 +3,7 @@ import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { consultationSupabaseClient, shortLinkClient } from '@adapters/di/container';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import type { ConsultationType, ConsultationMethod } from '@domain/entities/Consultation';
@@ -211,10 +212,26 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   // 스텝 위저드
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
+  const getEffectiveTeacherSchedule = useScheduleStore((s) => s.getEffectiveTeacherSchedule);
+
   const breakPresets = useMemo(
     () => computeBreakPresets(settings.periodTimes, settings.lunchStart, settings.lunchEnd),
     [settings.periodTimes, settings.lunchStart, settings.lunchEnd],
   );
+
+  // 상담 날짜 기준 공강 교시 판별
+  const freePeriodSet = useMemo(() => {
+    // Use first parent date to determine free periods
+    const targetDate = type === 'parent' && dates.length > 0 ? dates[0]?.date : undefined;
+    if (!targetDate) return new Set<number>();
+
+    const schedule = getEffectiveTeacherSchedule(targetDate, settings.enableWeekendDays);
+    const free = new Set<number>();
+    schedule.forEach((period, idx) => {
+      if (period === null) free.add(idx + 1); // 1-based period number
+    });
+    return free;
+  }, [type, dates, getEffectiveTeacherSchedule, settings.enableWeekendDays]);
 
   // 학부모: 제외할 시간대 목록 (수업 교시 + 커스텀)
   const excludedTimes = useMemo(() => {
@@ -226,18 +243,22 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     return [...fromPresets, ...fromCustom];
   }, [excludeClassTime, type, breakPresets, excludedPeriodIds, customExclusions]);
 
-  // 수업 시간 제외 토글 시 교시 자동 선택
+  // 수업 시간 제외 토글 시 실제 수업 교시만 자동 선택 (공강 제외)
   useEffect(() => {
     if (excludeClassTime && type === 'parent') {
       const classPeriodIds = breakPresets
-        .filter((p) => p.id.startsWith('period-'))
+        .filter((p) => {
+          if (!p.id.startsWith('period-')) return false;
+          const periodNum = parseInt(p.id.replace('period-', ''), 10);
+          return !freePeriodSet.has(periodNum); // 공강이 아닌 교시만 제외
+        })
         .map((p) => p.id);
       setExcludedPeriodIds(new Set(classPeriodIds));
     } else if (!excludeClassTime) {
       setExcludedPeriodIds(new Set());
       setCustomExclusions([]);
     }
-  }, [excludeClassTime, type, breakPresets]);
+  }, [excludeClassTime, type, breakPresets, freePeriodSet]);
 
   const toggleExcludedPeriod = useCallback((periodId: string) => {
     setExcludedPeriodIds((prev) => {
@@ -957,6 +978,29 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                       <span className="flex-1 text-left">수업 시간 제외</span>
                       <span className="text-caption text-sp-muted">시간표 연동</span>
                     </button>
+                    {excludeClassTime && freePeriodSet.size > 0 && (
+                      <button
+                        onClick={() => {
+                          // 수업 교시 + 쉬는 시간 + 점심 모두 제외, 공강만 열기
+                          const toExclude = new Set<string>();
+                          for (const p of breakPresets) {
+                            if (p.id === 'before-school' || p.id === 'after-school') continue;
+                            if (p.id.startsWith('period-')) {
+                              const periodNum = parseInt(p.id.replace('period-', ''), 10);
+                              if (!freePeriodSet.has(periodNum)) toExclude.add(p.id);
+                            } else {
+                              toExclude.add(p.id); // 쉬는 시간, 점심
+                            }
+                          }
+                          setExcludedPeriodIds(toExclude);
+                        }}
+                        className="mt-1 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-xs text-emerald-400 hover:bg-emerald-500/10 transition-all w-full"
+                      >
+                        <span className="material-symbols-outlined text-sm">event_available</span>
+                        <span className="flex-1 text-left">공강만 상담 가능</span>
+                        <span className="text-caption text-emerald-400/60">{freePeriodSet.size}교시</span>
+                      </button>
+                    )}
 
                     {excludeClassTime && (
                       <div className="mt-2 rounded-lg border border-sp-border bg-sp-surface/50 p-3 flex flex-col gap-2">
@@ -981,8 +1025,17 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                                   {isExcluded && <span className="material-symbols-outlined text-white" style={{ fontSize: '10px' }}>close</span>}
                                 </span>
                                 <span className="flex-1 text-left">{preset.label}</span>
+                                {isClass && (
+                                  <span className={`text-tiny px-1.5 py-0.5 rounded-full ${
+                                    freePeriodSet.has(parseInt(preset.id.replace('period-', ''), 10))
+                                      ? 'bg-emerald-500/15 text-emerald-400'
+                                      : 'bg-sp-muted/10 text-sp-muted'
+                                  }`}>
+                                    {freePeriodSet.has(parseInt(preset.id.replace('period-', ''), 10)) ? '공강' : '수업'}
+                                  </span>
+                                )}
                                 <span className="text-caption font-mono text-sp-muted">{preset.startTime}~{preset.endTime}</span>
-                                {isClass && !isExcluded && (
+                                {isClass && !isExcluded && freePeriodSet.has(parseInt(preset.id.replace('period-', ''), 10)) && (
                                   <span className="text-tiny text-green-400">상담가능</span>
                                 )}
                               </button>
