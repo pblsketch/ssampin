@@ -12,6 +12,7 @@ interface MobileTodoState {
   addTodo: (todo: Todo) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
+  toggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
 }
 
 export const useMobileTodoStore = create<MobileTodoState>((set, get) => ({
@@ -56,6 +57,22 @@ export const useMobileTodoStore = create<MobileTodoState>((set, get) => ({
 
   deleteTodo: async (id) => {
     const todos = get().todos.filter((t) => t.id !== id);
+    set({ todos });
+    await todoRepository.saveTodos({ todos, categories: get().categories });
+    useMobileDriveSyncStore.getState().triggerSaveSync();
+  },
+
+  toggleSubTask: async (todoId, subTaskId) => {
+    const todos = get().todos.map((t) =>
+      t.id === todoId && t.subTasks
+        ? {
+            ...t,
+            subTasks: t.subTasks.map((st) =>
+              st.id === subTaskId ? { ...st, completed: !st.completed } : st,
+            ),
+          }
+        : t,
+    );
     set({ todos });
     await todoRepository.saveTodos({ todos, categories: get().categories });
     useMobileDriveSyncStore.getState().triggerSaveSync();
