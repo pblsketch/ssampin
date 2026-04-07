@@ -60,7 +60,8 @@ export type ToolName =
   | 'seat_picker'
   | 'assignment'
   | 'class_seating'
-  | 'grouping';
+  | 'grouping'
+  | 'multi-survey';
 
 /** 이벤트별 properties 타입 매핑 */
 export interface AnalyticsEventProperties {

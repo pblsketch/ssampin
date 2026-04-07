@@ -1,14 +1,14 @@
 /**
- * 실시간 학생 투표 IPC 핸들러
+ * 실시간 복수 설문 IPC 핸들러
  *
  * 로컬 HTTP 서버 + WebSocket 서버를 열어 학생들이
- * 스마트폰 브라우저로 접속해 투표할 수 있게 한다.
+ * 스마트폰 브라우저로 접속해 복수 문항 답변을 제출할 수 있게 한다.
  */
 import { ipcMain, BrowserWindow } from 'electron';
 import http from 'http';
 import os from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
-import { generateVotingHTML } from './liveVoteHTML';
+import { generateMultiSurveyHTML, MultiSurveyQuestionForHTML } from './liveMultiSurveyHTML';
 import { isTunnelAvailable, installTunnel, openTunnel, closeTunnel } from './tunnel';
 
 /** WSL/Hyper-V 등 가상 네트워크 대역 (외부 기기 접속 불가) */
@@ -37,23 +37,17 @@ function getLocalIPs(): string[] {
   return ips;
 }
 
-interface VoteOption {
-  id: string;
-  text: string;
-  color: string;
-}
-
-interface LiveVoteSession {
+interface LiveMultiSurveySession {
   server: http.Server;
   wss: WebSocketServer;
-  question: string;
-  options: VoteOption[];
-  votes: Map<string, string>; // sessionToken -> optionId
+  questions: MultiSurveyQuestionForHTML[];
+  submissions: Map<string, string>; // sessionToken -> answers json string
   clients: Set<WebSocket>;
+  stepMode: boolean;
 }
 
-/** 현재 실행 중인 투표 세션 (하나만 허용) */
-let session: LiveVoteSession | null = null;
+/** 현재 실행 중인 복수 설문 세션 (하나만 허용) */
+let session: LiveMultiSurveySession | null = null;
 
 /**
  * 세션을 완전히 정리한다.
@@ -78,29 +72,38 @@ function closeSession(): void {
 }
 
 /**
- * 실시간 투표 IPC 핸들러 등록
+ * 간단한 UUID-like 제출 ID 생성
+ */
+function generateSubmissionId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+/**
+ * 실시간 복수 설문 IPC 핸들러 등록
  * @param mainWindow 렌더러에 이벤트를 전달할 메인 윈도우
  */
-export function registerLiveVoteHandlers(mainWindow: BrowserWindow): void {
+export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void {
   /**
-   * live-vote:start — 투표 세션 시작
+   * live-multi-survey:start — 복수 설문 세션 시작
    *
-   * @param args.question 투표 질문
-   * @param args.options  선택지 목록 { id, text, color }
+   * @param args.questions 설문 문항 목록
    * @returns { port, localIPs }
    */
   ipcMain.handle(
-    'live-vote:start',
+    'live-multi-survey:start',
     async (
       _event,
-      args: { question: string; options: VoteOption[] },
+      args: { questions: MultiSurveyQuestionForHTML[]; stepMode?: boolean },
     ): Promise<{ port: number; localIPs: string[] }> => {
       return new Promise<{ port: number; localIPs: string[] }>((resolve, reject) => {
         // 기존 세션 정리
         closeSession();
 
-        const { question, options } = args;
-        const html = generateVotingHTML(question, options);
+        const { questions, stepMode } = args;
+        const html = generateMultiSurveyHTML(questions, stepMode ?? false);
 
         const server = http.createServer((req, res) => {
           const pathname = req.url?.split('?')[0] ?? '/';
@@ -127,10 +130,10 @@ export function registerLiveVoteHandlers(mainWindow: BrowserWindow): void {
         session = {
           server,
           wss,
-          question,
-          options,
-          votes: new Map(),
+          questions,
+          submissions: new Map(),
           clients: new Set(),
+          stepMode: stepMode ?? false,
         };
 
         wss.on('connection', (ws: WebSocket) => {
@@ -143,7 +146,7 @@ export function registerLiveVoteHandlers(mainWindow: BrowserWindow): void {
 
           // 연결 수 변경 알림
           if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('live-vote:connection-count', {
+            mainWindow.webContents.send('live-multi-survey:connection-count', {
               count: session.clients.size,
             });
           }
@@ -168,42 +171,40 @@ export function registerLiveVoteHandlers(mainWindow: BrowserWindow): void {
               const sessionToken = msg['sessionToken'];
               if (typeof sessionToken !== 'string') return;
 
-              if (session.votes.has(sessionToken)) {
-                ws.send(JSON.stringify({ type: 'already_voted' }));
+              if (session.submissions.has(sessionToken)) {
+                ws.send(JSON.stringify({ type: 'already_submitted' }));
               } else {
                 ws.send(
                   JSON.stringify({
-                    type: 'poll',
-                    question: session.question,
-                    options: session.options,
+                    type: 'survey',
+                    questions: session.questions,
                   }),
                 );
               }
               return;
             }
 
-            if (type === 'vote') {
-              const optionId = msg['optionId'];
+            if (type === 'submit') {
+              const rawAnswers = msg['answers'];
               const sessionToken = msg['sessionToken'];
 
-              if (typeof optionId !== 'string' || typeof sessionToken !== 'string') return;
+              if (!Array.isArray(rawAnswers) || typeof sessionToken !== 'string') return;
 
-              // 유효한 옵션인지 검증
-              const validOption = session.options.some((o) => o.id === optionId);
-              if (!validOption) return;
-
-              if (session.votes.has(sessionToken)) {
-                ws.send(JSON.stringify({ type: 'already_voted' }));
+              // 중복 제출 방지
+              if (session.submissions.has(sessionToken)) {
+                ws.send(JSON.stringify({ type: 'already_submitted' }));
                 return;
               }
 
-              session.votes.set(sessionToken, optionId);
-              ws.send(JSON.stringify({ type: 'voted', optionId }));
+              const answersJson = JSON.stringify(rawAnswers);
+              session.submissions.set(sessionToken, answersJson);
+              ws.send(JSON.stringify({ type: 'submitted' }));
 
               if (!mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('live-vote:student-voted', {
-                  optionId,
-                  totalVoters: session.votes.size,
+                mainWindow.webContents.send('live-multi-survey:student-submitted', {
+                  answers: rawAnswers,
+                  submissionId: generateSubmissionId(),
+                  totalSubmissions: session.submissions.size,
                 });
               }
               return;
@@ -215,7 +216,7 @@ export function registerLiveVoteHandlers(mainWindow: BrowserWindow): void {
             session.clients.delete(ws);
 
             if (!mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('live-vote:connection-count', {
+              mainWindow.webContents.send('live-multi-survey:connection-count', {
                 count: session.clients.size,
               });
             }
@@ -244,33 +245,33 @@ export function registerLiveVoteHandlers(mainWindow: BrowserWindow): void {
   );
 
   /**
-   * live-vote:stop — 투표 세션 종료
+   * live-multi-survey:stop — 복수 설문 세션 종료
    */
-  ipcMain.handle('live-vote:stop', (): void => {
+  ipcMain.handle('live-multi-survey:stop', (): void => {
     closeSession();
   });
 
   /**
-   * live-vote:tunnel-available — cloudflared 바이너리 설치 여부
+   * live-multi-survey:tunnel-available — cloudflared 바이너리 설치 여부
    */
-  ipcMain.handle('live-vote:tunnel-available', (): boolean => {
+  ipcMain.handle('live-multi-survey:tunnel-available', (): boolean => {
     return isTunnelAvailable();
   });
 
   /**
-   * live-vote:tunnel-install — cloudflared 바이너리 다운로드 (첫 사용 시)
+   * live-multi-survey:tunnel-install — cloudflared 바이너리 다운로드 (첫 사용 시)
    */
-  ipcMain.handle('live-vote:tunnel-install', async (): Promise<void> => {
+  ipcMain.handle('live-multi-survey:tunnel-install', async (): Promise<void> => {
     await installTunnel();
   });
 
   /**
-   * live-vote:tunnel-start — Cloudflare 터널 시작
+   * live-multi-survey:tunnel-start — Cloudflare 터널 시작
    * 로컬 서버가 이미 실행 중이어야 한다.
    * @returns { tunnelUrl } 공개 HTTPS URL
    */
-  ipcMain.handle('live-vote:tunnel-start', async (): Promise<{ tunnelUrl: string }> => {
-    if (!session) throw new Error('투표 세션이 없습니다');
+  ipcMain.handle('live-multi-survey:tunnel-start', async (): Promise<{ tunnelUrl: string }> => {
+    if (!session) throw new Error('복수 설문 세션이 없습니다');
     const address = session.server.address();
     if (!address || typeof address === 'string') throw new Error('서버가 준비되지 않았습니다');
     const tunnelUrl = await openTunnel(address.port);

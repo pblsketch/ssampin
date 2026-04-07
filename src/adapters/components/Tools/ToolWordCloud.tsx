@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, Fragment } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { PresetSelector } from './PresetSelector';
 import type { KeyboardShortcut } from './types';
@@ -74,8 +74,8 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
   };
 
   return (
-    <div className={`flex flex-col items-center justify-center gap-6 py-8 ${isFullscreen ? 'px-12' : 'px-6'}`}>
-      <div className="w-full max-w-xl">
+    <div className={`w-full max-w-2xl mx-auto flex flex-col gap-6 ${isFullscreen ? 'px-12 py-6' : 'px-6 py-4'}`}>
+      <div className="w-full">
         <label className="block text-sp-muted text-sm mb-2">질문</label>
         <input
           type="text"
@@ -83,13 +83,13 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleStart(); }}
           placeholder="학생들에게 물어볼 질문을 입력하세요"
-          className="w-full px-4 py-3 rounded-xl bg-sp-bg border border-sp-border text-sp-text text-lg focus:border-sp-accent focus:outline-none transition-colors"
+          className="w-full px-4 py-3 rounded-xl bg-sp-bg border border-sp-border text-sp-text text-xl placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
           autoFocus
         />
       </div>
 
       {/* 프리셋 저장/불러오기 + 자주 쓰는 질문 */}
-      <div className="w-full max-w-xl">
+      <div className="w-full">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sp-muted text-sm">자주 쓰는 질문</span>
           <PresetSelector
@@ -98,12 +98,12 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
             onLoad={handleLoadPreset}
           />
         </div>
-        <div className="flex flex-wrap gap-2 justify-center">
+        <div className="flex flex-wrap gap-2">
           {savedQuestions.map((eq) => (
             <button
               key={eq}
               onClick={() => setQuestion(eq)}
-              className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 text-sm transition-all"
+              className="px-3 py-1.5 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50 text-sm transition-all"
             >
               {eq}
             </button>
@@ -112,7 +112,7 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
       </div>
 
       {/* Settings */}
-      <div className="flex items-center gap-4 max-w-xl">
+      <div className="flex items-center gap-4">
         <label className="text-sp-muted text-sm whitespace-nowrap">1인당 제출 횟수</label>
         <div className="flex items-center gap-2">
           <button
@@ -131,23 +131,26 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
         </div>
       </div>
 
-      {/* Start + History buttons */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleStart}
-          disabled={!question.trim()}
-          className="px-8 py-4 rounded-xl bg-sp-accent hover:bg-blue-600 disabled:bg-sp-border disabled:text-sp-muted text-white font-bold text-lg transition-all"
-        >
-          ☁️ 워드클라우드 시작!
-        </button>
+      {/* History — secondary link */}
+      <div className="flex justify-center">
         <button
           onClick={onShowHistory}
-          className="px-4 py-4 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40 transition-all flex items-center gap-2"
+          className="flex items-center gap-1.5 text-sp-muted hover:text-sp-text text-sm transition-colors"
         >
-          <span className="material-symbols-outlined text-icon-lg">history</span>
-          <span className="text-sm font-medium">세션 기록</span>
+          <span className="material-symbols-outlined text-icon-md">history</span>
+          세션 기록
         </button>
       </div>
+
+      {/* Start button — full width primary */}
+      <button
+        onClick={handleStart}
+        disabled={!question.trim()}
+        className="w-full py-3.5 rounded-xl bg-sp-accent text-white font-bold text-lg hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+      >
+        ☁️ 워드클라우드 시작!
+      </button>
+
     </div>
   );
 }
@@ -221,6 +224,9 @@ function LivePanel({
       <div
         className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white cursor-pointer"
         onClick={onToggleQRFullscreen}
+        onKeyDown={(e) => { if (e.key === 'Escape') onToggleQRFullscreen(); }}
+        tabIndex={0}
+        ref={(el) => el?.focus()}
       >
         {displayUrl && <canvas ref={fullscreenCanvasRef} className="mb-6" />}
         <p className="text-gray-800 text-xl font-bold mb-2">☁️ 워드클라우드 참여하기</p>
@@ -275,7 +281,10 @@ function LivePanel({
             </div>
           ) : tunnelUrl ? (
             <div className="flex flex-col gap-1">
-              <p className="text-sp-text font-mono text-sm break-all">{tunnelUrl}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
+                <button onClick={() => { void navigator.clipboard.writeText(tunnelUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+              </div>
               <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
           ) : tunnelError ? (
@@ -288,7 +297,10 @@ function LivePanel({
             <div className="mt-2 border-t border-sp-border pt-2 flex flex-col gap-2">
               <div>
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
-                <p className="text-sp-accent font-bold text-sm font-mono">{shortUrl}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
+                  <button onClick={() => { void navigator.clipboard.writeText(shortUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                </div>
               </div>
               <div className="flex items-center gap-1.5">
                 <input
@@ -480,6 +492,7 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('create');
   const [question, setQuestion] = useState('');
   const [words, setWords] = useState<WordEntry[]>([]);
+
   const [totalSubmissions, setTotalSubmissions] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentGroups, setCurrentGroups] = useState<WordCloudGroup[]>([]);
@@ -710,8 +723,31 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
       shortcuts={shortcuts}
     >
       <div className="flex flex-col h-full">
+        {/* Mode indicator */}
+        <div className="flex items-center justify-center gap-2 py-2 shrink-0">
+          {([
+            { key: 'create', label: '질문 설정' },
+            { key: 'live', label: '응답 수집' },
+            { key: 'organize', label: '결과' },
+          ] as const).map((step, i) => {
+            const isActive = viewMode === step.key || (viewMode === 'history' && step.key === 'organize');
+            return (
+              <Fragment key={step.key}>
+                {i > 0 && <span className="text-sp-border">›</span>}
+                <span className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                  {step.label}
+                </span>
+              </Fragment>
+            );
+          })}
+        </div>
+
         {viewMode === 'create' && (
-          <CreateView isFullscreen={isFullscreen} onStart={handleStart} onShowHistory={() => setViewMode('history')} />
+          <CreateView
+            isFullscreen={isFullscreen}
+            onStart={handleStart}
+            onShowHistory={() => setViewMode('history')}
+          />
         )}
 
         {viewMode === 'live' && (
@@ -761,15 +797,14 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
             {/* Bottom controls */}
             {!liveError && (
               <div className="flex items-center justify-center gap-3 py-2">
-                {words.length > 0 && (
-                  <button
-                    onClick={handleOrganize}
-                    className="px-4 py-2 rounded-lg bg-sp-accent text-white text-sm font-medium hover:bg-sp-accent/80 transition-all flex items-center gap-1.5"
-                  >
-                    <span className="material-symbols-outlined text-icon-md">category</span>
-                    정리하기
-                  </button>
-                )}
+                <button
+                  onClick={handleOrganize}
+                  disabled={words.length === 0}
+                  className="px-4 py-2 rounded-lg bg-sp-accent text-white text-sm font-medium hover:bg-sp-accent/80 transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined text-icon-md">category</span>
+                  정리하기
+                </button>
                 <button
                   onClick={handleReset}
                   className="px-4 py-2 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-all"

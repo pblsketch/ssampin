@@ -1,8 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, Fragment } from 'react';
 import { ToolLayout } from './ToolLayout';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
+import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
+import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
+import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 
 interface ToolSurveyProps {
   onBack: () => void;
@@ -47,12 +50,23 @@ function defaultSurveyQuestion(): SurveyQuestion {
 interface CreateViewProps {
   isFullscreen: boolean;
   onStart: (questions: SurveyQuestion[]) => void;
+  onSaveRequest?: (question: string, maxLength: number) => void;
+  onLoadTemplate?: (template: ToolTemplate) => void;
+  loadedDraft?: { question: string; maxLength: number } | null;
+  onShowPastResults?: () => void;
 }
 
-function CreateView({ isFullscreen, onStart }: CreateViewProps) {
+function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, loadedDraft, onShowPastResults }: CreateViewProps) {
   const [questions, setQuestions] = useState<SurveyQuestion[]>([defaultSurveyQuestion()]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [exampleIdx, setExampleIdx] = useState(-1);
+
+  // Apply loadedDraft when it changes
+  useEffect(() => {
+    if (!loadedDraft) return;
+    setQuestions([{ id: uid(), question: loadedDraft.question, maxLength: loadedDraft.maxLength }]);
+    setActiveIdx(0);
+  }, [loadedDraft]);
 
   const canStart = questions.some((q) => q.question.trim().length > 0);
 
@@ -125,7 +139,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
         {questions.length < MAX_QUESTIONS && (
           <button
             onClick={addQuestion}
-            className="px-3 py-1.5 rounded-lg border border-dashed border-sp-border text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 text-sm transition-all"
+            className="px-3 py-1.5 rounded-xl border border-dashed border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent text-sm transition-all"
           >
             + 문항 추가
           </button>
@@ -142,7 +156,7 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
               value={active.question}
               onChange={(e) => updateQuestion(activeIdx, { question: e.target.value })}
               placeholder="질문을 입력하세요"
-              className="flex-1 bg-sp-card border border-sp-border rounded-xl px-4 py-3 text-xl text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
+              className="flex-1 bg-sp-bg border border-sp-border rounded-xl px-4 py-3 text-xl text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
               maxLength={100}
               onKeyDown={(e) => { if (e.key === 'Enter' && canStart) handleStart(); }}
             />
@@ -173,6 +187,9 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
                 </button>
               ))}
             </div>
+            <p className="text-xs text-sp-muted mt-1">
+              {active.maxLength <= 50 ? '짧은 한 문장' : active.maxLength <= 100 ? '1~2문장 분량' : active.maxLength <= 200 ? '2~3문장 분량' : '긴 서술형'}
+            </p>
           </div>
 
           {/* Move / Delete buttons */}
@@ -201,6 +218,48 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 내 템플릿 */}
+      <div className="flex items-center gap-2 flex-wrap shrink-0">
+        {onLoadTemplate && (
+          <TemplateLoadDropdown toolType="survey" onLoad={onLoadTemplate} />
+        )}
+        {onSaveRequest && (
+          <button
+            onClick={() => {
+              const activeQ = questions[activeIdx];
+              if (activeQ) onSaveRequest(activeQ.question, activeQ.maxLength);
+            }}
+            disabled={!canStart}
+            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sm text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all disabled:opacity-40"
+          >
+            💾 현재 문항 저장
+          </button>
+        )}
+        {onShowPastResults && (
+          <button
+            onClick={onShowPastResults}
+            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sm text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all"
+          >
+            📊 지난 결과
+          </button>
+        )}
+      </div>
+
+      {/* Question summary preview */}
+      {questions.length > 1 && (
+        <div className="bg-sp-bg border border-sp-border rounded-xl p-3 mt-3">
+          <p className="text-xs text-sp-muted mb-2 font-medium">전체 문항 미리보기</p>
+          <div className="flex flex-col gap-1">
+            {questions.map((q, i) => (
+              <p key={i} className={`text-xs ${q.question.trim() ? 'text-sp-text' : 'text-red-400'}`}>
+                Q{i + 1}. {q.question.trim() || '(질문 미입력)'}
+                <span className="text-sp-muted ml-1">({q.maxLength}자)</span>
+              </p>
+            ))}
+          </div>
         </div>
       )}
 
@@ -334,7 +393,10 @@ function LiveSurveyPanel({
             </div>
           ) : tunnelUrl ? (
             <div className="flex flex-col gap-1">
-              <p className="text-sp-text font-mono text-sm break-all">{tunnelUrl}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
+                <button onClick={() => { void navigator.clipboard.writeText(tunnelUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+              </div>
               <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
           ) : tunnelError ? (
@@ -348,7 +410,10 @@ function LiveSurveyPanel({
             <div className="mt-2 border-t border-sp-border pt-2 flex flex-col gap-2">
               <div>
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
-                <p className="text-sp-accent font-bold text-sm font-mono">{shortUrl}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
+                  <button onClick={() => { void navigator.clipboard.writeText(shortUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                </div>
               </div>
               <div className="flex items-center gap-1.5">
                 <input
@@ -530,7 +595,7 @@ function SurveyingView({
 
           <button
             onClick={onFinish}
-            className="px-4 py-2 rounded-xl bg-sp-accent text-white font-bold hover:bg-sp-accent/80 transition-all text-sm"
+            className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-all text-sm font-bold"
           >
             설문 종료 → 결과 보기
           </button>
@@ -554,9 +619,10 @@ interface ResultsViewProps {
   submissions: SurveySubmission[];
   isFullscreen: boolean;
   onNewSurvey: () => void;
+  resultSaveButton?: React.ReactNode;
 }
 
-function ResultsView({ questions, submissions, isFullscreen, onNewSurvey }: ResultsViewProps) {
+function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, resultSaveButton }: ResultsViewProps) {
   return (
     <div className="w-full flex flex-col h-full min-h-0 gap-6">
       {/* Single question: show question as header */}
@@ -638,13 +704,14 @@ function ResultsView({ questions, submissions, isFullscreen, onNewSurvey }: Resu
       </div>
 
       {/* Bottom buttons */}
-      <div className="flex items-center justify-center gap-3 shrink-0 pb-1">
+      <div className="flex items-center justify-center gap-3 shrink-0 pb-1 flex-wrap">
         <button
           onClick={onNewSurvey}
           className="px-5 py-2.5 rounded-xl bg-sp-accent text-white font-bold hover:bg-sp-accent/80 transition-all text-sm"
         >
           🆕 새 설문
         </button>
+        {resultSaveButton}
       </div>
     </div>
   );
@@ -659,6 +726,11 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [viewMode, setViewMode] = useState<ViewMode>('create');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [showPastResults, setShowPastResults] = useState(false);
+  const [loadedDraft, setLoadedDraft] = useState<{ question: string; maxLength: number } | null>(null);
+  const [pendingSave, setPendingSave] = useState<{ question: string; maxLength: number } | null>(null);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [submissions, setSubmissions] = useState<SurveySubmission[]>([]);
 
@@ -820,6 +892,29 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     setShowQRFullscreen((prev) => !prev);
   }, []);
 
+  const handleSaveTemplate = useCallback((name: string, question: string, maxLength: number) => {
+    const config = { type: 'survey' as const, question, maxLength };
+    if (editingTemplateId) {
+      void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
+    } else {
+      void useToolTemplateStore.getState().addTemplate(name, 'survey', config);
+    }
+    setShowSaveModal(false);
+    setEditingTemplateId(null);
+  }, [editingTemplateId]);
+
+  const handleSaveRequest = useCallback((question: string, maxLength: number) => {
+    setPendingSave({ question, maxLength });
+    setEditingTemplateId(null);
+    setShowSaveModal(true);
+  }, []);
+
+  const handleLoadTemplate = useCallback((template: ToolTemplate) => {
+    if (template.config.type !== 'survey') return;
+    setLoadedDraft({ question: template.config.question, maxLength: template.config.maxLength });
+    setEditingTemplateId(template.id);
+  }, []);
+
   // Live survey IPC event listeners
   useEffect(() => {
     if (!isLiveMode || !window.electronAPI) return;
@@ -865,10 +960,38 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
 
   return (
     <ToolLayout title="주관식 설문" emoji="📝" onBack={onBack} isFullscreen={isFullscreen}>
-      {viewMode === 'create' && (
-        <CreateView isFullscreen={isFullscreen} onStart={handleStart} />
+      {!showPastResults && (
+        <div className="flex items-center justify-center gap-2 py-2 shrink-0">
+          {[
+            { key: 'create', label: '문항 작성' },
+            { key: 'surveying', label: '응답 수집' },
+            { key: 'results', label: '결과' },
+          ].map((step, i) => {
+            const isActive = viewMode === step.key;
+            return (
+              <Fragment key={step.key}>
+                {i > 0 && <span className="text-sp-border">›</span>}
+                <span className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                  {step.label}
+                </span>
+              </Fragment>
+            );
+          })}
+        </div>
       )}
-      {viewMode === 'surveying' && (
+      {showPastResults ? (
+        <PastResultsView toolType="survey" onClose={() => setShowPastResults(false)} />
+      ) : viewMode === 'create' && (
+        <CreateView
+          isFullscreen={isFullscreen}
+          onStart={handleStart}
+          onSaveRequest={handleSaveRequest}
+          onLoadTemplate={handleLoadTemplate}
+          loadedDraft={loadedDraft}
+          onShowPastResults={() => setShowPastResults(true)}
+        />
+      )}
+      {!showPastResults && viewMode === 'surveying' && (
         <SurveyingView
           questions={questions}
           submissions={submissions}
@@ -894,14 +1017,37 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           onSetCustomCode={handleSetCustomCode}
         />
       )}
-      {viewMode === 'results' && (
+      {!showPastResults && viewMode === 'results' && (
         <ResultsView
           questions={questions}
           submissions={submissions}
           isFullscreen={isFullscreen}
           onNewSurvey={handleReset}
+          resultSaveButton={
+            <ResultSaveButton
+              toolType="survey"
+              defaultName={questions[0]?.question ?? ''}
+              resultData={{
+                type: 'survey' as const,
+                question: questions[0]?.question ?? '',
+                responses: submissions.map((s) => ({
+                  text: s.answers.map((a) => a.text).join(' / '),
+                  submittedAt: s.submittedAt,
+                })),
+              }}
+            />
+          }
         />
       )}
+      <TemplateSaveModal
+        open={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        onSave={(name) => {
+          if (pendingSave) {
+            handleSaveTemplate(name, pendingSave.question, pendingSave.maxLength);
+          }
+        }}
+      />
     </ToolLayout>
   );
 }

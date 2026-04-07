@@ -1,10 +1,13 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { Fragment, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { MultiSurveyQuestionType, MultiSurveySubmission } from '@domain/entities/MultiSurvey';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import { buildWordFrequency, type WordEntry } from '@adapters/utils/wordFrequency';
+import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
+import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
+import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 
 interface ToolMultiSurveyProps {
   onBack: () => void;
@@ -232,7 +235,7 @@ function QuestionCard({ q, index, total, onChange, onDelete, onMoveUp, onMoveDow
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               q.type === t
                 ? 'bg-sp-accent/20 border border-sp-accent text-sp-accent'
-                : 'bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
             }`}
           >
             {QUESTION_TYPE_ICONS[t]} {QUESTION_TYPE_LABELS[t]}
@@ -298,7 +301,7 @@ function QuestionCard({ q, index, total, onChange, onDelete, onMoveUp, onMoveDow
                 className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                   q.maxLength === len
                     ? 'bg-sp-accent/20 border border-sp-accent text-sp-accent'
-                    : 'bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text'
+                    : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text'
                 }`}
               >
                 {len}자
@@ -320,7 +323,7 @@ function QuestionCard({ q, index, total, onChange, onDelete, onMoveUp, onMoveDow
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                     q.scaleMin === r.min && q.scaleMax === r.max
                       ? 'bg-sp-accent/20 border border-sp-accent text-sp-accent'
-                      : 'bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text'
+                      : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text'
                   }`}
                 >
                   {r.label}
@@ -373,11 +376,39 @@ interface CreateViewProps {
   onStepModeChange: (v: boolean) => void;
   useStopwords: boolean;
   onUseStopwordsChange: (v: boolean) => void;
+  editingTemplateId: string | null;
+  onSetEditingTemplateId: (id: string | null) => void;
+  onLoadFromTemplate: (template: ToolTemplate) => void;
+  showSaveModal: boolean;
+  onOpenSaveModal: () => void;
+  onCloseSaveModal: () => void;
+  onSaveTemplate: (name: string, title: string, questions: EditableQuestion[]) => void;
+  showPastResults: boolean;
+  onShowPastResults: () => void;
+  onHidePastResults: () => void;
+  externalTitle: string | null;
+  externalQuestions: EditableQuestion[] | null;
+  onTemplateApplied: () => void;
 }
 
-function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStopwords, onUseStopwordsChange }: CreateViewProps) {
+function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStopwords, onUseStopwordsChange, editingTemplateId: _editingTemplateId, onSetEditingTemplateId: _onSetEditingTemplateId, onLoadFromTemplate, showSaveModal, onOpenSaveModal, onCloseSaveModal, onSaveTemplate, showPastResults, onShowPastResults, onHidePastResults, externalTitle, externalQuestions, onTemplateApplied }: CreateViewProps) {
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState<EditableQuestion[]>([defaultQuestion()]);
+
+  useEffect(() => {
+    if (externalTitle !== null) {
+      setTitle(externalTitle);
+      onTemplateApplied();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalTitle]);
+
+  useEffect(() => {
+    if (externalQuestions !== null) {
+      setQuestions(externalQuestions);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalQuestions]);
 
   const handleChange = useCallback((id: string, patch: Partial<EditableQuestion>) => {
     setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
@@ -420,6 +451,25 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
     setQuestions(template.questions.map(templateToEditable));
   }, []);
 
+  const handleLoadFromTemplate = useCallback((tmpl: ToolTemplate) => {
+    onLoadFromTemplate(tmpl);
+    if (tmpl.config.type !== 'multi-survey') return;
+    const cfg = tmpl.config;
+    setTitle(cfg.title);
+    setQuestions(cfg.questions.map((q) => ({
+      id: q.id,
+      type: q.type,
+      question: q.question,
+      required: q.required,
+      options: q.options.map((o) => ({ ...o })),
+      maxLength: q.maxLength,
+      scaleMin: q.scaleMin,
+      scaleMax: q.scaleMax,
+      scaleMinLabel: q.scaleMinLabel,
+      scaleMaxLabel: q.scaleMaxLabel,
+    })));
+  }, [onLoadFromTemplate]);
+
   const canStart = questions.every((q) => {
     if (!q.question.trim()) return false;
     if (q.type === 'single-choice' || q.type === 'multi-choice') {
@@ -435,14 +485,14 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
   }, [canStart, title, questions, onStart]);
 
   return (
-    <div className={`w-full max-w-3xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-3' : 'gap-4'}`}>
+    <div className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-3' : 'gap-4'}`}>
       {/* Title */}
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="설문 제목 (선택사항)"
-        className="w-full bg-sp-card border border-sp-border rounded-xl px-4 py-3 text-lg text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors shrink-0"
+        className="w-full bg-sp-card border border-sp-border border-l-4 border-l-sp-accent rounded-xl px-4 py-3 text-xl font-bold text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors shrink-0"
         maxLength={100}
       />
 
@@ -502,29 +552,51 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
             onChange={(e) => onUseStopwordsChange(e.target.checked)}
             className="rounded"
           />
-          🔤 불용어 제거 (워드클라우드용)
+          🔤 조사·접속사 제외 (은, 는, 이, 가...)
         </label>
       </div>
 
-      {/* Add question + Start */}
-      <div className="flex items-center gap-3 shrink-0">
-        {questions.length < MAX_QUESTIONS && (
-          <button
-            onClick={handleAddQuestion}
-            className="px-4 py-2.5 rounded-xl border border-dashed border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent transition-all text-sm font-medium"
-          >
-            + 문항 추가 ({questions.length}/{MAX_QUESTIONS})
-          </button>
-        )}
-        <div className="flex-1" />
+      {/* Template manager row */}
+      <div className="flex items-center gap-2 shrink-0">
+        <TemplateLoadDropdown toolType="multi-survey" onLoad={handleLoadFromTemplate} />
         <button
-          onClick={handleStart}
+          onClick={onOpenSaveModal}
           disabled={!canStart}
-          className="px-6 py-2.5 rounded-xl bg-sp-accent text-white font-bold text-sm hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sm text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all disabled:opacity-40"
         >
-          📋 설문 시작
+          💾 현재 문항 저장
+        </button>
+        <button
+          onClick={onShowPastResults}
+          className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sm text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all"
+        >
+          📊 지난 결과
         </button>
       </div>
+
+      {/* Add question */}
+      {questions.length < MAX_QUESTIONS && (
+        <button
+          onClick={handleAddQuestion}
+          className="w-full py-2.5 rounded-xl border border-dashed border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent transition-all text-sm font-medium shrink-0"
+        >
+          + 문항 추가 ({questions.length}/{MAX_QUESTIONS})
+        </button>
+      )}
+
+      {/* Start button */}
+      <button
+        onClick={handleStart}
+        disabled={!canStart}
+        className="w-full py-3.5 rounded-xl bg-sp-accent text-white font-bold text-lg hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+      >
+        📋 설문 시작
+      </button>
+
+      <TemplateSaveModal open={showSaveModal} onClose={onCloseSaveModal} onSave={(name) => onSaveTemplate(name, title, questions)} />
+      {showPastResults && (
+        <PastResultsView toolType="multi-survey" onClose={onHidePastResults} />
+      )}
     </div>
   );
 }
@@ -649,7 +721,10 @@ function LivePanel({
             </div>
           ) : tunnelUrl ? (
             <div className="flex flex-col gap-1">
-              <p className="text-sp-text font-mono text-sm break-all">{tunnelUrl}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
+                <button onClick={() => { void navigator.clipboard.writeText(tunnelUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+              </div>
               <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
           ) : tunnelError ? (
@@ -662,7 +737,10 @@ function LivePanel({
             <div className="mt-2 border-t border-sp-border pt-2 flex flex-col gap-2">
               <div>
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
-                <p className="text-sp-accent font-bold text-sm font-mono">{shortUrl}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
+                  <button onClick={() => { void navigator.clipboard.writeText(shortUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                </div>
               </div>
               <div className="flex items-center gap-1.5">
                 <input
@@ -841,7 +919,7 @@ function RunningView({
           </button>
           <button
             onClick={handleReset}
-            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
+            className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-all text-sm font-medium"
           >
             🗑️ 초기화
           </button>
@@ -906,7 +984,7 @@ function TextResultWithCloud({
         </button>
         <label className="ml-auto flex items-center gap-1.5 text-xs text-sp-muted cursor-pointer">
           <input type="checkbox" checked={useStopwords} onChange={(e) => onUseStopwordsChange(e.target.checked)} />
-          불용어 제거
+          조사·접속사 제외
         </label>
       </div>
 
@@ -983,6 +1061,7 @@ interface ResultsViewProps {
   onTextSubTabChange: (v: Record<string, 'cloud' | 'list'>) => void;
   selectedWord: { questionId: string; word: string } | null;
   onSelectedWordChange: (v: { questionId: string; word: string } | null) => void;
+  resultSaveButton: React.ReactNode;
 }
 
 function ChoiceBarChart({ options, counts, total }: { options: EditableOption[]; counts: Map<string, number>; total: number }) {
@@ -1061,7 +1140,7 @@ function ScaleResult({ question, submissions }: { question: EditableQuestion; su
 
 
 
-function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey, useStopwords, onUseStopwordsChange, textSubTab, onTextSubTabChange, selectedWord, onSelectedWordChange }: ResultsViewProps) {
+function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey, useStopwords, onUseStopwordsChange, textSubTab, onTextSubTabChange, selectedWord, onSelectedWordChange, resultSaveButton }: ResultsViewProps) {
   return (
     <div className="w-full flex flex-col h-full min-h-0 gap-4">
       {/* Header */}
@@ -1135,7 +1214,8 @@ function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey,
       </div>
 
       {/* Bottom */}
-      <div className="flex items-center justify-center shrink-0 pb-1">
+      <div className="flex items-center justify-center gap-3 shrink-0 pb-1">
+        {resultSaveButton}
         <button
           onClick={onNewSurvey}
           className="px-5 py-2.5 rounded-xl bg-sp-accent text-white font-bold hover:bg-sp-accent/80 transition-all text-sm"
@@ -1161,6 +1241,14 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   const [questions, setQuestions] = useState<EditableQuestion[]>([defaultQuestion()]);
   const [submissions, setSubmissions] = useState<MultiSurveySubmission[]>([]);
 
+  // Template state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [showPastResults, setShowPastResults] = useState(false);
+  // Used to push loaded template data into CreateView's local state
+  const [pendingTitle, setPendingTitle] = useState<string | null>(null);
+  const [pendingQuestions, setPendingQuestions] = useState<EditableQuestion[] | null>(null);
+
   // Word cloud / step mode state
   const [stepMode, setStepMode] = useState(false);
   const [useStopwords, setUseStopwords] = useState(true);
@@ -1185,6 +1273,56 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   const [customCodeInput, setCustomCodeInput] = useState('');
   const [customCodeError, setCustomCodeError] = useState<string | null>(null);
   const liveSessionClientRef = useRef(new LiveSessionClient());
+
+  const handleSaveTemplate = useCallback((name: string, t: string, qs: EditableQuestion[]) => {
+    const config = {
+      type: 'multi-survey' as const,
+      title: t,
+      questions: qs.map((q) => ({
+        id: q.id,
+        type: q.type,
+        question: q.question,
+        required: q.required,
+        options: q.options.map((o) => ({ id: o.id, text: o.text })),
+        maxLength: q.maxLength,
+        scaleMin: q.scaleMin,
+        scaleMax: q.scaleMax,
+        scaleMinLabel: q.scaleMinLabel,
+        scaleMaxLabel: q.scaleMaxLabel,
+      })),
+      stepMode,
+      useStopwords,
+    };
+    if (editingTemplateId) {
+      void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
+    } else {
+      void useToolTemplateStore.getState().addTemplate(name, 'multi-survey', config);
+    }
+    setShowSaveModal(false);
+    setEditingTemplateId(null);
+  }, [stepMode, useStopwords, editingTemplateId]);
+
+  const handleLoadTemplate = useCallback((template: ToolTemplate) => {
+    if (template.config.type !== 'multi-survey') return;
+    const cfg = template.config;
+    setTitle(cfg.title);
+    const loadedQuestions = cfg.questions.map((q) => ({
+      id: q.id,
+      type: q.type,
+      question: q.question,
+      required: q.required,
+      options: q.options.map((o) => ({ ...o })),
+      maxLength: q.maxLength,
+      scaleMin: q.scaleMin,
+      scaleMax: q.scaleMax,
+      scaleMinLabel: q.scaleMinLabel,
+      scaleMaxLabel: q.scaleMaxLabel,
+    }));
+    setQuestions(loadedQuestions);
+    setPendingTitle(cfg.title);
+    setPendingQuestions(loadedQuestions);
+    setEditingTemplateId(template.id);
+  }, []);
 
   const handleStart = useCallback((t: string, qs: EditableQuestion[]) => {
     setTitle(t);
@@ -1335,7 +1473,24 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   }, []);
 
   return (
-    <ToolLayout title="복수 문항 설문" emoji="📋" onBack={onBack} isFullscreen={isFullscreen}>
+    <ToolLayout title="복합 유형 설문" emoji="📋" onBack={onBack} isFullscreen={isFullscreen}>
+      <div className="flex items-center justify-center gap-2 py-2 shrink-0">
+        {[
+          { key: 'create', label: '문항 작성' },
+          { key: 'running', label: '응답 수집' },
+          { key: 'results', label: '결과' },
+        ].map((step, i) => {
+          const isActive = phase === step.key;
+          return (
+            <Fragment key={step.key}>
+              {i > 0 && <span className="text-sp-border">›</span>}
+              <span className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                {step.label}
+              </span>
+            </Fragment>
+          );
+        })}
+      </div>
       {phase === 'create' && (
         <CreateView
           isFullscreen={isFullscreen}
@@ -1344,6 +1499,19 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           onStepModeChange={setStepMode}
           useStopwords={useStopwords}
           onUseStopwordsChange={setUseStopwords}
+          editingTemplateId={editingTemplateId}
+          onSetEditingTemplateId={setEditingTemplateId}
+          onLoadFromTemplate={handleLoadTemplate}
+          showSaveModal={showSaveModal}
+          onOpenSaveModal={() => { setEditingTemplateId(editingTemplateId); setShowSaveModal(true); }}
+          onCloseSaveModal={() => setShowSaveModal(false)}
+          onSaveTemplate={handleSaveTemplate}
+          showPastResults={showPastResults}
+          onShowPastResults={() => setShowPastResults(true)}
+          onHidePastResults={() => setShowPastResults(false)}
+          externalTitle={pendingTitle}
+          externalQuestions={pendingQuestions}
+          onTemplateApplied={() => { setPendingTitle(null); setPendingQuestions(null); }}
         />
       )}
       {phase === 'running' && (
@@ -1386,6 +1554,33 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           onTextSubTabChange={setTextSubTab}
           selectedWord={selectedWord}
           onSelectedWordChange={setSelectedWord}
+          resultSaveButton={
+            <ResultSaveButton
+              toolType="multi-survey"
+              defaultName={title || '복합 설문'}
+              resultData={{
+                type: 'multi-survey' as const,
+                title,
+                questions: questions.map((q) => ({
+                  id: q.id,
+                  type: q.type,
+                  question: q.question,
+                  required: q.required,
+                  options: q.options.map((o) => ({ id: o.id, text: o.text })),
+                  maxLength: q.maxLength,
+                  scaleMin: q.scaleMin,
+                  scaleMax: q.scaleMax,
+                  scaleMinLabel: q.scaleMinLabel,
+                  scaleMaxLabel: q.scaleMaxLabel,
+                })),
+                submissions: submissions.map((s) => ({
+                  id: s.id,
+                  answers: s.answers.map((a) => ({ questionId: a.questionId, value: a.value })),
+                  submittedAt: s.submittedAt,
+                })),
+              }}
+            />
+          }
         />
       )}
     </ToolLayout>

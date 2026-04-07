@@ -187,6 +187,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('live-survey:connection-count', handler);
     return () => { ipcRenderer.removeListener('live-survey:connection-count', handler); };
   },
+  // Live Multi Survey
+  startLiveMultiSurvey: (data: {
+    questions: Array<{
+      id: string;
+      type: 'single-choice' | 'multi-choice' | 'text' | 'scale';
+      question: string;
+      required: boolean;
+      options?: Array<{ id: string; text: string }>;
+      scaleMin?: number;
+      scaleMax?: number;
+      scaleMinLabel?: string;
+      scaleMaxLabel?: string;
+      maxLength?: number;
+    }>;
+    stepMode?: boolean;
+  }): Promise<{ port: number; localIPs: string[] }> =>
+    ipcRenderer.invoke('live-multi-survey:start', data),
+  stopLiveMultiSurvey: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:stop'),
+  multiSurveyTunnelAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('live-multi-survey:tunnel-available'),
+  multiSurveyTunnelInstall: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:tunnel-install'),
+  multiSurveyTunnelStart: (): Promise<{ tunnelUrl: string }> =>
+    ipcRenderer.invoke('live-multi-survey:tunnel-start'),
+  onLiveMultiSurveyStudentSubmitted: (callback: (data: { answers: Array<{ questionId: string; value: string | string[] | number }>; submissionId: string; totalSubmissions: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { answers: Array<{ questionId: string; value: string | string[] | number }>; submissionId: string; totalSubmissions: number }) => callback(data);
+    ipcRenderer.on('live-multi-survey:student-submitted', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:student-submitted', handler); };
+  },
+  onLiveMultiSurveyConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { count: number }) => callback(data);
+    ipcRenderer.on('live-multi-survey:connection-count', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:connection-count', handler); };
+  },
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;

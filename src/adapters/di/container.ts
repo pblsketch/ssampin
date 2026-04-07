@@ -32,6 +32,8 @@ import type { IDriveSyncRepository } from '@domain/repositories/IDriveSyncReposi
 import type { IManualMealRepository } from '@domain/repositories/IManualMealRepository';
 import type { IImageWidgetRepository } from '@domain/repositories/IImageWidgetRepository';
 import type { IWordCloudRepository } from '@domain/repositories/IWordCloudRepository';
+import type { IToolTemplateRepository } from '@domain/repositories/IToolTemplateRepository';
+import type { IToolResultRepository } from '@domain/repositories/IToolResultRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -65,6 +67,8 @@ import { JsonDriveSyncRepository } from '@adapters/repositories/JsonDriveSyncRep
 import { JsonManualMealRepository } from '@adapters/repositories/JsonManualMealRepository';
 import { JsonImageWidgetRepository } from '@adapters/repositories/JsonImageWidgetRepository';
 import { JsonWordCloudRepository } from '@adapters/repositories/JsonWordCloudRepository';
+import { JsonToolTemplateRepository } from '@adapters/repositories/JsonToolTemplateRepository';
+import { JsonToolResultRepository } from '@adapters/repositories/JsonToolResultRepository';
 import { DriveSyncAdapter } from '@infrastructure/google/DriveSyncAdapter';
 import { ConsultationSupabaseClient } from '@infrastructure/supabase/ConsultationSupabaseClient';
 import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
@@ -136,6 +140,12 @@ export const imageWidgetRepository: IImageWidgetRepository =
 
 export const wordCloudRepository: IWordCloudRepository =
   new JsonWordCloudRepository(storage);
+
+export const toolTemplateRepository: IToolTemplateRepository =
+  new JsonToolTemplateRepository(storage);
+
+export const toolResultRepository: IToolResultRepository =
+  new JsonToolResultRepository(storage);
 
 export const neisPort: INeisPort = new NeisApiClient();
 

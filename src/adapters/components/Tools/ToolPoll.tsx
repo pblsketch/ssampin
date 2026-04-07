@@ -1,9 +1,12 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, Fragment } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { PollOption, PollQuestion } from '@domain/entities/Poll';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
+import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
+import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
+import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 
 interface ToolPollProps {
   onBack: () => void;
@@ -66,6 +69,7 @@ interface QuestionDraft {
   id: string;
   question: string;
   optionTexts: string[];
+  required: boolean;
 }
 
 function makeQuestionDraft(): QuestionDraft {
@@ -73,20 +77,37 @@ function makeQuestionDraft(): QuestionDraft {
     id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     question: '',
     optionTexts: ['', ''],
+    required: true,
   };
 }
 
 interface CreateViewProps {
   isFullscreen: boolean;
   onStart: (questions: PollQuestion[]) => void;
+  onSaveRequest?: (drafts: Array<{ question: string; options: string[] }>) => void;
+  onLoadTemplate?: (template: ToolTemplate) => void;
+  loadedDraft?: Array<{ question: string; options: string[] }> | null;
+  onShowPastResults?: () => void;
 }
 
-function CreateView({ isFullscreen, onStart }: CreateViewProps) {
+function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, loadedDraft, onShowPastResults }: CreateViewProps) {
   const [drafts, setDrafts] = useState<QuestionDraft[]>([makeQuestionDraft()]);
+  const [stepMode, setStepMode] = useState(false);
   const [exampleIdx, setExampleIdx] = useState(-1);
   const inputRefs = useRef<Map<string, (HTMLInputElement | null)[]>>(new Map());
 
-  const canStart = drafts.some(
+  // Apply loadedDraft when it changes
+  useEffect(() => {
+    if (!loadedDraft || loadedDraft.length === 0) return;
+    setDrafts(loadedDraft.map((d) => ({
+      id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      question: d.question,
+      optionTexts: d.options.length > 0 ? [...d.options] : ['', ''],
+      required: true,
+    })));
+  }, [loadedDraft]);
+
+  const canStart = drafts.every(
     (d) => d.question.trim().length > 0 && d.optionTexts.filter((t) => t.trim().length > 0).length >= 2
   );
 
@@ -135,19 +156,15 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
     }
   }, [drafts, handleAddOption]);
 
-  const handlePreset = useCallback((preset: Preset) => {
-    // Apply preset to first draft
-    if (drafts.length === 0) return;
-    updateDraft(drafts[0]!.id, (d) => ({ ...d, optionTexts: [...preset.options] }));
-  }, [drafts, updateDraft]);
+  const handlePreset = useCallback((draftId: string, preset: Preset) => {
+    updateDraft(draftId, (d) => ({ ...d, optionTexts: [...preset.options] }));
+  }, [updateDraft]);
 
-  const handleExampleClick = useCallback(() => {
+  const handleExampleClick = useCallback((draftId: string) => {
     const nextIdx = (exampleIdx + 1) % EXAMPLE_QUESTIONS.length;
     setExampleIdx(nextIdx);
-    if (drafts.length > 0) {
-      updateDraft(drafts[0]!.id, (d) => ({ ...d, question: EXAMPLE_QUESTIONS[nextIdx]! }));
-    }
-  }, [exampleIdx, drafts, updateDraft]);
+    updateDraft(draftId, (d) => ({ ...d, question: EXAMPLE_QUESTIONS[nextIdx]! }));
+  }, [exampleIdx, updateDraft]);
 
   const handleAddQuestion = useCallback(() => {
     if (drafts.length >= MAX_QUESTIONS) return;
@@ -215,15 +232,13 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
                   className="flex-1 bg-sp-bg border border-sp-border rounded-xl px-4 py-3 text-xl text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
                   maxLength={100}
                 />
-                {qIdx === 0 && (
-                  <button
-                    onClick={handleExampleClick}
-                    className="shrink-0 px-3 py-3 rounded-xl bg-sp-bg border border-sp-border text-sp-muted hover:text-yellow-400 hover:border-yellow-400/30 transition-all"
-                    title="예시 질문"
-                  >
-                    {'\u{1F4A1}'}
-                  </button>
-                )}
+                <button
+                  onClick={() => handleExampleClick(draft.id)}
+                  className="shrink-0 px-3 py-3 rounded-xl bg-sp-bg border border-sp-border text-sp-muted hover:text-yellow-400 hover:border-yellow-400/30 transition-all"
+                  title="예시 질문"
+                >
+                  {'\u{1F4A1}'}
+                </button>
                 {drafts.length > 1 && (
                   <>
                     <button
@@ -293,23 +308,30 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
                 )}
               </div>
 
-              {/* Presets (first question only) */}
-              {qIdx === 0 && (
-                <div className="flex flex-col gap-2">
-                  <span className="text-sm text-sp-muted font-medium">빠른 생성</span>
-                  <div className="flex flex-wrap gap-2">
-                    {PRESETS.map((preset) => (
-                      <button
-                        key={preset.label}
-                        onClick={() => handlePreset(preset)}
-                        className="px-4 py-2 rounded-xl bg-sp-bg border border-sp-border text-sm text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all"
-                      >
-                        {preset.emoji} {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Presets below options */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-sp-muted font-medium">빠른 생성:</span>
+                {PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => handlePreset(draft.id, preset)}
+                    className="px-3 py-1.5 rounded-lg bg-sp-card border border-sp-border text-xs text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all"
+                  >
+                    {preset.emoji} {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Required checkbox */}
+              <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draft.required}
+                  onChange={(e) => updateDraft(draft.id, (d) => ({ ...d, required: e.target.checked }))}
+                  className="rounded"
+                />
+                필수 응답
+              </label>
             </div>
           );
         })}
@@ -325,13 +347,61 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
         </button>
       )}
 
+      {/* Response mode toggle */}
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-sm text-sp-muted font-medium">응답 모드:</span>
+        <button
+          onClick={() => setStepMode(false)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${!stepMode ? 'bg-sp-accent/20 border-sp-accent text-sp-accent' : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'}`}
+        >
+          📜 전체 한 화면
+        </button>
+        <button
+          onClick={() => setStepMode(true)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${stepMode ? 'bg-sp-accent/20 border-sp-accent text-sp-accent' : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'}`}
+        >
+          ➡️ 문항별 순서
+        </button>
+      </div>
+
+      {/* Template actions */}
+      <div className="flex items-center gap-2 flex-wrap shrink-0">
+        {onLoadTemplate && (
+          <TemplateLoadDropdown toolType="poll" onLoad={onLoadTemplate} />
+        )}
+        {onSaveRequest && (
+          <button
+            onClick={() => {
+              onSaveRequest(
+                drafts.map((d) => ({
+                  question: d.question,
+                  options: d.optionTexts.map((t) => t.trim()).filter((t) => t.length > 0),
+                }))
+              );
+            }}
+            disabled={!canStart}
+            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sm text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all disabled:opacity-40"
+          >
+            💾 현재 문항 세트 저장
+          </button>
+        )}
+        {onShowPastResults && (
+          <button
+            onClick={onShowPastResults}
+            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sm text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all"
+          >
+            📊 지난 결과
+          </button>
+        )}
+      </div>
+
       {/* Start button */}
       <button
         onClick={handleStart}
         disabled={!canStart}
         className="w-full py-3.5 rounded-xl bg-sp-accent text-white font-bold text-lg hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
       >
-        {'\u{1F4CA}'} 설문 시작!
+        {'\u{1F4CA}'} 투표 시작!
       </button>
     </div>
   );
@@ -453,7 +523,10 @@ function LiveVotePanel({
             </div>
           ) : tunnelUrl ? (
             <div className="flex flex-col gap-1">
-              <p className="text-sp-text font-mono text-sm break-all">{tunnelUrl}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
+                <button onClick={() => { void navigator.clipboard.writeText(tunnelUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+              </div>
               <p className="text-blue-400 text-xs">{'\u{1F310}'} 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
           ) : tunnelError ? (
@@ -467,7 +540,10 @@ function LiveVotePanel({
             <div className="mt-2 border-t border-sp-border pt-2 flex flex-col gap-2">
               <div>
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
-                <p className="text-sp-accent font-bold text-sm font-mono">{shortUrl}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
+                  <button onClick={() => { void navigator.clipboard.writeText(shortUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                </div>
               </div>
               <div className="flex items-center gap-1.5">
                 <input
@@ -859,7 +935,7 @@ function VotingView({
           {isOpen ? (
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
+              className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-all text-sm font-medium"
             >
               {'\u{1F512}'} 설문 종료
             </button>
@@ -890,9 +966,10 @@ interface ResultsViewProps {
   isFullscreen: boolean;
   onRevote: () => void;
   onNewPoll: () => void;
+  resultSaveButton?: React.ReactNode;
 }
 
-function ResultsView({ questions, isFullscreen, onRevote, onNewPoll }: ResultsViewProps) {
+function ResultsView({ questions, isFullscreen, onRevote, onNewPoll, resultSaveButton }: ResultsViewProps) {
   const totalVotesAll = questions.reduce((sum, q) => sum + q.options.reduce((s, o) => s + o.votes, 0), 0);
   const [animated, setAnimated] = useState(false);
 
@@ -995,19 +1072,20 @@ function ResultsView({ questions, isFullscreen, onRevote, onNewPoll }: ResultsVi
       </div>
 
       {/* Bottom buttons */}
-      <div className="flex items-center justify-center gap-3 shrink-0 pb-1">
+      <div className="flex items-center justify-center gap-3 shrink-0 pb-1 flex-wrap">
         <button
           onClick={onRevote}
           className="px-5 py-2.5 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
         >
-          {'\u{1F4CA}'} 다시 설문
+          {'\u{21A9}'} 재투표
         </button>
         <button
           onClick={onNewPoll}
           className="px-5 py-2.5 rounded-xl bg-sp-accent text-white font-bold hover:bg-sp-accent/80 transition-all text-sm"
         >
-          {'\u{1F195}'} 새 설문
+          {'\u{270F}\uFE0F'} 새 문항
         </button>
+        {resultSaveButton}
       </div>
     </div>
   );
@@ -1022,6 +1100,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [viewMode, setViewMode] = useState<ViewMode>('create');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [showPastResults, setShowPastResults] = useState(false);
+  const [loadedDraft, setLoadedDraft] = useState<Array<{ question: string; options: string[] }> | null>(null);
   const [questions, setQuestions] = useState<PollQuestion[]>([]);
   const [isOpen, setIsOpen] = useState(true);
   const [showResults, setShowResults] = useState(false);
@@ -1220,6 +1302,32 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
     setShowQRFullscreen((prev) => !prev);
   }, []);
 
+  const [pendingSave, setPendingSave] = useState<Array<{ question: string; options: string[] }> | null>(null);
+
+  const handleSaveTemplate = useCallback((name: string) => {
+    if (!pendingSave) return;
+    const config = { type: 'poll' as const, questions: pendingSave };
+    if (editingTemplateId) {
+      void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
+    } else {
+      void useToolTemplateStore.getState().addTemplate(name, 'poll', config);
+    }
+    setShowSaveModal(false);
+    setEditingTemplateId(null);
+  }, [editingTemplateId, pendingSave]);
+
+  const handleSaveRequest = useCallback((drafts: Array<{ question: string; options: string[] }>) => {
+    setPendingSave(drafts);
+    setEditingTemplateId(null);
+    setShowSaveModal(true);
+  }, []);
+
+  const handleLoadTemplate = useCallback((template: ToolTemplate) => {
+    if (template.config.type !== 'poll') return;
+    setLoadedDraft([...template.config.questions.map((q) => ({ question: q.question, options: [...q.options] }))]);
+    setEditingTemplateId(template.id);
+  }, []);
+
   // Live vote IPC event listeners — single question uses liveVote, multi uses liveMultiSurvey
   useEffect(() => {
     if (!isLiveMode || !window.electronAPI) return;
@@ -1262,10 +1370,39 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
 
   return (
     <ToolLayout title="객관식 설문" emoji={'\u{1F4CA}'} onBack={onBack} isFullscreen={isFullscreen}>
-      {viewMode === 'create' && (
-        <CreateView isFullscreen={isFullscreen} onStart={handleStart} />
+      {/* Phase indicator */}
+      {!showPastResults && (
+        <div className="flex items-center justify-center gap-2 py-2 shrink-0">
+          {[
+            { key: 'create', label: '문항 작성' },
+            { key: 'voting', label: '투표 진행' },
+            { key: 'results', label: '결과' },
+          ].map((step, i) => {
+            const isActive = viewMode === step.key;
+            return (
+              <Fragment key={step.key}>
+                {i > 0 && <span className="text-sp-border">›</span>}
+                <span className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                  {step.label}
+                </span>
+              </Fragment>
+            );
+          })}
+        </div>
       )}
-      {viewMode === 'voting' && (
+      {showPastResults ? (
+        <PastResultsView toolType="poll" onClose={() => setShowPastResults(false)} />
+      ) : viewMode === 'create' && (
+        <CreateView
+          isFullscreen={isFullscreen}
+          onStart={handleStart}
+          onSaveRequest={handleSaveRequest}
+          onLoadTemplate={handleLoadTemplate}
+          loadedDraft={loadedDraft}
+          onShowPastResults={() => setShowPastResults(true)}
+        />
+      )}
+      {!showPastResults && viewMode === 'voting' && (
         <VotingView
           questions={questions}
           isOpen={isOpen}
@@ -1296,14 +1433,35 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           onSetCustomCode={handleSetCustomCode}
         />
       )}
-      {viewMode === 'results' && (
+      {!showPastResults && viewMode === 'results' && (
         <ResultsView
           questions={questions}
           isFullscreen={isFullscreen}
           onRevote={handleRevote}
           onNewPoll={handleReset}
+          resultSaveButton={
+            <ResultSaveButton
+              toolType="poll"
+              defaultName={questions[0]?.question ?? ''}
+              resultData={{
+                type: 'poll' as const,
+                question: questions[0]?.question ?? '',
+                options: questions.flatMap((q) =>
+                  q.options.map((o) => ({ text: o.text, votes: o.votes, color: o.color }))
+                ),
+                totalVotes: questions.reduce((s, q) => s + q.options.reduce((ss, o) => ss + o.votes, 0), 0),
+              }}
+            />
+          }
         />
       )}
+      <TemplateSaveModal
+        open={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        onSave={(name) => {
+          handleSaveTemplate(name);
+        }}
+      />
     </ToolLayout>
   );
 }

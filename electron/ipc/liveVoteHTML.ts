@@ -33,6 +33,7 @@ export function generateVotingHTML(
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>쌤핀 투표</title>
   <style>
+    [hidden] { display: none !important; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {

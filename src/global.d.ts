@@ -88,6 +88,28 @@ interface ElectronAPI {
   surveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
   onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void) => () => void;
   onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  // Live Multi Survey
+  startLiveMultiSurvey: (data: {
+    questions: Array<{
+      id: string;
+      type: 'single-choice' | 'multi-choice' | 'text' | 'scale';
+      question: string;
+      required: boolean;
+      options?: Array<{ id: string; text: string }>;
+      scaleMin?: number;
+      scaleMax?: number;
+      scaleMinLabel?: string;
+      scaleMaxLabel?: string;
+      maxLength?: number;
+    }>;
+    stepMode?: boolean;
+  }) => Promise<{ port: number; localIPs: string[] }>;
+  stopLiveMultiSurvey: () => Promise<void>;
+  multiSurveyTunnelAvailable: () => Promise<boolean>;
+  multiSurveyTunnelInstall: () => Promise<void>;
+  multiSurveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  onLiveMultiSurveyStudentSubmitted: (callback: (data: { answers: Array<{ questionId: string; value: string | string[] | number }>; submissionId: string; totalSubmissions: number }) => void) => () => void;
+  onLiveMultiSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;
