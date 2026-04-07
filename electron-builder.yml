@@ -36,6 +36,7 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: 쌤핀
   artifactName: ssampin-Setup.${ext}
+  include: build/installer.nsh
 mac:
   target:
     - target: dmg
