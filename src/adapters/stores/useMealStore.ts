@@ -91,6 +91,7 @@ interface MealState {
 
   // Actions
   loadTodayMeals: (atptCode: string, schoolCode: string) => Promise<void>;
+  loadMealsForDate: (atptCode: string, schoolCode: string, date: string) => Promise<void>;
   loadWeekMeals: (atptCode: string, schoolCode: string, startDate: string, endDate: string) => Promise<void>;
   searchSchools: (query: string) => Promise<void>;
   clearSearch: () => void;
@@ -153,6 +154,20 @@ export const useMealStore = create<MealState>((set, get) => ({
       }));
     } catch {
       set({ todayLoading: false, todayError: '급식 정보를 불러올 수 없습니다' });
+    }
+  },
+
+  loadMealsForDate: async (atptCode, schoolCode, date) => {
+    if (!atptCode || !schoolCode) return;
+    const cached = get().cache[date];
+    if (cached) return; // already in cache
+    try {
+      const meals = await getMeals.execute(NEIS_API_KEY, atptCode, schoolCode, date);
+      set((s) => ({
+        cache: { ...s.cache, [date]: meals },
+      }));
+    } catch {
+      // silently fail — will show "no meals" for that date
     }
   },
 

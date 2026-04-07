@@ -23,6 +23,7 @@ export function DashboardMeal() {
     todayLoading, todayError, loadTodayMeals,
     manualLoaded, loadManualMeals, mealSource,
     getMergedMealsForDate, getMergedTodayMeals,
+    loadMealsForDate,
   } = useMealStore();
   // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
   const atptCode = settings.mealSchool?.atptCode || settings.neis?.atptCode;
@@ -54,6 +55,13 @@ export function DashboardMeal() {
       void loadTodayMeals(atptCode, schoolCode);
     }
   }, [atptCode, schoolCode, loadTodayMeals, mealSource]);
+
+  // 다른 날짜로 이동 시 캐시에 없으면 자동 fetch
+  useEffect(() => {
+    if (!isViewingToday && atptCode && schoolCode && mealSource !== 'manual') {
+      void loadMealsForDate(atptCode, schoolCode, viewDateStr);
+    }
+  }, [viewDateStr, isViewingToday, atptCode, schoolCode, mealSource, loadMealsForDate]);
 
   const reloadMeal = useCallback(() => {
     if (atptCode && schoolCode && mealSource !== 'manual') void loadTodayMeals(atptCode, schoolCode);
