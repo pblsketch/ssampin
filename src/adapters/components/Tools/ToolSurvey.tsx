@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { ToolLayout } from './ToolLayout';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 
 interface ToolSurveyProps {
   onBack: () => void;
@@ -112,8 +113,6 @@ function CreateView({ isFullscreen, onStart }: CreateViewProps) {
 interface LiveSurveyPanelProps {
   serverInfo: { port: number; localIPs: string[] };
   connectedStudents: number;
-  selectedIP: string;
-  onSelectIP: (ip: string) => void;
   onStop: () => void;
   isFullscreen: boolean;
   showQRFullscreen: boolean;
@@ -122,14 +121,18 @@ interface LiveSurveyPanelProps {
   tunnelUrl: string | null;
   tunnelLoading: boolean;
   tunnelError: string | null;
-  onStartTunnel: () => void;
+  // Short URL props
+  shortUrl: string | null;
+  shortCode: string | null;
+  customCodeInput: string;
+  customCodeError: string | null;
+  onCustomCodeChange: (v: string) => void;
+  onSetCustomCode: () => void;
 }
 
 function LiveSurveyPanel({
   serverInfo,
   connectedStudents,
-  selectedIP,
-  onSelectIP,
   onStop,
   isFullscreen,
   showQRFullscreen,
@@ -137,15 +140,20 @@ function LiveSurveyPanel({
   tunnelUrl,
   tunnelLoading,
   tunnelError,
-  onStartTunnel,
+  shortUrl,
+  shortCode,
+  customCodeInput,
+  customCodeError,
+  onCustomCodeChange,
+  onSetCustomCode,
 }: LiveSurveyPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fullscreenCanvasRef = useRef<HTMLCanvasElement>(null);
-  const displayUrl = tunnelUrl ?? `http://${selectedIP}:${serverInfo.port}`;
+  const displayUrl = shortUrl ?? tunnelUrl ?? '';
 
   // Generate QR code
   useEffect(() => {
-    if (canvasRef.current) {
+    if (canvasRef.current && displayUrl) {
       QRCode.toCanvas(canvasRef.current, displayUrl, {
         width: 200,
         margin: 2,
@@ -157,7 +165,7 @@ function LiveSurveyPanel({
 
   // Generate fullscreen QR
   useEffect(() => {
-    if (showQRFullscreen && fullscreenCanvasRef.current) {
+    if (showQRFullscreen && fullscreenCanvasRef.current && displayUrl) {
       QRCode.toCanvas(fullscreenCanvasRef.current, displayUrl, {
         width: 400,
         margin: 3,
@@ -177,9 +185,6 @@ function LiveSurveyPanel({
         <canvas ref={fullscreenCanvasRef} className="mb-6" />
         <p className="text-gray-800 text-xl font-bold mb-2">📝 설문 참여하기</p>
         <p className="text-gray-600 text-lg font-mono">{displayUrl}</p>
-        {tunnelUrl && (
-          <p className="text-blue-500 text-sm mt-1">인터넷 모드 (Wi-Fi 불필요)</p>
-        )}
         <p className="text-gray-400 text-sm mt-4">화면을 클릭하면 돌아갑니다</p>
       </div>
     );
@@ -209,47 +214,64 @@ function LiveSurveyPanel({
       </div>
 
       <div className="flex items-center gap-4">
-        {/* QR Code */}
-        <div className="bg-white rounded-lg p-2">
-          <canvas ref={canvasRef} />
-        </div>
+        {/* QR Code — only when URL is ready */}
+        {displayUrl && (
+          <div className="bg-white rounded-lg p-2">
+            <canvas ref={canvasRef} />
+          </div>
+        )}
 
-        {/* URL + IP selector + Tunnel */}
+        {/* Tunnel status */}
         <div className="flex flex-col gap-2">
-          <p className="text-sp-text font-mono text-sm break-all">{displayUrl}</p>
-          {!tunnelUrl && serverInfo.localIPs.length > 1 && (
-            <select
-              value={selectedIP}
-              onChange={(e) => onSelectIP(e.target.value)}
-              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
-            >
-              {serverInfo.localIPs.map((ip) => (
-                <option key={ip} value={ip}>{ip}</option>
-              ))}
-            </select>
-          )}
-          {tunnelUrl ? (
-            <p className="text-blue-400 text-xs">
-              🌐 인터넷 모드 — Wi-Fi 연결 불필요
-            </p>
-          ) : (
-            <p className="text-sp-muted text-xs">
-              학생들이 같은 Wi-Fi에서 QR을 스캔하세요
-            </p>
-          )}
+          {tunnelLoading ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 text-blue-400 text-sm">
+                <span className="animate-spin">⏳</span>
+                <span>인터넷 연결 준비 중...</span>
+              </div>
+              <p className="text-sp-muted text-xs">보통 10초 이내 완료됩니다</p>
+            </div>
+          ) : tunnelUrl ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-sp-text font-mono text-sm break-all">{tunnelUrl}</p>
+              <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
+            </div>
+          ) : tunnelError ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-red-400 text-xs">{tunnelError}</p>
+              <p className="text-sp-muted text-xs">Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}</p>
+            </div>
+          ) : null}
 
-          {/* Tunnel toggle */}
-          {!tunnelUrl && (
-            <button
-              onClick={onStartTunnel}
-              disabled={tunnelLoading}
-              className="mt-1 px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-wait"
-            >
-              {tunnelLoading ? '🔄 인터넷 연결 준비 중...' : '🌐 인터넷으로 공유'}
-            </button>
-          )}
-          {tunnelError && (
-            <p className="text-red-400 text-xs">{tunnelError}</p>
+          {/* Short URL */}
+          {shortUrl && (
+            <div className="mt-2 border-t border-sp-border pt-2 flex flex-col gap-2">
+              <div>
+                <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
+                <p className="text-sp-accent font-bold text-sm font-mono">{shortUrl}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={customCodeInput}
+                  onChange={(e) => onCustomCodeChange(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') onSetCustomCode(); }}
+                  placeholder={shortCode ?? '커스텀 코드'}
+                  maxLength={30}
+                  className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
+                />
+                <button
+                  onClick={onSetCustomCode}
+                  disabled={!customCodeInput.trim()}
+                  className="px-2.5 py-1 rounded-lg bg-sp-accent/20 border border-sp-accent/30 text-sp-accent text-xs font-medium hover:bg-sp-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  변경
+                </button>
+              </div>
+              {customCodeError && (
+                <p className="text-red-400 text-xs">{customCodeError}</p>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -302,8 +324,6 @@ interface SurveyingViewProps {
   isLiveMode: boolean;
   liveServerInfo: { port: number; localIPs: string[] } | null;
   connectedStudents: number;
-  selectedIP: string;
-  onSelectIP: (ip: string) => void;
   onStartLive: () => void;
   onStopLive: () => void;
   showQRFullscreen: boolean;
@@ -315,7 +335,13 @@ interface SurveyingViewProps {
   tunnelUrl: string | null;
   tunnelLoading: boolean;
   tunnelError: string | null;
-  onStartTunnel: () => void;
+  // Short URL props
+  shortUrl: string | null;
+  shortCode: string | null;
+  customCodeInput: string;
+  customCodeError: string | null;
+  onCustomCodeChange: (v: string) => void;
+  onSetCustomCode: () => void;
 }
 
 function SurveyingView({
@@ -325,8 +351,6 @@ function SurveyingView({
   isLiveMode,
   liveServerInfo,
   connectedStudents,
-  selectedIP,
-  onSelectIP,
   onStartLive,
   onStopLive,
   showQRFullscreen,
@@ -337,7 +361,12 @@ function SurveyingView({
   tunnelUrl,
   tunnelLoading,
   tunnelError,
-  onStartTunnel,
+  shortUrl,
+  shortCode,
+  customCodeInput,
+  customCodeError,
+  onCustomCodeChange,
+  onSetCustomCode,
 }: SurveyingViewProps) {
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const prevCountRef = useRef(0);
@@ -375,8 +404,6 @@ function SurveyingView({
         <LiveSurveyPanel
           serverInfo={liveServerInfo}
           connectedStudents={connectedStudents}
-          selectedIP={selectedIP}
-          onSelectIP={onSelectIP}
           onStop={onStopLive}
           isFullscreen={isFullscreen}
           showQRFullscreen={showQRFullscreen}
@@ -384,7 +411,12 @@ function SurveyingView({
           tunnelUrl={tunnelUrl}
           tunnelLoading={tunnelLoading}
           tunnelError={tunnelError}
-          onStartTunnel={onStartTunnel}
+          shortUrl={shortUrl}
+          shortCode={shortCode}
+          customCodeInput={customCodeInput}
+          customCodeError={customCodeError}
+          onCustomCodeChange={onCustomCodeChange}
+          onSetCustomCode={onSetCustomCode}
         />
       )}
 
@@ -536,7 +568,6 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(null);
   const [connectedStudents, setConnectedStudents] = useState(0);
-  const [selectedIP, setSelectedIP] = useState('');
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
 
@@ -544,6 +575,11 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
   const [tunnelLoading, setTunnelLoading] = useState(false);
   const [tunnelError, setTunnelError] = useState<string | null>(null);
+  const [shortUrl, setShortUrl] = useState<string | null>(null);
+  const [shortCode, setShortCode] = useState<string | null>(null);
+  const [customCodeInput, setCustomCodeInput] = useState('');
+  const [customCodeError, setCustomCodeError] = useState<string | null>(null);
+  const liveSessionClientRef = useRef(new LiveSessionClient());
 
   const handleStart = useCallback((q: string, ml: number) => {
     setQuestion(q);
@@ -565,9 +601,29 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
         return;
       }
       setLiveServerInfo(info);
-      setSelectedIP(info.localIPs[0]!);
       setIsLiveMode(true);
       setConnectedStudents(0);
+      setTunnelLoading(true);
+      setTunnelError(null);
+      try {
+        const available = await window.electronAPI.surveyTunnelAvailable();
+        if (!available) await window.electronAPI.surveyTunnelInstall();
+        const result = await window.electronAPI.surveyTunnelStart();
+        setTunnelUrl(result.tunnelUrl);
+        setShortUrl(null);
+        setShortCode(null);
+        // Register shortcode async (non-blocking)
+        void liveSessionClientRef.current.registerSession(result.tunnelUrl).then((session) => {
+          if (session) {
+            setShortUrl(session.shortUrl);
+            setShortCode(session.code);
+          }
+        });
+      } catch {
+        setTunnelError('인터넷 연결에 실패했습니다. Wi-Fi로 접속하거나 네트워크를 확인해주세요.');
+      } finally {
+        setTunnelLoading(false);
+      }
     } catch {
       setLiveError('학생 설문 서버를 시작할 수 없습니다.');
     }
@@ -585,31 +641,24 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     setTunnelUrl(null);
     setTunnelLoading(false);
     setTunnelError(null);
+    setShortUrl(null);
+    setShortCode(null);
+    setCustomCodeInput('');
+    setCustomCodeError(null);
   }, []);
 
-  const handleStartTunnel = useCallback(async () => {
-    if (!window.electronAPI?.surveyTunnelStart) {
-      setTunnelError('인터넷 공유 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
-      return;
-    }
+  const handleSetCustomCode = useCallback(async () => {
+    if (!tunnelUrl || !customCodeInput.trim()) return;
+    setCustomCodeError(null);
     try {
-      setTunnelLoading(true);
-      setTunnelError(null);
-
-      // 바이너리가 없으면 설치 (첫 사용 시)
-      const available = await window.electronAPI.surveyTunnelAvailable();
-      if (!available) {
-        await window.electronAPI.surveyTunnelInstall();
-      }
-
-      const result = await window.electronAPI.surveyTunnelStart();
-      setTunnelUrl(result.tunnelUrl);
-    } catch {
-      setTunnelError('인터넷 연결에 실패했습니다. 네트워크를 확인해주세요.');
-    } finally {
-      setTunnelLoading(false);
+      const session = await liveSessionClientRef.current.setCustomCode(tunnelUrl, customCodeInput.trim());
+      setShortUrl(session.shortUrl);
+      setShortCode(session.code);
+      setCustomCodeInput('');
+    } catch (e) {
+      setCustomCodeError(e instanceof Error ? e.message : '코드 변경에 실패했습니다');
     }
-  }, []);
+  }, [tunnelUrl, customCodeInput]);
 
   const handleFinish = useCallback(() => {
     if (isLiveMode) {
@@ -630,10 +679,6 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
 
   const handleToggleQRFullscreen = useCallback(() => {
     setShowQRFullscreen((prev) => !prev);
-  }, []);
-
-  const handleSelectIP = useCallback((ip: string) => {
-    setSelectedIP(ip);
   }, []);
 
   // Live survey IPC event listeners
@@ -680,8 +725,6 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           isLiveMode={isLiveMode}
           liveServerInfo={liveServerInfo}
           connectedStudents={connectedStudents}
-          selectedIP={selectedIP}
-          onSelectIP={handleSelectIP}
           onStartLive={handleStartLive}
           onStopLive={handleStopLive}
           showQRFullscreen={showQRFullscreen}
@@ -692,7 +735,12 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           tunnelUrl={tunnelUrl}
           tunnelLoading={tunnelLoading}
           tunnelError={tunnelError}
-          onStartTunnel={handleStartTunnel}
+          shortUrl={shortUrl}
+          shortCode={shortCode}
+          customCodeInput={customCodeInput}
+          customCodeError={customCodeError}
+          onCustomCodeChange={setCustomCodeInput}
+          onSetCustomCode={handleSetCustomCode}
         />
       )}
       {viewMode === 'results' && (

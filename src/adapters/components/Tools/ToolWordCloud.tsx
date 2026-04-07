@@ -7,6 +7,7 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { WordCloudSession, WordCloudGroup } from '@domain/entities/WordCloudSession';
 import { useWordCloudHistoryStore } from '@adapters/stores/useWordCloudHistoryStore';
 import { OrganizeView } from './WordCloud/OrganizeView';
+import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 
 interface ToolWordCloudProps {
   onBack: () => void;
@@ -156,8 +157,6 @@ function CreateView({ isFullscreen, onStart, onShowHistory }: CreateViewProps) {
 interface LivePanelProps {
   serverInfo: { port: number; localIPs: string[] };
   connectedStudents: number;
-  selectedIP: string;
-  onSelectIP: (ip: string) => void;
   onStop: () => void;
   isFullscreen: boolean;
   showQRFullscreen: boolean;
@@ -166,14 +165,17 @@ interface LivePanelProps {
   tunnelUrl: string | null;
   tunnelLoading: boolean;
   tunnelError: string | null;
-  onStartTunnel: () => void;
+  shortUrl: string | null;
+  shortCode: string | null;
+  customCodeInput: string;
+  customCodeError: string | null;
+  onCustomCodeChange: (v: string) => void;
+  onSetCustomCode: () => void;
 }
 
 function LivePanel({
   serverInfo,
   connectedStudents,
-  selectedIP,
-  onSelectIP,
   onStop,
   isFullscreen,
   showQRFullscreen,
@@ -181,14 +183,19 @@ function LivePanel({
   tunnelUrl,
   tunnelLoading,
   tunnelError,
-  onStartTunnel,
+  shortUrl,
+  shortCode,
+  customCodeInput,
+  customCodeError,
+  onCustomCodeChange,
+  onSetCustomCode,
 }: LivePanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fullscreenCanvasRef = useRef<HTMLCanvasElement>(null);
-  const displayUrl = tunnelUrl ?? `http://${selectedIP}:${serverInfo.port}`;
+  const displayUrl = shortUrl ?? tunnelUrl ?? '';
 
   useEffect(() => {
-    if (canvasRef.current) {
+    if (displayUrl && canvasRef.current) {
       QRCode.toCanvas(canvasRef.current, displayUrl, {
         width: 200,
         margin: 2,
@@ -199,7 +206,7 @@ function LivePanel({
   }, [displayUrl]);
 
   useEffect(() => {
-    if (showQRFullscreen && fullscreenCanvasRef.current) {
+    if (showQRFullscreen && displayUrl && fullscreenCanvasRef.current) {
       QRCode.toCanvas(fullscreenCanvasRef.current, displayUrl, {
         width: 400,
         margin: 3,
@@ -215,9 +222,9 @@ function LivePanel({
         className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white cursor-pointer"
         onClick={onToggleQRFullscreen}
       >
-        <canvas ref={fullscreenCanvasRef} className="mb-6" />
+        {displayUrl && <canvas ref={fullscreenCanvasRef} className="mb-6" />}
         <p className="text-gray-800 text-xl font-bold mb-2">☁️ 워드클라우드 참여하기</p>
-        <p className="text-gray-600 text-lg font-mono">{displayUrl}</p>
+        {displayUrl && <p className="text-gray-600 text-lg font-mono">{displayUrl}</p>}
         {tunnelUrl && (
           <p className="text-blue-500 text-sm mt-1">인터넷 모드 (Wi-Fi 불필요)</p>
         )}
@@ -234,13 +241,15 @@ function LivePanel({
           접속 학생: <span className="text-sp-text font-bold">{connectedStudents}명</span>
         </span>
         <div className="flex-1" />
-        <button
-          onClick={onToggleQRFullscreen}
-          className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text text-xs transition-all"
-          title="QR 코드 크게 보기"
-        >
-          🔍 크게
-        </button>
+        {displayUrl && (
+          <button
+            onClick={onToggleQRFullscreen}
+            className="px-3 py-1.5 rounded-lg bg-sp-bg border border-sp-border text-sp-muted hover:text-sp-text text-xs transition-all"
+            title="QR 코드 크게 보기"
+          >
+            🔍 크게
+          </button>
+        )}
         <button
           onClick={onStop}
           className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 text-xs font-medium transition-all"
@@ -250,44 +259,57 @@ function LivePanel({
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="bg-white rounded-lg p-2">
-          <canvas ref={canvasRef} />
-        </div>
+        {displayUrl && (
+          <div className="bg-white rounded-lg p-2">
+            <canvas ref={canvasRef} />
+          </div>
+        )}
         <div className="flex flex-col gap-2">
-          <p className="text-sp-text font-mono text-sm break-all">{displayUrl}</p>
-          {!tunnelUrl && serverInfo.localIPs.length > 1 && (
-            <select
-              value={selectedIP}
-              onChange={(e) => onSelectIP(e.target.value)}
-              className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none"
-            >
-              {serverInfo.localIPs.map((ip) => (
-                <option key={ip} value={ip}>{ip}</option>
-              ))}
-            </select>
-          )}
-          {tunnelUrl ? (
-            <p className="text-blue-400 text-xs">
-              🌐 인터넷 모드 — Wi-Fi 연결 불필요
-            </p>
-          ) : (
-            <p className="text-sp-muted text-xs">
-              학생들이 같은 Wi-Fi에서 QR을 스캔하세요
-            </p>
-          )}
-
-          {/* Tunnel toggle */}
-          {!tunnelUrl && (
-            <button
-              onClick={onStartTunnel}
-              disabled={tunnelLoading}
-              className="mt-1 px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-wait"
-            >
-              {tunnelLoading ? '🔄 인터넷 연결 준비 중...' : '🌐 인터넷으로 공유'}
-            </button>
-          )}
-          {tunnelError && (
-            <p className="text-red-400 text-xs">{tunnelError}</p>
+          {tunnelLoading ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 text-blue-400 text-sm">
+                <span className="animate-spin">⏳</span>
+                <span>인터넷 연결 준비 중...</span>
+              </div>
+              <p className="text-sp-muted text-xs">보통 10초 이내 완료됩니다</p>
+            </div>
+          ) : tunnelUrl ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-sp-text font-mono text-sm break-all">{tunnelUrl}</p>
+              <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
+            </div>
+          ) : tunnelError ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-red-400 text-xs">{tunnelError}</p>
+              <p className="text-sp-muted text-xs">Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}</p>
+            </div>
+          ) : null}
+          {shortUrl && (
+            <div className="mt-2 border-t border-sp-border pt-2 flex flex-col gap-2">
+              <div>
+                <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
+                <p className="text-sp-accent font-bold text-sm font-mono">{shortUrl}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={customCodeInput}
+                  onChange={(e) => onCustomCodeChange(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') onSetCustomCode(); }}
+                  placeholder={shortCode ?? '커스텀 코드'}
+                  maxLength={30}
+                  className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
+                />
+                <button
+                  onClick={onSetCustomCode}
+                  disabled={!customCodeInput.trim()}
+                  className="px-2.5 py-1 rounded-lg bg-sp-accent/20 border border-sp-accent/30 text-sp-accent text-xs font-medium hover:bg-sp-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  변경
+                </button>
+              </div>
+              {customCodeError && <p className="text-red-400 text-xs">{customCodeError}</p>}
+            </div>
           )}
         </div>
       </div>
@@ -469,12 +491,17 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(null);
   const [connectedStudents, setConnectedStudents] = useState(0);
-  const [selectedIP, setSelectedIP] = useState('');
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
   const [tunnelLoading, setTunnelLoading] = useState(false);
   const [tunnelError, setTunnelError] = useState<string | null>(null);
+
+  const [shortUrl, setShortUrl] = useState<string | null>(null);
+  const [shortCode, setShortCode] = useState<string | null>(null);
+  const [customCodeInput, setCustomCodeInput] = useState('');
+  const [customCodeError, setCustomCodeError] = useState<string | null>(null);
+  const liveSessionClientRef = useRef(new LiveSessionClient());
 
   // Color index tracker
   const colorIndexRef = useRef(0);
@@ -501,15 +528,49 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
       }
 
       setLiveServerInfo(info);
-      setSelectedIP(info.localIPs[0]!);
       setIsLiveMode(true);
       setLiveError(null);
       setViewMode('live');
+
+      // Auto-start tunnel
+      setTunnelLoading(true);
+      setTunnelError(null);
+      try {
+        const available = await window.electronAPI.wordcloudTunnelAvailable();
+        if (!available) await window.electronAPI.wordcloudTunnelInstall();
+        const result = await window.electronAPI.wordcloudTunnelStart();
+        setTunnelUrl(result.tunnelUrl);
+        setShortUrl(null);
+        setShortCode(null);
+        void liveSessionClientRef.current.registerSession(result.tunnelUrl).then((session) => {
+          if (session) {
+            setShortUrl(session.shortUrl);
+            setShortCode(session.code);
+          }
+        });
+      } catch {
+        setTunnelError('인터넷 연결에 실패했습니다. Wi-Fi로 접속하거나 네트워크를 확인해주세요.');
+      } finally {
+        setTunnelLoading(false);
+      }
     } catch {
       setLiveError('서버를 시작할 수 없습니다.');
       setViewMode('live');
     }
   }, []);
+
+  const handleSetCustomCode = useCallback(async () => {
+    if (!tunnelUrl || !customCodeInput.trim()) return;
+    setCustomCodeError(null);
+    try {
+      const session = await liveSessionClientRef.current.setCustomCode(tunnelUrl, customCodeInput.trim());
+      setShortUrl(session.shortUrl);
+      setShortCode(session.code);
+      setCustomCodeInput('');
+    } catch (e) {
+      setCustomCodeError(e instanceof Error ? e.message : '코드 변경에 실패했습니다');
+    }
+  }, [tunnelUrl, customCodeInput]);
 
   const handleStopLive = useCallback(() => {
     if (window.electronAPI?.stopLiveWordCloud) {
@@ -522,6 +583,10 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
     setTunnelUrl(null);
     setTunnelLoading(false);
     setTunnelError(null);
+    setShortUrl(null);
+    setShortCode(null);
+    setCustomCodeInput('');
+    setCustomCodeError(null);
   }, []);
 
   const handleReset = useCallback(() => {
@@ -573,31 +638,6 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
     setCurrentSessionId(session.id);
     setCurrentGroups([...session.groups.map((g) => ({ ...g, words: [...g.words] }))]);
     setViewMode('organize');
-  }, []);
-
-  const handleStartTunnel = useCallback(async () => {
-    if (!window.electronAPI?.wordcloudTunnelStart) {
-      setTunnelError('인터넷 공유 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
-      return;
-    }
-    try {
-      setTunnelLoading(true);
-      setTunnelError(null);
-
-      // 바이너리가 없으면 설치 (첫 사용 시)
-      const available = await window.electronAPI.wordcloudTunnelAvailable();
-      if (!available) {
-        await window.electronAPI.wordcloudTunnelInstall();
-      }
-
-      const result = await window.electronAPI.wordcloudTunnelStart();
-      setTunnelUrl(result.tunnelUrl);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setTunnelError(`인터넷 연결 실패: ${msg}`);
-    } finally {
-      setTunnelLoading(false);
-    }
   }, []);
 
   // IPC event listeners
@@ -694,8 +734,6 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
               <LivePanel
                 serverInfo={liveServerInfo}
                 connectedStudents={connectedStudents}
-                selectedIP={selectedIP}
-                onSelectIP={setSelectedIP}
                 onStop={handleStopLive}
                 isFullscreen={isFullscreen}
                 showQRFullscreen={showQRFullscreen}
@@ -703,7 +741,12 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
                 tunnelUrl={tunnelUrl}
                 tunnelLoading={tunnelLoading}
                 tunnelError={tunnelError}
-                onStartTunnel={handleStartTunnel}
+                shortUrl={shortUrl}
+                shortCode={shortCode}
+                customCodeInput={customCodeInput}
+                customCodeError={customCodeError}
+                onCustomCodeChange={setCustomCodeInput}
+                onSetCustomCode={() => { void handleSetCustomCode(); }}
               />
             )}
 
