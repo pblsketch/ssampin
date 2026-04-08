@@ -76,6 +76,13 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const [waitingForNext, setWaitingForNext] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
+  /* ─── Blocked / Fixed seat state ─── */
+  const [blockedSeats, setBlockedSeats] = useState<Set<string>>(new Set());
+  const [fixedStudents, setFixedStudents] = useState<Map<string, string>>(new Map()); // key: "row-col", value: studentId
+  const [seatConfigOpen, setSeatConfigOpen] = useState(false);
+  const [seatConfigMode, setSeatConfigMode] = useState<'block' | 'fix'>('block');
+  const [fixPickerSeat, setFixPickerSeat] = useState<string | null>(null); // "row-col" of seat showing student picker
+
   /* ─── Complete state ─── */
   const [showSaveModal, setShowSaveModal] = useState(false);
 
@@ -123,11 +130,13 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const effectiveRows = seatDataSource === 'homeroom' ? seating.rows : tcSeatingRows;
   const effectiveCols = seatDataSource === 'homeroom' ? seating.cols : tcSeatingCols;
   const totalSeats = effectiveRows * effectiveCols;
+  const availableSeats = totalSeats - blockedSeats.size;
+  const unfixedStudentCount = activeStudents.length - fixedStudents.size;
   const hasSeatingData = effectiveRows > 0 && effectiveCols > 0;
   const needsAutoGrid = seatDataSource === 'teachingClass' && selectedTc !== null && !selectedTc.seating && activeStudents.length > 0;
-  const studentShortage = !needsAutoGrid && activeStudents.length > totalSeats;
+  const studentShortage = !needsAutoGrid && activeStudents.length > availableSeats;
   const canStart = seatDataSource === 'homeroom'
-    ? hasSeatingData && activeStudents.length > 0 && !studentShortage
+    ? hasSeatingData && activeStudents.length > 0 && !studentShortage && fixedStudents.size <= availableSeats
     : selectedTc !== null && activeStudents.length > 0 && (hasSeatingData || needsAutoGrid);
 
   const assignedCount = assignments.size;
@@ -136,11 +145,15 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
   /* ─── Start picking ─── */
   const handleStart = useCallback(() => {
+    // Separate fixed students from the rest
+    const fixedStudentIds = new Set(fixedStudents.values());
+    const unfixedActive = activeStudents.filter((s) => !fixedStudentIds.has(s.id));
+
     let ordered: Student[];
     if (orderMode === 'random') {
-      ordered = shuffleArray(activeStudents);
+      ordered = shuffleArray(unfixedActive);
     } else {
-      ordered = [...activeStudents].sort(
+      ordered = [...unfixedActive].sort(
         (a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0),
       );
     }
@@ -149,24 +162,34 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     let rows = effectiveRows;
     let cols = effectiveCols;
     if (needsAutoGrid) {
-      cols = Math.max(1, Math.ceil(Math.sqrt(ordered.length)));
-      rows = Math.max(1, Math.ceil(ordered.length / cols));
+      cols = Math.max(1, Math.ceil(Math.sqrt(activeStudents.length)));
+      rows = Math.max(1, Math.ceil(activeStudents.length / cols));
     }
 
-    // Generate all seat positions and shuffle for card assignment
+    // Generate available seat positions (exclude blocked and fixed seats)
     const allSeats: SeatPosition[] = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        allSeats.push({ row: r, col: c });
+        const key = `${r}-${c}`;
+        if (!blockedSeats.has(key) && !fixedStudents.has(key)) {
+          allSeats.push({ row: r, col: c });
+        }
       }
     }
     const shuffled = shuffleArray(allSeats);
+
+    // Pre-assign fixed students
+    const preAssignments = new Map<string, Assignment>();
+    for (const [seatKey, studentId] of fixedStudents.entries()) {
+      const [rStr, cStr] = seatKey.split('-');
+      preAssignments.set(studentId, { row: parseInt(rStr!, 10), col: parseInt(cStr!, 10) });
+    }
 
     setPickingRows(rows);
     setPickingCols(cols);
     setStudentOrder(ordered);
     setCurrentIndex(0);
-    setAssignments(new Map());
+    setAssignments(preAssignments);
     setShuffledSeats(shuffled);
     setFlippedCards(new Set());
     setLastAssigned(null);
@@ -174,7 +197,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     setWaitingForNext(false);
     setIsPaused(false);
     setPhase('picking');
-  }, [activeStudents, orderMode, effectiveRows, effectiveCols, needsAutoGrid]);
+  }, [activeStudents, orderMode, effectiveRows, effectiveCols, needsAutoGrid, blockedSeats, fixedStudents]);
 
   /* ─── Handle card click ─── */
   const handleCardClick = useCallback(
@@ -325,6 +348,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     setIsPaused(false);
     setPickingRows(0);
     setPickingCols(0);
+    setFixPickerSeat(null);
   }, []);
 
   /* ─── Save to seating store ─── */
@@ -532,14 +556,21 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       </div>
                     </div>
                   </div>
-                  {studentShortage && (
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2.5 text-red-400 text-sm">
-                      좌석이 부족합니다 (학생 {activeStudents.length}명 &gt; 좌석 {totalSeats}석)
+                  {(blockedSeats.size > 0 || fixedStudents.size > 0) && (
+                    <div className="bg-sp-surface rounded-lg px-4 py-2.5 text-sp-muted text-sm mb-2 flex items-center gap-3">
+                      {blockedSeats.size > 0 && <span>🚫 빈자리 {blockedSeats.size}개</span>}
+                      {fixedStudents.size > 0 && <span>📌 고정 {fixedStudents.size}명</span>}
+                      <span className="ml-auto text-sp-text font-medium">사용 가능 {availableSeats - fixedStudents.size}석</span>
                     </div>
                   )}
-                  {!studentShortage && !needsAutoGrid && activeStudents.length < totalSeats && (
+                  {studentShortage && (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2.5 text-red-400 text-sm">
+                      좌석이 부족합니다 (학생 {activeStudents.length}명 &gt; 사용 가능 좌석 {availableSeats}석)
+                    </div>
+                  )}
+                  {!studentShortage && !needsAutoGrid && unfixedStudentCount < (availableSeats - fixedStudents.size) && (
                     <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2.5 text-blue-300 text-sm">
-                      {totalSeats - activeStudents.length}개 좌석이 비게 됩니다
+                      {availableSeats - fixedStudents.size - unfixedStudentCount}개 좌석이 비게 됩니다
                     </div>
                   )}
                 </div>
@@ -586,6 +617,190 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                       </button>
                     </div>
                   </div>
+                </div>
+                )}
+
+                {/* Seat configuration (blocked / fixed) */}
+                {hasSeatingData && !needsAutoGrid && (
+                <div className="bg-sp-card border border-sp-border rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setSeatConfigOpen((v) => !v)}
+                    className="w-full flex items-center justify-between px-5 py-4 text-sp-text font-medium hover:bg-sp-surface/50 transition-colors"
+                  >
+                    <span>좌석 설정</span>
+                    <span className="text-sp-muted text-sm flex items-center gap-2">
+                      {(blockedSeats.size > 0 || fixedStudents.size > 0) && (
+                        <span className="text-xs bg-sp-accent/20 text-sp-accent px-2 py-0.5 rounded-full">
+                          {blockedSeats.size > 0 && `빈자리 ${blockedSeats.size}`}
+                          {blockedSeats.size > 0 && fixedStudents.size > 0 && ' · '}
+                          {fixedStudents.size > 0 && `고정 ${fixedStudents.size}`}
+                        </span>
+                      )}
+                      <span className="material-symbols-outlined text-icon-md transition-transform" style={{ transform: seatConfigOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>expand_more</span>
+                    </span>
+                  </button>
+                  {seatConfigOpen && (
+                    <div className="px-5 pb-5 border-t border-sp-border pt-4">
+                      {/* Mode tabs */}
+                      <div className="flex gap-2 mb-4">
+                        <button
+                          onClick={() => { setSeatConfigMode('block'); setFixPickerSeat(null); }}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            seatConfigMode === 'block'
+                              ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                              : 'bg-sp-surface border-sp-border text-sp-muted hover:border-red-500/30 hover:text-sp-text'
+                          }`}
+                        >
+                          🚫 빈자리 지정
+                        </button>
+                        <button
+                          onClick={() => { setSeatConfigMode('fix'); }}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            seatConfigMode === 'fix'
+                              ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                              : 'bg-sp-surface border-sp-border text-sp-muted hover:border-amber-500/30 hover:text-sp-text'
+                          }`}
+                        >
+                          📌 학생 고정
+                        </button>
+                      </div>
+
+                      {/* Mini seat grid */}
+                      <div className="bg-sp-surface rounded-lg py-1.5 px-4 text-center mb-2">
+                        <span className="text-sp-muted text-xs font-medium">교탁</span>
+                      </div>
+                      <div
+                        className="grid gap-1.5 mx-auto mb-3"
+                        style={{
+                          gridTemplateColumns: `repeat(${effectiveCols}, minmax(0, 1fr))`,
+                          maxWidth: `${effectiveCols * 64}px`,
+                        }}
+                      >
+                        {Array.from({ length: effectiveRows }, (_, r) =>
+                          Array.from({ length: effectiveCols }, (_, c) => {
+                            const key = `${r}-${c}`;
+                            const isBlocked = blockedSeats.has(key);
+                            const fixedStudentId = fixedStudents.get(key);
+                            const fixedStudent = fixedStudentId
+                              ? activeStudents.find((s) => s.id === fixedStudentId) ?? null
+                              : null;
+                            const isShowingPicker = fixPickerSeat === key;
+
+                            // Available students for fix picker (not already fixed elsewhere)
+                            const alreadyFixed = new Set(fixedStudents.values());
+
+                            return (
+                              <div key={key} className="relative">
+                                <button
+                                  onClick={() => {
+                                    if (seatConfigMode === 'block') {
+                                      if (fixedStudentId) return; // can't block a fixed seat
+                                      setBlockedSeats((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(key)) next.delete(key);
+                                        else next.add(key);
+                                        return next;
+                                      });
+                                    } else {
+                                      if (isBlocked) return; // can't fix a blocked seat
+                                      if (fixedStudentId) {
+                                        // remove fix
+                                        setFixedStudents((prev) => {
+                                          const next = new Map(prev);
+                                          next.delete(key);
+                                          return next;
+                                        });
+                                        setFixPickerSeat(null);
+                                      } else {
+                                        setFixPickerSeat(isShowingPicker ? null : key);
+                                      }
+                                    }
+                                  }}
+                                  className={`
+                                    w-full aspect-square rounded-lg flex flex-col items-center justify-center text-center text-xs transition-all
+                                    ${isBlocked
+                                      ? seatConfigMode === 'block'
+                                        ? 'bg-red-500/20 border-2 border-red-500/50 text-red-400 hover:bg-red-500/30'
+                                        : 'bg-red-500/10 border border-red-500/20 text-red-400/50 cursor-not-allowed'
+                                      : fixedStudent
+                                        ? seatConfigMode === 'fix'
+                                          ? 'bg-amber-500/20 border-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/30'
+                                          : 'bg-amber-500/10 border border-amber-500/20 text-amber-400/50 cursor-not-allowed'
+                                        : seatConfigMode === 'block'
+                                          ? 'bg-sp-card border border-sp-border hover:bg-red-500/10 hover:border-red-500/30 text-sp-muted'
+                                          : 'bg-sp-card border border-sp-border hover:bg-amber-500/10 hover:border-amber-500/30 text-sp-muted'
+                                    }
+                                  `}
+                                >
+                                  {isBlocked ? (
+                                    <span className="text-sm font-bold">✕</span>
+                                  ) : fixedStudent ? (
+                                    <>
+                                      <span className="text-caption leading-none">📌</span>
+                                      <span className="truncate w-full text-caption font-medium leading-tight">{fixedStudent.name}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-sp-muted/60 leading-tight">{r + 1},{c + 1}</span>
+                                  )}
+                                </button>
+
+                                {/* Student picker dropdown */}
+                                {isShowingPicker && seatConfigMode === 'fix' && (
+                                  <div className="absolute z-30 top-full left-0 mt-1 w-36 max-h-40 overflow-auto bg-sp-card border border-sp-border rounded-lg shadow-xl">
+                                    {activeStudents
+                                      .filter((s) => !alreadyFixed.has(s.id) || s.id === fixedStudentId)
+                                      .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0))
+                                      .map((s) => (
+                                        <button
+                                          key={s.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setFixedStudents((prev) => {
+                                              const next = new Map(prev);
+                                              next.set(key, s.id);
+                                              return next;
+                                            });
+                                            setFixPickerSeat(null);
+                                          }}
+                                          className="w-full text-left px-3 py-1.5 text-xs text-sp-text hover:bg-sp-accent/20 transition-colors"
+                                        >
+                                          {s.studentNumber ?? '-'}번 {s.name}
+                                        </button>
+                                      ))}
+                                    {activeStudents.filter((s) => !alreadyFixed.has(s.id) || s.id === fixedStudentId).length === 0 && (
+                                      <div className="px-3 py-2 text-xs text-sp-muted">배정 가능한 학생 없음</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }),
+                        )}
+                      </div>
+
+                      {/* Summary + reset */}
+                      <div className="flex items-center justify-between text-xs text-sp-muted">
+                        <span>
+                          {blockedSeats.size > 0 && `빈자리 ${blockedSeats.size}개`}
+                          {blockedSeats.size > 0 && fixedStudents.size > 0 && ' · '}
+                          {fixedStudents.size > 0 && `고정 ${fixedStudents.size}명`}
+                          {blockedSeats.size === 0 && fixedStudents.size === 0 && '좌석을 클릭하여 설정하세요'}
+                        </span>
+                        {(blockedSeats.size > 0 || fixedStudents.size > 0) && (
+                          <button
+                            onClick={() => {
+                              setBlockedSeats(new Set());
+                              setFixedStudents(new Map());
+                              setFixPickerSeat(null);
+                            }}
+                            className="text-red-400 hover:text-red-300 transition-colors font-medium"
+                          >
+                            초기화
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 )}
 
@@ -737,33 +952,50 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                 >
                   {Array.from({ length: pickingRows || effectiveRows }, (_, r) =>
                     Array.from({ length: pickingCols || effectiveCols }, (_, c) => {
+                      const seatKey = `${r}-${c}`;
+                      const isBlocked = blockedSeats.has(seatKey);
+                      const isFixed = fixedStudents.has(seatKey);
                       const assigned = getAssignmentForSeat(r, c);
                       const isLastAssigned =
                         assigned !== null && assigned.studentId === lastAssigned;
                       const canClickSeat =
-                        orderMode === 'direct' && !assigned && !isPaused && !showPopup && !isPickingDone;
+                        orderMode === 'direct' && !assigned && !isBlocked && !isPaused && !showPopup && !isPickingDone;
+
+                      if (isBlocked) {
+                        return (
+                          <div
+                            key={seatKey}
+                            className="w-full aspect-square rounded-lg flex flex-col items-center justify-center text-center p-1 bg-sp-surface/60 border border-sp-border/40"
+                          >
+                            <span className="text-red-400/60 text-sm font-bold">✕</span>
+                            <span className="text-sp-muted/40 text-caption leading-tight">빈자리</span>
+                          </div>
+                        );
+                      }
 
                       return (
                         <div
-                          key={`${r}-${c}`}
+                          key={seatKey}
                           onClick={() => canClickSeat && handleDirectSeatClick(r, c)}
                           className={`
                             w-full aspect-square rounded-lg flex flex-col items-center justify-center text-center p-1 transition-all duration-300
                             ${
                               isLastAssigned
                                 ? 'bg-blue-500/40 border-2 border-blue-400 ring-2 ring-blue-400/50 animate-pulse'
-                                : assigned
-                                  ? 'bg-blue-500/20 border border-blue-500/40'
-                                  : canClickSeat
-                                    ? 'bg-sp-card border-2 border-dashed border-sp-accent/40 cursor-pointer hover:bg-sp-accent/10 hover:border-sp-accent'
-                                    : 'bg-sp-card border border-dashed border-sp-border'
+                                : assigned && isFixed
+                                  ? 'bg-amber-500/20 border border-amber-500/40'
+                                  : assigned
+                                    ? 'bg-blue-500/20 border border-blue-500/40'
+                                    : canClickSeat
+                                      ? 'bg-sp-card border-2 border-dashed border-sp-accent/40 cursor-pointer hover:bg-sp-accent/10 hover:border-sp-accent'
+                                      : 'bg-sp-card border border-dashed border-sp-border'
                             }
                           `}
                         >
                           {assigned ? (
                             <>
                               <span className="text-sp-text text-xs font-bold truncate w-full leading-tight">
-                                {assigned.student.name}
+                                {isFixed && '📌'}{assigned.student.name}
                               </span>
                               <span className="text-sp-muted text-caption leading-tight">
                                 {r + 1}행 {c + 1}열
@@ -1022,20 +1254,38 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
           >
             {Array.from({ length: pickingRows || effectiveRows }, (_, r) =>
               Array.from({ length: pickingCols || effectiveCols }, (_, c) => {
+                const seatKey = `${r}-${c}`;
+                const isBlocked = blockedSeats.has(seatKey);
+                const isFixed = fixedStudents.has(seatKey);
                 const assigned = getAssignmentForSeat(r, c);
+
+                if (isBlocked) {
+                  return (
+                    <div
+                      key={seatKey}
+                      className="w-full aspect-square rounded-lg flex flex-col items-center justify-center text-center p-1 bg-sp-surface/60 border border-sp-border/40"
+                    >
+                      <span className="text-red-400/60 text-sm font-bold">✕</span>
+                      <span className="text-sp-muted/40 text-caption leading-tight">빈자리</span>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
-                    key={`${r}-${c}`}
+                    key={seatKey}
                     className={`w-full aspect-square rounded-lg flex flex-col items-center justify-center text-center p-1 ${
-                      assigned
-                        ? 'bg-blue-500/20 border border-blue-500/40'
-                        : 'bg-sp-card border border-dashed border-sp-border'
+                      assigned && isFixed
+                        ? 'bg-amber-500/20 border border-amber-500/40'
+                        : assigned
+                          ? 'bg-blue-500/20 border border-blue-500/40'
+                          : 'bg-sp-card border border-dashed border-sp-border'
                     }`}
                   >
                     {assigned ? (
                       <>
                         <span className="text-sp-text text-xs font-bold truncate w-full leading-tight">
-                          {assigned.student.name}
+                          {isFixed && '📌'}{assigned.student.name}
                         </span>
                         <span className="text-sp-muted text-caption leading-tight">
                           {r + 1}행 {c + 1}열
@@ -1074,6 +1324,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                     <td className="px-4 py-2 text-sp-text font-medium">{student.name}</td>
                     <td className="px-4 py-2 text-sp-accent font-medium">
                       {pos ? `${pos.row + 1}행 ${pos.col + 1}열` : '-'}
+                      {pos && fixedStudents.has(`${pos.row}-${pos.col}`) && <span className="ml-1 text-amber-400" title="고정 좌석">📌</span>}
                     </td>
                   </tr>
                 ))}
