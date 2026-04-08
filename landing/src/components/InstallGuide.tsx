@@ -56,12 +56,14 @@ const troubleshootCases = [
     icon: '⛔',
     label: '스마트 앱 컨트롤',
     title: '"스마트 앱 컨트롤이 차단했습니다" (Windows 11)',
-    description: 'Windows 11의 스마트 앱 컨트롤이 실행을 막은 경우예요.',
+    description: 'Windows 11의 스마트 앱 컨트롤이 실행을 막은 경우예요. 코드 서명이 없는 앱은 "무시" 버튼 없이 완전히 차단돼요.',
     steps: [
-      { text: <>설치 파일을 우클릭 → <strong className="text-amber-200/80">&quot;속성&quot;</strong> 선택</> },
-      { text: <>하단 <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크박스 체크 → 확인</> },
-      { text: <>설치 파일을 다시 더블클릭</> },
+      { text: <>설치 파일 우클릭 → <strong className="text-amber-200/80">&quot;속성&quot;</strong> → 하단 <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크 → 확인 후 다시 실행</> },
+      { text: <>위 방법이 안 되면: <strong className="text-amber-200/80">설정</strong> → <strong className="text-amber-200/80">개인정보 및 보안</strong> → <strong className="text-amber-200/80">Windows 보안</strong> → <strong className="text-amber-200/80">앱 및 브라우저 컨트롤</strong></> },
+      { text: <><strong className="text-amber-200/80">&quot;스마트 앱 컨트롤 설정&quot;</strong>을 클릭하고 <strong className="text-amber-200/80">&quot;끔&quot;</strong>을 선택합니다</> },
+      { text: <>설치 파일을 다시 더블클릭합니다</> },
     ],
+    extraTip: '⚠️ 스마트 앱 컨트롤은 한번 끄면 PC를 초기화하기 전까지 다시 켤 수 없어요.\n쌤핀 설치 후에도 다른 앱은 Windows 보안(SmartScreen)이 계속 보호합니다.',
   },
   {
     id: 'antivirus',
