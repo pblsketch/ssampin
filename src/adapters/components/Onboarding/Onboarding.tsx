@@ -4,6 +4,7 @@ import { useMealStore } from '@adapters/stores/useMealStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Settings, SchoolLevel, NeisSettings } from '@domain/entities/Settings';
+import { DEFAULT_NEIS_SCHEDULE_SETTINGS } from '@domain/entities/NeisSchedule';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import type { SchoolSearchResult, NEIS_API_KEY as _ApiKeyType } from '@domain/entities/Meal';
 import { NEIS_API_KEY } from '@domain/entities/Meal';
@@ -51,6 +52,9 @@ export function Onboarding() {
     const [neisClass, setNeisClass] = useState('');
     const [classList, setClassList] = useState<readonly NeisClassInfo[]>([]);
     const [classListLoading, setClassListLoading] = useState(false);
+
+    // NEIS 학사일정 자동 동기화 온보딩 옵트인
+    const [neisScheduleEnabled, setNeisScheduleEnabled] = useState(true);
 
     // NEIS 학교가 선택된 상태인지
     const hasNeisSchool = Boolean(draft.neis?.schoolCode && draft.neis?.atptCode);
@@ -156,9 +160,15 @@ export function Onboarding() {
             }
             : draft.neis;
 
+        // NEIS 학사일정 자동 동기화 설정
+        const neisScheduleSettings = hasNeisSchool && neisScheduleEnabled
+            ? { ...DEFAULT_NEIS_SCHEDULE_SETTINGS, enabled: true }
+            : undefined;
+
         const finalDraft: Partial<Settings> = {
             ...draft,
             ...(neisWithAutoSync != null ? { neis: neisWithAutoSync } : {}),
+            ...(neisScheduleSettings != null ? { neisSchedule: neisScheduleSettings } : {}),
             hiddenMenus,
             teacherRoles: selectedRoles.length > 0 ? selectedRoles : undefined,
         };
@@ -444,7 +454,7 @@ export function Onboarding() {
                                         <div className="col-span-2 flex items-start gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
                                             <span className="material-symbols-outlined text-blue-400 text-icon mt-0.5">info</span>
                                             <p className="text-detail text-blue-300">
-                                                학년/반을 선택하면 NEIS 시간표가 자동으로 연동됩니다. 건너뛰어도 나중에 설정할 수 있어요.
+                                                학년/반을 선택하면 해당 반의 <strong>학급 시간표</strong>가 자동으로 연동됩니다 (담임용). 건너뛰어도 나중에 설정할 수 있어요.
                                             </p>
                                         </div>
                                         <div className="space-y-2">
@@ -489,12 +499,31 @@ export function Onboarding() {
                                                 </select>
                                             )}
                                         </div>
-                                        {/* NEIS 시간표 자동 연동 안내 */}
+                                        {/* NEIS 학사일정 자동 동기화 — 학교만 선택하면 바로 가능 */}
+                                        <div className="col-span-2 flex items-center justify-between p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                                            <div className="flex items-start gap-2">
+                                                <span className="material-symbols-outlined text-purple-400 text-icon-md mt-0.5">calendar_month</span>
+                                                <div>
+                                                    <p className="text-sm font-medium text-sp-text">NEIS 학사일정 자동 동기화</p>
+                                                    <p className="text-xs text-sp-muted mt-0.5">학교 학사일정·공휴일을 자동으로 가져옵니다</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={neisScheduleEnabled}
+                                                onClick={() => setNeisScheduleEnabled(!neisScheduleEnabled)}
+                                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${neisScheduleEnabled ? 'bg-sp-accent' : 'bg-sp-border'}`}
+                                            >
+                                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform ${neisScheduleEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+                                        {/* NEIS 학급 시간표 자동 연동 확인 — 학년+반 선택 완료 시 */}
                                         {neisGrade && neisClass && (
                                             <div className="col-span-2 flex items-start gap-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 animate-in fade-in duration-300">
                                                 <span className="material-symbols-outlined text-emerald-400 text-icon-md mt-0.5">auto_awesome</span>
                                                 <p className="text-xs text-emerald-300">
-                                                    NEIS에 등록된 {neisGrade}학년 {neisClass}반 시간표가 대시보드에 자동으로 표시됩니다.
+                                                    {neisGrade}학년 {neisClass}반의 학급 시간표가 대시보드에 자동으로 표시됩니다.
                                                 </p>
                                             </div>
                                         )}

@@ -6,7 +6,6 @@ import { getDefaultPreset, generatePeriodTimes, parseMinutes, formatTime, PERIOD
 import { getLunchBreakIndex, formatLunchBreakTime } from '@adapters/presenters/timetablePresenter';
 import { SettingsSection } from '../shared/SettingsSection';
 import { SCHOOL_LEVEL_OPTIONS } from '../shared/constants';
-import { NeisTimetableAutoSyncSection } from '../NeisTimetableAutoSyncSection';
 
 interface Props {
   draft: Settings;
@@ -426,8 +425,18 @@ export function PeriodTab({ draft, patch }: Props) {
       </div>
     </SettingsSection>
 
-      {/* NEIS 시간표 자동 동기화 — custom(직접 설정)일 때 숨김 */}
-      {draft.schoolLevel !== 'custom' && <NeisTimetableAutoSyncSection />}
+      {/* NEIS 시간표 동기화 안내 — 일정 탭으로 이동됨 */}
+      {draft.schoolLevel !== 'custom' && (
+        <div className="flex items-start gap-2.5 p-4 rounded-xl bg-sp-accent/5 border border-sp-accent/20 mt-2">
+          <span className="material-symbols-outlined text-sp-accent text-lg mt-0.5">info</span>
+          <div>
+            <p className="text-sm text-sp-text font-medium">NEIS 학급 시간표 자동 동기화</p>
+            <p className="text-xs text-sp-muted mt-0.5">
+              학급 시간표(담임용) 동기화 설정은 <strong className="text-sp-accent">일정·연동</strong> 탭의 외부 연동 섹션으로 이동했습니다.
+            </p>
+          </div>
+        </div>
+      )}
     </>
   );
 }

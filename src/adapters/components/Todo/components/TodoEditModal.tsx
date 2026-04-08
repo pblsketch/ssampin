@@ -82,47 +82,83 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
         />
 
         {/* 날짜 */}
-        <div className="flex items-center gap-3 mb-3">
-          <DatePopover
-            date={startDate || dueDate || toLocalDateString()}
-            endDate={startDate ? dueDate : undefined}
-            onDateChange={(d) => {
-              if (startDate) setStartDate(d);
-              else setDueDate(d);
-            }}
-            onEndDateChange={(endDate) => {
-              if (endDate) {
-                setStartDate(dueDate || toLocalDateString());
-                setDueDate(endDate);
-              } else {
-                setStartDate('');
-              }
-            }}
-          >
-            <div className="flex items-center gap-1.5 bg-sp-surface text-xs px-3 py-2 rounded-lg border border-sp-border hover:border-sp-accent transition-colors cursor-pointer text-sp-text">
-              <span className="material-symbols-outlined text-base">calendar_today</span>
-              {startDate ? `${startDate} → ${dueDate}` : dueDate || '기한 없음'}
-            </div>
-          </DatePopover>
-          {dueDate && (
-            <button type="button" onClick={() => { setDueDate(''); setStartDate(''); }} className="text-sp-muted hover:text-red-400 text-xs">
-              기한 제거
-            </button>
-          )}
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            <DatePopover
+              date={startDate || dueDate || toLocalDateString()}
+              endDate={startDate ? dueDate : undefined}
+              onDateChange={(d) => {
+                if (startDate) setStartDate(d);
+                else setDueDate(d);
+              }}
+              onEndDateChange={(endDate) => {
+                if (endDate) {
+                  setStartDate(dueDate || toLocalDateString());
+                  setDueDate(endDate);
+                } else {
+                  setStartDate('');
+                }
+              }}
+            >
+              {dueDate ? (
+                <div className="flex items-center gap-2 flex-1 px-3 py-2 bg-sp-surface rounded-lg border border-sp-border hover:border-sp-accent/50 transition-colors cursor-pointer text-sm text-sp-text">
+                  <span className="material-symbols-outlined text-base text-sp-accent">calendar_today</span>
+                  <span>{startDate ? `${startDate} → ${dueDate}` : dueDate}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 flex-1 px-3 py-2 rounded-lg border border-dashed border-sp-border hover:border-sp-accent/50 hover:text-sp-text transition-colors cursor-pointer text-sm text-sp-muted">
+                  <span className="material-symbols-outlined text-base">calendar_today</span>
+                  <span>기한 설정</span>
+                </div>
+              )}
+            </DatePopover>
+            {dueDate && (
+              <button
+                type="button"
+                onClick={() => { setDueDate(''); setStartDate(''); }}
+                className="p-1.5 rounded-lg text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                title="기한 제거"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 시간 */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xs text-sp-muted">⏰</span>
-          <input
-            type="time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            className="bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none"
-          />
-          {time && (
-            <button type="button" onClick={() => setTime('')} className="text-xs text-sp-muted hover:text-red-400">✕</button>
-          )}
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            {time ? (
+              <div className="flex items-center gap-2 px-3 py-2 bg-sp-surface rounded-lg border border-sp-border text-sm text-sp-text">
+                <span className="material-symbols-outlined text-base text-sp-accent">schedule</span>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="bg-transparent text-sp-text text-sm focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setTime('09:00')}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-sp-border hover:border-sp-accent/50 hover:text-sp-text transition-colors text-sm text-sp-muted"
+              >
+                <span className="material-symbols-outlined text-base">schedule</span>
+                <span>시간 설정</span>
+              </button>
+            )}
+            {time && (
+              <button
+                type="button"
+                onClick={() => setTime('')}
+                className="p-1.5 rounded-lg text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                title="시간 제거"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 우선순위 */}

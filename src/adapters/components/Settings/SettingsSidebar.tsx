@@ -14,7 +14,7 @@ const TABS: TabDef[] = [
   { id: 'widget',   icon: 'widgets',               label: '위젯',      color: 'bg-indigo-500/10 text-indigo-400' },
   { id: 'seat',     icon: 'chair',                 label: '좌석',      color: 'bg-orange-500/10 text-orange-400' },
   { id: 'security', icon: 'lock',                  label: '보안',      color: 'bg-red-500/10 text-red-400' },
-  { id: 'calendar', icon: 'event',                 label: '일정',      color: 'bg-pink-500/10 text-pink-400' },
+  { id: 'calendar', icon: 'event',                 label: '일정·연동',  color: 'bg-pink-500/10 text-pink-400' },
   { id: 'weather',  icon: 'cloud',                 label: '날씨',      color: 'bg-sky-500/10 text-sky-500' },
   { id: 'display',  icon: 'palette',               label: '디스플레이', color: 'bg-yellow-500/10 text-yellow-500' },
   { id: 'sidebar',  icon: 'menu',                  label: '사이드바',   color: 'bg-sp-surface text-sp-muted' },

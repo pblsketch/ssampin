@@ -189,16 +189,16 @@ export function NeisTimetableAutoSyncSection() {
         <div className="p-2 rounded-lg bg-sp-accent/10 text-sp-accent">
           <span className="material-symbols-outlined">sync</span>
         </div>
-        <h3 className="text-lg font-bold text-sp-text">NEIS 시간표 자동 동기화</h3>
+        <h3 className="text-lg font-bold text-sp-text">NEIS 학급 시간표 자동 동기화</h3>
       </div>
 
       <div className="space-y-5">
         {/* 메인 토글 */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-sp-text">시간표 자동 동기화</p>
+            <p className="text-sm font-medium text-sp-text">학급 시간표 자동 동기화</p>
             <p className="text-xs text-sp-muted mt-0.5">
-              매주 앱 시작 시 이번 주 시간표를 자동으로 가져옵니다
+              매주 앱 시작 시 선택한 반의 시간표를 NEIS에서 가져옵니다 (담임용)
             </p>
           </div>
           <Toggle checked={autoSync?.enabled ?? false} onChange={(v) => void handleToggle(v)} />
@@ -298,7 +298,7 @@ export function NeisTimetableAutoSyncSection() {
             </div>
 
             <p className="text-xs text-sp-muted">
-              매주 월요일부터 금요일까지의 시간표를 NEIS에서 자동으로 가져옵니다. 새 과목이 있으면 색상이 자동으로 배정됩니다.
+              선택한 반의 월~금 학급 시간표를 NEIS에서 자동으로 가져옵니다. 새 과목이 있으면 색상이 자동으로 배정됩니다.
             </p>
           </>
         )}
