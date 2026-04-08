@@ -312,7 +312,7 @@ export function UpdateNotification() {
               <span className="material-symbols-outlined text-green-400 text-2xl">check_circle</span>
               <div>
                 <p className="text-sp-text text-sm font-bold">업데이트 준비 완료!</p>
-                <p className="text-sp-muted text-xs mt-0.5">재시작하면 새 버전이 적용됩니다.</p>
+                <p className="text-sp-muted text-xs mt-0.5">쌤핀 앱만 재시작되며, PC 재부팅이 아닙니다.</p>
               </div>
             </div>
             <div className="flex justify-end gap-2.5">
@@ -327,7 +327,7 @@ export function UpdateNotification() {
                 className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base">restart_alt</span>
-                지금 재시작
+                쌤핀 재시작
               </button>
             </div>
           </div>
