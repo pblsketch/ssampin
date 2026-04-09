@@ -14,6 +14,7 @@ import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attend
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { GroupResult } from '@domain/rules/groupingRules';
+import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -1673,4 +1674,150 @@ export async function exportGroupingToExcel(
   }
 
   return await wb.xlsx.writeBuffer() as ArrayBuffer;
+}
+
+/* ────────────────────────────────────────────────── */
+/* 관찰 기록 내보내기                                    */
+/* ────────────────────────────────────────────────── */
+
+export interface ObservationExportRecord {
+  readonly studentNumber: number;
+  readonly studentName: string;
+  readonly date: string;
+  readonly tags: readonly string[];
+  readonly content: string;
+}
+
+// 태그별 배경색 (ARGB)
+const TAG_FILL_COLORS: Record<string, string> = {
+  '교과역량': 'FFDBEAFE',
+  '학습태도': 'FFDCFCE7',
+  '진로흥미': 'FFEDE9FE',
+  '특이사항': 'FFFEF3C7',
+};
+const TAG_FILL_DEFAULT = 'FFF1F5F9';
+
+export async function exportObservationsToExcel(
+  records: readonly ObservationExportRecord[],
+  className: string,
+  period?: { start: string; end: string },
+  filterTags?: string[],
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+
+  const periodFiltered = period
+    ? records.filter((r) => r.date >= period.start && r.date <= period.end)
+    : records;
+
+  // 태그 필터: filterTags가 있으면 해당 태그 중 하나라도 포함된 기록만
+  const filtered = filterTags && filterTags.length > 0
+    ? periodFiltered.filter((r) => r.tags.some((t) => filterTags.includes(t)))
+    : periodFiltered;
+
+  const sorted = [...filtered].sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    return a.studentNumber - b.studentNumber;
+  });
+
+  // Sheet 1: 날짜순 전체기록
+  const sheetName = `${className} 관찰기록`.slice(0, 31);
+  const ws = workbook.addWorksheet(sheetName);
+
+  const headers = ['번호', '이름', '날짜', '태그', '관찰 내용'];
+  const headerRow = ws.addRow(headers);
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws.getColumn(1).width = 6;
+  ws.getColumn(2).width = 10;
+  ws.getColumn(3).width = 12;
+  ws.getColumn(4).width = 20;
+  ws.getColumn(5).width = 60;
+
+  for (const record of sorted) {
+    const tagText = record.tags.join(', ');
+    const row = ws.addRow([
+      record.studentNumber,
+      record.studentName,
+      record.date,
+      tagText,
+      record.content,
+    ]);
+    // 태그 셀 배경색: 첫 번째 태그 기준
+    const firstTag = record.tags[0] ?? '';
+    const tagBg = TAG_FILL_COLORS[firstTag] ?? TAG_FILL_DEFAULT;
+    row.eachCell((cell, colNumber) => {
+      if (colNumber === 4) {
+        applyCellStyle(cell, tagBg);
+      } else if (colNumber === 5) {
+        applyCellStyle(cell);
+        cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+      } else {
+        applyCellStyle(cell);
+      }
+    });
+  }
+
+  // Sheet 2: 학생별 요약 (태그별 기록 수 컬럼 포함)
+  const ws2 = workbook.addWorksheet(`${className} 학생별 요약`.slice(0, 31));
+  const knownTags: string[] = [...DEFAULT_OBSERVATION_TAGS];
+  const headers2 = ['번호', '이름', '기록 수', '최근 기록일', ...knownTags, '기타'];
+  const headerRow2 = ws2.addRow(headers2);
+  headerRow2.eachCell((cell) => applyHeaderStyle(cell));
+
+  ws2.getColumn(1).width = 6;
+  ws2.getColumn(2).width = 10;
+  ws2.getColumn(3).width = 10;
+  ws2.getColumn(4).width = 14;
+  knownTags.forEach((_, i) => { ws2.getColumn(5 + i).width = 12; });
+  ws2.getColumn(5 + knownTags.length).width = 12;
+
+  const studentMap = new Map<number, {
+    name: string;
+    count: number;
+    lastDate: string;
+    tags: Map<string, number>;
+  }>();
+
+  for (const r of sorted) {
+    const existing = studentMap.get(r.studentNumber);
+    if (existing) {
+      existing.count++;
+      if (r.date > existing.lastDate) existing.lastDate = r.date;
+      for (const t of r.tags) {
+        existing.tags.set(t, (existing.tags.get(t) ?? 0) + 1);
+      }
+    } else {
+      const tags = new Map<string, number>();
+      for (const t of r.tags) tags.set(t, 1);
+      studentMap.set(r.studentNumber, {
+        name: r.studentName,
+        count: 1,
+        lastDate: r.date,
+        tags,
+      });
+    }
+  }
+
+  const studentEntries = [...studentMap.entries()].sort(([a], [b]) => a - b);
+  for (const [num, info] of studentEntries) {
+    const tagCounts = knownTags.map((tag) => info.tags.get(tag) ?? 0);
+    const otherCount = [...info.tags.entries()]
+      .filter(([tag]) => !knownTags.includes(tag))
+      .reduce((sum, [, cnt]) => sum + cnt, 0);
+    const row = ws2.addRow([num, info.name, info.count, info.lastDate, ...tagCounts, otherCount]);
+    row.eachCell((cell, colNumber) => {
+      // 태그별 컬럼에 배경색 적용
+      const tagIndex = colNumber - 5; // 5번 컬럼부터 태그
+      if (tagIndex >= 0 && tagIndex < knownTags.length) {
+        const tag = knownTags[tagIndex] ?? '';
+        const bg = TAG_FILL_COLORS[tag] ?? TAG_FILL_DEFAULT;
+        applyCellStyle(cell, bg);
+      } else {
+        applyCellStyle(cell);
+      }
+    });
+  }
+
+  return await workbook.xlsx.writeBuffer() as ArrayBuffer;
 }

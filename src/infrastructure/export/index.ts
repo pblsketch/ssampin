@@ -13,8 +13,9 @@ export {
   generateTeachingClassRosterTemplate,
   parseTeachingClassRosterFromExcel,
   exportGroupingToExcel,
+  exportObservationsToExcel,
 } from './ExcelExporter';
-export type { ParsedExcelEvent } from './ExcelExporter';
+export type { ParsedExcelEvent, ObservationExportRecord } from './ExcelExporter';
 
 export { exportToPdf } from './PdfExporter';
 

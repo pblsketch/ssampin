@@ -34,6 +34,7 @@ import type { IImageWidgetRepository } from '@domain/repositories/IImageWidgetRe
 import type { IWordCloudRepository } from '@domain/repositories/IWordCloudRepository';
 import type { IToolTemplateRepository } from '@domain/repositories/IToolTemplateRepository';
 import type { IToolResultRepository } from '@domain/repositories/IToolResultRepository';
+import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -69,6 +70,7 @@ import { JsonImageWidgetRepository } from '@adapters/repositories/JsonImageWidge
 import { JsonWordCloudRepository } from '@adapters/repositories/JsonWordCloudRepository';
 import { JsonToolTemplateRepository } from '@adapters/repositories/JsonToolTemplateRepository';
 import { JsonToolResultRepository } from '@adapters/repositories/JsonToolResultRepository';
+import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
 import { DriveSyncAdapter } from '@infrastructure/google/DriveSyncAdapter';
 import { ConsultationSupabaseClient } from '@infrastructure/supabase/ConsultationSupabaseClient';
 import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
@@ -146,6 +148,9 @@ export const toolTemplateRepository: IToolTemplateRepository =
 
 export const toolResultRepository: IToolResultRepository =
   new JsonToolResultRepository(storage);
+
+export const observationRepository: IObservationRepository =
+  new JsonObservationRepository(storage);
 
 export const neisPort: INeisPort = new NeisApiClient();
 

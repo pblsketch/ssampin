@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { TeachingClass, TeachingClassStudent, TeachingClassSeating } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
+import type { StudentStatus } from '@domain/entities/Student';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
@@ -9,6 +10,15 @@ import { ManageTeachingClasses } from '@usecases/classManagement/ManageTeachingC
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
 import { ManageAttendance } from '@usecases/classManagement/ManageAttendance';
 import { generateUUID } from '@infrastructure/utils/uuid';
+
+/** 로드 시 기존 isVacant 데이터를 status 기반으로 마이그레이션 */
+function migrateStudentStatus(student: TeachingClassStudent): TeachingClassStudent {
+  if (student.status) return student; // 이미 status 있으면 그대로
+  if (student.isVacant) {
+    return { ...student, status: 'withdrawn' as StudentStatus };
+  }
+  return student;
+}
 
 interface TeachingClassState {
   classes: readonly TeachingClass[];
@@ -43,6 +53,7 @@ interface TeachingClassState {
   resizeClassGrid: (classId: string, rows: number, cols: number) => Promise<void>;
   toggleClassPairMode: (classId: string) => Promise<void>;
   toggleClassOddColumnMode: (classId: string) => Promise<void>;
+  updateStudentStatus: (classId: string, sKey: string, status: StudentStatus, statusNote?: string) => Promise<void>;
 }
 
 export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
@@ -66,8 +77,14 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
           manageProgress.getAll(),
           manageAttendance.getAll(),
         ]);
+        // isVacant → status 마이그레이션
+        const migrated = classes.map((cls) => {
+          const migratedStudents = cls.students.map(migrateStudentStatus);
+          if (migratedStudents === cls.students) return cls;
+          return { ...cls, students: migratedStudents };
+        });
         // order 기준 정렬 (order 없으면 생성순)
-        const sorted = [...classes].sort((a, b) => {
+        const sorted = [...migrated].sort((a, b) => {
           const orderA = a.order ?? Infinity;
           const orderB = b.order ?? Infinity;
           if (orderA !== orderB) return orderA - orderB;
@@ -181,7 +198,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const cls = get().classes.find((c) => c.id === classId);
       if (!cls) return;
 
-      const activeStudents = cls.students.filter((s) => !s.isVacant);
+      const activeStudents = cls.students.filter((s) => !s.isVacant && (!s.status || s.status === 'active'));
       const keys = activeStudents.map((s) => studentKey(s));
 
       if (mode === 'random') {
@@ -320,6 +337,41 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const next: OddColumnMode = current === 'single' ? 'triple' : 'single';
       const seating: TeachingClassSeating = { ...cls.seating, oddColumnMode: next };
       const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
+      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
+      await manageClasses.update(updated);
+    },
+
+    updateStudentStatus: async (classId, sKey, status, statusNote) => {
+      const cls = get().classes.find((c) => c.id === classId);
+      if (!cls) return;
+
+      const isInactive = status !== 'active';
+      const updatedStudents = cls.students.map((s) => {
+        if (studentKey(s) !== sKey) return s;
+        return {
+          ...s,
+          status,
+          statusNote: statusNote ?? s.statusNote,
+          statusChangedAt: new Date().toISOString().slice(0, 10),
+          isVacant: isInactive, // 하위호환
+        };
+      });
+
+      // 비활성 학생 좌석 제거
+      let seating = cls.seating;
+      if (isInactive && seating) {
+        const newSeats = seating.seats.map((row) =>
+          row.map((cell) => (cell === sKey ? null : cell)),
+        );
+        seating = { ...seating, seats: newSeats };
+      }
+
+      const updated: TeachingClass = {
+        ...cls,
+        students: updatedStudents,
+        seating,
+        updatedAt: new Date().toISOString(),
+      };
       set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
       await manageClasses.update(updated);
     },

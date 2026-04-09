@@ -3,13 +3,14 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { ClassList } from './ClassList';
 import { ClassRosterTab } from './ClassRosterTab';
+import { ClassRecordTab } from './ClassRecordTab';
 import { ClassSeatingTab } from './ClassSeatingTab';
 import { ProgressTab } from './ProgressTab';
 import { ClassSurveyTab } from './ClassSurveyTab';
 import { ClassAssignmentTab } from './ClassAssignmentTab';
-import { AttendanceTab } from './AttendanceTab';
+import { PinGuard } from '@adapters/components/common/PinGuard';
 
-type TabId = 'roster' | 'attendance' | 'seating' | 'progress' | 'survey' | 'assignment';
+type TabId = 'roster' | 'record' | 'seating' | 'progress' | 'survey' | 'assignment';
 
 interface TabConfig {
   id: TabId;
@@ -18,8 +19,8 @@ interface TabConfig {
 }
 
 const TABS: readonly TabConfig[] = [
-  { id: 'roster', label: '명렬표', icon: 'people' },
-  { id: 'attendance', label: '출석', icon: 'how_to_reg' },
+  { id: 'roster', label: '명렬 관리', icon: 'people' },
+  { id: 'record', label: '수업 기록', icon: 'edit_note' },
   { id: 'seating', label: '좌석배치', icon: 'grid_view' },
   { id: 'progress', label: '진도 관리', icon: 'trending_up' },
   { id: 'survey', label: '설문/체크', icon: 'checklist' },
@@ -86,7 +87,11 @@ export function ClassManagementPage() {
               {/* 탭 콘텐츠 */}
               <div className="flex-1 overflow-y-auto">
                 {activeTab === 'roster' && <ClassRosterTab classId={selectedClassId} />}
-                {activeTab === 'attendance' && <AttendanceTab classId={selectedClassId} />}
+                {activeTab === 'record' && (
+                  <PinGuard feature="observation">
+                    <ClassRecordTab classId={selectedClassId} />
+                  </PinGuard>
+                )}
                 {activeTab === 'seating' && <ClassSeatingTab classId={selectedClassId} />}
                 {activeTab === 'progress' && <ProgressTab classId={selectedClassId} />}
                 {activeTab === 'survey' && <ClassSurveyTab classId={selectedClassId} />}

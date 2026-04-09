@@ -1,3 +1,5 @@
+import type { StudentStatus } from './Student';
+
 export interface TeachingClassStudent {
   readonly number: number;
   readonly name: string;
@@ -6,8 +8,14 @@ export interface TeachingClassStudent {
   readonly grade?: number;
   /** 반 (소속 반이 다른 학생이 섞인 수업반용) */
   readonly classNum?: number;
-  /** 결번 여부 */
+  /** 결번 여부 (하위호환용 — 새 로직은 status 기반) */
   readonly isVacant?: boolean;
+  /** 재적 상태 (미설정 시 'active' 취급) */
+  readonly status?: StudentStatus;
+  /** 상태 변경 사유 메모 */
+  readonly statusNote?: string;
+  /** 상태 변경일 (YYYY-MM-DD) */
+  readonly statusChangedAt?: string;
 }
 
 /** 학생 복합 키 (학년-반-번호) — 같은 번호의 다른 반 학생 구분용 */

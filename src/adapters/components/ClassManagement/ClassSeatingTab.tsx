@@ -7,11 +7,15 @@ import { studentKey } from '@domain/entities/TeachingClass';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
-import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
+import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
+import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { exportSeatingToExcel, exportSeatingToHwpx } from '@infrastructure/export';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
+import { ObservationForm } from './ObservationForm';
+import { ObservationCard } from './ObservationCard';
+import { useObservationStore } from '@adapters/stores/useObservationStore';
 
 /* ──────────────────────── 출석 체크 상수 ──────────────────────── */
 
@@ -26,14 +30,6 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; col
   late: { label: '지각', icon: 'schedule', color: 'amber' },
   earlyLeave: { label: '조퇴', icon: 'exit_to_app', color: 'orange' },
   classAbsence: { label: '결과', icon: 'event_busy', color: 'purple' },
-};
-
-const STATUS_CYCLE: Record<AttendanceStatus, AttendanceStatus> = {
-  present: 'absent',
-  absent: 'late',
-  late: 'earlyLeave',
-  earlyLeave: 'classAbsence',
-  classAbsence: 'present',
 };
 
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -84,22 +80,40 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   const [attendanceDate, setAttendanceDate] = useState(todayString);
   const [attendancePeriod, setAttendancePeriod] = useState(1);
   const [localAttendance, setLocalAttendance] = useState<Map<string, AttendanceStatus>>(new Map());
+  const [attendanceReasons, setAttendanceReasons] = useState<Map<string, string>>(new Map());
+  const [attendanceMemos, setAttendanceMemos] = useState<Map<string, string>>(new Map());
   const [hasModified, setHasModified] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  // 출석 팝업 모달 상태
+  const [selectedStudentKey, setSelectedStudentKey] = useState<string | null>(null);
+
+  // 특기사항 데이터
+  const observationRecords = useObservationStore((s) => s.records);
+  const loadObs = useObservationStore((s) => s.load);
 
   // 스케줄 로드
   useEffect(() => {
     void loadSchedule();
   }, [loadSchedule]);
 
+  // 특기사항 로드
+  useEffect(() => {
+    void loadObs();
+  }, [loadObs]);
+
   // 출석 모드 ON / 날짜·교시 변경 시 기록 로드
   useEffect(() => {
     if (!isAttendanceMode || !cls) return;
     const existing = getAttendanceRecord(classId, attendanceDate, attendancePeriod);
     const map = new Map<string, AttendanceStatus>();
+    const reasonMap = new Map<string, string>();
+    const memoMap = new Map<string, string>();
     if (existing) {
       for (const sa of existing.students) {
         map.set(studentKey(sa), sa.status);
+        if (sa.reason) reasonMap.set(studentKey(sa), sa.reason);
+        if (sa.memo) memoMap.set(studentKey(sa), sa.memo);
       }
       // 새로 추가된 학생은 present
       for (const s of cls.students) {
@@ -114,6 +128,8 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
       }
     }
     setLocalAttendance(map);
+    setAttendanceReasons(reasonMap);
+    setAttendanceMemos(memoMap);
     setHasModified(false);
     setSaveStatus('idle');
   }, [isAttendanceMode, attendanceDate, attendancePeriod, classId, cls, getAttendanceRecord]);
@@ -149,17 +165,30 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
     return matching;
   }, [cls, attendanceDate, teacherSchedule, scheduleOverrides]);
 
-  // 출석 클릭 핸들러
+  // 출석 클릭 핸들러 — 팝업 열기
   const handleAttendanceClick = useCallback((key: string) => {
+    setSelectedStudentKey(key);
+  }, []);
+
+  // 팝업 내 출석 상태 변경
+  const setStudentAttStatus = useCallback((key: string, newStatus: AttendanceStatus) => {
     setLocalAttendance((prev) => {
       const next = new Map(prev);
-      const current = next.get(key) ?? 'present';
-      next.set(key, STATUS_CYCLE[current]);
+      next.set(key, newStatus);
       return next;
     });
     setHasModified(true);
     setSaveStatus('idle');
   }, []);
+
+  // 선택된 학생의 최근 특기사항
+  const selectedObservations = useMemo(() => {
+    if (!selectedStudentKey) return [];
+    return [...observationRecords]
+      .filter((r) => r.classId === classId && r.studentId === selectedStudentKey)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5);
+  }, [observationRecords, classId, selectedStudentKey]);
 
   // 출석 저장
   const handleSaveAttendance = useCallback(async () => {
@@ -167,12 +196,17 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
     setSaveStatus('saving');
     const studentAttendances: StudentAttendance[] = cls.students
       .filter((s) => !s.isVacant)
-      .map((s) => ({
-        number: s.number,
-        status: localAttendance.get(studentKey(s)) ?? 'present',
-        grade: s.grade,
-        classNum: s.classNum,
-      }));
+      .map((s) => {
+        const k = studentKey(s);
+        return {
+          number: s.number,
+          status: localAttendance.get(k) ?? 'present',
+          reason: attendanceReasons.get(k) as AttendanceReason | undefined,
+          memo: attendanceMemos.get(k),
+          grade: s.grade,
+          classNum: s.classNum,
+        };
+      });
     const record: AttendanceRecord = {
       classId,
       date: attendanceDate,
@@ -183,7 +217,7 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
     setSaveStatus('saved');
     setHasModified(false);
     showToast('출석이 저장되었습니다', 'success');
-  }, [cls, classId, attendanceDate, attendancePeriod, localAttendance, saveAttendanceRecord, showToast]);
+  }, [cls, classId, attendanceDate, attendancePeriod, localAttendance, attendanceReasons, attendanceMemos, saveAttendanceRecord, showToast]);
 
   // 출석 통계
   const attendanceStats = useMemo(() => {
@@ -702,6 +736,153 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
           </div>
         </div>
       )}
+
+      {/* 출석 팝업 모달 */}
+      {selectedStudentKey && (() => {
+        const student = studentMap.get(selectedStudentKey);
+        const currentStatus = localAttendance.get(selectedStudentKey) ?? 'present';
+        const currentReason = attendanceReasons.get(selectedStudentKey) ?? '';
+        const currentMemo = attendanceMemos.get(selectedStudentKey) ?? '';
+        const needsReason = currentStatus !== 'present';
+
+        const STATUS_BUTTONS: { status: AttendanceStatus; label: string; color: string }[] = [
+          { status: 'present', label: '출석', color: 'bg-green-500/20 text-green-400 border-green-500/40' },
+          { status: 'absent', label: '결석', color: 'bg-red-500/20 text-red-400 border-red-500/40' },
+          { status: 'late', label: '지각', color: 'bg-amber-500/20 text-amber-400 border-amber-500/40' },
+          { status: 'earlyLeave', label: '조퇴', color: 'bg-orange-500/20 text-orange-400 border-orange-500/40' },
+          { status: 'classAbsence', label: '결과', color: 'bg-purple-500/20 text-purple-400 border-purple-500/40' },
+        ];
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setSelectedStudentKey(null)}
+          >
+            <div
+              className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto shadow-2xl shadow-black/40"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 헤더 */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
+                <h3 className="text-base font-semibold text-sp-text">
+                  {student ? `${student.number}번 ${student.name}` : '학생'}
+                </h3>
+                <button
+                  onClick={() => setSelectedStudentKey(null)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-sp-border/50 text-sp-muted transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-5">
+                {/* 출결 섹션 */}
+                <div>
+                  <p className="text-xs font-semibold text-sp-muted mb-2 uppercase tracking-wide">출결</p>
+                  <div className="flex gap-1.5 flex-wrap mb-3">
+                    {STATUS_BUTTONS.map(({ status, label, color }) => (
+                      <button
+                        key={status}
+                        onClick={() => setStudentAttStatus(selectedStudentKey, status)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition-all
+                          ${currentStatus === status ? color + ' font-semibold ring-2 ring-offset-1 ring-offset-sp-card ring-current' : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 사유 (출석이 아닐 때) */}
+                  {needsReason && (
+                    <div className="mb-3">
+                      <p className="text-xs text-sp-muted mb-1.5">사유</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {ATTENDANCE_REASONS.map((reason) => (
+                          <button
+                            key={reason}
+                            onClick={() => {
+                              setAttendanceReasons((prev) => {
+                                const next = new Map(prev);
+                                if (next.get(selectedStudentKey) === reason) {
+                                  next.delete(selectedStudentKey);
+                                } else {
+                                  next.set(selectedStudentKey, reason);
+                                }
+                                return next;
+                              });
+                              setHasModified(true);
+                              setSaveStatus('idle');
+                            }}
+                            className={`px-3 py-1 rounded-lg text-sm border transition-all
+                              ${currentReason === reason
+                                ? 'bg-sp-accent/20 border-sp-accent/40 text-sp-accent font-semibold'
+                                : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'}`}
+                          >
+                            {reason}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 상세 메모 */}
+                  <div>
+                    <p className="text-xs text-sp-muted mb-1.5">상세 메모</p>
+                    <input
+                      type="text"
+                      value={currentMemo}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAttendanceMemos((prev) => {
+                          const next = new Map(prev);
+                          if (val) next.set(selectedStudentKey, val);
+                          else next.delete(selectedStudentKey);
+                          return next;
+                        });
+                        setHasModified(true);
+                        setSaveStatus('idle');
+                      }}
+                      placeholder="메모 입력 (선택)"
+                      className="w-full px-3 py-2 bg-sp-surface border border-sp-border rounded-lg text-sp-text text-sm placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
+                    />
+                  </div>
+                </div>
+
+                {/* 출결 저장 버튼 */}
+                <button
+                  onClick={async () => { await handleSaveAttendance(); setSelectedStudentKey(null); }}
+                  disabled={saveStatus === 'saving'}
+                  className={`w-full py-2 rounded-lg text-sm font-medium transition-all ${
+                    saveStatus === 'saved'
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-sp-accent text-white hover:bg-sp-accent/80'
+                  } disabled:opacity-50`}
+                >
+                  {saveStatus === 'saved' ? '✓ 출석 저장됨' : saveStatus === 'saving' ? '저장 중...' : '출석 저장'}
+                </button>
+
+                {/* 특기사항 섹션 */}
+                <div className="border-t border-sp-border pt-4">
+                  <p className="text-xs font-semibold text-sp-muted mb-3 uppercase tracking-wide">특기사항</p>
+                  <ObservationForm classId={classId} studentId={selectedStudentKey} />
+                </div>
+
+                {/* 최근 기록 */}
+                {selectedObservations.length > 0 && (
+                  <div className="border-t border-sp-border pt-4">
+                    <p className="text-xs font-semibold text-sp-muted mb-3 uppercase tracking-wide">최근 기록</p>
+                    <div className="space-y-2">
+                      {selectedObservations.map((rec) => (
+                        <ObservationCard key={rec.id} record={rec} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

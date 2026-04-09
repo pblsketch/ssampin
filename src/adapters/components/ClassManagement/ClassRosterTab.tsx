@@ -1,49 +1,13 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
-import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
-import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
-import { exportAttendanceToExcel, generateTeachingClassRosterTemplate, parseTeachingClassRosterFromExcel } from '@infrastructure/export';
+import { generateTeachingClassRosterTemplate, parseTeachingClassRosterFromExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
-import { isSubjectMatch } from '@domain/rules/matchingRules';
-import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
+import { STUDENT_STATUS_LABELS, STUDENT_STATUS_COLORS, isInactiveStatus } from '@domain/entities/Student';
+import type { StudentStatus } from '@domain/entities/Student';
 import { FormatHint } from '../common/FormatHint';
-
-/* ──────────────────────── 유틸 ──────────────────────── */
-
-function todayString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; badge: string }> = {
-  present: { label: '출석', icon: 'check_circle', badge: 'bg-green-500/20 text-green-400' },
-  absent: { label: '결석', icon: 'cancel', badge: 'bg-red-500/20 text-red-400' },
-  late: { label: '지각', icon: 'schedule', badge: 'bg-amber-500/20 text-amber-400' },
-  earlyLeave: { label: '조퇴', icon: 'exit_to_app', badge: 'bg-orange-500/20 text-orange-400' },
-  classAbsence: { label: '결과', icon: 'event_busy', badge: 'bg-purple-500/20 text-purple-400' },
-};
-
-const STATUS_CYCLE: Record<AttendanceStatus, AttendanceStatus> = {
-  present: 'absent',
-  absent: 'late',
-  late: 'earlyLeave',
-  earlyLeave: 'classAbsence',
-  classAbsence: 'present',
-};
-
-const STAT_COLORS: Record<AttendanceStatus, string> = {
-  present: 'text-green-400',
-  absent: 'text-red-400',
-  late: 'text-amber-400',
-  earlyLeave: 'text-orange-400',
-  classAbsence: 'text-purple-400',
-};
-
-const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+import { UnifiedExportModal } from './UnifiedExportModal';
 
 /* ──────────────────────── 컴포넌트 ──────────────────────── */
 
@@ -54,29 +18,10 @@ interface ClassRosterTabProps {
 export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const updateClass = useTeachingClassStore((s) => s.updateClass);
-  const getAttendanceRecord = useTeachingClassStore((s) => s.getAttendanceRecord);
-  const saveAttendanceRecord = useTeachingClassStore((s) => s.saveAttendanceRecord);
   const showToast = useToastStore((s) => s.show);
-  const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
-  const loadSchedule = useScheduleStore((s) => s.load);
-  const { settings } = useSettingsStore();
-
-  useEffect(() => {
-    void loadSchedule();
-  }, [loadSchedule]);
 
   const cls = classes.find((c) => c.id === classId);
   const students = cls?.students ?? [];
-
-  // 과목 색상 (시간표 설정과 동일)
-  const subjectAccent = useMemo(() => {
-    if (!cls) return undefined;
-    const colorBy = settings.timetableColorBy ?? 'classroom';
-    if (colorBy === 'classroom') {
-      return resolveClassroomPreset(cls.name, settings.classroomColors).tw;
-    }
-    return resolvePreset(cls.subject, settings.subjectColors).tw;
-  }, [cls, settings.subjectColors, settings.classroomColors, settings.timetableColorBy]);
 
   /* ── 편집 모드 상태 ── */
   const [isEditing, setIsEditing] = useState(false);
@@ -85,10 +30,10 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [excelPreview, setExcelPreview] = useState<TeachingClassStudent[] | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const excelFileRef = useRef<HTMLInputElement>(null);
 
   const hasGradeInfo = useMemo(() => {
-    // 편집 중이면 editStudents도 체크
     const list = isEditing ? editStudents : students;
     return list.some((s) => s.grade != null || s.classNum != null);
   }, [students, isEditing, editStudents]);
@@ -98,182 +43,21 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     return [...list].sort((a, b) => {
       switch (sortBy) {
         case 'grade':
-          // 소속이 있는 학생 먼저, 없는 학생은 뒤로
           if ((a.grade != null) !== (b.grade != null)) return a.grade != null ? -1 : 1;
           if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
           if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
           return a.number - b.number;
         case 'name':
-          // 결번은 뒤로
           if ((a.isVacant ?? false) !== (b.isVacant ?? false)) return a.isVacant ? 1 : -1;
           return (a.name || '').localeCompare(b.name || '', 'ko');
         case 'number':
         default:
-          // 소속(학년→반) 순 → 번호 순
           if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
           if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
           return a.number - b.number;
       }
     });
   }, [isEditing, editStudents, cls?.students, sortBy]);
-
-  /* ── 출석 상태 ── */
-  const [date, setDate] = useState(todayString);
-  const [period, setPeriod] = useState(1);
-  const [localAttendance, setLocalAttendance] = useState<StudentAttendance[]>([]);
-  const [attendanceInitialized, setAttendanceInitialized] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-
-  /* ── 인라인 메모 편집 상태 ── */
-  const [editingMemoKey, setEditingMemoKey] = useState<string | null>(null);
-  const [editingMemoValue, setEditingMemoValue] = useState('');
-  const memoInputRef = useRef<HTMLInputElement>(null);
-
-  /* ── 시간표 연동: 해당 날짜의 매칭 교시 ── */
-  const getMatchingPeriods = useCallback((dateStr: string): number[] => {
-    if (!cls) return [];
-    const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
-    const d = new Date(dateStr + 'T00:00:00');
-    const dayOfWeek = DAYS[d.getDay()] ?? '';
-    if (!dayOfWeek) return [];
-
-    const dayScheduleTeacher = teacherSchedule?.[dayOfWeek];
-    if (!dayScheduleTeacher) return [];
-
-    const periods: number[] = [];
-
-    // 1단계: 교사 시간표에서 교실명 + 과목 동시 매칭
-    dayScheduleTeacher.forEach((slot, idx) => {
-      if (!slot) return;
-      const classroomMatch =
-        slot.classroom === cls.name ||
-        slot.classroom.includes(cls.name) ||
-        cls.name.includes(slot.classroom);
-      if (classroomMatch && isSubjectMatch(slot.subject, cls.subject)) {
-        periods.push(idx + 1);
-      }
-    });
-
-    return periods;
-  }, [cls, teacherSchedule]);
-
-  const matchingPeriods = useMemo(
-    () => new Set(getMatchingPeriods(date)),
-    [date, getMatchingPeriods],
-  );
-
-  // 수업이 있는 요일 (CalendarPicker용)
-  const lessonDayIndices = useMemo(() => {
-    const indices: number[] = [];
-    const ref = new Date();
-    const refDay = ref.getDay();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(ref);
-      d.setDate(d.getDate() + (i - refDay));
-      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      if (getMatchingPeriods(ds).length > 0) {
-        indices.push(i);
-      }
-    }
-    return indices;
-  }, [getMatchingPeriods]);
-
-  /* ──────────────────────── 출석 로드 ──────────────────────── */
-
-  const loadRecord = useCallback(
-    (d: string, p: number) => {
-      const activeStudents = students.filter((s) => !s.isVacant);
-      const existing = getAttendanceRecord(classId, d, p);
-      if (existing) {
-        const map = new Map(existing.students.map((s) => [studentKey(s), s.status]));
-        setLocalAttendance(
-          activeStudents.map((s) => ({
-            number: s.number,
-            grade: s.grade,
-            classNum: s.classNum,
-            status: map.get(studentKey(s)) ?? 'present',
-          })),
-        );
-      } else {
-        setLocalAttendance(
-          activeStudents.map((s) => ({
-            number: s.number,
-            grade: s.grade,
-            classNum: s.classNum,
-            status: 'present' as AttendanceStatus,
-          })),
-        );
-      }
-      setAttendanceInitialized(true);
-      setSaveStatus('idle');
-    },
-    [classId, students, getAttendanceRecord],
-  );
-
-  // 초기 로드 및 날짜/교시 변경 감지
-  useMemo(() => {
-    if (students.length > 0) {
-      loadRecord(date, period);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, period, classId, students.length]);
-
-  const handleDateChange = useCallback(
-    (newDate: string) => {
-      setDate(newDate);
-      loadRecord(newDate, period);
-    },
-    [period, loadRecord],
-  );
-
-  const handlePeriodChange = useCallback(
-    (newPeriod: number) => {
-      setPeriod(newPeriod);
-      loadRecord(date, newPeriod);
-    },
-    [date, loadRecord],
-  );
-
-  const toggleStatus = useCallback((key: string) => {
-    setLocalAttendance((prev) =>
-      prev.map((s) =>
-        studentKey(s) === key
-          ? { ...s, status: STATUS_CYCLE[s.status] }
-          : s,
-      ),
-    );
-    setSaveStatus('idle');
-  }, []);
-
-  const handleAttendanceSave = useCallback(async () => {
-    setSaveStatus('saving');
-    const record: AttendanceRecord = {
-      classId,
-      date,
-      period,
-      students: localAttendance,
-    };
-    await saveAttendanceRecord(record);
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 2000);
-  }, [classId, date, period, localAttendance, saveAttendanceRecord]);
-
-  const [showExportModal, setShowExportModal] = useState(false);
-
-  /* ── 출석 통계 ── */
-  const stats = useMemo(() => {
-    const counts: Record<AttendanceStatus, number> = {
-      present: 0,
-      absent: 0,
-      late: 0,
-      earlyLeave: 0,
-      classAbsence: 0,
-    };
-    for (const s of localAttendance) {
-      counts[s.status]++;
-    }
-    return counts;
-  }, [localAttendance]);
 
   /* ──────────────────────── 편집 모드 ──────────────────────── */
 
@@ -307,7 +91,6 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
       return next;
     });
   }, []);
-
 
   const addRow = useCallback(() => {
     setEditStudents((prev) => {
@@ -362,15 +145,17 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     });
   }, []);
 
-  const toggleVacant = useCallback((index: number) => {
+  const updateStudentStatus = useCallback((index: number, status: StudentStatus) => {
     setEditStudents((prev) => {
       const next = [...prev];
       const existing = next[index];
       if (existing) {
+        const inactive = isInactiveStatus(status);
         next[index] = {
           ...existing,
-          isVacant: !existing.isVacant,
-          name: !existing.isVacant ? '' : existing.name,
+          status,
+          isVacant: inactive ? true : existing.isVacant,
+          ...(status === 'active' ? { isVacant: false } : {}),
         };
       }
       return next;
@@ -392,7 +177,6 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const addBulkEntry = useCallback(() => {
     setBulkEntries((prev) => {
-      // 마지막 항목의 학년을 복사
       const last = prev[prev.length - 1];
       return [...prev, { grade: last?.grade ?? '', classNum: '', count: '' }];
     });
@@ -403,19 +187,18 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   }, []);
 
   const applyBulkEntries = useCallback(() => {
-    // 학년 → 반 순으로 정렬 후 생성
     const sorted = [...bulkEntries]
       .map((e) => ({ grade: parseInt(e.grade, 10), classNum: parseInt(e.classNum, 10), count: parseInt(e.count, 10) }))
       .filter((e) => !isNaN(e.grade) && !isNaN(e.classNum) && !isNaN(e.count) && e.count > 0)
       .sort((a, b) => a.grade - b.grade || a.classNum - b.classNum);
-    const students: TeachingClassStudent[] = [];
+    const newStudents: TeachingClassStudent[] = [];
     for (const entry of sorted) {
       for (let i = 1; i <= entry.count; i++) {
-        students.push({ number: i, name: '', grade: entry.grade, classNum: entry.classNum });
+        newStudents.push({ number: i, name: '', grade: entry.grade, classNum: entry.classNum });
       }
     }
-    if (students.length > 0) {
-      setEditStudents(students);
+    if (newStudents.length > 0) {
+      setEditStudents(newStudents);
     }
   }, [bulkEntries]);
 
@@ -437,7 +220,6 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
     const parsed: TeachingClassStudent[] = lines.map((line, idx) => {
       const parts = line.split('\t');
-      // 4열: 학년 반 번호 이름
       if (parts.length >= 4) {
         const grade = parseInt(parts[0]!.trim(), 10);
         const classNum = parseInt(parts[1]!.trim(), 10);
@@ -450,13 +232,11 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           classNum: isNaN(classNum) ? undefined : classNum,
         };
       }
-      // 2열: 번호 이름
       if (parts.length >= 2) {
         const num = parseInt(parts[0]!.trim(), 10);
         const name = parts[1]!.trim();
         return { number: isNaN(num) ? idx + 1 : num, name };
       }
-      // 1열: 이름만
       return { number: idx + 1, name: line.trim() };
     });
 
@@ -491,8 +271,10 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         const a = document.createElement('a');
         a.href = url;
         a.download = defaultFileName;
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
         showToast('양식이 다운로드되었습니다', 'success');
       }
     } catch {
@@ -570,40 +352,6 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     });
   }, [pasteText]);
 
-  /* ──────────────────────── 인라인 메모 저장 ──────────────────────── */
-
-  const startMemoEdit = useCallback((key: string, currentMemo: string) => {
-    setEditingMemoKey(key);
-    setEditingMemoValue(currentMemo);
-    // focus will be handled via useEffect-like ref callback
-    setTimeout(() => memoInputRef.current?.focus(), 0);
-  }, []);
-
-  const saveMemo = useCallback(async () => {
-    if (editingMemoKey === null || !cls) return;
-    const updatedStudents = cls.students.map((s) =>
-      studentKey(s) === editingMemoKey
-        ? { ...s, memo: editingMemoValue.trim() || undefined }
-        : s,
-    );
-    await updateClass({ ...cls, students: updatedStudents });
-    setEditingMemoKey(null);
-    setEditingMemoValue('');
-  }, [editingMemoKey, editingMemoValue, cls, updateClass]);
-
-  const handleMemoKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        void saveMemo();
-      }
-      if (e.key === 'Escape') {
-        setEditingMemoKey(null);
-        setEditingMemoValue('');
-      }
-    },
-    [saveMemo],
-  );
 
   /* ──────────────────────── 렌더링 ──────────────────────── */
 
@@ -617,58 +365,15 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const displayStudents = sortedStudents;
 
-  // 편집 모드에서는 항상 소속 컬럼 표시 (직접 입력 가능하도록)
+  // 편집 모드에서는 항상 소속 컬럼 표시
   const showGradeCol = isEditing || hasGradeInfo;
 
   const gridCols = showGradeCol
-    ? (isEditing ? 'grid-cols-[7rem_3.5rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[5rem_3.5rem_1fr_1fr_8rem]')
-    : (isEditing ? 'grid-cols-[3rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[3rem_1fr_1fr_8rem]');
+    ? (isEditing ? 'grid-cols-[7rem_3.5rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[4rem_2.5rem_1fr]')
+    : (isEditing ? 'grid-cols-[3rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[2.5rem_1fr]');
 
   return (
     <div className="space-y-4">
-      {/* ── 상단 컨트롤: 날짜 + 교시 (편집 모드 아닐 때) ── */}
-      {!isEditing && students.length > 0 && (
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-sp-muted">날짜</label>
-            <CalendarPicker
-              value={date}
-              onChange={handleDateChange}
-              lessonDays={lessonDayIndices}
-              accentColor={subjectAccent}
-              portal
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-sp-muted">교시</label>
-            <div className="flex gap-1">
-              {PERIODS.map((p) => {
-                const isMatching = matchingPeriods.has(p);
-                return (
-                  <button
-                    key={p}
-                    onClick={() => handlePeriodChange(p)}
-                    title={isMatching ? `${cls?.subject} 수업` : undefined}
-                    className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-all
-                      ${period === p
-                        ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40 shadow-md shadow-sp-accent/20'
-                        : isMatching
-                          ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
-                          : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-                      }`}
-                  >
-                    {p}
-                    {isMatching && period !== p && (
-                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sp-accent" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── 헤더: 학생 수 + 편집 버튼 ── */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-sp-muted">
@@ -680,7 +385,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
               <button
                 onClick={() => setShowExportModal(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text bg-sp-card border border-sp-border rounded-lg hover:border-sp-accent/50 transition-colors"
-                title="출결 기록을 엑셀로 내보내기"
+                title="명렬표 내보내기"
               >
                 <span className="material-symbols-outlined text-sm">download</span>
                 내보내기
@@ -861,32 +566,41 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
             번호
             {sortBy === 'number' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
           </button>
-          <button
-            onClick={() => setSortBy('name')}
-            className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'name' ? 'text-sp-accent' : ''}`}
-          >
-            이름
-            {sortBy === 'name' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
-          </button>
-          <span>{isEditing ? '' : '메모'}</span>
-          <span className="text-center">{isEditing ? '결번' : '출석'}</span>
-          {isEditing && <span />}
+          {!isEditing ? (
+            <button
+              onClick={() => setSortBy('name')}
+              className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'name' ? 'text-sp-accent' : ''}`}
+            >
+              이름
+              {sortBy === 'name' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => setSortBy('name')}
+                className={`flex items-center gap-0.5 hover:text-sp-text transition-colors text-left ${sortBy === 'name' ? 'text-sp-accent' : ''}`}
+              >
+                이름
+                {sortBy === 'name' && <span className="material-symbols-outlined text-xs">arrow_downward</span>}
+              </button>
+              <span />
+              <span className="text-center">상태</span>
+              <span />
+            </>
+          )}
         </div>
 
         {/* 학생 행 */}
         <div className="divide-y divide-sp-border/50">
           {displayStudents.map((student) => {
-            // 편집 모드에서 정렬 시 원래 인덱스를 찾아야 함
             const originalIdx = isEditing
               ? editStudents.findIndex((s) => s.number === student.number && s.grade === student.grade && s.classNum === student.classNum)
               : -1;
-            const attendance = localAttendance.find((s) => studentKey(s) === studentKey(student));
-            const status = attendance?.status ?? 'present';
-            const config = STATUS_CONFIG[status];
+
+            const sKey = studentKey(student);
 
             return (
-              <div
-                key={studentKey(student)}
+              <div key={sKey}
                 className={`grid items-center px-4 py-2 hover:bg-sp-text/[0.02] transition-colors ${gridCols}`}
               >
                 {/* 소속 (학년-반) */}
@@ -933,110 +647,68 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                     min={1}
                   />
                 ) : (
-                  <span className={`text-sm ${student.isVacant ? 'text-sp-muted/40 line-through' : 'text-sp-muted'}`}>{student.number}</span>
+                  <span className={`text-sm ${(student.isVacant || isInactiveStatus(student.status)) ? 'text-sp-muted/40' : 'text-sp-muted'}`}>{student.number}</span>
                 )}
 
-                {/* 이름 */}
+                {/* 이름 (보기 모드) / 이름 + 상태 (편집 모드) */}
                 {isEditing ? (
-                  student.isVacant ? (
-                    <span className="text-sm text-sp-muted/40 italic">결번</span>
-                  ) : (
-                    <div className="pr-2">
-                      <input
-                        type="text"
-                        value={student.name}
-                        onChange={(e) => updateStudentName(originalIdx, e.target.value)}
-                        className="w-full bg-sp-bg border border-sp-border rounded-lg px-2.5 py-1 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
-                        placeholder="이름 입력"
-                      />
-                    </div>
-                  )
-                ) : (
-                  student.isVacant ? (
-                    <span className="text-sm text-sp-muted/40 italic">결번</span>
-                  ) : (
-                    <span className="text-sm text-sp-text">{student.name}</span>
-                  )
-                )}
-
-                {/* 메모 (보기 모드) / 빈 칸 (편집 모드) */}
-                {isEditing ? (
-                  <div />
-                ) : editingMemoKey === studentKey(student) ? (
-                  <div className="pr-2">
-                    <input
-                      ref={memoInputRef}
-                      type="text"
-                      value={editingMemoValue}
-                      onChange={(e) => setEditingMemoValue(e.target.value)}
-                      onBlur={() => void saveMemo()}
-                      onKeyDown={handleMemoKeyDown}
-                      className="w-full bg-sp-bg border border-sp-accent rounded-lg px-2.5 py-1 text-sm text-sp-text placeholder:text-sp-muted focus:outline-none"
-                      placeholder="메모 입력"
-                    />
-                  </div>
-                ) : student.isVacant ? (
-                  <div />
-                ) : (
-                  <button
-                    onClick={() => startMemoEdit(studentKey(student), student.memo ?? '')}
-                    className="text-left text-sm truncate pr-2 py-1 rounded hover:bg-sp-text/[0.04] transition-colors"
-                  >
-                    {student.memo ? (
-                      <span className="text-sp-text">{student.memo}</span>
+                  <>
+                    {student.isVacant && !isInactiveStatus(student.status) ? (
+                      <span className="text-sm text-sp-muted/40 italic">결번</span>
                     ) : (
-                      <span className="text-sp-muted/50 italic">메모 추가...</span>
+                      <div className="pr-2">
+                        <input
+                          type="text"
+                          value={student.name}
+                          onChange={(e) => updateStudentName(originalIdx, e.target.value)}
+                          className={`w-full bg-sp-bg border border-sp-border rounded-lg px-2.5 py-1 text-sm placeholder:text-sp-muted focus:outline-none focus:border-sp-accent ${
+                            isInactiveStatus(student.status) ? 'text-sp-muted/50' : 'text-sp-text'
+                          }`}
+                          placeholder="이름 입력"
+                        />
+                      </div>
                     )}
-                  </button>
-                )}
-
-                {/* 결번 토글 (편집 모드) / 출석 (보기 모드) */}
-                {isEditing ? (
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => toggleVacant(originalIdx)}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
-                        student.isVacant
-                          ? 'bg-red-500/20 text-red-400'
-                          : 'bg-sp-bg border border-sp-border text-sp-muted hover:border-sp-accent/50'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-sm">
-                        {student.isVacant ? 'person_off' : 'person'}
-                      </span>
-                    </button>
-                  </div>
-                ) : student.isVacant ? (
-                  <div />
-                ) : attendanceInitialized ? (
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => toggleStatus(studentKey(student))}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs
-                                 font-medium cursor-pointer transition-colors ${config.badge}
-                                 hover:opacity-80`}
-                      title="클릭하여 상태 변경"
-                    >
-                      <span className="material-symbols-outlined text-sm">
-                        {config.icon}
-                      </span>
-                      {config.label}
-                    </button>
-                  </div>
+                    <div />
+                    <div className="flex justify-center">
+                      <select
+                        value={student.status ?? 'active'}
+                        onChange={(e) => updateStudentStatus(originalIdx, e.target.value as StudentStatus)}
+                        className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors focus:outline-none focus:border-sp-accent cursor-pointer
+                          ${isInactiveStatus(student.status)
+                            ? `${STUDENT_STATUS_COLORS[student.status ?? 'active']} border-transparent`
+                            : 'bg-sp-bg border-sp-border text-sp-muted hover:border-sp-accent/50'
+                          }`}
+                      >
+                        {(Object.entries(STUDENT_STATUS_LABELS) as [StudentStatus, string][]).map(([value, label]) => (
+                          <option key={value} value={value} className="bg-sp-card text-sp-text">
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => removeRow(originalIdx)}
+                        className="p-1 text-sp-muted hover:text-red-400 rounded transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">close</span>
+                      </button>
+                    </div>
+                  </>
                 ) : (
-                  <div />
-                )}
-
-                {/* 삭제 (편집 모드) */}
-                {isEditing && (
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => removeRow(originalIdx)}
-                      className="p-1 text-sp-muted hover:text-red-400 rounded transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  </div>
+                  /* 보기 모드: 이름 */
+                  student.isVacant && !isInactiveStatus(student.status) ? (
+                    <span className="text-sm text-sp-muted/40 italic">결번</span>
+                  ) : isInactiveStatus(student.status) ? (
+                    <span className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span className="text-sm text-sp-muted/50 line-through">{student.name}</span>
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${STUDENT_STATUS_COLORS[student.status!]}`}>
+                        {STUDENT_STATUS_LABELS[student.status!]}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-sm text-sp-text whitespace-nowrap">{student.name}</span>
+                  )
                 )}
               </div>
             );
@@ -1077,56 +749,10 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
         )}
       </div>
 
-      {/* ── 출석 통계 바 (편집 모드 아닐 때) ── */}
-      {!isEditing && students.length > 0 && attendanceInitialized && (
-        <div className="flex items-center gap-4 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5">
-          {(Object.keys(STATUS_CONFIG) as AttendanceStatus[]).map((statusKey) => (
-            <div key={statusKey} className="flex items-center gap-1.5">
-              <span className={`material-symbols-outlined text-base ${STAT_COLORS[statusKey]}`}>
-                {STATUS_CONFIG[statusKey].icon}
-              </span>
-              <span className="text-xs text-sp-muted">
-                {STATUS_CONFIG[statusKey].label}:
-              </span>
-              <span className={`text-sm font-medium ${STAT_COLORS[statusKey]}`}>
-                {stats[statusKey]}명
-              </span>
-            </div>
-          ))}
-          <div className="flex-1" />
-          <span className="text-xs text-sp-muted">
-            전체 {localAttendance.length}명
-          </span>
-        </div>
-      )}
-
-      {/* ── 출석 저장 버튼 (편집 모드 아닐 때) ── */}
-      {!isEditing && students.length > 0 && attendanceInitialized && (
-        <div className="flex justify-end">
-          <button
-            onClick={() => void handleAttendanceSave()}
-            disabled={saveStatus === 'saving'}
-            className={`flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-medium
-                       transition-all duration-200 ${
-              saveStatus === 'saved'
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-sp-accent text-white hover:bg-sp-accent/80'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            <span className="material-symbols-outlined text-lg">
-              {saveStatus === 'saved' ? 'check' : saveStatus === 'saving' ? 'hourglass_empty' : 'save'}
-            </span>
-            {saveStatus === 'saved' ? '저장됨!' : saveStatus === 'saving' ? '저장 중...' : '출석 저장'}
-          </button>
-        </div>
-      )}
-
-      {/* ── 출결 내보내기 모달 ── */}
+      {/* ── 통합 내보내기 모달 ── */}
       {showExportModal && cls && (
-        <AttendanceExportModal
+        <UnifiedExportModal
           classId={classId}
-          className={cls.name}
-          students={cls.students}
           onClose={() => setShowExportModal(false)}
         />
       )}
@@ -1255,200 +881,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-/* ──────────────────────── 출결 내보내기 모달 ──────────────────────── */
-
-type PeriodPreset = 'all' | 'semester' | 'month' | 'custom';
-
-function getSemesterRange(): { start: string; end: string } {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const semesterStart = m >= 8 ? new Date(y, 8, 1) : new Date(y, 2, 1);
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { start: fmt(semesterStart), end: fmt(now) };
-}
-
-function getMonthRange(): { start: string; end: string } {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const start = new Date(y, m, 1);
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { start: fmt(start), end: fmt(now) };
-}
-
-interface AttendanceExportModalProps {
-  classId: string;
-  className: string;
-  students: readonly TeachingClassStudent[];
-  onClose: () => void;
-}
-
-function AttendanceExportModal({ classId, className, students, onClose }: AttendanceExportModalProps) {
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('all');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
-  const [isExporting, setIsExporting] = useState(false);
-  const showToast = useToastStore((s) => s.show);
-
-  const period = useMemo<{ start: string; end: string } | undefined>(() => {
-    if (periodPreset === 'all') return undefined;
-    if (periodPreset === 'semester') return getSemesterRange();
-    if (periodPreset === 'month') return getMonthRange();
-    if (periodPreset === 'custom' && customStart && customEnd) {
-      return { start: customStart, end: customEnd };
-    }
-    return undefined;
-  }, [periodPreset, customStart, customEnd]);
-
-  const allRecords = useMemo(() => {
-    return useTeachingClassStore.getState().attendanceRecords
-      .filter((r) => r.classId === classId);
-  }, [classId]);
-
-  const filteredCount = useMemo(() => {
-    if (!period) return allRecords.length;
-    return allRecords.filter((r) => r.date >= period.start && r.date <= period.end).length;
-  }, [allRecords, period]);
-
-  const handleExport = useCallback(async () => {
-    if (filteredCount === 0) {
-      showToast('내보낼 출결 기록이 없습니다', 'info');
-      return;
-    }
-    setIsExporting(true);
-    try {
-      const buffer = await exportAttendanceToExcel(allRecords, students, className, period);
-      const defaultFileName = `${className}_출결기록.xlsx`;
-
-      if (window.electronAPI) {
-        const filePath = await window.electronAPI.showSaveDialog({
-          title: '출결 기록 내보내기',
-          defaultPath: defaultFileName,
-          filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
-        });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, buffer);
-          showToast('파일이 저장되었습니다', 'success', {
-            label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(filePath),
-          });
-          onClose();
-        }
-      } else {
-        const blob = new Blob([buffer], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = defaultFileName;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('파일이 다운로드되었습니다', 'success');
-        onClose();
-      }
-    } catch {
-      showToast('내보내기 중 오류가 발생했습니다', 'error');
-    } finally {
-      setIsExporting(false);
-    }
-  }, [allRecords, students, className, period, filteredCount, showToast, onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div
-        className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-md mx-4"
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-sp-accent">download</span>
-            <h3 className="text-sp-text font-semibold">출결 기록 내보내기</h3>
-          </div>
-          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-
-        <div className="px-6 py-4 space-y-5">
-          <div>
-            <label className="text-sm text-sp-muted mb-2 block">기간</label>
-            <div className="flex gap-2 flex-wrap">
-              {([
-                { id: 'all' as const, label: '전체' },
-                { id: 'semester' as const, label: '이번 학기' },
-                { id: 'month' as const, label: '이번 달' },
-                { id: 'custom' as const, label: '직접 입력' },
-              ]).map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setPeriodPreset(p.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    periodPreset === p.id
-                      ? 'bg-sp-accent text-white'
-                      : 'bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            {periodPreset === 'custom' && (
-              <div className="flex gap-2 mt-2">
-                <input
-                  type="date"
-                  value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                  className="bg-sp-surface border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                />
-                <span className="text-sp-muted text-sm self-center">~</span>
-                <input
-                  type="date"
-                  value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                  className="bg-sp-surface border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="bg-sp-surface border border-sp-border rounded-xl px-4 py-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-sp-muted">출결 기록</span>
-              <span className="text-sp-text font-medium">{filteredCount}건</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex gap-2 px-6 py-4 border-t border-sp-border">
-          <button
-            onClick={() => void handleExport()}
-            disabled={isExporting || filteredCount === 0}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium
-                       bg-sp-accent text-white hover:bg-sp-accent/80 transition-colors
-                       disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-base">
-              {isExporting ? 'hourglass_empty' : 'download'}
-            </span>
-            {isExporting ? '내보내는 중...' : '엑셀로 내보내기'}
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-lg text-sm text-sp-muted bg-sp-surface border border-sp-border hover:text-sp-text transition-colors"
-          >
-            취소
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
