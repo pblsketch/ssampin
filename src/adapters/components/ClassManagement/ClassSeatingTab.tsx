@@ -88,6 +88,8 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   // 출석 팝업 모달 상태
   const [selectedStudentKey, setSelectedStudentKey] = useState<string | null>(null);
 
+  const [showRecentRecords, setShowRecentRecords] = useState(false);
+
   // 특기사항 데이터
   const observationRecords = useObservationStore((s) => s.records);
   const loadObs = useObservationStore((s) => s.load);
@@ -594,7 +596,7 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
           className={isAttendanceMode ? activeBtnClass : toolBtnClass}
         >
           <span className="material-symbols-outlined text-lg">fact_check</span>
-          출석 체크
+          출석/기록
         </button>
 
         {/* 내보내기 */}
@@ -867,15 +869,25 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
                   <ObservationForm classId={classId} studentId={selectedStudentKey} />
                 </div>
 
-                {/* 최근 기록 */}
+                {/* 최근 기록 (토글) */}
                 {selectedObservations.length > 0 && (
                   <div className="border-t border-sp-border pt-4">
-                    <p className="text-xs font-semibold text-sp-muted mb-3 uppercase tracking-wide">최근 기록</p>
-                    <div className="space-y-2">
-                      {selectedObservations.map((rec) => (
-                        <ObservationCard key={rec.id} record={rec} />
-                      ))}
-                    </div>
+                    <button
+                      onClick={() => setShowRecentRecords((v) => !v)}
+                      className="flex items-center gap-1 text-xs font-semibold text-sp-muted mb-3 uppercase tracking-wide hover:text-sp-text transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm" style={{ transition: 'transform 0.2s', transform: showRecentRecords ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                        chevron_right
+                      </span>
+                      최근 기록 ({selectedObservations.length})
+                    </button>
+                    {showRecentRecords && (
+                      <div className="space-y-2">
+                        {selectedObservations.map((rec) => (
+                          <ObservationCard key={rec.id} record={rec} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

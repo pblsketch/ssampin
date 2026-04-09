@@ -1219,6 +1219,7 @@ function RecordsSubTab({ studentId }: { studentId: string; studentName: string }
   const categories = useMobileStudentRecordsStore((s) => s.categories);
 
   const [showForm, setShowForm] = useState(false);
+  const [showMobileRecords, setShowMobileRecords] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
   const [content, setContent] = useState('');
@@ -1254,10 +1255,18 @@ function RecordsSubTab({ studentId }: { studentId: string; studentName: string }
 
   return (
     <div className="px-5 py-4 space-y-4 max-h-[50vh] overflow-y-auto">
-      {/* 최근 기록 */}
+      {/* 최근 기록 (토글) */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sp-muted text-xs font-medium">최근 기록</p>
+          <button
+            onClick={() => setShowMobileRecords((v) => !v)}
+            className="flex items-center gap-1 text-sp-muted text-xs font-medium"
+          >
+            <span className="material-symbols-outlined text-sm" style={{ transition: 'transform 0.2s', transform: showMobileRecords ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+              chevron_right
+            </span>
+            최근 기록 ({recentRecords.length})
+          </button>
           <button
             onClick={() => setShowForm(!showForm)}
             className="text-sp-accent text-xs font-medium"
@@ -1266,32 +1275,34 @@ function RecordsSubTab({ studentId }: { studentId: string; studentName: string }
           </button>
         </div>
 
-        {recentRecords.length === 0 ? (
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
-            <p className="text-sp-muted text-sm">기록이 없습니다</p>
-          </div>
-        ) : (
-          recentRecords.map((rec) => {
-            const cat = categories.find((c) => c.id === rec.category);
-            const colorClass = CATEGORY_COLORS[cat?.color ?? 'gray'] ?? 'bg-gray-400';
-            return (
-              <div key={rec.id} className="bg-white/5 backdrop-blur-sm border border-white/10 flex rounded-xl overflow-hidden mb-2">
-                <div className={`w-1 shrink-0 ${colorClass}`} />
-                <div className="flex-1 p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs text-sp-muted">{rec.date}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/5 text-sp-muted">
-                      {cat?.name.split('(')[0]?.trim() ?? rec.category}
-                    </span>
-                    {rec.subcategory && (
-                      <span className="text-xs text-sp-muted/70">{rec.subcategory}</span>
-                    )}
+        {showMobileRecords && (
+          recentRecords.length === 0 ? (
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
+              <p className="text-sp-muted text-sm">기록이 없습니다</p>
+            </div>
+          ) : (
+            recentRecords.map((rec) => {
+              const cat = categories.find((c) => c.id === rec.category);
+              const colorClass = CATEGORY_COLORS[cat?.color ?? 'gray'] ?? 'bg-gray-400';
+              return (
+                <div key={rec.id} className="bg-white/5 backdrop-blur-sm border border-white/10 flex rounded-xl overflow-hidden mb-2">
+                  <div className={`w-1 shrink-0 ${colorClass}`} />
+                  <div className="flex-1 p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs text-sp-muted">{rec.date}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/5 text-sp-muted">
+                        {cat?.name.split('(')[0]?.trim() ?? rec.category}
+                      </span>
+                      {rec.subcategory && (
+                        <span className="text-xs text-sp-muted/70">{rec.subcategory}</span>
+                      )}
+                    </div>
+                    <p className="text-sp-text text-sm">{rec.content}</p>
                   </div>
-                  <p className="text-sp-text text-sm">{rec.content}</p>
                 </div>
-              </div>
-            );
-          })
+              );
+            })
+          )
         )}
       </div>
 

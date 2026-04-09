@@ -8,7 +8,7 @@ import { ClassSeatingTab } from './ClassSeatingTab';
 import { ProgressTab } from './ProgressTab';
 import { ClassSurveyTab } from './ClassSurveyTab';
 import { ClassAssignmentTab } from './ClassAssignmentTab';
-import { PinGuard } from '@adapters/components/common/PinGuard';
+
 
 type TabId = 'roster' | 'record' | 'seating' | 'progress' | 'survey' | 'assignment';
 
@@ -88,9 +88,7 @@ export function ClassManagementPage() {
               <div className="flex-1 overflow-y-auto">
                 {activeTab === 'roster' && <ClassRosterTab classId={selectedClassId} />}
                 {activeTab === 'record' && (
-                  <PinGuard feature="observation">
                     <ClassRecordTab classId={selectedClassId} />
-                  </PinGuard>
                 )}
                 {activeTab === 'seating' && <ClassSeatingTab classId={selectedClassId} />}
                 {activeTab === 'progress' && <ProgressTab classId={selectedClassId} />}

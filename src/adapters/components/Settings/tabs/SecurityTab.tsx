@@ -14,7 +14,6 @@ interface Props {
 
 const FEATURE_LABELS: { key: ProtectedFeatureKey; icon: string; label: string }[] = [
   ...PROTECTABLE_PAGES.map((p) => ({ key: p.featureKey, icon: p.icon, label: p.label })),
-  { key: 'observation', icon: 'edit_note', label: '특기사항' },
 ];
 
 export function SecurityTab({ draft, patch }: Props) {
@@ -69,7 +68,7 @@ export function SecurityTab({ draft, patch }: Props) {
           pin: {
             enabled: false,
             pinHash: null,
-            protectedFeatures: { timetable: false, seating: false, schedule: false, studentRecords: false, meal: false, memo: false, todo: false, classManagement: false, bookmarks: false, observation: false },
+            protectedFeatures: { timetable: false, seating: false, schedule: false, studentRecords: false, meal: false, memo: false, todo: false, classManagement: false, bookmarks: false },
             autoLockMinutes: 5,
           },
         });

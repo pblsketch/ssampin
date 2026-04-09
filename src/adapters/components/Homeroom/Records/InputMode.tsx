@@ -48,6 +48,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [reportedToNeis, setReportedToNeis] = useState(false);
   const [documentSubmitted, setDocumentSubmitted] = useState(false);
   const [rightTab, setRightTab] = useState<RightTab>('today');
+  const [showTodayRecords, setShowTodayRecords] = useState(false);
   const [showMemoModal, setShowMemoModal] = useState(false);
   const [studentView, setStudentView] = useState<'default' | 'roster'>('default');
 
@@ -923,50 +924,58 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                 })()}
               </div>
             ) : dateRecords.length > 0 ? (
-              /* 기록 목록 */
+              /* 기록 목록 (토글) */
               <div className="p-4">
-                <p className="text-xs text-sp-muted mb-2">
-                  {'\uD83D\uDCCB'} {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
-                </p>
-                <div className="space-y-1">
-                  {dateRecords.map((record) => {
-                    const student = studentMap.get(record.studentId);
-                    return (
-                      <div key={record.id} className="group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors hover:bg-sp-surface/50">
-                        <span className={getRecordTagClass(record.category, categories)}>
-                          {record.subcategory}
-                        </span>
-                        <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
-                        {record.content && (
-                          <span className="text-sp-muted truncate flex-1">{record.content}</span>
-                        )}
-                        <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => {
-                              setEditingRecordId(record.id);
-                              setEditingContent(record.content);
-                              setEditingCategory(record.category);
-                              setEditingSubcat(record.subcategory);
-                              setEditingReportedToNeis(record.reportedToNeis ?? false);
-                              setEditingDocumentSubmitted(record.documentSubmitted ?? false);
-                            }}
-                            className="text-sp-muted hover:text-sp-accent transition-colors"
-                            title="수정"
-                          >
-                            <span className="material-symbols-outlined text-sm">edit</span>
-                          </button>
-                          <button
-                            onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void deleteRecord(record.id); }}
-                            className="text-sp-muted hover:text-red-400 transition-colors"
-                            title="삭제"
-                          >
-                            <span className="material-symbols-outlined text-sm">delete</span>
-                          </button>
+                <button
+                  onClick={() => setShowTodayRecords((v) => !v)}
+                  className="flex items-center gap-1 text-xs font-semibold text-sp-muted mb-2 uppercase tracking-wide hover:text-sp-text transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm" style={{ transition: 'transform 0.2s', transform: showTodayRecords ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                    chevron_right
+                  </span>
+                  {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
+                </button>
+                {showTodayRecords && (
+                  <div className="space-y-1">
+                    {dateRecords.map((record) => {
+                      const student = studentMap.get(record.studentId);
+                      return (
+                        <div key={record.id} className="group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors hover:bg-sp-surface/50">
+                          <span className={getRecordTagClass(record.category, categories)}>
+                            {record.subcategory}
+                          </span>
+                          <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
+                          {record.content && (
+                            <span className="text-sp-muted truncate flex-1">{record.content}</span>
+                          )}
+                          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => {
+                                setEditingRecordId(record.id);
+                                setEditingContent(record.content);
+                                setEditingCategory(record.category);
+                                setEditingSubcat(record.subcategory);
+                                setEditingReportedToNeis(record.reportedToNeis ?? false);
+                                setEditingDocumentSubmitted(record.documentSubmitted ?? false);
+                              }}
+                              className="text-sp-muted hover:text-sp-accent transition-colors"
+                              title="수정"
+                            >
+                              <span className="material-symbols-outlined text-sm">edit</span>
+                            </button>
+                            <button
+                              onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void deleteRecord(record.id); }}
+                              className="text-sp-muted hover:text-red-400 transition-colors"
+                              title="삭제"
+                            >
+                              <span className="material-symbols-outlined text-sm">delete</span>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : (
               /* 빈 상태 */

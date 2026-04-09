@@ -16,6 +16,7 @@ interface ObservationPanelProps {
 
 export function ObservationPanel({ classId, studentId, onClose }: ObservationPanelProps) {
   const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [showRecords, setShowRecords] = useState(false);
   const [showExport, setShowExport] = useState(false);
 
   const load = useObservationStore((s) => s.load);
@@ -91,37 +92,56 @@ export function ObservationPanel({ classId, studentId, onClose }: ObservationPan
         {/* 입력 폼 */}
         <ObservationForm classId={classId} studentId={studentId} />
 
-        {/* 기록 목록 */}
+        {/* 기록 목록 (토글) */}
         <div className="flex-1 overflow-y-auto px-4 pb-3">
-          {records.length >= 2 && (
-            <div className="mb-2 pt-1">
-              <TagFilter
-                tags={allTags}
-                activeFilters={filterTags}
-                onToggle={toggleTag}
-                onClear={() => setFilterTags([])}
-              />
+          {records.length > 0 ? (
+            <>
+              <button
+                onClick={() => setShowRecords((v) => !v)}
+                className="flex items-center gap-1 text-xs font-semibold text-sp-muted pt-2 mb-2 uppercase tracking-wide hover:text-sp-text transition-colors w-full"
+              >
+                <span className="material-symbols-outlined text-sm" style={{ transition: 'transform 0.2s', transform: showRecords ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  chevron_right
+                </span>
+                최근 기록 ({records.length})
+              </button>
+              {showRecords && (
+                <>
+                  {records.length >= 2 && (
+                    <div className="mb-2">
+                      <TagFilter
+                        tags={allTags}
+                        activeFilters={filterTags}
+                        onToggle={toggleTag}
+                        onClear={() => setFilterTags([])}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {filteredRecords.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-sp-muted">
+                        <span className="material-symbols-outlined text-3xl mb-2 opacity-30">
+                          edit_note
+                        </span>
+                        <p className="text-xs">필터와 일치하는 기록이 없습니다</p>
+                      </div>
+                    ) : (
+                      filteredRecords.map((record) => (
+                        <ObservationCard key={record.id} record={record} />
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 text-sp-muted">
+              <span className="material-symbols-outlined text-3xl mb-2 opacity-30">
+                edit_note
+              </span>
+              <p className="text-xs">아직 관찰 기록이 없습니다</p>
             </div>
           )}
-
-          <div className="space-y-2">
-            {filteredRecords.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-sp-muted">
-                <span className="material-symbols-outlined text-3xl mb-2 opacity-30">
-                  edit_note
-                </span>
-                <p className="text-xs">
-                  {records.length === 0
-                    ? '아직 관찰 기록이 없습니다'
-                    : '필터와 일치하는 기록이 없습니다'}
-                </p>
-              </div>
-            ) : (
-              filteredRecords.map((record) => (
-                <ObservationCard key={record.id} record={record} />
-              ))
-            )}
-          </div>
         </div>
       </div>
 

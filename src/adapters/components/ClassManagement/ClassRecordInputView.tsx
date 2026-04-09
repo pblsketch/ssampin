@@ -82,6 +82,7 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
   const [localAttendance, setLocalAttendance] = useState<StudentAttendance[]>([]);
   const [attendanceInitialized, setAttendanceInitialized] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [showRecentRecords, setShowRecentRecords] = useState(false);
 
   /* ── 시간표 연동 ── */
   const subjectAccent = useMemo(() => {
@@ -450,17 +451,27 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
 
               <ObservationForm classId={classId} studentId={selectedStudentKey} />
 
-              <div className="px-4 pb-3 space-y-2">
-                {selectedObservations.length === 0 ? (
-                  <div className="py-4 text-center text-xs text-sp-muted">
-                    아직 기록이 없습니다
-                  </div>
-                ) : (
-                  selectedObservations.map((r) => (
-                    <ObservationCard key={r.id} record={r} />
-                  ))
-                )}
-              </div>
+              {/* 최근 기록 (토글) */}
+              {selectedObservations.length > 0 && (
+                <div className="px-4 pb-3">
+                  <button
+                    onClick={() => setShowRecentRecords((v) => !v)}
+                    className="flex items-center gap-1 text-xs font-semibold text-sp-muted mb-2 uppercase tracking-wide hover:text-sp-text transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm" style={{ transition: 'transform 0.2s', transform: showRecentRecords ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                      chevron_right
+                    </span>
+                    최근 기록 ({selectedObservations.length})
+                  </button>
+                  {showRecentRecords && (
+                    <div className="space-y-2">
+                      {selectedObservations.map((r) => (
+                        <ObservationCard key={r.id} record={r} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : (
