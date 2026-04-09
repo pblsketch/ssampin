@@ -120,7 +120,7 @@ const QA_DOCUMENTS = [
     metadata: { source: 'system-qa', category: 'settings', title: 'Q: 폰트 변경' },
   },
   {
-    content: `Q: PIN 잠금을 설정하려면?\nA: 설정(⚙️) → PIN 잠금에서 기능별로 잠금을 설정할 수 있어요. 시간표, 좌석배치, 일정, 학생기록, 급식, 메모, 할일, 수업관리, 특기사항, 북마크 각각 잠금을 켜거나 끌 수 있어요. PIN 번호는 4자리 숫자로 설정해요.`,
+    content: `Q: PIN 잠금을 설정하려면?\nA: 설정(⚙️) → PIN 잠금에서 기능별로 잠금을 설정할 수 있어요. 시간표, 좌석배치, 일정, 학생기록, 급식, 메모, 할일, 수업관리, 북마크 각각 잠금을 켜거나 끌 수 있어요. PIN 번호는 4자리 숫자로 설정해요.`,
     metadata: { source: 'system-qa', category: 'settings', title: 'Q: PIN 잠금 설정' },
   },
   {
@@ -278,8 +278,8 @@ const QA_DOCUMENTS = [
     metadata: { source: 'system-qa', category: 'tools', title: 'Q: 자리뽑기 번호 역순' },
   },
   {
-    content: `Q: 특기사항도 PIN 잠금으로 보호할 수 있나요?\nA: 네! 설정 → PIN 잠금에서 '특기사항' 항목을 켜면 특기사항 열람 시 PIN을 입력해야 해요. 민감한 학생 정보를 더 안전하게 보호할 수 있어요.`,
-    metadata: { source: 'system-qa', category: 'settings', title: 'Q: PIN 잠금 특기사항 보호' },
+    content: `Q: 학생 기록(특기사항)은 어떻게 보호되나요?\nA: 학생 기록은 기본적으로 접혀 있어서 의도치 않은 노출을 방지해요. '최근 기록' 버튼을 클릭하면 펼쳐서 볼 수 있어요. 수업관리, 담임 업무, 모바일 모두 동일하게 적용돼요.`,
+    metadata: { source: 'system-qa', category: 'settings', title: 'Q: 학생 기록 보호' },
   },
   {
     content: `Q: 출결 사유는 어떤 것들이 있나요?\nA: 출결 사유는 질병, 인정, 미인정, 기타 4가지예요. 결석/지각/조퇴/결과 등 출결 유형을 먼저 선택한 뒤 사유를 지정할 수 있어요.`,
