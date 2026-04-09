@@ -5,6 +5,7 @@ import { PresetSelector } from './PresetSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolSound } from '@adapters/hooks/useToolSound';
 
 interface ToolRouletteProps {
   onBack: () => void;
@@ -41,6 +42,7 @@ function truncateName(name: string, maxLen: number): string {
 
 export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const { track } = useAnalytics();
+  const { playProgress, playResult } = useToolSound('roulette');
   useEffect(() => {
     track('tool_use', { tool: 'roulette' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,7 +194,8 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     setIsSpinning(true);
     setWinner(null);
     setWinnerIndex(null);
-  }, [isSpinning, items.length, rotation]);
+    playProgress();
+  }, [isSpinning, items.length, rotation, playProgress]);
 
   const handleTransitionEnd = useCallback(() => {
     if (!isSpinning) return;
@@ -217,12 +220,13 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     setWinnerIndex(idx);
     setWinner(winnerName);
     setHistory((prev) => [winnerName, ...prev].slice(0, 10));
+    playResult();
 
     if (winnerTimerRef.current) clearTimeout(winnerTimerRef.current);
     winnerTimerRef.current = setTimeout(() => {
       setWinner(null);
     }, 2000);
-  }, [isSpinning, rotation, items]);
+  }, [isSpinning, rotation, items, playResult]);
 
   const handleLoadPreset = useCallback((presetItems: readonly string[]) => {
     setItems([...presetItems].slice(0, 20));

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolSound } from '@adapters/hooks/useToolSound';
 
 interface ToolCoinProps {
   onBack: () => void;
@@ -18,6 +19,7 @@ const BASE_SPINS = 6; // number of full 360-degree rotations before landing
 
 export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
   const { track } = useAnalytics();
+  const { playProgress, playResult } = useToolSound('coin');
   useEffect(() => {
     track('tool_use', { tool: 'coin' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,6 +63,7 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
     setShowResult(false);
     setResult(null);
     setRotation(newRotation);
+    playProgress();
 
     // Animation duration matches CSS transition (1500ms)
     if (flipTimerRef.current) {
@@ -70,6 +73,7 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
       setIsFlipping(false);
       setResult(nextResult);
       setShowResult(true);
+      playResult();
       setStats((prev) => ({
         heads: prev.heads + (nextResult === 'heads' ? 1 : 0),
         tails: prev.tails + (nextResult === 'tails' ? 1 : 0),

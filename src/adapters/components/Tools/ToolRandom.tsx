@@ -8,6 +8,7 @@ import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { shuffleArray, pickRandom } from '@domain/rules/randomRules';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolSound } from '@adapters/hooks/useToolSound';
 
 interface ToolRandomProps {
   onBack: () => void;
@@ -24,6 +25,7 @@ interface RangeConfig {
 
 export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const { track } = useAnalytics();
+  const { playProgress, playResult, stopAll: stopSound } = useToolSound('random');
   useEffect(() => {
     track('tool_use', { tool: 'random_picker' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,6 +148,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
 
     setIsAnimating(true);
     setShowResult(false);
+    playProgress();
     speedRef.current = 50;
     stepCountRef.current = 0;
 
@@ -168,6 +171,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
           onComplete(picked);
         }
         setIsAnimating(false);
+        playResult();
         return;
       }
 
@@ -186,7 +190,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
     };
 
     animationRef.current = setInterval(tick, speedRef.current);
-  }, []);
+  }, [playProgress, playResult]);
 
   // --- Handle pick ---
   const handlePick = useCallback(() => {
@@ -211,6 +215,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
         const count = Math.min(multipleCount, pool.length);
         setIsAnimating(true);
         setShowResult(false);
+        playProgress();
 
         // Brief suspense animation
         speedRef.current = 50;
@@ -233,6 +238,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
             setShowResult(true);
             setIsAnimating(false);
             setPickedItems((prev) => [...prev, ...picked]);
+            playResult();
             return;
           }
 
@@ -253,6 +259,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
         setIsAnimating(true);
         setShowResult(false);
         setRevealedCount(0);
+        playProgress();
 
         // Brief suspense
         speedRef.current = 50;
@@ -274,6 +281,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
             setSlotDisplay('');
             setShowResult(true);
             setIsAnimating(false);
+            playResult();
 
             // Stagger reveal
             let revealIdx = 0;
@@ -301,7 +309,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
         break;
       }
     }
-  }, [isAnimating, mode, excludePicked, getPool, pickedItems, multipleCount, runSlotAnimation]);
+  }, [isAnimating, mode, excludePicked, getPool, pickedItems, multipleCount, runSlotAnimation, playProgress, playResult]);
 
   // --- Reset ---
   const handleReset = useCallback(() => {
@@ -315,7 +323,8 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
     setSlotDisplay('');
     setIsAnimating(false);
     setRevealedCount(0);
-  }, []);
+    stopSound();
+  }, [stopSound]);
 
   // Reset roster exclusions when data source changes
   useEffect(() => {

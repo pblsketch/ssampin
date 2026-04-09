@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolSound } from '@adapters/hooks/useToolSound';
 
 interface ToolDiceProps {
   onBack: () => void;
@@ -218,6 +219,7 @@ type DiceCount = 1 | 2 | 3;
 
 export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
   const { track } = useAnalytics();
+  const { playProgress, playResult } = useToolSound('dice');
   useEffect(() => {
     track('tool_use', { tool: 'dice' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -238,12 +240,14 @@ export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
 
     setIsRolling(true);
     setRollId((prev) => prev + 1);
+    playProgress();
 
     // After animation completes, update results and stop rolling state
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       setResults(newResults);
       setIsRolling(false);
+      playResult();
       setHistory((prev) => [newResults, ...prev].slice(0, 10));
     }, 1500);
   }, [isRolling, diceCount]);

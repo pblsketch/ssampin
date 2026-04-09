@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolSound } from '@adapters/hooks/useToolSound';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { shuffleArray } from '@domain/rules/randomRules';
@@ -22,7 +23,7 @@ interface ToolSeatPickerProps {
 }
 
 type Phase = 'setup' | 'picking' | 'complete';
-type OrderMode = 'number' | 'random' | 'direct';
+type OrderMode = 'number' | 'numberReverse' | 'random' | 'direct';
 type AdvanceMode = 'manual' | 'auto';
 type SeatDataSource = 'homeroom' | 'teachingClass';
 
@@ -40,6 +41,7 @@ interface Assignment {
 
 export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const { track } = useAnalytics();
+  const { playResult: playAssignSound } = useToolSound('seatPicker');
   useEffect(() => {
     track('tool_use', { tool: 'seat_picker' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,6 +154,10 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     let ordered: Student[];
     if (orderMode === 'random') {
       ordered = shuffleArray(unfixedActive);
+    } else if (orderMode === 'numberReverse') {
+      ordered = [...unfixedActive].sort(
+        (a, b) => (b.studentNumber ?? 0) - (a.studentNumber ?? 0),
+      );
     } else {
       ordered = [...unfixedActive].sort(
         (a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0),
@@ -212,6 +218,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
       // Flip the card
       setFlippedCards((prev) => new Set(prev).add(cardIndex));
+      playAssignSound();
 
       // Assign student to this seat
       const newAssignments = new Map(assignments);
@@ -810,36 +817,47 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setOrderMode('number')}
-                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-lg border text-sm font-medium whitespace-nowrap transition-all ${
                         orderMode === 'number'
                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                           : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
                       }`}
                     >
                       <span>🔢</span>
-                      <span>번호 순서</span>
+                      <span>번호순</span>
+                    </button>
+                    <button
+                      onClick={() => setOrderMode('numberReverse')}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-lg border text-sm font-medium whitespace-nowrap transition-all ${
+                        orderMode === 'numberReverse'
+                          ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                          : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
+                      }`}
+                    >
+                      <span>🔃</span>
+                      <span>번호역순</span>
                     </button>
                     <button
                       onClick={() => setOrderMode('random')}
-                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-lg border text-sm font-medium whitespace-nowrap transition-all ${
                         orderMode === 'random'
                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                           : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
                       }`}
                     >
                       <span>🔀</span>
-                      <span>랜덤 순서</span>
+                      <span>랜덤</span>
                     </button>
                     <button
                       onClick={() => setOrderMode('direct')}
-                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-lg border text-sm font-medium whitespace-nowrap transition-all ${
                         orderMode === 'direct'
                           ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
                           : 'bg-sp-surface border-sp-border text-sp-muted hover:border-sp-accent/50 hover:text-sp-text'
                       }`}
                     >
                       <span>✏️</span>
-                      <span>직접 지정</span>
+                      <span>직접지정</span>
                     </button>
                   </div>
                 </div>

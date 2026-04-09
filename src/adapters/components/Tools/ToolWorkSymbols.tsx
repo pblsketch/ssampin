@@ -4,6 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { DEFAULT_WORK_SYMBOLS } from '@adapters/stores/useSettingsStore';
 import type { WorkSymbolItem } from '@domain/entities/Settings';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolSound } from '@adapters/hooks/useToolSound';
 
 interface ToolWorkSymbolsProps {
   onBack: () => void;
@@ -407,6 +408,7 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
 
 export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) {
   const { track } = useAnalytics();
+  const { playResult: playSwitchSound } = useToolSound('workSymbols');
   useEffect(() => {
     track('tool_use', { tool: 'activity_symbol' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -433,6 +435,7 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
     if (index === selectedIndex || animPhase !== 'idle') return;
     pendingIndex.current = index;
     setAnimPhase('out');
+    playSwitchSound();
 
     setTimeout(() => {
       setSelectedIndex(index);
@@ -442,7 +445,7 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
         pendingIndex.current = null;
       }, 300);
     }, 200);
-  }, [selectedIndex, animPhase]);
+  }, [selectedIndex, animPhase, playSwitchSound]);
 
   // Keyboard shortcuts (1~N)
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardShortcut } from './types';
+import { useSoundStore } from '@adapters/stores/useSoundStore';
 
 interface ToolLayoutProps {
   title: string;
@@ -29,6 +30,15 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
   const [showHelp, setShowHelp] = useState(false);
   const shortcutsRef = useRef<KeyboardShortcut[]>([]);
   shortcutsRef.current = shortcuts ?? [];
+
+  const soundEnabled = useSoundStore((s) => s.settings.enabled);
+  const soundLoaded = useSoundStore((s) => s.loaded);
+  const loadSound = useSoundStore((s) => s.load);
+  const toggleSound = useSoundStore((s) => s.toggleEnabled);
+
+  useEffect(() => {
+    if (!soundLoaded) loadSound();
+  }, [soundLoaded, loadSound]);
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -71,6 +81,13 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
+      // M key for mute toggle
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleSound();
+        return;
+      }
+
       for (const sc of shortcutsRef.current) {
         const keyMatch = e.key === sc.key;
         const needShift = sc.modifiers?.shift ?? false;
@@ -86,11 +103,12 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onBack, toggleFullscreen]);
+  }, [onBack, toggleFullscreen, toggleSound]);
 
   const allShortcuts = [
     { key: 'Esc', label: '뒤로가기' },
     { key: 'F11', label: '전체화면' },
+    { key: 'M', label: '소리 켜기/끄기' },
     ...(shortcuts ?? []).map((s) => ({
       key: formatKeyLabel(s.key, s.modifiers),
       label: s.label,
@@ -146,6 +164,21 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
               <span className="material-symbols-outlined text-icon-md">add</span>
             </button>
           </div>
+
+          {/* Sound toggle */}
+          <button
+            onClick={() => toggleSound()}
+            className={`p-2 rounded-lg transition-all ${
+              soundEnabled
+                ? 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+                : 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
+            }`}
+            title={soundEnabled ? '소리 끄기 (M)' : '소리 켜기 (M)'}
+          >
+            <span className="material-symbols-outlined text-icon-lg">
+              {soundEnabled ? 'volume_up' : 'volume_off'}
+            </span>
+          </button>
 
           {/* Keyboard shortcuts help */}
           <div className="relative">
