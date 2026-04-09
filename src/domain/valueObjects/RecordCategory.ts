@@ -16,7 +16,7 @@ export interface RecordCategoryItem {
 export const ATTENDANCE_TYPES = ['결석', '지각', '조퇴', '결과'] as const;
 
 /** 출결 사유 (2단계 선택 2단계) */
-export const ATTENDANCE_REASONS = ['질병', '인정', '기타', '생리통', '미인정'] as const;
+export const ATTENDANCE_REASONS = ['질병', '인정', '미인정', '기타'] as const;
 
 /** 기본 카테고리 정의 (사용자 정의 카테고리가 없을 때 fallback) */
 export const DEFAULT_RECORD_CATEGORIES: readonly RecordCategoryItem[] = [

@@ -120,7 +120,7 @@ const QA_DOCUMENTS = [
     metadata: { source: 'system-qa', category: 'settings', title: 'Q: 폰트 변경' },
   },
   {
-    content: `Q: PIN 잠금을 설정하려면?\nA: 설정(⚙️) → PIN 잠금에서 기능별로 잠금을 설정할 수 있어요. 시간표, 좌석배치, 일정, 학생기록, 급식, 메모, 할일, 수업관리, 북마크 각각 잠금을 켜거나 끌 수 있어요. PIN 번호는 4자리 숫자로 설정해요.`,
+    content: `Q: PIN 잠금을 설정하려면?\nA: 설정(⚙️) → PIN 잠금에서 기능별로 잠금을 설정할 수 있어요. 시간표, 좌석배치, 일정, 학생기록, 급식, 메모, 할일, 수업관리, 특기사항, 북마크 각각 잠금을 켜거나 끌 수 있어요. PIN 번호는 4자리 숫자로 설정해요.`,
     metadata: { source: 'system-qa', category: 'settings', title: 'Q: PIN 잠금 설정' },
   },
   {
@@ -267,6 +267,24 @@ const QA_DOCUMENTS = [
     content: `Q: 상담 예약에서 공강 시간만 열 수 있나요?\nA: 네! 상담 일정 생성 시 '수업 시간 제외' 옵션을 켜면 시간표에 수업이 없는 교시만 상담 가능 시간으로 설정돼요.`,
     metadata: { source: 'system-qa', category: 'homeroom', title: 'Q: 공강 시간 상담 제외' },
   },
+
+  // ── v1.9.5 신규 ──────────────────────────────────────────────────────────
+  {
+    content: `Q: 쌤도구에 효과음이 있나요?\nA: 네! v1.9.5부터 쌤도구에 효과음이 추가됐어요. 타이머 종료, 랜덤 뽑기, 룰렛 등에서 효과음이 나와요. 설정에서 효과음을 켜거나 끌 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 쌤도구 효과음' },
+  },
+  {
+    content: `Q: 자리뽑기에서 번호를 역순으로 배치할 수 있나요?\nA: 네! 자리뽑기 설정에서 '번호 역순' 옵션을 켜면 번호가 큰 학생부터 앞자리에 배치돼요.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 자리뽑기 번호 역순' },
+  },
+  {
+    content: `Q: 특기사항도 PIN 잠금으로 보호할 수 있나요?\nA: 네! 설정 → PIN 잠금에서 '특기사항' 항목을 켜면 특기사항 열람 시 PIN을 입력해야 해요. 민감한 학생 정보를 더 안전하게 보호할 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'settings', title: 'Q: PIN 잠금 특기사항 보호' },
+  },
+  {
+    content: `Q: 출결 사유는 어떤 것들이 있나요?\nA: 출결 사유는 질병, 인정, 미인정, 기타 4가지예요. 결석/지각/조퇴/결과 등 출결 유형을 먼저 선택한 뒤 사유를 지정할 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'class-management', title: 'Q: 출결 사유 종류' },
+  },
 ];
 
 // ── 기능 요약 문서 ────────────────────────────────────────────────────────────
@@ -297,7 +315,7 @@ const FEATURE_DOCUMENTS = [
     metadata: { source: 'feature-summary', category: 'homeroom', title: '담임 업무 기능 요약' },
   },
   {
-    content: `📚 수업 관리: 수업반 생성·관리, 명렬표(NEIS 호환 양식, 엑셀 업로드 헤더 자동 감지, 미리보기 모달), 좌석배치(출석 체크 모드), 진도·출결 관리(진도 기록 날짜별 그룹 헤더), 출결 태그 색상 구분, 설문/체크리스트, 과제 수합(Google Drive 연동), 결번 학생 표시.`,
+    content: `📚 수업 관리 (6개 탭: 명렬 관리, 수업 기록, 좌석배치, 진도 관리, 설문/체크, 과제 수합): 수업반 생성·관리, 명렬표(NEIS 호환 양식, 엑셀 업로드 헤더 자동 감지, 미리보기 모달), 좌석배치(출석 체크 모드), 진도·출결 관리(진도 기록 날짜별 그룹 헤더, 출결 사유: 질병·인정·미인정·기타), 출결 태그 색상 구분, 설문/체크리스트, 과제 수합(Google Drive 연동), 결번 학생 표시. 탭 구조는 담임 업무와 동일하게 통일.`,
     metadata: { source: 'feature-summary', category: 'class-management', title: '수업 관리 기능 요약' },
   },
   {
@@ -317,7 +335,7 @@ const FEATURE_DOCUMENTS = [
     metadata: { source: 'feature-summary', category: 'bookmark', title: '북마크 기능 요약' },
   },
   {
-    content: `🔧 쌤도구 (14가지+): 타이머(종료 예고 알림), 랜덤 뽑기, 신호등, 점수판, 룰렛, 주사위, 동전 던지기, QR코드 생성, 활동 기호, 투표, 설문/체크리스트, 워드클라우드, 자리 뽑기, 과제 수합.`,
+    content: `🔧 쌤도구 (14가지+): 타이머(종료 예고 알림), 랜덤 뽑기, 신호등, 점수판, 룰렛, 주사위, 동전 던지기, QR코드 생성, 활동 기호, 투표, 설문/체크리스트, 워드클라우드, 자리 뽑기(번호 역순 옵션), 과제 수합. 효과음 지원(설정에서 켜기/끄기).`,
     metadata: { source: 'feature-summary', category: 'tools', title: '쌤도구 기능 요약' },
   },
   {

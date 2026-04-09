@@ -7,7 +7,8 @@ export type ProtectedFeatureKey =
   | 'memo'
   | 'todo'
   | 'classManagement'
-  | 'bookmarks';
+  | 'bookmarks'
+  | 'observation';
 
 export interface ProtectedFeatures {
   readonly timetable: boolean;
@@ -19,6 +20,7 @@ export interface ProtectedFeatures {
   readonly todo: boolean;
   readonly classManagement: boolean;
   readonly bookmarks: boolean;
+  readonly observation: boolean;
 }
 
 export interface PinSettings {

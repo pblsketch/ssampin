@@ -1,8 +1,8 @@
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'earlyLeave' | 'classAbsence';
 
-export type AttendanceReason = '질병' | '인정' | '기타' | '생리통' | '미인정';
+export type AttendanceReason = '질병' | '인정' | '미인정' | '기타';
 
-export const ATTENDANCE_REASONS: readonly AttendanceReason[] = ['질병', '인정', '기타', '생리통', '미인정'] as const;
+export const ATTENDANCE_REASONS: readonly AttendanceReason[] = ['질병', '인정', '미인정', '기타'] as const;
 
 export interface StudentAttendance {
   readonly number: number;

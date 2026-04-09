@@ -94,6 +94,7 @@ const DEFAULT_SETTINGS: Settings = {
       todo: false,
       classManagement: false,
       bookmarks: false,
+      observation: false,
     },
     autoLockMinutes: 5,
   },

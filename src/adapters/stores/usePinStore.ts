@@ -98,6 +98,7 @@ export const usePinStore = create<PinState>((set, get) => ({
         todo: false,
         classManagement: false,
         bookmarks: false,
+        observation: false,
       },
       autoLockMinutes: 5,
     };
