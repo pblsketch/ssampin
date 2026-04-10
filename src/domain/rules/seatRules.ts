@@ -545,6 +545,32 @@ export function shuffleSeatsWithConstraints(
 }
 
 /**
+ * 격자 순서를 유지하며 모둠을 배정합니다 (랜덤 없음).
+ * allStudentIds는 격자 순서(row-major)로 전달됩니다.
+ */
+export function assignGroupsInOrder(
+  studentIds: string[],
+  groupCount: number,
+  maxSize: number,
+): SeatGroup[] {
+  const groups: SeatGroup[] = [];
+  let idx = 0;
+  for (let g = 0; g < groupCount; g++) {
+    const groupStudents = studentIds.slice(idx, idx + maxSize);
+    if (groupStudents.length === 0) break;
+    groups.push({
+      id: `grp-${Date.now()}-${g}`,
+      name: `${g + 1}모둠`,
+      color: GROUP_COLORS[g % GROUP_COLORS.length]!,
+      studentIds: groupStudents,
+      maxSize,
+    });
+    idx += maxSize;
+  }
+  return groups;
+}
+
+/**
  * 모둠 랜덤 배치: 학생들을 모둠에 균등 분배 (라운드로빈)
  */
 export function shuffleGroups(

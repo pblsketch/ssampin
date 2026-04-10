@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { SeatingLayout, SeatGroup } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
-import { countStudents, countEmptySeats, shuffleGroups } from '@domain/rules/seatRules';
+import { countStudents, countEmptySeats, shuffleGroups, assignGroupsInOrder } from '@domain/rules/seatRules';
 import type { ShuffleResult } from '@domain/rules/seatRules';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import { seatingRepository, seatConstraintsRepository } from '@adapters/di/container';
@@ -298,7 +298,7 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         const allStudentIds = seating.seats.flat().filter((id): id is string => id !== null);
         const maxSize = 6;
         const groupCount = Math.max(1, Math.ceil(allStudentIds.length / maxSize));
-        const groups = shuffleGroups(allStudentIds, groupCount, maxSize, [], Math.random);
+        const groups = assignGroupsInOrder(allStudentIds, groupCount, maxSize);
         const updated: SeatingData = { ...seating, layout, groups };
         try {
           await seatingRepository.saveSeating(updated);
