@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { neisPort } from '@adapters/di/container';
 import { NEIS_API_KEY } from '@domain/entities/Meal';
@@ -37,6 +38,7 @@ type PeriodOption = 'thisWeek' | 'lastWeek' | 'custom';
 export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, onEnableAutoSync }: NeisImportModalProps) {
   const { settings } = useSettingsStore();
   const { searchResults, searching, searchSchools, clearSearch } = useMealStore();
+  const showToast = useToastStore((s) => s.show);
 
   /* ── 학교 선택 ── */
   const [schoolQuery, setSchoolQuery] = useState('');
@@ -46,6 +48,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
   /* ── 학년/반 ── */
   const [classList, setClassList] = useState<readonly NeisClassInfo[]>([]);
   const [classListLoading, setClassListLoading] = useState(false);
+  const [classListError, setClassListError] = useState('');
 
   const [selectedGrade, setSelectedGrade] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
@@ -104,6 +107,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
 
     setClassListLoading(true);
     setSelectedClass('');
+    setClassListError('');
     void neisPort
       .getClassList({
         apiKey,
@@ -115,8 +119,13 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
       .then((list) => {
         setClassList(list);
       })
-      .catch(() => {
+      .catch((e) => {
         setClassList([]);
+        setClassListError(
+          e instanceof NeisApiError
+            ? getNeisErrorMessage(e.errorType)
+            : '반 목록을 불러올 수 없습니다. 학교 정보와 학교 구분(초/중/고)을 확인해주세요.'
+        );
       })
       .finally(() => {
         setClassListLoading(false);
@@ -153,7 +162,20 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
       });
 
       if (rows.length === 0) {
-        setErrorMsg('해당 기간의 시간표 데이터가 없습니다. 학기 중인지 확인해주세요.');
+        const hint = [
+          `학년도: ${academicYear}년 ${semester}학기`,
+          `학교 구분: ${neisLevel === 'els' ? '초등' : neisLevel === 'mis' ? '중학' : '고등'}`,
+          `기간: ${formatDateDisplay(dateRange.fromDate)} ~ ${formatDateDisplay(dateRange.toDate)}`,
+        ].join(' | ');
+
+        setErrorMsg(
+          `시간표 데이터가 없습니다.\n\n` +
+          `가능한 원인:\n` +
+          `• 해당 기간에 등록된 시간표가 없음 (개학 전 데이터)\n` +
+          `• 학교 구분(초/중/고)이 실제 학교와 다름\n` +
+          `• 학년/반 번호가 NEIS에 등록된 것과 다름\n\n` +
+          `조회 정보: ${hint}`
+        );
         setStep('error');
         return;
       }
@@ -230,6 +252,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
       setSelectedGrade('');
       setSelectedClass('');
       setClassList([]);
+      setClassListError('');
       setPeriodOption('thisWeek');
       setShowOverwriteConfirm(false);
       setAutoSyncOffered(false);
@@ -374,7 +397,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                   <label className="text-xs font-semibold text-sp-muted">학년</label>
                   <select
                     value={selectedGrade}
-                    onChange={(e) => setSelectedGrade(e.target.value)}
+                    onChange={(e) => { setSelectedGrade(e.target.value); setClassListError(''); }}
                     className="w-full px-3 py-2 rounded-xl bg-sp-surface border border-sp-border text-sm text-sp-text focus:border-sp-accent focus:outline-none"
                   >
                     <option value="">선택</option>
@@ -408,6 +431,11 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
               <p className="text-xs text-sp-muted">
                 선택한 반의 시간표를 불러옵니다.
               </p>
+              {classListError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">
+                  {classListError}
+                </div>
+              )}
             </div>
           )}
 
@@ -546,17 +574,43 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
 
           {/* 에러 */}
           {step === 'error' && (
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
               <div className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center">
                 <span className="material-symbols-outlined text-red-400 text-3xl">error</span>
               </div>
-              <p className="text-sm text-sp-text text-center px-4">{errorMsg}</p>
-              <button
-                onClick={() => void executeImport()}
-                className="mt-2 px-4 py-2 rounded-xl bg-sp-surface border border-sp-border text-sm font-medium text-sp-text hover:bg-sp-card transition-colors"
-              >
-                다시 시도
-              </button>
+              <p className="text-sm text-sp-text text-center px-4 whitespace-pre-line">{errorMsg}</p>
+
+              <div className="w-full p-3 bg-sp-surface rounded-xl border border-sp-border text-xs text-sp-muted space-y-1">
+                <p className="font-semibold text-sp-text mb-1">현재 설정 확인</p>
+                <p>학교: {settings.neis.schoolName || '미설정'}</p>
+                <p>학교 구분: {settings.schoolLevel === 'elementary' ? '초등학교' : settings.schoolLevel === 'middle' ? '중학교' : settings.schoolLevel === 'high' ? '고등학교' : '미설정'}</p>
+                <p>학년도: {academicYear}년 {semester}학기</p>
+              </div>
+
+              <div className="flex gap-2 mt-1">
+                <button
+                  onClick={() => void executeImport()}
+                  className="px-4 py-2 rounded-xl bg-sp-surface border border-sp-border text-sm font-medium text-sp-text hover:bg-sp-card transition-colors"
+                >
+                  다시 시도
+                </button>
+                <button
+                  onClick={() => {
+                    const ctx = [
+                      `[NEIS 연동 오류 신고]`,
+                      `학교: ${settings.neis.schoolName}`,
+                      `학교구분: ${settings.schoolLevel}`,
+                      `학년도: ${academicYear}년 ${semester}학기`,
+                      `에러: ${errorMsg}`,
+                    ].join('\n');
+                    void navigator.clipboard.writeText(ctx);
+                    showToast('오류 정보가 복사되었습니다. 피드백으로 보내주세요.', 'success');
+                  }}
+                  className="px-4 py-2 rounded-xl border border-red-500/30 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  오류 신고
+                </button>
+              </div>
             </div>
           )}
         </div>
