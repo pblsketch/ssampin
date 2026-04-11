@@ -29,6 +29,9 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-seat-picker', emoji: '🪑', name: '자리 뽑기', description: '내 손으로 뽑는 내 자리' },
   { id: 'tool-grouping', emoji: '👥', name: '모둠 편성기', description: '조건에 맞게 모둠을 편성' },
   { id: 'tool-assignment', emoji: '📋', name: '과제수합', description: '과제를 수합하고 제출 현황을 확인합니다' },
+  { id: 'tool-valueline', emoji: '📏', name: '가치수직선 토론', description: '입장을 수직선 위에 표현' },
+  { id: 'tool-traffic-discussion', emoji: '🚦', name: '신호등 토론', description: '찬성·보류·반대 의사 표현' },
+  { id: 'tool-chalkboard', emoji: '🖍️', name: '칠판', description: '분필로 판서하기' },
   { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진', externalUrl: 'https://supsori.com' },
   { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구', externalUrl: 'https://pblsketch.xyz' },
 ];

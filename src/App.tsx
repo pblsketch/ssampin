@@ -32,6 +32,8 @@ import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
 import { ToolGrouping } from '@adapters/components/Tools/ToolGrouping';
 import { AssignmentTool } from '@adapters/components/Tools/Assignment/AssignmentTool';
 import { AssignmentDetail } from '@adapters/components/Tools/Assignment/AssignmentDetail';
+import { ToolChalkboard } from '@adapters/components/Tools/ToolChalkboard';
+import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/Tools/Discussion';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer, useToastStore } from '@adapters/components/common/Toast';
@@ -157,6 +159,15 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   }
   if (page === 'tool-grouping') {
     return <ToolGrouping onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-valueline') {
+    return <ToolValueLine onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-traffic-discussion') {
+    return <ToolTrafficLightDiscussion onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
+  if (page === 'tool-chalkboard') {
+    return <ToolChalkboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
   }
   if (page === 'tool-assignment') {
     return (

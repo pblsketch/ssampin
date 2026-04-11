@@ -9,6 +9,7 @@ interface ToolLayoutProps {
   isFullscreen: boolean;
   children: React.ReactNode;
   shortcuts?: KeyboardShortcut[];
+  disableZoom?: boolean;
 }
 
 const ZOOM_MIN = 50;
@@ -25,7 +26,7 @@ function formatKeyLabel(key: string, modifiers?: { shift?: boolean; ctrl?: boole
   return parts.join('+');
 }
 
-export function ToolLayout({ title, emoji, onBack, isFullscreen, children, shortcuts }: ToolLayoutProps) {
+export function ToolLayout({ title, emoji, onBack, isFullscreen, children, shortcuts, disableZoom }: ToolLayoutProps) {
   const [zoom, setZoom] = useState(100);
   const [showHelp, setShowHelp] = useState(false);
   const shortcutsRef = useRef<KeyboardShortcut[]>([]);
@@ -139,31 +140,33 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
         </div>
         <div className="flex items-center gap-2">
           {/* Zoom controls */}
-          <div className="flex items-center gap-0.5 bg-sp-text/5 rounded-lg px-1 py-0.5">
-            <button
-              onClick={zoomOut}
-              disabled={zoom <= ZOOM_MIN}
-              className="p-1.5 rounded text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
-              title="축소"
-            >
-              <span className="material-symbols-outlined text-icon-md">remove</span>
-            </button>
-            <button
-              onClick={resetZoom}
-              className="px-2 py-1 text-xs font-medium text-sp-muted hover:text-sp-text transition-colors min-w-[3.5rem] text-center rounded hover:bg-sp-text/10"
-              title="기본 배율로 초기화"
-            >
-              {zoom}%
-            </button>
-            <button
-              onClick={zoomIn}
-              disabled={zoom >= ZOOM_MAX}
-              className="p-1.5 rounded text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
-              title="확대"
-            >
-              <span className="material-symbols-outlined text-icon-md">add</span>
-            </button>
-          </div>
+          {!disableZoom && (
+            <div className="flex items-center gap-0.5 bg-sp-text/5 rounded-lg px-1 py-0.5">
+              <button
+                onClick={zoomOut}
+                disabled={zoom <= ZOOM_MIN}
+                className="p-1.5 rounded text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
+                title="축소"
+              >
+                <span className="material-symbols-outlined text-icon-md">remove</span>
+              </button>
+              <button
+                onClick={resetZoom}
+                className="px-2 py-1 text-xs font-medium text-sp-muted hover:text-sp-text transition-colors min-w-[3.5rem] text-center rounded hover:bg-sp-text/10"
+                title="기본 배율로 초기화"
+              >
+                {zoom}%
+              </button>
+              <button
+                onClick={zoomIn}
+                disabled={zoom >= ZOOM_MAX}
+                className="p-1.5 rounded text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
+                title="확대"
+              >
+                <span className="material-symbols-outlined text-icon-md">add</span>
+              </button>
+            </div>
+          )}
 
           {/* Sound toggle */}
           <button
@@ -227,16 +230,22 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-auto">
-        <div
-          style={{
-            transform: `scale(${zoom / 100})`,
-            transformOrigin: 'top left',
-            width: `${10000 / zoom}%`,
-          }}
-          className="flex flex-col min-h-full"
-        >
-          {children}
-        </div>
+        {disableZoom ? (
+          <div className="flex flex-col min-h-full h-full">
+            {children}
+          </div>
+        ) : (
+          <div
+            style={{
+              transform: `scale(${zoom / 100})`,
+              transformOrigin: 'top left',
+              width: `${10000 / zoom}%`,
+            }}
+            className="flex flex-col min-h-full"
+          >
+            {children}
+          </div>
+        )}
       </div>
     </div>
   );

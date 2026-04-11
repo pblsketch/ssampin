@@ -33,6 +33,9 @@ export type PageId =
   | 'tool-assignment'
   | 'tool-assignment-detail'
   | 'tool-grouping'
+  | 'tool-chalkboard'
+  | 'tool-valueline'
+  | 'tool-traffic-discussion'
   | 'settings';
 
 import { useState, useMemo, useCallback } from 'react';
