@@ -9,6 +9,7 @@ import { registerLiveVoteHandlers } from './ipc/liveVote';
 import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
 import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
 import { registerLiveMultiSurveyHandlers } from './ipc/liveMultiSurvey';
+import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
 
 declare const __dirname: string;
 
@@ -1283,6 +1284,7 @@ if (!gotTheLock) {
     registerLiveSurveyHandlers(mainWindow!);
     registerLiveWordCloudHandlers(mainWindow!);
     registerLiveMultiSurveyHandlers(mainWindow!);
+    registerLiveDiscussionHandlers(mainWindow!);
     createTray();
     setupAutoUpdater();
 

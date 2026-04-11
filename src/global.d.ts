@@ -122,6 +122,27 @@ interface ElectronAPI {
   wordcloudTunnelAvailable: () => Promise<boolean>;
   wordcloudTunnelInstall: () => Promise<void>;
   wordcloudTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  // Live Discussion (Value Line / Traffic Light)
+  startDiscussion: (config: { toolType: string; topics: string[] }) => Promise<{ port: number; localIPs: string[] }>;
+  stopDiscussion: () => Promise<void>;
+  discussionNextRound: () => Promise<void>;
+  discussionGetState: () => Promise<{
+    toolType: string;
+    topics: string[];
+    currentRound: number;
+    students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
+    chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
+  } | null>;
+  onDiscussionConnectionCount: (callback: (count: number) => void) => () => void;
+  onDiscussionState: (callback: (state: {
+    students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
+    chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
+  }) => void) => () => void;
+  onDiscussionChat: (callback: (chat: { name: string; emoji: string; avatarColor: string; text: string; time: string }) => void) => () => void;
+  // Discussion Tunnel
+  discussionTunnelAvailable: () => Promise<boolean>;
+  discussionTunnelInstall: () => Promise<void>;
+  discussionTunnelStart: () => Promise<{ tunnelUrl: string }>;
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number) => Promise<void>;
   // Analytics

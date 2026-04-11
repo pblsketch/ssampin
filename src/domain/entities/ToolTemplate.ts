@@ -1,6 +1,6 @@
 import type { MultiSurveyQuestionType } from './MultiSurvey';
 
-export type ToolTemplateType = 'poll' | 'survey' | 'multi-survey' | 'wordcloud';
+export type ToolTemplateType = 'poll' | 'survey' | 'multi-survey' | 'wordcloud' | 'discussion';
 
 /** 각 도구별 문항 설계 데이터 */
 export type PollTemplateQuestion = {
@@ -46,11 +46,18 @@ export type WordCloudTemplateConfig = {
   readonly maxSubmissions: number;
 };
 
+export type DiscussionTemplateConfig = {
+  readonly type: 'discussion';
+  readonly toolType: 'valueline' | 'trafficlight';
+  readonly topics: readonly string[];
+};
+
 export type ToolTemplateConfig =
   | PollTemplateConfig
   | SurveyTemplateConfig
   | MultiSurveyTemplateConfig
-  | WordCloudTemplateConfig;
+  | WordCloudTemplateConfig
+  | DiscussionTemplateConfig;
 
 export interface ToolTemplate {
   readonly id: string;

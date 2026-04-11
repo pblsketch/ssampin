@@ -247,6 +247,49 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('live-wordcloud:tunnel-install'),
   wordcloudTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('live-wordcloud:tunnel-start'),
+  // Live Discussion (Value Line / Traffic Light)
+  startDiscussion: (config: { toolType: string; topics: string[] }): Promise<{ port: number; localIPs: string[] }> =>
+    ipcRenderer.invoke('discussion:start', config),
+  stopDiscussion: (): Promise<void> =>
+    ipcRenderer.invoke('discussion:stop'),
+  discussionNextRound: (): Promise<void> =>
+    ipcRenderer.invoke('discussion:next-round'),
+  discussionGetState: (): Promise<{
+    toolType: string;
+    topics: string[];
+    currentRound: number;
+    students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
+    chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
+  } | null> =>
+    ipcRenderer.invoke('discussion:get-state'),
+  onDiscussionConnectionCount: (callback: (count: number) => void): (() => void) => {
+    const handler = (_event: unknown, data: { count: number }) => callback(data.count);
+    ipcRenderer.on('discussion:connection-count', handler);
+    return () => { ipcRenderer.removeListener('discussion:connection-count', handler); };
+  },
+  onDiscussionState: (callback: (state: {
+    students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
+    chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, state: {
+      students: Array<{ id: string; name: string; emoji: string; avatarColor: string; connected: boolean; position: number; signal: string }>;
+      chats: Array<{ name: string; emoji: string; avatarColor: string; text: string; time: string }>;
+    }) => callback(state);
+    ipcRenderer.on('discussion:state', handler);
+    return () => { ipcRenderer.removeListener('discussion:state', handler); };
+  },
+  onDiscussionChat: (callback: (chat: { name: string; emoji: string; avatarColor: string; text: string; time: string }) => void): (() => void) => {
+    const handler = (_event: unknown, chat: { name: string; emoji: string; avatarColor: string; text: string; time: string }) => callback(chat);
+    ipcRenderer.on('discussion:chat', handler);
+    return () => { ipcRenderer.removeListener('discussion:chat', handler); };
+  },
+  // Discussion Tunnel
+  discussionTunnelAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('discussion:tunnel-available'),
+  discussionTunnelInstall: (): Promise<void> =>
+    ipcRenderer.invoke('discussion:tunnel-install'),
+  discussionTunnelStart: (): Promise<{ tunnelUrl: string }> =>
+    ipcRenderer.invoke('discussion:tunnel-start'),
   // Widget 리사이즈 (JS 기반, thickFrame: false 대응)
   resizeWidget: (edge: string, dx: number, dy: number): Promise<void> =>
     ipcRenderer.invoke('window:resizeWidget', edge, dx, dy),

@@ -31,6 +31,11 @@ function getSummary(result: ToolResult): string {
       return `${d.submissions.length}명 응답`;
     case 'wordcloud':
       return `${d.words.length}개 단어`;
+    case 'valueline-discussion':
+    case 'trafficlight-discussion':
+      return `${d.rounds.length}라운드`;
+    default:
+      return '';
   }
 }
 
