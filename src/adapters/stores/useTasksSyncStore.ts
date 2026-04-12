@@ -82,8 +82,9 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         return;
       }
 
-      // Tasks 스코프 있음 → Task List 선택 모달 표시
+      // Tasks 스코프 있음 → Task List 선택 모달 표시 + 즉시 로드
       set({ showTaskListPicker: true });
+      await get().fetchTaskLists();
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Tasks 동기화 활성화 중 오류가 발생했습니다.' });
     }
