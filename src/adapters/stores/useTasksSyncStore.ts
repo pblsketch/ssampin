@@ -51,6 +51,9 @@ async function persistState(state: PersistedState): Promise<void> {
   await storage.write<PersistedState>(STORAGE_KEY, state);
 }
 
+// syncNow 동시 실행 방지 뮤텍스
+let tasksSyncPromise: Promise<void> | null = null;
+
 export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
   isEnabled: false,
   taskListId: null,
@@ -154,118 +157,132 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
   },
 
   syncNow: async () => {
+    // 이미 진행 중인 동기화가 있으면 그 Promise를 기다림 (중복 실행 방지)
+    if (tasksSyncPromise) {
+      await tasksSyncPromise;
+      return;
+    }
+
     const state = get();
     if (!state.isEnabled || !state.taskListId) return;
 
     set({ isSyncing: true, error: null });
     const taskListId = state.taskListId;
 
-    try {
-      const { authenticateGoogle, googleTasksPort, todoRepository } = await import('@adapters/di/container');
-      const { useTodoStore } = await import('./useTodoStore');
+    tasksSyncPromise = (async () => {
+      try {
+        const { authenticateGoogle, googleTasksPort, todoRepository } = await import('@adapters/di/container');
+        const { useTodoStore } = await import('./useTodoStore');
 
-      const accessToken = await authenticateGoogle.getValidAccessToken();
+        const accessToken = await authenticateGoogle.getValidAccessToken();
 
-      // 삭제 대기 중인 원격 Task 처리 (tombstone)
-      const pending = get().pendingDeleteIds;
-      if (pending.length > 0) {
-        for (const id of pending) {
-          try {
-            await googleTasksPort.deleteTask(accessToken, taskListId, id);
-          } catch (err) {
-            // 이미 없거나 권한 문제 — 무시하고 계속 (tombstone은 클리어)
-            console.warn('[TasksSync] pending delete 실패 (무시):', id, err);
+        // 삭제 대기 중인 원격 Task 처리 (tombstone)
+        const pending = get().pendingDeleteIds;
+        if (pending.length > 0) {
+          for (const id of pending) {
+            try {
+              await googleTasksPort.deleteTask(accessToken, taskListId, id);
+            } catch (err) {
+              // 이미 없거나 권한 문제 — 무시하고 계속 (tombstone은 클리어)
+              console.warn('[TasksSync] pending delete 실패 (무시):', id, err);
+            }
           }
-        }
-        set({ pendingDeleteIds: [] });
-        // 영속화는 syncNow 마지막 persistState에서 자동 반영
-      }
-
-      // 로컬 todos 로드
-      const data = await todoRepository.getTodos();
-      const localTodos: readonly Todo[] = data?.todos ?? [];
-
-      // Google Tasks에서 최신 목록 조회
-      const remoteTasks = await googleTasksPort.listTasks(accessToken, taskListId);
-      const remoteMap = new Map(remoteTasks.filter((t) => !t.deleted).map((t) => [t.id, t]));
-
-      // 업데이트된 todos 배열 구성
-      const processedTodos: Todo[] = [];
-
-      for (const todo of localTodos) {
-        if (todo.archivedAt) {
-          processedTodos.push(todo);
-          continue;
+          set({ pendingDeleteIds: [] });
+          // 영속화는 syncNow 마지막 persistState에서 자동 반영
         }
 
-        if (!todo.googleTaskId) {
-          // 원격에 없는 todo → 생성
-          const created = await googleTasksPort.createTask(accessToken, taskListId, {
-            title: todo.text,
-            status: todo.completed ? 'completed' : 'needsAction',
-            ...(todo.dueDate ? { due: `${todo.dueDate}T00:00:00.000Z` } : {}),
-          });
-          processedTodos.push({ ...todo, googleTaskId: created.id, googleTaskListId: taskListId });
-        } else {
-          const remote = remoteMap.get(todo.googleTaskId);
-          if (!remote) {
-            // 원격에서 삭제된 경우 — 로컬 연동 해제 후 유지
-            const { googleTaskId: _removed, googleTaskListId: _removed2, ...rest } = todo;
-            void _removed;
-            void _removed2;
-            processedTodos.push(rest as Todo);
-          } else {
-            // 원격 업데이트 (로컬 기준)
-            await googleTasksPort.updateTask(accessToken, taskListId, todo.googleTaskId, {
+        // 로컬 todos 로드
+        const data = await todoRepository.getTodos();
+        const localTodos: readonly Todo[] = data?.todos ?? [];
+
+        // Google Tasks에서 최신 목록 조회
+        const remoteTasks = await googleTasksPort.listTasks(accessToken, taskListId);
+        const remoteMap = new Map(remoteTasks.filter((t) => !t.deleted).map((t) => [t.id, t]));
+
+        // 업데이트된 todos 배열 구성
+        const processedTodos: Todo[] = [];
+
+        for (const todo of localTodos) {
+          if (todo.archivedAt) {
+            processedTodos.push(todo);
+            continue;
+          }
+
+          if (!todo.googleTaskId) {
+            // 원격에 없는 todo → 생성
+            const created = await googleTasksPort.createTask(accessToken, taskListId, {
               title: todo.text,
               status: todo.completed ? 'completed' : 'needsAction',
               ...(todo.dueDate ? { due: `${todo.dueDate}T00:00:00.000Z` } : {}),
             });
-            processedTodos.push(todo);
-            remoteMap.delete(todo.googleTaskId);
+            processedTodos.push({ ...todo, googleTaskId: created.id, googleTaskListId: taskListId });
+          } else {
+            const remote = remoteMap.get(todo.googleTaskId);
+            if (!remote) {
+              // 원격에서 삭제된 경우 — 로컬 연동 해제 후 유지
+              const { googleTaskId: _removed, googleTaskListId: _removed2, ...rest } = todo;
+              void _removed;
+              void _removed2;
+              processedTodos.push(rest as Todo);
+            } else {
+              // 원격 업데이트 (로컬 기준)
+              await googleTasksPort.updateTask(accessToken, taskListId, todo.googleTaskId, {
+                title: todo.text,
+                status: todo.completed ? 'completed' : 'needsAction',
+                ...(todo.dueDate ? { due: `${todo.dueDate}T00:00:00.000Z` } : {}),
+              });
+              processedTodos.push(todo);
+              remoteMap.delete(todo.googleTaskId);
+            }
           }
         }
+
+        // 원격에만 있는 Task → 로컬에 신규 추가
+        const now = new Date().toISOString();
+        for (const remote of remoteMap.values()) {
+          const newTodo: Todo = {
+            id: generateUUID(),
+            text: remote.title,
+            completed: remote.status === 'completed',
+            createdAt: now,
+            googleTaskId: remote.id,
+            googleTaskListId: taskListId,
+            ...(remote.due ? { dueDate: remote.due.substring(0, 10) } : {}),
+            ...(remote.notes ? { notes: remote.notes } : {}),
+          };
+          processedTodos.push(newTodo);
+        }
+
+        // 저장
+        await todoRepository.saveTodos({ todos: processedTodos, categories: data?.categories });
+
+        const lastSyncedAt = new Date().toISOString();
+        set({ lastSyncedAt, isSyncing: false });
+
+        // 스토어 갱신
+        await useTodoStore.getState().refresh();
+
+        // 상태 영속
+        await persistState({
+          isEnabled: get().isEnabled,
+          taskListId: get().taskListId,
+          taskListName: get().taskListName,
+          lastSyncedAt,
+          pendingDeleteIds: get().pendingDeleteIds,
+        });
+      } catch (err) {
+        console.error('[TasksSync] syncNow 오류:', err);
+        set({
+          isSyncing: false,
+          error: err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.',
+        });
       }
+    })();
 
-      // 원격에만 있는 Task → 로컬에 신규 추가
-      const now = new Date().toISOString();
-      for (const remote of remoteMap.values()) {
-        const newTodo: Todo = {
-          id: generateUUID(),
-          text: remote.title,
-          completed: remote.status === 'completed',
-          createdAt: now,
-          googleTaskId: remote.id,
-          googleTaskListId: taskListId,
-          ...(remote.due ? { dueDate: remote.due.substring(0, 10) } : {}),
-          ...(remote.notes ? { notes: remote.notes } : {}),
-        };
-        processedTodos.push(newTodo);
-      }
-
-      // 저장
-      await todoRepository.saveTodos({ todos: processedTodos, categories: data?.categories });
-
-      const lastSyncedAt = new Date().toISOString();
-      set({ lastSyncedAt, isSyncing: false });
-
-      // 스토어 갱신
-      await useTodoStore.getState().refresh();
-
-      // 상태 영속
-      await persistState({
-        isEnabled: get().isEnabled,
-        taskListId: get().taskListId,
-        taskListName: get().taskListName,
-        lastSyncedAt,
-        pendingDeleteIds: get().pendingDeleteIds,
-      });
-    } catch (err) {
-      console.error('[TasksSync] syncNow 오류:', err);
-      set({
-        isSyncing: false,
-        error: err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.',
-      });
+    try {
+      await tasksSyncPromise;
+    } finally {
+      tasksSyncPromise = null;
     }
   },
 

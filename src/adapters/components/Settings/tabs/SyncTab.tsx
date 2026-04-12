@@ -310,6 +310,10 @@ export function SyncTab() {
                     </button>
                   </div>
 
+                  <p className="text-xs text-sp-muted/70 italic">
+                    자동 동기화 설정은 위 Google Drive 동기화 설정(시작 시/저장 시/주기)을 공유합니다
+                  </p>
+
                   {/* 지금 동기화 */}
                   <button
                     type="button"

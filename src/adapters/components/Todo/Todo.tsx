@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -180,6 +181,9 @@ export function Todo() {
     return !localStorage.getItem('ssampin:todo-edit-hint-dismissed');
   });
 
+  const tasksSyncing = useTasksSyncStore((s) => s.isSyncing);
+  const tasksEnabled = useTasksSyncStore((s) => s.isEnabled);
+
   const { classSchedule, teacherSchedule, load: loadSchedule } = useScheduleStore();
   const { events, load: loadEvents } = useEventsStore();
   const { settings, update: updateSettings } = useSettingsStore();
@@ -358,6 +362,12 @@ export function Todo() {
       <header className="h-20 shrink-0 px-8 flex items-center justify-between border-b border-sp-border bg-sp-bg">
         <h2 className="text-sp-text text-2xl font-bold flex items-center gap-3">
           <span className="text-3xl">✅</span> 할 일
+          {tasksEnabled && tasksSyncing && (
+            <span className="inline-flex items-center gap-1 text-xs text-sp-muted ml-2">
+              <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+              동기화 중
+            </span>
+          )}
         </h2>
 
         <div className="flex items-center gap-4">

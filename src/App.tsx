@@ -53,6 +53,7 @@ import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore'
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
+import { useTasksAutoSync } from '@adapters/hooks/useTasksAutoSync';
 import { useNeisAutoSync } from '@adapters/hooks/useNeisAutoSync';
 import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { DriveSyncConflictModal } from '@adapters/components/common/DriveSyncConflictModal';
@@ -346,6 +347,9 @@ export function App() {
 
   // 구글 캘린더 자동 동기화
   useAutoSync();
+
+  // Google Tasks 자동 동기화
+  useTasksAutoSync();
 
   // Google Drive 자동 동기화 (앱 시작 시)
   useEffect(() => {
