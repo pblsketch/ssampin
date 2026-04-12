@@ -53,6 +53,14 @@ export interface Todo {
   // === 프로 모드용 신규 필드 ===
   /** 프로 모드 진행 상태. optional이므로 기존 데이터와 100% 호환. */
   readonly status?: TodoStatus;
+
+  // === Google Tasks 연동 필드 ===
+  /** Google Tasks API에서 부여한 Task ID */
+  readonly googleTaskId?: string;
+  /** 이 할일이 속한 Google Task List ID */
+  readonly googleTaskListId?: string;
+  /** Google Tasks의 notes (상세 메모) */
+  readonly notes?: string;
 }
 
 export interface TodosData {

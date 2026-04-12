@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "1.9.7",
+      "date": "2026-04-12",
+      "highlights": ["Google Tasks 양방향 동기화"],
+      "changes": [
+        {
+          "type": "new",
+          "title": "Google Tasks 연동",
+          "description": "쌤핀 할 일을 Google Tasks와 양방향으로 동기화할 수 있습니다. 설정 > 구글 드라이브 동기화 탭에서 활성화하세요. 로컬에서 삭제한 할 일은 다음 동기화 때 Google Tasks에서도 자동으로 제거됩니다."
+        },
+        {
+          "type": "improve",
+          "title": "OAuth 권한 흐름 개선",
+          "description": "추가 권한(예: Tasks) 요청 시 기존 캘린더 연결을 유지한 채 증분 인증으로 처리합니다. 실제로 허용된 스코프를 정확히 저장·검증하도록 수정했습니다."
+        },
+        {
+          "type": "new",
+          "title": "할 일 Google 연동 표시",
+          "description": "Google Tasks와 연동된 할 일 옆에 작은 클라우드 아이콘을 표시하여 동기화 상태를 한눈에 확인할 수 있습니다."
+        }
+      ]
+    },
+    {
       "version": "1.9.6",
       "date": "2026-04-12",
       "highlights": ["칠판 도구", "가치수직선·신호등 토론", "NEIS 연동 개선"],

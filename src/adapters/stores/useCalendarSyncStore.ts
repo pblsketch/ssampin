@@ -47,9 +47,9 @@ interface CalendarSyncState {
 
   // 액션
   initialize: () => Promise<void>;
-  startAuth: (forceAccountSelect?: boolean) => Promise<void>;
+  startAuth: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   completeAuth: (code: string, redirectUri: string) => Promise<void>;
-  startPKCEFallback: (forceAccountSelect?: boolean) => Promise<void>;
+  startPKCEFallback: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   completePKCEAuth: (code: string) => Promise<void>;
   disconnect: () => Promise<void>;
   setError: (error: string | null) => void;
@@ -118,7 +118,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     }
   },
 
-  startAuth: async (forceAccountSelect?: boolean) => {
+  startAuth: async (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => {
     set({ isLoading: true, error: null, showFallbackSuggestion: false, fallbackSuggestionData: null });
     try {
       const api = window.electronAPI;
@@ -130,7 +130,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       // 첫 연결이면 계정 선택 화면 표시
       const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
       // placeholder redirect_uri로 URL 생성 (IPC 핸들러에서 실제 포트로 교체)
-      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount);
+      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
 
       // redirect_uri를 IPC에서 받아오기 위한 Promise
       const redirectUriPromise = new Promise<string>((resolve) => {
@@ -211,7 +211,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     }
   },
 
-  startPKCEFallback: async (forceAccountSelect?: boolean) => {
+  startPKCEFallback: async (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => {
     set({ isLoading: true, error: null, oauthError: null });
     try {
       const api = window.electronAPI;
@@ -221,7 +221,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
 
       const { authenticateGoogle } = await import('@adapters/di/container');
       const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
-      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount);
+      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
 
       // PKCE 시작: 브라우저에서 인증 URL 열기
       await api.startPKCEAuth(authUrl);

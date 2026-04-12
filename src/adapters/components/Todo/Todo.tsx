@@ -535,6 +535,9 @@ export function Todo() {
                             className="w-3.5 h-3.5 rounded border-sp-border text-sp-accent focus:ring-sp-accent shrink-0"
                           />
                           <span className="truncate">{todo.text}</span>
+                          {todo.googleTaskId && (
+                            <span className="material-symbols-outlined text-xs text-sp-muted/50 shrink-0" title="Google Tasks 연동됨">cloud_done</span>
+                          )}
                           {todo.dueDate && (
                             <span className="shrink-0 text-sp-muted text-[10px]">
                               {todo.dueDate.slice(5).replace('-', '/')}
@@ -1961,6 +1964,11 @@ function TodoItem({
         >
           {todo.text}
         </span>
+
+        {/* Google Tasks 연동 아이콘 */}
+        {todo.googleTaskId && (
+          <span className="material-symbols-outlined text-xs text-sp-muted/50 shrink-0" title="Google Tasks 연동됨">cloud_done</span>
+        )}
 
         {/* Subtask progress */}
         {subTaskTotal > 0 && (

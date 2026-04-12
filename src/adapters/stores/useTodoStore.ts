@@ -109,10 +109,25 @@ export const useTodoStore = create<TodoState>((set, get) => {
     },
 
     deleteTodo: async (id) => {
+      const target = get().todos.find((t) => t.id === id);
+
       await manageTodos.delete(id);
       set((state) => ({
         todos: state.todos.filter((todo) => todo.id !== id),
       }));
+
+      // Google Tasks 연동된 할 일이면 원격 삭제 예약
+      if (target?.googleTaskId) {
+        try {
+          const { useTasksSyncStore } = await import('./useTasksSyncStore');
+          const tasksState = useTasksSyncStore.getState();
+          if (tasksState.isEnabled && tasksState.taskListId) {
+            await tasksState.markForRemoteDelete(target.googleTaskId);
+          }
+        } catch (err) {
+          console.error('[Todo] markForRemoteDelete 실패:', err);
+        }
+      }
     },
 
     updateTodo: async (id, changes) => {

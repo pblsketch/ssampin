@@ -16,12 +16,14 @@ interface TokenResponse {
   access_token: string;
   refresh_token: string;
   expires_in: number;
+  scope?: string;
 }
 
 /** 토큰 갱신 API 응답 (refresh_token 없음) */
 interface RefreshTokenResponse {
   access_token: string;
   expires_in: number;
+  scope?: string;
 }
 
 /** Google userinfo API 응답 */
@@ -35,6 +37,8 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
     'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/userinfo.email',
   ] as const;
+
+  static readonly TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
   private readonly clientId: string;
   private readonly clientSecret: string;
@@ -50,15 +54,24 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
    * @param redirectUri 리다이렉트 URI (로컬 서버 콜백)
    * @param codeChallenge PKCE code challenge (S256)
    */
-  getAuthUrl(redirectUri: string, codeChallenge?: string, forceAccountSelect?: boolean): string {
+  getAuthUrl(redirectUri: string, codeChallenge?: string, forceAccountSelect?: boolean, additionalScopes?: readonly string[]): string {
+    const allScopes = additionalScopes
+      ? [...GoogleOAuthClient.SCOPES, ...additionalScopes]
+      : GoogleOAuthClient.SCOPES;
+
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
-      scope: GoogleOAuthClient.SCOPES.join(' '),
+      scope: allScopes.join(' '),
       access_type: 'offline',
       prompt: forceAccountSelect ? 'select_account consent' : 'consent',
     });
+
+    // incremental authorization 지원
+    if (additionalScopes?.length) {
+      params.set('include_granted_scopes', 'true');
+    }
 
     if (codeChallenge) {
       params.set('code_challenge', codeChallenge);
@@ -112,7 +125,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
       refreshToken: data.refresh_token,
       expiresAt: Date.now() + data.expires_in * 1000,
       email,
-      grantedScopes: [...GoogleOAuthClient.SCOPES],
+      grantedScopes: data.scope ? data.scope.split(' ') : [...GoogleOAuthClient.SCOPES],
     };
   }
 
@@ -151,7 +164,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
       refreshToken, // refresh token은 변경되지 않음
       expiresAt: Date.now() + data.expires_in * 1000,
       email,
-      grantedScopes: [...GoogleOAuthClient.SCOPES],
+      grantedScopes: data.scope ? data.scope.split(' ') : [...GoogleOAuthClient.SCOPES],
     };
   }
 

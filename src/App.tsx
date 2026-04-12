@@ -44,6 +44,7 @@ import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
+import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
@@ -337,9 +338,10 @@ export function App() {
     return () => window.removeEventListener('ssampin:navigate', handler);
   }, []);
 
-  // 구글 캘린더 연결 상태 초기화
+  // 구글 캘린더 및 Tasks 연결 상태 초기화
   useEffect(() => {
     useCalendarSyncStore.getState().initialize();
+    void useTasksSyncStore.getState().initialize();
   }, []);
 
   // 구글 캘린더 자동 동기화

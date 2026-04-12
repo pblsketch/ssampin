@@ -24,6 +24,7 @@ import type { IDDayRepository } from '@domain/repositories/IDDayRepository';
 import type { IAnalyticsPort } from '@domain/ports/IAnalyticsPort';
 import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepository';
 import type { IGoogleDrivePort } from '@domain/ports/IGoogleDrivePort';
+import type { IGoogleTasksPort } from '@domain/ports/IGoogleTasksPort';
 import type { IAssignmentServicePort } from '@domain/ports/IAssignmentServicePort';
 import type { IConsultationRepository } from '@domain/repositories/IConsultationRepository';
 import type { ISurveyRepository } from '@domain/repositories/ISurveyRepository';
@@ -43,6 +44,7 @@ import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
 import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarApiClient';
 import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnalyticsAdapter';
 import { GoogleDriveClient } from '@infrastructure/google/GoogleDriveClient';
+import { GoogleTasksApiClient } from '@infrastructure/google/GoogleTasksApiClient';
 import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
 import { ShortLinkClient } from '@infrastructure/supabase/ShortLinkClient';
 
@@ -190,6 +192,16 @@ export const syncFromGoogle = new SyncFromGoogle(
   googleCalendarPort,
   calendarSyncRepo,
   eventsRepository,
+  () => authenticateGoogle.getValidAccessToken(),
+);
+
+// === Google Tasks 관련 ===
+
+const googleTasksApiClient = new GoogleTasksApiClient();
+export const googleTasksPort: IGoogleTasksPort = googleTasksApiClient;
+
+// 401 재시도를 위한 토큰 갱신 콜백 등록
+googleTasksApiClient.setTokenRefreshCallback(
   () => authenticateGoogle.getValidAccessToken(),
 );
 

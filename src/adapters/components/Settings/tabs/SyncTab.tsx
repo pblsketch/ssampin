@@ -5,6 +5,8 @@ import { SyncResultSummary } from '@adapters/components/common/SyncResultSummary
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
+import { TasksScopeRequestModal } from '../modals/TasksScopeRequestModal';
 import type { SyncSettings } from '@domain/entities/Settings';
 
 const INTERVAL_OPTIONS = [0, 5, 10, 15, 30] as const;
@@ -26,6 +28,25 @@ export function SyncTab() {
   }, [setOAuthError]);
   const { status, syncToCloud, syncFromCloud, deleteCloudData, lastSyncResult } = useDriveSyncStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const tasksSync = useTasksSyncStore();
+  const {
+    isEnabled: tasksEnabled,
+    taskListName,
+    taskLists,
+    isSyncing: tasksSyncing,
+    lastSyncedAt: tasksLastSyncedAt,
+    error: tasksError,
+    showScopeRequestModal,
+    showTaskListPicker,
+    enableSync,
+    disableSync,
+    setShowScopeRequestModal,
+    setShowTaskListPicker,
+    fetchTaskLists,
+    selectTaskList,
+    syncNow: tasksSyncNow,
+  } = tasksSync;
 
   const sync: SyncSettings = settings.sync ?? {
     enabled: false,
@@ -253,6 +274,76 @@ export function SyncTab() {
             </div>
           </SettingsSection>
 
+          {/* Google Tasks 동기화 */}
+          <SettingsSection
+            icon="checklist"
+            iconColor="bg-green-500/10 text-green-400"
+            title="Google Tasks 연동"
+            description="할 일을 Google Tasks와 동기화합니다"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-sp-text">Google Tasks 동기화 사용</p>
+                  <p className="text-xs text-sp-muted mt-0.5">쌤핀 할 일과 Google Tasks를 양방향 동기화합니다</p>
+                </div>
+                <Toggle
+                  checked={tasksEnabled}
+                  onChange={(v) => { if (v) { void enableSync(); } else { void disableSync(); } }}
+                />
+              </div>
+
+              {tasksEnabled && (
+                <>
+                  {/* Task List 선택 */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-sp-text">동기화 목록</p>
+                      <p className="text-xs text-sp-muted mt-0.5">{taskListName ?? '목록을 선택해 주세요'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { void fetchTaskLists().then(() => setShowTaskListPicker(true)); }}
+                      className="text-xs text-sp-muted hover:text-sp-accent font-medium px-3 py-1.5 rounded-lg border border-sp-border hover:border-sp-accent/50 transition-colors"
+                    >
+                      변경
+                    </button>
+                  </div>
+
+                  {/* 지금 동기화 */}
+                  <button
+                    type="button"
+                    onClick={() => void tasksSyncNow()}
+                    disabled={tasksSyncing}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-sp-surface hover:bg-sp-text/5 text-sp-text font-medium text-sm border border-sp-border transition-all disabled:opacity-50"
+                  >
+                    <span className={`material-symbols-outlined text-icon-md ${tasksSyncing ? 'animate-spin' : ''}`}>
+                      {tasksSyncing ? 'progress_activity' : 'sync'}
+                    </span>
+                    {tasksSyncing ? '동기화 중...' : '지금 동기화'}
+                  </button>
+
+                  {/* 마지막 동기화 시간 */}
+                  {tasksLastSyncedAt && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-sp-muted">마지막 동기화</span>
+                      <span className="text-sp-text font-medium">
+                        {new Date(tasksLastSyncedAt).toLocaleString('ko-KR')}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* 에러 표시 */}
+                  {tasksError && (
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-400">
+                      {tasksError}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </SettingsSection>
+
           {/* 위험 영역 */}
           <SettingsSection
             icon="warning"
@@ -351,6 +442,56 @@ export function SyncTab() {
                 </button>
               )}
               <button onClick={() => setOAuthError(null)} className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-muted transition-colors hover:bg-sp-surface">닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Google Tasks 스코프 요청 모달 */}
+      {showScopeRequestModal && (
+        <TasksScopeRequestModal
+          onConfirm={async () => {
+            setShowScopeRequestModal(false);
+            await startAuth(true, ['https://www.googleapis.com/auth/tasks']);
+          }}
+          onCancel={() => setShowScopeRequestModal(false)}
+        />
+      )}
+
+      {/* Task List 선택 모달 */}
+      {showTaskListPicker && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setShowTaskListPicker(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-green-500/10">
+                <span className="material-symbols-outlined text-green-400">checklist</span>
+              </div>
+              <h3 className="text-lg font-bold text-sp-text">동기화할 목록 선택</h3>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {taskLists.length === 0 ? (
+                <p className="text-sm text-sp-muted text-center py-4">목록을 불러오는 중...</p>
+              ) : (
+                taskLists.map((list) => (
+                  <button
+                    key={list.id}
+                    type="button"
+                    onClick={() => void selectTaskList(list.id, list.title)}
+                    className="w-full text-left px-4 py-3 rounded-lg border border-sp-border hover:border-sp-accent/50 hover:bg-sp-accent/5 text-sm text-sp-text transition-colors"
+                  >
+                    {list.title}
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                type="button"
+                onClick={() => setShowTaskListPicker(false)}
+                className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
+              >
+                취소
+              </button>
             </div>
           </div>
         </div>
