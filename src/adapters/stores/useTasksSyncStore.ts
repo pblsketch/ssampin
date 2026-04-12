@@ -250,7 +250,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
       set({ lastSyncedAt, isSyncing: false });
 
       // 스토어 갱신
-      await useTodoStore.getState().load();
+      await useTodoStore.getState().refresh();
 
       // 상태 영속
       await persistState({

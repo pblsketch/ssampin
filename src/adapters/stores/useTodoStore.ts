@@ -11,6 +11,8 @@ interface TodoState {
   loaded: boolean;
 
   load: () => Promise<void>;
+  /** 강제 재로딩 — 동기화 후 UI 갱신용 */
+  refresh: () => Promise<void>;
   addTodo: (
     text: string,
     dueDate?: string,
@@ -65,6 +67,24 @@ export const useTodoStore = create<TodoState>((set, get) => {
         set({ todos: migrated, categories, loaded: true });
       } catch {
         set({ loaded: true });
+      }
+    },
+
+    refresh: async () => {
+      try {
+        const data = await manageTodos.getData();
+        // 기존 데이터 마이그레이션: priority 없으면 'none'
+        const migrated = (data.todos ?? []).map((todo) => ({
+          ...todo,
+          priority: todo.priority ?? 'none' as TodoPriority,
+        }));
+        const categories = (data.categories ?? [...DEFAULT_TODO_CATEGORIES]).map((cat) => ({
+          ...cat,
+          icon: cat.icon || '📌',
+        }));
+        set({ todos: migrated, categories });
+      } catch (err) {
+        console.error('[Todo] refresh 오류:', err);
       }
     },
 
