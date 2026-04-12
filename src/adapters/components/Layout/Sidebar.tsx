@@ -286,7 +286,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           <span className="text-xs font-medium">건의사항 보내기</span>
         </button>
 
-        <p className="text-caption text-sp-muted text-center mt-2">v1.9.5</p>
+        <p className="text-caption text-sp-muted text-center mt-2">v1.9.6</p>
       </div>
     </aside>
   );
