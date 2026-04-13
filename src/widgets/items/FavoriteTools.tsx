@@ -8,13 +8,22 @@ export function FavoriteTools() {
   const update = useSettingsStore((s) => s.update);
   const [showPicker, setShowPicker] = useState(false);
 
-  const handleToolClick = (toolId: string) => {
+  const handleToolClick = (tool: ToolDefinition) => {
+    // 외부 URL 도구는 브라우저로 열기
+    if (tool.externalUrl) {
+      if (window.electronAPI?.openExternal) {
+        void window.electronAPI.openExternal(tool.externalUrl);
+      } else {
+        window.open(tool.externalUrl, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
     // 위젯 모드(별도 BrowserWindow)에서는 IPC로 메인 윈도우 네비게이션
     if (window.electronAPI?.navigateToPage) {
-      void window.electronAPI.navigateToPage(toolId);
+      void window.electronAPI.navigateToPage(tool.id);
     } else {
       // 브라우저 개발 모드 폴백
-      window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: toolId }));
+      window.dispatchEvent(new CustomEvent('ssampin:navigate', { detail: tool.id }));
     }
   };
 
@@ -44,7 +53,7 @@ export function FavoriteTools() {
           {tools.map((tool) => (
             <button
               key={tool.id}
-              onClick={() => handleToolClick(tool.id)}
+              onClick={() => handleToolClick(tool)}
               className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl ${tool.color} hover:scale-105 active:scale-95 transition-all`}
             >
               <span className="text-xl">{tool.icon}</span>
