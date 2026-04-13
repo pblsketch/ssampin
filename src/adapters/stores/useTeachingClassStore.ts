@@ -4,7 +4,7 @@ import { studentKey } from '@domain/entities/TeachingClass';
 import type { StudentStatus } from '@domain/entities/Student';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
-import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
+import type { AttendanceRecord, AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
 import { teachingClassRepository } from '@adapters/di/container';
 import { ManageTeachingClasses } from '@usecases/classManagement/ManageTeachingClasses';
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
@@ -45,6 +45,12 @@ interface TeachingClassState {
   deleteProgressEntry: (id: string) => Promise<void>;
   getAttendanceRecord: (classId: string, date: string, period: number) => AttendanceRecord | undefined;
   saveAttendanceRecord: (record: AttendanceRecord) => Promise<void>;
+  getDayAttendance: (classId: string, date: string) => readonly AttendanceRecord[];
+  saveDayAttendance: (
+    classId: string,
+    date: string,
+    recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>,
+  ) => Promise<void>;
   // 좌석배치 액션
   initClassSeating: (classId: string, mode: 'sequential' | 'random') => Promise<void>;
   randomizeClassSeating: (classId: string) => Promise<void>;
@@ -398,6 +404,23 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         await manageAttendance.add(record);
         set((state) => ({ attendanceRecords: [...state.attendanceRecords, record] }));
       }
+    },
+
+    getDayAttendance: (classId, date) => {
+      return get().attendanceRecords.filter(
+        (r) => r.classId === classId && r.date === date,
+      );
+    },
+
+    saveDayAttendance: async (classId, date, recordsByPeriod) => {
+      if (get().loadFailed) {
+        console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
+        return;
+      }
+      await manageAttendance.saveDayBatch(classId, date, recordsByPeriod);
+      // 저장 후 스토어 상태 동기화
+      const all = await manageAttendance.getAll();
+      set({ attendanceRecords: [...all] });
     },
   };
 });

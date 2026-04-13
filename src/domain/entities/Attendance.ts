@@ -4,6 +4,15 @@ export type AttendanceReason = '질병' | '인정' | '미인정' | '기타';
 
 export const ATTENDANCE_REASONS: readonly AttendanceReason[] = ['질병', '인정', '미인정', '기타'] as const;
 
+/** 출결 상태 순환 순서 (present → absent → late → earlyLeave → classAbsence → present) */
+export const ATTENDANCE_STATUS_ORDER: readonly AttendanceStatus[] = [
+  'present',
+  'absent',
+  'late',
+  'earlyLeave',
+  'classAbsence',
+] as const;
+
 export interface StudentAttendance {
   readonly number: number;
   readonly status: AttendanceStatus;

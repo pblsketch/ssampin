@@ -1,11 +1,13 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
-import type { AttendanceStatus, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
+import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { exportAttendanceToExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { getDayOfWeek } from '@domain/rules/periodRules';
+import { AttendanceMatrixView } from './AttendanceMatrixView';
+import { AttendanceDetailEditor } from './shared/AttendanceDetailEditor';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -40,6 +42,8 @@ const STAT_COLORS: Record<AttendanceStatus, string> = {
 
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
+type ViewMode = 'single' | 'matrix';
+
 /* ──────────────────────── 컴포넌트 ──────────────────────── */
 
 interface AttendanceTabProps {
@@ -48,6 +52,17 @@ interface AttendanceTabProps {
 
 export function AttendanceTab({ classId }: AttendanceTabProps) {
   const { classes, getAttendanceRecord, saveAttendanceRecord } = useTeachingClassStore();
+
+  /* ── 뷰 모드 토글 (localStorage 유지) ── */
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const stored = localStorage.getItem('ssampin:attendance-view-mode');
+    return stored === 'matrix' ? 'matrix' : 'single';
+  });
+
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem('ssampin:attendance-view-mode', mode);
+  }, []);
 
   const [date, setDate] = useState(todayString);
   const [period, setPeriod] = useState(1);
@@ -97,7 +112,6 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     const baseSchedule = teacherSchedule[dayOfWeekVal] ?? [];
     const dayOverrides = scheduleOverrides.filter((o) => o.date === date);
 
-    // Apply overrides to get effective schedule
     const periods = [...baseSchedule];
     for (const override of dayOverrides) {
       const idx = override.period - 1;
@@ -113,7 +127,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     const matching = new Set<number>();
     periods.forEach((slot, idx) => {
       if (slot && slot.classroom === cls.name && slot.subject === cls.subject) {
-        matching.add(idx + 1); // convert 0-based index to 1-based period
+        matching.add(idx + 1);
       }
     });
     return matching;
@@ -124,15 +138,19 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     (d: string, p: number) => {
       const existing = getAttendanceRecord(classId, d, p);
       if (existing) {
-        // 기존 기록이 있으면 로드, 새 학생이 추가됐을 수 있으므로 병합
-        const map = new Map(existing.students.map((s) => [studentKey(s), s.status]));
+        const map = new Map(existing.students.map((s) => [studentKey(s), s]));
         setLocalStudents(
-          students.map((s) => ({
-            number: s.number,
-            grade: s.grade,
-            classNum: s.classNum,
-            status: map.get(studentKey(s)) ?? 'present',
-          })),
+          students.map((s) => {
+            const saved = map.get(studentKey(s));
+            return {
+              number: s.number,
+              grade: s.grade,
+              classNum: s.classNum,
+              status: saved?.status ?? 'present',
+              reason: saved?.reason,
+              memo: saved?.memo,
+            };
+          }),
         );
         setHasExistingRecord(true);
       } else {
@@ -153,7 +171,6 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     [classId, students, getAttendanceRecord],
   );
 
-  // 초기 로드 및 날짜/교시 변경 감지
   useMemo(() => {
     if (students.length > 0) {
       loadRecord(date, period);
@@ -179,15 +196,31 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
   const toggleStatus = useCallback((key: string) => {
     setLocalStudents((prev) =>
-      prev.map((s) =>
-        studentKey(s) === key
-          ? { ...s, status: STATUS_CYCLE[s.status] }
-          : s,
-      ),
+      prev.map((s) => {
+        if (studentKey(s) !== key) return s;
+        const next = STATUS_CYCLE[s.status];
+        // present로 돌아오면 reason/memo clear
+        return next === 'present'
+          ? { ...s, status: next, reason: undefined, memo: undefined }
+          : { ...s, status: next };
+      }),
     );
     setHasModified(true);
     setSaveStatus('idle');
   }, []);
+
+  const handleDetailChange = useCallback(
+    (key: string, next: { reason?: AttendanceReason; memo?: string }) => {
+      setLocalStudents((prev) =>
+        prev.map((s) =>
+          studentKey(s) === key ? { ...s, reason: next.reason, memo: next.memo } : s,
+        ),
+      );
+      setHasModified(true);
+      setSaveStatus('idle');
+    },
+    [],
+  );
 
   const handleSave = useCallback(async () => {
     setSaveStatus('saving');
@@ -195,7 +228,14 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
       classId,
       date,
       period,
-      students: localStudents,
+      students: localStudents.map((s) => ({
+        number: s.number,
+        status: s.status,
+        ...(s.grade != null ? { grade: s.grade } : {}),
+        ...(s.classNum != null ? { classNum: s.classNum } : {}),
+        ...(s.reason ? { reason: s.reason } : {}),
+        ...(s.memo ? { memo: s.memo } : {}),
+      })),
     };
     await saveAttendanceRecord(record);
     setSaveStatus('saved');
@@ -280,193 +320,249 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── 상단 컨트롤: 날짜 + 교시 ── */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-sp-muted">날짜</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => handleDateChange(e.target.value)}
-            className="px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
-                       text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-          />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <label className="text-xs text-sp-muted">교시</label>
-          <div className="flex gap-1">
-            {PERIODS.map((p) => {
-              const isMatching = matchingPeriods.has(p);
-              return (
-                <button
-                  key={p}
-                  onClick={() => handlePeriodChange(p)}
-                  title={isMatching ? `${cls?.subject} 수업` : undefined}
-                  className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-all
-                    ${period === p
-                      ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40 shadow-md shadow-sp-accent/20'
-                      : isMatching
-                        ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
-                        : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-                    }`}
-                >
-                  {p}
-                  {isMatching && period !== p && (
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sp-accent" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ── 수정 안내 바 (이전 기록 불러왔을 때 + 첫 방문 시) ── */}
-      {hasExistingRecord && initialized && !dismissedGuide && (
-        <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
-                        rounded-xl px-4 py-2.5 text-sm text-sp-accent">
-          <span className="material-symbols-outlined text-base">edit_note</span>
-          <span>이전 기록을 불러왔습니다. 학생을 클릭하면 출결 상태를 수정할 수 있습니다.</span>
-          <button
-            onClick={() => {
-              setDismissedGuide(true);
-              localStorage.setItem('ssampin:attendance-guide-dismissed', 'true');
-            }}
-            className="ml-auto text-sp-muted hover:text-sp-text transition-colors"
-            title="닫기"
-          >
-            <span className="material-symbols-outlined text-sm">close</span>
-          </button>
-        </div>
-      )}
-
-      {/* ── 상태 순환 범례 ── */}
-      {hasExistingRecord && initialized && !dismissedGuide && (
-        <div className="flex items-center gap-3 text-xs text-sp-muted px-1">
-          <span className="text-sp-muted/70">상태 변경 순서:</span>
-          <span className="flex items-center gap-1 text-green-400">
-            <span className="material-symbols-outlined text-sm">check_circle</span>출석
-          </span>
-          <span className="text-sp-muted/50">→</span>
-          <span className="flex items-center gap-1 text-red-400">
-            <span className="material-symbols-outlined text-sm">cancel</span>결석
-          </span>
-          <span className="text-sp-muted/50">→</span>
-          <span className="flex items-center gap-1 text-amber-400">
-            <span className="material-symbols-outlined text-sm">schedule</span>지각
-          </span>
-          <span className="text-sp-muted/50">→</span>
-          <span className="text-sp-muted/70">(반복)</span>
-        </div>
-      )}
-
-      {/* ── 통계 바 ── */}
-      <div className="flex items-center gap-4 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5">
-        {(Object.keys(STATUS_CONFIG) as AttendanceStatus[]).map((status) => (
-          <div key={status} className="flex items-center gap-1.5">
-            <span className={`material-symbols-outlined text-base ${STAT_COLORS[status]}`}>
-              {STATUS_CONFIG[status].icon}
-            </span>
-            <span className="text-xs text-sp-muted">
-              {STATUS_CONFIG[status].label}:
-            </span>
-            <span className={`text-sm font-medium ${STAT_COLORS[status]}`}>
-              {stats[status]}명
-            </span>
-          </div>
-        ))}
+      {/* ── 뷰 모드 토글 ── */}
+      <div className="flex items-center gap-2">
         <button
-          onClick={() => void handleExport()}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text
-                     bg-sp-card border border-sp-border rounded-lg transition-colors hover:border-sp-accent/50"
-          title="출결 기록을 엑셀로 내보내기"
+          onClick={() => handleViewModeChange('single')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+            viewMode === 'single'
+              ? 'bg-sp-accent text-white'
+              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text'
+          }`}
         >
-          <span className="material-symbols-outlined text-sm">download</span>
-          내보내기
+          <span className="material-symbols-outlined text-base">format_list_bulleted</span>
+          단일 교시
         </button>
-        <div className="flex-1" />
-        <span className="text-xs text-sp-muted">
-          전체 {localStudents.length}명
-        </span>
+        <button
+          onClick={() => handleViewModeChange('matrix')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+            viewMode === 'matrix'
+              ? 'bg-sp-accent text-white'
+              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text'
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">grid_on</span>
+          전체 교시
+        </button>
       </div>
 
-      {/* ── 학생 목록 ── */}
-      {initialized && (
-        <div className="bg-sp-surface border border-sp-border rounded-xl overflow-hidden">
-          {/* 헤더 */}
-          <div className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} px-4 py-2 border-b border-sp-border
-                          text-xs text-sp-muted font-medium`}>
-            {hasGradeInfo && <span>소속</span>}
-            <span>번호</span>
-            <span>이름</span>
-            <span className="text-center">출석상태</span>
-          </div>
+      {/* ── 매트릭스 모드 ── */}
+      {viewMode === 'matrix' && (
+        <AttendanceMatrixView
+          classId={classId}
+          date={date}
+          onDateChange={handleDateChange}
+        />
+      )}
 
-          {/* 학생 행 */}
-          <div className="divide-y divide-sp-border/50">
-            {sortedStudents.map((student) => {
-              const attendance = localStudents.find((s) => studentKey(s) === studentKey(student));
-              const status = attendance?.status ?? 'present';
-              const config = STATUS_CONFIG[status];
-
-              return (
-                <div
-                  key={studentKey(student)}
-                  className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} items-center px-4 py-2.5
-                             hover:bg-sp-card/50 transition-colors`}
-                >
-                  {hasGradeInfo && (
-                    <span className="text-xs text-sp-muted">
-                      {student.grade != null && student.classNum != null ? `${student.grade}-${student.classNum}` : ''}
-                    </span>
-                  )}
-                  <span className="text-sm text-sp-muted font-medium">
-                    {student.number}
-                  </span>
-                  <span className="text-sm text-sp-text">
-                    {student.name}
-                  </span>
-                  <div className="flex justify-center">
+      {/* ── 단일 교시 모드 ── */}
+      {viewMode === 'single' && (
+        <>
+          {/* 상단 컨트롤: 날짜 + 교시 */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-sp-muted">날짜</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
+                           text-sp-text text-sm focus:outline-none focus:border-sp-accent"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-sp-muted">교시</label>
+              <div className="flex gap-1">
+                {PERIODS.map((p) => {
+                  const isMatching = matchingPeriods.has(p);
+                  return (
                     <button
-                      onClick={() => toggleStatus(studentKey(student))}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs
-                                 font-medium cursor-pointer transition-colors ${config.badge}
-                                 hover:opacity-80`}
-                      title={`클릭하여 출결 상태 변경 (${config.label} → ${STATUS_CONFIG[STATUS_CYCLE[status]].label})`}
+                      key={p}
+                      onClick={() => handlePeriodChange(p)}
+                      title={isMatching ? `${cls?.subject} 수업` : undefined}
+                      className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-all
+                        ${period === p
+                          ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40 shadow-md shadow-sp-accent/20'
+                          : isMatching
+                            ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
+                            : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                        }`}
                     >
-                      <span className="material-symbols-outlined text-sm">
-                        {config.icon}
-                      </span>
-                      {config.label}
+                      {p}
+                      {isMatching && period !== p && (
+                        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sp-accent" />
+                      )}
                     </button>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* ── 저장 버튼 ── */}
-      <div className="flex justify-end">
-        <button
-          onClick={() => void handleSave()}
-          disabled={saveStatus === 'saving'}
-          className={`flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-medium
-                     transition-all duration-200 ${
-            saveStatus === 'saved'
-              ? 'bg-green-500/20 text-green-400'
-              : 'bg-sp-accent text-white hover:bg-sp-accent/80'
-          } ${
-            hasModified && saveStatus === 'idle' ? 'animate-pulse ring-2 ring-sp-accent/50' : ''
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          <span className="material-symbols-outlined text-lg">
-            {saveStatus === 'saved' ? 'check' : saveStatus === 'saving' ? 'hourglass_empty' : 'save'}
-          </span>
-          {saveStatus === 'saved' ? '저장됨!' : saveStatus === 'saving' ? '저장 중...' : '출석 저장'}
-        </button>
-      </div>
+          {/* 수정 안내 바 */}
+          {hasExistingRecord && initialized && !dismissedGuide && (
+            <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
+                            rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+              <span className="material-symbols-outlined text-base">edit_note</span>
+              <span>이전 기록을 불러왔습니다. 학생을 클릭하면 출결 상태를 수정할 수 있습니다.</span>
+              <button
+                onClick={() => {
+                  setDismissedGuide(true);
+                  localStorage.setItem('ssampin:attendance-guide-dismissed', 'true');
+                }}
+                className="ml-auto text-sp-muted hover:text-sp-text transition-colors"
+                title="닫기"
+              >
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+          )}
+
+          {/* 상태 순환 범례 */}
+          {hasExistingRecord && initialized && !dismissedGuide && (
+            <div className="flex items-center gap-3 text-xs text-sp-muted px-1">
+              <span className="text-sp-muted/70">상태 변경 순서:</span>
+              <span className="flex items-center gap-1 text-green-400">
+                <span className="material-symbols-outlined text-sm">check_circle</span>출석
+              </span>
+              <span className="text-sp-muted/50">→</span>
+              <span className="flex items-center gap-1 text-red-400">
+                <span className="material-symbols-outlined text-sm">cancel</span>결석
+              </span>
+              <span className="text-sp-muted/50">→</span>
+              <span className="flex items-center gap-1 text-amber-400">
+                <span className="material-symbols-outlined text-sm">schedule</span>지각
+              </span>
+              <span className="text-sp-muted/50">→</span>
+              <span className="text-sp-muted/70">(반복)</span>
+            </div>
+          )}
+
+          {/* 통계 바 */}
+          <div className="flex items-center gap-4 bg-sp-surface border border-sp-border rounded-xl px-4 py-2.5">
+            {(Object.keys(STATUS_CONFIG) as AttendanceStatus[]).map((status) => (
+              <div key={status} className="flex items-center gap-1.5">
+                <span className={`material-symbols-outlined text-base ${STAT_COLORS[status]}`}>
+                  {STATUS_CONFIG[status].icon}
+                </span>
+                <span className="text-xs text-sp-muted">
+                  {STATUS_CONFIG[status].label}:
+                </span>
+                <span className={`text-sm font-medium ${STAT_COLORS[status]}`}>
+                  {stats[status]}명
+                </span>
+              </div>
+            ))}
+            <button
+              onClick={() => void handleExport()}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs text-sp-muted hover:text-sp-text
+                         bg-sp-card border border-sp-border rounded-lg transition-colors hover:border-sp-accent/50"
+              title="출결 기록을 엑셀로 내보내기"
+            >
+              <span className="material-symbols-outlined text-sm">download</span>
+              내보내기
+            </button>
+            <div className="flex-1" />
+            <span className="text-xs text-sp-muted">
+              전체 {localStudents.length}명
+            </span>
+          </div>
+
+          {/* 학생 목록 */}
+          {initialized && (
+            <div className="bg-sp-surface border border-sp-border rounded-xl overflow-hidden">
+              {/* 헤더 */}
+              <div className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} px-4 py-2 border-b border-sp-border
+                              text-xs text-sp-muted font-medium`}>
+                {hasGradeInfo && <span>소속</span>}
+                <span>번호</span>
+                <span>이름</span>
+                <span className="text-center">출석상태</span>
+              </div>
+
+              {/* 학생 행 */}
+              <div className="divide-y divide-sp-border/50">
+                {sortedStudents.map((student) => {
+                  const sKey = studentKey(student);
+                  const attendance = localStudents.find((s) => studentKey(s) === sKey);
+                  const status = attendance?.status ?? 'present';
+                  const config = STATUS_CONFIG[status];
+                  const showDetail = status !== 'present';
+
+                  return (
+                    <div
+                      key={sKey}
+                      className={`px-4 py-2.5 hover:bg-sp-card/50 transition-colors`}
+                    >
+                      <div className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} items-center`}>
+                        {hasGradeInfo && (
+                          <span className="text-xs text-sp-muted">
+                            {student.grade != null && student.classNum != null ? `${student.grade}-${student.classNum}` : ''}
+                          </span>
+                        )}
+                        <span className="text-sm text-sp-muted font-medium">
+                          {student.number}
+                        </span>
+                        <span className="text-sm text-sp-text">
+                          {student.name}
+                        </span>
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() => toggleStatus(sKey)}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs
+                                       font-medium cursor-pointer transition-colors ${config.badge}
+                                       hover:opacity-80`}
+                            title={`클릭하여 출결 상태 변경 (${config.label} → ${STATUS_CONFIG[STATUS_CYCLE[status]].label})`}
+                          >
+                            <span className="material-symbols-outlined text-sm">
+                              {config.icon}
+                            </span>
+                            {config.label}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* reason/memo 인라인 편집 (비출석 상태일 때만) */}
+                      {showDetail && (
+                        <div className="mt-1 pl-0">
+                          <AttendanceDetailEditor
+                            status={status}
+                            reason={attendance?.reason}
+                            memo={attendance?.memo}
+                            onChange={(next) => handleDetailChange(sKey, next)}
+                            compact={true}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 저장 버튼 */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => void handleSave()}
+              disabled={saveStatus === 'saving'}
+              className={`flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-medium
+                         transition-all duration-200 ${
+                saveStatus === 'saved'
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-sp-accent text-white hover:bg-sp-accent/80'
+              } ${
+                hasModified && saveStatus === 'idle' ? 'animate-pulse ring-2 ring-sp-accent/50' : ''
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <span className="material-symbols-outlined text-lg">
+                {saveStatus === 'saved' ? 'check' : saveStatus === 'saving' ? 'hourglass_empty' : 'save'}
+              </span>
+              {saveStatus === 'saved' ? '저장됨!' : saveStatus === 'saving' ? '저장 중...' : '출석 저장'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

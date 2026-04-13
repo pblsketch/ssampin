@@ -8,9 +8,10 @@ import { ClassSeatingTab } from './ClassSeatingTab';
 import { ProgressTab } from './ProgressTab';
 import { ClassSurveyTab } from './ClassSurveyTab';
 import { ClassAssignmentTab } from './ClassAssignmentTab';
+import { AttendanceTab } from './AttendanceTab';
 
 
-type TabId = 'roster' | 'record' | 'seating' | 'progress' | 'survey' | 'assignment';
+type TabId = 'roster' | 'record' | 'attendance' | 'seating' | 'progress' | 'survey' | 'assignment';
 
 interface TabConfig {
   id: TabId;
@@ -21,6 +22,7 @@ interface TabConfig {
 const TABS: readonly TabConfig[] = [
   { id: 'roster', label: '명렬 관리', icon: 'people' },
   { id: 'record', label: '수업 기록', icon: 'edit_note' },
+  { id: 'attendance', label: '출석부', icon: 'fact_check' },
   { id: 'seating', label: '좌석배치', icon: 'grid_view' },
   { id: 'progress', label: '진도 관리', icon: 'trending_up' },
   { id: 'survey', label: '설문/체크', icon: 'checklist' },
@@ -90,6 +92,7 @@ export function ClassManagementPage() {
                 {activeTab === 'record' && (
                     <ClassRecordTab classId={selectedClassId} />
                 )}
+                {activeTab === 'attendance' && <AttendanceTab classId={selectedClassId} />}
                 {activeTab === 'seating' && <ClassSeatingTab classId={selectedClassId} />}
                 {activeTab === 'progress' && <ProgressTab classId={selectedClassId} />}
                 {activeTab === 'survey' && <ClassSurveyTab classId={selectedClassId} />}

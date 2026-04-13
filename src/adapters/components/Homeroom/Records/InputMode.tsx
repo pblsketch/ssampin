@@ -1,12 +1,16 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
+import type { StudentAttendance, AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
 import type { CounselingMethod } from '@domain/entities/StudentRecord';
 import type { RecordPrefill } from '../HomeroomPage';
 import { DEFAULT_TEMPLATES } from '@domain/valueObjects/DefaultTemplates';
 import { InlineRecordEditor } from './InlineRecordEditor';
 import { StudentRecordReferencePanel } from './StudentRecordReferencePanel';
+import { PeriodChipGroup, type AccentColor } from './PeriodChipGroup';
 import {
   type ModeProps,
   formatDateKR,
@@ -19,15 +23,38 @@ import {
 
 export interface InputModeProps extends ModeProps {
   selectedDate: string;
+  onDateChange?: (date: string) => void;
   prefill?: RecordPrefill | null;
   onPrefillConsumed?: () => void;
 }
 
 type RightTab = 'today' | 'history';
 
+const LAST_PERIODS_KEY = 'ssampin:homeroom-last-periods';
+
+const STATUS_FROM_TYPE: Record<string, AttendanceStatus> = {
+  '결석': 'absent',
+  '지각': 'late',
+  '조퇴': 'earlyLeave',
+  '결과': 'classAbsence',
+};
+
+const ACCENT_FROM_TYPE: Record<string, AccentColor> = {
+  '결석': 'red',
+  '지각': 'amber',
+  '조퇴': 'orange',
+  '결과': 'purple',
+};
+
 function InputMode({ students, records, categories, selectedDate, prefill, onPrefillConsumed }: InputModeProps) {
   const { addRecord, deleteRecord, updateRecord } = useStudentRecordsStore();
+  const { getDayAttendance, saveDayAttendance } = useTeachingClassStore();
+  const bridgeHomeroomDayAttendance = useStudentRecordsStore((s) => s.bridgeHomeroomDayAttendance);
+  const className = useSettingsStore((s) => s.settings.className);
+  const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
+  const periodCount = maxPeriods ?? 7;
   const showToast = useToastStore((s) => s.show);
+
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [editingCategory, setEditingCategory] = useState('');
@@ -40,6 +67,17 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     subcategory: string;
   } | null>(null);
   const [attendanceType, setAttendanceType] = useState<string | null>(null);
+  const [selectedPeriods, setSelectedPeriods] = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem(LAST_PERIODS_KEY);
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw) as unknown;
+      if (Array.isArray(arr)) {
+        return new Set(arr.filter((n): n is number => typeof n === 'number'));
+      }
+    } catch { /* noop */ }
+    return new Set();
+  });
   const [memo, setMemo] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<CounselingMethod | undefined>(undefined);
   const [showFollowUp, setShowFollowUp] = useState(false);
@@ -210,10 +248,67 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     setMemo(tpl.contentTemplate);
   }, []);
 
-  // 단일 날짜 저장 (기존 로직)
+  // 단일 날짜 저장 (기존 로직 + 출결 교시 fan-out)
   const saveForDate = useCallback(async (date: string) => {
     if (selectedStudents.size === 0 || selectedSub === null) return 0;
 
+    // ── 출결 카테고리: 교시별 fan-out 저장 ──
+    if (selectedSub.categoryId === 'attendance' && attendanceType) {
+      if (!className) {
+        showToast('설정에서 담임반을 먼저 입력해주세요', 'info');
+        return 0;
+      }
+      const periods = selectedPeriods.size > 0
+        ? Array.from(selectedPeriods)
+        : Array.from({ length: periodCount }, (_, i) => i + 1);
+
+      // "결석 (질병)" → "질병"
+      const match = selectedSub.subcategory.match(/\(([^)]+)\)\s*$/);
+      const reason = (match?.[1] ?? '기타') as AttendanceReason;
+      const status = STATUS_FROM_TYPE[attendanceType] ?? 'absent';
+      const memoText = memo.trim() || undefined;
+
+      const existing = getDayAttendance(className, date);
+      const recordsByPeriod = new Map<number, StudentAttendance[]>();
+      for (const r of existing) {
+        recordsByPeriod.set(r.period, [...r.students]);
+      }
+
+      let affected = 0;
+      for (const period of periods) {
+        const arr = recordsByPeriod.get(period) ?? [];
+        for (const studentId of selectedStudents) {
+          const student = students.find((s) => s.id === studentId);
+          if (!student?.studentNumber) continue;
+          const next: StudentAttendance = {
+            number: student.studentNumber,
+            status,
+            reason: status !== 'present' ? reason : undefined,
+            memo: status !== 'present' ? memoText : undefined,
+          };
+          const idx = arr.findIndex((sa) => sa.number === student.studentNumber);
+          if (idx >= 0) arr[idx] = next;
+          else arr.push(next);
+        }
+        recordsByPeriod.set(period, arr);
+      }
+
+      await saveDayAttendance(className, date, recordsByPeriod);
+      await bridgeHomeroomDayAttendance({ className, date, recordsByPeriod, students });
+
+      try {
+        localStorage.setItem(LAST_PERIODS_KEY, JSON.stringify(periods));
+      } catch { /* noop */ }
+
+      // 영향받은 학생 수
+      affected = Array.from(selectedStudents).filter((id) => {
+        const s = students.find((st) => st.id === id);
+        return !!s?.studentNumber;
+      }).length;
+      return affected;
+    }
+
+    // ── 기존 경로 (상담/생활/기타) ──
     const method = selectedSub.categoryId === 'counseling' ? selectedMethod : undefined;
     const fu = followUp.trim() || undefined;
     const fuDate = followUpDate || undefined;
@@ -250,7 +345,12 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     );
     await Promise.all(promises);
     return newStudents.length;
-  }, [selectedStudents, selectedSub, memo, records, selectedMethod, followUp, followUpDate, reportedToNeis, documentSubmitted, addRecord]);
+  }, [
+    selectedStudents, selectedSub, attendanceType, selectedPeriods, periodCount,
+    className, students, getDayAttendance, saveDayAttendance, bridgeHomeroomDayAttendance,
+    memo, records, selectedMethod, followUp, followUpDate, reportedToNeis, documentSubmitted,
+    addRecord, showToast,
+  ]);
 
   const resetForm = useCallback(() => {
     setSelectedStudents(new Set());
@@ -309,6 +409,67 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     }
   }, [dateRangeMode, rangeDates.length, handleSave]);
 
+  /* ── 키보드 단축키 (A/L/E/X 유형, Q/W/R/T 사유, 1~7 교시, 0/Space 전체, Enter 저장, Esc 리셋) ── */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = document.activeElement as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      const key = e.key.toLowerCase();
+
+      // 출결 유형 토글
+      if (key === 'a') { handleAttendanceTypeClick('결석'); e.preventDefault(); return; }
+      if (key === 'l') { handleAttendanceTypeClick('지각'); e.preventDefault(); return; }
+      if (key === 'e') { handleAttendanceTypeClick('조퇴'); e.preventDefault(); return; }
+      if (key === 'x') { handleAttendanceTypeClick('결과'); e.preventDefault(); return; }
+
+      // 출결 유형 선택된 상태에서만 교시/사유 단축키
+      if (attendanceType) {
+        if (key === 'q') { handleAttendanceReasonClick('질병'); e.preventDefault(); return; }
+        if (key === 'w') { handleAttendanceReasonClick('인정'); e.preventDefault(); return; }
+        if (key === 'r') { handleAttendanceReasonClick('미인정'); e.preventDefault(); return; }
+        if (key === 't') { handleAttendanceReasonClick('기타'); e.preventDefault(); return; }
+
+        if (/^[1-7]$/.test(key)) {
+          const p = parseInt(key, 10);
+          if (p <= periodCount) {
+            setSelectedPeriods((prev) => {
+              const next = new Set(prev);
+              if (next.has(p)) next.delete(p); else next.add(p);
+              return next;
+            });
+            e.preventDefault();
+            return;
+          }
+        }
+        if (key === '0' || e.key === ' ') {
+          setSelectedPeriods((prev) => {
+            if (prev.size === periodCount) return new Set();
+            return new Set(Array.from({ length: periodCount }, (_, i) => i + 1));
+          });
+          e.preventDefault();
+          return;
+        }
+      }
+
+      if (e.key === 'Enter' && selectedSub && selectedStudents.size > 0) {
+        handleSaveClick();
+        e.preventDefault();
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        setAttendanceType(null);
+        setSelectedSub(null);
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [attendanceType, selectedSub, selectedStudents, handleAttendanceTypeClick, handleAttendanceReasonClick, handleSaveClick, periodCount]);
+
   const dateRecords = useMemo(() => {
     return records.filter((r) => r.date === selectedDate);
   }, [records, selectedDate]);
@@ -328,7 +489,8 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   }, [selectedStudents, students]);
 
   return (
-    <div ref={containerRef} className="flex-1 flex min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 gap-3">
+      <div ref={containerRef} className="flex-1 flex min-h-0">
       {/* ── 좌측: 학생 선택 ── */}
       <div className="flex flex-col rounded-xl bg-sp-card p-5 min-w-0" style={{ width: `${leftPct}%` }}>
         <div className="flex items-center justify-between mb-4">
@@ -529,6 +691,14 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                       })}
                     </div>
                     {attendanceType && (
+                      <PeriodChipGroup
+                        periodCount={periodCount}
+                        selected={selectedPeriods}
+                        onChange={setSelectedPeriods}
+                        accent={ACCENT_FROM_TYPE[attendanceType] ?? 'red'}
+                      />
+                    )}
+                    {attendanceType && (
                       <div className="ml-2 pl-3 border-l-2 border-red-500/30">
                         <p className="text-detail text-sp-muted mb-1">사유</p>
                         <div className="flex flex-wrap gap-1.5">
@@ -549,6 +719,9 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                             );
                           })}
                         </div>
+                        <p className="mt-2 text-[10px] text-sp-muted leading-relaxed">
+                          단축키: A 결석 · L 지각 · E 조퇴 · X 결과 · 1~7 교시 · 0 전체 · Q 질병 · ↵ 저장
+                        </p>
                       </div>
                     )}
                   </div>
@@ -1055,6 +1228,8 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
           </div>
         </div>
       )}
+        </div>
+      {/* 메모 확대 모달 (fixed 포지션) */}
     </div>
   );
 }

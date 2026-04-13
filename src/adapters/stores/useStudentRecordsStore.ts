@@ -5,6 +5,9 @@ import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import { studentRecordsRepository } from '@adapters/di/container';
 import { ManageStudentRecords } from '@usecases/studentRecords/ManageStudentRecords';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import type { StudentAttendance, AttendanceStatus } from '@domain/entities/Attendance';
+import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
+import type { Student } from '@domain/entities/Student';
 
 /** 카테고리 색상 → Tailwind 클래스 매핑 */
 export const RECORD_COLOR_MAP: Record<
@@ -67,6 +70,20 @@ export const RECORD_COLOR_MAP: Record<
   },
 };
 
+const ATTENDANCE_STATUS_LABEL: Record<Exclude<AttendanceStatus, 'present'>, string> = {
+  absent: '결석',
+  late: '지각',
+  earlyLeave: '조퇴',
+  classAbsence: '결과',
+};
+
+export interface BridgeHomeroomDayParams {
+  className: string;
+  date: string;
+  recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
+  students: readonly Student[];
+}
+
 type ViewMode = 'input' | 'progress' | 'search';
 type PeriodFilter = 'week' | 'month' | 'all' | 'custom';
 
@@ -109,6 +126,7 @@ interface StudentRecordsState {
     oldName: string,
     newName: string,
   ) => Promise<void>;
+  bridgeHomeroomDayAttendance: (params: BridgeHomeroomDayParams) => Promise<void>;
 }
 
 export const useStudentRecordsStore = create<StudentRecordsState>(
@@ -290,6 +308,52 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
             c.id === categoryId ? updated : c,
           ),
         }));
+      },
+
+      bridgeHomeroomDayAttendance: async ({ date, recordsByPeriod, students }) => {
+        for (const student of students) {
+          if (student.studentNumber == null) continue;
+
+          // 교시별 StudentAttendance 맵 재구성 (studentNumber 매칭)
+          const periodMap = new Map<number, StudentAttendance | undefined>();
+          for (const [period, periodStudents] of recordsByPeriod) {
+            const hit = periodStudents.find((sa) => sa.number === student.studentNumber);
+            periodMap.set(period, hit);
+          }
+
+          const rep = pickRepresentativeAttendance(periodMap);
+          const bridgeId = `att-${student.id}-${date}`;
+          const existing = get().records.find((r) => r.id === bridgeId);
+
+          if (rep == null) {
+            // 대표 없음(전부 present) → 기존 bridge 삭제
+            if (existing) {
+              await manageRecords.delete(bridgeId);
+              set((s) => ({ records: s.records.filter((r) => r.id !== bridgeId) }));
+            }
+            continue;
+          }
+
+          const typeLabel = ATTENDANCE_STATUS_LABEL[rep.status as Exclude<AttendanceStatus, 'present'>];
+          const subcategory = rep.reason ? `${typeLabel} (${rep.reason})` : typeLabel;
+          const record: StudentRecord = {
+            id: bridgeId,
+            studentId: student.id,
+            category: 'attendance',
+            subcategory,
+            content: rep.memo ?? '',
+            date,
+            createdAt: existing?.createdAt ?? new Date().toISOString(),
+          };
+
+          if (existing) {
+            await manageRecords.update(record);
+            set((s) => ({ records: s.records.map((r) => (r.id === bridgeId ? record : r)) }));
+          } else {
+            await manageRecords.add(record);
+            set((s) => ({ records: [...s.records, record] }));
+          }
+        }
       },
     };
   },
