@@ -52,7 +52,11 @@ export function TimetablePage() {
   } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
   useAnalytics();
-  const [tab, setTab] = useState<TabType>('teacher');
+  const [tab, setTabState] = useState<TabType>(
+    settings.timetableDefaultView
+      ?? (settings.schoolLevel === 'elementary' ? 'class' : 'teacher'),
+  );
+  const tabInitializedRef = useRef(false);
   const [isEditing, setIsEditing] = useState(false);
   const [now, setNow] = useState(new Date());
 
@@ -60,6 +64,18 @@ export function TimetablePage() {
     void loadSchedule();
     void loadSettings();
   }, [loadSchedule, loadSettings]);
+
+  // Settings 비동기 로드 완료 후 초기 탭을 한 번만 동기화
+  useEffect(() => {
+    if (tabInitializedRef.current) return;
+    if (settings.timetableDefaultView || settings.schoolLevel) {
+      setTabState(
+        settings.timetableDefaultView
+          ?? (settings.schoolLevel === 'elementary' ? 'class' : 'teacher'),
+      );
+      tabInitializedRef.current = true;
+    }
+  }, [settings.timetableDefaultView, settings.schoolLevel]);
 
   // 색상 모드: schoolLevel 기반 기본값
   const colorBy = settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
@@ -231,6 +247,16 @@ export function TimetablePage() {
   const updateSettings = useSettingsStore((s) => s.update);
   const updateClassSchedule = useScheduleStore((s) => s.updateClassSchedule);
 
+  // 시간표 탭 전환 — 상태 반영 + 다음 진입 시 기억되도록 Settings에 저장
+  const handleTabChange = useCallback(
+    (next: TabType) => {
+      setTabState(next);
+      tabInitializedRef.current = true;
+      void updateSettings({ timetableDefaultView: next });
+    },
+    [updateSettings],
+  );
+
   // 보기 모드 색상 변경 핸들러
   const handleViewColorChange = useCallback(
     (key: string, colorId: SubjectColorId) => {
@@ -348,7 +374,8 @@ export function TimetablePage() {
       }
       setPreviewSchedule(parsed);
       setShowExcelPreview(true);
-    } catch {
+    } catch (err) {
+      console.error('[TimetablePage] 엑셀 파싱 실패:', err);
       showToast('엑셀 파일을 읽을 수 없습니다. 양식을 확인해주세요.', 'error');
     }
     e.target.value = '';
@@ -488,8 +515,8 @@ export function TimetablePage() {
           )}
           {/* 탭 토글 */}
           <div className="flex rounded-xl bg-sp-surface p-1 border border-sp-border">
-            <TabButton active={tab === 'teacher'} onClick={() => setTab('teacher')} label="교사 시간표" />
-            <TabButton active={tab === 'class'} onClick={() => setTab('class')} label="학급 시간표" />
+            <TabButton active={tab === 'teacher'} onClick={() => handleTabChange('teacher')} label="교사 시간표" />
+            <TabButton active={tab === 'class'} onClick={() => handleTabChange('class')} label="학급 시간표" />
           </div>
           {/* 직접 편집 버튼 */}
           <button
