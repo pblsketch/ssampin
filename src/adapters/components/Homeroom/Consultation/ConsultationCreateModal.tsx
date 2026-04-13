@@ -128,6 +128,17 @@ function computeBreakPresets(
   return presets;
 }
 
+/** 학생 상담: 날짜+프리셋 키 생성 */
+function presetKey(date: string, presetId: string): string {
+  return `${date}|${presetId}`;
+}
+
+/** 학생 상담: 키 파싱 */
+function parsePresetKey(key: string): { date: string; presetId: string } {
+  const idx = key.indexOf('|');
+  return { date: key.slice(0, idx), presetId: key.slice(idx + 1) };
+}
+
 /** 시작시간부터 slotMinutes 간격으로 endTime까지 슬롯 시작시간 목록 생성 */
 function buildSlotChips(startTime: string, endTime: string, slotMinutes: number): string[] {
   const start = parseTimeToMinutes(startTime);
@@ -197,8 +208,9 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   const [linkCodeError, setLinkCodeError] = useState<string | null>(null);
   const [isCheckingCode, setIsCheckingCode] = useState(false);
 
-  // 학생 상담용: 날짜 + 프리셋 체크박스
-  const [studentDate, setStudentDate] = useState('');
+  // 학생 상담용: 여러 날짜 + 날짜별 프리셋 체크박스
+  // selectedPresets 키 형식: `${date}|${presetId}`
+  const [studentDates, setStudentDates] = useState<string[]>([]);
   const [selectedPresets, setSelectedPresets] = useState<Set<string>>(new Set());
 
   // 학부모 상담용: 수업 시간 제외
@@ -269,24 +281,25 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     });
   }, []);
 
-  // slotMinutes 변경 시 불가 프리셋 해제 + 남은 프리셋 칩 재생성
+  // slotMinutes 변경 시 불가 프리셋 해제 + 남은 프리셋 칩 재생성 (모든 학생 상담 날짜에 대해)
   useEffect(() => {
     if (type !== 'student') return;
     const toRemove = new Set<string>();
     const newEntries: DateEntry[] = [];
 
-    for (const presetId of selectedPresets) {
+    for (const key of selectedPresets) {
+      const { date, presetId } = parsePresetKey(key);
       const preset = breakPresets.find((p) => p.id === presetId);
       if (!preset) continue;
       const chips = buildSlotChips(preset.startTime, preset.endTime, slotMinutes);
       if (chips.length === 0) {
-        toRemove.add(presetId);
+        toRemove.add(key);
         continue;
       }
       // 모든 칩을 선택 상태로 재생성
       for (const chip of chips) {
         newEntries.push({
-          date: studentDate,
+          date,
           startTime: chip,
           endTime: minutesToTime(parseTimeToMinutes(chip) + slotMinutes),
           presetId,
@@ -297,7 +310,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     if (toRemove.size > 0) {
       setSelectedPresets((prev) => {
         const next = new Set(prev);
-        for (const id of toRemove) next.delete(id);
+        for (const k of toRemove) next.delete(k);
         return next;
       });
     }
@@ -310,19 +323,20 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slotMinutes, type, breakPresets]);
 
-  // 프리셋 토글 → 개별 칩 DateEntry 일괄 추가/제거
-  const togglePreset = useCallback((preset: BreakPreset, disabled: boolean) => {
-    if (disabled) return;
+  // 프리셋 토글 → 개별 칩 DateEntry 일괄 추가/제거 (특정 날짜 기준)
+  const togglePreset = useCallback((date: string, preset: BreakPreset, disabled: boolean) => {
+    if (disabled || !date) return;
+    const key = presetKey(date, preset.id);
     setSelectedPresets((prev) => {
       const next = new Set(prev);
-      if (next.has(preset.id)) {
-        next.delete(preset.id);
-        setDates((d) => d.filter((entry) => entry.presetId !== preset.id));
+      if (next.has(key)) {
+        next.delete(key);
+        setDates((d) => d.filter((entry) => !(entry.presetId === preset.id && entry.date === date)));
       } else {
-        next.add(preset.id);
+        next.add(key);
         const chips = buildSlotChips(preset.startTime, preset.endTime, slotMinutes);
         const newEntries = chips.map((chip) => ({
-          date: studentDate,
+          date,
           startTime: chip,
           endTime: minutesToTime(parseTimeToMinutes(chip) + slotMinutes),
           presetId: preset.id,
@@ -331,45 +345,99 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
       }
       return next;
     });
-  }, [studentDate, slotMinutes]);
+  }, [slotMinutes]);
 
-  // 개별 칩 토글 (프리셋 내 특정 시간 선택/해제)
-  const toggleChip = useCallback((presetId: string, chipStart: string) => {
+  // 개별 칩 토글 (프리셋 내 특정 시간 선택/해제, 날짜별)
+  const toggleChip = useCallback((date: string, presetId: string, chipStart: string) => {
+    if (!date) return;
     setDates((prev) => {
-      const exists = prev.some((d) => d.presetId === presetId && d.startTime === chipStart);
+      const exists = prev.some((d) => d.presetId === presetId && d.date === date && d.startTime === chipStart);
       if (exists) {
-        const filtered = prev.filter((d) => !(d.presetId === presetId && d.startTime === chipStart));
-        // 프리셋의 모든 칩이 해제되면 프리셋 자체도 해제
-        if (!filtered.some((d) => d.presetId === presetId)) {
+        const filtered = prev.filter((d) => !(d.presetId === presetId && d.date === date && d.startTime === chipStart));
+        // 해당 날짜의 프리셋 칩이 모두 해제되면 프리셋 자체도 해제
+        if (!filtered.some((d) => d.presetId === presetId && d.date === date)) {
           setSelectedPresets((p) => {
             const next = new Set(p);
-            next.delete(presetId);
+            next.delete(presetKey(date, presetId));
             return next;
           });
         }
         return filtered;
       } else {
         return [...prev, {
-          date: studentDate,
+          date,
           startTime: chipStart,
           endTime: minutesToTime(parseTimeToMinutes(chipStart) + slotMinutes),
           presetId,
         }];
       }
     });
-  }, [studentDate, slotMinutes]);
+  }, [slotMinutes]);
 
-  // 학생 상담: 날짜 변경 시 프리셋 항목의 date 동기화
-  useEffect(() => {
-    if (type !== 'student' || !studentDate) return;
-    setDates((prev) => prev.map((d) => d.presetId ? { ...d, date: studentDate } : d));
-  }, [type, studentDate]);
+  // 학생 상담: 날짜 추가 / 변경 / 제거 헬퍼
+  const addStudentDate = useCallback(() => {
+    setStudentDates((prev) => [...prev, '']);
+  }, []);
+
+  const updateStudentDate = useCallback((idx: number, newDate: string) => {
+    setStudentDates((prev) => {
+      const oldDate = prev[idx] ?? '';
+      if (oldDate === newDate) return prev;
+      // 중복 방지: 이미 같은 날짜가 있으면 변경 취소 (사용자가 다시 선택하도록)
+      if (newDate && prev.includes(newDate)) return prev;
+      const next = [...prev];
+      next[idx] = newDate;
+
+      // dates 배열에서 이 슬롯에 속한 항목들의 date 마이그레이션
+      setDates((entries) => entries.map((entry) => {
+        if (entry.date !== oldDate) return entry;
+        // 수동 항목: 빈 oldDate에서 newDate로만 이동 (같은 oldDate가 여러 idx에 동시 존재할 수 없도록 중복 방지됨)
+        return { ...entry, date: newDate };
+      }));
+
+      // selectedPresets 키 재발급
+      setSelectedPresets((keys) => {
+        const nextKeys = new Set<string>();
+        for (const k of keys) {
+          const { date, presetId } = parsePresetKey(k);
+          if (date === oldDate) nextKeys.add(presetKey(newDate, presetId));
+          else nextKeys.add(k);
+        }
+        return nextKeys;
+      });
+
+      return next;
+    });
+  }, []);
+
+  const removeStudentDate = useCallback((idx: number) => {
+    setStudentDates((prev) => {
+      const target = prev[idx];
+      if (target === undefined) return prev;
+      const next = prev.filter((_, i) => i !== idx);
+
+      // 해당 날짜의 모든 dates 항목 제거 (프리셋 + 수동)
+      setDates((entries) => entries.filter((e) => e.date !== target));
+
+      // 해당 날짜의 모든 선택 프리셋 키 제거
+      setSelectedPresets((keys) => {
+        const nextKeys = new Set<string>();
+        for (const k of keys) {
+          const { date } = parsePresetKey(k);
+          if (date !== target) nextKeys.add(k);
+        }
+        return nextKeys;
+      });
+
+      return next;
+    });
+  }, []);
 
   // 유형 변경 시 dates 리셋
   useEffect(() => {
     setDates([]);
     setSelectedPresets(new Set());
-    setStudentDate('');
+    setStudentDates([]);
     setSlotMinutes(type === 'parent' ? 30 : 15);
     setCustomSlot(false);
     setExcludeClassTime(false);
@@ -764,146 +832,166 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
             </label>
 
             {type === 'student' ? (
-              /* ── 학생 상담: 날짜 + 프리셋 체크박스 ── */
+              /* ── 학생 상담: 여러 날짜 + 날짜별 프리셋 체크박스 ── */
               <div className="flex flex-col gap-3">
-                {/* 날짜 선택 */}
-                <div>
-                  <label className="text-caption text-sp-muted mb-1 block">날짜</label>
-                  <input
-                    type="date"
-                    value={studentDate}
-                    onChange={(e) => setStudentDate(e.target.value)}
-                    className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
-                  />
-                </div>
+                {studentDates.map((sDate, sIdx) => (
+                  <div key={`student-date-${sIdx}`} className="bg-sp-surface rounded-lg p-3 border border-sp-border flex flex-col gap-3">
+                    {/* 날짜 선택 + 삭제 */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={sDate}
+                        onChange={(e) => updateStudentDate(sIdx, e.target.value)}
+                        className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                      />
+                      <button
+                        onClick={() => removeStudentDate(sIdx)}
+                        className="text-sp-muted hover:text-red-400 transition-colors shrink-0"
+                        aria-label="날짜 삭제"
+                      >
+                        <span className="material-symbols-outlined text-base">delete</span>
+                      </button>
+                    </div>
 
-                {/* 프리셋 체크박스 */}
-                {studentDate && breakPresets.length > 0 && (
-                  <div>
-                    <label className="text-caption text-sp-muted mb-1.5 block">시간대 선택</label>
-                    <div className="flex flex-col gap-1.5">
-                      {breakPresets.map((preset) => {
-                        const checked = selectedPresets.has(preset.id);
-                        const allChips = buildSlotChips(preset.startTime, preset.endTime, slotMinutes);
-                        const presetSlotCount = allChips.length;
-                        const selectedChipCount = dates.filter((d) => d.presetId === preset.id).length;
-                        const disabled = !checked && presetSlotCount === 0;
-                        return (
-                          <div
-                            key={preset.id}
-                            className={`rounded-lg border transition-all ${
-                              disabled
-                                ? 'opacity-40 bg-sp-surface border-sp-border'
-                                : checked
-                                  ? 'bg-sp-accent/15 border-sp-accent/50'
-                                  : 'bg-sp-surface border-sp-border'
-                            }`}
-                          >
-                            <button
-                              onClick={() => togglePreset(preset, disabled)}
-                              disabled={disabled}
-                              className={`flex items-center gap-2.5 px-3 py-2.5 text-sm text-left w-full ${
-                                disabled
-                                  ? 'cursor-not-allowed text-sp-muted'
-                                  : checked
-                                    ? 'text-sp-text'
-                                    : 'text-sp-muted hover:text-sp-text'
-                              }`}
-                            >
-                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                checked ? 'bg-sp-accent border-sp-accent' : 'border-sp-border'
-                              }`}>
-                                {checked && <span className="material-symbols-outlined text-white text-xs">check</span>}
-                              </span>
-                              <span className="flex-1">{preset.label}</span>
-                              {!checked && (
-                                <span className="text-xs text-sp-muted font-mono">{preset.startTime}~{preset.endTime}</span>
-                              )}
-                              {/* N명 가능 / 불가 배지 (또는 선택 현황) */}
-                              <span className={`text-caption font-medium ml-1 shrink-0 ${
-                                disabled ? 'text-sp-muted/50'
-                                  : checked ? 'text-sp-accent'
-                                    : presetSlotCount >= 1 ? 'text-sp-accent' : 'text-sp-muted/50'
-                              }`}>
-                                {disabled ? '불가'
-                                  : checked ? `${selectedChipCount}/${presetSlotCount}명`
-                                    : `${presetSlotCount}명 가능`}
-                              </span>
-                            </button>
-                            {/* 선택 가능한 시간 칩 */}
-                            {checked && allChips.length > 0 && (
-                              <div className="flex flex-wrap gap-1 px-3 pb-2.5">
-                                {allChips.map((chip) => {
-                                  const isSelected = dates.some(
-                                    (d) => d.presetId === preset.id && d.startTime === chip,
-                                  );
-                                  return (
-                                    <button
-                                      key={chip}
-                                      onClick={(e) => { e.stopPropagation(); toggleChip(preset.id, chip); }}
-                                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-caption font-mono border transition-all ${
-                                        isSelected
-                                          ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                                          : 'bg-sp-surface border-sp-border text-sp-muted/50 hover:text-sp-muted hover:border-sp-muted/50'
-                                      }`}
-                                    >
-                                      {chip}
-                                    </button>
-                                  );
-                                })}
+                    {/* 프리셋 체크박스 (해당 날짜용) */}
+                    {sDate && breakPresets.length > 0 && (
+                      <div>
+                        <label className="text-caption text-sp-muted mb-1.5 block">시간대 선택</label>
+                        <div className="flex flex-col gap-1.5">
+                          {breakPresets.map((preset) => {
+                            const key = presetKey(sDate, preset.id);
+                            const checked = selectedPresets.has(key);
+                            const allChips = buildSlotChips(preset.startTime, preset.endTime, slotMinutes);
+                            const presetSlotCount = allChips.length;
+                            const selectedChipCount = dates.filter((d) => d.presetId === preset.id && d.date === sDate).length;
+                            const disabled = !checked && presetSlotCount === 0;
+                            return (
+                              <div
+                                key={preset.id}
+                                className={`rounded-lg border transition-all ${
+                                  disabled
+                                    ? 'opacity-40 bg-sp-card border-sp-border'
+                                    : checked
+                                      ? 'bg-sp-accent/15 border-sp-accent/50'
+                                      : 'bg-sp-card border-sp-border'
+                                }`}
+                              >
+                                <button
+                                  onClick={() => togglePreset(sDate, preset, disabled)}
+                                  disabled={disabled}
+                                  className={`flex items-center gap-2.5 px-3 py-2.5 text-sm text-left w-full ${
+                                    disabled
+                                      ? 'cursor-not-allowed text-sp-muted'
+                                      : checked
+                                        ? 'text-sp-text'
+                                        : 'text-sp-muted hover:text-sp-text'
+                                  }`}
+                                >
+                                  <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                    checked ? 'bg-sp-accent border-sp-accent' : 'border-sp-border'
+                                  }`}>
+                                    {checked && <span className="material-symbols-outlined text-white text-xs">check</span>}
+                                  </span>
+                                  <span className="flex-1">{preset.label}</span>
+                                  {!checked && (
+                                    <span className="text-xs text-sp-muted font-mono">{preset.startTime}~{preset.endTime}</span>
+                                  )}
+                                  {/* N명 가능 / 불가 배지 (또는 선택 현황) */}
+                                  <span className={`text-caption font-medium ml-1 shrink-0 ${
+                                    disabled ? 'text-sp-muted/50'
+                                      : checked ? 'text-sp-accent'
+                                        : presetSlotCount >= 1 ? 'text-sp-accent' : 'text-sp-muted/50'
+                                  }`}>
+                                    {disabled ? '불가'
+                                      : checked ? `${selectedChipCount}/${presetSlotCount}명`
+                                        : `${presetSlotCount}명 가능`}
+                                  </span>
+                                </button>
+                                {/* 선택 가능한 시간 칩 */}
+                                {checked && allChips.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 px-3 pb-2.5">
+                                    {allChips.map((chip) => {
+                                      const isSelected = dates.some(
+                                        (d) => d.presetId === preset.id && d.date === sDate && d.startTime === chip,
+                                      );
+                                      return (
+                                        <button
+                                          key={chip}
+                                          onClick={(e) => { e.stopPropagation(); toggleChip(sDate, preset.id, chip); }}
+                                          className={`inline-flex items-center rounded-md px-2 py-0.5 text-caption font-mono border transition-all ${
+                                            isSelected
+                                              ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                                              : 'bg-sp-card border-sp-border text-sp-muted/50 hover:text-sp-muted hover:border-sp-muted/50'
+                                          }`}
+                                        >
+                                          {chip}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* 수동 추가된 시간대 */}
-                {dates.filter((d) => !d.presetId).map((d) => {
-                  const realIdx = dates.indexOf(d);
-                  const isInvalid = d.date !== '' && d.startTime >= d.endTime;
-                  return (
-                    <div key={`manual-${realIdx}`} className="bg-sp-surface rounded-lg p-3 border border-sp-border flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="time"
-                          value={d.startTime}
-                          onChange={(e) => updateDate(realIdx, 'startTime', e.target.value)}
-                          className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
-                        />
-                        <span className="text-sp-muted text-xs">~</span>
-                        <input
-                          type="time"
-                          value={d.endTime}
-                          onChange={(e) => updateDate(realIdx, 'endTime', e.target.value)}
-                          className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
-                        />
-                        <button
-                          onClick={() => removeDate(realIdx)}
-                          className="text-sp-muted hover:text-red-400 transition-colors shrink-0"
-                        >
-                          <span className="material-symbols-outlined text-base">delete</span>
-                        </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      {isInvalid && (
-                        <p className="text-caption text-amber-400">종료 시간이 시작 시간보다 이전입니다</p>
-                      )}
-                    </div>
-                  );
-                })}
+                    )}
 
-                {/* 직접 추가 */}
-                {studentDate && (
-                  <button
-                    onClick={() => setDates((prev) => [...prev, { date: studentDate, startTime: '09:00', endTime: '10:00' }])}
-                    className="flex items-center justify-center gap-1 py-2 rounded-lg border border-dashed border-sp-border text-xs text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-sm">add</span>
-                    시간대 직접 추가
-                  </button>
-                )}
+                    {/* 해당 날짜의 수동 추가된 시간대 */}
+                    {dates.map((d, dIdx) => {
+                      if (d.presetId || d.date !== sDate) return null;
+                      const isInvalid = d.startTime >= d.endTime;
+                      return (
+                        <div key={`manual-${dIdx}`} className="bg-sp-card rounded-lg p-2.5 border border-sp-border flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="time"
+                              value={d.startTime}
+                              onChange={(e) => updateDate(dIdx, 'startTime', e.target.value)}
+                              className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                            />
+                            <span className="text-sp-muted text-xs">~</span>
+                            <input
+                              type="time"
+                              value={d.endTime}
+                              onChange={(e) => updateDate(dIdx, 'endTime', e.target.value)}
+                              className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none transition-colors"
+                            />
+                            <button
+                              onClick={() => removeDate(dIdx)}
+                              className="text-sp-muted hover:text-red-400 transition-colors shrink-0"
+                            >
+                              <span className="material-symbols-outlined text-base">delete</span>
+                            </button>
+                          </div>
+                          {isInvalid && (
+                            <p className="text-caption text-amber-400">종료 시간이 시작 시간보다 이전입니다</p>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* 이 날짜에 수동 시간대 직접 추가 */}
+                    {sDate && (
+                      <button
+                        onClick={() => setDates((prev) => [...prev, { date: sDate, startTime: '09:00', endTime: '10:00' }])}
+                        className="flex items-center justify-center gap-1 py-1.5 rounded-lg border border-dashed border-sp-border text-caption text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
+                      >
+                        <span className="material-symbols-outlined text-sm">add</span>
+                        시간대 직접 추가
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {/* 날짜 추가 */}
+                <button
+                  onClick={addStudentDate}
+                  className="flex items-center justify-center gap-1 py-2 rounded-lg border border-dashed border-sp-border text-xs text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
+                >
+                  <span className="material-symbols-outlined text-sm">add</span>
+                  날짜 추가
+                </button>
               </div>
             ) : (
               /* ── 학부모 상담: 기존 날짜+시간 범위 UI ── */
