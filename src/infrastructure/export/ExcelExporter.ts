@@ -180,35 +180,78 @@ export async function parseTeacherTimetableFromExcel(
   const ws = workbook.worksheets[0];
   if (!ws) return {};
 
-  if (detectComTimeFormat(ws)) {
-    return parseComTimeFormat(ws);
+  const headerRow = findHeaderRow(ws);
+  if (headerRow === -1) return {};
+
+  if (detectComTimeFormat(ws, headerRow)) {
+    return parseComTimeFormat(ws, headerRow);
   }
-  return parseSsampinFormat(ws);
+  return parseSsampinFormat(ws, headerRow);
 }
 
-/** 컴시간 양식 감지: 교시 열에 "1(08:40)" 패턴 */
-function detectComTimeFormat(ws: ExcelJS.Worksheet): boolean {
-  const cell = String(ws.getRow(2).getCell(1).value ?? '');
-  return /^\d+\s*\(\d{2}:\d{2}\)/.test(cell);
+const DAY_TOKENS = ['월', '화', '수', '목', '금', '토'] as const;
+
+/**
+ * 요일 헤더 행 찾기
+ *
+ * 제목/정보 행이 앞에 올 수 있으므로 상위 20행을 스캔하여
+ * 서로 다른 열에 2개 이상의 요일 마커(월/화/수/목/금/토)가 있는 행을 헤더로 판정.
+ * 실패 시 -1.
+ */
+function findHeaderRow(ws: ExcelJS.Worksheet): number {
+  const maxScan = Math.min(ws.rowCount, 20);
+  for (let r = 1; r <= maxScan; r++) {
+    const row = ws.getRow(r);
+    const found = new Set<string>();
+    row.eachCell({ includeEmpty: false }, (cell) => {
+      const val = String(cell.value ?? '').trim();
+      if (!val) return;
+      for (const d of DAY_TOKENS) {
+        if (val === d || val.startsWith(d) || val === `${d}요일`) found.add(d);
+      }
+    });
+    if (found.size >= 2) return r;
+  }
+  return -1;
+}
+
+/** 컴시간 양식 감지: 헤더 바로 아래 행의 1열이 "1(08:40)" 패턴 */
+function detectComTimeFormat(ws: ExcelJS.Worksheet, headerRow: number): boolean {
+  const cell = String(ws.getRow(headerRow + 1).getCell(1).value ?? '');
+  return /^\d+\s*\(\d{1,2}:\d{2}\)/.test(cell);
+}
+
+function buildDayColMap(ws: ExcelJS.Worksheet, headerRow: number): Record<string, number> {
+  const dayColMap: Record<string, number> = {};
+  ws.getRow(headerRow).eachCell((cell, colNumber) => {
+    const val = String(cell.value ?? '').trim();
+    for (const d of DAY_TOKENS) {
+      if (val === d || val === `${d}요일` || val.startsWith(d)) {
+        if (!(d in dayColMap)) dayColMap[d] = colNumber;
+      }
+    }
+  });
+  return dayColMap;
+}
+
+function extractCellText(cellValue: unknown): string {
+  if (typeof cellValue === 'object' && cellValue !== null && 'richText' in cellValue) {
+    return (cellValue as { richText: { text: string }[] }).richText
+      .map((r) => r.text)
+      .join('');
+  }
+  return String(cellValue ?? '').trim();
 }
 
 /** 컴시간 양식 파싱 */
-function parseComTimeFormat(ws: ExcelJS.Worksheet): TeacherScheduleData {
-  const dayColMap: Record<string, number> = {};
-
-  ws.getRow(1).eachCell((cell, colNumber) => {
-    const val = String(cell.value ?? '').trim();
-    for (const d of ['월', '화', '수', '목', '금', '토']) {
-      if (val.startsWith(d)) dayColMap[d] = colNumber;
-    }
-  });
-
-  const days = ['월', '화', '수', '목', '금', '토'].filter((d) => d in dayColMap);
+function parseComTimeFormat(ws: ExcelJS.Worksheet, headerRow: number): TeacherScheduleData {
+  const dayColMap = buildDayColMap(ws, headerRow);
+  const days = DAY_TOKENS.filter((d) => d in dayColMap);
   const data: Record<string, (TeacherPeriod | null)[]> = {};
   for (const day of days) data[day] = [];
 
   ws.eachRow((row, rowNumber) => {
-    if (rowNumber <= 1) return;
+    if (rowNumber <= headerRow) return;
 
     const periodRaw = String(row.getCell(1).value ?? '');
     const periodMatch = periodRaw.match(/^(\d+)/);
@@ -218,16 +261,7 @@ function parseComTimeFormat(ws: ExcelJS.Worksheet): TeacherScheduleData {
 
     for (const day of days) {
       const colNum = dayColMap[day]!;
-      const cellValue = row.getCell(colNum).value;
-      let text = '';
-
-      if (typeof cellValue === 'object' && cellValue !== null && 'richText' in cellValue) {
-        text = (cellValue as { richText: { text: string }[] }).richText
-          .map((r) => r.text)
-          .join('');
-      } else {
-        text = String(cellValue ?? '').trim();
-      }
+      const text = extractCellText(row.getCell(colNum).value);
 
       while (data[day]!.length <= periodIdx) data[day]!.push(null);
 
@@ -246,22 +280,14 @@ function parseComTimeFormat(ws: ExcelJS.Worksheet): TeacherScheduleData {
 }
 
 /** 쌤핀 기본 양식 파싱 */
-function parseSsampinFormat(ws: ExcelJS.Worksheet): TeacherScheduleData {
-  const dayColMap: Record<string, number> = {};
-
-  ws.getRow(1).eachCell((cell, colNumber) => {
-    const val = String(cell.value ?? '').trim();
-    for (const d of ['월', '화', '수', '목', '금', '토']) {
-      if (val === d || val.startsWith(d)) dayColMap[d] = colNumber;
-    }
-  });
-
-  const days = Object.keys(dayColMap);
+function parseSsampinFormat(ws: ExcelJS.Worksheet, headerRow: number): TeacherScheduleData {
+  const dayColMap = buildDayColMap(ws, headerRow);
+  const days = DAY_TOKENS.filter((d) => d in dayColMap);
   const data: Record<string, (TeacherPeriod | null)[]> = {};
   for (const day of days) data[day] = [];
 
   ws.eachRow((row, rowNumber) => {
-    if (rowNumber <= 1) return;
+    if (rowNumber <= headerRow) return;
 
     const periodRaw = row.getCell(1).value;
     // "1교시" 또는 숫자
@@ -272,16 +298,7 @@ function parseSsampinFormat(ws: ExcelJS.Worksheet): TeacherScheduleData {
     const periodIdx = period - 1;
 
     for (const day of days) {
-      const cellValue = row.getCell(dayColMap[day]!).value;
-      let text = '';
-
-      if (typeof cellValue === 'object' && cellValue !== null && 'richText' in cellValue) {
-        text = (cellValue as { richText: { text: string }[] }).richText
-          .map((r) => r.text)
-          .join('');
-      } else {
-        text = String(cellValue ?? '').trim();
-      }
+      const text = extractCellText(row.getCell(dayColMap[day]!).value);
 
       while (data[day]!.length <= periodIdx) data[day]!.push(null);
 
