@@ -323,7 +323,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
         )}
 
         {!sidebarCollapsed && (
-          <p className="text-caption text-sp-muted text-center mt-2">v1.9.7</p>
+          <p className="text-caption text-sp-muted text-center mt-2">v1.9.8</p>
         )}
       </div>
     </aside>
