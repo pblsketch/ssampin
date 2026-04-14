@@ -16,7 +16,8 @@ declare const __dirname: string;
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
-let widgetActiveBeforeSleep = false;  // suspend 시점의 스냅샷
+let widgetActiveBeforeSleep = false;  // suspend/lock 시점의 스냅샷
+let isSystemSuspending = false;       // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
 let savePositionTimer: ReturnType<typeof setTimeout> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -420,6 +421,11 @@ async function doRestoreWidget(): Promise<void> {
           widgetWasActive = true;
         }
 
+        // Win+D 복원 폴링 재시작 (close 핸들러에서 중단되었을 수 있음)
+        if (process.platform === 'win32') {
+          startWinDRecovery();
+        }
+
         console.log('[widget] 절전 복귀 — 위젯 리프레시 완료');
 
         // 렌더러에 시스템 복귀 알림 (날짜/데이터 갱신용)
@@ -601,22 +607,37 @@ function createWidgetWindow(
   });
 
   widgetWindow.on('close', (e) => {
+    console.log(`[diag] widget close — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}, widgetWasActive=${widgetWasActive}`);
     if (!isQuitting) {
       e.preventDefault();
-      stopWinDRecovery();
       widgetWindow?.hide();
-      widgetWasActive = false;
-      mainWindow?.show();
+      if (!isSystemSuspending) {
+        // 사용자 의도 닫기일 때만 상태 초기화 + 폴링 중단 + 메인 표시
+        stopWinDRecovery();
+        widgetWasActive = false;
+        mainWindow?.show();
+      }
+      // 시스템 잠금/절전으로 인한 close면 상태 유지 → unlock/resume 시 복원 가능
     }
   });
 
   widgetWindow.on('closed', () => {
+    console.log(`[diag] widget closed — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}`);
     stopWinDRecovery();
     widgetWindow = null;
     currentDesktopMode = 'normal';
-    if (!isQuitting) {
+    if (!isQuitting && !isSystemSuspending) {
       widgetWasActive = false;
     }
+  });
+
+  // 진단용: 시스템/DWM이 hide를 유발하는지 확인
+  widgetWindow.on('hide', () => {
+    console.log(`[diag] widget hide — isSystemSuspending=${isSystemSuspending}, visible=false`);
+  });
+
+  widgetWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.log('[diag] widget renderer gone:', details);
   });
 }
 
@@ -1335,17 +1356,28 @@ if (!gotTheLock) {
     // ─── 절전/화면보호기 복귀 시 위젯 복원 (Windows, macOS) ───
     powerMonitor.on('suspend', () => {
       console.log('[power] 시스템 suspend 감지');
+      isSystemSuspending = true;
       widgetActiveBeforeSleep = widgetWasActive ||
         (widgetWindow !== null && !widgetWindow.isDestroyed());
     });
 
     powerMonitor.on('resume', () => {
       console.log('[power] 시스템 resume 감지');
+      isSystemSuspending = false;
       setTimeout(() => restoreWidgetAfterSleep(), 1000);
+    });
+
+    // 화면 잠금(화면보호기 + "로그온 화면 표시" 옵션 포함) 감지
+    powerMonitor.on('lock-screen', () => {
+      console.log('[power] 화면 잠금 감지');
+      isSystemSuspending = true;
+      widgetActiveBeforeSleep = widgetWasActive ||
+        (widgetWindow !== null && !widgetWindow.isDestroyed());
     });
 
     powerMonitor.on('unlock-screen', () => {
       console.log('[power] 화면 잠금 해제 감지');
+      isSystemSuspending = false;
       setTimeout(() => restoreWidgetAfterSleep(), 500);
     });
   });
