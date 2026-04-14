@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { AttendanceRecord, AttendanceStatus, AttendanceReason, StudentAttendance } from '@domain/entities/Attendance';
+import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodLabel } from '@domain/entities/Attendance';
 import {
   cycleStatus,
   buildAttendanceMatrix,
@@ -11,7 +12,11 @@ import { studentKey } from '@domain/entities/TeachingClass';
 import { AttendanceDetailEditor } from './AttendanceDetailEditor';
 
 /* ── 상수 ── */
-const DEFAULT_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const DEFAULT_PERIODS = [PERIOD_MORNING, 1, 2, 3, 4, 5, 6, 7, 8, PERIOD_CLOSING] as const;
+
+function isSpecialPeriod(p: number): boolean {
+  return p === PERIOD_MORNING || p === PERIOD_CLOSING;
+}
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; cell: string }> = {
   present: { label: '출석', icon: 'check_circle', cell: 'text-sp-muted/50 hover:bg-sp-surface' },
@@ -378,18 +383,25 @@ export function AttendanceMatrixCore({
               <th className="sticky left-0 z-10 bg-sp-surface px-3 py-2 text-xs text-sp-muted font-medium text-left whitespace-nowrap min-w-[5rem]">
                 이름
               </th>
-              {PERIODS.map((p) => (
-                <th
-                  key={p}
-                  className={`px-1 py-2 text-xs font-medium text-center w-10 whitespace-nowrap ${
-                    effectiveMatchingPeriods.has(p)
-                      ? 'bg-sp-accent/20 text-sp-accent'
-                      : 'text-sp-muted'
-                  }`}
-                >
-                  {p}교시
-                </th>
-              ))}
+              {PERIODS.map((p) => {
+                const special = isSpecialPeriod(p);
+                return (
+                  <th
+                    key={p}
+                    className={`px-1 py-2 text-xs font-medium text-center ${
+                      special ? 'min-w-[3rem]' : 'w-10'
+                    } whitespace-nowrap ${
+                      effectiveMatchingPeriods.has(p)
+                        ? 'bg-sp-accent/20 text-sp-accent'
+                        : special
+                          ? 'text-sp-muted/80 bg-sp-bg/40'
+                          : 'text-sp-muted'
+                    }`}
+                  >
+                    {formatPeriodLabel(p)}
+                  </th>
+                );
+              })}
               <th className="px-3 py-2 text-xs text-sp-muted font-medium text-center whitespace-nowrap min-w-[5rem]">
                 요약
               </th>
@@ -420,8 +432,9 @@ export function AttendanceMatrixCore({
                     const att = row[p];
                     const status: AttendanceStatus = att?.status ?? 'present';
                     const config = STATUS_CONFIG[status];
+                    const periodLabel = formatPeriodLabel(p);
                     const titleParts = [
-                      `${p}교시`,
+                      periodLabel,
                       config.label,
                       att?.reason ? att.reason : '',
                       att?.memo ? att.memo : '',
@@ -434,7 +447,7 @@ export function AttendanceMatrixCore({
                           onClick={() => handleCellClick(sKey, p)}
                           onContextMenu={(e) => handleCellContextMenu(e, sKey, p)}
                           title={titleParts.join(' · ')}
-                          aria-label={`${student.name} ${p}교시 ${config.label}${att?.reason ? ` (${att.reason})` : ''}`}
+                          aria-label={`${student.name} ${periodLabel} ${config.label}${att?.reason ? ` (${att.reason})` : ''}`}
                           className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all
                                      cursor-pointer ${config.cell}`}
                         >
@@ -534,7 +547,7 @@ export function AttendanceMatrixCore({
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-sp-text">
-              {popoverStudent?.name} {popover.period}교시
+              {popoverStudent?.name} {formatPeriodLabel(popover.period)}
             </span>
             <button
               type="button"

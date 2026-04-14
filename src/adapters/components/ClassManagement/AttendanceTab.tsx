@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
+import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodShort } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { exportAttendanceToExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -40,7 +41,11 @@ const STAT_COLORS: Record<AttendanceStatus, string> = {
   classAbsence: 'text-purple-400',
 };
 
-const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const PERIODS = [PERIOD_MORNING, 1, 2, 3, 4, 5, 6, 7, 8, PERIOD_CLOSING] as const;
+
+function isSpecialPeriod(p: number): boolean {
+  return p === PERIOD_MORNING || p === PERIOD_CLOSING;
+}
 
 type ViewMode = 'single' | 'matrix';
 
@@ -375,20 +380,28 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
               <div className="flex gap-1">
                 {PERIODS.map((p) => {
                   const isMatching = matchingPeriods.has(p);
+                  const special = isSpecialPeriod(p);
+                  const label = formatPeriodShort(p);
                   return (
                     <button
                       key={p}
                       onClick={() => handlePeriodChange(p)}
-                      title={isMatching ? `${cls?.subject} 수업` : undefined}
-                      className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-all
+                      title={
+                        special
+                          ? p === PERIOD_MORNING ? '조회 (아침 담임 시간)' : '종례 (하교 담임 시간)'
+                          : isMatching ? `${cls?.subject} 수업` : undefined
+                      }
+                      className={`relative ${special ? 'px-2 h-8' : 'w-8 h-8'} rounded-lg text-sm font-medium transition-all
                         ${period === p
                           ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40 shadow-md shadow-sp-accent/20'
                           : isMatching
                             ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
-                            : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                            : special
+                              ? 'bg-sp-card border border-sp-border/70 text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
                         }`}
                     >
-                      {p}
+                      {label}
                       {isMatching && period !== p && (
                         <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sp-accent" />
                       )}

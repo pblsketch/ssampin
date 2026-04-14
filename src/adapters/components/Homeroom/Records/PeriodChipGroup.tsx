@@ -1,3 +1,5 @@
+import { PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
+
 export type AccentColor = 'red' | 'amber' | 'orange' | 'purple';
 
 interface AccentClasses {
@@ -53,19 +55,30 @@ interface Props {
 
 export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red' }: Props) {
   const classes = ACCENT_CLASSES[accent];
-  const allSelected = selected.size === periodCount;
-  const emptyMeansAll = selected.size === 0;
+  // "전체"는 1~N 교시 전체 선택을 의미 (조회/종례는 별도 선택)
+  const regularPeriods = Array.from({ length: periodCount }, (_, i) => i + 1);
+  const regularSelectedCount = regularPeriods.filter((p) => selected.has(p)).length;
+  const allRegularSelected = regularSelectedCount === periodCount;
+  const morningSelected = selected.has(PERIOD_MORNING);
+  const closingSelected = selected.has(PERIOD_CLOSING);
+  const noneSelected = selected.size === 0;
 
   const toggleAll = () => {
-    if (allSelected || emptyMeansAll) {
-      // 전체 → 해제 (빈 Set = 전체 의미와 동일하므로 명시적 전체 선택 상태로)
-      if (emptyMeansAll) {
-        onChange(new Set(Array.from({ length: periodCount }, (_, i) => i + 1)));
+    if (allRegularSelected || noneSelected) {
+      // 전부 선택 상태 → 해제 (단, 아무 것도 없으면 전체 선택으로)
+      if (noneSelected) {
+        onChange(new Set(regularPeriods));
       } else {
-        onChange(new Set());
+        // 정규 교시만 제거, 조회/종례 선택은 유지
+        const next = new Set(selected);
+        for (const p of regularPeriods) next.delete(p);
+        onChange(next);
       }
     } else {
-      onChange(new Set(Array.from({ length: periodCount }, (_, i) => i + 1)));
+      // 정규 교시 모두 추가 (조회/종례 선택은 유지)
+      const next = new Set(selected);
+      for (const p of regularPeriods) next.add(p);
+      onChange(next);
     }
   };
 
@@ -76,9 +89,12 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
     onChange(next);
   };
 
-  // "전체" 활성: 실제로 전부 선택됐거나, 아무것도 선택 안 됐을 때(기본 = 전체 의미)
-  const allActive = allSelected || emptyMeansAll;
+  // "전체" 활성: 정규 교시가 전부 선택됐거나, 아무것도 선택 안 됐을 때(기본 = 전체 의미)
+  const allActive = allRegularSelected || noneSelected;
   const sortedSelected = Array.from(selected).sort((a, b) => a - b);
+  const selectedLabels = sortedSelected.map((p) =>
+    p === PERIOD_MORNING ? '조회' : p === PERIOD_CLOSING ? '종례' : `${p}교시`,
+  );
 
   return (
     <div className={`ml-2 pl-3 border-l-2 ${classes.border} space-y-1.5`}>
@@ -94,8 +110,19 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
         >
           {allActive && <span className="mr-1">✓</span>}전체
         </button>
-        {Array.from({ length: periodCount }, (_, i) => i + 1).map((p) => {
-          const on = selected.has(p) && !allSelected;
+        <button
+          type="button"
+          onClick={() => togglePeriod(PERIOD_MORNING)}
+          title="조회 (아침 담임 시간)"
+          className={[
+            'px-2 py-1 rounded-lg text-xs font-medium transition-all',
+            morningSelected ? classes.periodActive : classes.periodInactive,
+          ].join(' ')}
+        >
+          조회
+        </button>
+        {regularPeriods.map((p) => {
+          const on = selected.has(p) && !allRegularSelected;
           return (
             <button
               key={p}
@@ -110,10 +137,21 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => togglePeriod(PERIOD_CLOSING)}
+          title="종례 (하교 담임 시간)"
+          className={[
+            'px-2 py-1 rounded-lg text-xs font-medium transition-all',
+            closingSelected ? classes.periodActive : classes.periodInactive,
+          ].join(' ')}
+        >
+          종례
+        </button>
       </div>
-      {sortedSelected.length > 0 && !allSelected && (
+      {selectedLabels.length > 0 && !allRegularSelected && (
         <p className={`text-[11px] ${classes.hint}`}>
-          {sortedSelected.join('·')}교시 선택됨
+          {selectedLabels.join('·')} 선택됨
         </p>
       )}
     </div>

@@ -32,3 +32,22 @@ export interface AttendanceRecord {
 export interface AttendanceData {
   readonly records: readonly AttendanceRecord[];
 }
+
+/** 조회(아침 조회) — 1교시 전 담임 점검 시간대 */
+export const PERIOD_MORNING = 0;
+/** 종례(하교 종례) — 8교시 후 담임 점검 시간대 */
+export const PERIOD_CLOSING = 9;
+
+/** 교시 번호 → 표시 라벨 ("1교시" / "조회" / "종례") */
+export function formatPeriodLabel(period: number): string {
+  if (period === PERIOD_MORNING) return '조회';
+  if (period === PERIOD_CLOSING) return '종례';
+  return `${period}교시`;
+}
+
+/** 교시 번호 → 짧은 라벨 ("1" / "조회" / "종례") — 좁은 칸에서 사용 */
+export function formatPeriodShort(period: number): string {
+  if (period === PERIOD_MORNING) return '조회';
+  if (period === PERIOD_CLOSING) return '종례';
+  return String(period);
+}

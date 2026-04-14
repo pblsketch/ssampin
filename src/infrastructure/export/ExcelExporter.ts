@@ -11,6 +11,7 @@ import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLa
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectArgb, getClassroomArgb } from '@domain/valueObjects/SubjectColor';
 import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
+import { formatPeriodLabel } from '@domain/entities/Attendance';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { GroupResult } from '@domain/rules/groupingRules';
@@ -1472,7 +1473,7 @@ export async function exportAttendanceToExcel(
       const student = activeStudents.find((s) => studentKey(s) === studentKey(sa));
       const row = ws3.addRow([
         record.date,
-        `${record.period}교시`,
+        formatPeriodLabel(record.period),
         sa.number,
         student?.name ?? '',
         ATTENDANCE_STATUS_LABEL[sa.status],
