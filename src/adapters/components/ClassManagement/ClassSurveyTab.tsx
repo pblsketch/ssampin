@@ -140,6 +140,112 @@ function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
   );
 }
 
+/* ──────────────── SurveyCopyModal ──────────────── */
+
+interface SurveyCopyModalProps {
+  survey: Survey;
+  currentClassId: string;
+  onClose: () => void;
+}
+
+function SurveyCopyModal({ survey, currentClassId, onClose }: SurveyCopyModalProps) {
+  const classes = useTeachingClassStore((s) => s.classes);
+  const duplicateSurvey = useSurveyStore((s) => s.duplicateSurvey);
+  const showToast = useToastStore((s) => s.show);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+
+  const targets = useMemo(
+    () => classes.filter((c) => c.id !== currentClassId),
+    [classes, currentClassId],
+  );
+
+  const handleCopy = useCallback(
+    async (targetClassId: string, targetCount: number) => {
+      if (copyingId) return;
+      setCopyingId(targetClassId);
+      try {
+        await duplicateSurvey(survey.id, targetClassId, targetCount);
+        showToast('다른 반으로 복사했습니다', 'success');
+        onClose();
+      } catch {
+        showToast('복사에 실패했습니다', 'error');
+        setCopyingId(null);
+      }
+    },
+    [copyingId, duplicateSurvey, survey.id, showToast, onClose],
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+      aria-hidden="true"
+    >
+      <div
+        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 max-h-[70vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between p-4 border-b border-sp-border shrink-0">
+          <div>
+            <h3 className="text-sm font-bold text-sp-text">다른 반에 복사</h3>
+            <p className="text-xs text-sp-muted mt-0.5 truncate">{survey.title}</p>
+          </div>
+          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
+            <span className="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {targets.length === 0 ? (
+            <div className="py-8 text-center text-sp-muted text-xs">
+              복사할 수 있는 다른 수업반이 없습니다
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {targets.map((c) => {
+                const activeCount = c.students.filter(
+                  (st) => !st.isVacant && (st.status ?? 'active') === 'active',
+                ).length;
+                const isCopying = copyingId === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => handleCopy(c.id, activeCount)}
+                    disabled={copyingId !== null || activeCount === 0}
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border hover:border-sp-accent/50 hover:bg-sp-surface/80 transition-colors text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-sp-text font-medium truncate">{c.name}</p>
+                      <p className="text-xs text-sp-muted mt-0.5 truncate">
+                        {c.subject} · {activeCount}명
+                      </p>
+                    </div>
+                    {isCopying ? (
+                      <span className="text-xs text-sp-accent shrink-0 ml-2">복사 중...</span>
+                    ) : (
+                      <span className="material-symbols-outlined text-base text-sp-muted shrink-0 ml-2">
+                        arrow_forward
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="p-3 border-t border-sp-border shrink-0">
+          <p className="text-caption text-sp-muted">
+            질문·설정은 그대로 복사되며, 응답 데이터는 복사되지 않습니다. 학생 응답 모드는 새 공유 링크와 PIN이 생성됩니다.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ──────────────── ClassSurveyCard ──────────────── */
 
 interface ClassSurveyCardProps {
@@ -147,9 +253,10 @@ interface ClassSurveyCardProps {
   totalStudents: number;
   onSelect: (id: string) => void;
   onShare: (survey: Survey) => void;
+  onCopy: (survey: Survey) => void;
 }
 
-function ClassSurveyCard({ survey, totalStudents, onSelect, onShare }: ClassSurveyCardProps) {
+function ClassSurveyCard({ survey, totalStudents, onSelect, onShare, onCopy }: ClassSurveyCardProps) {
   const localData = useSurveyStore((s) => s.getLocalData(survey.id));
   const color = getColor(survey.categoryColor);
   const progress = survey.mode === 'teacher'
@@ -209,9 +316,9 @@ function ClassSurveyCard({ survey, totalStudents, onSelect, onShare }: ClassSurv
             {progress.percentage}%
           </div>
 
-          {/* 학생 응답 모드 → 공유 버튼 */}
-          {survey.mode === 'student' && survey.shareUrl && (
-            <div className="mt-2 flex items-center gap-2">
+          {/* 액션 버튼 (공유 / 복사) */}
+          <div className="mt-2 flex items-center gap-3">
+            {survey.mode === 'student' && survey.shareUrl && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -222,8 +329,19 @@ function ClassSurveyCard({ survey, totalStudents, onSelect, onShare }: ClassSurv
                 <span className="material-symbols-outlined text-xs">share</span>
                 공유 (링크 + QR)
               </button>
-            </div>
-          )}
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCopy(survey);
+              }}
+              className="text-detail text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
+              title="다른 반에 복사"
+            >
+              <span className="material-symbols-outlined text-xs">content_copy</span>
+              다른 반에 복사
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -245,9 +363,14 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [selectedSurveyId, setSelectedSurveyId] = useState<string | null>(null);
   const [shareSurvey, setShareSurvey] = useState<Survey | null>(null);
+  const [copySurvey, setCopySurvey] = useState<Survey | null>(null);
 
   const handleShare = useCallback((survey: Survey) => {
     setShareSurvey(survey);
+  }, []);
+
+  const handleCopy = useCallback((survey: Survey) => {
+    setCopySurvey(survey);
   }, []);
 
   useEffect(() => {
@@ -369,6 +492,7 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
                     totalStudents={totalStudents}
                     onSelect={handleSelect}
                     onShare={handleShare}
+                    onCopy={handleCopy}
                   />
                 ))}
               </>
@@ -393,6 +517,7 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
                     totalStudents={totalStudents}
                     onSelect={handleSelect}
                     onShare={handleShare}
+                    onCopy={handleCopy}
                   />
                 ))}
               </>
@@ -411,6 +536,14 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
 
       {shareSurvey && (
         <SurveyShareModal survey={shareSurvey} onClose={() => setShareSurvey(null)} />
+      )}
+
+      {copySurvey && (
+        <SurveyCopyModal
+          survey={copySurvey}
+          currentClassId={classId}
+          onClose={() => setCopySurvey(null)}
+        />
       )}
     </div>
   );
