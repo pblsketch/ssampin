@@ -119,6 +119,8 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
   const { settings } = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.update);
 
+  const sidebarCollapsed = settings.sidebarCollapsed ?? false;
+
   const [draggedId, setDraggedId] = useState<PageId | null>(null);
   const [dragOverId, setDragOverId] = useState<PageId | null>(null);
 
@@ -180,21 +182,43 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
     setDragOverId(null);
   }, []);
 
+  const handleToggleCollapse = useCallback(() => {
+    void updateSettings({ sidebarCollapsed: !sidebarCollapsed });
+  }, [sidebarCollapsed, updateSettings]);
+
   return (
-    <aside className="w-64 h-full bg-sp-surface flex flex-col border-r border-sp-border shrink-0">
+    <aside
+      className={`${sidebarCollapsed ? 'w-16' : 'w-64'} h-full bg-sp-surface flex flex-col border-r border-sp-border shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden`}
+    >
       {/* 로고 */}
-      <div className="p-6 flex items-center gap-3">
-        <div className="bg-sp-accent/20 p-2 rounded-lg">
-          <img src={`${import.meta.env.BASE_URL}icon_new.svg`} alt="쌤핀" className="w-8 h-8" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-sp-text tracking-tight">쌤핀</h1>
-          <p className="text-xs text-sp-muted">Teacher&apos;s Dashboard</p>
-        </div>
+      <div className={`p-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
+        {!sidebarCollapsed && (
+          <div className="bg-sp-accent/20 p-2 rounded-lg shrink-0">
+            <img src={`${import.meta.env.BASE_URL}icon_new.svg`} alt="쌤핀" className="w-8 h-8" />
+          </div>
+        )}
+        {!sidebarCollapsed && (
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-sp-text tracking-tight">쌤핀</h1>
+            <p className="text-xs text-sp-muted">Teacher&apos;s Dashboard</p>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={handleToggleCollapse}
+          aria-label={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+          aria-expanded={!sidebarCollapsed}
+          title={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+          className="text-sp-muted hover:text-sp-text hover:bg-sp-text/5 rounded-lg p-1.5 transition-colors shrink-0"
+        >
+          <span className="material-symbols-outlined text-xl">
+            {sidebarCollapsed ? 'menu' : 'menu_open'}
+          </span>
+        </button>
       </div>
 
       {/* 네비게이션 */}
-      <nav aria-label="메인 내비게이션" className="flex-1 px-4 py-2 flex flex-col gap-1 overflow-y-auto">
+      <nav aria-label="메인 내비게이션" className="flex-1 px-2 py-2 flex flex-col gap-1 overflow-y-auto">
         {visibleItems.map((item) => {
           const isActive = currentPage === item.id
             || (item.id === 'tools' && currentPage.startsWith('tool-'));
@@ -204,17 +228,18 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           return (
             <button
               key={item.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, item.id)}
-              onDragOver={(e) => handleDragOver(e, item.id)}
-              onDrop={(e) => handleDrop(e, item.id)}
-              onDragEnd={handleDragEnd}
-              onDragLeave={() => { if (dragOverId === item.id) setDragOverId(null); }}
+              draggable={!sidebarCollapsed}
+              onDragStart={!sidebarCollapsed ? (e) => handleDragStart(e, item.id) : undefined}
+              onDragOver={!sidebarCollapsed ? (e) => handleDragOver(e, item.id) : undefined}
+              onDrop={!sidebarCollapsed ? (e) => handleDrop(e, item.id) : undefined}
+              onDragEnd={!sidebarCollapsed ? handleDragEnd : undefined}
+              onDragLeave={!sidebarCollapsed ? () => { if (dragOverId === item.id) setDragOverId(null); } : undefined}
+              title={sidebarCollapsed ? item.label : undefined}
               onClick={() => {
                 track('feature_discovery', { feature: item.id, source: 'menu' });
                 onNavigate(item.id);
               }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left group ${
+              className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-4'} py-3 rounded-xl transition-all text-left group ${
                 isActive
                   ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/20'
                   : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
@@ -222,71 +247,84 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
                 isDragOver ? 'ring-2 ring-sp-accent/50 bg-sp-accent/10' : ''
               }`}
             >
-              <span className="material-symbols-outlined text-icon-md opacity-0 group-hover:opacity-50 cursor-grab active:cursor-grabbing shrink-0 -ml-1 mr--2 transition-opacity">
-                drag_indicator
-              </span>
+              {!sidebarCollapsed && (
+                <span className="material-symbols-outlined text-icon-md opacity-0 group-hover:opacity-50 cursor-grab active:cursor-grabbing shrink-0 -ml-1 mr--2 transition-opacity">
+                  drag_indicator
+                </span>
+              )}
               <span className="material-symbols-outlined">{item.icon}</span>
-              <span className="font-medium text-sm">{item.label}</span>
+              {!sidebarCollapsed && (
+                <span className="font-medium text-sm">{item.label}</span>
+              )}
             </button>
           );
         })}
       </nav>
 
       {/* 하단: 설정 + 프로필 + 버전 */}
-      <div className="p-4 border-t border-sp-border">
-        <SyncStatusBar />
-        <DriveSyncIndicator />
+      <div className={`${sidebarCollapsed ? 'p-2' : 'p-4'} border-t border-sp-border`}>
+        {!sidebarCollapsed && <SyncStatusBar />}
+        {!sidebarCollapsed && <DriveSyncIndicator />}
         <button
           onClick={() => {
             track('feature_discovery', { feature: 'settings', source: 'menu' });
             onNavigate('settings');
           }}
-          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all w-full text-left ${currentPage === 'settings'
+          title={sidebarCollapsed ? '설정' : undefined}
+          className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-4'} py-3 rounded-xl transition-all w-full text-left ${currentPage === 'settings'
             ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/20'
             : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
             }`}
         >
           <span className="material-symbols-outlined">settings</span>
-          <span className="font-medium text-sm">설정</span>
+          {!sidebarCollapsed && <span className="font-medium text-sm">설정</span>}
         </button>
 
-        <div className="flex items-center gap-3 px-4 py-2 mt-3">
-          <div className="w-8 h-8 rounded-full bg-sp-border flex items-center justify-center">
+        <div className={`flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-4'} py-2 mt-3`}>
+          <div className="w-8 h-8 rounded-full bg-sp-border flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-sp-muted text-base">
               person
             </span>
           </div>
-          <div>
-            <p className="text-sm font-medium text-sp-text">
-              {settings.teacherName ? `${settings.teacherName} 선생님` : '선생님'}
-            </p>
-            <p className="text-xs text-sp-muted">
-              {settings.className ? `${settings.className} 담임` : '학급 정보 없음'}
-            </p>
-          </div>
+          {!sidebarCollapsed && (
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-sp-text truncate">
+                {settings.teacherName ? `${settings.teacherName} 선생님` : '선생님'}
+              </p>
+              <p className="text-xs text-sp-muted truncate">
+                {settings.className ? `${settings.className} 담임` : '학급 정보 없음'}
+              </p>
+            </div>
+          )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            useShareStore.getState().openModal('manual');
-          }}
-          className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-accent/80 hover:text-sp-accent hover:bg-sp-accent/5 mt-1"
-        >
-          <span className="material-symbols-outlined text-icon-md">mail</span>
-          <span className="text-xs font-medium">지인에게 추천</span>
-        </button>
+        {!sidebarCollapsed && (
+          <button
+            type="button"
+            onClick={() => {
+              useShareStore.getState().openModal('manual');
+            }}
+            className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-accent/80 hover:text-sp-accent hover:bg-sp-accent/5 mt-1"
+          >
+            <span className="material-symbols-outlined text-icon-md">mail</span>
+            <span className="text-xs font-medium">지인에게 추천</span>
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={onFeedback}
-          className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-muted hover:text-sp-text hover:bg-sp-text/5 mt-1"
-        >
-          <span className="material-symbols-outlined text-icon-md">rate_review</span>
-          <span className="text-xs font-medium">건의사항 보내기</span>
-        </button>
+        {!sidebarCollapsed && (
+          <button
+            type="button"
+            onClick={onFeedback}
+            className="flex items-center gap-3 px-4 py-2 rounded-xl transition-all w-full text-left text-sp-muted hover:text-sp-text hover:bg-sp-text/5 mt-1"
+          >
+            <span className="material-symbols-outlined text-icon-md">rate_review</span>
+            <span className="text-xs font-medium">건의사항 보내기</span>
+          </button>
+        )}
 
-        <p className="text-caption text-sp-muted text-center mt-2">v1.9.7</p>
+        {!sidebarCollapsed && (
+          <p className="text-caption text-sp-muted text-center mt-2">v1.9.7</p>
+        )}
       </div>
     </aside>
   );

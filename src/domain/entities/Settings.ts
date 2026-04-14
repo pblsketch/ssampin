@@ -277,4 +277,6 @@ export interface Settings {
   readonly todoSettings?: TodoSettings;
   /** 요일 시작 요일: 'monday'(월~일) | 'sunday'(일~토). 기본 'sunday' */
   readonly weekdayStart?: 'monday' | 'sunday';
+  /** 사이드바 접힘 상태 (기본: false = 펼침) */
+  readonly sidebarCollapsed?: boolean;
 }

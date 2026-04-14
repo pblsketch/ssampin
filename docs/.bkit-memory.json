@@ -1,8 +1,11 @@
 {
-  "sessionCount": 138,
+  "sessionCount": 147,
   "lastSession": {
-    "startedAt": "2026-03-26T08:16:35.624Z",
+    "startedAt": "2026-04-14T05:03:08.365Z",
     "platform": "claude",
     "level": "Dynamic"
-  }
+  },
+  "currentFeature": "sidebar-collapse",
+  "phase": "plan",
+  "lastUpdated": "2026-04-14T05:03:08.365Z"
 }

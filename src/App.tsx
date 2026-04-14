@@ -282,6 +282,24 @@ export function App() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  // Ctrl+B / Cmd+B: 사이드바 접기/펼치기 단축키
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b') return;
+      const target = e.target as HTMLElement;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target.isContentEditable
+      ) return;
+      e.preventDefault();
+      const current = useSettingsStore.getState().settings.sidebarCollapsed ?? false;
+      void useSettingsStore.getState().update({ sidebarCollapsed: !current });
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // .ssampin 파일 열기 이벤트 리스너 (Electron에서 파일 더블클릭 시)
   useEffect(() => {
     const api = window.electronAPI;
