@@ -48,6 +48,13 @@ interface ClassSeatingTabProps {
 
 export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   const cls = useTeachingClassStore((s) => s.classes.find((c) => c.id === classId));
+  const groupSiblingCount = useTeachingClassStore((s) =>
+    s.classes.find((c) => c.id === classId)?.groupId
+      ? s.classes.filter(
+          (c) => c.groupId === s.classes.find((cc) => cc.id === classId)?.groupId,
+        ).length
+      : 0,
+  );
   const initClassSeating = useTeachingClassStore((s) => s.initClassSeating);
   const randomizeClassSeating = useTeachingClassStore((s) => s.randomizeClassSeating);
   const swapClassSeats = useTeachingClassStore((s) => s.swapClassSeats);
@@ -485,6 +492,12 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
 
   return (
     <div className="flex flex-col h-full">
+      {cls.groupId && groupSiblingCount > 1 && (
+        <div className="bg-sp-accent/10 border border-sp-accent/30 px-3 py-2 rounded-lg text-xs text-sp-muted mb-3">
+          이 학급은 <span className="text-sp-text font-medium">{cls.name}</span> 그룹에 속합니다.
+          좌석 변경사항은 <span className="text-sp-accent font-medium">{groupSiblingCount}</span>개 과목에 공유됩니다.
+        </div>
+      )}
       {/* 미배치 학생 알림 */}
       {unplacedStudents.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 mb-4 flex items-center gap-3">

@@ -20,6 +20,14 @@ function migrateStudentStatus(student: TeachingClassStudent): TeachingClassStude
   return student;
 }
 
+/** targetId가 가리키는 클래스를 포함하여 같은 groupId를 가진 모든 클래스 id 목록. groupId 없으면 단일. */
+function getGroupClassIds(classes: readonly TeachingClass[], classId: string): string[] {
+  const target = classes.find((c) => c.id === classId);
+  if (!target) return [];
+  if (!target.groupId) return [classId];
+  return classes.filter((c) => c.groupId === target.groupId).map((c) => c.id);
+}
+
 interface TeachingClassState {
   classes: readonly TeachingClass[];
   progressEntries: readonly ProgressEntry[];
@@ -29,7 +37,24 @@ interface TeachingClassState {
   loadFailed: boolean;
   load: () => Promise<void>;
   selectClass: (id: string | null) => void;
-  addClass: (name: string, subject: string, students: readonly TeachingClassStudent[]) => Promise<void>;
+  addClass: (
+    name: string,
+    subject: string,
+    students: readonly TeachingClassStudent[],
+    groupId?: string,
+  ) => Promise<void>;
+  /** 여러 과목을 하나의 groupId로 묶어 일괄 생성 (초등 위자드 완료 시 호출) */
+  addClassGroup: (
+    name: string,
+    subjects: readonly string[],
+    students: readonly TeachingClassStudent[],
+  ) => Promise<{ groupId: string; firstClassId: string }>;
+  /** 그룹 내 모든 클래스의 students를 동일하게 덮어씀 */
+  syncGroupStudents: (groupId: string, students: readonly TeachingClassStudent[]) => Promise<void>;
+  /** 그룹 내 모든 클래스의 seating을 동일하게 덮어씀 */
+  syncGroupSeating: (groupId: string, seating: TeachingClassSeating | undefined) => Promise<void>;
+  /** 기존 그룹에 과목만 추가 (학생 명렬은 그룹의 기존 클래스에서 복사) */
+  addSubjectsToGroup: (groupId: string, subjects: readonly string[]) => Promise<void>;
   updateClass: (cls: TeachingClass) => Promise<void>;
   deleteClass: (id: string) => Promise<void>;
   reorderClasses: (orderedIds: string[]) => Promise<void>;
@@ -66,6 +91,29 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
   const manageClasses = new ManageTeachingClasses(teachingClassRepository);
   const manageProgress = new ManageCurriculumProgress(teachingClassRepository);
   const manageAttendance = new ManageAttendance(teachingClassRepository);
+
+  /** 좌석을 그룹 내 모든 클래스에 전파하여 저장. 대상 클래스가 단일이면 단일 업데이트. */
+  const applySeatingToGroup = async (
+    classId: string,
+    seatingOrUndef: TeachingClassSeating | undefined,
+  ): Promise<void> => {
+    const classes = get().classes;
+    const target = classes.find((c) => c.id === classId);
+    if (!target) return;
+    const ids = getGroupClassIds(classes, classId);
+    const now = new Date().toISOString();
+    const updatedList: TeachingClass[] = [];
+    const nextClasses = classes.map((c) => {
+      if (!ids.includes(c.id)) return c;
+      const updated: TeachingClass = { ...c, seating: seatingOrUndef, updatedAt: now };
+      updatedList.push(updated);
+      return updated;
+    });
+    set({ classes: nextClasses });
+    for (const u of updatedList) {
+      await manageClasses.update(u);
+    }
+  };
 
   return {
     classes: [],
@@ -107,18 +155,114 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       set({ selectedClassId: id });
     },
 
-    addClass: async (name, subject, students) => {
+    addClass: async (name, subject, students, groupId) => {
       const now = new Date().toISOString();
       const newClass: TeachingClass = {
         id: generateUUID(),
         name,
         subject,
+        ...(groupId ? { groupId } : {}),
         students,
         createdAt: now,
         updatedAt: now,
       };
       await manageClasses.add(newClass);
       set((state) => ({ classes: [...state.classes, newClass] }));
+    },
+
+    addClassGroup: async (name, subjects, students) => {
+      const groupId = generateUUID();
+      const now = new Date().toISOString();
+      const created: TeachingClass[] = subjects.map((subject) => ({
+        id: generateUUID(),
+        name,
+        subject,
+        groupId,
+        students,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      // 반복 저장 (각각 add 호출)
+      for (const cls of created) {
+        await manageClasses.add(cls);
+      }
+      set((state) => ({ classes: [...state.classes, ...created] }));
+      const firstClassId = created[0]?.id ?? '';
+      return { groupId, firstClassId };
+    },
+
+    syncGroupStudents: async (groupId, students) => {
+      const classes = get().classes;
+      const now = new Date().toISOString();
+      const updatedList: TeachingClass[] = [];
+      const nextClasses = classes.map((c) => {
+        if (c.groupId !== groupId) return c;
+        // 비활성 학생 좌석 제거 (각 클래스 seating 고려)
+        const activeKeys = new Set(
+          students.filter((s) => !s.status || s.status === 'active').map((s) => studentKey(s)),
+        );
+        let seating = c.seating;
+        if (seating) {
+          const newSeats = seating.seats.map((row) =>
+            row.map((cell) => (cell && !activeKeys.has(cell) ? null : cell)),
+          );
+          seating = { ...seating, seats: newSeats };
+        }
+        const updated: TeachingClass = { ...c, students, seating, updatedAt: now };
+        updatedList.push(updated);
+        return updated;
+      });
+      set({ classes: nextClasses });
+      for (const u of updatedList) {
+        await manageClasses.update(u);
+      }
+    },
+
+    syncGroupSeating: async (groupId, seating) => {
+      const classes = get().classes;
+      const now = new Date().toISOString();
+      const updatedList: TeachingClass[] = [];
+      const nextClasses = classes.map((c) => {
+        if (c.groupId !== groupId) return c;
+        const updated: TeachingClass = { ...c, seating, updatedAt: now };
+        updatedList.push(updated);
+        return updated;
+      });
+      set({ classes: nextClasses });
+      for (const u of updatedList) {
+        await manageClasses.update(u);
+      }
+    },
+
+    addSubjectsToGroup: async (groupId, subjects) => {
+      const classes = get().classes;
+      const firstInGroup = classes.find((c) => c.groupId === groupId);
+      if (!firstInGroup) return;
+
+      // 학생 명렬은 그룹의 첫 클래스에서 복사, seating은 복사하되 좌석 비우기
+      const copiedStudents = [...firstInGroup.students];
+      const now = new Date().toISOString();
+      const emptySeating: TeachingClassSeating | undefined = firstInGroup.seating
+        ? {
+            ...firstInGroup.seating,
+            seats: firstInGroup.seating.seats.map((row) => row.map(() => null)),
+          }
+        : undefined;
+
+      const created: TeachingClass[] = subjects.map((subject) => ({
+        id: generateUUID(),
+        name: firstInGroup.name,
+        subject,
+        groupId,
+        students: copiedStudents,
+        ...(emptySeating ? { seating: emptySeating } : {}),
+        createdAt: now,
+        updatedAt: now,
+      }));
+      for (const cls of created) {
+        await manageClasses.add(cls);
+      }
+      set((state) => ({ classes: [...state.classes, ...created] }));
     },
 
     updateClass: async (cls) => {
@@ -134,10 +278,22 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 삭제 차단');
         return;
       }
+      const target = get().classes.find((c) => c.id === id);
+      const groupId = target?.groupId;
+
       await manageClasses.delete(id);
       // 해당 학급의 진도 기록과 출석 기록도 함께 삭제
       const progressToKeep = get().progressEntries.filter((e) => e.classId !== id);
-      const attendanceToKeep = get().attendanceRecords.filter((r) => r.classId !== id);
+      let attendanceToKeep = get().attendanceRecords.filter((r) => r.classId !== id);
+
+      // 그룹 내 마지막 클래스 삭제 시: 그룹 attendance records도 정리
+      if (groupId) {
+        const remaining = get().classes.filter((c) => c.id !== id && c.groupId === groupId);
+        if (remaining.length === 0) {
+          attendanceToKeep = attendanceToKeep.filter((r) => r.groupId !== groupId);
+        }
+      }
+
       await manageProgress.saveAll(progressToKeep, true);
       await manageAttendance.saveAll(attendanceToKeep, true);
       set((state) => ({
@@ -193,6 +349,13 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
     },
 
     getAttendanceRecord: (classId, date, period) => {
+      const cls = get().classes.find((c) => c.id === classId);
+      if (cls?.groupId) {
+        const groupRecord = get().attendanceRecords.find(
+          (r) => r.groupId === cls.groupId && r.date === date && r.period === period,
+        );
+        if (groupRecord) return groupRecord;
+      }
       return get().attendanceRecords.find(
         (r) => r.classId === classId && r.date === date && r.period === period,
       );
@@ -228,9 +391,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       }
 
       const seating: TeachingClassSeating = { rows, cols, seats };
-      const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
-      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
-      await manageClasses.update(updated);
+      await applySeatingToGroup(classId, seating);
     },
 
     randomizeClassSeating: async (classId) => {
@@ -258,9 +419,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       }
 
       const seating: TeachingClassSeating = { ...cls.seating, seats: newSeats };
-      const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
-      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
-      await manageClasses.update(updated);
+      await applySeatingToGroup(classId, seating);
     },
 
     swapClassSeats: async (classId, r1, c1, r2, c2) => {
@@ -273,18 +432,13 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       newSeats[r2]![c2] = temp;
 
       const seating: TeachingClassSeating = { ...cls.seating, seats: newSeats };
-      const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
-      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
-      await manageClasses.update(updated);
+      await applySeatingToGroup(classId, seating);
     },
 
     clearClassSeating: async (classId) => {
       const cls = get().classes.find((c) => c.id === classId);
       if (!cls) return;
-
-      const updated: TeachingClass = { ...cls, seating: undefined, updatedAt: new Date().toISOString() };
-      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
-      await manageClasses.update(updated);
+      await applySeatingToGroup(classId, undefined);
     },
 
     resizeClassGrid: async (classId, newRows, newCols) => {
@@ -320,9 +474,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       }
 
       const seating: TeachingClassSeating = { ...cls.seating, rows: newRows, cols: newCols, seats: newSeats };
-      const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
-      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
-      await manageClasses.update(updated);
+      await applySeatingToGroup(classId, seating);
     },
 
     toggleClassPairMode: async (classId) => {
@@ -330,9 +482,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       if (!cls?.seating) return;
 
       const seating: TeachingClassSeating = { ...cls.seating, pairMode: !cls.seating.pairMode };
-      const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
-      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
-      await manageClasses.update(updated);
+      await applySeatingToGroup(classId, seating);
     },
 
     toggleClassOddColumnMode: async (classId) => {
@@ -342,9 +492,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const current = cls.seating.oddColumnMode ?? 'single';
       const next: OddColumnMode = current === 'single' ? 'triple' : 'single';
       const seating: TeachingClassSeating = { ...cls.seating, oddColumnMode: next };
-      const updated: TeachingClass = { ...cls, seating, updatedAt: new Date().toISOString() };
-      set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
-      await manageClasses.update(updated);
+      await applySeatingToGroup(classId, seating);
     },
 
     updateStudentStatus: async (classId, sKey, status, statusNote) => {
@@ -363,7 +511,38 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         };
       });
 
-      // 비활성 학생 좌석 제거
+      const classes = get().classes;
+      const now = new Date().toISOString();
+
+      if (cls.groupId) {
+        // 그룹 전체에 동일 students + seating에서 비활성 학생 좌석 제거
+        const updatedList: TeachingClass[] = [];
+        const nextClasses = classes.map((c) => {
+          if (c.groupId !== cls.groupId) return c;
+          let seating = c.seating;
+          if (isInactive && seating) {
+            const newSeats = seating.seats.map((row) =>
+              row.map((cell) => (cell === sKey ? null : cell)),
+            );
+            seating = { ...seating, seats: newSeats };
+          }
+          const updated: TeachingClass = {
+            ...c,
+            students: updatedStudents,
+            seating,
+            updatedAt: now,
+          };
+          updatedList.push(updated);
+          return updated;
+        });
+        set({ classes: nextClasses });
+        for (const u of updatedList) {
+          await manageClasses.update(u);
+        }
+        return;
+      }
+
+      // 단일 클래스: 기존 로직
       let seating = cls.seating;
       if (isInactive && seating) {
         const newSeats = seating.seats.map((row) =>
@@ -376,7 +555,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         ...cls,
         students: updatedStudents,
         seating,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       };
       set((state) => ({ classes: state.classes.map((c) => (c.id === classId ? updated : c)) }));
       await manageClasses.update(updated);
@@ -387,29 +566,65 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
         return;
       }
-      const existing = get().attendanceRecords.find(
-        (r) => r.classId === record.classId && r.date === record.date && r.period === record.period,
-      );
+      // cls의 groupId 주입
+      const cls = get().classes.find((c) => c.id === record.classId);
+      const finalRecord: AttendanceRecord = cls?.groupId
+        ? { ...record, groupId: cls.groupId }
+        : record;
+
+      // 그룹 레코드인 경우: (groupId, date, period) 키로 upsert
+      // 단일 레코드인 경우: (classId, date, period) 키로 upsert
+      const records = get().attendanceRecords;
+      const isGroup = !!finalRecord.groupId;
+
+      const existing = isGroup
+        ? records.find(
+            (r) =>
+              r.groupId === finalRecord.groupId &&
+              r.date === finalRecord.date &&
+              r.period === finalRecord.period,
+          )
+        : records.find(
+            (r) =>
+              r.classId === finalRecord.classId &&
+              r.date === finalRecord.date &&
+              r.period === finalRecord.period &&
+              !r.groupId,
+          );
+
       if (existing !== undefined) {
-        // 기존 기록 업데이트
-        const updated = get().attendanceRecords.map((r) =>
-          r.classId === record.classId && r.date === record.date && r.period === record.period
-            ? record
-            : r,
-        );
+        const updated = records.map((r) => {
+          if (isGroup) {
+            return r.groupId === finalRecord.groupId &&
+              r.date === finalRecord.date &&
+              r.period === finalRecord.period
+              ? finalRecord
+              : r;
+          }
+          return r.classId === finalRecord.classId &&
+            r.date === finalRecord.date &&
+            r.period === finalRecord.period &&
+            !r.groupId
+            ? finalRecord
+            : r;
+        });
         await manageAttendance.saveAll(updated);
         set({ attendanceRecords: updated });
       } else {
-        // 새 기록 추가
-        await manageAttendance.add(record);
-        set((state) => ({ attendanceRecords: [...state.attendanceRecords, record] }));
+        await manageAttendance.add(finalRecord);
+        set((state) => ({ attendanceRecords: [...state.attendanceRecords, finalRecord] }));
       }
     },
 
     getDayAttendance: (classId, date) => {
-      return get().attendanceRecords.filter(
-        (r) => r.classId === classId && r.date === date,
-      );
+      const cls = get().classes.find((c) => c.id === classId);
+      if (cls?.groupId) {
+        // groupId 매치 + 같은 classId도 포함 (과목별 수업 중 출결)
+        return get().attendanceRecords.filter(
+          (r) => r.date === date && (r.groupId === cls.groupId || r.classId === classId),
+        );
+      }
+      return get().attendanceRecords.filter((r) => r.classId === classId && r.date === date);
     },
 
     saveDayAttendance: async (classId, date, recordsByPeriod) => {
@@ -417,10 +632,41 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         console.warn('[TeachingClassStore] 데이터 로드 실패 상태에서 저장 차단');
         return;
       }
-      await manageAttendance.saveDayBatch(classId, date, recordsByPeriod);
-      // 저장 후 스토어 상태 동기화
+      const cls = get().classes.find((c) => c.id === classId);
+      const groupId = cls?.groupId;
+
+      // 기존 manageAttendance.saveDayBatch는 classId 기반이므로 직접 처리
       const all = await manageAttendance.getAll();
-      set({ attendanceRecords: [...all] });
+
+      // 제거 대상: 그룹이면 (groupId, date) 매치 + 해당 classId의 (classId, date) 단일 레코드
+      //          단일이면 (classId, date, !groupId) 매치
+      const filtered = all.filter((r) => {
+        if (r.date !== date) return true;
+        if (groupId) {
+          if (r.groupId === groupId) return false;
+          if (r.classId === classId && !r.groupId) return false;
+          return true;
+        }
+        return !(r.classId === classId && !r.groupId);
+      });
+
+      const newRecords: AttendanceRecord[] = [];
+      for (const [period, students] of recordsByPeriod) {
+        if (students.length > 0) {
+          const rec: AttendanceRecord = {
+            classId,
+            ...(groupId ? { groupId } : {}),
+            date,
+            period,
+            students,
+          };
+          newRecords.push(rec);
+        }
+      }
+
+      const merged: readonly AttendanceRecord[] = [...filtered, ...newRecords];
+      await manageAttendance.saveAll(merged, true);
+      set({ attendanceRecords: [...merged] });
     },
   };
 });

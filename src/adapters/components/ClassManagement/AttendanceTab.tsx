@@ -94,6 +94,12 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
   const allStudents = cls?.students ?? [];
   const students = useMemo(() => allStudents.filter((s) => !s.isVacant), [allStudents]);
 
+  const groupSiblingCount = useMemo(
+    () =>
+      cls?.groupId ? classes.filter((c) => c.groupId === cls.groupId).length : 0,
+    [cls, classes],
+  );
+
   const hasGradeInfo = useMemo(() => {
     return students.some((s) => s.grade != null || s.classNum != null);
   }, [students]);
@@ -411,6 +417,15 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
               </div>
             </div>
           </div>
+
+          {/* 그룹 출결 안내 (조회/종례는 그룹 전체 공유) */}
+          {cls?.groupId && groupSiblingCount > 1 && isSpecialPeriod(period) && (
+            <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
+                            rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+              <span className="material-symbols-outlined text-base">groups</span>
+              <span>조회 출결은 이 학급의 모든 과목에 공유됩니다.</span>
+            </div>
+          )}
 
           {/* 수정 안내 바 */}
           {hasExistingRecord && initialized && !dismissedGuide && (

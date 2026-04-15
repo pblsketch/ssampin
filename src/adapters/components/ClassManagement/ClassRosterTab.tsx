@@ -18,6 +18,7 @@ interface ClassRosterTabProps {
 export function ClassRosterTab({ classId }: ClassRosterTabProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const updateClass = useTeachingClassStore((s) => s.updateClass);
+  const syncGroupStudents = useTeachingClassStore((s) => s.syncGroupStudents);
   const showToast = useToastStore((s) => s.show);
 
   const cls = classes.find((c) => c.id === classId);
@@ -74,12 +75,16 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const saveEdit = useCallback(async () => {
     if (!cls) return;
-    await updateClass({
-      ...cls,
-      students: editStudents,
-    });
+    if (cls.groupId) {
+      await syncGroupStudents(cls.groupId, editStudents);
+    } else {
+      await updateClass({
+        ...cls,
+        students: editStudents,
+      });
+    }
     setIsEditing(false);
-  }, [cls, editStudents, updateClass]);
+  }, [cls, editStudents, updateClass, syncGroupStudents]);
 
   const updateStudentName = useCallback((index: number, name: string) => {
     setEditStudents((prev) => {
@@ -372,8 +377,18 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     ? (isEditing ? 'grid-cols-[7rem_3.5rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[4rem_2.5rem_1fr]')
     : (isEditing ? 'grid-cols-[3rem_1fr_1fr_5rem_2.5rem]' : 'grid-cols-[2.5rem_1fr]');
 
+  const groupSiblingCount = cls.groupId
+    ? classes.filter((c) => c.groupId === cls.groupId).length
+    : 0;
+
   return (
     <div className="space-y-4">
+      {cls.groupId && groupSiblingCount > 1 && (
+        <div className="bg-sp-accent/10 border border-sp-accent/30 px-3 py-2 rounded-lg text-xs text-sp-muted">
+          이 학급은 <span className="text-sp-text font-medium">{cls.name}</span> 그룹에 속합니다.
+          변경사항은 <span className="text-sp-accent font-medium">{groupSiblingCount}</span>개 과목에 공유됩니다.
+        </div>
+      )}
       {/* ── 헤더: 학생 수 + 편집 버튼 ── */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-sp-muted">

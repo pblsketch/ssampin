@@ -43,6 +43,8 @@ export interface TeachingClass {
   readonly id: string;
   readonly name: string;
   readonly subject: string;
+  /** 담임 학급 그룹 식별자. 같은 groupId = 같은 교실의 여러 과목 */
+  readonly groupId?: string;
   readonly students: readonly TeachingClassStudent[];
   readonly seating?: TeachingClassSeating;
   readonly order?: number;

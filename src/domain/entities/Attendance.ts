@@ -24,6 +24,8 @@ export interface StudentAttendance {
 
 export interface AttendanceRecord {
   readonly classId: string;
+  /** 그룹 출결: 이 값이 있으면 groupId 기준 조회 우선 */
+  readonly groupId?: string;
   readonly date: string;
   readonly period: number;
   readonly students: readonly StudentAttendance[];
