@@ -36,11 +36,21 @@ export function SchoolTab({ draft, patch }: Props) {
       atptCode: school.atptCode,
       schoolName: `${school.schoolName} (${school.address.split(' ').slice(0, 2).join(' ')})`,
     });
-    patch({ schoolName: school.schoolName });
+    const kind = school.schoolType ?? '';
+    const detectedLevel: Settings['schoolLevel'] | null =
+      kind.includes('초등') ? 'elementary'
+      : kind.includes('중학') ? 'middle'
+      : kind.includes('고등') ? 'high'
+      : null;
+    patch(
+      detectedLevel && detectedLevel !== draft.schoolLevel
+        ? { schoolName: school.schoolName, schoolLevel: detectedLevel }
+        : { schoolName: school.schoolName }
+    );
     setSchoolQuery('');
     setShowSchoolSearch(false);
     clearSearch();
-  }, [patchNeis, patch, clearSearch]);
+  }, [patchNeis, patch, clearSearch, draft.schoolLevel]);
 
   // 급식용 학교 검색
   const handleMealSchoolSearch = useCallback(async () => {
