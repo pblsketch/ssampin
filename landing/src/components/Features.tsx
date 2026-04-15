@@ -43,8 +43,9 @@ const tier2 = [
 ];
 
 const tier3Tags = [
-  '구글 캘린더', '포스트잇 메모', '할 일', '수업 관리',
-  '과제 수합', 'PIN 잠금', '한글·엑셀·PDF 내보내기',
+  '구글 캘린더 동기화', 'Google Tasks 동기화', 'Google Drive 앱 폴더 백업',
+  '포스트잇 메모', '수업 관리', '과제 수합',
+  'PIN 잠금', '한글·엑셀·PDF 내보내기',
 ];
 
 export default function Features() {

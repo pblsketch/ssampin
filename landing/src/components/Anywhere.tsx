@@ -77,10 +77,10 @@ export default function Anywhere() {
               <p className="mb-4 text-sm text-sp-muted">
                 교무실 PC의 데이터를 교실에서도 확인하세요.
                 <br />
-                Google Drive로 안전하게 동기화됩니다.
+                Google Drive 앱 전용 폴더에 안전하게 백업됩니다.
               </p>
               <ul className="mb-6 space-y-2">
-                {['시간표·출결·메모 확인', '홈 화면에 추가 (PWA)', 'Google Drive 동기화'].map((item) => (
+                {['시간표·출결·메모 확인', '홈 화면에 추가 (PWA)', 'Google Drive 앱 폴더 백업'].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-sm">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs text-blue-400">
                       ✓

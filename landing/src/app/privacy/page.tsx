@@ -147,6 +147,9 @@ const koContent = {
           <p>쌤핀이 Google 계정 연결 시 요청하는 스코프와 실제 사용 범위는 다음과 같습니다:</p>
           <ul>
             <li>
+              <strong><code>.../auth/userinfo.email</code></strong> — 로그인한 Google 계정의 이메일 주소를 받아 설정 화면의 &quot;연결된 계정&quot;에 표시하고, 재로그인 시 데이터 일관성(동일 계정 여부)을 확인합니다. 이름·프로필 사진 등 다른 프로필 정보는 요청하지 않습니다.
+            </li>
+            <li>
               <strong><code>.../auth/calendar</code></strong> — 사용자가 선택한 Google 캘린더의 일정을 읽고 쓰기 위해 필요합니다. 선택하지 않은 캘린더는 접근하지 않습니다.
             </li>
             <li>
@@ -358,6 +361,9 @@ const enContent = {
         <>
           <p>When you connect your Google account, SsamPin may request the following scopes and uses them only as described:</p>
           <ul>
+            <li>
+              <strong><code>.../auth/userinfo.email</code></strong> — retrieves the email address of the signed-in Google account to display it as the &quot;Connected Account&quot; in the Settings screen and to verify account consistency on re-login. Other profile information (name, picture, etc.) is not requested.
+            </li>
             <li>
               <strong><code>.../auth/calendar</code></strong> — required to read and write events on the Google Calendars you select. Calendars you do not select are not accessed.
             </li>
