@@ -223,6 +223,91 @@ function WidgetUpdateBanner() {
 }
 
 export function App() {
+  if (isWidgetMode()) {
+    return <WidgetApp />;
+  }
+  return <MainApp />;
+}
+
+function WidgetApp() {
+  const { settings } = useSettingsStore();
+  const { track } = useAnalytics();
+
+  // Analytics: 위젯 오픈 이벤트 + 활성일 기록
+  useEffect(() => {
+    track('app_open', { launchMode: 'widget' });
+    recordActiveDay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 메인 ↔ 위젯 데이터 동기화: 다른 창에서 데이터 변경 시 스토어 리로드
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onDataChanged) return;
+    const unsubscribe = api.onDataChanged((filename: string) => {
+      void reloadStores([filename]);
+    });
+    return unsubscribe;
+  }, []);
+
+  // 위젯 → 메인 윈도우 크로스 윈도우 네비게이션 수신
+  // (위젯이 열려있을 때 메인 창이 destroy된 경우 대비; 보통은 MainApp이 수신)
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onNavigateToPage) return;
+    const unsubscribe = api.onNavigateToPage(() => {
+      // 위젯 모드에서는 페이지 전환 불가; 메인 창이 열릴 때 처리됨
+    });
+    return unsubscribe;
+  }, []);
+
+  // 위젯 내 도구 클릭 → ssampin:navigate 이벤트 수신 (위젯 내부 네비게이션용)
+  useEffect(() => {
+    const handler = () => {
+      // 위젯 모드에서는 페이지 전환 없음 — 메인 창에서 열리도록 IPC로 위임
+    };
+    window.addEventListener('ssampin:navigate', handler);
+    return () => window.removeEventListener('ssampin:navigate', handler);
+  }, []);
+
+  // 테마 CSS 변수 주입
+  useThemeApplier();
+
+  // 글꼴 종류 적용
+  useFontApplier(settings.fontFamily ?? 'noto-sans', settings.customFont);
+
+  // 글꼴 크기: html 루트 font-size
+  useEffect(() => {
+    const root = document.documentElement;
+    switch (settings.fontSize) {
+      case 'small':
+        root.style.fontSize = '14px';
+        break;
+      case 'large':
+        root.style.fontSize = '18px';
+        break;
+      case 'xlarge':
+        root.style.fontSize = '20px';
+        break;
+      case 'medium':
+      default:
+        root.style.fontSize = '16px';
+        break;
+    }
+    return () => {
+      root.style.fontSize = '';
+    };
+  }, [settings.fontSize]);
+
+  return (
+    <div className="h-screen w-screen bg-transparent">
+      <Widget />
+      <WidgetUpdateBanner />
+    </div>
+  );
+}
+
+function MainApp() {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -233,7 +318,7 @@ export function App() {
 
   // Analytics: 앱 시작 이벤트 + 활성일 기록
   useEffect(() => {
-    track('app_open', { launchMode: isWidgetMode() ? 'widget' : 'normal' });
+    track('app_open', { launchMode: 'normal' });
     recordActiveDay();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -561,16 +646,6 @@ export function App() {
       root.style.fontSize = '';
     };
   }, [settings.fontSize]);
-
-  // 위젯 모드: URL에 ?mode=widget 또는 #widget 이 있으면 위젯 전용 렌더링
-  if (isWidgetMode()) {
-    return (
-      <div className="h-screen w-screen bg-transparent">
-        <Widget />
-        <WidgetUpdateBanner />
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-screen bg-sp-bg">

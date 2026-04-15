@@ -697,13 +697,13 @@ function readSettingsWidgetOptions(): { width: number; height: number; startInWi
         startInWidgetMode: settings.widget?.transparent ?? false,
         closeAction,
         desktopMode,
-        memorySaverMode: settings.widget?.memorySaverMode ?? false,
+        memorySaverMode: settings.widget?.memorySaverMode ?? true,
       };
     }
   } catch {
     // fall through to defaults
   }
-  return { width: 920, height: 700, startInWidgetMode: false, closeAction: 'widget', desktopMode: 'normal', memorySaverMode: false };
+  return { width: 920, height: 700, startInWidgetMode: false, closeAction: 'widget', desktopMode: 'normal', memorySaverMode: true };
 }
 
 function setupAutoUpdater(): void {
