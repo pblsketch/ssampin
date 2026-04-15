@@ -140,6 +140,12 @@ export interface WidgetSettings {
   readonly desktopMode: WidgetDesktopMode;
   /** 위젯 헤더에 날씨 정보 표시 여부 (기본 true) */
   readonly showWeather?: boolean;
+  /**
+   * 메모리 절약 모드 (기본 false).
+   * true일 때, 위젯 모드로 전환 시 메인 창을 숨기지 않고 완전히 destroy 하여
+   * 렌더러 프로세스를 1개로 줄인다. 메인 복귀 시 재생성하며 첫 로드가 약간 느려질 수 있다.
+   */
+  readonly memorySaverMode?: boolean;
 }
 
 export interface SystemSettings {

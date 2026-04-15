@@ -43,6 +43,36 @@ function getDataDir(): string {
   return dir;
 }
 
+/**
+ * 메인 창을 "위젯 모드로 전환" 상황에서 숨기거나(기본) 완전히 destroy한다.
+ * 메모리 절약 모드(memorySaverMode)가 true이면 destroy하여 렌더러 프로세스를 해제한다.
+ * 주의: destroy 시 상태는 파일에 이미 저장돼 있으므로 복귀 시 재생성해도 데이터 손실 없음.
+ */
+function hideOrDestroyMainWindow(memorySaverMode: boolean): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (memorySaverMode) {
+    console.log('[memory-saver] 메인 창 destroy — 렌더러 프로세스 해제');
+    // close는 close 이벤트의 preventDefault에 걸리므로 destroy 사용
+    mainWindow.destroy();
+    mainWindow = null;
+  } else {
+    mainWindow.hide();
+  }
+}
+
+/**
+ * 메인 창이 필요할 때 호출. 기존 창이 있으면 show+focus, 없으면 재생성.
+ * 메모리 절약 모드에서 위젯 → 메인 복귀 시 사용된다.
+ */
+function ensureMainWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createWindow();
+  }
+}
+
 function readWidgetBounds(): WidgetBounds | null {
   const filePath = path.join(getDataDir(), 'widget-bounds.json');
   if (!fs.existsSync(filePath)) {
@@ -172,14 +202,14 @@ function createWindow(): void {
       if (opts.closeAction === 'widget') {
         // X 버튼 → 위젯 모드로 전환
         if (!widgetWindow || widgetWindow.isDestroyed()) {
-          // 위젯이 실제로 표시된 뒤 메인 창을 숨겨 "아무것도 안 보이는" gap 방지
-          createWidgetWindow(opts, () => mainWindow?.hide());
+          // 위젯이 실제로 표시된 뒤 메인 창을 숨겨/해제하여 "아무것도 안 보이는" gap 방지
+          createWidgetWindow(opts, () => hideOrDestroyMainWindow(opts.memorySaverMode));
         } else {
           widgetWindow.show();
-          mainWindow?.hide();
+          hideOrDestroyMainWindow(opts.memorySaverMode);
         }
       } else {
-        // tray: 위젯 전환 없이 트레이로만 숨김
+        // tray: 위젯 전환 없이 트레이로만 숨김 (메모리 절약 모드와 무관)
         mainWindow?.hide();
       }
     }
@@ -225,7 +255,7 @@ function createTray(): void {
           if (!widgetWindow || widgetWindow.isDestroyed()) {
             const widgetOptions = readSettingsWidgetOptions();
             createWidgetWindow(widgetOptions);
-            mainWindow?.hide();
+            hideOrDestroyMainWindow(widgetOptions.memorySaverMode);
           } else {
             widgetWindow.show();
           }
@@ -542,6 +572,8 @@ function createWidgetWindow(
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // 위젯이 가려지거나 최소화됐을 때 CPU/메모리 사용량 절감 (Chromium 기본 정책)
+      backgroundThrottling: true,
     },
   });
 
@@ -612,10 +644,11 @@ function createWidgetWindow(
       e.preventDefault();
       widgetWindow?.hide();
       if (!isSystemSuspending) {
-        // 사용자 의도 닫기일 때만 상태 초기화 + 폴링 중단 + 메인 표시
+        // 사용자 의도 닫기일 때만 상태 초기화 + 폴링 중단 + 메인 표시/재생성
         stopWinDRecovery();
         widgetWasActive = false;
-        mainWindow?.show();
+        // 메모리 절약 모드에서 destroy된 경우 재생성
+        ensureMainWindow();
       }
       // 시스템 잠금/절전으로 인한 close면 상태 유지 → unlock/resume 시 복원 가능
     }
@@ -641,13 +674,13 @@ function createWidgetWindow(
   });
 }
 
-function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeAction: 'widget' | 'tray' | 'ask'; desktopMode: string } {
+function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeAction: 'widget' | 'tray' | 'ask'; desktopMode: string; memorySaverMode: boolean } {
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const settings = JSON.parse(raw) as {
-        widget?: { width?: number; height?: number; transparent?: boolean; closeToWidget?: boolean; desktopMode?: string };
+        widget?: { width?: number; height?: number; transparent?: boolean; closeToWidget?: boolean; desktopMode?: string; memorySaverMode?: boolean };
       };
       const rawMode = settings.widget?.desktopMode ?? 'normal';
       // 마이그레이션: 이전 모드 → normal/topmost
@@ -664,12 +697,13 @@ function readSettingsWidgetOptions(): { width: number; height: number; startInWi
         startInWidgetMode: settings.widget?.transparent ?? false,
         closeAction,
         desktopMode,
+        memorySaverMode: settings.widget?.memorySaverMode ?? false,
       };
     }
   } catch {
     // fall through to defaults
   }
-  return { width: 920, height: 700, startInWidgetMode: false, closeAction: 'widget', desktopMode: 'normal' };
+  return { width: 920, height: 700, startInWidgetMode: false, closeAction: 'widget', desktopMode: 'normal', memorySaverMode: false };
 }
 
 function setupAutoUpdater(): void {
@@ -741,12 +775,13 @@ function registerIpcHandlers(): void {
     const opts = readSettingsWidgetOptions();
     if (action === 'widget') {
       if (!widgetWindow || widgetWindow.isDestroyed()) {
-        createWidgetWindow(opts, () => mainWindow?.hide());
+        createWidgetWindow(opts, () => hideOrDestroyMainWindow(opts.memorySaverMode));
       } else {
         widgetWindow.show();
-        mainWindow?.hide();
+        hideOrDestroyMainWindow(opts.memorySaverMode);
       }
     } else {
+      // tray로 숨김은 메모리 절약 모드 영향 없음
       mainWindow?.hide();
     }
   });
@@ -850,6 +885,29 @@ function registerIpcHandlers(): void {
     },
   );
 
+  // system:getMemoryMetrics — 현재 Electron 앱 프로세스별 메모리 사용량 조회 (진단용)
+  // 반환: { totalBytes, processes: [{ type, pid, memoryBytes }] }
+  ipcMain.handle('system:getMemoryMetrics', async (): Promise<{
+    totalBytes: number;
+    processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
+  }> => {
+    try {
+      const metrics = app.getAppMetrics();
+      const processes = metrics.map((m) => ({
+        type: m.type,
+        pid: m.pid,
+        // workingSetSize는 KB 단위 → bytes로 변환
+        memoryBytes: (m.memory?.workingSetSize ?? 0) * 1024,
+        name: (m as { name?: string }).name,
+      }));
+      const totalBytes = processes.reduce((sum, p) => sum + p.memoryBytes, 0);
+      return { totalBytes, processes };
+    } catch (err) {
+      console.error('[system:getMemoryMetrics] 실패:', err);
+      return { totalBytes: 0, processes: [] };
+    }
+  });
+
   // window:setAlwaysOnTop — 메인 창에만 적용 (위젯은 모드별 자동 관리)
   ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean): void => {
     mainWindow?.setAlwaysOnTop(flag);
@@ -878,25 +936,24 @@ function registerIpcHandlers(): void {
   // window:toggleWidget — 위젯 토글
   ipcMain.handle('window:toggleWidget', (): void => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
-      // 위젯이 열려있으면 닫고 메인창 복원
+      // 위젯이 열려있으면 닫고 메인창 복원 (필요 시 재생성)
       stopWinDRecovery();
       widgetWindow.destroy();
       widgetWindow = null;
       currentDesktopMode = 'normal';
-      mainWindow?.show();
+      ensureMainWindow();
     } else {
-      // 위젯이 없으면 생성하고, 표시된 뒤 메인창 숨김
+      // 위젯이 없으면 생성하고, 표시된 뒤 메인창 숨김/해제
       const widgetOptions = readSettingsWidgetOptions();
-      createWidgetWindow(widgetOptions, () => mainWindow?.hide());
+      createWidgetWindow(widgetOptions, () => hideOrDestroyMainWindow(widgetOptions.memorySaverMode));
     }
   });
 
   // window:navigateToPage — 메인 창으로 포커스 이동 + 페이지 이동 + 위젯 닫기
   ipcMain.handle('window:navigateToPage', (_event, page: string) => {
-    // Send navigation event to main window
+    // 메모리 절약 모드에서 메인창이 destroy된 상태일 수 있으므로 재생성 후 페이지 이동
+    ensureMainWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-      mainWindow.focus();
       mainWindow.webContents.send('navigate:to-page', page);
     }
     // Close widget window
@@ -1341,7 +1398,7 @@ if (!gotTheLock) {
     // Start in widget mode if the setting is enabled
     const widgetOptions = readSettingsWidgetOptions();
     if (widgetOptions.startInWidgetMode) {
-      createWidgetWindow(widgetOptions, () => mainWindow?.hide());
+      createWidgetWindow(widgetOptions, () => hideOrDestroyMainWindow(widgetOptions.memorySaverMode));
     }
 
     // Handle .ssampin file open from CLI args

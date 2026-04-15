@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Settings, WidgetSettings, WidgetDesktopMode } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
@@ -8,10 +8,42 @@ interface Props {
   patch: (p: Partial<Settings>) => void;
 }
 
+interface MemoryMetrics {
+  totalBytes: number;
+  processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
+}
+
+function formatMB(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+}
+
+function useMemoryMetrics(enabled: boolean): MemoryMetrics | null {
+  const [metrics, setMetrics] = useState<MemoryMetrics | null>(null);
+  useEffect(() => {
+    if (!enabled || !window.electronAPI?.getMemoryMetrics) return undefined;
+    let cancelled = false;
+    const fetchMetrics = () => {
+      window.electronAPI?.getMemoryMetrics?.().then((m) => {
+        if (!cancelled) setMetrics(m);
+      }).catch(() => { /* ignore */ });
+    };
+    fetchMetrics();
+    const timerId = window.setInterval(fetchMetrics, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timerId);
+    };
+  }, [enabled]);
+  return metrics;
+}
+
 export function WidgetTab({ draft, patch }: Props) {
   const patchWidget = useCallback((p: Partial<WidgetSettings>) => {
     patch({ widget: { ...draft.widget, ...p } });
   }, [draft.widget, patch]);
+
+  const [showMemory, setShowMemory] = useState(false);
+  const metrics = useMemoryMetrics(showMemory);
 
   return (
     <SettingsSection
@@ -94,6 +126,66 @@ export function WidgetTab({ draft, patch }: Props) {
             <span className="text-xs text-sp-muted">앱 실행 시 전체화면 대신 위젯으로 시작합니다.</span>
           </div>
           <Toggle checked={draft.widget.transparent} onChange={(v) => patchWidget({ transparent: v })} />
+        </div>
+        <div className="flex items-center justify-between pt-4 border-t border-sp-border">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-sp-text">메모리 절약 모드</span>
+            <span className="text-xs text-sp-muted leading-relaxed">
+              위젯으로 전환할 때 메인 창을 완전히 해제해 메모리 사용량을 줄입니다.
+              <br />
+              메인으로 돌아올 때 첫 화면 로드가 약간 느려질 수 있습니다. (저사양 PC 권장)
+            </span>
+          </div>
+          <Toggle
+            checked={draft.widget.memorySaverMode ?? false}
+            onChange={(v) => patchWidget({ memorySaverMode: v })}
+          />
+        </div>
+        <div className="pt-4 border-t border-sp-border">
+          <button
+            type="button"
+            onClick={() => setShowMemory((v) => !v)}
+            className="flex items-center gap-2 text-sm text-sp-accent hover:text-sp-accent/80 transition-colors"
+          >
+            <span className="material-symbols-outlined text-icon-md">
+              {showMemory ? 'expand_less' : 'expand_more'}
+            </span>
+            메모리 사용량 진단 {showMemory ? '숨기기' : '보기'}
+          </button>
+          {showMemory && (
+            <div className="mt-3 rounded-lg bg-sp-surface p-3 space-y-2">
+              {!window.electronAPI?.getMemoryMetrics ? (
+                <p className="text-xs text-sp-muted">개발 모드(브라우저)에서는 사용할 수 없습니다.</p>
+              ) : metrics === null ? (
+                <p className="text-xs text-sp-muted">측정 중…</p>
+              ) : (
+                <>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-sp-muted">전체 사용량</span>
+                    <span className="text-base font-bold text-sp-text">{formatMB(metrics.totalBytes)}</span>
+                  </div>
+                  <div className="text-xs text-sp-muted">
+                    프로세스 {metrics.processes.length}개 (메인 + 렌더러 + GPU 등)
+                  </div>
+                  <ul className="mt-2 space-y-1 max-h-48 overflow-y-auto pr-1">
+                    {[...metrics.processes]
+                      .sort((a, b) => b.memoryBytes - a.memoryBytes)
+                      .map((p) => (
+                        <li key={p.pid} className="flex items-center justify-between text-[11px] text-sp-muted">
+                          <span className="truncate">
+                            {p.type}
+                            {p.name ? ` · ${p.name}` : ''}
+                            <span className="text-sp-muted/60"> (pid {p.pid})</span>
+                          </span>
+                          <span className="font-mono text-sp-text shrink-0 ml-2">{formatMB(p.memoryBytes)}</span>
+                        </li>
+                      ))}
+                  </ul>
+                  <p className="text-[10px] text-sp-muted/70 pt-1">3초마다 갱신됩니다.</p>
+                </>
+              )}
+            </div>
+          )}
         </div>
         <div className="pt-4 border-t border-sp-border">
           <p className="text-sm font-medium text-sp-text mb-1">위젯 표시 항목</p>

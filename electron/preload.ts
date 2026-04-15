@@ -320,4 +320,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('system:resume', handler);
     return () => { ipcRenderer.removeListener('system:resume', handler); };
   },
+  // 메모리 진단 (설정 화면 표시용)
+  getMemoryMetrics: (): Promise<{
+    totalBytes: number;
+    processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
+  }> => ipcRenderer.invoke('system:getMemoryMetrics'),
 });

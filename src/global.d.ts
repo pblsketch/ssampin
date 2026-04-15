@@ -154,6 +154,11 @@ interface ElectronAPI {
   onDataChanged: (callback: (filename: string) => void) => () => void;
   // 절전/잠금 복귀 알림
   onSystemResume?: (callback: () => void) => () => void;
+  // 메모리 진단
+  getMemoryMetrics?: () => Promise<{
+    totalBytes: number;
+    processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
+  }>;
 }
 
 interface Window {
