@@ -2,6 +2,16 @@
 
 export type AirQualityGrade = '좋음' | '보통' | '나쁨' | '매우나쁨';
 
+export interface ForecastDay {
+  readonly date: string;             // "2026-04-16"
+  readonly dayOfWeek: string;        // "수"
+  readonly tempMin: number;
+  readonly tempMax: number;
+  readonly condition: string;        // "맑음"
+  readonly conditionIcon: string;    // WeatherAPI CDN URL (https: 프리픽스 포함)
+  readonly chanceOfRain: number;     // 강수 확률 %
+}
+
 export interface WeatherData {
   readonly tempCurrent: number;
   readonly tempMin: number;
@@ -12,6 +22,7 @@ export interface WeatherData {
   readonly pm10: number;
   readonly pm25: number;
   readonly airQuality: AirQualityGrade;
+  readonly forecast: ForecastDay[];  // 7일치 예보 (오늘 포함)
   readonly fetchedAt: number;        // Date.now()
 }
 
@@ -31,9 +42,15 @@ interface WeatherApiCurrentResponse {
   };
   forecast: {
     forecastday: Array<{
+      date: string;
       day: {
         maxtemp_c: number;
         mintemp_c: number;
+        daily_chance_of_rain: number;
+        condition: {
+          text: string;
+          icon: string;
+        };
       };
     }>;
   };
@@ -56,7 +73,7 @@ export async function fetchWeather(
 ): Promise<WeatherData> {
   // Electron → 직접 호출, 브라우저 → 프록시 경유 (CORS 우회)
   const base = isElectron ? 'https://api.weatherapi.com' : '/weather-api';
-  const url = `${base}/v1/forecast.json?key=${encodeURIComponent(WEATHER_API_KEY)}&q=${lat},${lon}&days=1&aqi=yes&lang=ko`;
+  const url = `${base}/v1/forecast.json?key=${encodeURIComponent(WEATHER_API_KEY)}&q=${lat},${lon}&days=7&aqi=yes&lang=ko`;
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -73,6 +90,25 @@ export async function fetchWeather(
 
   const airQuality = current.air_quality;
 
+  const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+  const forecastDays: ForecastDay[] = forecast.forecastday.map((d) => {
+    // YYYY-MM-DD 를 로컬 기준으로 파싱 (타임존 경계에서 하루 밀리는 문제 방지)
+    const [y, m, day] = d.date.split('-').map(Number);
+    const dateObj = new Date(y ?? 1970, (m ?? 1) - 1, day ?? 1);
+    const iconUrl = d.day.condition.icon.startsWith('http')
+      ? d.day.condition.icon
+      : `https:${d.day.condition.icon}`;
+    return {
+      date: d.date,
+      dayOfWeek: DAY_LABELS[dateObj.getDay()] ?? '',
+      tempMin: Math.round(d.day.mintemp_c),
+      tempMax: Math.round(d.day.maxtemp_c),
+      condition: d.day.condition.text,
+      conditionIcon: iconUrl,
+      chanceOfRain: Math.round(d.day.daily_chance_of_rain ?? 0),
+    };
+  });
+
   return {
     tempCurrent: Math.round(current.temp_c),
     tempMin: Math.round(today.day.mintemp_c),
@@ -83,6 +119,7 @@ export async function fetchWeather(
     pm10: Math.round(airQuality?.pm10 ?? 0),
     pm25: Math.round(airQuality?.pm2_5 ?? 0),
     airQuality: epaIndexToGrade(airQuality?.['us-epa-index'] ?? 1),
+    forecast: forecastDays,
     fetchedAt: Date.now(),
   };
 }

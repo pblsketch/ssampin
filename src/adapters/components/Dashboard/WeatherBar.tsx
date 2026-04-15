@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useWeatherStore } from '@adapters/stores/useWeatherStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { AirQualityGrade } from '@infrastructure/weather';
+import { WeatherForecastPopup } from './WeatherForecastPopup';
 
 const AIR_QUALITY_COLOR: Record<AirQualityGrade, string> = {
   '좋음': 'text-green-400',
@@ -21,6 +22,7 @@ export function WeatherBar() {
   const refresh = useWeatherStore((s) => s.refresh);
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const weatherLocation = useSettingsStore((s) => s.settings.weather.location);
+  const [showForecast, setShowForecast] = useState(false);
 
   useEffect(() => {
     if (!settingsLoaded) return; // settings 아직 로드 안 됐으면 대기
@@ -50,33 +52,63 @@ export function WeatherBar() {
   }
 
   const airColor = AIR_QUALITY_COLOR[weather.airQuality];
+  const iconUrl = weather.conditionIcon
+    ? weather.conditionIcon.startsWith('http')
+      ? weather.conditionIcon
+      : `https:${weather.conditionIcon}`
+    : null;
+  const hasForecast = weather.forecast && weather.forecast.length > 0;
 
   return (
-    <div className="flex items-center gap-4 text-sp-muted text-sm">
-      <span className="flex items-center gap-1">
-        <span className="material-symbols-outlined text-base">thermostat</span>
-        {weather.tempCurrent}°C ({weather.tempMin}° ~ {weather.tempMax}°)
-      </span>
+    <>
+      <button
+        type="button"
+        onClick={() => hasForecast && setShowForecast(true)}
+        disabled={!hasForecast}
+        title={hasForecast ? '클릭하여 주간 예보 보기' : undefined}
+        className={`flex items-center gap-4 text-sp-muted text-sm rounded-lg px-2 py-1 -mx-2 transition-colors ${
+          hasForecast ? 'cursor-pointer hover:bg-sp-text/5' : 'cursor-default'
+        }`}
+      >
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-base">thermostat</span>
+          {weather.tempCurrent}°C ({weather.tempMin}° ~ {weather.tempMax}°)
+        </span>
 
-      <Dot />
+        <Dot />
 
-      <span className="flex items-center gap-1">
-        <span className="material-symbols-outlined text-base">water_drop</span>
-        습도 {weather.humidity}%
-      </span>
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-base">water_drop</span>
+          습도 {weather.humidity}%
+        </span>
 
-      <Dot />
+        <Dot />
 
-      <span className={`flex items-center gap-1 ${airColor}`}>
-        <span className="material-symbols-outlined text-base">air</span>
-        미세먼지 {weather.airQuality}
-      </span>
+        <span className={`flex items-center gap-1 ${airColor}`}>
+          <span className="material-symbols-outlined text-base">air</span>
+          미세먼지 {weather.airQuality}
+        </span>
 
-      <Dot />
+        <Dot />
 
-      <span className="flex items-center gap-1">
-        {weather.condition}
-      </span>
-    </div>
+        <span className="flex items-center gap-1">
+          {iconUrl && <img src={iconUrl} alt="" className="w-5 h-5" />}
+          {weather.condition}
+        </span>
+
+        {hasForecast && (
+          <span className="material-symbols-outlined text-base text-sp-muted/60">
+            chevron_right
+          </span>
+        )}
+      </button>
+
+      {showForecast && weather.forecast && (
+        <WeatherForecastPopup
+          forecast={weather.forecast}
+          onClose={() => setShowForecast(false)}
+        />
+      )}
+    </>
   );
 }

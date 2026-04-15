@@ -49,6 +49,7 @@ export interface MessageStyle {
   readonly colorPreset: MessageColorPreset;
   readonly customColor?: string;
   readonly subtitle: string;
+  readonly collapsed?: boolean;
 }
 
 /** 기본 스타일 — 위젯 테마 연동 */
@@ -56,6 +57,7 @@ export const DEFAULT_MESSAGE_STYLE: MessageStyle = {
   icon: 'verified',
   colorPreset: 'theme',
   subtitle: '',
+  collapsed: false,
 };
 
 export interface MessageData {

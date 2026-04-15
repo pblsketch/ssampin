@@ -186,10 +186,24 @@ export function MessageBanner() {
 
   const s = { ...DEFAULT_MESSAGE_STYLE, ...style };
   const colors = getColors(s);
+  const isCollapsed = s.collapsed === true;
 
   function startEdit() {
+    if (isCollapsed) {
+      void setStyle({ collapsed: false });
+      return;
+    }
     setDraft(message);
     setIsEditing(true);
+  }
+
+  function toggleCollapsed(e: React.MouseEvent) {
+    e.stopPropagation();
+    void setStyle({ collapsed: !isCollapsed });
+    if (!isCollapsed) {
+      setIsEditing(false);
+      setShowStyleEditor(false);
+    }
   }
 
   useEffect(() => {
@@ -228,7 +242,9 @@ export function MessageBanner() {
   return (
     <div className="relative">
       <div
-        className="rounded-xl p-4 flex items-center gap-4 max-w-2xl w-full cursor-pointer border transition-colors"
+        className={`rounded-xl flex items-center max-w-2xl w-full cursor-pointer border transition-all ${
+          isCollapsed ? 'px-3 py-1.5 gap-2' : 'p-4 gap-4'
+        }`}
         style={{ background: colors.bg, borderColor: colors.border }}
         onClick={!isEditing ? startEdit : undefined}
         role={!isEditing ? 'button' : undefined}
@@ -238,21 +254,39 @@ export function MessageBanner() {
             ? (e) => { if (e.key === 'Enter' || e.key === ' ') startEdit(); }
             : undefined
         }
-        aria-label={!isEditing ? '메시지 편집' : undefined}
+        aria-label={
+          !isEditing
+            ? isCollapsed ? '오늘의 메시지 펼치기' : '메시지 편집'
+            : undefined
+        }
+        aria-expanded={!isCollapsed}
       >
         {/* 아이콘 */}
         {s.icon !== 'none' && (
           <div
-            className="rounded-full p-2 text-white flex shrink-0"
+            className={`rounded-full text-white flex shrink-0 ${isCollapsed ? 'p-1' : 'p-2'}`}
             style={{ background: colors.icon }}
           >
-            <span className="material-symbols-outlined text-xl">{s.icon}</span>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: isCollapsed ? '14px' : '20px' }}
+            >
+              {s.icon}
+            </span>
           </div>
         )}
 
         {/* 텍스트 영역 */}
         <div className="flex-1 min-w-0">
-          {isEditing ? (
+          {isCollapsed ? (
+            <p
+              className="text-sm font-medium truncate"
+              style={{ color: colors.text }}
+              title={message || '오늘의 메시지'}
+            >
+              {message !== '' ? message : '오늘의 메시지'}
+            </p>
+          ) : isEditing ? (
             <input
               ref={inputRef}
               type="text"
@@ -279,22 +313,42 @@ export function MessageBanner() {
           )}
         </div>
 
-        {/* 스타일 편집 버튼 */}
+        {/* 스타일 편집 버튼 (펼친 상태에서만) */}
+        {!isCollapsed && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStyleEditor((v) => !v);
+            }}
+            className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-white/10"
+            style={{ color: colors.text }}
+            title="배너 꾸미기"
+          >
+            <span className="material-symbols-outlined text-lg">palette</span>
+          </button>
+        )}
+
+        {/* 접기/펼치기 토글 */}
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowStyleEditor((v) => !v);
-          }}
-          className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-white/10"
+          onClick={toggleCollapsed}
+          className={`shrink-0 rounded-lg transition-colors hover:bg-white/10 ${
+            isCollapsed ? 'p-1' : 'p-1.5'
+          }`}
           style={{ color: colors.text }}
-          title="배너 꾸미기"
+          title={isCollapsed ? '펼치기' : '접기'}
+          aria-label={isCollapsed ? '오늘의 메시지 펼치기' : '오늘의 메시지 접기'}
         >
-          <span className="material-symbols-outlined text-lg">palette</span>
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: isCollapsed ? '16px' : '18px' }}
+          >
+            {isCollapsed ? 'expand_more' : 'expand_less'}
+          </span>
         </button>
       </div>
 
       {/* 스타일 편집 드롭다운 */}
-      {showStyleEditor && (
+      {showStyleEditor && !isCollapsed && (
         <div ref={editorRef}>
           <MessageStyleEditor
             style={s}

@@ -47,6 +47,17 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // debounce된 setTimeout 안에서 최신 상태를 읽기 위한 ref 미러
+  // (useCallback 의존성 업데이트 전에 setTimeout이 발사되면 stale closure로 이전 값을 덮어씀)
+  const statusesRef = useRef(studentStatuses);
+  const reasonsRef = useRef(studentReasons);
+  const memosRef = useRef(studentMemos);
+  const studentsRef = useRef(students);
+  useEffect(() => { statusesRef.current = studentStatuses; }, [studentStatuses]);
+  useEffect(() => { reasonsRef.current = studentReasons; }, [studentReasons]);
+  useEffect(() => { memosRef.current = studentMemos; }, [studentMemos]);
+  useEffect(() => { studentsRef.current = students; }, [students]);
+
   // 데이터 로드
   useEffect(() => {
     void loadAttendance();
@@ -94,13 +105,19 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
     }
   }, [classesLoaded, classId, period, getClass, getTodayRecord]);
 
-  // 저장 함수
+  // 저장 함수 — 상태는 ref에서 읽어 항상 최신 값을 보장
+  // (의존성 배열에서 state를 제외하여 debounce 중 재생성을 방지 → clearTimeout race 제거)
   const doSave = useCallback(async () => {
-    const studentAttendances: StudentAttendance[] = students.map((s) => ({
+    const currentStudents = studentsRef.current;
+    const currentStatuses = statusesRef.current;
+    const currentReasons = reasonsRef.current;
+    const currentMemos = memosRef.current;
+
+    const studentAttendances: StudentAttendance[] = currentStudents.map((s) => ({
       number: s.number,
-      status: studentStatuses.get(studentKey(s)) ?? 'present',
-      reason: studentReasons.get(studentKey(s)) || undefined,
-      memo: studentMemos.get(studentKey(s)) || undefined,
+      status: currentStatuses.get(studentKey(s)) ?? 'present',
+      reason: currentReasons.get(studentKey(s)) || undefined,
+      memo: currentMemos.get(studentKey(s)) || undefined,
       ...(s.grade != null ? { grade: s.grade } : {}),
       ...(s.classNum != null ? { classNum: s.classNum } : {}),
     }));
@@ -133,7 +150,7 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
         });
       }
     }
-  }, [students, studentStatuses, studentReasons, studentMemos, classId, period, saveRecord, type]);
+  }, [classId, period, saveRecord, type]);
 
   // 상태 변경 핸들러
   const setStatus = useCallback((sKey: string, status: AttendanceStatus) => {

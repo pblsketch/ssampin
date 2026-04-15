@@ -166,16 +166,26 @@ export function AttendanceMatrixCore({
 
   /* ── 셀 상태 변경 ── */
   const handleCellClick = useCallback((sKey: string, period: number) => {
+    // 기존 출결 레코드가 없을 때도 올바른 학생 번호/학년/반을 사용해야 한다
+    // (number: 0 폴백은 저장 시 잘못된 번호로 기록됨)
+    const student = students.find((s) => studentKey(s) === sKey);
+    if (!student) return;
     setMatrix((prev) => {
       const row = prev[sKey] ?? {};
       const current = row[period];
       const currentStatus: AttendanceStatus = current?.status ?? 'present';
       const nextStatus = cycleStatus(currentStatus);
+      const fallback: LocalStudentAttendance = {
+        number: student.number,
+        status: 'present',
+        ...(student.grade != null ? { grade: student.grade } : {}),
+        ...(student.classNum != null ? { classNum: student.classNum } : {}),
+      };
       const updated: LocalStudentAttendance | undefined =
         nextStatus === 'present'
           ? undefined
           : {
-              ...(current ?? { number: 0 }),
+              ...(current ?? fallback),
               status: nextStatus,
               reason: undefined,
               memo: undefined,
@@ -184,7 +194,7 @@ export function AttendanceMatrixCore({
     });
     setDirty(true);
     setSaveStatus('idle');
-  }, []);
+  }, [students]);
 
   /* ── 셀 우클릭 → 팝오버 ── */
   const handleCellContextMenu = useCallback(
