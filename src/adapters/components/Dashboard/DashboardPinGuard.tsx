@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { ProtectedFeatureKey } from '@domain/entities/PinSettings';
 import { usePinStore } from '@adapters/stores/usePinStore';
 import { PinOverlay } from '@adapters/components/common/PinOverlay';
@@ -17,16 +17,30 @@ export function DashboardPinGuard({ feature, children }: DashboardPinGuardProps)
   const isProtected = usePinStore((s) => s.isProtected);
   const isAccessible = usePinStore((s) => s.isAccessible);
   const checkAutoLock = usePinStore((s) => s.checkAutoLock);
+  const lastUnlockedAt = usePinStore((s) => s.lastUnlockedAt);
   const [showPinOverlay, setShowPinOverlay] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+
+  // 자동 잠금 체크 (마운트 시 + 30초 주기 재검사)
+  // 위젯 모드에서는 useClock으로 매초 리렌더되지만 일반 대시보드는 그렇지 않으므로
+  // 페이지/위젯 구분 없이 주기적으로 autoLockMinutes 경과를 확인한다.
+  useEffect(() => {
+    checkAutoLock();
+    const id = setInterval(checkAutoLock, 30_000);
+    return () => clearInterval(id);
+  }, [checkAutoLock]);
+
+  // 전역 잠금 상태 변화에 로컬 unlocked 동기화
+  // - "지금 잠그기" 버튼 클릭 또는 자동 잠금 타임아웃 시 lastUnlockedAt === null
+  //   → 다시 잠금 카드가 보이도록 로컬 상태도 해제
+  useEffect(() => {
+    if (lastUnlockedAt === null) setUnlocked(false);
+  }, [lastUnlockedAt]);
 
   const protected_ = isProtected(feature);
 
   // 보호 대상이 아니면 그대로 렌더링
   if (!protected_) return <>{children}</>;
-
-  // 자동 잠금 체크
-  checkAutoLock();
 
   // 잠금 해제됐으면 그대로 렌더링
   if (isAccessible(feature) || unlocked) return <>{children}</>;

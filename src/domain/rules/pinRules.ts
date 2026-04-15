@@ -1,6 +1,15 @@
 import type { PinSettings, ProtectedFeatureKey } from '../entities/PinSettings';
 
 /**
+ * PIN 포맷 검증 (4자리 숫자)
+ * - 도메인 레벨 방어선: UI 우회 시 비정상 PIN 저장 방지
+ * - 해시/비교 로직과는 독립적 (기존 저장된 PIN 검증에는 영향 없음)
+ */
+export function validatePinFormat(pin: string): boolean {
+  return /^\d{4}$/.test(pin);
+}
+
+/**
  * PIN을 해시하여 반환 (평문 저장 방지)
  * 보안 수준: 학생의 교사 PC 엿보기 방지 (간단한 동기 해시)
  */

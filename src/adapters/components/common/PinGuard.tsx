@@ -12,12 +12,22 @@ export function PinGuard({ feature, children }: PinGuardProps) {
   const isProtected = usePinStore((s) => s.isProtected);
   const isAccessible = usePinStore((s) => s.isAccessible);
   const checkAutoLock = usePinStore((s) => s.checkAutoLock);
+  const lastUnlockedAt = usePinStore((s) => s.lastUnlockedAt);
   const [unlocked, setUnlocked] = useState(false);
 
-  // 페이지 진입 시 자동 잠금 체크
+  // 페이지 진입 시 자동 잠금 체크 + 주기적 재검사
+  // (autoLockMinutes 경과 시점에 트리거되도록 30초 간격으로 확인)
   useEffect(() => {
     checkAutoLock();
+    const id = setInterval(checkAutoLock, 30_000);
+    return () => clearInterval(id);
   }, [checkAutoLock]);
+
+  // 전역 잠금 상태 변화에 로컬 unlocked 동기화
+  // - "지금 잠그기" 또는 자동 잠금 타임아웃 시 다시 PIN을 요구하도록 복구
+  useEffect(() => {
+    if (lastUnlockedAt === null) setUnlocked(false);
+  }, [lastUnlockedAt]);
 
   const protected_ = isProtected(feature);
   const accessible = isAccessible(feature);

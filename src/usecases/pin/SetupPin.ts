@@ -1,6 +1,6 @@
 import type { ISettingsRepository } from '@domain/repositories/ISettingsRepository';
 import type { ProtectedFeatures } from '@domain/entities/PinSettings';
-import { hashPin, verifyPin } from '@domain/rules/pinRules';
+import { hashPin, verifyPin, validatePinFormat } from '@domain/rules/pinRules';
 
 export class SetupPinUseCase {
   constructor(private readonly settingsRepo: ISettingsRepository) {}
@@ -14,6 +14,10 @@ export class SetupPinUseCase {
     protectedFeatures: ProtectedFeatures,
     oldPin?: string,
   ): Promise<{ success: boolean; error?: string }> {
+    if (!validatePinFormat(newPin)) {
+      return { success: false, error: 'PIN은 4자리 숫자여야 합니다' };
+    }
+
     const settings = await this.settingsRepo.getSettings();
     if (!settings) return { success: false, error: '설정을 불러올 수 없습니다' };
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { PinSettings, ProtectedFeatures, ProtectedFeatureKey } from '@domain/entities/PinSettings';
-import { hashPin, verifyPin } from '@domain/rules/pinRules';
+import { hashPin, verifyPin, validatePinFormat } from '@domain/rules/pinRules';
 import { checkAccess } from '@usecases/pin/CheckAccess';
 import { useSettingsStore } from './useSettingsStore';
 
@@ -57,6 +57,11 @@ export const usePinStore = create<PinState>((set, get) => ({
   },
 
   setupPin: (newPin, features, autoLockMinutes, oldPin?) => {
+    // 도메인 레벨 포맷 검증 (UI 우회 방지)
+    if (!validatePinFormat(newPin)) {
+      return { success: false, error: 'PIN은 4자리 숫자여야 합니다' };
+    }
+
     const pinSettings = get().getPinSettings();
 
     // 기존 PIN 확인

@@ -3,6 +3,7 @@ import type { Settings } from '@domain/entities/Settings';
 import type { PinSettings, ProtectedFeatures, ProtectedFeatureKey } from '@domain/entities/PinSettings';
 import { PROTECTABLE_PAGES } from '@adapters/components/Layout/Sidebar';
 import { usePinStore } from '@adapters/stores/usePinStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
 import { AUTO_LOCK_OPTIONS } from '../shared/constants';
@@ -18,6 +19,7 @@ const FEATURE_LABELS: { key: ProtectedFeatureKey; icon: string; label: string }[
 
 export function SecurityTab({ draft, patch }: Props) {
   const pinStore = usePinStore();
+  const showToast = useToastStore((s) => s.show);
   const [pinMode, setPinMode] = useState<'idle' | 'setup' | 'change' | 'remove'>('idle');
   const [pinStep, setPinStep] = useState<'input' | 'confirm' | 'old'>('input');
   const [pinDigits, setPinDigits] = useState('');
@@ -62,6 +64,10 @@ export function SecurityTab({ draft, patch }: Props) {
 
   const handlePinSubmit = () => {
     if (pinMode === 'remove') {
+      if (pinOld.length !== 4) {
+        setPinError('4자리 숫자를 입력해주세요');
+        return;
+      }
       const result = pinStore.removePin(pinOld);
       if (result.success) {
         patch({
@@ -81,6 +87,10 @@ export function SecurityTab({ draft, patch }: Props) {
     }
 
     if (pinStep === 'old') {
+      if (pinOld.length !== 4) {
+        setPinError('4자리 숫자를 입력해주세요');
+        return;
+      }
       const ok = pinStore.verify(pinOld);
       if (ok) {
         setPinStep('input');
@@ -115,6 +125,15 @@ export function SecurityTab({ draft, patch }: Props) {
         pinMode === 'change' ? pinOld : undefined,
       );
       if (result.success) {
+        // setupPin은 store와 디스크만 갱신하므로, 로컬 draft도 동기화하여
+        // Settings 페이지의 UI 상태(pinEnabled 배지 등)가 즉시 반영되게 한다.
+        patch({
+          pin: {
+            ...draft.pin,
+            enabled: true,
+            pinHash: usePinStore.getState().getPinSettings().pinHash,
+          },
+        });
         resetPinForm();
       } else {
         setPinError(result.error ?? '오류가 발생했습니다');
@@ -183,10 +202,10 @@ export function SecurityTab({ draft, patch }: Props) {
           <div className="p-4 rounded-lg bg-sp-surface/80 border border-sp-border space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-sp-text">
-                {pinMode === 'remove' ? '현재 PIN 입력' :
-                  pinStep === 'old' ? '현재 PIN 입력' :
+                {pinMode === 'remove' ? '현재 PIN 입력 (4자리)' :
+                  pinStep === 'old' ? '현재 PIN 입력 (4자리)' :
                     pinStep === 'input' ? '새 PIN 입력 (4자리)' :
-                      'PIN 확인 (한 번 더)'}
+                      'PIN 확인 (4자리, 한 번 더)'}
               </span>
               <button type="button" onClick={resetPinForm} className="text-xs text-sp-muted hover:text-sp-text">
                 취소
@@ -296,7 +315,10 @@ export function SecurityTab({ draft, patch }: Props) {
             <div className="pt-4 border-t border-sp-border">
               <button
                 type="button"
-                onClick={() => pinStore.lock()}
+                onClick={() => {
+                  pinStore.lock();
+                  showToast('모든 보호 기능이 잠겼습니다.', 'success');
+                }}
                 className="w-full px-4 py-2.5 rounded-lg border border-sp-border text-sp-muted hover:bg-sp-text/5 hover:text-sp-text text-sm font-medium transition-colors flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-icon">lock</span>

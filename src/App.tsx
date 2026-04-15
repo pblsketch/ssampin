@@ -103,7 +103,7 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
     return <PinGuard feature="memo"><MemoPage /></PinGuard>;
   }
   if (page === 'class-management') {
-    return <ClassManagementPage />;
+    return <PinGuard feature="classManagement"><ClassManagementPage /></PinGuard>;
   }
   if (page === 'settings') {
     return <SettingsPage />;
@@ -112,7 +112,7 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
     return <Export />;
   }
   if (page === 'bookmarks') {
-    return <BookmarksPage />;
+    return <PinGuard feature="bookmarks"><BookmarksPage /></PinGuard>;
   }
   if (page === 'tools') {
     return <ToolsGrid onNavigate={onNavigate} />;

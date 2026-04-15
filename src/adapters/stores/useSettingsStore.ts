@@ -296,6 +296,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       todoSettings: patch.todoSettings
         ? { ...(current.todoSettings ?? DEFAULT_TODO_SETTINGS), ...patch.todoSettings }
         : current.todoSettings,
+      // pin은 보안 관련 중첩 객체이므로 부분 업데이트 시 기존 pinHash 등 필드 보존 필요
+      pin: patch.pin
+        ? {
+            ...current.pin,
+            ...patch.pin,
+            protectedFeatures: patch.pin.protectedFeatures
+              ? { ...current.pin.protectedFeatures, ...patch.pin.protectedFeatures }
+              : current.pin.protectedFeatures,
+          }
+        : current.pin,
     };
     set({ settings: next });
     await settingsRepository.saveSettings(next);
