@@ -195,7 +195,7 @@ export default async function AdminAnalyticsPage({
     fetchRecentEvents(),
     fetchTotals(),
     fetchView<{ tool_name: string; usage_count: number; unique_users: number; avg_per_user: number }>('analytics_tool_ranking_weekly', { order: 'usage_count.desc' }),
-    fetchView<{ app_version: string; users: number; last_seen: string }>('analytics_version_distribution', { order: 'users.desc', limit: 50 }),
+    fetchView<{ app_version: string; users: number; last_seen: string }>('analytics_version_distribution', { order: 'users.desc' }),
     fetchView<{ cohort_date: string; cohort_size: number; day1: number; day3: number; day7: number; day1_pct: number; day3_pct: number; day7_pct: number }>('analytics_retention', { order: 'cohort_date.desc', dateColumn: 'cohort_date', dateFrom, dateTo }),
     fetchView<{ date: string; user_messages: number; bot_responses: number; unique_sessions: number; avg_messages_per_session: number }>('chatbot_daily_stats', { order: 'date.desc', dateColumn: 'date', dateFrom, dateTo }),
     fetchView<{ keyword: string; mention_count: number; unique_sessions: number }>('chatbot_popular_topics', { order: 'mention_count.desc' }),
