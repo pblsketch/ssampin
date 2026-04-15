@@ -7,8 +7,8 @@ import type { Settings } from '@domain/entities/Settings';
 import { SettingsLayout } from './SettingsLayout';
 
 export type SettingsTabId =
-  | 'account' | 'school' | 'period' | 'widget' | 'seat' | 'security'
-  | 'calendar' | 'weather' | 'display' | 'sidebar' | 'todo' | 'sync' | 'system' | 'about';
+  | 'google' | 'school' | 'period' | 'widget' | 'seat' | 'security'
+  | 'calendar' | 'weather' | 'display' | 'sidebar' | 'todo' | 'system' | 'about';
 
 export function SettingsPage() {
   const { track } = useAnalytics();

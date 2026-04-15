@@ -8,7 +8,6 @@ import { Toggle } from '../shared/Toggle';
 import { COLOR_MAP, colorDot, DEFAULT_CAT_IDS } from '../shared/constants';
 import { NeisScheduleSection } from '../NeisScheduleSection';
 import { NeisTimetableAutoSyncSection } from '../NeisTimetableAutoSyncSection';
-import { CalendarSettings } from '../CalendarSettings';
 
 interface Props {
   draft: Settings;
@@ -167,13 +166,15 @@ export function CalendarTab({ draft, patch }: Props) {
         </>
       )}
 
-      {/* 구글 캘린더 연동 */}
+      {/* 구글 캘린더 연동 안내 — 실제 설정은 Google 연동 탭에서 */}
       <SettingsSection
         icon="calendar_month"
         iconColor="bg-green-500/10 text-green-400"
         title="구글 캘린더 연동"
       >
-        <CalendarSettings />
+        <p className="text-sm text-sp-muted">
+          구글 캘린더 양방향 동기화는 <span className="text-sp-text font-medium">설정 › Google 연동</span> 탭에서 관리합니다.
+        </p>
       </SettingsSection>
     </div>
   );

@@ -44,7 +44,9 @@ import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
+import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
 import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
+import { OAuthModalsProvider } from '@adapters/components/Settings/modals/OAuthModalsProvider';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
@@ -442,9 +444,10 @@ function MainApp() {
     return () => window.removeEventListener('ssampin:navigate', handler);
   }, []);
 
-  // 구글 캘린더 및 Tasks 연결 상태 초기화
+  // 구글 계정 + 캘린더 + Tasks 연결 상태 초기화
+  // useGoogleAccountStore.initialize()가 useCalendarSyncStore.initialize()도 연쇄 호출함
   useEffect(() => {
-    useCalendarSyncStore.getState().initialize();
+    void useGoogleAccountStore.getState().initialize();
     void useTasksSyncStore.getState().initialize();
   }, []);
 
@@ -679,6 +682,7 @@ function MainApp() {
       <SharePromptOverlay />
       <HelpChatPanel />
       <CloseActionDialog />
+      <OAuthModalsProvider />
       </div>
     </div>
   );
