@@ -15,6 +15,15 @@ import { SeatZoneModal } from './SeatZoneModal';
 import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
+/* ──────────────────────── 이름 글자 크기 매핑 ──────────────────────── */
+
+const NAME_SIZE_CLASS: Record<'sm' | 'md' | 'lg' | 'xl', string> = {
+  sm: 'text-sm',
+  md: 'text-base',
+  lg: 'text-lg',
+  xl: 'text-xl',
+};
+
 /* ──────────────────────── 좌석 카드 ──────────────────────── */
 
 interface SeatCardProps {
@@ -56,6 +65,8 @@ function SeatCard({
   const student = getStudent(studentId);
   const isEmpty = studentId === null;
   const studentNumber = student?.studentNumber;
+  const nameSize = useSettingsStore((s) => s.settings.seatingNameSize ?? 'sm');
+  const nameSizeClass = NAME_SIZE_CLASS[nameSize];
 
   const [editName, setEditName] = useState(student?.name ?? '');
 
@@ -206,8 +217,8 @@ function SeatCard({
             {student?.name.charAt(0) ?? '?'}
           </span>
         </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-bold text-sp-text leading-tight">
+        <div className="flex flex-col min-w-0">
+          <span className={`${nameSizeClass} font-bold text-sp-text leading-tight truncate`}>
             {student?.name ?? ''}
           </span>
         </div>

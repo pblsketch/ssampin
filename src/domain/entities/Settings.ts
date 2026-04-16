@@ -243,6 +243,8 @@ export interface Settings {
   readonly classroomColors?: SubjectColorMap;
   /** 좌석배치 기본 시점: 'student' | 'teacher' */
   readonly seatingDefaultView?: 'student' | 'teacher';
+  /** 좌석배치 학생 이름 글자 크기 (기본 'sm') */
+  readonly seatingNameSize?: 'sm' | 'md' | 'lg' | 'xl';
   /** 시간표 기본 탭: 'class'(학급) | 'teacher'(교사). 미설정 시 schoolLevel로 스마트 디폴트 */
   readonly timetableDefaultView?: 'class' | 'teacher';
   /** Google Drive 동기화 설정 */

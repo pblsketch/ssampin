@@ -574,9 +574,6 @@ export function AttendanceMatrixCore({
             onChange={(next) => handleDetailChange(popover.studentKey, popover.period, next)}
             compact={false}
           />
-          {(!popoverAtt || popoverAtt.status === 'present') && (
-            <p className="text-xs text-sp-muted/60 mt-1">출석 상태에서는 사유를 입력할 수 없습니다.</p>
-          )}
         </div>
       )}
     </div>

@@ -1,7 +1,8 @@
 import { RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { Student } from '@domain/entities/Student';
-import type { StudentRecord, CounselingMethod } from '@domain/entities/StudentRecord';
+import type { StudentRecord, CounselingMethod, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
+import { formatPeriodLabel } from '@domain/entities/Attendance';
 
 /* ──────────────────────── 공유 타입 ──────────────────────── */
 
@@ -153,6 +154,61 @@ export function getSmartTagClass(record: { category: string; subcategory: string
     }
   }
   return getRecordTagClass(record.category, categories);
+}
+
+/* ──────────────────────── 교시별 출결 표시 ──────────────────────── */
+
+const ATTENDANCE_STATUS_TEXT: Record<AttendancePeriodEntry['status'], string> = {
+  absent: '결석',
+  late: '지각',
+  earlyLeave: '조퇴',
+  classAbsence: '결과',
+};
+
+/**
+ * 교시별 출결 상세를 한 줄(단일 그룹) 또는 여러 줄(다중 그룹)로 변환한다.
+ *
+ * - 모든 교시의 (상태, 사유)가 동일: `["1교시, 3교시"]` — subcategory 태그가 이미 유형을 표시하므로 교시만 노출.
+ * - 교시마다 (상태, 사유)가 다름: `["1교시 결석 (질병)", "3교시 지각 (기타)"]` — 교시별 유형까지 표시.
+ *
+ * @param entries attendancePeriods 필드 (period 오름차순 가정)
+ * @returns 표시용 문자열 배열. entries가 비어있으면 빈 배열.
+ */
+export function formatAttendancePeriodLines(
+  entries: readonly AttendancePeriodEntry[] | undefined,
+): string[] {
+  if (!entries || entries.length === 0) return [];
+
+  // (status, reason) 그룹핑
+  const groups = new Map<
+    string,
+    { periods: number[]; status: AttendancePeriodEntry['status']; reason?: string }
+  >();
+  for (const e of entries) {
+    const key = `${e.status}|${e.reason ?? ''}`;
+    const existing = groups.get(key);
+    if (existing) existing.periods.push(e.period);
+    else groups.set(key, { periods: [e.period], status: e.status, reason: e.reason });
+  }
+
+  const renderPeriods = (periods: readonly number[]): string =>
+    periods.map(formatPeriodLabel).join(', ');
+
+  // 단일 그룹: 교시 나열만 (subcategory 태그가 유형 표시)
+  if (groups.size === 1) {
+    const only = groups.values().next().value;
+    if (!only) return [];
+    return [renderPeriods(only.periods)];
+  }
+
+  // 다중 그룹: 교시 + 유형(사유) 모두 표시
+  const lines: string[] = [];
+  for (const g of groups.values()) {
+    const statusText = ATTENDANCE_STATUS_TEXT[g.status];
+    const reasonText = g.reason ? ` (${g.reason})` : '';
+    lines.push(`${renderPeriods(g.periods)} ${statusText}${reasonText}`);
+  }
+  return lines;
 }
 
 /** 출결 유형 정렬 우선순위 */

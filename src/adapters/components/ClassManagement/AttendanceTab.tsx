@@ -515,7 +515,6 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
                   const attendance = localStudents.find((s) => studentKey(s) === sKey);
                   const status = attendance?.status ?? 'present';
                   const config = STATUS_CONFIG[status];
-                  const showDetail = status !== 'present';
 
                   return (
                     <div
@@ -550,18 +549,16 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
                         </div>
                       </div>
 
-                      {/* reason/memo 인라인 편집 (비출석 상태일 때만) */}
-                      {showDetail && (
-                        <div className="mt-1 pl-0">
-                          <AttendanceDetailEditor
-                            status={status}
-                            reason={attendance?.reason}
-                            memo={attendance?.memo}
-                            onChange={(next) => handleDetailChange(sKey, next)}
-                            compact={true}
-                          />
-                        </div>
-                      )}
+                      {/* reason/memo 인라인 편집 (present면 안내 문구, 그 외면 편집 UI) */}
+                      <div className="mt-1 pl-0">
+                        <AttendanceDetailEditor
+                          status={status}
+                          reason={attendance?.reason}
+                          memo={attendance?.memo}
+                          onChange={(next) => handleDetailChange(sKey, next)}
+                          compact={true}
+                        />
+                      </div>
                     </div>
                   );
                 })}

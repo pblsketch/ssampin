@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StudentRecord, CounselingMethod } from '@domain/entities/StudentRecord';
+import type { StudentRecord, CounselingMethod, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import { studentRecordsRepository } from '@adapters/di/container';
@@ -336,6 +336,21 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
 
           const typeLabel = ATTENDANCE_STATUS_LABEL[rep.status as Exclude<AttendanceStatus, 'present'>];
           const subcategory = rep.reason ? `${typeLabel} (${rep.reason})` : typeLabel;
+
+          // 교시별 이상 출결 상세 보존 (present/undefined 제외, period 오름차순)
+          const attendancePeriods: AttendancePeriodEntry[] = [];
+          const sortedPeriods = [...periodMap.keys()].sort((a, b) => a - b);
+          for (const period of sortedPeriods) {
+            const entry = periodMap.get(period);
+            if (!entry || entry.status === 'present') continue;
+            attendancePeriods.push({
+              period,
+              status: entry.status,
+              ...(entry.reason ? { reason: entry.reason } : {}),
+              ...(entry.memo ? { memo: entry.memo } : {}),
+            });
+          }
+
           const record: StudentRecord = {
             id: bridgeId,
             studentId: student.id,
@@ -344,6 +359,7 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
             content: rep.memo ?? '',
             date,
             createdAt: existing?.createdAt ?? new Date().toISOString(),
+            attendancePeriods,
           };
 
           if (existing) {

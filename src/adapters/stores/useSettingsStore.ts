@@ -133,6 +133,7 @@ const DEFAULT_SETTINGS: Settings = {
     gridRowHeight: 80,
   },
   seatingDefaultView: 'teacher',
+  seatingNameSize: 'sm',
   sidebarCollapsed: false,
   eventAlertEnabled: true,
   showChatbot: true,

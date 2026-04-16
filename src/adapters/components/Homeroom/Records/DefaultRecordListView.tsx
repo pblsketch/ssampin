@@ -6,6 +6,7 @@ import {
   type RecordEditProps,
   formatDateKR,
   formatTimeKR,
+  formatAttendancePeriodLines,
   getMethodIcon,
   getSmartTagClass,
   METHOD_OPTIONS,
@@ -48,6 +49,9 @@ function DefaultRecordListView({
               {dateRecords.map((record) => {
                 const student = studentMap.get(record.studentId);
                 const isEditing = editingId === record.id;
+                const periodLines = record.category === 'attendance'
+                  ? formatAttendancePeriodLines(record.attendancePeriods)
+                  : [];
                 return (
                   <div
                     key={record.id}
@@ -66,6 +70,14 @@ function DefaultRecordListView({
                       <span className={getSmartTagClass(record, categories)}>
                         {record.subcategory}
                       </span>
+                      {periodLines.length > 0 && (
+                        <span
+                          className="text-detail font-medium text-sp-muted rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 whitespace-nowrap flex-shrink-0 tabular-nums"
+                          title={periodLines.join(' · ')}
+                        >
+                          {periodLines.join(' · ')}
+                        </span>
+                      )}
                       {record.method && (
                         <span className="text-xs text-sp-muted" title={METHOD_OPTIONS.find((m) => m.value === record.method)?.label}>
                           {getMethodIcon(record.method)}

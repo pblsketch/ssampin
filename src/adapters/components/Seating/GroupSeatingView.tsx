@@ -2,6 +2,16 @@ import { useState, useCallback } from 'react';
 import type { SeatGroup } from '@domain/entities/Seating';
 import { GROUP_COLORS } from '@domain/entities/Seating';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+
+/* ──────────────────────── 이름 글자 크기 매핑 ──────────────────────── */
+
+const NAME_SIZE_CLASS: Record<'sm' | 'md' | 'lg' | 'xl', string> = {
+  sm: 'text-detail',
+  md: 'text-sm',
+  lg: 'text-base',
+  xl: 'text-lg',
+};
 
 /* ──────────────────────── 학생 칩 ──────────────────────── */
 
@@ -16,6 +26,8 @@ function StudentChip({ studentId, groupColor, isEditing, onRemove }: StudentChip
   const getStudent = useStudentStore((s) => s.getStudent);
   const student = getStudent(studentId);
   const studentNumber = student?.studentNumber;
+  const nameSize = useSettingsStore((s) => s.settings.seatingNameSize ?? 'sm');
+  const nameSizeClass = NAME_SIZE_CLASS[nameSize];
 
   return (
     <div
@@ -31,7 +43,7 @@ function StudentChip({ studentId, groupColor, isEditing, onRemove }: StudentChip
       </div>
       {/* 이름 + 번호 */}
       <div className="flex flex-col items-center">
-        <span className="text-detail font-medium text-sp-text leading-tight">
+        <span className={`${nameSizeClass} font-medium text-sp-text leading-tight`}>
           {student?.name ?? '알 수 없음'}
         </span>
         {studentNumber !== undefined && (

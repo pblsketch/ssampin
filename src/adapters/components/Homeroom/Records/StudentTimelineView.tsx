@@ -8,6 +8,7 @@ import {
   type RecordEditProps,
   formatDateKR,
   formatTimeKR,
+  formatAttendancePeriodLines,
   getMethodIcon,
   getRecordTagClass,
   getCategoryDotColor,
@@ -86,6 +87,9 @@ function StudentTimelineView({
                 <div className="space-y-2 ml-2">
                   {dateRecords.map((record) => {
                     const isEditing = editingId === record.id;
+                    const periodLines = record.category === 'attendance'
+                      ? formatAttendancePeriodLines(record.attendancePeriods)
+                      : [];
                     return (
                       <div key={record.id} className="relative">
                         {/* 도트 */}
@@ -98,6 +102,14 @@ function StudentTimelineView({
                             <span className={getRecordTagClass(record.category, categories)}>
                               {record.subcategory}
                             </span>
+                            {periodLines.length > 0 && (
+                              <span
+                                className="text-detail font-medium text-sp-muted rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 whitespace-nowrap tabular-nums"
+                                title={periodLines.join(' · ')}
+                              >
+                                {periodLines.join(' · ')}
+                              </span>
+                            )}
                             {record.method && (
                               <span className="text-xs text-sp-muted">
                                 {getMethodIcon(record.method)}

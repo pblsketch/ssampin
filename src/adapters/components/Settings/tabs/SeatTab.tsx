@@ -56,6 +56,23 @@ export function SeatTab({ draft, patch }: Props) {
             <option value="teacher">교사 시점</option>
           </select>
         </div>
+
+        <div className="flex items-center justify-between mt-6 pt-6 border-t border-sp-border/30">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-sp-text">학생 이름 크기</span>
+            <span className="text-xs text-sp-muted">자리배치 화면의 학생 이름 글자 크기를 조정합니다.</span>
+          </div>
+          <select
+            value={draft.seatingNameSize ?? 'sm'}
+            onChange={(e) => patch({ seatingNameSize: e.target.value as 'sm' | 'md' | 'lg' | 'xl' })}
+            className="bg-sp-card border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
+          >
+            <option value="sm">작게</option>
+            <option value="md">보통</option>
+            <option value="lg">크게</option>
+            <option value="xl">아주 크게</option>
+          </select>
+        </div>
       </SettingsSection>
 
       <SeatRelationSection />

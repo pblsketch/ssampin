@@ -11,7 +11,8 @@ export interface AttendanceDetailEditorProps {
 
 /**
  * 출결 사유 chip + 메모 textarea 조합 컴포넌트.
- * status === 'present' 이면 null 반환 (정상출석에는 사유 불필요).
+ * status === 'present' 이면 상태 변경 안내만 표시한다
+ * (메모 textarea 자체가 사라지면 사용자가 "입력 불가"로 오인하는 UX 문제 방지).
  * compact=true 이면 인라인용(작게), false 이면 팝오버용(보통 크기).
  */
 export function AttendanceDetailEditor({
@@ -21,7 +22,15 @@ export function AttendanceDetailEditor({
   onChange,
   compact = false,
 }: AttendanceDetailEditorProps) {
-  if (status === 'present') return null;
+  if (status === 'present') {
+    return (
+      <p
+        className={`text-sp-muted/70 ${compact ? 'text-[10px] pt-0.5' : 'text-xs pt-1'}`}
+      >
+        결석·지각·조퇴·결과로 변경하면 사유와 메모를 입력할 수 있어요.
+      </p>
+    );
+  }
 
   const handleReasonClick = (r: AttendanceReason) => {
     onChange({ reason: reason === r ? undefined : r, memo });
