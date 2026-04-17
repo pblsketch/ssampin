@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { ToolLayout } from './ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 
 interface ToolQRCodeProps {
   onBack: () => void;
@@ -68,12 +69,8 @@ function FullscreenQR({
   value: string;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+  useToolKeydown((e) => {
+    if (e.key === 'Escape') onClose();
   }, [onClose]);
 
   return (

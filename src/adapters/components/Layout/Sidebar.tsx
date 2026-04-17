@@ -36,6 +36,7 @@ export type PageId =
   | 'tool-chalkboard'
   | 'tool-valueline'
   | 'tool-traffic-discussion'
+  | 'dual-tool-view'
   | 'settings';
 
 import { useState, useMemo, useCallback } from 'react';

@@ -3,6 +3,7 @@ import { formatTime, getPresentationWarningLevel } from '@domain/rules/timerRule
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 import {
   playAlarmSound,
   playPreWarningSound,
@@ -419,29 +420,25 @@ export function PresentationMode() {
   }, [updateSettings, settings.alarmSound]);
 
   // ─── 키보드 단축키 ────────────────────────────
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (document.activeElement as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown((e) => {
+    const tag = (document.activeElement as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      if (e.key === ' ') {
-        e.preventDefault();
-        if (state === 'setup') startTimer();
-        else if (state === 'running') pauseTimer();
-        else if (state === 'paused') resumeTimerStable();
-        else if (state === 'slide-done') nextPresenter();
-      } else if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
-        e.preventDefault();
-        if (state === 'slide-done' || state === 'running' || state === 'paused') {
-          nextPresenter();
-        }
-      } else if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        resetAll();
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (state === 'setup') startTimer();
+      else if (state === 'running') pauseTimer();
+      else if (state === 'paused') resumeTimerStable();
+      else if (state === 'slide-done') nextPresenter();
+    } else if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
+      e.preventDefault();
+      if (state === 'slide-done' || state === 'running' || state === 'paused') {
+        nextPresenter();
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    } else if (e.key === 'r' || e.key === 'R') {
+      e.preventDefault();
+      resetAll();
+    }
   }, [state, startTimer, pauseTimer, resumeTimerStable, nextPresenter, resetAll]);
 
   // ─── 경고 레벨 ────────────────────────────────

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Sidebar, type PageId } from '@adapters/components/Layout/Sidebar';
 import { EventPopup } from '@adapters/components/Dashboard/EventPopup';
 import { Dashboard } from '@adapters/components/Dashboard/Dashboard';
@@ -15,6 +15,9 @@ import { Widget } from '@adapters/components/Widget/Widget';
 import { Export } from '@adapters/components/Export/Export';
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
 import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
+import { DualToolContainer } from '@adapters/components/Tools/DualToolContainer';
+import { ToolServicesContext, type ToolServicesValue } from '@adapters/components/Tools/ToolServicesContext';
+import { isDualToolId, type DualToolId } from '@adapters/components/Tools/toolRegistry';
 import { ToolTimer } from '@adapters/components/Tools/Timer';
 import { ToolRandom } from '@adapters/components/Tools/ToolRandom';
 import { ToolTrafficLight } from '@adapters/components/Tools/ToolTrafficLight';
@@ -76,7 +79,25 @@ function isWidgetMode(): boolean {
   return false;
 }
 
-function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscreen: boolean) {
+function useCallbackForDualEntry(
+  setCurrentPage: (page: PageId) => void,
+): () => void {
+  return useCallback(() => {
+    setCurrentPage('dual-tool-view');
+  }, [setCurrentPage]);
+}
+
+interface RenderPageContext {
+  readonly onRequestDualMode: () => void;
+  readonly lastSingleTool: DualToolId | null;
+}
+
+function renderPage(
+  page: PageId,
+  onNavigate: (page: PageId) => void,
+  isFullscreen: boolean,
+  ctx: RenderPageContext,
+) {
   if (page === 'dashboard') {
     return <Dashboard onNavigate={(page) => onNavigate(page as PageId)} />;
   }
@@ -119,59 +140,77 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void, isFullscre
   if (page === 'tools') {
     return <ToolsGrid onNavigate={onNavigate} />;
   }
-  if (page === 'tool-timer') {
-    return <ToolTimer onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  if (page === 'dual-tool-view') {
+    return (
+      <DualToolContainer
+        initialLeftTool={ctx.lastSingleTool}
+        onExit={(remaining) => onNavigate(remaining ?? 'tools')}
+      />
+    );
   }
+  // 단일 모드 tool-* 페이지는 공통 ToolServicesContext로 감싸 "병렬 모드 열기" 버튼을 활성화
+  const singleToolServices: ToolServicesValue = { onRequestDualMode: ctx.onRequestDualMode };
+  if (page === 'tool-timer') {
+    return (
+      <ToolServicesContext.Provider value={singleToolServices}>
+        <ToolTimer onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />
+      </ToolServicesContext.Provider>
+    );
+  }
+  const wrap = (el: React.ReactNode) => (
+    <ToolServicesContext.Provider value={singleToolServices}>{el}</ToolServicesContext.Provider>
+  );
   if (page === 'tool-random') {
-    return <ToolRandom onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolRandom onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-traffic-light') {
-    return <ToolTrafficLight onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolTrafficLight onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-scoreboard') {
-    return <ToolScoreboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolScoreboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-roulette') {
-    return <ToolRoulette onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolRoulette onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-dice') {
-    return <ToolDice onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolDice onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-coin') {
-    return <ToolCoin onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolCoin onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-qrcode') {
-    return <ToolQRCode onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolQRCode onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-work-symbols') {
-    return <ToolWorkSymbols onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolWorkSymbols onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-poll') {
-    return <ToolPoll onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolPoll onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-survey') {
-    return <ToolSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-multi-survey') {
-    return <ToolMultiSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolMultiSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-wordcloud') {
-    return <ToolWordCloud onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolWordCloud onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-seat-picker') {
+    // 듀얼 모드 미지원 — ToolServicesContext 미제공으로 "병렬 모드" 버튼도 표시하지 않음
     return <ToolSeatPicker onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
   }
   if (page === 'tool-grouping') {
-    return <ToolGrouping onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolGrouping onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-valueline') {
-    return <ToolValueLine onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolValueLine onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-traffic-discussion') {
-    return <ToolTrafficLightDiscussion onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolTrafficLightDiscussion onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-chalkboard') {
-    return <ToolChalkboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+    return wrap(<ToolChalkboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-assignment') {
     return (
@@ -313,6 +352,13 @@ function MainApp() {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+
+  // 듀얼 모드 진입 시 초기 좌측 도구 힌트로 쓰일, 마지막으로 본 단일 듀얼지원 도구
+  const [lastSingleTool, setLastSingleTool] = useState<DualToolId | null>(null);
+  useEffect(() => {
+    if (isDualToolId(currentPage)) setLastSingleTool(currentPage);
+  }, [currentPage]);
+  const handleRequestDualMode = useCallbackForDualEntry(setCurrentPage);
   const { setShareFile, setShowImportModal } = useEventsStore();
   const { settings } = useSettingsStore();
   useAnalyticsLifecycle();
@@ -658,7 +704,10 @@ function MainApp() {
         <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} onFeedback={() => setShowFeedback(true)} />
       )}
       <main className={`flex-1 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
-        {renderPage(currentPage, setCurrentPage, isFullscreen)}
+        {renderPage(currentPage, setCurrentPage, isFullscreen, {
+          onRequestDualMode: handleRequestDualMode,
+          lastSingleTool,
+        })}
       </main>
       <UpdateNotification />
       <EventPopup />

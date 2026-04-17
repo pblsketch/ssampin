@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { KeyboardShortcut } from './types';
 import { useSoundStore } from '@adapters/stores/useSoundStore';
+import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
+import { DualToolContext } from './DualToolContext';
+import { ToolServicesContext } from './ToolServicesContext';
 
 interface ToolLayoutProps {
   title: string;
@@ -11,6 +14,8 @@ interface ToolLayoutProps {
   shortcuts?: KeyboardShortcut[];
   disableZoom?: boolean;
 }
+
+const DUAL_MIN_WIDTH = 1280;
 
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 200;
@@ -26,11 +31,31 @@ function formatKeyLabel(key: string, modifiers?: { shift?: boolean; ctrl?: boole
   return parts.join('+');
 }
 
+function useCanEnterDual(): boolean {
+  const [canEnter, setCanEnter] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= DUAL_MIN_WIDTH;
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const update = () => setCanEnter(window.innerWidth >= DUAL_MIN_WIDTH);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return canEnter;
+}
+
 export function ToolLayout({ title, emoji, onBack, isFullscreen, children, shortcuts, disableZoom }: ToolLayoutProps) {
   const [zoom, setZoom] = useState(100);
   const [showHelp, setShowHelp] = useState(false);
   const shortcutsRef = useRef<KeyboardShortcut[]>([]);
   shortcutsRef.current = shortcuts ?? [];
+
+  const dualCtx = useContext(DualToolContext);
+  const singleSvc = useContext(ToolServicesContext);
+  const canEnterDual = useCanEnterDual();
+  const showDualEntry = singleSvc !== null && dualCtx === null;
 
   const soundEnabled = useSoundStore((s) => s.settings.enabled);
   const soundLoaded = useSoundStore((s) => s.loaded);
@@ -62,53 +87,52 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
   }, []);
 
   // Keyboard shortcut handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // ESC always works, even in inputs
-      if (e.key === 'Escape') {
+  // 듀얼 모드: useToolKeydown 이 활성 슬롯이 아닐 때 자동으로 스킵.
+  // 단일 모드: DualToolContext 부재 → 항상 실행 (기존 동작과 동일).
+  useToolKeydown((e) => {
+    // ESC: 듀얼 모드면 슬롯 닫기, 아니면 onBack
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (dualCtx) dualCtx.onSlotClose();
+      else onBack();
+      return;
+    }
+
+    // F11: 듀얼 모드면 슬롯 최대화 토글, 아니면 창 전체화면
+    if (e.key === 'F11') {
+      e.preventDefault();
+      if (dualCtx) dualCtx.onSlotMaximizeToggle();
+      else toggleFullscreen();
+      return;
+    }
+
+    // Skip remaining shortcuts when focused on form elements
+    const tag = (document.activeElement as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    // M key for mute toggle
+    if (e.key === 'm' || e.key === 'M') {
+      e.preventDefault();
+      toggleSound();
+      return;
+    }
+
+    for (const sc of shortcutsRef.current) {
+      const keyMatch = e.key === sc.key;
+      const needShift = sc.modifiers?.shift ?? false;
+      const needCtrl = sc.modifiers?.ctrl ?? false;
+
+      if (keyMatch && needShift === e.shiftKey && needCtrl === (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        onBack();
+        sc.handler();
         return;
       }
-
-      // F11 always works
-      if (e.key === 'F11') {
-        e.preventDefault();
-        toggleFullscreen();
-        return;
-      }
-
-      // Skip remaining shortcuts when focused on form elements
-      const tag = (document.activeElement as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-      // M key for mute toggle
-      if (e.key === 'm' || e.key === 'M') {
-        e.preventDefault();
-        toggleSound();
-        return;
-      }
-
-      for (const sc of shortcutsRef.current) {
-        const keyMatch = e.key === sc.key;
-        const needShift = sc.modifiers?.shift ?? false;
-        const needCtrl = sc.modifiers?.ctrl ?? false;
-
-        if (keyMatch && needShift === e.shiftKey && needCtrl === (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          sc.handler();
-          return;
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onBack, toggleFullscreen, toggleSound]);
+    }
+  }, [onBack, toggleFullscreen, toggleSound, dualCtx]);
 
   const allShortcuts = [
-    { key: 'Esc', label: '뒤로가기' },
-    { key: 'F11', label: '전체화면' },
+    { key: 'Esc', label: dualCtx ? '슬롯 닫기' : '뒤로가기' },
+    { key: 'F11', label: dualCtx ? '슬롯 최대화' : '전체화면' },
     { key: 'M', label: '소리 켜기/끄기' },
     ...(shortcuts ?? []).map((s) => ({
       key: formatKeyLabel(s.key, s.modifiers),
@@ -215,16 +239,79 @@ export function ToolLayout({ title, emoji, onBack, isFullscreen, children, short
             )}
           </div>
 
-          {/* Fullscreen button */}
+          {/* Dual mode entry button (single mode only) */}
+          {showDualEntry && (
+            <button
+              type="button"
+              onClick={singleSvc.onRequestDualMode}
+              disabled={!canEnterDual}
+              className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sp-muted"
+              title={
+                canEnterDual
+                  ? '병렬 모드로 열기'
+                  : '화면이 좁아 병렬 모드를 지원하지 않습니다 (1280px 이상 권장)'
+              }
+              aria-label="병렬 모드로 열기"
+            >
+              <span className="material-symbols-outlined text-icon-lg">splitscreen</span>
+            </button>
+          )}
+
+          {/* Dual mode slot controls (dual mode only) */}
+          {dualCtx && (
+            <>
+              <button
+                type="button"
+                onClick={dualCtx.onRequestToolChange}
+                className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
+                title="도구 교체"
+                aria-label="이 슬롯의 도구 교체"
+              >
+                <span className="material-symbols-outlined text-icon-lg">swap_horiz</span>
+              </button>
+              <button
+                type="button"
+                onClick={dualCtx.onSlotSwap}
+                className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
+                title="좌우 전환"
+                aria-label="좌우 슬롯 도구 교환"
+              >
+                <span className="material-symbols-outlined text-icon-lg">swap_vert</span>
+              </button>
+            </>
+          )}
+
+          {/* Fullscreen / Slot maximize button */}
           <button
-            onClick={toggleFullscreen}
+            type="button"
+            onClick={dualCtx ? dualCtx.onSlotMaximizeToggle : toggleFullscreen}
             className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all"
-            title={isFullscreen ? '전체화면 나가기' : '전체화면'}
+            title={
+              dualCtx
+                ? '슬롯 최대화'
+                : (isFullscreen ? '전체화면 나가기' : '전체화면')
+            }
+            aria-label={dualCtx ? '슬롯 최대화 토글' : (isFullscreen ? '전체화면 나가기' : '전체화면')}
           >
             <span className="material-symbols-outlined">
-              {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+              {dualCtx
+                ? 'open_in_full'
+                : (isFullscreen ? 'fullscreen_exit' : 'fullscreen')}
             </span>
           </button>
+
+          {/* Slot close button (dual mode only) */}
+          {dualCtx && (
+            <button
+              type="button"
+              onClick={dualCtx.onSlotClose}
+              className="p-2 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
+              title="슬롯 닫기"
+              aria-label="이 슬롯 닫기"
+            >
+              <span className="material-symbols-outlined text-icon-lg">close</span>
+            </button>
+          )}
         </div>
       </div>
 

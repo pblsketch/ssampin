@@ -6,6 +6,7 @@ import type { AlarmSoundId, PreWarningSoundId, PreWarningSettings } from '@domai
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 
 interface ToolTimerProps {
   onBack: () => void;
@@ -911,32 +912,28 @@ function TimerMode() {
   }, [flashCount]);
 
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (document.activeElement as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown((e) => {
+    const tag = (document.activeElement as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      if (e.key === ' ') {
-        e.preventDefault();
-        if (state === 'finished') return;
-        if (state === 'running') pause();
-        else start();
-      } else if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        reset();
-      } else if (e.key === 'Enter' && state === 'finished') {
-        e.preventDefault();
-        dismiss();
-      } else if (e.key === 'ArrowUp' && (state === 'running' || state === 'paused')) {
-        e.preventDefault();
-        adjustTime(30);
-      } else if (e.key === 'ArrowDown' && (state === 'running' || state === 'paused')) {
-        e.preventDefault();
-        adjustTime(-30);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (state === 'finished') return;
+      if (state === 'running') pause();
+      else start();
+    } else if (e.key === 'r' || e.key === 'R') {
+      e.preventDefault();
+      reset();
+    } else if (e.key === 'Enter' && state === 'finished') {
+      e.preventDefault();
+      dismiss();
+    } else if (e.key === 'ArrowUp' && (state === 'running' || state === 'paused')) {
+      e.preventDefault();
+      adjustTime(30);
+    } else if (e.key === 'ArrowDown' && (state === 'running' || state === 'paused')) {
+      e.preventDefault();
+      adjustTime(-30);
+    }
   }, [state, start, pause, reset, dismiss, adjustTime]);
 
   const ratio = totalSeconds > 0 ? remaining / totalSeconds : 0;
@@ -1306,25 +1303,21 @@ function StopwatchMode() {
   }, [clearSW]);
 
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (document.activeElement as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown((e) => {
+    const tag = (document.activeElement as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      if (e.key === ' ') {
-        e.preventDefault();
-        if (state === 'running') pause();
-        else start();
-      } else if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        reset();
-      } else if ((e.key === 'l' || e.key === 'L') && state === 'running') {
-        e.preventDefault();
-        lap();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (state === 'running') pause();
+      else start();
+    } else if (e.key === 'r' || e.key === 'R') {
+      e.preventDefault();
+      reset();
+    } else if ((e.key === 'l' || e.key === 'L') && state === 'running') {
+      e.preventDefault();
+      lap();
+    }
   }, [state, start, pause, reset, lap]);
 
   return (

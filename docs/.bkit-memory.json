@@ -1,11 +1,22 @@
 {
-  "sessionCount": 147,
+  "sessionCount": 212,
   "lastSession": {
-    "startedAt": "2026-04-14T05:03:08.365Z",
+    "startedAt": "2026-04-17T14:12:20.720Z",
     "platform": "claude",
     "level": "Dynamic"
   },
-  "currentFeature": "sidebar-collapse",
-  "phase": "plan",
-  "lastUpdated": "2026-04-14T05:03:08.365Z"
+  "currentFeature": "dual-tool-view",
+  "phase": "do",
+  "lastUpdated": "2026-04-17T13:30:43.269Z",
+  "activeFeatures": [
+    "sidebar-collapse",
+    "memo-font-size",
+    "memo-image-attachment",
+    "memo-enhancements",
+    "dual-tool-view"
+  ],
+  "featureNotes": {
+    "memo-enhancements": "memo-font-size + memo-image-attachment 통합 Design. Plan 2개를 단일 엔티티 마이그레이션으로 묶어 v1.11.0에 함께 릴리즈.",
+    "dual-tool-view": "챗봇 피드백 기반 두 도구 병렬 표시. MVP=분할 뷰(v1.11.0). Do Phase 1~4 완료: keydown 훅 + 마이그레이션, ToolLayout 듀얼 헤더 + 1280px 가드, useDualToolSession, DualToolPicker/ResizeDivider/DualToolSlot/DualToolContainer, ToolServicesContext(병렬 진입 버튼 주입), Sidebar.tsx PageId 확장 + App.tsx dual-tool-view 분기 + lastSingleTool 추적. tsc + npm run build 통과. 남은 단계: Phase 5 수동 스모크 테스트(단일 모드 회귀 + 듀얼 기본 경로 + 폴백) · 릴리즈 직전 챗봇 KB 업데이트 + release-notes.json v1.11.0 항목 추가. 신규 파일: toolRegistry.ts, DualToolContext.tsx, ToolServicesContext.tsx, useToolKeydown.ts, useDualToolSession.ts, DualToolPicker.tsx, ResizeDivider.tsx, DualToolSlot.tsx, DualToolContainer.tsx. 수정 파일: ToolLayout.tsx(2건), App.tsx, Sidebar.tsx, ToolTimer.tsx, Timer/{TimerMode,StopwatchMode,PresentationMode}.tsx, ToolQRCode.tsx, ToolWorkSymbols.tsx, TeacherControlPanel.tsx."
+  }
 }

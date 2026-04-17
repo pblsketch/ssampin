@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { formatTimeMs } from '@domain/rules/timerRules';
+import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 import type { StopwatchState, LapRecord } from './types';
 
 export function StopwatchMode() {
@@ -54,25 +55,21 @@ export function StopwatchMode() {
     return clearSW;
   }, [clearSW]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (document.activeElement as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown((e) => {
+    const tag = (document.activeElement as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      if (e.key === ' ') {
-        e.preventDefault();
-        if (state === 'running') pause();
-        else start();
-      } else if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        reset();
-      } else if ((e.key === 'l' || e.key === 'L') && state === 'running') {
-        e.preventDefault();
-        lap();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (state === 'running') pause();
+      else start();
+    } else if (e.key === 'r' || e.key === 'R') {
+      e.preventDefault();
+      reset();
+    } else if ((e.key === 'l' || e.key === 'L') && state === 'running') {
+      e.preventDefault();
+      lap();
+    }
   }, [state, start, pause, reset, lap]);
 
   return (

@@ -5,6 +5,7 @@ import { DEFAULT_WORK_SYMBOLS } from '@adapters/stores/useSettingsStore';
 import type { WorkSymbolItem } from '@domain/entities/Settings';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
+import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 
 interface ToolWorkSymbolsProps {
   onBack: () => void;
@@ -448,19 +449,14 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
   }, [selectedIndex, animPhase, playSwitchSound]);
 
   // Keyboard shortcuts (1~N)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  useToolKeydown((e) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      const num = parseInt(e.key, 10);
-      if (num >= 1 && num <= symbols.length) {
-        selectSymbol(num - 1);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const num = parseInt(e.key, 10);
+    if (num >= 1 && num <= symbols.length) {
+      selectSymbol(num - 1);
+    }
   }, [symbols.length, selectSymbol]);
 
   // Fullscreen: auto-hide bottom bar
