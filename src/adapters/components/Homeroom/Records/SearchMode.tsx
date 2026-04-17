@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
-import type { StudentRecord } from '@domain/entities/StudentRecord';
+import type { StudentRecord, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import {
   filterByStudent,
   filterByCategory,
@@ -26,14 +27,17 @@ import {
   getAttendanceTypeFromSubcategory,
   getWeekRange,
   getMonthRange,
+  initEditAttendancePeriods,
 } from './recordUtils';
 import { FilterSummaryStrip } from './FilterSummaryStrip';
 import { ActionDashboard } from './ActionDashboard';
 import { StudentJumpList } from './StudentJumpList';
 
 function SearchMode({ students, records, categories }: ModeProps) {
-  const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, toggleFollowUpDone, toggleNeisReport, toggleDocumentSubmitted } =
+  const { periodFilter, setPeriodFilter, deleteRecord, updateRecord, updateAttendanceRecord, toggleFollowUpDone, toggleNeisReport, toggleDocumentSubmitted } =
     useStudentRecordsStore();
+  const className = useSettingsStore((s) => s.settings.className);
+  const regularPeriodCount = useSettingsStore((s) => s.settings.maxPeriods) ?? 7;
   const showToast = useToastStore((s) => s.show);
   const [dismissedSearchGuide, setDismissedSearchGuide] = useState(
     () => localStorage.getItem('ssampin:record-search-guide-dismissed') === 'true',
@@ -55,6 +59,7 @@ function SearchMode({ students, records, categories }: ModeProps) {
   const [editDocumentSubmitted, setEditDocumentSubmitted] = useState(false);
   const [editFollowUp, setEditFollowUp] = useState('');
   const [editFollowUpDate, setEditFollowUpDate] = useState('');
+  const [editAttendancePeriods, setEditAttendancePeriods] = useState<AttendancePeriodEntry[]>([]);
   const [sortMode, setSortMode] = useState<RecordSortMode>('time');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -192,19 +197,66 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setEditDocumentSubmitted(record.documentSubmitted ?? false);
     setEditFollowUp(record.followUp ?? '');
     setEditFollowUpDate(record.followUpDate ?? '');
+    if (record.category === 'attendance') {
+      setEditAttendancePeriods(initEditAttendancePeriods(record));
+    } else {
+      setEditAttendancePeriods([]);
+    }
   }, []);
 
   const handleEditSave = useCallback(async (record: StudentRecord) => {
-    await updateRecord({
-      ...record,
-      content: editContent,
-      category: editCategory,
-      subcategory: editSubcategory,
-      reportedToNeis: record.category === 'attendance' ? editReportedToNeis : record.reportedToNeis,
-      documentSubmitted: record.category === 'attendance' ? editDocumentSubmitted : record.documentSubmitted,
-      followUp: editFollowUp.trim() || undefined,
-      followUpDate: editFollowUpDate || undefined,
-    });
+    if (record.category === 'attendance') {
+      const student = studentMap.get(record.studentId);
+      // Snapshot for undo
+      const snapshot = {
+        nextPeriods: [...(record.attendancePeriods ?? [])],
+        content: record.content,
+        reportedToNeis: record.reportedToNeis ?? false,
+        documentSubmitted: record.documentSubmitted ?? false,
+      };
+      try {
+        await updateAttendanceRecord({
+          record,
+          nextPeriods: editAttendancePeriods,
+          content: editContent,
+          reportedToNeis: editReportedToNeis,
+          documentSubmitted: editDocumentSubmitted,
+          classId: className,
+          date: record.date,
+          studentNumber: student?.studentNumber,
+          regularPeriodCount,
+        });
+        showToast('출결 기록을 저장했습니다', 'success', {
+          label: '되돌리기',
+          onClick: () => {
+            void updateAttendanceRecord({
+              record,
+              nextPeriods: snapshot.nextPeriods,
+              content: snapshot.content,
+              reportedToNeis: snapshot.reportedToNeis,
+              documentSubmitted: snapshot.documentSubmitted,
+              classId: className,
+              date: record.date,
+              studentNumber: student?.studentNumber,
+              regularPeriodCount,
+            });
+          },
+        });
+      } catch (err) {
+        console.error('[handleEditSave] 출결 기록 저장 실패', err);
+        showToast('저장에 실패했습니다', 'error');
+        return;
+      }
+    } else {
+      await updateRecord({
+        ...record,
+        content: editContent,
+        category: editCategory,
+        subcategory: editSubcategory,
+        followUp: editFollowUp.trim() || undefined,
+        followUpDate: editFollowUpDate || undefined,
+      });
+    }
     setEditingId(null);
     setEditContent('');
     setEditCategory('');
@@ -213,7 +265,8 @@ function SearchMode({ students, records, categories }: ModeProps) {
     setEditDocumentSubmitted(false);
     setEditFollowUp('');
     setEditFollowUpDate('');
-  }, [editContent, editCategory, editSubcategory, editReportedToNeis, editDocumentSubmitted, editFollowUp, editFollowUpDate, updateRecord]);
+    setEditAttendancePeriods([]);
+  }, [editContent, editCategory, editSubcategory, editReportedToNeis, editDocumentSubmitted, editFollowUp, editFollowUpDate, editAttendancePeriods, className, regularPeriodCount, studentMap, updateRecord, updateAttendanceRecord, showToast]);
 
   const handleExportFiltered = useCallback(async () => {
     const targetStudents = selectedStudentId
@@ -516,8 +569,11 @@ function SearchMode({ students, records, categories }: ModeProps) {
               setEditFollowUp={setEditFollowUp}
               editFollowUpDate={editFollowUpDate}
               setEditFollowUpDate={setEditFollowUpDate}
+              editAttendancePeriods={editAttendancePeriods}
+              setEditAttendancePeriods={setEditAttendancePeriods}
+              regularPeriodCount={regularPeriodCount}
               onEditSave={handleEditSave}
-              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditDocumentSubmitted(false); setEditFollowUp(''); setEditFollowUpDate(''); }}
+              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditDocumentSubmitted(false); setEditFollowUp(''); setEditFollowUpDate(''); setEditAttendancePeriods([]); }}
             />
           ) : (
             <DefaultRecordListView
@@ -544,8 +600,11 @@ function SearchMode({ students, records, categories }: ModeProps) {
               setEditFollowUp={setEditFollowUp}
               editFollowUpDate={editFollowUpDate}
               setEditFollowUpDate={setEditFollowUpDate}
+              editAttendancePeriods={editAttendancePeriods}
+              setEditAttendancePeriods={setEditAttendancePeriods}
+              regularPeriodCount={regularPeriodCount}
               onEditSave={handleEditSave}
-              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditDocumentSubmitted(false); setEditFollowUp(''); setEditFollowUpDate(''); }}
+              onEditCancel={() => { setEditingId(null); setEditReportedToNeis(false); setEditDocumentSubmitted(false); setEditFollowUp(''); setEditFollowUpDate(''); setEditAttendancePeriods([]); }}
             />
           )}
         </div>

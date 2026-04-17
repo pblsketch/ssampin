@@ -5,7 +5,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { StudentAttendance, AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
-import type { CounselingMethod } from '@domain/entities/StudentRecord';
+import type { CounselingMethod, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import type { RecordPrefill } from '../HomeroomPage';
 import { DEFAULT_TEMPLATES } from '@domain/valueObjects/DefaultTemplates';
 import { InlineRecordEditor } from './InlineRecordEditor';
@@ -19,6 +19,7 @@ import {
   getSubcategoryChipClass,
   getCategoryLabelColor,
   getRecordTagClass,
+  initEditAttendancePeriods,
 } from './recordUtils';
 
 export interface InputModeProps extends ModeProps {
@@ -47,7 +48,7 @@ const ACCENT_FROM_TYPE: Record<string, AccentColor> = {
 };
 
 function InputMode({ students, records, categories, selectedDate, prefill, onPrefillConsumed }: InputModeProps) {
-  const { addRecord, deleteRecord, updateRecord } = useStudentRecordsStore();
+  const { addRecord, deleteRecord, updateRecord, updateAttendanceRecord } = useStudentRecordsStore();
   const { getDayAttendance, saveDayAttendance } = useTeachingClassStore();
   const bridgeHomeroomDayAttendance = useStudentRecordsStore((s) => s.bridgeHomeroomDayAttendance);
   const className = useSettingsStore((s) => s.settings.className);
@@ -61,6 +62,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [editingSubcat, setEditingSubcat] = useState('');
   const [editingReportedToNeis, setEditingReportedToNeis] = useState(false);
   const [editingDocumentSubmitted, setEditingDocumentSubmitted] = useState(false);
+  const [editingAttendancePeriods, setEditingAttendancePeriods] = useState<AttendancePeriodEntry[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<{
     categoryId: string;
@@ -1078,20 +1080,75 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                       setEditReportedToNeis={setEditingReportedToNeis}
                       editDocumentSubmitted={editingDocumentSubmitted}
                       setEditDocumentSubmitted={setEditingDocumentSubmitted}
-                      onSave={() => {
-                        void updateRecord({
-                          ...editingRecord,
-                          content: editingContent,
-                          category: editingCategory,
-                          subcategory: editingSubcat,
-                          reportedToNeis: editingRecord.category === 'attendance' ? editingReportedToNeis : editingRecord.reportedToNeis,
-                          documentSubmitted: editingRecord.category === 'attendance' ? editingDocumentSubmitted : editingRecord.documentSubmitted,
-                        });
+                      attendancePeriods={
+                        editingRecord.category === 'attendance' ? editingAttendancePeriods : undefined
+                      }
+                      setAttendancePeriods={
+                        editingRecord.category === 'attendance' ? setEditingAttendancePeriods : undefined
+                      }
+                      regularPeriodCount={periodCount}
+                      onSave={async () => {
+                        if (editingRecord.category === 'attendance') {
+                          const student = students.find((s) => s.id === editingRecord.studentId);
+                          // Snapshot for undo
+                          const snapshot = {
+                            nextPeriods: [...(editingRecord.attendancePeriods ?? [])],
+                            content: editingRecord.content,
+                            reportedToNeis: editingRecord.reportedToNeis ?? false,
+                            documentSubmitted: editingRecord.documentSubmitted ?? false,
+                          };
+                          try {
+                            await updateAttendanceRecord({
+                              record: editingRecord,
+                              nextPeriods: editingAttendancePeriods,
+                              content: editingContent,
+                              reportedToNeis: editingReportedToNeis,
+                              documentSubmitted: editingDocumentSubmitted,
+                              classId: className,
+                              date: editingRecord.date,
+                              studentNumber: student?.studentNumber,
+                              regularPeriodCount: periodCount,
+                            });
+                            showToast('출결 기록을 저장했습니다', 'success', {
+                              label: '되돌리기',
+                              onClick: () => {
+                                void updateAttendanceRecord({
+                                  record: editingRecord,
+                                  nextPeriods: snapshot.nextPeriods,
+                                  content: snapshot.content,
+                                  reportedToNeis: snapshot.reportedToNeis,
+                                  documentSubmitted: snapshot.documentSubmitted,
+                                  classId: className,
+                                  date: editingRecord.date,
+                                  studentNumber: student?.studentNumber,
+                                  regularPeriodCount: periodCount,
+                                });
+                              },
+                            });
+                          } catch (err) {
+                            console.error('[InputMode] 출결 기록 저장 실패', err);
+                            showToast('저장에 실패했습니다', 'error');
+                            return;
+                          }
+                        } else {
+                          await updateRecord({
+                            ...editingRecord,
+                            content: editingContent,
+                            category: editingCategory,
+                            subcategory: editingSubcat,
+                          });
+                        }
                         setEditingRecordId(null);
                         setEditingReportedToNeis(false);
                         setEditingDocumentSubmitted(false);
+                        setEditingAttendancePeriods([]);
                       }}
-                      onCancel={() => { setEditingRecordId(null); setEditingReportedToNeis(false); setEditingDocumentSubmitted(false); }}
+                      onCancel={() => {
+                        setEditingRecordId(null);
+                        setEditingReportedToNeis(false);
+                        setEditingDocumentSubmitted(false);
+                        setEditingAttendancePeriods([]);
+                      }}
                     />
                   );
                 })()}
@@ -1113,7 +1170,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                     {dateRecords.map((record) => {
                       const student = studentMap.get(record.studentId);
                       return (
-                        <div key={record.id} className="group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors hover:bg-sp-surface/50">
+                        <div key={record.id} className="group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors hover:bg-sp-surface/50 focus-within:bg-sp-surface/50">
                           <span className={getRecordTagClass(record.category, categories)}>
                             {record.subcategory}
                           </span>
@@ -1121,7 +1178,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                           {record.content && (
                             <span className="text-sp-muted truncate flex-1">{record.content}</span>
                           )}
-                          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                             <button
                               onClick={() => {
                                 setEditingRecordId(record.id);
@@ -1130,6 +1187,11 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                                 setEditingSubcat(record.subcategory);
                                 setEditingReportedToNeis(record.reportedToNeis ?? false);
                                 setEditingDocumentSubmitted(record.documentSubmitted ?? false);
+                                if (record.category === 'attendance') {
+                                  setEditingAttendancePeriods(initEditAttendancePeriods(record));
+                                } else {
+                                  setEditingAttendancePeriods([]);
+                                }
                               }}
                               className="text-sp-muted hover:text-sp-accent transition-colors"
                               title="수정"

@@ -2,8 +2,10 @@ import { useEffect, useState, useMemo } from 'react';
 import { RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
-import type { StudentRecord } from '@domain/entities/StudentRecord';
+import type { StudentRecord, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
+import { validateAttendancePeriods } from '@domain/rules/attendanceRules';
 import { GRAY_COLOR, getSubcategoryChipClass } from './recordUtils';
+import { PeriodRowEditor } from './PeriodRowEditor';
 
 export interface InlineRecordEditorProps {
   record: StudentRecord;
@@ -25,6 +27,10 @@ export interface InlineRecordEditorProps {
   onSave: () => void;
   onCancel: () => void;
   compact?: boolean;
+  /** 편집 모드에서 attendance일 때 교시별 편집 UI를 쓰기 위한 props */
+  attendancePeriods?: readonly AttendancePeriodEntry[];
+  setAttendancePeriods?: (next: AttendancePeriodEntry[]) => void;
+  regularPeriodCount?: number;
 }
 
 export function InlineRecordEditor({
@@ -46,9 +52,24 @@ export function InlineRecordEditor({
   onSave,
   onCancel,
   compact,
+  attendancePeriods,
+  setAttendancePeriods,
+  regularPeriodCount,
 }: InlineRecordEditorProps) {
   const cat = useMemo(() => categories.find((c) => c.id === editCategory), [editCategory, categories]);
   const isAttendance = editCategory === 'attendance';
+  const periodEditMode =
+    isAttendance &&
+    attendancePeriods !== undefined &&
+    setAttendancePeriods !== undefined &&
+    regularPeriodCount !== undefined;
+
+  const periodValidation = useMemo(() => {
+    if (!periodEditMode) return null;
+    return validateAttendancePeriods(attendancePeriods, {
+      regularPeriodCount,
+    });
+  }, [periodEditMode, attendancePeriods, regularPeriodCount]);
 
   // Local attendance 2-level state
   const [localAttType, setLocalAttType] = useState('');
@@ -107,7 +128,14 @@ export function InlineRecordEditor({
       {cat && (
         <div>
           <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>세부 항목</p>
-          {isAttendance ? (
+          {periodEditMode ? (
+            <PeriodRowEditor
+              entries={attendancePeriods}
+              onChange={setAttendancePeriods}
+              regularPeriodCount={regularPeriodCount}
+              compact={compact}
+            />
+          ) : isAttendance ? (
             <div className="space-y-1.5">
               {/* 출결 유형 */}
               <div className="flex flex-wrap gap-1.5">
@@ -246,7 +274,7 @@ export function InlineRecordEditor({
         >취소</button>
         <button
           onClick={onSave}
-          disabled={!editSubcategory}
+          disabled={periodEditMode ? periodValidation !== null : !editSubcategory}
           className="px-3 py-1.5 rounded-lg text-xs font-medium bg-sp-accent text-white hover:bg-sp-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
         >저장</button>
       </div>

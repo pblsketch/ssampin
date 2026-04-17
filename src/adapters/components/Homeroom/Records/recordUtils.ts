@@ -28,8 +28,45 @@ export interface RecordEditProps {
   setEditFollowUp: (v: string) => void;
   editFollowUpDate: string;
   setEditFollowUpDate: (v: string) => void;
+  /** 출결 교시 편집 상태 (attendance 기록의 편집 UI에서 사용) */
+  editAttendancePeriods?: readonly AttendancePeriodEntry[];
+  setEditAttendancePeriods?: (next: AttendancePeriodEntry[]) => void;
+  /** 정규 교시 수 (settings.maxPeriods) */
+  regularPeriodCount?: number;
   onEditSave: (record: StudentRecord) => Promise<void>;
   onEditCancel: () => void;
+}
+
+/* ──────────────────────── 출결 편집 유틸 ──────────────────────── */
+
+const SUBCATEGORY_STATUS_MAP: Record<string, AttendancePeriodEntry['status']> = {
+  '결석': 'absent',
+  '지각': 'late',
+  '조퇴': 'earlyLeave',
+  '결과': 'classAbsence',
+};
+
+/**
+ * 출결 기록 편집 시작 시 교시 행 상태의 초기값을 계산한다.
+ * - record.attendancePeriods 가 있으면 그대로 사용
+ * - 없으면(레거시) subcategory 문자열을 파싱해 1행을 만든다 (period=1 기본값)
+ */
+export function initEditAttendancePeriods(
+  record: { readonly subcategory: string; readonly attendancePeriods?: readonly AttendancePeriodEntry[] },
+): AttendancePeriodEntry[] {
+  if (record.attendancePeriods && record.attendancePeriods.length > 0) {
+    return [...record.attendancePeriods];
+  }
+  // 레거시 파싱: "결석 (질병)" | "지각"
+  const match = record.subcategory.match(/^(.+?)(?:\s*\((.+)\))?$/);
+  const typeLabel = match?.[1]?.trim() ?? '결석';
+  const reason = match?.[2]?.trim() as AttendancePeriodEntry['reason'] | undefined;
+  const status = SUBCATEGORY_STATUS_MAP[typeLabel] ?? 'absent';
+  return [{
+    period: 1,
+    status,
+    ...(reason ? { reason } : {}),
+  }];
 }
 
 /* ──────────────────────── 날짜 유틸 ──────────────────────── */

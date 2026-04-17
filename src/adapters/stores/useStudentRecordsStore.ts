@@ -4,10 +4,12 @@ import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { DEFAULT_RECORD_CATEGORIES } from '@domain/valueObjects/RecordCategory';
 import { studentRecordsRepository } from '@adapters/di/container';
 import { ManageStudentRecords } from '@usecases/studentRecords/ManageStudentRecords';
+import { updateAttendancePeriods } from '@usecases/studentRecords/UpdateAttendancePeriods';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { StudentAttendance, AttendanceStatus } from '@domain/entities/Attendance';
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
 import type { Student } from '@domain/entities/Student';
+import { useTeachingClassStore } from './useTeachingClassStore';
 
 /** 카테고리 색상 → Tailwind 클래스 매핑 */
 export const RECORD_COLOR_MAP: Record<
@@ -127,6 +129,23 @@ interface StudentRecordsState {
     newName: string,
   ) => Promise<void>;
   bridgeHomeroomDayAttendance: (params: BridgeHomeroomDayParams) => Promise<void>;
+  updateAttendanceRecord: (params: UpdateAttendanceRecordParams) => Promise<void>;
+}
+
+export interface UpdateAttendanceRecordParams {
+  record: StudentRecord;
+  nextPeriods: readonly AttendancePeriodEntry[];
+  content: string;
+  reportedToNeis?: boolean;
+  documentSubmitted?: boolean;
+  /** 담임 반 ID (보통 settings.className) — 없으면 원본 출결부 동기화 건너뜀 */
+  classId?: string;
+  /** 기록 날짜 (YYYY-MM-DD) */
+  date: string;
+  /** 해당 학생 번호 (studentNumber) — 원본 출결부 동기화 시 필요 */
+  studentNumber?: number;
+  /** 정규 교시 수 (settings.maxPeriods 등) */
+  regularPeriodCount: number;
 }
 
 export const useStudentRecordsStore = create<StudentRecordsState>(
@@ -370,6 +389,83 @@ export const useStudentRecordsStore = create<StudentRecordsState>(
             set((s) => ({ records: [...s.records, record] }));
           }
         }
+      },
+
+      updateAttendanceRecord: async (params) => {
+        const {
+          record,
+          nextPeriods,
+          content,
+          reportedToNeis,
+          documentSubmitted,
+          classId,
+          date,
+          studentNumber,
+          regularPeriodCount,
+        } = params;
+
+        // 1) usecase 호출 (검증 + 대표 subcategory 재계산)
+        const { record: updatedRecord } = updateAttendancePeriods({
+          record,
+          nextPeriods,
+          content,
+          reportedToNeis,
+          documentSubmitted,
+          regularPeriodCount,
+        });
+
+        // 2) 원본 출결부(useTeachingClassStore) 동기화 — classId/studentNumber 있을 때만
+        if (classId && studentNumber != null) {
+          try {
+            const teaching = useTeachingClassStore.getState();
+            const existing = teaching.getDayAttendance(classId, date);
+
+            // 기존 recordsByPeriod 맵 구성 (다른 학생 엔트리 보존)
+            const nextMap = new Map<number, StudentAttendance[]>();
+            for (const r of existing) {
+              nextMap.set(r.period, [...r.students]);
+            }
+
+            // 전체 후보 교시 (조회/정규/종례) — 이 범위 내에서 해당 학생 엔트리 재계산
+            const candidatePeriods = new Set<number>(nextMap.keys());
+            candidatePeriods.add(0); // 조회
+            candidatePeriods.add(9); // 종례
+            for (let p = 1; p <= regularPeriodCount; p += 1) candidatePeriods.add(p);
+
+            for (const p of candidatePeriods) {
+              const periodEntry = updatedRecord.attendancePeriods?.find(
+                (e) => e.period === p,
+              );
+              const others = (nextMap.get(p) ?? []).filter(
+                (sa) => sa.number !== studentNumber,
+              );
+              if (periodEntry) {
+                others.push({
+                  number: studentNumber,
+                  status: periodEntry.status,
+                  ...(periodEntry.reason ? { reason: periodEntry.reason } : {}),
+                  ...(periodEntry.memo ? { memo: periodEntry.memo } : {}),
+                });
+              }
+              if (others.length > 0) {
+                nextMap.set(p, others);
+              } else {
+                nextMap.delete(p);
+              }
+            }
+
+            await teaching.saveDayAttendance(classId, date, nextMap);
+          } catch (err) {
+            console.warn('[updateAttendanceRecord] 원본 출결부 동기화 실패', err);
+            // 원본 실패해도 기록 레이어는 계속 진행 (부분 실패 허용)
+          }
+        }
+
+        // 3) 기록 레이어 업데이트
+        await manageRecords.update(updatedRecord);
+        set((s) => ({
+          records: s.records.map((r) => (r.id === updatedRecord.id ? updatedRecord : r)),
+        }));
       },
     };
   },

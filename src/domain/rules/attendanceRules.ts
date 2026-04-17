@@ -1,5 +1,6 @@
 import type { AttendanceRecord, AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
-import { ATTENDANCE_STATUS_ORDER } from '@domain/entities/Attendance';
+import { ATTENDANCE_STATUS_ORDER, PERIOD_MORNING, PERIOD_CLOSING } from '@domain/entities/Attendance';
+import type { AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import { studentKey } from '@domain/entities/TeachingClass';
 
 /**
@@ -188,4 +189,48 @@ export function pickRepresentativeAttendance(
   }
 
   return undefined;
+}
+
+/**
+ * 출결 기록 교시 편집 검증 결과.
+ * code 종류:
+ * - EMPTY: 행이 하나도 없음 (Q2 A안: 저장 비활성화)
+ * - DUPLICATE_PERIOD: 같은 교시가 2번 이상 등장
+ * - OUT_OF_RANGE: 허용 범위(조회/1~N/종례) 밖
+ * - MISSING_STATUS: status 미지정
+ */
+export interface PeriodValidationError {
+  readonly code: 'EMPTY' | 'DUPLICATE_PERIOD' | 'OUT_OF_RANGE' | 'MISSING_STATUS';
+  readonly period?: number;
+}
+
+/**
+ * AttendancePeriodEntry 배열을 검증한다.
+ * @param entries 검증 대상 엔트리 배열
+ * @param options.regularPeriodCount 정규 교시 수 (1..N, 기본 7)
+ *                 조회(0)/종례(9)는 항상 허용.
+ * @returns 오류가 있으면 첫 오류, 없으면 null
+ */
+export function validateAttendancePeriods(
+  entries: readonly AttendancePeriodEntry[],
+  options: { regularPeriodCount: number },
+): PeriodValidationError | null {
+  if (entries.length === 0) return { code: 'EMPTY' };
+
+  const seen = new Set<number>();
+  for (const e of entries) {
+    const isRegular = e.period >= 1 && e.period <= options.regularPeriodCount;
+    const isSpecial = e.period === PERIOD_MORNING || e.period === PERIOD_CLOSING;
+    if (!isRegular && !isSpecial) {
+      return { code: 'OUT_OF_RANGE', period: e.period };
+    }
+    if (!e.status) {
+      return { code: 'MISSING_STATUS', period: e.period };
+    }
+    if (seen.has(e.period)) {
+      return { code: 'DUPLICATE_PERIOD', period: e.period };
+    }
+    seen.add(e.period);
+  }
+  return null;
 }

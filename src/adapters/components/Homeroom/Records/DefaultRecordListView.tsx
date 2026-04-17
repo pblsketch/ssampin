@@ -31,6 +31,7 @@ function DefaultRecordListView({
   editReportedToNeis, setEditReportedToNeis,
   editDocumentSubmitted, setEditDocumentSubmitted,
   editFollowUp, setEditFollowUp, editFollowUpDate, setEditFollowUpDate,
+  editAttendancePeriods, setEditAttendancePeriods, regularPeriodCount,
   onEditSave, onEditCancel,
 }: DefaultRecordListViewProps) {
   return (
@@ -151,6 +152,13 @@ function DefaultRecordListView({
                         setEditFollowUp={setEditFollowUp}
                         editFollowUpDate={editFollowUpDate}
                         setEditFollowUpDate={setEditFollowUpDate}
+                        attendancePeriods={
+                          record.category === 'attendance' ? editAttendancePeriods : undefined
+                        }
+                        setAttendancePeriods={
+                          record.category === 'attendance' ? setEditAttendancePeriods : undefined
+                        }
+                        regularPeriodCount={regularPeriodCount}
                         onSave={() => void onEditSave(record)}
                         onCancel={onEditCancel}
                       />
