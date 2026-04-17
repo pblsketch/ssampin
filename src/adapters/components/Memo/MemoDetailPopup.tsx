@@ -3,8 +3,13 @@ import { createPortal } from 'react-dom';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
+import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
+import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { MemoFormattedText } from './MemoFormattedText';
 import { MemoRichEditor } from './MemoRichEditor';
+import { MemoRichToolbarExtras } from './MemoRichToolbarExtras';
+import { MemoImageAttachment } from './MemoImageAttachment';
+import { MemoImageViewer } from './MemoImageViewer';
 
 const POPUP_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-100',
@@ -47,7 +52,10 @@ export function MemoDetailPopup({
   const isEmpty = memo.content.trim() === '';
   const [isEditing, setIsEditing] = useState(isEmpty);
   const [editContent, setEditContent] = useState(memo.content);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const savedContentRef = useRef(memo.content);
+
+  const { updateFontSize, attachImage, detachImage } = useMemoStore();
 
   // Sync editContent when memo prop changes (e.g. after color change returns updated memo)
   useEffect(() => {
@@ -131,6 +139,32 @@ export function MemoDetailPopup({
     e.stopPropagation();
   }, []);
 
+  const handleFontSizeChange = useCallback(
+    (fontSize: MemoFontSize) => {
+      void updateFontSize(memo.id, fontSize);
+    },
+    [memo.id, updateFontSize],
+  );
+
+  const handleAttachImage = useCallback(
+    async (blob: Blob, fileName: string) => {
+      const result = await attachImage(memo.id, blob, fileName);
+      if (!result.ok) {
+        const msg: Record<'size' | 'mime' | 'decode', string> = {
+          size: '이미지는 5MB 이하만 첨부할 수 있습니다.',
+          mime: 'PNG, JPEG, WebP만 지원합니다.',
+          decode: '이미지 처리에 실패했어요.',
+        };
+        console.warn(msg[result.reason]);
+      }
+    },
+    [attachImage, memo.id],
+  );
+
+  const handleDetachImage = useCallback(() => {
+    void detachImage(memo.id);
+  }, [detachImage, memo.id]);
+
   const updatedLabel = new Date(memo.updatedAt).toLocaleString('ko-KR');
 
   const popup = (
@@ -211,33 +245,59 @@ export function MemoDetailPopup({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 pb-2">
-          {isEditing ? (
-            <MemoRichEditor
-              initialContent={editContent}
-              onContentChange={setEditContent}
-              onBlur={() => void handleBlur()}
-              onKeyDown={handleEditorKeyDown}
-              className="w-full text-sm leading-relaxed text-slate-700 outline-none"
-              style={{ minHeight: '120px' }}
-              autoFocus
-            />
-          ) : (
-            memo.content ? (
-              <MemoFormattedText
-                content={memo.content}
-                className="text-sm leading-relaxed text-slate-700"
+        <div className="flex-1 overflow-y-auto pb-2">
+          {/* Image thumbnail */}
+          {memo.image !== undefined && (
+            <div className="px-4 pb-2">
+              <MemoImageAttachment
+                image={memo.image}
+                onOpenViewer={() => setViewerOpen(true)}
+                onRemove={isEditing ? handleDetachImage : undefined}
+                maxHeight={200}
+              />
+            </div>
+          )}
+
+          <div className="px-4">
+            {isEditing ? (
+              <MemoRichEditor
+                initialContent={editContent}
+                onContentChange={setEditContent}
+                onBlur={() => void handleBlur()}
+                onKeyDown={handleEditorKeyDown}
+                fontSize={memo.fontSize}
+                onImagePaste={(blob, name) => void handleAttachImage(blob, name)}
+                extraToolbarItems={
+                  <MemoRichToolbarExtras
+                    fontSize={memo.fontSize}
+                    onFontSizeChange={handleFontSizeChange}
+                    hasImage={memo.image !== undefined}
+                    onAttachImage={(blob, name) => void handleAttachImage(blob, name)}
+                    onDetachImage={handleDetachImage}
+                  />
+                }
+                className="w-full leading-relaxed text-slate-700 outline-none"
                 style={{ minHeight: '120px' }}
+                autoFocus
               />
             ) : (
-              <div
-                className="text-sm leading-relaxed text-slate-700"
-                style={{ minHeight: '120px' }}
-              >
-                <span className="text-slate-400">메모 내용이 없습니다</span>
-              </div>
-            )
-          )}
+              memo.content ? (
+                <MemoFormattedText
+                  content={memo.content}
+                  fontSize={memo.fontSize}
+                  className="leading-relaxed text-slate-700"
+                  style={{ minHeight: '120px' }}
+                />
+              ) : (
+                <div
+                  className="text-base leading-relaxed text-slate-700"
+                  style={{ minHeight: '120px' }}
+                >
+                  <span className="text-slate-400">메모 내용이 없습니다</span>
+                </div>
+              )
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -250,6 +310,11 @@ export function MemoDetailPopup({
           </span>
         </div>
       </div>
+
+      {/* Image viewer */}
+      {viewerOpen && memo.image !== undefined && (
+        <MemoImageViewer image={memo.image} onClose={() => setViewerOpen(false)} />
+      )}
     </div>
   );
 

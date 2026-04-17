@@ -1,5 +1,8 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { markdownToHtml, htmlToMarkdown } from '@domain/rules/memoRules';
+import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
+import { MEMO_FONT_SIZE_CLASS } from '@domain/valueObjects/MemoFontSize';
+import { isAllowedMemoImageMime } from '@domain/valueObjects/MemoImage';
 
 interface MemoRichEditorProps {
   initialContent: string;
@@ -10,6 +13,11 @@ interface MemoRichEditorProps {
   placeholder?: string;
   autoFocus?: boolean;
   style?: React.CSSProperties;
+  fontSize?: MemoFontSize;
+  /** 이미지가 클립보드에 있을 때 호출. 지원 포맷만 전달됨. */
+  onImagePaste?: (blob: Blob, fileName: string) => void;
+  /** 서식 버튼 뒤에 붙는 추가 툴바 아이템 (글자 크기·이미지 도구 등) */
+  extraToolbarItems?: React.ReactNode;
 }
 
 const FORMAT_COMMANDS = [
@@ -27,6 +35,9 @@ export function MemoRichEditor({
   placeholder = '메모를 입력하세요...',
   autoFocus = false,
   style,
+  fontSize,
+  onImagePaste,
+  extraToolbarItems,
 }: MemoRichEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isEmpty, setIsEmpty] = useState(!initialContent.trim());
@@ -64,17 +75,34 @@ export function MemoRichEditor({
     [handleInput],
   );
 
-  // 붙여넣기 시 서식 제거 (plain text만)
+  // 붙여넣기 시 이미지 우선, 텍스트는 서식 제거
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    // 1) 이미지 붙여넣기 체크
+    if (onImagePaste !== undefined) {
+      const items = e.clipboardData.items;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item !== undefined && item.type.startsWith('image/') && isAllowedMemoImageMime(item.type)) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file !== null) {
+            const ext = item.type.split('/')[1] ?? 'png';
+            onImagePaste(file, `clipboard-${Date.now()}.${ext}`);
+          }
+          return;
+        }
+      }
+    }
+    // 2) 기존 텍스트 붙여넣기 (서식 제거)
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
     document.execCommand('insertText', false, text);
-  }, []);
+  }, [onImagePaste]);
 
   return (
     <>
       {/* 서식 도구 모음 */}
-      <div className="mb-1 flex gap-0.5">
+      <div className="mb-1 flex items-center gap-0.5">
         {FORMAT_COMMANDS.map((fmt) => (
           <button
             key={fmt.command}
@@ -83,13 +111,14 @@ export function MemoRichEditor({
               e.preventDefault();
               handleFormat(fmt.command);
             }}
-            className="rounded p-0.5 text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text"
+            className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text"
             aria-label={fmt.label}
             title={fmt.label}
           >
             <span className="material-symbols-outlined text-icon">{fmt.icon}</span>
           </button>
         ))}
+        {extraToolbarItems}
       </div>
 
       {/* 편집 영역 */}
@@ -106,7 +135,7 @@ export function MemoRichEditor({
           onBlur={onBlur}
           onKeyDown={onKeyDown}
           onPaste={handlePaste}
-          className={className}
+          className={`${className} ${MEMO_FONT_SIZE_CLASS[fontSize ?? 'base']}`.trim()}
           style={style}
           suppressContentEditableWarning
         />

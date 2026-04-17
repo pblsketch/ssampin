@@ -1,4 +1,6 @@
 import type { MemoColor } from '../valueObjects/MemoColor';
+import type { MemoFontSize } from '../valueObjects/MemoFontSize';
+import type { MemoImage } from '../valueObjects/MemoImage';
 
 export interface Memo {
   readonly id: string;
@@ -12,6 +14,8 @@ export interface Memo {
   readonly createdAt: string;  // ISO 8601
   readonly updatedAt: string;  // ISO 8601
   readonly archived: boolean;
+  readonly fontSize: MemoFontSize;
+  readonly image?: MemoImage;
 }
 
 export interface MemosData {

@@ -4,6 +4,7 @@ import { generateUUID } from '@infrastructure/utils/uuid';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
+import { DEFAULT_MEMO_FONT_SIZE } from '@domain/valueObjects/MemoFontSize';
 
 interface Props {
   onBack?: () => void;
@@ -224,6 +225,7 @@ export function MemoPage({ onBack = undefined }: Props) {
       createdAt: now,
       updatedAt: now,
       archived: false,
+      fontSize: DEFAULT_MEMO_FONT_SIZE,
     });
   };
 

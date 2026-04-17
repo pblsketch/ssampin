@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
+import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
+import { DEFAULT_MEMO_FONT_SIZE } from '@domain/valueObjects/MemoFontSize';
+import { MEMO_IMAGE_LIMITS, isAllowedMemoImageMime } from '@domain/valueObjects/MemoImage';
+import type { MemoImage } from '@domain/valueObjects/MemoImage';
+import { resizeImageBlob } from '@domain/utils/imageResize';
 import { MEMO_SIZE } from '@domain/rules/memoRules';
 import { memoRepository } from '@adapters/di/container';
 import { ManageMemos } from '@usecases/memo/ManageMemos';
@@ -20,6 +25,9 @@ interface MemoState {
   unarchiveMemo: (id: string) => Promise<void>;
   bringToFront: (id: string) => void;
   arrangeInGrid: (canvasWidth: number) => Promise<void>;
+  updateFontSize: (id: string, fontSize: MemoFontSize) => Promise<void>;
+  attachImage: (id: string, blob: Blob, fileName: string) => Promise<{ ok: true } | { ok: false; reason: 'size' | 'mime' | 'decode' }>;
+  detachImage: (id: string) => Promise<void>;
 }
 
 function randomRotation(): number {
@@ -45,6 +53,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
           height: m.height ?? MEMO_SIZE.DEFAULT_HEIGHT,
           rotation: m.rotation ?? randomRotation(),
           archived: m.archived ?? false,
+          fontSize: m.fontSize ?? DEFAULT_MEMO_FONT_SIZE,
         }));
         set({ memos: migrated, loaded: true });
       } catch {
@@ -69,6 +78,7 @@ export const useMemoStore = create<MemoState>((set, get) => {
         createdAt: now,
         updatedAt: now,
         archived: false,
+        fontSize: DEFAULT_MEMO_FONT_SIZE,
       };
       await manageMemos.add(newMemo);
       set((state) => ({ memos: [...state.memos, newMemo] }));
@@ -214,6 +224,63 @@ export const useMemoStore = create<MemoState>((set, get) => {
       for (const memo of updatedMemos) {
         await manageMemos.update({ ...memo, updatedAt: now });
       }
+    },
+
+    updateFontSize: async (id, fontSize) => {
+      const updatedAt = new Date().toISOString();
+      set((state) => ({
+        memos: state.memos.map((memo) =>
+          memo.id === id ? { ...memo, fontSize, updatedAt } : memo,
+        ),
+      }));
+      await manageMemos.updateFontSize(id, fontSize);
+    },
+
+    attachImage: async (id, blob, fileName) => {
+      // 1. 크기 검증
+      if (blob.size > MEMO_IMAGE_LIMITS.MAX_SIZE_BYTES) {
+        return { ok: false, reason: 'size' };
+      }
+      // 2. MIME 검증
+      if (!isAllowedMemoImageMime(blob.type)) {
+        return { ok: false, reason: 'mime' };
+      }
+      // 3. 리사이즈
+      let resized;
+      try {
+        resized = await resizeImageBlob(blob, blob.type);
+      } catch {
+        return { ok: false, reason: 'decode' };
+      }
+      // 4. MemoImage 구성
+      const image: MemoImage = {
+        dataUrl: resized.dataUrl,
+        fileName,
+        mimeType: resized.mimeType,
+        width: resized.width,
+        height: resized.height,
+        originalSize: blob.size,
+      };
+      const updatedAt = new Date().toISOString();
+      set((state) => ({
+        memos: state.memos.map((memo) =>
+          memo.id === id ? { ...memo, image, updatedAt } : memo,
+        ),
+      }));
+      await manageMemos.attachImage(id, image);
+      return { ok: true };
+    },
+
+    detachImage: async (id) => {
+      const updatedAt = new Date().toISOString();
+      set((state) => ({
+        memos: state.memos.map((memo) => {
+          if (memo.id !== id) return memo;
+          const { image: _removed, ...rest } = memo;
+          return { ...rest, updatedAt };
+        }),
+      }));
+      await manageMemos.detachImage(id);
     },
   };
 });

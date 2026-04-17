@@ -1,9 +1,22 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
+import type { RefObject } from 'react';
+import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
+import {
+  clampFontSizeStep,
+  MEMO_FONT_SIZE_LABEL,
+  MEMO_FONT_SIZES,
+} from '@domain/valueObjects/MemoFontSize';
+import { isAllowedMemoImageMime } from '@domain/valueObjects/MemoImage';
 
 interface MemoFormatToolbarProps {
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
   content: string;
   onContentChange: (newContent: string) => void;
+  fontSize: MemoFontSize;
+  onFontSizeChange: (fontSize: MemoFontSize) => void;
+  hasImage: boolean;
+  onAttachImage: (blob: Blob, fileName: string) => void;
+  onDetachImage: () => void;
 }
 
 type FormatMarker = '**' | '__' | '~~';
@@ -26,7 +39,18 @@ function isWrapped(text: string, marker: string): boolean {
     && text.endsWith(marker);
 }
 
-export function MemoFormatToolbar({ textareaRef, content, onContentChange }: MemoFormatToolbarProps) {
+export function MemoFormatToolbar({
+  textareaRef,
+  content,
+  onContentChange,
+  fontSize,
+  onFontSizeChange,
+  hasImage,
+  onAttachImage,
+  onDetachImage,
+}: MemoFormatToolbarProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const applyFormat = useCallback(
     (marker: FormatMarker) => {
       const ta = textareaRef.current;
@@ -108,6 +132,9 @@ export function MemoFormatToolbar({ textareaRef, content, onContentChange }: Mem
     [applyFormat],
   );
 
+  const isAtMin = MEMO_FONT_SIZES.indexOf(fontSize) === 0;
+  const isAtMax = MEMO_FONT_SIZES.indexOf(fontSize) === MEMO_FONT_SIZES.length - 1;
+
   return (
     <div className="flex items-center gap-0.5 pb-1">
       {FORMAT_BUTTONS.map(({ marker, icon, label }) => (
@@ -122,6 +149,82 @@ export function MemoFormatToolbar({ textareaRef, content, onContentChange }: Mem
           <span className="material-symbols-outlined text-icon-md">{icon}</span>
         </button>
       ))}
+
+      {/* 구분선 */}
+      <span className="mx-1 h-5 w-px bg-black/10" />
+
+      {/* 글자 크기 감소 */}
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onFontSizeChange(clampFontSizeStep(fontSize, -1))}
+        disabled={isAtMin}
+        className={`flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/5 hover:text-sp-text disabled:opacity-40 disabled:cursor-not-allowed`}
+        aria-label="글자 크기 줄이기"
+        title="글자 크기 줄이기"
+      >
+        <span className="material-symbols-outlined text-icon-md">text_decrease</span>
+      </button>
+
+      {/* 현재 크기 라벨 */}
+      <span className="px-1 text-xs text-sp-muted select-none min-w-[3rem] text-center">
+        {MEMO_FONT_SIZE_LABEL[fontSize]}
+      </span>
+
+      {/* 글자 크기 증가 */}
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onFontSizeChange(clampFontSizeStep(fontSize, 1))}
+        disabled={isAtMax}
+        className={`flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/5 hover:text-sp-text disabled:opacity-40 disabled:cursor-not-allowed`}
+        aria-label="글자 크기 늘리기"
+        title="글자 크기 늘리기"
+      >
+        <span className="material-symbols-outlined text-icon-md">text_increase</span>
+      </button>
+
+      {/* 구분선 */}
+      <span className="mx-1 h-5 w-px bg-black/10" />
+
+      {/* 이미지 첨부/제거 */}
+      {hasImage ? (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onDetachImage}
+          className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/5 hover:text-sp-text"
+          aria-label="이미지 제거"
+          title="이미지 제거"
+        >
+          <span className="material-symbols-outlined text-icon-md">hide_image</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => fileInputRef.current?.click()}
+          className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/5 hover:text-sp-text"
+          aria-label="이미지 첨부"
+          title="이미지 첨부"
+        >
+          <span className="material-symbols-outlined text-icon-md">add_photo_alternate</span>
+        </button>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && isAllowedMemoImageMime(file.type)) {
+            onAttachImage(file, file.name);
+          }
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }

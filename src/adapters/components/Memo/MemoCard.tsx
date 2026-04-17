@@ -1,11 +1,16 @@
 import { useState, useRef, useCallback, useEffect, type RefObject } from 'react';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
+import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import { MEMO_SIZE } from '@domain/rules/memoRules';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { MemoFormattedText } from './MemoFormattedText';
 import { MemoRichEditor } from './MemoRichEditor';
+import { MemoRichToolbarExtras } from './MemoRichToolbarExtras';
+import { MemoImageAttachment } from './MemoImageAttachment';
+import { MemoImageViewer } from './MemoImageViewer';
 
 const NOTE_BG: Record<MemoColor, string> = {
   yellow: 'bg-yellow-200',
@@ -46,8 +51,10 @@ interface MemoCardProps {
 }
 
 export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, onArchive, canvasRef }: MemoCardProps) {
-  const { updateMemo, updatePosition, updateColor, updateSize } = useMemoStore();
+  const { updateMemo, updatePosition, updateColor, updateSize, updateFontSize, attachImage, detachImage } = useMemoStore();
+  const { show: showToast } = useToastStore();
   const [editing, setEditing] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [content, setContent] = useState(memo.content);
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
@@ -214,6 +221,32 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
     [memo.id, memo.width, memo.height, updateSize],
   );
 
+  const handleFontSizeChange = useCallback(
+    async (fontSize: MemoFontSize) => {
+      await updateFontSize(memo.id, fontSize);
+    },
+    [updateFontSize, memo.id],
+  );
+
+  const handleAttachImage = useCallback(
+    async (blob: Blob, fileName: string) => {
+      const result = await attachImage(memo.id, blob, fileName);
+      if (!result.ok) {
+        const messages: Record<'size' | 'mime' | 'decode', string> = {
+          size: '이미지는 5MB 이하만 첨부할 수 있습니다.',
+          mime: 'PNG, JPEG, WebP만 지원합니다.',
+          decode: '이미지 처리에 실패했어요. 다른 이미지로 시도해주세요.',
+        };
+        showToast(messages[result.reason], 'error');
+      }
+    },
+    [attachImage, memo.id, showToast],
+  );
+
+  const handleDetachImage = useCallback(async () => {
+    await detachImage(memo.id);
+  }, [detachImage, memo.id]);
+
   const handleColorChange = useCallback(
     (color: MemoColor) => {
       void updateColor(memo.id, color);
@@ -292,6 +325,17 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
         </div>
       </div>
 
+      {/* Image attachment (헤더 다음, 본문 텍스트 직전) */}
+      {memo.image !== undefined && (
+        <div className="px-3 pb-0">
+          <MemoImageAttachment
+            image={memo.image}
+            onOpenViewer={() => setViewerOpen(true)}
+            onRemove={editing ? (() => void handleDetachImage()) : undefined}
+          />
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex flex-1 flex-col gap-2 p-5 pt-1">
         {editing ? (
@@ -300,17 +344,29 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
             onContentChange={setContent}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
-            className="flex-1 w-full text-sm leading-relaxed text-slate-700 outline-none"
+            className="flex-1 w-full leading-relaxed text-slate-700 outline-none"
             autoFocus
+            fontSize={memo.fontSize}
+            onImagePaste={(blob, name) => void handleAttachImage(blob, name)}
+            extraToolbarItems={
+              <MemoRichToolbarExtras
+                fontSize={memo.fontSize}
+                onFontSizeChange={(fs) => void handleFontSizeChange(fs)}
+                hasImage={memo.image !== undefined}
+                onAttachImage={(blob, name) => void handleAttachImage(blob, name)}
+                onDetachImage={() => void handleDetachImage()}
+              />
+            }
           />
         ) : (
           memo.content ? (
             <MemoFormattedText
               content={memo.content}
-              className="flex-1 text-sm leading-relaxed text-slate-700"
+              className="flex-1 leading-relaxed text-slate-700"
+              fontSize={memo.fontSize}
             />
           ) : (
-            <div className="flex-1 text-sm leading-relaxed text-slate-700">
+            <div className="flex-1 text-base leading-relaxed text-slate-700">
               <span className="text-slate-400">더블 클릭하여 메모를 작성하세요</span>
             </div>
           )
@@ -345,6 +401,11 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
       <div
         className={`absolute bottom-0 right-0 border-r-transparent border-t-[20px] border-r-[20px] opacity-50 shadow-sm ${FOLD_BORDER[memo.color]}`}
       />
+
+      {/* Image viewer modal */}
+      {viewerOpen && memo.image !== undefined && (
+        <MemoImageViewer image={memo.image} onClose={() => setViewerOpen(false)} />
+      )}
     </div>
   );
 }

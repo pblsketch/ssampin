@@ -1,9 +1,12 @@
 import { memo, useMemo } from 'react';
 import { parseInlineMarkdown } from '@domain/rules/memoRules';
 import type { FormattedSegment } from '@domain/rules/memoRules';
+import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
+import { MEMO_FONT_SIZE_CLASS } from '@domain/valueObjects/MemoFontSize';
 
 interface MemoFormattedTextProps {
   content: string;
+  fontSize?: MemoFontSize;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -16,7 +19,7 @@ function segmentClassName(seg: FormattedSegment): string {
   return classes.join(' ');
 }
 
-function MemoFormattedTextInner({ content, className, style }: MemoFormattedTextProps) {
+function MemoFormattedTextInner({ content, fontSize, className, style }: MemoFormattedTextProps) {
   const segments = useMemo(() => parseInlineMarkdown(content), [content]);
 
   // Split segments by newline to handle <br /> correctly
@@ -46,7 +49,10 @@ function MemoFormattedTextInner({ content, className, style }: MemoFormattedText
     }
   }
 
-  return <div className={className} style={style}>{elements}</div>;
+  const sizeClass = MEMO_FONT_SIZE_CLASS[fontSize ?? 'base'];
+  // sizeClass를 뒤에 두어 호출부 className에 text-xx가 있어도 fontSize가 이긴다
+  const combinedClassName = [className, sizeClass].filter(Boolean).join(' ');
+  return <div className={combinedClassName} style={style}>{elements}</div>;
 }
 
 export const MemoFormattedText = memo(MemoFormattedTextInner);
