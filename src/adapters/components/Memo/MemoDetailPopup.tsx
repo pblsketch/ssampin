@@ -4,6 +4,7 @@ import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
+import { isAllowedMemoImageMime } from '@domain/valueObjects/MemoImage';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { MemoFormattedText } from './MemoFormattedText';
 import { MemoRichEditor } from './MemoRichEditor';
@@ -54,6 +55,7 @@ export function MemoDetailPopup({
   const [editContent, setEditContent] = useState(memo.content);
   const [viewerOpen, setViewerOpen] = useState(false);
   const savedContentRef = useRef(memo.content);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { updateFontSize, attachImage, detachImage } = useMemoStore();
 
@@ -165,6 +167,24 @@ export function MemoDetailPopup({
     void detachImage(memo.id);
   }, [detachImage, memo.id]);
 
+  const handleAttachRequest = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileInputChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (file === undefined) return;
+      if (!isAllowedMemoImageMime(file.type)) {
+        console.warn('PNG, JPEG, WebP만 지원합니다.');
+        return;
+      }
+      await handleAttachImage(file, file.name);
+    },
+    [handleAttachImage],
+  );
+
   const updatedLabel = new Date(memo.updatedAt).toLocaleString('ko-KR');
 
   const popup = (
@@ -272,7 +292,7 @@ export function MemoDetailPopup({
                     fontSize={memo.fontSize}
                     onFontSizeChange={handleFontSizeChange}
                     hasImage={memo.image !== undefined}
-                    onAttachImage={(blob, name) => void handleAttachImage(blob, name)}
+                    onAttachRequest={handleAttachRequest}
                     onDetachImage={handleDetachImage}
                   />
                 }
@@ -310,6 +330,15 @@ export function MemoDetailPopup({
           </span>
         </div>
       </div>
+
+      {/* Hidden file input — popup 최상위에 두어 편집 상태와 무관하게 항상 DOM에 존재 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => void handleFileInputChange(e)}
+      />
 
       {/* Image viewer */}
       {viewerOpen && memo.image !== undefined && (

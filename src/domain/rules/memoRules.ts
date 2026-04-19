@@ -12,6 +12,24 @@ export interface FormattedSegment {
   readonly bold: boolean;
   readonly underline: boolean;
   readonly strikethrough: boolean;
+  /** 링크 세그먼트인 경우 url (검증된 http/https/mailto). undefined면 일반 텍스트. */
+  readonly href?: string;
+}
+
+/**
+ * 링크 URL 유효성 검사 — XSS 방지.
+ * http://, https://, mailto: 만 허용한다.
+ * javascript:, data:, file:, vbscript: 등은 차단.
+ */
+export function isValidLinkHref(url: string): boolean {
+  const trimmed = url.trim();
+  if (trimmed === '') return false;
+  const lower = trimmed.toLowerCase();
+  return (
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('mailto:')
+  );
 }
 
 type MarkerKind = 'bold' | 'underline' | 'strikethrough';
@@ -86,6 +104,7 @@ const EMPTY_SEGMENT: FormattedSegment = {
  * - **text** → bold
  * - __text__ → underline (쌤핀 전용)
  * - ~~text~~ → strikethrough
+ * - [text](url) → link (http/https/mailto만 유효)
  * - 중첩 가능: **~~bold strikethrough~~**
  * - 이스케이프: \** → 리터럴 **
  * - 불완전한 마크다운: **미닫힘 → 리터럴 텍스트
@@ -93,6 +112,54 @@ const EMPTY_SEGMENT: FormattedSegment = {
 export function parseInlineMarkdown(content: string): FormattedSegment[] {
   if (content === '') {
     return [EMPTY_SEGMENT];
+  }
+
+  // 링크를 먼저 분리한 뒤 비링크 구간은 기존 파서로 처리
+  const LINK_RE = /\[([^\]\n]+)\]\(([^)\n]+)\)/g;
+  const segments: FormattedSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = LINK_RE.exec(content)) !== null) {
+    // 링크 앞의 비링크 구간은 기존 파서로
+    if (match.index > lastIndex) {
+      const before = content.substring(lastIndex, match.index);
+      segments.push(...parseInlineMarkdownNoLinks(before));
+    }
+
+    const linkText = match[1] ?? '';
+    const url = match[2] ?? '';
+    if (isValidLinkHref(url)) {
+      segments.push({
+        text: linkText,
+        bold: false,
+        underline: false,
+        strikethrough: false,
+        href: url.trim(),
+      });
+    } else {
+      // 유효하지 않은 URL은 원문 그대로 텍스트 처리
+      segments.push(...parseInlineMarkdownNoLinks(match[0]));
+    }
+    lastIndex = match.index + match[0].length;
+  }
+
+  // 마지막 링크 이후 남은 구간
+  if (lastIndex < content.length) {
+    const after = content.substring(lastIndex);
+    segments.push(...parseInlineMarkdownNoLinks(after));
+  }
+
+  if (segments.length === 0) {
+    return [EMPTY_SEGMENT];
+  }
+  return segments;
+}
+
+/** 링크가 제거된 텍스트에 대한 기존 인라인 마크다운 파서 (bold/underline/strikethrough) */
+function parseInlineMarkdownNoLinks(content: string): FormattedSegment[] {
+  if (content === '') {
+    return [];
   }
 
   const tokens = tokenize(content);
@@ -178,10 +245,6 @@ export function parseInlineMarkdown(content: string): FormattedSegment[] {
     }
   }
 
-  if (segments.length === 0) {
-    return [EMPTY_SEGMENT];
-  }
-
   return segments;
 }
 
@@ -206,6 +269,10 @@ export function markdownToHtml(content: string): string {
     if (seg.bold) text = `<b>${text}</b>`;
     if (seg.underline) text = `<u>${text}</u>`;
     if (seg.strikethrough) text = `<s>${text}</s>`;
+    if (seg.href !== undefined && isValidLinkHref(seg.href)) {
+      const escapedHref = seg.href.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      text = `<a href="${escapedHref}" data-memo-link="1">${text}</a>`;
+    }
     parts.push(text);
   }
   return parts.join('');
@@ -238,6 +305,13 @@ export function htmlToMarkdown(element: HTMLElement): string {
           result += `__${inner}__`;
         } else if (tag === 's' || tag === 'del' || tag === 'strike') {
           result += `~~${inner}~~`;
+        } else if (tag === 'a') {
+          const href = el.getAttribute('href') ?? '';
+          if (isValidLinkHref(href) && inner.length > 0) {
+            result += `[${inner}](${href.trim()})`;
+          } else {
+            result += inner;
+          }
         } else if (tag === 'span') {
           // 일부 브라우저가 인라인 스타일로 서식 적용
           const style = el.style;

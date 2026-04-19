@@ -1,13 +1,15 @@
-import { useRef, useCallback } from 'react';
+import { useCallback } from 'react';
 import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
 import { clampFontSizeStep, MEMO_FONT_SIZE_LABEL } from '@domain/valueObjects/MemoFontSize';
-import { isAllowedMemoImageMime } from '@domain/valueObjects/MemoImage';
 
 interface MemoRichToolbarExtrasProps {
   fontSize: MemoFontSize;
   onFontSizeChange: (fontSize: MemoFontSize) => void;
   hasImage: boolean;
-  onAttachImage: (blob: Blob, fileName: string) => void;
+  /** 이미지 첨부 요청 — 외부 file input을 트리거해야 한다.
+   *  파일 다이얼로그는 편집 모드 blur를 일으킬 수 있으므로,
+   *  file input 자체는 이 컴포넌트 밖(편집 상태와 무관한 위치)에 두어야 한다. */
+  onAttachRequest: () => void;
   onDetachImage: () => void;
 }
 
@@ -15,18 +17,17 @@ interface MemoRichToolbarExtrasProps {
  * MemoRichEditor 내부 툴바의 FORMAT 버튼 뒤에 붙는 확장 도구 모음.
  * 글자 크기 증감(A- / 라벨 / A+) + 이미지 첨부/제거 버튼.
  *
- * 모든 버튼은 onMouseDown preventDefault로 contentEditable의 focus를 유지한다.
- * (편집 모드에서 도구를 눌러도 blur로 빠져나가지 않도록)
+ * B/U/S 버튼과 동일하게 모든 클릭 로직을 onMouseDown에서 실행한다.
+ * preventDefault로 contentEditable focus를 유지하고, mousedown 직후 즉시
+ * 핸들러를 실행하므로 click 이벤트 의존성이 없다.
  */
 export function MemoRichToolbarExtras({
   fontSize,
   onFontSizeChange,
   hasImage,
-  onAttachImage,
+  onAttachRequest,
   onDetachImage,
 }: MemoRichToolbarExtrasProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const handleFontSizeStep = useCallback(
     (delta: 1 | -1) => {
       const next = clampFontSizeStep(fontSize, delta);
@@ -37,38 +38,29 @@ export function MemoRichToolbarExtras({
     [fontSize, onFontSizeChange],
   );
 
-  const handleImageButton = useCallback(() => {
-    if (hasImage) {
-      onDetachImage();
-    } else {
-      fileInputRef.current?.click();
-    }
-  }, [hasImage, onDetachImage]);
-
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file !== undefined && isAllowedMemoImageMime(file.type)) {
-        onAttachImage(file, file.name);
+  const handleImageMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (hasImage) {
+        onDetachImage();
+      } else {
+        onAttachRequest();
       }
-      e.target.value = '';
     },
-    [onAttachImage],
+    [hasImage, onAttachRequest, onDetachImage],
   );
-
-  const preventBlur = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-  }, []);
 
   return (
     <>
       <span className="mx-0.5 h-5 w-px bg-black/10" aria-hidden />
       <button
         type="button"
-        onMouseDown={preventBlur}
-        onClick={() => handleFontSizeStep(-1)}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          handleFontSizeStep(-1);
+        }}
         disabled={fontSize === 'sm'}
-        className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text disabled:opacity-40"
+        className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="글자 작게"
         title="글자 작게"
       >
@@ -79,10 +71,12 @@ export function MemoRichToolbarExtras({
       </span>
       <button
         type="button"
-        onMouseDown={preventBlur}
-        onClick={() => handleFontSizeStep(1)}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          handleFontSizeStep(1);
+        }}
         disabled={fontSize === 'xl'}
-        className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text disabled:opacity-40"
+        className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="글자 크게"
         title="글자 크게"
       >
@@ -91,8 +85,7 @@ export function MemoRichToolbarExtras({
       <span className="mx-0.5 h-5 w-px bg-black/10" aria-hidden />
       <button
         type="button"
-        onMouseDown={preventBlur}
-        onClick={handleImageButton}
+        onMouseDown={handleImageMouseDown}
         className="flex h-7 w-7 items-center justify-center rounded text-sp-muted transition-colors hover:bg-black/10 hover:text-sp-text"
         aria-label={hasImage ? '이미지 제거' : '이미지 첨부'}
         title={hasImage ? '이미지 제거' : '이미지 첨부'}
@@ -101,13 +94,6 @@ export function MemoRichToolbarExtras({
           {hasImage ? 'hide_image' : 'add_photo_alternate'}
         </span>
       </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-        onChange={handleFileChange}
-      />
     </>
   );
 }

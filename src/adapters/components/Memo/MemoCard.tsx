@@ -4,6 +4,7 @@ import type { MemoColor } from '@domain/valueObjects/MemoColor';
 import type { MemoFontSize } from '@domain/valueObjects/MemoFontSize';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import { MEMO_SIZE } from '@domain/rules/memoRules';
+import { isAllowedMemoImageMime } from '@domain/valueObjects/MemoImage';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { MemoFormattedText } from './MemoFormattedText';
@@ -63,6 +64,7 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
   const dragOffset = useRef({ x: 0, y: 0 });
   const mouseDownPos = useRef({ x: 0, y: 0 });
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setContent(memo.content);
@@ -247,6 +249,24 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
     await detachImage(memo.id);
   }, [detachImage, memo.id]);
 
+  const handleAttachRequest = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileInputChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (file === undefined) return;
+      if (!isAllowedMemoImageMime(file.type)) {
+        showToast('PNG, JPEG, WebP만 지원합니다.', 'error');
+        return;
+      }
+      await handleAttachImage(file, file.name);
+    },
+    [handleAttachImage, showToast],
+  );
+
   const handleColorChange = useCallback(
     (color: MemoColor) => {
       void updateColor(memo.id, color);
@@ -353,7 +373,7 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
                 fontSize={memo.fontSize}
                 onFontSizeChange={(fs) => void handleFontSizeChange(fs)}
                 hasImage={memo.image !== undefined}
-                onAttachImage={(blob, name) => void handleAttachImage(blob, name)}
+                onAttachRequest={handleAttachRequest}
                 onDetachImage={() => void handleDetachImage()}
               />
             }
@@ -400,6 +420,15 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
       {/* Fold effect (bottom-right corner) */}
       <div
         className={`absolute bottom-0 right-0 border-r-transparent border-t-[20px] border-r-[20px] opacity-50 shadow-sm ${FOLD_BORDER[memo.color]}`}
+      />
+
+      {/* Hidden file input — 편집 상태와 무관하게 항상 DOM에 존재해야 파일 다이얼로그가 안정적으로 동작한다 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => void handleFileInputChange(e)}
       />
 
       {/* Image viewer modal */}
