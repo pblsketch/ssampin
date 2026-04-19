@@ -1,0 +1,13 @@
+{
+  "name": "ssampin-spike-s1-cdn-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.19.0",
+    "yjs": "^13.6.19",
+    "y-websocket": "^2.0.4"
+  }
+}
