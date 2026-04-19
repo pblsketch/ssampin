@@ -8,4 +8,3 @@ export type { IStudentRecordsRepository } from './IStudentRecordsRepository';
 export type { IMessageRepository } from './IMessageRepository';
 export type { IStudentRepository } from './IStudentRepository';
 export type { IAssignmentRepository } from './IAssignmentRepository';
-export type { IBoardRepository } from './IBoardRepository';

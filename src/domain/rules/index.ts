@@ -4,4 +4,3 @@ export * from './ddayRules';
 export * from './studentRecordRules';
 export * from './shareRules';
 export * from './matchingRules';
-export * from './boardRules';
