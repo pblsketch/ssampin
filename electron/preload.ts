@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+/** 단일/복수 선택 집계 */
+type AggregatedSingleMulti = { counts: Record<string, number>; total: number };
+/** 스케일 집계 */
+type AggregatedScale = { avg: number; distribution: Record<number, number>; total: number };
+/** 주관식 집계 (무기명) */
+type AggregatedText = { answers: string[] };
+/** 집계 결과 discriminated union */
+type AggregatedResult = AggregatedSingleMulti | AggregatedScale | AggregatedText;
+
 contextBridge.exposeInMainWorld('electronAPI', {
   readData: (filename: string): Promise<string | null> =>
     ipcRenderer.invoke('data:read', filename),
@@ -221,6 +230,76 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event: unknown, data: { count: number }) => callback(data);
     ipcRenderer.on('live-multi-survey:connection-count', handler);
     return () => { ipcRenderer.removeListener('live-multi-survey:connection-count', handler); };
+  },
+  // Live Multi Survey — step mode controls
+  liveMultiSurveyActivateSession: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:activate-session'),
+  liveMultiSurveyReveal: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:reveal'),
+  liveMultiSurveyAdvance: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:advance'),
+  liveMultiSurveyPrev: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:prev'),
+  liveMultiSurveyReopen: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:reopen'),
+  liveMultiSurveyEndSession: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:end-session'),
+  // Live Multi Survey — step mode events
+  onLiveMultiSurveyStudentAnswered: (callback: (data: {
+    sessionId: string;
+    nickname: string;
+    questionIndex: number;
+    totalAnswered: number;
+    totalConnected: number;
+    aggregatedPreview: AggregatedResult | null;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      sessionId: string;
+      nickname: string;
+      questionIndex: number;
+      totalAnswered: number;
+      totalConnected: number;
+      aggregatedPreview: AggregatedResult | null;
+    }) => callback(data);
+    ipcRenderer.on('live-multi-survey:student-answered', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:student-answered', handler); };
+  },
+  onLiveMultiSurveyPhaseChanged: (callback: (data: {
+    phase: 'lobby' | 'open' | 'revealed' | 'ended';
+    currentQuestionIndex: number;
+    totalAnswered: number;
+    totalConnected: number;
+    aggregated?: AggregatedResult;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      phase: 'lobby' | 'open' | 'revealed' | 'ended';
+      currentQuestionIndex: number;
+      totalAnswered: number;
+      totalConnected: number;
+      aggregated?: AggregatedResult;
+    }) => callback(data);
+    ipcRenderer.on('live-multi-survey:phase-changed', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:phase-changed', handler); };
+  },
+  onLiveMultiSurveyRoster: (callback: (data: {
+    roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
+    }) => callback(data);
+    ipcRenderer.on('live-multi-survey:roster', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:roster', handler); };
+  },
+  onLiveMultiSurveyTextAnswerDetail: (callback: (data: {
+    questionIndex: number;
+    entries: Array<{ sessionId: string; nickname: string; text: string }>;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      questionIndex: number;
+      entries: Array<{ sessionId: string; nickname: string; text: string }>;
+    }) => callback(data);
+    ipcRenderer.on('live-multi-survey:text-answer-detail', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:text-answer-detail', handler); };
   },
   // Live Word Cloud
   startLiveWordCloud: (data: {

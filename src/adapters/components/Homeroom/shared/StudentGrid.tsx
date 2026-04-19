@@ -58,10 +58,16 @@ export function StudentGrid<T extends string = string>({
   hideVacant = false,
   className = '',
 }: StudentGridProps<T>) {
-  const filteredStudents = useMemo(
-    () => (hideVacant ? students.filter((s) => !isInactiveStatus(s.status) && !s.isVacant) : students),
-    [students, hideVacant],
-  );
+  /* 원본 배열 위치에서 번호를 계산한 뒤 필터링 — hideVacant 시 번호 밀림 방지 */
+  const displayData = useMemo(() => {
+    const all = students.map((s, idx) => ({
+      student: s,
+      displayNumber: idx + 1,
+    }));
+    return hideVacant
+      ? all.filter(({ student: s }) => !isInactiveStatus(s.status) && !s.isVacant)
+      : all;
+  }, [students, hideVacant]);
 
   const handleClick = useCallback(
     (student: Student) => {
@@ -84,11 +90,11 @@ export function StudentGrid<T extends string = string>({
       className={`grid gap-2 ${className}`}
       style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
     >
-      {filteredStudents.map((student, idx) => (
+      {displayData.map(({ student, displayNumber }) => (
         <StudentCell
           key={student.id}
           student={student}
-          displayNumber={idx + 1}
+          displayNumber={displayNumber}
           gridMode={gridMode}
           onClick={() => handleClick(student)}
         />

@@ -6,6 +6,9 @@ import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
+import type { MultiSurveyQuestion } from '@domain/entities/MultiSurvey';
+import { TeacherControlPanel } from './TeacherControlPanel';
+import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
 
 interface ToolSurveyProps {
   onBack: () => void;
@@ -54,9 +57,11 @@ interface CreateViewProps {
   onLoadTemplate?: (template: ToolTemplate) => void;
   loadedDraft?: { question: string; maxLength: number } | null;
   onShowPastResults?: () => void;
+  stepMode: boolean;
+  onStepModeChange: (v: boolean) => void;
 }
 
-function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, loadedDraft, onShowPastResults }: CreateViewProps) {
+function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, loadedDraft, onShowPastResults, stepMode, onStepModeChange }: CreateViewProps) {
   const [questions, setQuestions] = useState<SurveyQuestion[]>([defaultSurveyQuestion()]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [exampleIdx, setExampleIdx] = useState(-1);
@@ -260,6 +265,35 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
               </p>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* stepMode 토글 — 다문항일 때만 표시 */}
+      {questions.length >= 2 && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-sp-muted font-medium shrink-0">응답 모드:</span>
+          <button
+            type="button"
+            onClick={() => onStepModeChange(false)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+              !stepMode
+                ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            📜 전체 한 화면
+          </button>
+          <button
+            type="button"
+            onClick={() => onStepModeChange(true)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+              stepMode
+                ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'
+            }`}
+          >
+            👨‍🏫 교사 주도 진행
+          </button>
         </div>
       )}
 
@@ -469,6 +503,21 @@ interface SurveyingViewProps {
   customCodeError: string | null;
   onCustomCodeChange: (v: string) => void;
   onSetCustomCode: () => void;
+  // 교사 주도 진행 모드
+  stepMode: boolean;
+  teacherPhase: 'lobby' | 'open' | 'revealed' | 'ended';
+  teacherQuestionIndex: number;
+  teacherTotalConnected: number;
+  teacherTotalAnswered: number;
+  teacherAggregated: AggregatedResult | undefined;
+  teacherRoster: RosterEntry[];
+  teacherTextDetail: TextAnswerEntry[] | undefined;
+  onTeacherActivate: () => void;
+  onTeacherReveal: () => void;
+  onTeacherAdvance: () => void;
+  onTeacherPrev: () => void;
+  onTeacherReopen: () => void;
+  onTeacherEnd: () => void;
 }
 
 function SurveyingView({
@@ -494,7 +543,30 @@ function SurveyingView({
   customCodeError,
   onCustomCodeChange,
   onSetCustomCode,
+  stepMode,
+  teacherPhase,
+  teacherQuestionIndex,
+  teacherTotalConnected,
+  teacherTotalAnswered,
+  teacherAggregated,
+  teacherRoster,
+  teacherTextDetail,
+  onTeacherActivate,
+  onTeacherReveal,
+  onTeacherAdvance,
+  onTeacherPrev,
+  onTeacherReopen,
+  onTeacherEnd,
 }: SurveyingViewProps) {
+  // SurveyQuestion → MultiSurveyQuestion 변환 (TeacherControlPanel 전달용)
+  const convertedQuestions: MultiSurveyQuestion[] = questions.map((q) => ({
+    id: q.id,
+    type: 'text' as const,
+    question: q.question,
+    required: true,
+    maxLength: q.maxLength,
+  }));
+
   const handleReset = useCallback(() => {
     if (submissions.length > 0) {
       if (!window.confirm('모든 응답을 초기화하고 설문을 처음부터 시작하시겠습니까?')) return;
@@ -502,26 +574,30 @@ function SurveyingView({
     onReset();
   }, [submissions.length, onReset]);
 
+  const showTeacherPanel = isLiveMode && stepMode && questions.length >= 2;
+
   return (
     <div className="w-full flex flex-col h-full min-h-0 gap-4">
-      {/* Header: show question(s) */}
-      <div className="text-center shrink-0">
-        {questions.length === 1 ? (
-          <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
-            {questions[0]!.question}
-          </h2>
-        ) : (
-          <>
-            <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-3xl' : 'text-xl'}`}>
-              주관식 설문 진행 중
+      {/* Header — teacher-driven 모드에서는 TeacherControlPanel이 자체 헤더를 가지므로 숨김 */}
+      {!showTeacherPanel && (
+        <div className="text-center shrink-0">
+          {questions.length === 1 ? (
+            <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
+              {questions[0]!.question}
             </h2>
-            <p className="text-sp-muted text-sm mt-1">{questions.length}개 문항</p>
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-3xl' : 'text-xl'}`}>
+                주관식 설문 진행 중
+              </h2>
+              <p className="text-sp-muted text-sm mt-1">{questions.length}개 문항</p>
+            </>
+          )}
+        </div>
+      )}
 
-      {/* Live survey panel */}
-      {isLiveMode && liveServerInfo && (
+      {/* Live survey panel — stepMode=true 라이브에서는 숨김 (QR/URL은 학생 초대 모달로 이동) */}
+      {isLiveMode && liveServerInfo && !showTeacherPanel && (
         <LiveSurveyPanel
           serverInfo={liveServerInfo}
           connectedStudents={connectedStudents}
@@ -547,67 +623,98 @@ function SurveyingView({
         </div>
       )}
 
-      {/* Submission feed — show only "학생 제출 완료 + 시간" (no answer text) */}
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
-        {submissions.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sp-muted text-center">
-              아직 응답이 없습니다.<br />
-              <span className="text-sm">학생들이 응답하면 여기에 표시됩니다.</span>
-            </p>
-          </div>
-        ) : (
-          submissions.map((sub, idx) => (
-            <div
-              key={sub.id}
-              className="bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 flex items-center gap-3"
-            >
-              <span className="text-sp-accent font-mono text-sm font-bold">
-                #{submissions.length - idx}
-              </span>
-              <span className="text-sp-text text-sm">학생 제출 완료</span>
-              <span className="text-sp-muted text-xs ml-auto">
-                {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Bottom bar */}
-      <div className="flex items-center justify-between shrink-0 pb-1">
-        <span className="text-sp-muted text-sm font-medium">
-          📝 <span className="text-sp-text font-bold">{submissions.length}명</span> 응답
-        </span>
-
-        <div className="flex items-center gap-2">
-          {/* Student live survey toggle */}
-          <button
-            onClick={isLiveMode ? onStopLive : onStartLive}
-            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-              isLiveMode
-                ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
-                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
-            }`}
-          >
-            {isLiveMode ? `📱 학생 설문 중 (${connectedStudents}명)` : '📱 학생 설문'}
-          </button>
-
-          <button
-            onClick={onFinish}
-            className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-all text-sm font-bold"
-          >
-            설문 종료 → 결과 보기
-          </button>
-
-          <button
-            onClick={handleReset}
-            className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
-          >
-            🗑️ 초기화
-          </button>
+      {/* 교사 주도 진행 패널 — 다문항 + stepMode + 라이브 중일 때 메인 영역 전체 차지 */}
+      {showTeacherPanel && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <TeacherControlPanel
+            phase={teacherPhase}
+            currentQuestionIndex={teacherQuestionIndex}
+            totalQuestions={questions.length}
+            totalConnected={teacherTotalConnected}
+            totalAnswered={teacherTotalAnswered}
+            currentQuestion={convertedQuestions[teacherQuestionIndex]}
+            aggregated={teacherAggregated}
+            roster={teacherRoster}
+            textAnswerDetail={teacherTextDetail}
+            liveDisplayUrl={shortUrl ?? tunnelUrl ?? undefined}
+            liveFullUrl={tunnelUrl ?? undefined}
+            liveShortUrl={shortUrl ?? undefined}
+            liveTunnelLoading={tunnelLoading}
+            onActivate={onTeacherActivate}
+            onReveal={onTeacherReveal}
+            onAdvance={onTeacherAdvance}
+            onPrev={onTeacherPrev}
+            onReopen={onTeacherReopen}
+            onEnd={onTeacherEnd}
+          />
         </div>
-      </div>
+      )}
+
+      {/* Submission feed — stepMode=false 또는 단문항일 때만 (회귀 방지) */}
+      {!showTeacherPanel && (
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
+          {submissions.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-sp-muted text-center">
+                아직 응답이 없습니다.<br />
+                <span className="text-sm">학생들이 응답하면 여기에 표시됩니다.</span>
+              </p>
+            </div>
+          ) : (
+            submissions.map((sub, idx) => (
+              <div
+                key={sub.id}
+                className="bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 flex items-center gap-3"
+              >
+                <span className="text-sp-accent font-mono text-sm font-bold">
+                  #{submissions.length - idx}
+                </span>
+                <span className="text-sp-text text-sm">학생 제출 완료</span>
+                <span className="text-sp-muted text-xs ml-auto">
+                  {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Bottom bar — teacher-driven 모드에서는 숨김 (세션 종료는 TeacherControlPanel에서) */}
+      {!showTeacherPanel && (
+        <div className="flex items-center justify-between shrink-0 pb-1">
+          <span className="text-sp-muted text-sm font-medium">
+            📝 <span className="text-sp-text font-bold">{submissions.length}명</span> 응답
+          </span>
+
+          <div className="flex items-center gap-2">
+            {/* Student live survey toggle */}
+            <button
+              onClick={isLiveMode ? onStopLive : onStartLive}
+              className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+                isLiveMode
+                  ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
+                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+              }`}
+            >
+              {isLiveMode ? `📱 학생 설문 중 (${connectedStudents}명)` : '📱 학생 설문'}
+            </button>
+
+            <button
+              onClick={onFinish}
+              className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-all text-sm font-bold"
+            >
+              설문 종료 → 결과 보기
+            </button>
+
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
+            >
+              🗑️ 초기화
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -620,9 +727,29 @@ interface ResultsViewProps {
   isFullscreen: boolean;
   onNewSurvey: () => void;
   resultSaveButton?: React.ReactNode;
+  /** 교사 주도 모드(stepMode=true) 세션에서 수집된 문항별 aggregated 답변.
+   *  존재하면 submissions 기반 목록을 완전히 대체해서 표시한다. (Bug #B) */
+  teacherAggregatedByQuestion?: Record<string, AggregatedResult>;
+  /** 교사 주도 모드 총 접속 학생 수(헤더 표시용) */
+  teacherTotalConnected?: number;
 }
 
-function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, resultSaveButton }: ResultsViewProps) {
+function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, resultSaveButton, teacherAggregatedByQuestion, teacherTotalConnected }: ResultsViewProps) {
+  // 교사 주도 모드 집계가 있으면 submissions 기반 로직을 우회한다.
+  const hasTeacherAggregated = teacherAggregatedByQuestion !== undefined
+    && Object.keys(teacherAggregatedByQuestion).length > 0;
+  const headerTotal = hasTeacherAggregated
+    ? (teacherTotalConnected ?? 0)
+    : submissions.length;
+
+  // 교사 집계에서 문항별 답변 리스트 추출 (주관식만 사용)
+  const getTeacherTexts = (qId: string): string[] | null => {
+    const agg = teacherAggregatedByQuestion?.[qId];
+    if (!agg) return null;
+    if ('answers' in agg) return agg.answers;
+    return null;
+  };
+
   return (
     <div className="w-full flex flex-col h-full min-h-0 gap-6">
       {/* Single question: show question as header */}
@@ -636,7 +763,68 @@ function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, result
 
       {/* Responses */}
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
-        {submissions.length === 0 ? (
+        {hasTeacherAggregated ? (
+          /* 교사 주도 모드: 각 문항의 aggregated.answers 를 그대로 렌더 */
+          questions.length === 1 ? (
+            (() => {
+              const texts = getTeacherTexts(questions[0]!.id) ?? [];
+              if (texts.length === 0) {
+                return (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-sp-muted">응답이 없습니다.</p>
+                  </div>
+                );
+              }
+              return texts.map((text, idx) => (
+                <div
+                  key={`teacher-${idx}`}
+                  className="bg-sp-card border border-sp-border rounded-xl p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className={`shrink-0 font-mono text-sp-muted font-bold ${isFullscreen ? 'text-base' : 'text-sm'}`}>
+                      #{texts.length - idx}
+                    </span>
+                    <p className={`text-sp-text flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}>
+                      {text}
+                    </p>
+                  </div>
+                </div>
+              ));
+            })()
+          ) : (
+            questions.map((q, qIdx) => {
+              const texts = getTeacherTexts(q.id) ?? [];
+              return (
+                <div key={q.id} className="flex flex-col gap-2">
+                  <h3 className={`font-bold text-sp-text ${isFullscreen ? 'text-xl' : 'text-lg'}`}>
+                    Q{qIdx + 1}. {q.question}
+                  </h3>
+                  <div className="flex flex-col gap-2 ml-2">
+                    {texts.length === 0 ? (
+                      <p className="text-sp-muted text-sm ml-2">응답이 없습니다.</p>
+                    ) : (
+                      texts.map((text, tIdx) => (
+                        <div
+                          key={`teacher-${q.id}-${tIdx}`}
+                          className="bg-sp-card border border-sp-border rounded-lg px-4 py-3"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="shrink-0 font-mono text-sp-muted font-bold text-sm">
+                              #{texts.length - tIdx}
+                            </span>
+                            <p className="text-sp-text flex-1 leading-relaxed text-base">
+                              {text}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )
+        ) : submissions.length === 0 ? (
           <div className="flex-1 flex items-center justify-center">
             <p className="text-sp-muted">응답이 없습니다.</p>
           </div>
@@ -699,7 +887,7 @@ function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, result
       {/* Total */}
       <div className="text-center shrink-0">
         <span className="text-sp-muted">
-          총 <span className="text-sp-text font-bold text-lg">{submissions.length}명</span> 응답
+          총 <span className="text-sp-text font-bold text-lg">{headerTotal}명</span> 응답
         </span>
       </div>
 
@@ -751,11 +939,30 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
   const [customCodeError, setCustomCodeError] = useState<string | null>(null);
   const liveSessionClientRef = useRef(new LiveSessionClient());
 
+  // stepMode — 다문항 + 교사 주도 진행 모드 (기본값 false, 기존 동작 유지)
+  const [stepMode, setStepMode] = useState(false);
+
+  // 교사 주도 진행 모드 상태 (stepMode=true + 다문항일 때 활성)
+  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>('lobby');
+  const [teacherQuestionIndex, setTeacherQuestionIndex] = useState(0);
+  const [teacherTotalConnected, setTeacherTotalConnected] = useState(0);
+  const [teacherTotalAnswered, setTeacherTotalAnswered] = useState(0);
+  const [teacherAggregated, setTeacherAggregated] = useState<AggregatedResult | undefined>(undefined);
+  const [teacherRoster, setTeacherRoster] = useState<RosterEntry[]>([]);
+  const [teacherTextDetail, setTeacherTextDetail] = useState<TextAnswerEntry[] | undefined>(undefined);
+  // Bug #B: 교사 주도 모드에서 각 문항의 REVEALED 시점에 수신한 aggregated.answers를
+  // 문항ID 기준으로 누적한다. 세션 종료 후 ResultsView가 submissions 대신 이 집계를 우선 사용.
+  const [teacherAggregatedByQuestion, setTeacherAggregatedByQuestion] = useState<Record<string, AggregatedResult>>({});
+  // phase-changed 콜백에서 최신 questions 배열 참조용 ref
+  const questionsRef = useRef<SurveyQuestion[]>([]);
+  useEffect(() => { questionsRef.current = questions; }, [questions]);
+
   const isMultiQuestion = questions.length > 1;
 
   const handleStart = useCallback((qs: SurveyQuestion[]) => {
     setQuestions(qs);
     setSubmissions([]);
+    setTeacherAggregatedByQuestion({});
     setViewMode('surveying');
   }, []);
 
@@ -776,7 +983,7 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           required: true,
           maxLength: q.maxLength,
         }));
-        const info = await window.electronAPI.startLiveMultiSurvey({ questions: surveyQuestions });
+        const info = await window.electronAPI.startLiveMultiSurvey({ questions: surveyQuestions, stepMode });
         if (info.localIPs.length === 0) {
           setLiveError('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
           return;
@@ -837,7 +1044,7 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     } catch {
       setLiveError('학생 설문 서버를 시작할 수 없습니다.');
     }
-  }, [questions, isMultiQuestion]);
+  }, [questions, isMultiQuestion, stepMode]);
 
   const handleStopLive = useCallback(async () => {
     if (isMultiQuestion) {
@@ -857,6 +1064,14 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     setShortCode(null);
     setCustomCodeInput('');
     setCustomCodeError(null);
+    // 교사 주도 진행 모드 상태 초기화
+    setTeacherPhase('lobby');
+    setTeacherQuestionIndex(0);
+    setTeacherTotalConnected(0);
+    setTeacherTotalAnswered(0);
+    setTeacherAggregated(undefined);
+    setTeacherRoster([]);
+    setTeacherTextDetail(undefined);
   }, [isMultiQuestion]);
 
   const handleSetCustomCode = useCallback(async () => {
@@ -886,6 +1101,7 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     setViewMode('create');
     setQuestions([]);
     setSubmissions([]);
+    setTeacherAggregatedByQuestion({});
   }, [isLiveMode, handleStopLive]);
 
   const handleToggleQRFullscreen = useCallback(() => {
@@ -950,6 +1166,64 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     }
   }, [isLiveMode, isMultiQuestion, questions]);
 
+  // 교사 주도 진행 모드 IPC 구독 (stepMode=true + 다문항 + 라이브 중에만)
+  useEffect(() => {
+    if (!isLiveMode || !stepMode || questions.length < 2 || !window.electronAPI) return;
+
+    const unsubPhase = window.electronAPI.onLiveMultiSurveyPhaseChanged((data) => {
+      setTeacherPhase(data.phase);
+      setTeacherQuestionIndex(data.currentQuestionIndex);
+      setTeacherTotalAnswered(data.totalAnswered);
+      setTeacherTotalConnected(data.totalConnected);
+      setTeacherAggregated(data.aggregated);
+
+      // Bug #B: phase='revealed' 진입 시 해당 문항의 확정 aggregated를 문항ID별로 누적 저장.
+      // 세션 종료 후 ResultsView는 이 집계를 submissions 대신 우선 사용해 교사 주도 모드의
+      // 학생 답변을 기존 결과 화면에 정상 표시한다.
+      if (data.phase === 'revealed' && data.aggregated) {
+        const qIdx = data.currentQuestionIndex;
+        const currentQuestions = questionsRef.current;
+        const qId = currentQuestions[qIdx]?.id;
+        if (qId) {
+          const agg = data.aggregated;
+          setTeacherAggregatedByQuestion((prev) => ({ ...prev, [qId]: agg }));
+        }
+      }
+    });
+
+    const unsubRoster = window.electronAPI.onLiveMultiSurveyRoster((data) => {
+      setTeacherRoster(
+        data.roster.map((r) => ({
+          sessionId: r.sessionId,
+          nickname: r.nickname,
+          answeredCurrent: r.answeredQuestions.includes(teacherQuestionIndex),
+        })),
+      );
+    });
+
+    const unsubAnswered = window.electronAPI.onLiveMultiSurveyStudentAnswered((data) => {
+      setTeacherTotalAnswered(data.totalAnswered);
+      setTeacherTotalConnected(data.totalConnected);
+      if (data.aggregatedPreview) setTeacherAggregated(data.aggregatedPreview);
+    });
+
+    const unsubTextDetail = window.electronAPI.onLiveMultiSurveyTextAnswerDetail((data) => {
+      setTeacherTextDetail(data.entries);
+    });
+
+    const unsubConnCount = window.electronAPI.onLiveMultiSurveyConnectionCount((data) => {
+      setTeacherTotalConnected(data.count);
+    });
+
+    return () => {
+      unsubPhase();
+      unsubRoster();
+      unsubAnswered();
+      unsubTextDetail();
+      unsubConnCount();
+    };
+  }, [isLiveMode, stepMode, questions.length, teacherQuestionIndex]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -989,6 +1263,8 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           onLoadTemplate={handleLoadTemplate}
           loadedDraft={loadedDraft}
           onShowPastResults={() => setShowPastResults(true)}
+          stepMode={stepMode}
+          onStepModeChange={setStepMode}
         />
       )}
       {!showPastResults && viewMode === 'surveying' && (
@@ -1015,6 +1291,23 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           customCodeError={customCodeError}
           onCustomCodeChange={setCustomCodeInput}
           onSetCustomCode={handleSetCustomCode}
+          stepMode={stepMode}
+          teacherPhase={teacherPhase}
+          teacherQuestionIndex={teacherQuestionIndex}
+          teacherTotalConnected={teacherTotalConnected}
+          teacherTotalAnswered={teacherTotalAnswered}
+          teacherAggregated={teacherAggregated}
+          teacherRoster={teacherRoster}
+          teacherTextDetail={teacherTextDetail}
+          onTeacherActivate={() => { void window.electronAPI?.liveMultiSurveyActivateSession(); }}
+          onTeacherReveal={() => { void window.electronAPI?.liveMultiSurveyReveal(); }}
+          onTeacherAdvance={() => { void window.electronAPI?.liveMultiSurveyAdvance(); }}
+          onTeacherPrev={() => { void window.electronAPI?.liveMultiSurveyPrev(); }}
+          onTeacherReopen={() => { void window.electronAPI?.liveMultiSurveyReopen(); }}
+          onTeacherEnd={() => {
+            void window.electronAPI?.liveMultiSurveyEndSession();
+            void handleStopLive();
+          }}
         />
       )}
       {!showPastResults && viewMode === 'results' && (
@@ -1023,6 +1316,8 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           submissions={submissions}
           isFullscreen={isFullscreen}
           onNewSurvey={handleReset}
+          teacherAggregatedByQuestion={teacherAggregatedByQuestion}
+          teacherTotalConnected={teacherTotalConnected}
           resultSaveButton={
             <ResultSaveButton
               toolType="survey"

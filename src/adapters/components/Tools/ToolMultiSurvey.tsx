@@ -8,6 +8,8 @@ import { buildWordFrequency, type WordEntry } from '@adapters/utils/wordFrequenc
 import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
+import { TeacherControlPanel } from './TeacherControlPanel';
+import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
 
 interface ToolMultiSurveyProps {
   onBack: () => void;
@@ -795,6 +797,21 @@ interface RunningViewProps {
   customCodeError: string | null;
   onCustomCodeChange: (v: string) => void;
   onSetCustomCode: () => void;
+  // Teacher control panel (stepMode=true + 라이브 + 다문항)
+  stepMode: boolean;
+  teacherPhase: 'lobby' | 'open' | 'revealed' | 'ended';
+  teacherQuestionIndex: number;
+  teacherTotalConnected: number;
+  teacherTotalAnswered: number;
+  teacherAggregated: AggregatedResult | undefined;
+  teacherRoster: RosterEntry[];
+  teacherTextDetail: TextAnswerEntry[] | undefined;
+  onTeacherActivate: () => void;
+  onTeacherReveal: () => void;
+  onTeacherAdvance: () => void;
+  onTeacherPrev: () => void;
+  onTeacherReopen: () => void;
+  onTeacherEnd: () => void;
 }
 
 function RunningView({
@@ -821,6 +838,20 @@ function RunningView({
   customCodeError,
   onCustomCodeChange,
   onSetCustomCode,
+  stepMode,
+  teacherPhase,
+  teacherQuestionIndex,
+  teacherTotalConnected,
+  teacherTotalAnswered,
+  teacherAggregated,
+  teacherRoster,
+  teacherTextDetail,
+  onTeacherActivate,
+  onTeacherReveal,
+  onTeacherAdvance,
+  onTeacherPrev,
+  onTeacherReopen,
+  onTeacherEnd,
 }: RunningViewProps) {
   const handleReset = useCallback(() => {
     if (submissions.length > 0) {
@@ -829,20 +860,24 @@ function RunningView({
     onReset();
   }, [submissions.length, onReset]);
 
+  const showTeacherPanel = isLiveMode && stepMode && questions.length >= 2;
+
   return (
     <div className="w-full flex flex-col h-full min-h-0 gap-4">
-      {/* Header */}
-      <div className="text-center shrink-0">
-        {title && (
-          <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-3xl' : 'text-xl'}`}>
-            {title}
-          </h2>
-        )}
-        <p className="text-sp-muted text-sm mt-1">{questions.length}개 문항</p>
-      </div>
+      {/* Header — teacher-driven 모드에서는 TeacherControlPanel이 자체 맥락 제공하므로 숨김 */}
+      {!showTeacherPanel && (
+        <div className="text-center shrink-0">
+          {title && (
+            <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-3xl' : 'text-xl'}`}>
+              {title}
+            </h2>
+          )}
+          <p className="text-sp-muted text-sm mt-1">{questions.length}개 문항</p>
+        </div>
+      )}
 
-      {/* Live panel */}
-      {isLiveMode && liveServerInfo && (
+      {/* Live panel — teacher-driven 모드에서는 숨김 (QR/URL은 초대 모달로 이동) */}
+      {isLiveMode && liveServerInfo && !showTeacherPanel && (
         <LivePanel
           serverInfo={liveServerInfo}
           connectedStudents={connectedStudents}
@@ -868,63 +903,92 @@ function RunningView({
         </div>
       )}
 
-      {/* Submission feed */}
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
-        {submissions.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sp-muted text-center">
-              아직 응답이 없습니다.<br />
-              <span className="text-sm">학생들이 응답하면 여기에 표시됩니다.</span>
-            </p>
-          </div>
-        ) : (
-          submissions.map((sub, idx) => (
-            <div
-              key={sub.id}
-              className="bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 flex items-center gap-3"
-            >
-              <span className="text-sp-accent font-mono text-sm font-bold">
-                #{submissions.length - idx}
-              </span>
-              <span className="text-sp-text text-sm">학생 제출 완료</span>
-              <span className="text-sp-muted text-xs ml-auto">
-                {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Bottom bar */}
-      <div className="flex items-center justify-between shrink-0 pb-1">
-        <span className="text-sp-muted text-sm font-medium">
-          📋 <span className="text-sp-text font-bold">{submissions.length}명</span> 응답
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={isLiveMode ? onStopLive : onStartLive}
-            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-              isLiveMode
-                ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
-                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
-            }`}
-          >
-            {isLiveMode ? `📱 학생 설문 중 (${connectedStudents}명)` : '📱 학생 설문'}
-          </button>
-          <button
-            onClick={onFinish}
-            className="px-4 py-2 rounded-xl bg-sp-accent text-white font-bold hover:bg-sp-accent/80 transition-all text-sm"
-          >
-            설문 종료 → 결과 보기
-          </button>
-          <button
-            onClick={handleReset}
-            className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-all text-sm font-medium"
-          >
-            🗑️ 초기화
-          </button>
+      {/* Teacher control panel — stepMode=true, isLiveMode=true, 2개 이상 문항이면 메인 영역 전체 차지 */}
+      {showTeacherPanel ? (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <TeacherControlPanel
+            phase={teacherPhase}
+            currentQuestionIndex={teacherQuestionIndex}
+            totalQuestions={questions.length}
+            totalConnected={teacherTotalConnected}
+            totalAnswered={teacherTotalAnswered}
+            currentQuestion={questions[teacherQuestionIndex]}
+            aggregated={teacherAggregated}
+            roster={teacherRoster}
+            textAnswerDetail={teacherTextDetail}
+            liveDisplayUrl={shortUrl ?? tunnelUrl ?? undefined}
+            liveFullUrl={tunnelUrl ?? undefined}
+            liveShortUrl={shortUrl ?? undefined}
+            liveTunnelLoading={tunnelLoading}
+            onActivate={onTeacherActivate}
+            onReveal={onTeacherReveal}
+            onAdvance={onTeacherAdvance}
+            onPrev={onTeacherPrev}
+            onReopen={onTeacherReopen}
+            onEnd={onTeacherEnd}
+          />
         </div>
-      </div>
+      ) : (
+        /* Submission feed — stepMode=false 경로 (회귀 방지) */
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
+          {submissions.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-sp-muted text-center">
+                아직 응답이 없습니다.<br />
+                <span className="text-sm">학생들이 응답하면 여기에 표시됩니다.</span>
+              </p>
+            </div>
+          ) : (
+            submissions.map((sub, idx) => (
+              <div
+                key={sub.id}
+                className="bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 flex items-center gap-3"
+              >
+                <span className="text-sp-accent font-mono text-sm font-bold">
+                  #{submissions.length - idx}
+                </span>
+                <span className="text-sp-text text-sm">학생 제출 완료</span>
+                <span className="text-sp-muted text-xs ml-auto">
+                  {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Bottom bar — teacher-driven 모드에서는 숨김 (세션 종료는 TeacherControlPanel에서) */}
+      {!showTeacherPanel && (
+        <div className="flex items-center justify-between shrink-0 pb-1">
+          <span className="text-sp-muted text-sm font-medium">
+            📋 <span className="text-sp-text font-bold">{submissions.length}명</span> 응답
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={isLiveMode ? onStopLive : onStartLive}
+              className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+                isLiveMode
+                  ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
+                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+              }`}
+            >
+              {isLiveMode ? `📱 학생 설문 중 (${connectedStudents}명)` : '📱 학생 설문'}
+            </button>
+            <button
+              onClick={onFinish}
+              className="px-4 py-2 rounded-xl bg-sp-accent text-white font-bold hover:bg-sp-accent/80 transition-all text-sm"
+            >
+              설문 종료 → 결과 보기
+            </button>
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-all text-sm font-medium"
+            >
+              🗑️ 초기화
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -934,6 +998,7 @@ function RunningView({
 function TextResultWithCloud({
   questionId,
   submissions,
+  overrideTexts,
   useStopwords,
   onUseStopwordsChange,
   subTab,
@@ -943,6 +1008,9 @@ function TextResultWithCloud({
 }: {
   questionId: string;
   submissions: MultiSurveySubmission[];
+  /** 교사 주도 모드에서 백엔드가 집계한 텍스트 답변 배열.
+   *  존재하면 submissions 기반 추출을 완전히 대체한다. (Bug #B) */
+  overrideTexts?: string[];
   useStopwords: boolean;
   onUseStopwordsChange: (v: boolean) => void;
   subTab: 'cloud' | 'list';
@@ -951,13 +1019,14 @@ function TextResultWithCloud({
   onSelectWord: (word: string | null) => void;
 }) {
   const texts = useMemo(() => {
+    if (overrideTexts !== undefined) return overrideTexts;
     const result: string[] = [];
     for (const sub of submissions) {
       const ans = sub.answers.find((a) => a.questionId === questionId);
       if (ans && typeof ans.value === 'string' && ans.value.trim()) result.push(ans.value);
     }
     return result;
-  }, [submissions, questionId]);
+  }, [submissions, questionId, overrideTexts]);
 
   const wordEntries = useMemo(() => buildWordFrequency(texts, useStopwords), [texts, useStopwords]);
 
@@ -1062,6 +1131,12 @@ interface ResultsViewProps {
   selectedWord: { questionId: string; word: string } | null;
   onSelectedWordChange: (v: { questionId: string; word: string } | null) => void;
   resultSaveButton: React.ReactNode;
+  /** 교사 주도 모드(stepMode=true)에서 백엔드로부터 받은 문항별 확정 집계.
+   *  존재하는 경우 submissions 기반 계산을 덮어쓴다. (Bug #B 대응)
+   *  키: questionId */
+  teacherAggregatedByQuestion?: Record<string, AggregatedResult>;
+  /** 교사 주도 모드에서 총 응답자 수(접속 학생 수) */
+  teacherTotalConnected?: number;
 }
 
 function ChoiceBarChart({ options, counts, total }: { options: EditableOption[]; counts: Map<string, number>; total: number }) {
@@ -1090,25 +1165,47 @@ function ChoiceBarChart({ options, counts, total }: { options: EditableOption[];
   );
 }
 
-function ScaleResult({ question, submissions }: { question: EditableQuestion; submissions: MultiSurveySubmission[] }) {
-  const values: number[] = [];
-  for (const sub of submissions) {
-    const ans = sub.answers.find((a) => a.questionId === question.id);
-    if (ans && typeof ans.value === 'number') values.push(ans.value);
-  }
-  const avg = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-
-  // Distribution
+function ScaleResult({
+  question,
+  submissions,
+  overrideAggregate,
+}: {
+  question: EditableQuestion;
+  submissions: MultiSurveySubmission[];
+  /** 교사 주도 모드에서 백엔드로부터 받은 척도 집계.
+   *  존재하면 submissions 기반 계산을 완전히 대체한다. (Bug #B) */
+  overrideAggregate?: { avg: number; distribution: Record<number, number>; total: number };
+}) {
+  let avg = 0;
+  let total = 0;
   const dist = new Map<number, number>();
-  for (let i = question.scaleMin; i <= question.scaleMax; i++) dist.set(i, 0);
-  for (const v of values) dist.set(v, (dist.get(v) ?? 0) + 1);
+
+  if (overrideAggregate) {
+    avg = overrideAggregate.avg;
+    total = overrideAggregate.total;
+    for (let i = question.scaleMin; i <= question.scaleMax; i++) dist.set(i, 0);
+    for (const [v, c] of Object.entries(overrideAggregate.distribution)) {
+      const num = Number(v);
+      if (!Number.isNaN(num)) dist.set(num, c);
+    }
+  } else {
+    const values: number[] = [];
+    for (const sub of submissions) {
+      const ans = sub.answers.find((a) => a.questionId === question.id);
+      if (ans && typeof ans.value === 'number') values.push(ans.value);
+    }
+    avg = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+    total = values.length;
+    for (let i = question.scaleMin; i <= question.scaleMax; i++) dist.set(i, 0);
+    for (const v of values) dist.set(v, (dist.get(v) ?? 0) + 1);
+  }
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <span className="text-3xl font-bold text-sp-accent">{avg.toFixed(1)}</span>
         <span className="text-sp-muted text-sm">/ {question.scaleMax} 평균</span>
-        <span className="text-sp-muted text-xs ml-auto">{values.length}명 응답</span>
+        <span className="text-sp-muted text-xs ml-auto">{total}명 응답</span>
       </div>
       <div className="flex items-end gap-1.5 h-20">
         {Array.from(dist.entries()).map(([val, count]) => {
@@ -1140,7 +1237,14 @@ function ScaleResult({ question, submissions }: { question: EditableQuestion; su
 
 
 
-function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey, useStopwords, onUseStopwordsChange, textSubTab, onTextSubTabChange, selectedWord, onSelectedWordChange, resultSaveButton }: ResultsViewProps) {
+function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey, useStopwords, onUseStopwordsChange, textSubTab, onTextSubTabChange, selectedWord, onSelectedWordChange, resultSaveButton, teacherAggregatedByQuestion, teacherTotalConnected }: ResultsViewProps) {
+  // 교사 주도 모드에서 집계 데이터가 존재하면 그 쪽을 우선 사용한다. (Bug #B)
+  const hasTeacherAggregated = teacherAggregatedByQuestion !== undefined
+    && Object.keys(teacherAggregatedByQuestion).length > 0;
+  const headerTotal = hasTeacherAggregated
+    ? (teacherTotalConnected ?? 0)
+    : submissions.length;
+
   return (
     <div className="w-full flex flex-col h-full min-h-0 gap-4">
       {/* Header */}
@@ -1151,7 +1255,7 @@ function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey,
           </h2>
         )}
         <p className="text-sp-muted text-sm mt-1">
-          총 <span className="text-sp-text font-bold">{submissions.length}명</span> 응답
+          총 <span className="text-sp-text font-bold">{headerTotal}명</span> 응답
         </p>
       </div>
 
@@ -1159,26 +1263,44 @@ function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey,
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
         {questions.map((q, idx) => {
           const isChoiceType = q.type === 'single-choice' || q.type === 'multi-choice';
+          const teacherAgg = teacherAggregatedByQuestion?.[q.id];
 
-          // Build counts for choice types
+          // Build counts for choice types — teacher aggregated 우선
           let choiceCounts = new Map<string, number>();
           let choiceTotal = 0;
           if (isChoiceType) {
             for (const opt of q.options) choiceCounts.set(opt.id, 0);
-            for (const sub of submissions) {
-              const ans = sub.answers.find((a) => a.questionId === q.id);
-              if (!ans) continue;
-              if (q.type === 'single-choice' && typeof ans.value === 'string') {
-                choiceCounts.set(ans.value, (choiceCounts.get(ans.value) ?? 0) + 1);
-                choiceTotal++;
-              } else if (q.type === 'multi-choice' && Array.isArray(ans.value)) {
-                for (const v of ans.value) {
-                  choiceCounts.set(v, (choiceCounts.get(v) ?? 0) + 1);
+            if (teacherAgg && 'counts' in teacherAgg) {
+              for (const [optId, c] of Object.entries(teacherAgg.counts)) {
+                choiceCounts.set(optId, c);
+              }
+              choiceTotal = teacherAgg.total;
+            } else {
+              for (const sub of submissions) {
+                const ans = sub.answers.find((a) => a.questionId === q.id);
+                if (!ans) continue;
+                if (q.type === 'single-choice' && typeof ans.value === 'string') {
+                  choiceCounts.set(ans.value, (choiceCounts.get(ans.value) ?? 0) + 1);
+                  choiceTotal++;
+                } else if (q.type === 'multi-choice' && Array.isArray(ans.value)) {
+                  for (const v of ans.value) {
+                    choiceCounts.set(v, (choiceCounts.get(v) ?? 0) + 1);
+                  }
+                  choiceTotal++;
                 }
-                choiceTotal++;
               }
             }
           }
+
+          // text override (teacher aggregated.answers)
+          const overrideTexts = teacherAgg && 'answers' in teacherAgg
+            ? teacherAgg.answers
+            : undefined;
+
+          // scale override (teacher aggregated)
+          const overrideScaleAgg = teacherAgg && 'avg' in teacherAgg
+            ? teacherAgg
+            : undefined;
 
           return (
             <div key={q.id} className="bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col gap-3">
@@ -1197,6 +1319,7 @@ function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey,
                 <TextResultWithCloud
                   questionId={q.id}
                   submissions={submissions}
+                  overrideTexts={overrideTexts}
                   useStopwords={useStopwords}
                   onUseStopwordsChange={onUseStopwordsChange}
                   subTab={textSubTab[q.id] ?? 'cloud'}
@@ -1206,7 +1329,7 @@ function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey,
                 />
               )}
               {q.type === 'scale' && (
-                <ScaleResult question={q} submissions={submissions} />
+                <ScaleResult question={q} submissions={submissions} overrideAggregate={overrideScaleAgg} />
               )}
             </div>
           );
@@ -1274,6 +1397,22 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   const [customCodeError, setCustomCodeError] = useState<string | null>(null);
   const liveSessionClientRef = useRef(new LiveSessionClient());
 
+  // Teacher control panel state (stepMode=true, isLiveMode=true)
+  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>('lobby');
+  const [teacherQuestionIndex, setTeacherQuestionIndex] = useState(0);
+  const [teacherTotalConnected, setTeacherTotalConnected] = useState(0);
+  const [teacherTotalAnswered, setTeacherTotalAnswered] = useState(0);
+  const [teacherAggregated, setTeacherAggregated] = useState<AggregatedResult | undefined>();
+  const [teacherRoster, setTeacherRoster] = useState<RosterEntry[]>([]);
+  const [teacherTextDetail, setTeacherTextDetail] = useState<TextAnswerEntry[] | undefined>();
+  // Bug #B: 각 문항의 REVEALED 시점에 받은 aggregated를 문항ID 기준으로 누적한다.
+  // 세션 종료 후 ResultsView가 submissions 대신 이 집계를 우선 사용한다.
+  const [teacherAggregatedByQuestion, setTeacherAggregatedByQuestion] = useState<Record<string, AggregatedResult>>({});
+
+  // phase-changed 콜백에서 최신 questions 배열에 접근하기 위한 ref
+  const questionsRef = useRef<EditableQuestion[]>([]);
+  useEffect(() => { questionsRef.current = questions; }, [questions]);
+
   const handleSaveTemplate = useCallback((name: string, t: string, qs: EditableQuestion[]) => {
     const config = {
       type: 'multi-survey' as const,
@@ -1328,6 +1467,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
     setTitle(t);
     setQuestions(qs);
     setSubmissions([]);
+    setTeacherAggregatedByQuestion({});
     setPhase('running');
   }, []);
 
@@ -1434,6 +1574,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
     setTitle('');
     setQuestions([defaultQuestion()]);
     setSubmissions([]);
+    setTeacherAggregatedByQuestion({});
   }, [isLiveMode, handleStopLive]);
 
   const handleToggleQRFullscreen = useCallback(() => {
@@ -1461,6 +1602,82 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
       unsubSubmitted?.();
       unsubCount?.();
     };
+  }, [isLiveMode]);
+
+  // Teacher control panel IPC subscriptions (stepMode=true only)
+  useEffect(() => {
+    if (!isLiveMode || !stepMode || questions.length < 2) return;
+
+    const unsubs: Array<() => void> = [];
+
+    const unsubPhase = window.electronAPI?.onLiveMultiSurveyPhaseChanged?.((data) => {
+      setTeacherPhase(data.phase);
+      setTeacherQuestionIndex(data.currentQuestionIndex);
+      setTeacherTotalAnswered(data.totalAnswered);
+      setTeacherTotalConnected(data.totalConnected);
+      setTeacherAggregated(data.aggregated);
+
+      // Bug #B: phase='revealed' 진입 시 해당 문항의 확정 집계를 누적 저장한다.
+      // 마지막 문항까지 REVEAL한 뒤 종료하면 모든 문항의 집계가 모여 있어,
+      // "결과 보기" 화면(ResultsView)에서 submissions 대신 이 집계를 사용해
+      // 정확한 분포/평균/텍스트 리스트를 보여줄 수 있다.
+      if (data.phase === 'revealed' && data.aggregated) {
+        const qIdx = data.currentQuestionIndex;
+        const currentQuestions = questionsRef.current;
+        const qId = currentQuestions[qIdx]?.id;
+        if (qId) {
+          const agg = data.aggregated;
+          setTeacherAggregatedByQuestion((prev) => ({ ...prev, [qId]: agg }));
+        }
+      }
+
+    });
+    if (unsubPhase) unsubs.push(unsubPhase);
+
+    const unsubRoster = window.electronAPI?.onLiveMultiSurveyRoster?.((data) => {
+      setTeacherRoster(
+        data.roster.map((r) => ({
+          sessionId: r.sessionId,
+          nickname: r.nickname,
+          answeredCurrent: r.answeredQuestions.includes(teacherQuestionIndex),
+        })),
+      );
+    });
+    if (unsubRoster) unsubs.push(unsubRoster);
+
+    const unsubAnswered = window.electronAPI?.onLiveMultiSurveyStudentAnswered?.((data) => {
+      setTeacherTotalAnswered(data.totalAnswered);
+      setTeacherTotalConnected(data.totalConnected);
+      if (data.aggregatedPreview) setTeacherAggregated(data.aggregatedPreview);
+    });
+    if (unsubAnswered) unsubs.push(unsubAnswered);
+
+    const unsubTextDetail = window.electronAPI?.onLiveMultiSurveyTextAnswerDetail?.((data) => {
+      setTeacherTextDetail(data.entries);
+    });
+    if (unsubTextDetail) unsubs.push(unsubTextDetail);
+
+    const unsubConnCount = window.electronAPI?.onLiveMultiSurveyConnectionCount?.((data) => {
+      setTeacherTotalConnected(data.count);
+    });
+    if (unsubConnCount) unsubs.push(unsubConnCount);
+
+    return () => {
+      unsubs.forEach((u) => u());
+    };
+  }, [isLiveMode, stepMode, questions.length, teacherQuestionIndex]);
+
+  // Reset teacher panel state when live mode starts/stops
+  useEffect(() => {
+    if (!isLiveMode) {
+      setTeacherPhase('lobby');
+      setTeacherQuestionIndex(0);
+      setTeacherTotalConnected(0);
+      setTeacherTotalAnswered(0);
+      setTeacherAggregated(undefined);
+      setTeacherRoster([]);
+      setTeacherTextDetail(undefined);
+    }
   }, [isLiveMode]);
 
   // Cleanup on unmount
@@ -1539,6 +1756,23 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           customCodeError={customCodeError}
           onCustomCodeChange={setCustomCodeInput}
           onSetCustomCode={handleSetCustomCode}
+          stepMode={stepMode}
+          teacherPhase={teacherPhase}
+          teacherQuestionIndex={teacherQuestionIndex}
+          teacherTotalConnected={teacherTotalConnected}
+          teacherTotalAnswered={teacherTotalAnswered}
+          teacherAggregated={teacherAggregated}
+          teacherRoster={teacherRoster}
+          teacherTextDetail={teacherTextDetail}
+          onTeacherActivate={() => window.electronAPI?.liveMultiSurveyActivateSession?.()}
+          onTeacherReveal={() => window.electronAPI?.liveMultiSurveyReveal?.()}
+          onTeacherAdvance={() => window.electronAPI?.liveMultiSurveyAdvance?.()}
+          onTeacherPrev={() => window.electronAPI?.liveMultiSurveyPrev?.()}
+          onTeacherReopen={() => window.electronAPI?.liveMultiSurveyReopen?.()}
+          onTeacherEnd={() => {
+            void window.electronAPI?.liveMultiSurveyEndSession?.();
+            handleStopLive();
+          }}
         />
       )}
       {phase === 'results' && (
@@ -1554,6 +1788,8 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           onTextSubTabChange={setTextSubTab}
           selectedWord={selectedWord}
           onSelectedWordChange={setSelectedWord}
+          teacherAggregatedByQuestion={teacherAggregatedByQuestion}
+          teacherTotalConnected={teacherTotalConnected}
           resultSaveButton={
             <ResultSaveButton
               toolType="multi-survey"

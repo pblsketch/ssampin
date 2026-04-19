@@ -14,7 +14,7 @@ import { shortLinkClient } from '@adapters/di/container';
 
 /* ──────────────── 타입 ──────────────── */
 
-type StudentLike = { readonly id: string; readonly name: string; readonly isVacant?: boolean };
+type StudentLike = { readonly id: string; readonly name: string; readonly isVacant?: boolean; readonly number?: number };
 
 /* ──────────────── Props ──────────────── */
 
@@ -128,11 +128,11 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
   /* ── 학생 번호→이름 매핑 (로컬 명단) ── */
   const respondedMap = useMemo(() => {
     const map = new Map<string, string>();
-    const nonVacant = students.filter((s) => !s.isVacant);
     const respondedNumbers = new Set(responses.map((r) => r.studentNumber));
 
-    nonVacant.forEach((s, idx) => {
-      const num = idx + 1;
+    students.forEach((s, idx) => {
+      if (s.isVacant) return;
+      const num = s.number ?? idx + 1;
       map.set(s.id, respondedNumbers.has(num) ? 'responded' : '');
     });
     return map;
@@ -140,7 +140,9 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
 
   /* ── 내보내기 데이터 (로컬 이름 매칭) ── */
   const exportData = useMemo(() => {
-    const nonVacant = students.filter((s) => !s.isVacant);
+    const nonVacant = students
+      .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
+      .filter((s) => !s.isVacant);
     const columns = [
       { key: 'number', label: '번호' },
       { key: 'name', label: '이름' },
@@ -151,8 +153,8 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
       { key: 'submittedAt', label: '응답 시간' },
     ];
 
-    const rows = nonVacant.map((s, idx) => {
-      const num = idx + 1;
+    const rows = nonVacant.map((s) => {
+      const num = s._num;
       const resp = responses.find((r) => r.studentNumber === num);
       const row: Record<string, string> = {
         number: String(num),
@@ -184,10 +186,10 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
           ? 'bg-green-500/20 text-green-400'
           : 'bg-sp-surface text-sp-muted',
       renderSub: (studentId) => {
-        const nonVacant = students.filter((s) => !s.isVacant);
-        const idx = nonVacant.findIndex((s) => s.id === studentId);
-        if (idx === -1) return undefined;
-        const num = idx + 1;
+        const sIdx = students.findIndex((s) => s.id === studentId);
+        if (sIdx === -1) return undefined;
+        const s = students[sIdx]!;
+        const num = s.number ?? sIdx + 1;
         const resp = responses.find((r) => r.studentNumber === num);
         if (!resp) return undefined;
         const d = new Date(resp.submittedAt);
@@ -366,11 +368,13 @@ function PinListModal({
   onClose,
 }: {
   studentPins: StudentPinMap;
-  students: readonly import('@domain/entities/Student').Student[];
+  students: readonly StudentLike[];
   surveyTitle: string;
   onClose: () => void;
 }) {
-  const nonVacant = students.filter((s) => !s.isVacant);
+  const nonVacant = students
+    .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
+    .filter((s) => !s.isVacant);
 
   const handlePrint = () => {
     window.print();
@@ -413,12 +417,11 @@ function PinListModal({
               </tr>
             </thead>
             <tbody>
-              {nonVacant.map((student, idx) => {
-                const num = idx + 1;
-                const pin = studentPins[num] ?? '-';
+              {nonVacant.map((student) => {
+                const pin = studentPins[student._num] ?? '-';
                 return (
                   <tr key={student.id} className="border-t border-sp-border/50">
-                    <td className="py-2 text-sp-muted">{num}</td>
+                    <td className="py-2 text-sp-muted">{student._num}</td>
                     <td className="py-2 text-sp-text">{student.name}</td>
                     <td className="py-2 text-center font-mono text-sp-accent font-bold tracking-widest">{pin}</td>
                   </tr>
@@ -432,12 +435,11 @@ function PinListModal({
         <div className="hidden print:block p-4">
           <h2 className="text-base font-bold text-center mb-4">{surveyTitle} — PIN 코드</h2>
           <div className="grid grid-cols-3 gap-3">
-            {nonVacant.map((student, idx) => {
-              const num = idx + 1;
-              const pin = studentPins[num] ?? '-';
+            {nonVacant.map((student) => {
+              const pin = studentPins[student._num] ?? '-';
               return (
                 <div key={student.id} className="border border-gray-300 rounded-lg p-3 text-center">
-                  <p className="text-sm font-bold">{num}번 {student.name}</p>
+                  <p className="text-sm font-bold">{student._num}번 {student.name}</p>
                   <p className="text-2xl font-mono font-bold mt-1 tracking-widest">{pin}</p>
                   <p className="text-xs text-gray-400 mt-1">설문 PIN 코드</p>
                 </div>

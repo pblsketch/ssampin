@@ -384,14 +384,15 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
   );
   const classStudents = currentClass?.students ?? [];
 
-  // SurveyDetail 호환 형식으로 변환
+  // SurveyDetail 호환 형식으로 변환 (number 필드 포함 — 결번 학생 대응)
   const studentLikes = useMemo(
     () =>
       classStudents
-        .filter((s) => !s.isVacant)
+        .filter((s) => !s.isVacant && (s.status ?? 'active') === 'active')
         .map((s) => ({
           id: studentKey(s),
           name: s.name,
+          number: s.number,
           isVacant: s.isVacant,
         })),
     [classStudents],

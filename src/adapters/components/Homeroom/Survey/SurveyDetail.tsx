@@ -14,7 +14,7 @@ import {
 
 /* ──────────────── 타입 ──────────────── */
 
-type StudentLike = { readonly id: string; readonly name: string; readonly isVacant?: boolean };
+type StudentLike = { readonly id: string; readonly name: string; readonly isVacant?: boolean; readonly number?: number };
 
 /* ──────────────── Props ──────────────── */
 
@@ -240,10 +240,13 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
         </button>
         {showMemos && (
           <div className="mt-2 bg-sp-surface rounded-lg border border-sp-border p-2 flex flex-col gap-1.5">
-            {students.filter((s) => !s.isVacant).map((s, idx) => (
+            {students
+              .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
+              .filter((s) => !s.isVacant)
+              .map((s) => (
               <div key={s.id} className="flex items-center gap-2">
                 <span className="text-xs text-sp-muted w-14 shrink-0">
-                  {idx + 1} {s.name}
+                  {s._num} {s.name}
                 </span>
                 <input
                   type="text"
@@ -362,7 +365,12 @@ interface TextQuestionListProps {
 
 function TextQuestionList({ survey, question, students, localData }: TextQuestionListProps) {
   const setLocalEntry = useSurveyStore((s) => s.setLocalEntry);
-  const nonVacant = useMemo(() => students.filter((s) => !s.isVacant), [students]);
+  const nonVacant = useMemo(() =>
+    students
+      .map((s, idx) => ({ ...s, displayNum: s.number ?? idx + 1 }))
+      .filter((s) => !s.isVacant),
+    [students],
+  );
 
   const getEntryValue = useCallback(
     (studentId: string): string => {
@@ -384,12 +392,12 @@ function TextQuestionList({ survey, question, students, localData }: TextQuestio
 
   return (
     <div className="flex flex-col gap-2">
-      {nonVacant.map((student, idx) => {
+      {nonVacant.map((student) => {
         const value = getEntryValue(student.id);
         return (
           <div key={student.id} className="flex items-center gap-3 bg-sp-surface rounded-lg p-2.5">
             <span className="text-xs text-sp-muted w-14 shrink-0">
-              {idx + 1} {student.name}
+              {student.displayNum} {student.name}
             </span>
             <input
               type="text"
