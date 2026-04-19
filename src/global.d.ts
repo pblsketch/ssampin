@@ -1,3 +1,12 @@
+/** 단일/복수 선택 집계 */
+type AggregatedSingleMulti = { counts: Record<string, number>; total: number };
+/** 스케일 집계 */
+type AggregatedScale = { avg: number; distribution: Record<number, number>; total: number };
+/** 주관식 집계 (무기명) */
+type AggregatedText = { answers: string[] };
+/** 집계 결과 discriminated union */
+type AggregatedResult = AggregatedSingleMulti | AggregatedScale | AggregatedText;
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   writeData: (filename: string, data: string) => Promise<void>;
@@ -110,6 +119,36 @@ interface ElectronAPI {
   multiSurveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
   onLiveMultiSurveyStudentSubmitted: (callback: (data: { answers: Array<{ questionId: string; value: string | string[] | number }>; submissionId: string; totalSubmissions: number }) => void) => () => void;
   onLiveMultiSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  // Live Multi Survey — step mode controls
+  liveMultiSurveyActivateSession: () => Promise<void>;
+  liveMultiSurveyReveal: () => Promise<void>;
+  liveMultiSurveyAdvance: () => Promise<void>;
+  liveMultiSurveyPrev: () => Promise<void>;
+  liveMultiSurveyReopen: () => Promise<void>;
+  liveMultiSurveyEndSession: () => Promise<void>;
+  // Live Multi Survey — step mode events
+  onLiveMultiSurveyStudentAnswered: (callback: (data: {
+    sessionId: string;
+    nickname: string;
+    questionIndex: number;
+    totalAnswered: number;
+    totalConnected: number;
+    aggregatedPreview: AggregatedResult | null;
+  }) => void) => () => void;
+  onLiveMultiSurveyPhaseChanged: (callback: (data: {
+    phase: 'lobby' | 'open' | 'revealed' | 'ended';
+    currentQuestionIndex: number;
+    totalAnswered: number;
+    totalConnected: number;
+    aggregated?: AggregatedResult;
+  }) => void) => () => void;
+  onLiveMultiSurveyRoster: (callback: (data: {
+    roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
+  }) => void) => () => void;
+  onLiveMultiSurveyTextAnswerDetail: (callback: (data: {
+    questionIndex: number;
+    entries: Array<{ sessionId: string; nickname: string; text: string }>;
+  }) => void) => () => void;
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;
@@ -159,6 +198,46 @@ interface ElectronAPI {
     totalBytes: number;
     processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
   }>;
+
+  // === 협업 보드 (collab-board) — Design §4.1 ===
+  collabBoard?: {
+    list: () => Promise<CollabBoardMeta[]>;
+    create: (args: { name?: string }) => Promise<CollabBoardMeta>;
+    rename: (args: { id: string; name: string }) => Promise<CollabBoardMeta>;
+    delete: (args: { id: string }) => Promise<{ ok: true }>;
+    startSession: (args: { id: string }) => Promise<CollabBoardSessionStart>;
+    endSession: (args: { id: string; forceSave: boolean }) => Promise<{ ok: true }>;
+    getActiveSession: () => Promise<CollabBoardSessionStart | null>;
+    saveSnapshot: (args: { id: string }) => Promise<{ savedAt: number }>;
+    tunnelAvailable: () => Promise<{ available: boolean }>;
+    tunnelInstall: () => Promise<{ ok: true }>;
+
+    onParticipantChange: (cb: (data: { boardId: string; names: string[] }) => void) => () => void;
+    onAutoSave: (cb: (data: { boardId: string; savedAt: number }) => void) => () => void;
+    onSessionError: (cb: (data: { boardId: string; reason: string }) => void) => () => void;
+    onSessionStarted: (cb: (data: CollabBoardSessionStart) => void) => () => void;
+  };
+}
+
+/** 협업 보드 메타데이터 (Board 엔티티의 renderer-facing 뷰) */
+interface CollabBoardMeta {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  lastSessionEndedAt: number | null;
+  participantHistory: string[];
+  hasSnapshot: boolean;
+}
+
+/** 세션 시작 결과 (BoardSessionStartResult) */
+interface CollabBoardSessionStart {
+  boardId: string;
+  publicUrl: string;
+  sessionCode: string;
+  authToken: string;
+  qrDataUrl: string;
+  startedAt: number;
 }
 
 interface Window {

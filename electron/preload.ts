@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+/** 단일/복수 선택 집계 */
+type AggregatedSingleMulti = { counts: Record<string, number>; total: number };
+/** 스케일 집계 */
+type AggregatedScale = { avg: number; distribution: Record<number, number>; total: number };
+/** 주관식 집계 (무기명) */
+type AggregatedText = { answers: string[] };
+/** 집계 결과 discriminated union */
+type AggregatedResult = AggregatedSingleMulti | AggregatedScale | AggregatedText;
+
 contextBridge.exposeInMainWorld('electronAPI', {
   readData: (filename: string): Promise<string | null> =>
     ipcRenderer.invoke('data:read', filename),
@@ -222,6 +231,76 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('live-multi-survey:connection-count', handler);
     return () => { ipcRenderer.removeListener('live-multi-survey:connection-count', handler); };
   },
+  // Live Multi Survey — step mode controls
+  liveMultiSurveyActivateSession: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:activate-session'),
+  liveMultiSurveyReveal: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:reveal'),
+  liveMultiSurveyAdvance: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:advance'),
+  liveMultiSurveyPrev: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:prev'),
+  liveMultiSurveyReopen: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:reopen'),
+  liveMultiSurveyEndSession: (): Promise<void> =>
+    ipcRenderer.invoke('live-multi-survey:end-session'),
+  // Live Multi Survey — step mode events
+  onLiveMultiSurveyStudentAnswered: (callback: (data: {
+    sessionId: string;
+    nickname: string;
+    questionIndex: number;
+    totalAnswered: number;
+    totalConnected: number;
+    aggregatedPreview: AggregatedResult | null;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      sessionId: string;
+      nickname: string;
+      questionIndex: number;
+      totalAnswered: number;
+      totalConnected: number;
+      aggregatedPreview: AggregatedResult | null;
+    }) => callback(data);
+    ipcRenderer.on('live-multi-survey:student-answered', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:student-answered', handler); };
+  },
+  onLiveMultiSurveyPhaseChanged: (callback: (data: {
+    phase: 'lobby' | 'open' | 'revealed' | 'ended';
+    currentQuestionIndex: number;
+    totalAnswered: number;
+    totalConnected: number;
+    aggregated?: AggregatedResult;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      phase: 'lobby' | 'open' | 'revealed' | 'ended';
+      currentQuestionIndex: number;
+      totalAnswered: number;
+      totalConnected: number;
+      aggregated?: AggregatedResult;
+    }) => callback(data);
+    ipcRenderer.on('live-multi-survey:phase-changed', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:phase-changed', handler); };
+  },
+  onLiveMultiSurveyRoster: (callback: (data: {
+    roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      roster: Array<{ sessionId: string; nickname: string; answeredQuestions: number[] }>;
+    }) => callback(data);
+    ipcRenderer.on('live-multi-survey:roster', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:roster', handler); };
+  },
+  onLiveMultiSurveyTextAnswerDetail: (callback: (data: {
+    questionIndex: number;
+    entries: Array<{ sessionId: string; nickname: string; text: string }>;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      questionIndex: number;
+      entries: Array<{ sessionId: string; nickname: string; text: string }>;
+    }) => callback(data);
+    ipcRenderer.on('live-multi-survey:text-answer-detail', handler);
+    return () => { ipcRenderer.removeListener('live-multi-survey:text-answer-detail', handler); };
+  },
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;
@@ -325,4 +404,49 @@ contextBridge.exposeInMainWorld('electronAPI', {
     totalBytes: number;
     processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
   }> => ipcRenderer.invoke('system:getMemoryMetrics'),
+
+  // === 협업 보드 (collab-board) ===
+  // Design §4.1 14개 채널을 서브객체로 그루핑 (기존 flat 패턴과의 절충 — 채널 많음)
+  collabBoard: {
+    list: (): Promise<unknown[]> => ipcRenderer.invoke('collab-board:list'),
+    create: (args: { name?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('collab-board:create', args),
+    rename: (args: { id: string; name: string }): Promise<unknown> =>
+      ipcRenderer.invoke('collab-board:rename', args),
+    delete: (args: { id: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('collab-board:delete', args),
+    startSession: (args: { id: string }): Promise<unknown> =>
+      ipcRenderer.invoke('collab-board:start-session', args),
+    endSession: (args: { id: string; forceSave: boolean }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('collab-board:end-session', args),
+    getActiveSession: (): Promise<unknown> =>
+      ipcRenderer.invoke('collab-board:get-active-session'),
+    saveSnapshot: (args: { id: string }): Promise<{ savedAt: number }> =>
+      ipcRenderer.invoke('collab-board:save-snapshot', args),
+    tunnelAvailable: (): Promise<{ available: boolean }> =>
+      ipcRenderer.invoke('collab-board:tunnel-available'),
+    tunnelInstall: (): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('collab-board:tunnel-install'),
+
+    onParticipantChange: (cb: (data: { boardId: string; names: string[] }) => void): (() => void) => {
+      const handler = (_e: unknown, data: { boardId: string; names: string[] }) => cb(data);
+      ipcRenderer.on('collab-board:participant-change', handler);
+      return () => { ipcRenderer.removeListener('collab-board:participant-change', handler); };
+    },
+    onAutoSave: (cb: (data: { boardId: string; savedAt: number }) => void): (() => void) => {
+      const handler = (_e: unknown, data: { boardId: string; savedAt: number }) => cb(data);
+      ipcRenderer.on('collab-board:auto-save', handler);
+      return () => { ipcRenderer.removeListener('collab-board:auto-save', handler); };
+    },
+    onSessionError: (cb: (data: { boardId: string; reason: string }) => void): (() => void) => {
+      const handler = (_e: unknown, data: { boardId: string; reason: string }) => cb(data);
+      ipcRenderer.on('collab-board:session-error', handler);
+      return () => { ipcRenderer.removeListener('collab-board:session-error', handler); };
+    },
+    onSessionStarted: (cb: (data: unknown) => void): (() => void) => {
+      const handler = (_e: unknown, data: unknown) => cb(data);
+      ipcRenderer.on('collab-board:session-started', handler);
+      return () => { ipcRenderer.removeListener('collab-board:session-started', handler); };
+    },
+  },
 });

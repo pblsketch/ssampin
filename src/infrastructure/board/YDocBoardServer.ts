@@ -10,7 +10,6 @@
  */
 import http from 'http';
 import crypto from 'crypto';
-import { createRequire } from 'module';
 import { WebSocketServer, type WebSocket } from 'ws';
 import * as Y from 'yjs';
 
@@ -36,23 +35,30 @@ import {
 } from './constants';
 
 /**
- * y-websocket 2.x의 setupWSConnection 은 CJS export라 ESM에서 import 하면
- * ERR_PACKAGE_PATH_NOT_EXPORTED 발생 (spike s1 검증). createRequire 로 로드.
+ * y-websocket 2.x의 `/bin/utils` 는 CJS export(`./bin/utils` → `./bin/utils.cjs`).
+ * Electron main은 CJS로 번들되므로 ESM default import + esModuleInterop 경로로 접근.
+ * spike s1에서는 createRequire(import.meta.url)를 썼지만 packaged 환경의
+ * `import.meta.url` 비어있는 경고로 인해 default import로 전환.
  */
-const nodeRequire = createRequire(import.meta.url);
-const ywsUtils = nodeRequire('y-websocket/bin/utils') as {
-  setupWSConnection: (
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — y-websocket 패키지가 /bin/utils 타입을 제공하지 않음
+import ywsDefault from 'y-websocket/bin/utils';
+
+interface YwsUtilsShape {
+  readonly setupWSConnection: (
     ws: WebSocket,
     req: http.IncomingMessage,
     opts?: { readonly docName?: string; readonly gc?: boolean },
   ) => void;
-  docs: Map<string, {
+  readonly docs: Map<string, {
     readonly awareness: {
       on: (ev: 'change', cb: () => void) => void;
       getStates: () => Map<number, unknown>;
     };
   }>;
-};
+}
+
+const ywsUtils = ywsDefault as unknown as YwsUtilsShape;
 
 export type HtmlProvider = (ctx: {
   readonly boardName: string;
