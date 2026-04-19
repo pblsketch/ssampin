@@ -94,7 +94,7 @@ export class YDocBoardServer implements IBoardServerPort {
     const participants = new Map<number, string>();
 
     const html = this.htmlProvider({
-      boardName: roomName,
+      boardName: opts.boardName,
       authToken,
       sessionCode,
     });

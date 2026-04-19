@@ -24,6 +24,11 @@ export interface BoardServerHandle {
 
 export interface BoardServerStartOpts {
   readonly boardId: BoardId;
+  /**
+   * 학생 HTML 제목과 입장 모달에 노출될 사용자-대면 보드 이름.
+   * (boardId는 `bd-xxx` 형태이므로 학생에게 직접 노출하면 안 됨 — Design §2.1)
+   */
+  readonly boardName: string;
   /** 이전 세션 Y.Doc 바이너리 (없으면 null → 빈 문서로 시작) */
   readonly initialState: Uint8Array | null;
   /**
