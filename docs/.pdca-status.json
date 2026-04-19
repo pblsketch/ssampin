@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-26T08:18:03.601Z",
+  "lastUpdated": "2026-04-19T13:52:07.288Z",
   "activeFeatures": [
     "ssampin",
     "electron",
@@ -87,7 +87,8 @@
     "constants",
     "Wallpaper",
     "login",
-    "about"
+    "about",
+    "domain-tests"
   ],
   "primaryFeature": "ssampin",
   "features": {
@@ -126,9 +127,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:29.011Z",
-        "lastUpdated": "2026-03-25T12:14:48.951Z"
+        "lastUpdated": "2026-04-19T13:50:38.050Z"
       },
-      "lastFile": "e:/github/ssampin/src/domain/entities/Settings.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\entities\\BoardParticipant.ts"
     },
     "valueObjects": {
       "phase": "do",
@@ -139,9 +140,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:33.723Z",
-        "lastUpdated": "2026-03-25T13:11:41.761Z"
+        "lastUpdated": "2026-04-19T13:50:03.594Z"
       },
-      "lastFile": "E:/github/ssampin/src/domain/valueObjects/AnalyticsEvent.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\valueObjects\\BoardAuthToken.ts"
     },
     "rules": {
       "phase": "do",
@@ -152,9 +153,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:38.490Z",
-        "lastUpdated": "2026-03-23T14:14:54.796Z"
+        "lastUpdated": "2026-04-19T13:51:01.309Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\rules\\todoRules.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\rules\\boardRules.ts"
     },
     "ports": {
       "phase": "do",
@@ -165,9 +166,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:43.401Z",
-        "lastUpdated": "2026-03-22T10:50:15.272Z"
+        "lastUpdated": "2026-04-19T13:47:57.705Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\ports\\IGoogleAuthPort.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\ports\\index.ts"
     },
     "repositories": {
       "phase": "do",
@@ -178,9 +179,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:51.489Z",
-        "lastUpdated": "2026-03-23T12:37:34.257Z"
+        "lastUpdated": "2026-04-19T13:51:08.532Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\repositories\\JsonManualMealRepository.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\repositories\\IBoardRepository.ts"
     },
     "schedule": {
       "phase": "do",
@@ -1208,6 +1209,19 @@
         "lastUpdated": "2026-03-23T16:02:50.022Z"
       },
       "lastFile": "/e/github/ssampin/landing/src/app/about/page.tsx"
+    },
+    "domain-tests": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-19T13:48:34.947Z",
+        "lastUpdated": "2026-04-19T13:52:07.288Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\spikes\\collab-board\\domain-tests\\boardRules.test.ts"
     }
   },
   "pipeline": {
@@ -1218,7 +1232,7 @@
   "session": {
     "startedAt": "2026-03-01T00:40:27.620Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-03-26T08:18:03.601Z"
+    "lastActivity": "2026-04-19T13:52:07.288Z"
   },
   "history": [
     {
@@ -35412,6 +35426,114 @@
     {
       "timestamp": "2026-03-26T08:18:03.601Z",
       "feature": "Todo",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:47:04.114Z",
+      "feature": "ports",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:47:16.107Z",
+      "feature": "ports",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:47:22.381Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:47:30.094Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:47:36.292Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:47:41.416Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:47:57.705Z",
+      "feature": "ports",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:48:34.947Z",
+      "feature": "domain-tests",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:49:54.717Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:50:00.612Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:50:03.594Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:50:25.802Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:50:33.322Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:50:38.050Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:51:01.309Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:51:08.532Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:51:48.277Z",
+      "feature": "domain-tests",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T13:52:07.288Z",
+      "feature": "domain-tests",
       "phase": "do",
       "action": "updated"
     }
