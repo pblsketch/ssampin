@@ -116,8 +116,116 @@ Step 3~9 미착수 항목 — 위 "B. 진행률" 표 참조. 전부 Design §11.
 
 ---
 
+## v0.2 — Step 7 완료 시점 재분석 (2026-04-20)
+
+> **컨텍스트**: Phase 1a MVP 9단계 중 **Step 1~7 완료**. Step 8(수동 통합 테스트) 직전 스냅샷.
+> **Snapshot commit**: `ac49ce1` · **Branch**: `feature/collab-board`
+
+### 스코어 델타 (v0.1 → v0.2)
+
+| Category | v0.1 (Step 2) | v0.2 (Step 7) | 델타 |
+|---|:-:|:-:|:-:|
+| Design 충실도 (완료 범위) | 98% | **96%** | -2%p |
+| Architecture Compliance | 100% | **98%** | -2%p |
+| Convention Compliance | 100% | **99%** | -1%p |
+| Security §7 반영률 | 95% | **95%** | - |
+| Phase 1a MVP 진행률 (가중) | 30.8% | **80.0%** | **+49.2%p** |
+| **Overall Match Rate** | 98% | **95%** | -3%p |
+
+Match Rate 하락은 품질 저하가 아니라 **범위 확대에 따른 Design-실구현 차이 가시화** — v0.1에선 드러나지 않던 Design Diff 3건(D-1/D-3/D-4)이 Step 3~7 구현에서 실코드로 확정됨.
+
+### 해소된 이전 리스크 (4건)
+
+| ID | v0.1 상태 | v0.2 상태 |
+|---|---|---|
+| B-1 (Major) | boardName=roomName 혼선 | ✅ 해소 (BoardServerStartOpts.boardName 추가) |
+| B-2 (Minor) | awareness 1초 polling | ⚠️ 부분 해소 — 이전 names 비교 skip 미도입 |
+| 에러 분류 구현 | 분류만 있음 | ✅ BOARD_TUNNEL_BUSY/EXIT/LISTEN_FAILED 등 throw 경로 전부 |
+| 이중 토큰 검증 | Infra에만 | ✅ `YDocBoardServer:147` upgrade 훅 확인 |
+
+### Design과의 의도된 차이 (4건, Version History 등재 필요)
+
+| # | Design 초안 | 실구현 | 사유 | 영향 |
+|---|---|---|---|---|
+| D-1 | tunnel.ts getCurrentOwner 추가 | 폐기, tunnel.ts 무수정 | 환경 반복 revert로 A안 포기 | **R-1 유발** |
+| D-2 | `adapters/repositories/FileBoardRepository` | `infrastructure/board/FileBoardRepository` | Node-only fs 직접 사용, Clean Architecture 준수 강화 | Design §9.4 업데이트 권장 |
+| D-3 | container.ts에 board 3개 export | electron/ipc/board.ts 직접 조립 | renderer Vite 빌드 충돌 회피 | 일관성↑ (기존 5개 라이브 도구와 동일 패턴) |
+| D-4 | `createRequire(import.meta.url)` | `import ywsDefault from 'y-websocket/bin/utils'` | Vite CJS 경고 + packaged 빌드 안정화 | 리스크 감소 |
+
+### 🟡 새로 발견된 High 리스크 (Step 8 착수 전 수정 권고)
+
+| # | 위치 | 문제 | 심각도 | 수정 난이도 |
+|---|---|---|:-:|:-:|
+| **R-5** 🔴 | `generateBoardHTML.ts:177` | `new WebsocketProvider(wsUrl, BOARD_NAME, ydoc)` — 클라이언트 roomName=한국어 이름 vs 서버 docName=boardId 불일치 | **Critical (Blocker)** | 5분 (한 줄) |
+| **R-4** | `electron/ipc/board.ts:193-228 endActiveBoardSessionSync` | 실제 sync 저장이 아닌 `void repo.saveSnapshot(...)` 비동기 호출 | **Major** | 10분 |
+| **R-1** | `electron/ipc/board.ts:52 subscribeExit no-op` | 기존 라이브 도구가 보드 터널을 silent 파괴해도 coordinator가 인지 불가 | **Major** | 30~40분 (UI 5개 파일) |
+| **R-2** | `useBoardSessionStore.ts selectIsBoardRunning` export만 됨 | 역방향 상호 배타 — 기존 라이브 도구 진입 버튼에서 미참조 | **Major** | R-1과 묶음 |
+
+### 🟡 Medium/Low 리스크 (Step 8과 병행 수정 가능)
+
+| # | 위치 | 문제 | 심각도 |
+|---|---|---|:-:|
+| R-3 | `EndBoardSession.ts:74-85` | 메타 touch TODO 주석만 남음 (빈 세션 종료 시 updatedAt 미갱신) | Medium |
+| B-2 잔여 | `YDocBoardServer.ts:174-187` | awareness poll 변경 없을 때도 매초 onParticipantsChange 발사 | Medium |
+| R-6 | `generateBoardHTML.ts:184-187` | connection-close 일반 케이스(1006 등) overlay 미표시, 수동 재접속 버튼 없음 | Low |
+
+### Clean Architecture 재검증
+
+- domain/ 외부 의존 **0건** (react/zustand/electron/y-*)
+- usecases/board/ → adapters/infrastructure 직접 import **0건** (qrcode 외부 npm 허용)
+- container.ts → board 관련 import **0건** (D-3 결과)
+- electron/ipc/board.ts → domain/usecases/infrastructure import OK (예외 레이어)
+
+**위반 0건.** D-2·D-3은 Design보다 오히려 엄격. Design §9.4 / §4.4 주석 갱신 권장.
+
+### UI 품질 (기존 쌤도구 패턴 대비)
+
+- ToolLayout 래퍼 ✅
+- sp-* 디자인 토큰 일관 ✅ (5 컴포넌트 전부)
+- material-symbols 아이콘 ✅ (co_present 활용, qr_code_2 미사용 but 이미지로 대체)
+- hover edit/delete 노출 패턴 ✅ (`group-hover` 기존 ToolMultiSurvey와 동일)
+- `animate-pulse` 에메랄드 도트 (실행 중 표시) ✅
+- 빈 상태 안내 ✅ (모든 영역)
+- 한국어 UI + `readonly` Props ✅
+- `any` 0건 (서드파티 타입 미제공 1곳만 `as unknown as` 주석 동반)
+
+**기존 쌤도구 UX 패턴을 정확히 재현.** 감점 요소 없음.
+
+### Step 8 시 예상 문제 (코드 리딩 기반)
+
+| 시나리오 | 예상 증상 | 근거 |
+|---|---|---|
+| 교사 Alt+F4 (세션 활성) | 최근 30초 드로잉 손실 | R-4 |
+| 학생 첫 접속 | Room 불일치 sync 엇갈림 | R-5 (**블로커 가능**) |
+| 투표 실행 중 보드 시작 | 투표 QR silent 무효화 | R-2 |
+| 보드 실행 중 투표 버튼 | 보드 터널 silent 파괴 | R-1 |
+| 학생 30명 실측 | 드로잉 p50/p95 지연 미검증 | 스파이크는 2탭만 |
+| awareness 매초 리렌더 | BoardParticipantList 60fps 이슈 | B-2 잔여 |
+| cloudflared 종료 | BOARD_TUNNEL_EXIT 토스트 미표시 | subscribeExit no-op |
+
+### 📍 권고: **`/pdca iterate`** 먼저, 그 다음 Step 8
+
+Step 8 실기기 테스트 전 **High 4건(R-1/R-2/R-4/R-5)** 수정. 합계 약 1~1.5시간.
+
+| 단계 | 시간 | 대상 파일 |
+|---|:-:|---|
+| 1. R-5 수정 — WebsocketProvider roomName을 boardId로 | 5분 | `generateBoardHTML.ts:177` |
+| 2. R-4 수정 — endActiveBoardSessionSync 실제 sync 저장 | 10분 | `electron/ipc/board.ts:193-228` + `BoardFilePersistence` 싱글턴 노출 |
+| 3. R-1/R-2 수정 — 5개 라이브 도구에 `selectIsBoardRunning` 주입 + 역방향 대칭 | 30~40분 | `ToolPoll/Survey/MultiSurvey/WordCloud/TrafficLightDiscussion.tsx` |
+| 4. R-3 해결 — `IBoardRepository.touchSessionEnd` or rename trick | 10분 | `EndBoardSession.ts` + repo 구현 |
+| 5. tsc + build 재검증 | 5분 | — |
+
+**예상 복귀 match rate**: Overall 95% → **97.5%**, Design 충실도 96% → **98.5%**.
+
+### Step 8 관련 산출물
+
+- 수동 테스트 체크리스트: [collab-board.qa-checklist.md](collab-board.qa-checklist.md) (v0.1) — 13 섹션 + 에러 코드 해석표 + 합격 기준. Iterate 완료 후 이 체크리스트로 실기기 QA 진행 권장.
+
+---
+
 ## Version History
 
 | Version | Date | Notes |
 |---|---|---|
 | 0.1 | 2026-04-19 | Step 1+2 완료 시점 분석. 충실도 98%, 전체 진행률 30.8%. iteration 불필요, Step 3 계속 진행 권고. |
+| 0.2 | 2026-04-20 | Step 7 완료 시점 재분석. 충실도 96%, 진행률 80.0%. Step 8 착수 전 **High 4건(R-1/R-2/R-4/R-5) 수정 권고** → `/pdca iterate`. 그 외 3건은 Medium/Low로 병행 가능. |

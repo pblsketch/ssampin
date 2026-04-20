@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-19T14:56:36.472Z",
+  "lastUpdated": "2026-04-20T01:40:35.111Z",
   "activeFeatures": [
     "collab-board",
     "ssampin",
@@ -94,7 +94,10 @@
     "domain",
     "Timer",
     "s2-tunnel-mutex",
-    "board"
+    "board",
+    "Results",
+    "Board",
+    "dev"
   ],
   "primaryFeature": "ssampin",
   "features": {
@@ -107,7 +110,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:41:40.105Z",
-        "lastUpdated": "2026-04-17T14:29:05.617Z"
+        "lastUpdated": "2026-04-20T01:35:03.108Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\App.tsx"
     },
@@ -120,9 +123,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:08.474Z",
-        "lastUpdated": "2026-04-17T13:41:00.107Z"
+        "lastUpdated": "2026-04-19T15:10:06.412Z"
       },
-      "lastFile": "e:\\github\\ssampin\\electron\\preload.ts"
+      "lastFile": "e:\\github\\ssampin\\electron\\main.ts"
     },
     "entities": {
       "phase": "do",
@@ -159,9 +162,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:38.490Z",
-        "lastUpdated": "2026-04-19T13:46:44.103Z"
+        "lastUpdated": "2026-04-20T00:17:12.138Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\rules\\boardRules.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\rules\\toolResultAggregation.test.ts"
     },
     "ports": {
       "phase": "do",
@@ -172,9 +175,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:43.401Z",
-        "lastUpdated": "2026-03-22T10:50:15.272Z"
+        "lastUpdated": "2026-04-19T15:00:43.273Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\ports\\IGoogleAuthPort.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\ports\\IBoardServerPort.ts"
     },
     "repositories": {
       "phase": "do",
@@ -276,9 +279,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:22.830Z",
-        "lastUpdated": "2026-04-17T13:50:16.077Z"
+        "lastUpdated": "2026-04-20T00:52:43.619Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\stores\\useStudentRecordsStore.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\stores\\useBoardSessionStore.ts"
     },
     "adapters": {
       "phase": "do",
@@ -315,9 +318,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:39.637Z",
-        "lastUpdated": "2026-03-25T12:46:05.691Z"
+        "lastUpdated": "2026-04-19T15:12:22.063Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\mobile\\di\\container.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\di\\container.ts"
     },
     "storage": {
       "phase": "do",
@@ -354,9 +357,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:52.212Z",
-        "lastUpdated": "2026-03-25T12:38:00.124Z"
+        "lastUpdated": "2026-04-20T00:38:39.751Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\infrastructure\\export\\ExcelExporter.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\infrastructure\\export\\ExcelExporter.test.ts"
     },
     "Layout": {
       "phase": "do",
@@ -367,7 +370,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T01:04:54.193Z",
-        "lastUpdated": "2026-04-17T14:27:36.185Z"
+        "lastUpdated": "2026-04-20T00:54:45.753Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Layout\\Sidebar.tsx"
     },
@@ -588,9 +591,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T13:36:33.469Z",
-        "lastUpdated": "2026-04-17T14:27:52.784Z"
+        "lastUpdated": "2026-04-20T01:28:39.479Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\ToolSurvey.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\ToolCollabBoard.tsx"
     },
     "widgets": {
       "phase": "do",
@@ -679,9 +682,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T15:56:46.600Z",
-        "lastUpdated": "2026-04-17T13:40:50.323Z"
+        "lastUpdated": "2026-04-19T15:13:04.885Z"
       },
-      "lastFile": "e:\\github\\ssampin\\electron\\ipc\\liveMultiSurvey.ts"
+      "lastFile": "e:\\github\\ssampin\\electron\\ipc\\board.ts"
     },
     "Calendar": {
       "phase": "do",
@@ -1271,24 +1274,25 @@
     "collab-board": {
       "phase": "do",
       "phaseNumber": 3,
-      "matchRate": 98,
+      "matchRate": 95,
       "iterationCount": 0,
       "requirements": [],
       "documents": {
         "plan": "docs/01-plan/features/collab-board.plan.md",
         "design": "docs/02-design/features/collab-board.design.md",
         "spike": "spikes/collab-board/SPIKE-RESULT.md",
-        "analysis": "docs/03-analysis/collab-board.analysis.md"
+        "analysis": "docs/03-analysis/collab-board.analysis.md",
+        "qaChecklist": "docs/03-analysis/collab-board.qa-checklist.md"
       },
       "timestamps": {
         "planStartedAt": "2026-04-19T12:27:08.975Z",
-        "lastUpdated": "2026-04-19T14:56:36.472Z",
+        "lastUpdated": "2026-04-20T01:40:35.111Z",
         "designStartedAt": "2026-04-19T12:52:42.503Z",
         "doStartedAt": "2026-04-19T13:28:59.152Z",
-        "lastAnalyzedAt": "2026-04-19T14:56:36.472Z"
+        "lastAnalyzedAt": "2026-04-20T01:40:35.111Z"
       },
-      "notes": "Phase 1a MVP 진행 중 (Step 2/9 완료). Step 1+2 범위 Design 충실도 98%, 전체 진행률 30.8%. iteration 불필요. Step 3 계속 진행 권고. 유일한 Major gap: B-1 (YDocBoardServer.ts:97 boardName→boardId 혼선, Step 3에서 BoardServerStartOpts.boardName 필드 추가로 해결).",
-      "mvpProgress": 30.8
+      "notes": "Step 7 완료(80%/95%). Step 8 착수 전 High 4건 iterate 권고: R-5(WebsocketProvider roomName blocker), R-4(endActiveBoardSessionSync 실제 sync 저장), R-1/R-2(양방향 상호 배타 미완성, useBoardSessionStore.selectIsBoardRunning 5개 라이브 도구에 주입 필요). QA 체크리스트 13섹션 작성 완료.",
+      "mvpProgress": 80
     },
     "s2-tunnel-mutex": {
       "phase": "do",
@@ -1312,9 +1316,48 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-19T14:20:38.954Z",
-        "lastUpdated": "2026-04-19T14:23:37.073Z"
+        "lastUpdated": "2026-04-19T15:14:46.565Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\infrastructure\\board\\index.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\infrastructure\\board\\YDocBoardServer.ts"
+    },
+    "Results": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-20T00:51:53.221Z",
+        "lastUpdated": "2026-04-20T01:34:12.223Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\Results\\TableTab.tsx"
+    },
+    "Board": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-20T00:53:19.237Z",
+        "lastUpdated": "2026-04-20T01:28:17.068Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\Board\\BoardSessionPanel.tsx"
+    },
+    "dev": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-20T01:27:50.412Z",
+        "lastUpdated": "2026-04-20T01:30:16.056Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\src\\dev\\SpreadsheetDemo.tsx"
     }
   },
   "pipeline": {
@@ -1325,7 +1368,7 @@
   "session": {
     "startedAt": "2026-03-01T00:40:27.620Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-19T14:23:37.073Z"
+    "lastActivity": "2026-04-20T01:35:03.108Z"
   },
   "history": [
     {
@@ -38066,6 +38109,405 @@
       "matchRate": 98,
       "mvpProgress": 30.8,
       "note": "Intermediate analysis after Step 1+2. No iteration needed — proceed to Step 3."
+    },
+    {
+      "timestamp": "2026-04-19T15:00:43.273Z",
+      "feature": "ports",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:00:50.020Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:01:09.796Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:01:50.317Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:02:18.561Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:02:32.417Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:02:45.614Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:02:53.716Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:03:29.487Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:06:58.503Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:07:16.113Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:07:24.983Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:07:39.760Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:09:01.989Z",
+      "feature": "ipc",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:09:34.736Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:09:41.923Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:09:58.276Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:10:06.412Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:10:35.130Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:12:07.089Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:12:22.063Z",
+      "feature": "di",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:12:34.776Z",
+      "feature": "ipc",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:12:45.018Z",
+      "feature": "ipc",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:13:04.885Z",
+      "feature": "ipc",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:14:33.958Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-19T15:14:46.565Z",
+      "feature": "board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:12:49.978Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:13:51.952Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:14:42.819Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:15:16.370Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:15:55.384Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:16:48.219Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:16:59.963Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:17:05.329Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:17:12.138Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:36:27.209Z",
+      "feature": "export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:37:36.703Z",
+      "feature": "export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:38:39.751Z",
+      "feature": "export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:51:53.221Z",
+      "feature": "Results",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:52:18.026Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:52:35.361Z",
+      "feature": "Results",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:52:43.619Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:53:19.237Z",
+      "feature": "Board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:53:25.314Z",
+      "feature": "Results",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:53:50.980Z",
+      "feature": "Board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:54:03.217Z",
+      "feature": "Results",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:54:08.719Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:54:38.690Z",
+      "feature": "Results",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:54:45.754Z",
+      "feature": "Layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:55:05.650Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:55:21.686Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T00:55:33.344Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:27:40.252Z",
+      "feature": "Board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:27:50.412Z",
+      "feature": "dev",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:28:00.950Z",
+      "feature": "Board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:28:07.850Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:28:17.068Z",
+      "feature": "Board",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:28:18.999Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:28:28.913Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:28:39.479Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:30:08.791Z",
+      "feature": "dev",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:30:16.056Z",
+      "feature": "dev",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:34:04.724Z",
+      "feature": "Results",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:34:12.223Z",
+      "feature": "Results",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:35:03.108Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T01:40:35.111Z",
+      "feature": "collab-board",
+      "phase": "do",
+      "action": "gap_analysis_v02",
+      "matchRate": 95,
+      "mvpProgress": 80,
+      "note": "Step 7b snapshot analysis. 4 High risks identified. Recommend /pdca iterate before Step 8 manual QA."
     }
   ]
 }
