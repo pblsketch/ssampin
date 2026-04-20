@@ -20,3 +20,12 @@ export {
 
 export type { SubmissionStatus } from './SubmissionStatus';
 export { SUBMISSION_STATUSES, getSubmissionStatus } from './SubmissionStatus';
+
+export type { BoardId } from './BoardId';
+export { isBoardId } from './BoardId';
+
+export type { BoardSessionCode } from './BoardSessionCode';
+export { generateSessionCode, isSessionCode, SESSION_CODE_ALPHABET } from './BoardSessionCode';
+
+export type { BoardAuthToken } from './BoardAuthToken';
+export { isAuthToken } from './BoardAuthToken';

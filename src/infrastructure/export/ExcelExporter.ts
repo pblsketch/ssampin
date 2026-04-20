@@ -16,6 +16,16 @@ import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { GroupResult } from '@domain/rules/groupingRules';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
+import type {
+  ToolResult,
+  MultiSurveyResultData,
+  PollResultData,
+  SurveyResultData,
+  WordCloudResultData,
+} from '@domain/entities/ToolResult';
+import type { MultiSurveyTemplateQuestion } from '@domain/entities/ToolTemplate';
+import { aggregateAll, totalParticipants, completionRate } from '@domain/rules/toolResultAggregation';
+import { serializeAnswerCell, formatSubmissionLabel } from '@domain/rules/toolResultSerialization';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -1838,4 +1848,284 @@ export async function exportObservationsToExcel(
   }
 
   return await workbook.xlsx.writeBuffer() as ArrayBuffer;
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
+/*  설문·도구 결과 엑셀 내보내기 (SpreadsheetView · PastResultsView 공용) */
+/* ────────────────────────────────────────────────────────────────────── */
+
+const QUESTION_TYPE_LABEL: Record<MultiSurveyTemplateQuestion['type'], string> = {
+  'single-choice': '단일 선택',
+  'multi-choice': '복수 선택',
+  'text': '텍스트',
+  'scale': '척도',
+};
+
+/** 간이 토크나이저 — 공백/구두점 분리, 한글 2자 이상만 채택 */
+function tokenizeForWordFrequency(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[\s,.!?;:"'()[\]{}<>~`@#$%^&*+=/\\|\-—–]+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2);
+}
+
+/** 요약 통계 문자열 생성 (Sheet 1 D열용) */
+function formatAggregateSummary(
+  question: MultiSurveyTemplateQuestion,
+  data: MultiSurveyResultData,
+): string {
+  const aggs = aggregateAll(data);
+  const agg = aggs.find((a) => a.questionId === question.id);
+  if (!agg) return '';
+
+  if (agg.type === 'choice') {
+    return agg.counts
+      .filter((c) => c.count > 0)
+      .map((c) => `${c.optionText}: ${c.count}명 (${Math.round(c.ratio * 100)}%)`)
+      .join(' · ');
+  }
+  if (agg.type === 'scale') {
+    if (agg.total === 0) return '응답 없음';
+    return `평균 ${agg.avg.toFixed(2)} · 중앙값 ${agg.median} · 응답 ${agg.total}명`;
+  }
+  return `응답 ${agg.total}개`;
+}
+
+/** Sheet 1: 요약 */
+function addMultiSurveySummarySheet(
+  workbook: ExcelJS.Workbook,
+  data: MultiSurveyResultData,
+): void {
+  const ws = workbook.addWorksheet('요약');
+  const headerRow = ws.addRow(['번호', '질문', '유형', '통계']);
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+  ws.getColumn(1).width = 6;
+  ws.getColumn(2).width = 40;
+  ws.getColumn(3).width = 12;
+  ws.getColumn(4).width = 60;
+
+  // 메타 정보 (참여 · 완료율)
+  const participants = totalParticipants(data);
+  const completion = Math.round(completionRate(data) * 100);
+  const metaRow = ws.addRow(['', `총 참여: ${participants}명 · 완료율: ${completion}%`, '', '']);
+  metaRow.eachCell((cell) => applyCellStyle(cell));
+  ws.mergeCells(metaRow.number, 2, metaRow.number, 4);
+
+  data.questions.forEach((q, i) => {
+    const row = ws.addRow([
+      i + 1,
+      q.question,
+      QUESTION_TYPE_LABEL[q.type],
+      formatAggregateSummary(q, data),
+    ]);
+    row.eachCell((cell) => applyCellStyle(cell));
+    row.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  });
+}
+
+/** Sheet 2: 전체 응답 (피벗 테이블 — 행=응답자, 열=질문) */
+function addMultiSurveyResponsesSheet(
+  workbook: ExcelJS.Workbook,
+  data: MultiSurveyResultData,
+  anonymous: boolean,
+): void {
+  const ws = workbook.addWorksheet('전체 응답');
+
+  // 헤더: 응답자 | 제출 시각 | Q1 | Q2 | ...
+  const header = [
+    '응답자',
+    '제출 시각',
+    ...data.questions.map((q, i) => `Q${i + 1}. ${q.question}`),
+  ];
+  const headerRow = ws.addRow(header);
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+  ws.getColumn(1).width = 12;
+  ws.getColumn(2).width = 20;
+  data.questions.forEach((_, i) => {
+    ws.getColumn(i + 3).width = 30;
+  });
+
+  // anonymous 플래그는 현재 동작에 영향 없음 (Phase 1 단일 분기)
+  // 향후 로그인 기능 도입 시 이름 노출 분기에 활용
+  void anonymous;
+
+  data.submissions.forEach((sub, subIdx) => {
+    const submittedAt = new Date(sub.submittedAt);
+    const timeStr = `${submittedAt.getFullYear()}-${String(submittedAt.getMonth() + 1).padStart(2, '0')}-${String(submittedAt.getDate()).padStart(2, '0')} ${String(submittedAt.getHours()).padStart(2, '0')}:${String(submittedAt.getMinutes()).padStart(2, '0')}`;
+
+    const cells: (string | number | null)[] = [
+      formatSubmissionLabel(subIdx),
+      timeStr,
+    ];
+    for (const q of data.questions) {
+      const answer = sub.answers.find((a) => a.questionId === q.id);
+      const { raw } = serializeAnswerCell(q, answer);
+      cells.push(raw);
+    }
+    const row = ws.addRow(cells);
+    row.eachCell((cell, colNum) => {
+      // 미응답(null) 셀은 회색 배경
+      if (cell.value === null && colNum > 2) {
+        applyCellStyle(cell, 'FFF3F4F6');
+      } else {
+        applyCellStyle(cell);
+      }
+    });
+    row.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  });
+}
+
+/** Sheet 3: 워드 빈도 (텍스트 질문이 1개 이상일 때만 생성) */
+function addMultiSurveyWordFrequencySheet(
+  workbook: ExcelJS.Workbook,
+  data: MultiSurveyResultData,
+): void {
+  const textQuestions = data.questions.filter((q) => q.type === 'text');
+  if (textQuestions.length === 0) return;
+
+  const freq = new Map<string, number>();
+  for (const sub of data.submissions) {
+    for (const q of textQuestions) {
+      const ans = sub.answers.find((a) => a.questionId === q.id);
+      if (!ans || typeof ans.value !== 'string') continue;
+      for (const word of tokenizeForWordFrequency(ans.value)) {
+        freq.set(word, (freq.get(word) ?? 0) + 1);
+      }
+    }
+  }
+  if (freq.size === 0) return;
+
+  const ws = workbook.addWorksheet('워드 빈도');
+  const headerRow = ws.addRow(['단어', '빈도']);
+  headerRow.eachCell((cell) => applyHeaderStyle(cell));
+  ws.getColumn(1).width = 30;
+  ws.getColumn(2).width = 10;
+
+  [...freq.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .forEach(([word, count]) => {
+      const row = ws.addRow([word, count]);
+      row.eachCell((cell) => applyCellStyle(cell));
+    });
+}
+
+/** multi-survey 3시트 한 번에 추가 */
+function addMultiSurveySheets(
+  workbook: ExcelJS.Workbook,
+  data: MultiSurveyResultData,
+  anonymous: boolean,
+): void {
+  addMultiSurveySummarySheet(workbook, data);
+  addMultiSurveyResponsesSheet(workbook, data, anonymous);
+  addMultiSurveyWordFrequencySheet(workbook, data);
+}
+
+function addPollSheet(workbook: ExcelJS.Workbook, data: PollResultData): void {
+  const ws = workbook.addWorksheet('투표 결과');
+  const header = ws.addRow(['옵션', '투표수', '비율']);
+  header.eachCell((cell) => applyHeaderStyle(cell));
+  ws.getColumn(1).width = 30;
+  ws.getColumn(2).width = 10;
+  ws.getColumn(3).width = 10;
+
+  // 질문 메타 행
+  const qRow = ws.addRow([data.question, '', '']);
+  qRow.eachCell((cell) => applyCellStyle(cell));
+  ws.mergeCells(qRow.number, 1, qRow.number, 3);
+
+  const total = data.totalVotes;
+  for (const opt of data.options) {
+    const ratio = total === 0 ? 0 : Math.round((opt.votes / total) * 100);
+    const row = ws.addRow([opt.text, opt.votes, `${ratio}%`]);
+    row.eachCell((cell) => applyCellStyle(cell));
+  }
+
+  const totalRow = ws.addRow(['총 투표수', total, '']);
+  totalRow.eachCell((cell) => applyHeaderStyle(cell));
+}
+
+function addSurveySheet(workbook: ExcelJS.Workbook, data: SurveyResultData): void {
+  const ws = workbook.addWorksheet('설문 응답');
+  const header = ws.addRow(['응답자', '제출 시각', '응답']);
+  header.eachCell((cell) => applyHeaderStyle(cell));
+  ws.getColumn(1).width = 12;
+  ws.getColumn(2).width = 20;
+  ws.getColumn(3).width = 60;
+
+  // 질문 메타
+  const qRow = ws.addRow([data.question, '', '']);
+  qRow.eachCell((cell) => applyCellStyle(cell));
+  ws.mergeCells(qRow.number, 1, qRow.number, 3);
+
+  data.responses.forEach((r, idx) => {
+    const d = new Date(r.submittedAt);
+    const time = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const row = ws.addRow([formatSubmissionLabel(idx), time, r.text]);
+    row.eachCell((cell) => applyCellStyle(cell));
+    row.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  });
+}
+
+function addWordCloudSheet(workbook: ExcelJS.Workbook, data: WordCloudResultData): void {
+  const ws = workbook.addWorksheet('워드 클라우드');
+  const header = ws.addRow(['단어', '빈도']);
+  header.eachCell((cell) => applyHeaderStyle(cell));
+  ws.getColumn(1).width = 30;
+  ws.getColumn(2).width = 10;
+
+  const qRow = ws.addRow([data.question, '']);
+  qRow.eachCell((cell) => applyCellStyle(cell));
+  ws.mergeCells(qRow.number, 1, qRow.number, 2);
+
+  for (const w of [...data.words].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word))) {
+    const row = ws.addRow([w.word, w.count]);
+    row.eachCell((cell) => applyCellStyle(cell));
+  }
+
+  const totalRow = ws.addRow(['총 응답자', data.totalSubmissions]);
+  totalRow.eachCell((cell) => applyHeaderStyle(cell));
+}
+
+/**
+ * multi-survey 결과 데이터(순수)를 엑셀로 내보낸다.
+ * ToolMultiSurvey.results 단계에서 사용 — ToolResult 껍데기 불필요.
+ */
+export async function exportMultiSurveyDataToExcel(
+  data: MultiSurveyResultData,
+  options?: { anonymous?: boolean },
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+  addMultiSurveySheets(workbook, data, options?.anonymous ?? true);
+  return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+}
+
+/**
+ * 저장된 ToolResult 를 엑셀로 내보낸다 (PastResultsView 경로).
+ * `result.data.type`에 따라 시트 구성이 달라진다.
+ */
+export async function exportToolResultToExcel(
+  result: ToolResult,
+  options?: { anonymous?: boolean },
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+  const d = result.data;
+  switch (d.type) {
+    case 'multi-survey':
+      addMultiSurveySheets(workbook, d, options?.anonymous ?? true);
+      break;
+    case 'poll':
+      addPollSheet(workbook, d);
+      break;
+    case 'survey':
+      addSurveySheet(workbook, d);
+      break;
+    case 'wordcloud':
+      addWordCloudSheet(workbook, d);
+      break;
+    case 'valueline-discussion':
+    case 'trafficlight-discussion':
+      throw new Error(`이 도구 타입은 엑셀 내보내기를 아직 지원하지 않습니다: ${d.type}`);
+  }
+  return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
 }

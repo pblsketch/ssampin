@@ -198,6 +198,46 @@ interface ElectronAPI {
     totalBytes: number;
     processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
   }>;
+
+  // === 협업 보드 (collab-board) — Design §4.1 ===
+  collabBoard?: {
+    list: () => Promise<CollabBoardMeta[]>;
+    create: (args: { name?: string }) => Promise<CollabBoardMeta>;
+    rename: (args: { id: string; name: string }) => Promise<CollabBoardMeta>;
+    delete: (args: { id: string }) => Promise<{ ok: true }>;
+    startSession: (args: { id: string }) => Promise<CollabBoardSessionStart>;
+    endSession: (args: { id: string; forceSave: boolean }) => Promise<{ ok: true }>;
+    getActiveSession: () => Promise<CollabBoardSessionStart | null>;
+    saveSnapshot: (args: { id: string }) => Promise<{ savedAt: number }>;
+    tunnelAvailable: () => Promise<{ available: boolean }>;
+    tunnelInstall: () => Promise<{ ok: true }>;
+
+    onParticipantChange: (cb: (data: { boardId: string; names: string[] }) => void) => () => void;
+    onAutoSave: (cb: (data: { boardId: string; savedAt: number }) => void) => () => void;
+    onSessionError: (cb: (data: { boardId: string; reason: string }) => void) => () => void;
+    onSessionStarted: (cb: (data: CollabBoardSessionStart) => void) => () => void;
+  };
+}
+
+/** 협업 보드 메타데이터 (Board 엔티티의 renderer-facing 뷰) */
+interface CollabBoardMeta {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  lastSessionEndedAt: number | null;
+  participantHistory: string[];
+  hasSnapshot: boolean;
+}
+
+/** 세션 시작 결과 (BoardSessionStartResult) */
+interface CollabBoardSessionStart {
+  boardId: string;
+  publicUrl: string;
+  sessionCode: string;
+  authToken: string;
+  qrDataUrl: string;
+  startedAt: number;
 }
 
 interface Window {

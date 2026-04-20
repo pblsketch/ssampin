@@ -57,7 +57,7 @@ export function FavoriteTools() {
               className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl ${tool.color} hover:scale-105 active:scale-95 transition-all`}
             >
               <span className="text-xl">{tool.icon}</span>
-              <span className="text-caption font-medium truncate w-full text-center">
+              <span className="text-xs font-medium truncate w-full text-center">
                 {tool.name}
               </span>
             </button>
@@ -69,7 +69,7 @@ export function FavoriteTools() {
               className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl bg-sp-border/30 text-sp-muted hover:bg-sp-border/50 transition-colors"
             >
               <span className="material-symbols-outlined text-xl">add</span>
-              <span className="text-caption">추가</span>
+              <span className="text-xs">추가</span>
             </button>
           )}
         </div>

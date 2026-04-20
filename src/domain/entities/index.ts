@@ -52,3 +52,7 @@ export type {
 } from './DriveSyncState';
 
 export type { SyncSettings } from './Settings';
+
+export type { Board } from './Board';
+export type { BoardSession, BoardSessionPhase } from './BoardSession';
+export type { BoardParticipant } from './BoardParticipant';

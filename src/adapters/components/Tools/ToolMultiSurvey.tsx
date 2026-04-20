@@ -1,15 +1,18 @@
-import React, { Fragment, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { Fragment, useState, useCallback, useRef, useEffect } from 'react';
 import { ToolLayout } from './ToolLayout';
 import type { MultiSurveyQuestionType, MultiSurveySubmission } from '@domain/entities/MultiSurvey';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
-import { buildWordFrequency, type WordEntry } from '@adapters/utils/wordFrequency';
 import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
+import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 import { TeacherControlPanel } from './TeacherControlPanel';
 import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
+import { SpreadsheetView } from './Results/SpreadsheetView';
+import { FeedbackWallView } from './FeedbackWall/FeedbackWallView';
+import { FEEDBACK_PRESETS, type FeedbackPreset } from '@adapters/constants/feedbackPresets';
 
 interface ToolMultiSurveyProps {
   onBack: () => void;
@@ -146,13 +149,6 @@ function templateToEditable(tq: TemplateQuestion): EditableQuestion {
     scaleMinLabel: tq.scaleMinLabel ?? '',
     scaleMaxLabel: tq.scaleMaxLabel ?? '',
   };
-}
-
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /* ─────────────────── Question Card (Create) ─────────────────── */
@@ -453,6 +449,22 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
     setQuestions(template.questions.map(templateToEditable));
   }, []);
 
+  const handleFeedbackPreset = useCallback((preset: FeedbackPreset) => {
+    setTitle(preset.label);
+    // FeedbackPreset.questions는 readonly/unknown 호환성을 위해 templateToEditable이 수용하도록 구조 동일
+    setQuestions(preset.questions.map((q) => templateToEditable({
+      type: q.type,
+      question: q.question,
+      required: q.required,
+      options: q.options ? [...q.options] : undefined,
+      maxLength: q.maxLength,
+      scaleMin: q.scaleMin,
+      scaleMax: q.scaleMax,
+      scaleMinLabel: q.scaleMinLabel,
+      scaleMaxLabel: q.scaleMaxLabel,
+    })));
+  }, []);
+
   const handleLoadFromTemplate = useCallback((tmpl: ToolTemplate) => {
     onLoadFromTemplate(tmpl);
     if (tmpl.config.type !== 'multi-survey') return;
@@ -499,18 +511,35 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
       />
 
       {/* Templates */}
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs text-sp-muted font-medium">빠른 템플릿:</span>
-        <div className="flex flex-wrap gap-1.5">
-          {TEMPLATES.map((t) => (
-            <button
-              key={t.label}
-              onClick={() => handleTemplate(t)}
-              className="px-3 py-1.5 rounded-lg bg-sp-card border border-sp-border text-xs text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all"
-            >
-              {t.label}
-            </button>
-          ))}
+      <div className="flex flex-col gap-2 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-sp-muted font-medium">빠른 템플릿:</span>
+          <div className="flex flex-wrap gap-1.5">
+            {TEMPLATES.map((t) => (
+              <button
+                key={t.label}
+                onClick={() => handleTemplate(t)}
+                className="px-3 py-1.5 rounded-lg bg-sp-card border border-sp-border text-xs text-sp-muted hover:text-sp-text hover:border-sp-accent transition-all"
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-sp-muted font-medium">🎯 피드백 프리셋:</span>
+          <div className="flex flex-wrap gap-1.5">
+            {FEEDBACK_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handleFeedbackPreset(p)}
+                title={p.description}
+                className="px-3 py-1.5 rounded-lg bg-sp-card border border-sp-border text-xs text-sp-text hover:border-sp-highlight hover:text-sp-highlight transition-all"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -995,361 +1024,6 @@ function RunningView({
 
 /* ─────────────────── Results View ─────────────────── */
 
-function TextResultWithCloud({
-  questionId,
-  submissions,
-  overrideTexts,
-  useStopwords,
-  onUseStopwordsChange,
-  subTab,
-  onSubTabChange,
-  selectedWord,
-  onSelectWord,
-}: {
-  questionId: string;
-  submissions: MultiSurveySubmission[];
-  /** 교사 주도 모드에서 백엔드가 집계한 텍스트 답변 배열.
-   *  존재하면 submissions 기반 추출을 완전히 대체한다. (Bug #B) */
-  overrideTexts?: string[];
-  useStopwords: boolean;
-  onUseStopwordsChange: (v: boolean) => void;
-  subTab: 'cloud' | 'list';
-  onSubTabChange: (tab: 'cloud' | 'list') => void;
-  selectedWord: string | null;
-  onSelectWord: (word: string | null) => void;
-}) {
-  const texts = useMemo(() => {
-    if (overrideTexts !== undefined) return overrideTexts;
-    const result: string[] = [];
-    for (const sub of submissions) {
-      const ans = sub.answers.find((a) => a.questionId === questionId);
-      if (ans && typeof ans.value === 'string' && ans.value.trim()) result.push(ans.value);
-    }
-    return result;
-  }, [submissions, questionId, overrideTexts]);
-
-  const wordEntries = useMemo(() => buildWordFrequency(texts, useStopwords), [texts, useStopwords]);
-
-  const filteredTexts = useMemo(() => {
-    if (!selectedWord) return [];
-    return texts.filter((t) => t.toLowerCase().includes(selectedWord.toLowerCase()));
-  }, [texts, selectedWord]);
-
-  return (
-    <div className="flex flex-col gap-3">
-      {/* Sub-tabs */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => onSubTabChange('cloud')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${subTab === 'cloud' ? 'bg-sp-accent/20 border-sp-accent text-sp-accent' : 'bg-sp-card border-sp-border text-sp-muted'}`}
-        >
-          ☁️ 워드클라우드
-        </button>
-        <button
-          onClick={() => onSubTabChange('list')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${subTab === 'list' ? 'bg-sp-accent/20 border-sp-accent text-sp-accent' : 'bg-sp-card border-sp-border text-sp-muted'}`}
-        >
-          📄 응답 목록
-        </button>
-        <label className="ml-auto flex items-center gap-1.5 text-xs text-sp-muted cursor-pointer">
-          <input type="checkbox" checked={useStopwords} onChange={(e) => onUseStopwordsChange(e.target.checked)} />
-          조사·접속사 제외
-        </label>
-      </div>
-
-      {subTab === 'cloud' ? (
-        <div className="flex flex-wrap items-center justify-center gap-3 p-4 min-h-[120px] bg-sp-bg rounded-xl">
-          {wordEntries.length === 0 ? (
-            <p className="text-sp-muted text-sm">텍스트 응답이 없습니다.</p>
-          ) : (
-            wordEntries.map((entry) => (
-              <span
-                key={entry.word}
-                onClick={() => onSelectWord(entry.word)}
-                style={{ fontSize: `${getFontSize(entry.count, wordEntries)}px`, color: entry.color, transform: `rotate(${entry.rotation}deg)`, cursor: 'pointer' }}
-                className="inline-block font-bold select-none transition-all hover:opacity-80"
-              >
-                {entry.word}
-              </span>
-            ))
-          )}
-        </div>
-      ) : (
-        <div className="max-h-48 overflow-y-auto flex flex-col gap-2">
-          {texts.length === 0 ? (
-            <p className="text-sp-muted text-sm">응답이 없습니다.</p>
-          ) : (
-            texts.map((t, idx) => (
-              <div key={idx} className="bg-sp-bg rounded-lg px-3 py-2 flex items-start gap-2">
-                <span className="text-sp-muted text-xs font-mono shrink-0">#{texts.length - idx}</span>
-                <p className="text-sp-text text-sm leading-relaxed">{t}</p>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Selected word overlay */}
-      {selectedWord && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => onSelectWord(null)}>
-          <div className="bg-sp-card border border-sp-border rounded-2xl p-6 max-w-lg w-full max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sp-text font-bold">&ldquo;{selectedWord}&rdquo; 포함 응답</h3>
-              <button onClick={() => onSelectWord(null)} className="text-sp-muted hover:text-sp-text">✕</button>
-            </div>
-            {filteredTexts.map((text, i) => (
-              <div key={i} className="bg-sp-bg rounded-xl p-3 mb-2 text-sp-text text-sm leading-relaxed">
-                {text}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function getFontSize(count: number, entries: WordEntry[]): number {
-  if (entries.length === 0) return 14;
-  const counts = entries.map((e) => e.count);
-  const min = Math.min(...counts);
-  const max = Math.max(...counts);
-  if (max === min) return 36;
-  return 14 + ((count - min) / (max - min)) * 46;
-}
-
-interface ResultsViewProps {
-  title: string;
-  questions: EditableQuestion[];
-  submissions: MultiSurveySubmission[];
-  isFullscreen: boolean;
-  onNewSurvey: () => void;
-  useStopwords: boolean;
-  onUseStopwordsChange: (v: boolean) => void;
-  textSubTab: Record<string, 'cloud' | 'list'>;
-  onTextSubTabChange: (v: Record<string, 'cloud' | 'list'>) => void;
-  selectedWord: { questionId: string; word: string } | null;
-  onSelectedWordChange: (v: { questionId: string; word: string } | null) => void;
-  resultSaveButton: React.ReactNode;
-  /** 교사 주도 모드(stepMode=true)에서 백엔드로부터 받은 문항별 확정 집계.
-   *  존재하는 경우 submissions 기반 계산을 덮어쓴다. (Bug #B 대응)
-   *  키: questionId */
-  teacherAggregatedByQuestion?: Record<string, AggregatedResult>;
-  /** 교사 주도 모드에서 총 응답자 수(접속 학생 수) */
-  teacherTotalConnected?: number;
-}
-
-function ChoiceBarChart({ options, counts, total }: { options: EditableOption[]; counts: Map<string, number>; total: number }) {
-  return (
-    <div className="flex flex-col gap-2">
-      {options.map((opt, idx) => {
-        const count = counts.get(opt.id) ?? 0;
-        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-        const color = OPTION_COLORS[idx % OPTION_COLORS.length]!;
-        return (
-          <div key={opt.id} className="flex items-center gap-3">
-            <span className="text-sp-text text-sm w-28 shrink-0 truncate">{opt.text}</span>
-            <div className="flex-1 h-7 bg-sp-bg rounded-lg overflow-hidden relative">
-              <div
-                className="h-full rounded-lg transition-all duration-500"
-                style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: hexToRgba(color, 0.6) }}
-              />
-              <span className="absolute inset-y-0 right-2 flex items-center text-xs text-sp-muted font-medium">
-                {count}표 ({pct}%)
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ScaleResult({
-  question,
-  submissions,
-  overrideAggregate,
-}: {
-  question: EditableQuestion;
-  submissions: MultiSurveySubmission[];
-  /** 교사 주도 모드에서 백엔드로부터 받은 척도 집계.
-   *  존재하면 submissions 기반 계산을 완전히 대체한다. (Bug #B) */
-  overrideAggregate?: { avg: number; distribution: Record<number, number>; total: number };
-}) {
-  let avg = 0;
-  let total = 0;
-  const dist = new Map<number, number>();
-
-  if (overrideAggregate) {
-    avg = overrideAggregate.avg;
-    total = overrideAggregate.total;
-    for (let i = question.scaleMin; i <= question.scaleMax; i++) dist.set(i, 0);
-    for (const [v, c] of Object.entries(overrideAggregate.distribution)) {
-      const num = Number(v);
-      if (!Number.isNaN(num)) dist.set(num, c);
-    }
-  } else {
-    const values: number[] = [];
-    for (const sub of submissions) {
-      const ans = sub.answers.find((a) => a.questionId === question.id);
-      if (ans && typeof ans.value === 'number') values.push(ans.value);
-    }
-    avg = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-    total = values.length;
-    for (let i = question.scaleMin; i <= question.scaleMax; i++) dist.set(i, 0);
-    for (const v of values) dist.set(v, (dist.get(v) ?? 0) + 1);
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <span className="text-3xl font-bold text-sp-accent">{avg.toFixed(1)}</span>
-        <span className="text-sp-muted text-sm">/ {question.scaleMax} 평균</span>
-        <span className="text-sp-muted text-xs ml-auto">{total}명 응답</span>
-      </div>
-      <div className="flex items-end gap-1.5 h-20">
-        {Array.from(dist.entries()).map(([val, count]) => {
-          const maxCount = Math.max(...Array.from(dist.values()), 1);
-          const heightPct = (count / maxCount) * 100;
-          return (
-            <div key={val} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-xs text-sp-muted">{count}</span>
-              <div className="w-full rounded-t-md bg-sp-accent/30 relative" style={{ height: `${Math.max(heightPct, 4)}%` }}>
-                <div
-                  className="absolute inset-0 rounded-t-md bg-sp-accent/60"
-                  style={{ height: '100%' }}
-                />
-              </div>
-              <span className="text-xs text-sp-muted">{val}</span>
-            </div>
-          );
-        })}
-      </div>
-      {(question.scaleMinLabel || question.scaleMaxLabel) && (
-        <div className="flex justify-between text-xs text-sp-muted">
-          <span>{question.scaleMinLabel}</span>
-          <span>{question.scaleMaxLabel}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-
-function ResultsView({ title, questions, submissions, isFullscreen, onNewSurvey, useStopwords, onUseStopwordsChange, textSubTab, onTextSubTabChange, selectedWord, onSelectedWordChange, resultSaveButton, teacherAggregatedByQuestion, teacherTotalConnected }: ResultsViewProps) {
-  // 교사 주도 모드에서 집계 데이터가 존재하면 그 쪽을 우선 사용한다. (Bug #B)
-  const hasTeacherAggregated = teacherAggregatedByQuestion !== undefined
-    && Object.keys(teacherAggregatedByQuestion).length > 0;
-  const headerTotal = hasTeacherAggregated
-    ? (teacherTotalConnected ?? 0)
-    : submissions.length;
-
-  return (
-    <div className="w-full flex flex-col h-full min-h-0 gap-4">
-      {/* Header */}
-      <div className="text-center shrink-0">
-        {title && (
-          <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-3xl' : 'text-xl'}`}>
-            {title}
-          </h2>
-        )}
-        <p className="text-sp-muted text-sm mt-1">
-          총 <span className="text-sp-text font-bold">{headerTotal}명</span> 응답
-        </p>
-      </div>
-
-      {/* Per-question results */}
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
-        {questions.map((q, idx) => {
-          const isChoiceType = q.type === 'single-choice' || q.type === 'multi-choice';
-          const teacherAgg = teacherAggregatedByQuestion?.[q.id];
-
-          // Build counts for choice types — teacher aggregated 우선
-          let choiceCounts = new Map<string, number>();
-          let choiceTotal = 0;
-          if (isChoiceType) {
-            for (const opt of q.options) choiceCounts.set(opt.id, 0);
-            if (teacherAgg && 'counts' in teacherAgg) {
-              for (const [optId, c] of Object.entries(teacherAgg.counts)) {
-                choiceCounts.set(optId, c);
-              }
-              choiceTotal = teacherAgg.total;
-            } else {
-              for (const sub of submissions) {
-                const ans = sub.answers.find((a) => a.questionId === q.id);
-                if (!ans) continue;
-                if (q.type === 'single-choice' && typeof ans.value === 'string') {
-                  choiceCounts.set(ans.value, (choiceCounts.get(ans.value) ?? 0) + 1);
-                  choiceTotal++;
-                } else if (q.type === 'multi-choice' && Array.isArray(ans.value)) {
-                  for (const v of ans.value) {
-                    choiceCounts.set(v, (choiceCounts.get(v) ?? 0) + 1);
-                  }
-                  choiceTotal++;
-                }
-              }
-            }
-          }
-
-          // text override (teacher aggregated.answers)
-          const overrideTexts = teacherAgg && 'answers' in teacherAgg
-            ? teacherAgg.answers
-            : undefined;
-
-          // scale override (teacher aggregated)
-          const overrideScaleAgg = teacherAgg && 'avg' in teacherAgg
-            ? teacherAgg
-            : undefined;
-
-          return (
-            <div key={q.id} className="bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-lg bg-sp-accent/20 text-sp-accent text-xs font-bold">
-                  Q{idx + 1}
-                </span>
-                <span className="text-xs text-sp-muted">{QUESTION_TYPE_LABELS[q.type]}</span>
-              </div>
-              <h3 className="text-sp-text font-medium">{q.question}</h3>
-
-              {isChoiceType && (
-                <ChoiceBarChart options={q.options} counts={choiceCounts} total={choiceTotal} />
-              )}
-              {q.type === 'text' && (
-                <TextResultWithCloud
-                  questionId={q.id}
-                  submissions={submissions}
-                  overrideTexts={overrideTexts}
-                  useStopwords={useStopwords}
-                  onUseStopwordsChange={onUseStopwordsChange}
-                  subTab={textSubTab[q.id] ?? 'cloud'}
-                  onSubTabChange={(tab) => onTextSubTabChange({ ...textSubTab, [q.id]: tab })}
-                  selectedWord={selectedWord?.questionId === q.id ? selectedWord.word : null}
-                  onSelectWord={(word) => onSelectedWordChange(word ? { questionId: q.id, word } : null)}
-                />
-              )}
-              {q.type === 'scale' && (
-                <ScaleResult question={q} submissions={submissions} overrideAggregate={overrideScaleAgg} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Bottom */}
-      <div className="flex items-center justify-center gap-3 shrink-0 pb-1">
-        {resultSaveButton}
-        <button
-          onClick={onNewSurvey}
-          className="px-5 py-2.5 rounded-xl bg-sp-accent text-white font-bold hover:bg-sp-accent/80 transition-all text-sm"
-        >
-          🆕 새 설문
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ─────────────────── Main Component ─────────────────── */
 
 export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) {
@@ -1375,8 +1049,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   // Word cloud / step mode state
   const [stepMode, setStepMode] = useState(false);
   const [useStopwords, setUseStopwords] = useState(true);
-  const [textSubTab, setTextSubTab] = useState<Record<string, 'cloud' | 'list'>>({});
-  const [selectedWord, setSelectedWord] = useState<{ questionId: string; word: string } | null>(null);
+  const [showFeedbackWall, setShowFeedbackWall] = useState(false);
 
   // Live mode state
   const [isLiveMode, setIsLiveMode] = useState(false);
@@ -1405,9 +1078,6 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   const [teacherAggregated, setTeacherAggregated] = useState<AggregatedResult | undefined>();
   const [teacherRoster, setTeacherRoster] = useState<RosterEntry[]>([]);
   const [teacherTextDetail, setTeacherTextDetail] = useState<TextAnswerEntry[] | undefined>();
-  // Bug #B: 각 문항의 REVEALED 시점에 받은 aggregated를 문항ID 기준으로 누적한다.
-  // 세션 종료 후 ResultsView가 submissions 대신 이 집계를 우선 사용한다.
-  const [teacherAggregatedByQuestion, setTeacherAggregatedByQuestion] = useState<Record<string, AggregatedResult>>({});
 
   // phase-changed 콜백에서 최신 questions 배열에 접근하기 위한 ref
   const questionsRef = useRef<EditableQuestion[]>([]);
@@ -1467,13 +1137,17 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
     setTitle(t);
     setQuestions(qs);
     setSubmissions([]);
-    setTeacherAggregatedByQuestion({});
     setPhase('running');
   }, []);
 
   const handleStartLive = useCallback(async () => {
     if (!window.electronAPI?.startLiveMultiSurvey) {
       setLiveError('학생 설문 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
+      return;
+    }
+    // R-1/R-2 iter #1: 협업 보드가 실행 중이면 라이브 도구 시작 차단
+    if (useBoardSessionStore.getState().active !== null) {
+      setLiveError('협업 보드가 실행 중입니다. 먼저 보드를 종료해주세요.');
       return;
     }
     try {
@@ -1564,6 +1238,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
       handleStopLive();
     }
     setPhase('results');
+    setShowFeedbackWall(false);
   }, [isLiveMode, handleStopLive]);
 
   const handleReset = useCallback(() => {
@@ -1574,7 +1249,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
     setTitle('');
     setQuestions([defaultQuestion()]);
     setSubmissions([]);
-    setTeacherAggregatedByQuestion({});
+    setShowFeedbackWall(false);
   }, [isLiveMode, handleStopLive]);
 
   const handleToggleQRFullscreen = useCallback(() => {
@@ -1616,21 +1291,6 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
       setTeacherTotalAnswered(data.totalAnswered);
       setTeacherTotalConnected(data.totalConnected);
       setTeacherAggregated(data.aggregated);
-
-      // Bug #B: phase='revealed' 진입 시 해당 문항의 확정 집계를 누적 저장한다.
-      // 마지막 문항까지 REVEAL한 뒤 종료하면 모든 문항의 집계가 모여 있어,
-      // "결과 보기" 화면(ResultsView)에서 submissions 대신 이 집계를 사용해
-      // 정확한 분포/평균/텍스트 리스트를 보여줄 수 있다.
-      if (data.phase === 'revealed' && data.aggregated) {
-        const qIdx = data.currentQuestionIndex;
-        const currentQuestions = questionsRef.current;
-        const qId = currentQuestions[qIdx]?.id;
-        if (qId) {
-          const agg = data.aggregated;
-          setTeacherAggregatedByQuestion((prev) => ({ ...prev, [qId]: agg }));
-        }
-      }
-
     });
     if (unsubPhase) unsubs.push(unsubPhase);
 
@@ -1731,8 +1391,30 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           onTemplateApplied={() => { setPendingTitle(null); setPendingQuestions(null); }}
         />
       )}
-      {phase === 'running' && (
-        <RunningView
+      {phase === 'running' && showFeedbackWall && (
+        <FeedbackWallView
+          title={title}
+          questions={questions}
+          submissions={submissions}
+          isFullscreen={isFullscreen}
+          onClose={() => setShowFeedbackWall(false)}
+        />
+      )}
+      {phase === 'running' && !showFeedbackWall && (
+        <div className="relative flex h-full w-full flex-col">
+          {/* 텍스트 질문이 하나라도 있으면 피드백 월 토글 버튼 노출 */}
+          {questions.some((q) => q.type === 'text') && (
+            <button
+              type="button"
+              onClick={() => setShowFeedbackWall(true)}
+              className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs font-medium text-sp-text shadow-sm transition hover:border-sp-highlight hover:text-sp-highlight"
+              title="프로젝터용 라이브 피드백 월 (텍스트 응답만 카드로 표시)"
+            >
+              <span aria-hidden>📋</span>
+              <span>피드백 월</span>
+            </button>
+          )}
+          <RunningView
           title={title}
           questions={questions}
           submissions={submissions}
@@ -1773,52 +1455,52 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
             void window.electronAPI?.liveMultiSurveyEndSession?.();
             handleStopLive();
           }}
-        />
+          />
+        </div>
       )}
-      {phase === 'results' && (
-        <ResultsView
-          title={title}
-          questions={questions}
-          submissions={submissions}
-          isFullscreen={isFullscreen}
-          onNewSurvey={handleReset}
-          useStopwords={useStopwords}
-          onUseStopwordsChange={setUseStopwords}
-          textSubTab={textSubTab}
-          onTextSubTabChange={setTextSubTab}
-          selectedWord={selectedWord}
-          onSelectedWordChange={setSelectedWord}
-          teacherAggregatedByQuestion={teacherAggregatedByQuestion}
-          teacherTotalConnected={teacherTotalConnected}
-          resultSaveButton={
-            <ResultSaveButton
-              toolType="multi-survey"
-              defaultName={title || '복합 설문'}
-              resultData={{
-                type: 'multi-survey' as const,
-                title,
-                questions: questions.map((q) => ({
-                  id: q.id,
-                  type: q.type,
-                  question: q.question,
-                  required: q.required,
-                  options: q.options.map((o) => ({ id: o.id, text: o.text })),
-                  maxLength: q.maxLength,
-                  scaleMin: q.scaleMin,
-                  scaleMax: q.scaleMax,
-                  scaleMinLabel: q.scaleMinLabel,
-                  scaleMaxLabel: q.scaleMaxLabel,
-                })),
-                submissions: submissions.map((s) => ({
-                  id: s.id,
-                  answers: s.answers.map((a) => ({ questionId: a.questionId, value: a.value })),
-                  submittedAt: s.submittedAt,
-                })),
-              }}
-            />
-          }
-        />
-      )}
+      {phase === 'results' && (() => {
+        const spreadsheetData = {
+          type: 'multi-survey' as const,
+          title,
+          questions: questions.map((q) => ({
+            id: q.id,
+            type: q.type,
+            question: q.question,
+            required: q.required,
+            options: q.options.map((o) => ({ id: o.id, text: o.text })),
+            maxLength: q.maxLength,
+            scaleMin: q.scaleMin,
+            scaleMax: q.scaleMax,
+            scaleMinLabel: q.scaleMinLabel,
+            scaleMaxLabel: q.scaleMaxLabel,
+          })),
+          submissions: submissions.map((s) => ({
+            id: s.id,
+            answers: s.answers.map((a) => ({ questionId: a.questionId, value: a.value })),
+            submittedAt: s.submittedAt,
+          })),
+        };
+        return (
+          <SpreadsheetView
+            source={{ mode: 'inline', data: spreadsheetData }}
+            inlineFooter={
+              <>
+                <ResultSaveButton
+                  toolType="multi-survey"
+                  defaultName={title || '복합 설문'}
+                  resultData={spreadsheetData}
+                />
+                <button
+                  onClick={handleReset}
+                  className="rounded-xl bg-sp-accent px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-sp-accent/80"
+                >
+                  🆕 새 설문
+                </button>
+              </>
+            }
+          />
+        );
+      })()}
     </ToolLayout>
   );
 }

@@ -5,6 +5,7 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
+import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 import type { MultiSurveyQuestion } from '@domain/entities/MultiSurvey';
 import { TeacherControlPanel } from './TeacherControlPanel';
@@ -969,6 +970,12 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
   const handleStartLive = useCallback(async () => {
     try {
       setLiveError(null);
+
+      // R-1/R-2 iter #1: 협업 보드가 실행 중이면 라이브 도구 시작 차단
+      if (useBoardSessionStore.getState().active !== null) {
+        setLiveError('협업 보드가 실행 중입니다. 먼저 보드를 종료해주세요.');
+        return;
+      }
 
       if (isMultiQuestion) {
         // Multi-question: use liveMultiSurvey IPC

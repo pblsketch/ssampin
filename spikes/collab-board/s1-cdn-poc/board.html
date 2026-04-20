@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>쌤핀 협업보드 스파이크 S1 — CDN 로드 검증</title>
+  <!-- Excalidraw 0.17.6 CSS는 JS 번들 내부에 주입됨 (별도 link 불필요) -->
+  <style>
+    html, body, #app { margin: 0; padding: 0; height: 100%; font-family: system-ui, -apple-system, 'Noto Sans KR', sans-serif; }
+    #app { height: 100vh; position: relative; }
+    #status {
+      position: fixed; top: 10px; right: 10px; z-index: 9999;
+      background: rgba(15, 23, 42, 0.9); color: #e2e8f0;
+      padding: 8px 14px; border-radius: 8px; font-size: 13px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    #status.connected .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    #status.disconnected .dot { background: #ef4444; }
+    #status.connecting .dot { background: #f59e0b; }
+  </style>
+
+  <!-- Import map: 모든 모듈이 동일한 React/Yjs/Excalidraw 인스턴스를 공유하도록 esm.sh external 옵션 사용 -->
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+      "react-dom": "https://esm.sh/react-dom@18.3.1?external=react",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?external=react",
+      "yjs": "https://esm.sh/yjs@13.6.19",
+      "fractional-indexing": "https://esm.sh/fractional-indexing@3.2.0",
+      "@excalidraw/excalidraw": "https://esm.sh/@excalidraw/excalidraw@0.17.6?external=react,react-dom",
+      "y-websocket": "https://esm.sh/y-websocket@2.0.4?external=yjs",
+      "y-excalidraw": "https://esm.sh/y-excalidraw@2.0.12?external=@excalidraw/excalidraw,yjs,fractional-indexing"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="status" class="connecting"><span class="dot"></span><span id="status-text">연결 중…</span></div>
+  <div id="app"></div>
+
+  <script type="module">
+    import React from 'react';
+    import { createRoot } from 'react-dom/client';
+    // Excalidraw 0.17.6의 esm.sh 번들은 UMD 래핑되어 default export만 존재.
+    // { Excalidraw, convertToExcalidrawElements, ... } 등은 default 객체의 프로퍼티.
+    import ExcalidrawLib from '@excalidraw/excalidraw';
+    const { Excalidraw, convertToExcalidrawElements } = ExcalidrawLib;
+    import * as Y from 'yjs';
+    import { WebsocketProvider } from 'y-websocket';
+    import { ExcalidrawBinding, yjsToExcalidraw } from 'y-excalidraw';
+
+    console.log('[spike] Excalidraw lib keys:', Object.keys(ExcalidrawLib).slice(0, 15));
+
+    // --- 디버그용 글로벌 노출 (Playwright 검증에 사용) ---
+    window.__spike = { Y, yjsToExcalidraw, elementCount: 0, lastStatus: 'connecting', lastError: null };
+
+    const statusEl = document.getElementById('status');
+    const statusText = document.getElementById('status-text');
+    function setStatus(cls, text) {
+      statusEl.className = cls;
+      statusText.textContent = text;
+      window.__spike.lastStatus = cls;
+    }
+
+    // --- Y.js 문서 및 WebSocket 연결 ---
+    const ydoc = new Y.Doc();
+    const yElements = ydoc.getArray('elements');
+    const yAssets = ydoc.getMap('assets');
+
+    const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+    const provider = new WebsocketProvider(wsUrl, 'spike-s1-room', ydoc);
+
+    provider.on('status', (event) => {
+      if (event.status === 'connected') setStatus('connected', '연결됨 (동기화 활성)');
+      else if (event.status === 'disconnected') setStatus('disconnected', '연결 끊김');
+      else setStatus('connecting', '연결 중…');
+    });
+
+    // 로컬 awareness user
+    const tabId = 'tab-' + Math.random().toString(36).slice(2, 6);
+    provider.awareness.setLocalStateField('user', {
+      name: tabId,
+      color: '#3b82f6',
+      colorLight: '#3b82f655',
+    });
+
+    // elements 배열 변경 감지 → 디버그 카운터 업데이트
+    yElements.observe(() => {
+      window.__spike.elementCount = yElements.length;
+    });
+
+    function App() {
+      const [api, setApi] = React.useState(null);
+      const containerRef = React.useRef(null);
+      const bindingRef = React.useRef(null);
+
+      React.useEffect(() => {
+        if (!api) return;
+        // y-excalidraw 2.0.12의 setupUndoRedo가 excalidrawDom.querySelector('[aria-label="Undo"]')를
+        // 찾고 null 체크 없이 addEventListener를 호출하는 버그가 있어, undoManager 옵션을 생략한다.
+        // (업스트림 수정 or 자체 wrapper로 해결 예정 — 스파이크에선 핵심 sync 기능 검증에 집중)
+        let cancelled = false;
+        const setupTimer = setTimeout(() => {
+          if (cancelled) return;
+          try {
+            const binding = new ExcalidrawBinding(yElements, yAssets, api, provider.awareness);
+            bindingRef.current = binding;
+            window.__spike.binding = binding;
+            window.__spike.api = api;
+            console.log('[spike] binding 생성 성공');
+          } catch (err) {
+            window.__spike.lastError = String(err);
+            console.error('[spike] binding 생성 실패:', err);
+          }
+        }, 300); // Excalidraw 내부 UI 마운트 대기
+
+        return () => {
+          cancelled = true;
+          clearTimeout(setupTimer);
+          if (bindingRef.current) {
+            bindingRef.current.destroy();
+            bindingRef.current = null;
+          }
+        };
+      }, [api]);
+
+      return React.createElement(
+        'div',
+        { ref: containerRef, style: { height: '100vh' } },
+        React.createElement(Excalidraw, {
+          excalidrawAPI: setApi,
+          initialData: { elements: yjsToExcalidraw(yElements), scrollToContent: false },
+          onPointerUpdate: (payload) => {
+            if (bindingRef.current) bindingRef.current.onPointerUpdate(payload);
+          },
+          theme: 'light',
+          langCode: 'ko-KR',
+          UIOptions: {
+            canvasActions: {
+              toggleTheme: false,
+              clearCanvas: true,
+              loadScene: false,
+              export: false,
+              saveAsImage: false,
+            },
+          },
+        })
+      );
+    }
+
+    createRoot(document.getElementById('app')).render(React.createElement(App));
+
+    // --- Playwright 자동화 헬퍼: 외부에서 프로그래밍적으로 요소 추가 ---
+    window.__spike.addRect = function (x, y, w, h) {
+      yElements.push([createRectMap(x, y, w, h)]);
+    };
+
+    // y-excalidraw 내부 포맷 대신, CRDT 구조 검증용 간단 요소 추가 함수
+    // (실제 binding이 들어있으면 Excalidraw api.updateScene을 써야 하므로 아래처럼)
+    window.__spike.addRectViaAPI = function (x, y, w, h) {
+      const api = window.__spike.binding?.api;
+      if (!api) throw new Error('binding not ready');
+      const el = {
+        type: 'rectangle', x, y, width: w, height: h,
+        strokeColor: '#1e1e1e', backgroundColor: 'transparent',
+        fillStyle: 'hachure', strokeWidth: 2, strokeStyle: 'solid',
+        roughness: 1, opacity: 100, groupIds: [], strokeSharpness: 'sharp',
+        seed: Math.floor(Math.random()*100000), version: 1, versionNonce: Math.floor(Math.random()*100000),
+        isDeleted: false, boundElements: null, updated: Date.now(), link: null, locked: false,
+        id: 'r-' + Math.random().toString(36).slice(2,10),
+      };
+      const current = api.getSceneElementsIncludingDeleted();
+      api.updateScene({ elements: [...current, el] });
+    };
+
+    function createRectMap(x, y, w, h) {
+      // fallback path unused if binding is ready
+      return null;
+    }
+  </script>
+</body>
+</html>
