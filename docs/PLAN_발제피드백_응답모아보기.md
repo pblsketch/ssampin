@@ -349,32 +349,32 @@ exportToolResultToExcel(result: ToolResult): ArrayBuffer
 
 ## 4. 구현 로드맵
 
-### Phase 1: 핵심 가치 전달 (스프레드시트 뷰 + Excel 내보내기)
+### Phase 1: 핵심 가치 전달 (스프레드시트 뷰 + Excel 내보내기) — ✅ 완료 (2026-04-20, Match Rate 96%)
 
 **기간:** 4일 (구현 3일 + 디자인 튜닝·e2e 1일)
 **우선순위 근거:** 사용자 피드백의 핵심 요구("한꺼번에 볼 수 있는 기능"), 기존 인프라 활용도 높음
 
 작업 목록:
-- [ ] `SpreadsheetView.tsx` 컴포넌트 (요약/테이블/개별 3탭, 탭 간 상태 보존)
-- [ ] 응답자 익명/구분 토글 구현
-- [ ] `ExcelExporter.ts`에 `exportToolResultToExcel()` 추가 (직렬화 규칙 표 기준)
-- [ ] `ToolMultiSurvey.tsx` **`result` 단계를 SpreadsheetView로 대체** (기존 단순 집계 UI 제거)
-- [ ] `PastResultsView.tsx`에서 과거 결과 SpreadsheetView 열기 (prop 주입 경로)
-- [ ] Excel 다운로드 버튼 연결
-- [ ] `design examples/` 톤에 맞춘 색/간격 튜닝, 브라우저/Electron 모두 동작 확인
+- [x] `SpreadsheetView.tsx` 컴포넌트 (요약/테이블/개별 3탭, 탭 간 상태 보존)
+- [x] 응답자 익명/구분 토글 구현
+- [x] `ExcelExporter.ts`에 `exportToolResultToExcel()` 추가 (직렬화 규칙 표 기준) — `exportMultiSurveyDataToExcel` 오버로드도 함께
+- [x] `ToolMultiSurvey.tsx` **`results` 단계를 SpreadsheetView로 대체** (구 ResultsView 및 헬퍼 약 480라인 제거)
+- [x] `PastResultsView.tsx`에서 과거 결과 SpreadsheetView 모달 열기
+- [x] Excel 다운로드 버튼 연결 (파일명 sanitize 포함)
+- [x] `design examples/` 톤에 맞춘 색/간격 튜닝, 브라우저/Electron 모두 동작 확인 (createPortal 수정 + 라이트 테마 대비 보정)
 
-### Phase 2: 빠른 시작 경험 (발제 프리셋 + 라이브 월)
+### Phase 2: 빠른 시작 경험 (발제 프리셋 + 라이브 월) — ✅ 완료 (2026-04-20, Match Rate 97%)
 
 **기간:** 4일 (구현 3일 + 디자인 튜닝·e2e 1일)
 **우선순위 근거:** 사용자가 "발제 후 피드백" 시나리오를 1클릭으로 시작, 시각적 임팩트
 
 작업 목록:
-- [ ] `src/adapters/constants/feedbackPresets.ts` 프리셋 데이터 정의 (A/B/C 3종)
-- [ ] `ToolMultiSurvey.tsx` create 단계에 프리셋 선택 UI (`PresetSelector` 재사용)
-- [ ] `FeedbackWall/FeedbackWallView.tsx` 풀스크린 카드 월 디스플레이 (교사 뷰 전용)
-- [ ] MultiSurvey `running` 단계에 "피드백 월 보기" 토글 (IPC 변경 없이 뷰 레이어만)
-- [ ] 카드 fade-in 애니메이션, 카드 하이라이트/고정 기능
-- [ ] 프로젝터 해상도 반응형 (1920x1080 기준 튜닝)
+- [x] `src/adapters/constants/feedbackPresets.ts` 프리셋 데이터 정의 (A/B/C 3종)
+- [x] `ToolMultiSurvey.tsx` create 단계에 프리셋 선택 UI (🎯 피드백 프리셋 라인으로 별도 구현)
+- [x] `FeedbackWall/FeedbackWallView.tsx` 풀스크린 카드 월 디스플레이 (교사 뷰 전용)
+- [x] MultiSurvey `running` 단계에 "피드백 월 보기" 토글 (IPC 변경 없이 뷰 레이어만)
+- [x] 카드 fade-in 애니메이션, 카드 하이라이트(⭐)/고정(📌)/장문 확대(🔍) 기능
+- [x] 프로젝터 해상도 반응형 (`isFullscreen` 분기로 3컬럼 ↔ 4컬럼)
 
 ### Phase 3: 확장 (이미지 응답) — A안 확정
 
