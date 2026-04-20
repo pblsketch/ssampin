@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { BoardListPanel } from './Board/BoardListPanel';
 import { BoardControls } from './Board/BoardControls';
+import { BoardSessionPanel } from './Board/BoardSessionPanel';
 import { useBoardStore } from '@adapters/stores/useBoardStore';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 
@@ -56,21 +57,8 @@ export function ToolCollabBoard({ onBack, isFullscreen }: ToolCollabBoardProps):
             selectedBoardName={selectedBoard?.name ?? null}
           />
 
-          {/* Step 7b 예정: 활성 세션 시 QR + 세션 코드 + 접속자 패널 */}
-          {active && selectedBoardId === active.boardId && (
-            <div className="bg-sp-card rounded-xl p-5">
-              <div className="text-sm text-sp-muted mb-2">세션 URL</div>
-              <div className="text-xs text-sp-text break-all bg-sp-bg/60 rounded p-2 font-mono">
-                {active.publicUrl}?t={active.authToken}&amp;code={active.sessionCode}
-              </div>
-              <div className="text-xs text-sp-muted mt-3">
-                세션 코드: <span className="font-bold text-sp-text">{active.sessionCode}</span>
-              </div>
-              <div className="text-[10px] text-sp-muted mt-3">
-                💡 Step 7b에서 QR·접속자·자동저장 표시 UI가 추가됩니다.
-              </div>
-            </div>
-          )}
+          {/* 활성 세션 시 QR·세션코드·접속자·자동저장 패널 */}
+          {active && selectedBoardId === active.boardId && <BoardSessionPanel />}
         </div>
       </div>
     </ToolLayout>
