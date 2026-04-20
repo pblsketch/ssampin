@@ -36,6 +36,7 @@ export type PageId =
   | 'tool-chalkboard'
   | 'tool-valueline'
   | 'tool-traffic-discussion'
+  | 'tool-collab-board'
   | 'dual-tool-view'
   | 'settings';
 

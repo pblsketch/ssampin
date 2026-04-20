@@ -32,6 +32,7 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-valueline', emoji: '📏', name: '가치수직선 토론', description: '입장을 수직선 위에 표현' },
   { id: 'tool-traffic-discussion', emoji: '🚦', name: '신호등 토론', description: '찬성·보류·반대 의사 표현' },
   { id: 'tool-chalkboard', emoji: '🖍️', name: '칠판', description: '분필로 판서하기' },
+  { id: 'tool-collab-board', emoji: '🎨', name: '협업 보드', description: '학생과 실시간으로 함께 그리기 (Jamboard 대안)' },
   { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진', externalUrl: 'https://supsori.com' },
   { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구', externalUrl: 'https://pblsketch.xyz' },
 ];
