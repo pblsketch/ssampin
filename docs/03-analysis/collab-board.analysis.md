@@ -231,6 +231,7 @@ Step 8 실기기 테스트 전 **High 4건(R-1/R-2/R-4/R-5)** 수정. 합계 약
 | 0.2 | 2026-04-20 | Step 7 완료 시점 재분석. 충실도 96%, 진행률 80.0%. Step 8 착수 전 **High 4건(R-1/R-2/R-4/R-5) 수정 권고** → `/pdca iterate`. 그 외 3건은 Medium/Low로 병행 가능. |
 | 0.3 | 2026-04-19 | **Iteration #1 완료** — R-5/R-4/R-1/R-2/R-3 모두 해결. `npx tsc --noEmit` + `npm run build` green. 충실도 **98.5%**, Overall match rate **97.5%** 달성. |
 | 0.4 | 2026-04-20 | **Iteration #2~#4 완료** — 실기기 QA 중 발견된 학생 접속 불가 현상 해결. 핵심 원인: **CSS `[hidden]` vs `display:flex` 우선순위 버그** (iter #4). y-websocket params 전달 방식 예방 수정(iter #2)과 클라이언트 진단 로그(iter #3) 병행. 14:41 빌드 실기기 검증 통과. |
+| 0.5 | 2026-04-20 | **Iteration #5 완료** — 자동 저장이 실제로 **한 번도 실행되지 않고 있던 핵심 기능 장애** 발견·수정. YDocBoardServer가 외부 `new Y.Doc()`에 update 리스너를 걸었으나 y-websocket `setupWSConnection`은 내부 docs 맵에 별도 문서를 생성 → 드로잉이 외부 ydoc에 반영 안 됨 → dirty 영원히 false. 첫 연결 시 `ywsUtils.docs.get`로 실제 문서 획득 + initialState apply + update 리스너 등록으로 전환. 참여자 이력 UI도 BoardSessionPanel에 추가. 21:40 빌드. |
 
 ---
 
@@ -332,6 +333,67 @@ HTML `<div id="error-overlay" hidden>`로 숨기려 했으나, **브라우저 UA
 - **초기 가설이 그럴듯할수록 검증에 시간을 써야** 한다. iter #2의 y-websocket 파싱 버그 가설은 소스 코드 증거도 명확했지만, 실제 증상의 원인은 전혀 달랐다.
 - **서버 console.warn은 main process에서 보이지 않음**. 협업 보드처럼 서버 측 동작을 가진 Electron 기능은 **클라이언트 측 진단 로그**가 필수.
 - **HTML `hidden` attribute는 CSS 우선순위 cascade에 취약**. 모달 류 요소에 ID 기반 `display: flex`를 쓸 때는 반드시 `[hidden]` 지정 셀렉터를 함께 둬야 한다 — Design System 규칙으로 승격할 만한 패턴.
+
+---
+
+## Iteration #5 — 자동 저장·참여자 이력 동작 수정 (2026-04-20 저녁, commit `408a98a`)
+
+Step 8 QA 2차 진행 중 "자동 저장 토스트가 안 뜬다"는 보고로 시작되었고, 추적 결과 **자동 저장 자체가 단 한 번도 실행되지 않고 있던** 핵심 기능 장애가 드러났다. iter #1~#4와 달리 이번은 **Phase 1a MVP 핵심 FR의 실질 미구현**.
+
+### 원인 분석
+
+[YDocBoardServer.ts:97-99](../infrastructure/board/YDocBoardServer.ts)가 세션 시작 시 로컬에 `new Y.Doc()`을 만들어 `initialState` 적용 후 `ydoc.on('update', () => onStateChange())` 리스너를 걸었지만, 같은 파일의 `wss.on('connection', …)` 내부에서 호출하는 `ywsUtils.setupWSConnection(ws, req, { docName: roomName, gc: true })`는 **y-websocket 패키지 내부의 `docs` Map에 독립적인 `WSSharedDoc`(Y.Doc 서브타입)을 자동 생성**한다.
+
+결과: 두 개의 Y.Doc이 공존하고 서로 연결되지 않음.
+- 클라이언트 드로잉 → y-websocket 내부 문서에만 반영
+- 외부 로컬 ydoc는 **초기 상태 그대로** → `update` 이벤트 발생 `0회`
+- `runtime.dirty`는 영원히 `false`
+- [StartBoardSession.ts:154-165](../usecases/board/StartBoardSession.ts) setInterval은 매 30초 조건 분기에서 early return
+- `repo.saveSnapshot` 미호출 → 파일에 빈 데이터도 저장 안 됨
+- `listeners.onAutoSave` 미호출 → `collab-board:auto-save` IPC 이벤트 미발생
+- UI의 `lastSavedAt`은 영원히 null → "아직 저장 전" 문구 고정
+- **더 심각**: `handle.encodeState()`·`encodeStateSync()`도 빈 외부 ydoc을 반환 → 세션 종료 시·before-quit 저장도 빈 데이터로 덮어쓰기 → 재실행 시 복원할 데이터 없음
+
+즉 **"30초 자동 저장 + 강제 종료 후 복원"이라는 Phase 1a FR-08의 핵심 동작이 설계대로 구현되지 않은 채** 지금까지 gap-detector·QA를 통과하고 있었다.
+
+### 수정
+
+**1) 외부 Y.Doc 인스턴스 제거**
+
+`new Y.Doc()`을 완전히 삭제하고, 첫 WebSocket 연결 직후 `ywsUtils.docs.get(roomName)`로 실제 문서를 획득해 필요한 훅을 건다:
+
+```ts
+let initializedDoc = false;
+wss.on('connection', (ws, req) => {
+  ywsUtils.setupWSConnection(ws, req, { docName: roomName, gc: true });
+  if (initializedDoc) return;
+  const doc = ywsUtils.docs.get(roomName);
+  if (!doc) return;
+  initializedDoc = true;
+  if (opts.initialState) {
+    try { Y.applyUpdate(doc, opts.initialState); } catch { /* noop */ }
+  }
+  doc.on('update', () => opts.onStateChange());
+});
+```
+
+`RunningSession.ydoc` 필드 제거, `encodeState`·`encodeStateSync`는 실제 문서에서 `Y.encodeStateAsUpdate` 호출. `stop`에서 `ywsUtils.docs.delete(roomName)`로 명시 정리.
+
+**2) 참여자 이력 UI 추가**
+
+[BoardSessionPanel.tsx](../adapters/components/Tools/Board/BoardSessionPanel.tsx)에 "이 보드를 썼던 학생들 (N명)" 토글 섹션 추가. 과거 접속자 이름을 pill 형태로 나열, 현재 세션 참여자는 초록 강조. [BoardControls.tsx](../adapters/components/Tools/Board/BoardControls.tsx)의 `handleEnd`에서 세션 종료 직후 `useBoardStore.getState().load()` 호출해 `participantHistory` 즉시 반영.
+
+### 검증
+
+- `npx tsc --noEmit`: 0 error
+- `npm run electron:build`: success (21:40 빌드, 119 MB)
+- **실기기 재테스트 필요** — 드로잉 후 30초 대기 → "마지막 자동 저장: 방금" 표시, 앱 강제 종료 후 재실행 시 드로잉 복원 확인
+
+### iter #5 교훈 (핵심)
+
+- **외부 라이브러리가 내부 상태를 자체 관리**하는 경우 (`setupWSConnection`의 `docs` Map 등) **외부에서 만든 객체는 라이브러리에 닿지 않을 수 있다**. 반드시 라이브러리가 제공하는 "실제 문서 획득 훅"(이 경우 `ywsUtils.docs.get`)을 거쳐야 한다.
+- **gap-detector는 코드 일치도는 확인하지만 "런타임 연결 무결성"은 놓친다**. 두 ydoc이 이름만 같고 실제로 전혀 연결 안 되어 있어도 설계 문서 대비 파일·호출 형태가 맞으면 높은 match rate가 나온다.
+- **"동작한다"의 기준은 UI 토스트가 아니라 실제 파일에 저장된 바이트**여야 한다. 다음 QA부터는 `%APPDATA%\쌤핀\data\boards\{boardId}.ybin` 파일 크기 증가 직접 확인 항목을 추가할 것.
 
 ### 다음 단계
 
