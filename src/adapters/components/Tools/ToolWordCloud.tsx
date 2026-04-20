@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { WordCloudSession, WordCloudGroup } from '@domain/entities/WordCloudSession';
 import { useWordCloudHistoryStore } from '@adapters/stores/useWordCloudHistoryStore';
+import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import { OrganizeView } from './WordCloud/OrganizeView';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 
@@ -527,6 +528,13 @@ export function ToolWordCloud({ onBack, isFullscreen }: ToolWordCloudProps) {
 
     if (!window.electronAPI?.startLiveWordCloud) {
       setLiveError('워드클라우드 기능은 데스크톱 앱에서만 사용할 수 있습니다.');
+      setViewMode('live');
+      return;
+    }
+
+    // R-1/R-2 iter #1: 협업 보드가 실행 중이면 라이브 도구 시작 차단
+    if (useBoardSessionStore.getState().active !== null) {
+      setLiveError('협업 보드가 실행 중입니다. 먼저 보드를 종료해주세요.');
       setViewMode('live');
       return;
     }

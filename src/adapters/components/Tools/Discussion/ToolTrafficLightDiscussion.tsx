@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ToolLayout } from '../ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import { ResultSaveButton, PastResultsView } from '../TemplateManager';
 import { DiscussionSetup } from './DiscussionSetup';
@@ -50,6 +51,12 @@ export function ToolTrafficLightDiscussion({ onBack, isFullscreen }: ToolTraffic
   const liveSessionClientRef = useRef(new LiveSessionClient());
 
   const handleStart = useCallback(async (newTopics: string[]) => {
+    // R-1/R-2 iter #1: 협업 보드가 실행 중이면 라이브 도구 시작 차단
+    if (useBoardSessionStore.getState().active !== null) {
+      setTunnelError('협업 보드가 실행 중입니다. 먼저 보드를 종료해주세요.');
+      return;
+    }
+
     setTopics(newTopics);
     setCurrentRound(0);
     setStudents([]);

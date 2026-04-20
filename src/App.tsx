@@ -36,6 +36,7 @@ import { ToolGrouping } from '@adapters/components/Tools/ToolGrouping';
 import { AssignmentTool } from '@adapters/components/Tools/Assignment/AssignmentTool';
 import { AssignmentDetail } from '@adapters/components/Tools/Assignment/AssignmentDetail';
 import { ToolChalkboard } from '@adapters/components/Tools/ToolChalkboard';
+import { ToolCollabBoard } from '@adapters/components/Tools/ToolCollabBoard';
 import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/Tools/Discussion';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
@@ -211,6 +212,9 @@ function renderPage(
   }
   if (page === 'tool-chalkboard') {
     return wrap(<ToolChalkboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+  }
+  if (page === 'tool-collab-board') {
+    return wrap(<ToolCollabBoard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-assignment') {
     return (

@@ -47,6 +47,9 @@ import { GoogleDriveClient } from '@infrastructure/google/GoogleDriveClient';
 import { GoogleTasksApiClient } from '@infrastructure/google/GoogleTasksApiClient';
 import { AssignmentSupabaseClient } from '@infrastructure/supabase/AssignmentSupabaseClient';
 import { ShortLinkClient } from '@infrastructure/supabase/ShortLinkClient';
+// 협업 보드 infrastructure는 Node-only(yjs/ws/y-websocket/fs) 의존성을 가지므로
+// renderer 번들에 포함되면 Vite 빌드 실패. 따라서 container.ts에서 import하지 않고
+// electron/ipc/board.ts가 직접 조립한다 (기존 5개 라이브 도구와 동일 패턴).
 
 import { JsonScheduleRepository } from '@adapters/repositories/JsonScheduleRepository';
 import { JsonSeatingRepository } from '@adapters/repositories/JsonSeatingRepository';
@@ -274,6 +277,8 @@ export function getDriveSyncAdapter(
 export function resetDriveSyncAdapter(): void {
   _driveSyncAdapter = null;
 }
+
+// (협업 보드 조립은 electron/ipc/board.ts 가 담당 — 상단 import 주석 참조)
 
 // UseCase 팩토리 (Drive 클라이언트가 lazy이므로 팩토리 패턴)
 export function createAssignmentUseCases(getAccessToken: () => Promise<string>) {

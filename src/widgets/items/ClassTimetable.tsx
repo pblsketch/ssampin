@@ -74,7 +74,7 @@ export function ClassTimetable() {
           {/* 교시별 행 */}
           {periods.map((period) => (
             <Fragment key={period}>
-              <div className="bg-sp-card flex items-center justify-center text-sp-muted text-detail">
+              <div className="bg-sp-card flex items-center justify-center text-sp-muted text-xs">
                 {period}
               </div>
               {DAYS.map(({ key }) => {
@@ -88,11 +88,11 @@ export function ClassTimetable() {
                 return (
                   <div key={key} className="bg-sp-card p-0.5">
                     {subject ? (
-                      <div className={`rounded h-full flex items-center justify-center text-detail font-medium ${colorClass}`}>
+                      <div className={`rounded h-full flex items-center justify-center text-xs font-medium ${colorClass}`}>
                         {subject}
                       </div>
                     ) : (
-                      <div className="rounded h-full flex items-center justify-center text-detail text-sp-border">
+                      <div className="rounded h-full flex items-center justify-center text-xs text-sp-border">
                         -
                       </div>
                     )}

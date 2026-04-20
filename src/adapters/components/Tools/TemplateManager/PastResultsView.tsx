@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { ToolResult, ToolResultType, PollResultData, SurveyResultData, MultiSurveyResultData, WordCloudResultData } from '@domain/entities/ToolResult';
 import { useToolResultStore } from '@adapters/stores/useToolResultStore';
+import { SpreadsheetView } from '../Results/SpreadsheetView';
 
 interface PastResultsViewProps {
   toolType: ToolResultType;
@@ -82,11 +83,27 @@ function SurveyDetail({ data }: { data: SurveyResultData }) {
   );
 }
 
-function MultiSurveyDetail({ data }: { data: MultiSurveyResultData }) {
+function MultiSurveyDetail({
+  data,
+  onOpenSpreadsheet,
+}: {
+  data: MultiSurveyResultData;
+  onOpenSpreadsheet: () => void;
+}) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-sm text-sp-muted">{data.title}</p>
-      <p className="text-xs text-sp-muted">{data.questions.length}개 문항 · {data.submissions.length}명 응답</p>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm text-sp-muted truncate">{data.title}</p>
+          <p className="text-xs text-sp-muted">{data.questions.length}개 문항 · {data.submissions.length}명 응답</p>
+        </div>
+        <button
+          onClick={onOpenSpreadsheet}
+          className="shrink-0 rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-xs font-medium text-sp-text transition hover:border-sp-accent hover:text-sp-accent"
+        >
+          📊 스프레드시트로 열기
+        </button>
+      </div>
       {data.questions.map((q) => (
         <div key={q.id} className="bg-sp-surface rounded px-2 py-1.5">
           <p className="text-xs font-medium text-sp-text">{q.question}</p>
@@ -120,7 +137,13 @@ function WordCloudDetail({ data }: { data: WordCloudResultData }) {
   );
 }
 
-function ResultDetail({ result }: { result: ToolResult }) {
+function ResultDetail({
+  result,
+  onOpenSpreadsheet,
+}: {
+  result: ToolResult;
+  onOpenSpreadsheet: (r: ToolResult) => void;
+}) {
   const d = result.data;
   switch (d.type) {
     case 'poll':
@@ -128,7 +151,7 @@ function ResultDetail({ result }: { result: ToolResult }) {
     case 'survey':
       return <SurveyDetail data={d} />;
     case 'multi-survey':
-      return <MultiSurveyDetail data={d} />;
+      return <MultiSurveyDetail data={d} onOpenSpreadsheet={() => onOpenSpreadsheet(result)} />;
     case 'wordcloud':
       return <WordCloudDetail data={d} />;
   }
@@ -136,6 +159,7 @@ function ResultDetail({ result }: { result: ToolResult }) {
 
 export function PastResultsView({ toolType, onClose }: PastResultsViewProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [spreadsheetResult, setSpreadsheetResult] = useState<ToolResult | null>(null);
   const { load, getByType, deleteResult } = useToolResultStore();
 
   useEffect(() => {
@@ -205,12 +229,19 @@ export function PastResultsView({ toolType, onClose }: PastResultsViewProps) {
 
               {expandedId === r.id && (
                 <div className="px-4 pb-4 border-t border-sp-border pt-3">
-                  <ResultDetail result={r} />
+                  <ResultDetail result={r} onOpenSpreadsheet={setSpreadsheetResult} />
                 </div>
               )}
             </div>
           ))}
         </div>
+      )}
+
+      {spreadsheetResult && (
+        <SpreadsheetView
+          source={{ mode: 'modal', result: spreadsheetResult }}
+          onClose={() => setSpreadsheetResult(null)}
+        />
       )}
     </div>
   );

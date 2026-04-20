@@ -10,6 +10,7 @@ import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
 import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
 import { registerLiveMultiSurveyHandlers } from './ipc/liveMultiSurvey';
 import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
+import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 
 declare const __dirname: string;
 
@@ -1363,6 +1364,7 @@ if (!gotTheLock) {
     registerLiveWordCloudHandlers(mainWindow!);
     registerLiveMultiSurveyHandlers(mainWindow!);
     registerLiveDiscussionHandlers(mainWindow!);
+    registerBoardHandlers(mainWindow!);
     createTray();
     setupAutoUpdater();
 
@@ -1442,6 +1444,8 @@ if (!gotTheLock) {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // 협업 보드 활성 세션이 있으면 동기 저장 (Design §3.2-bis)
+  endActiveBoardSessionSync();
   // Analytics flush 신호 전송
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('analytics:flush');

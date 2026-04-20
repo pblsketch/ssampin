@@ -26,6 +26,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   { id: 'tool-valueline', name: '가치수직선 토론', icon: '📏', color: 'bg-lime-500/20 text-lime-600' },
   { id: 'tool-traffic-discussion', name: '신호등 토론', icon: '🚦', color: 'bg-fuchsia-500/20 text-fuchsia-600' },
   { id: 'tool-chalkboard', name: '칠판', icon: '🖍️', color: 'bg-stone-500/20 text-stone-600' },
+  { id: 'tool-collab-board', name: '협업 보드', icon: '🎨', color: 'bg-orange-400/20 text-orange-600' },
   { id: 'tool-supsori', name: '숲소리', icon: '🌳', color: 'bg-green-600/20 text-green-700', externalUrl: 'https://supsori.com' },
   { id: 'tool-pblsketch', name: 'PBL스케치', icon: '🎯', color: 'bg-blue-600/20 text-blue-700', externalUrl: 'https://pblsketch.xyz' },
 ];
