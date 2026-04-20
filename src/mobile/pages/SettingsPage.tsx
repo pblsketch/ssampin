@@ -145,7 +145,7 @@ export function SettingsPage({ onBack }: Props) {
               <span className="material-symbols-outlined text-sp-muted text-icon-lg">info</span>
               <div className="flex-1">
                 <p className="text-sp-muted text-xs mb-0.5">버전</p>
-                <p className="text-sp-text text-sm font-medium">쌤핀 모바일 v1.10.1</p>
+                <p className="text-sp-text text-sm font-medium">쌤핀 모바일 v1.10.2</p>
               </div>
             </div>
             <div className="py-3">

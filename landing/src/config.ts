@@ -1,7 +1,7 @@
 export const DOWNLOAD_URL = 'https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-Setup.exe';
 export const DOWNLOAD_URL_MAC_ARM = 'https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-arm64.dmg';
 export const DOWNLOAD_URL_MAC_X64 = 'https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-x64.dmg';
-export const VERSION = '1.10.1';
+export const VERSION = '1.10.2';
 export const FILE_SIZE = '~100MB';
 export const FILE_SIZE_MAC = '~130MB';
 export const GITHUB_URL = 'https://github.com/pblsketch/ssampin';
