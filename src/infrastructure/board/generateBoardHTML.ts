@@ -66,6 +66,9 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       display: flex; align-items: center; justify-content: center; z-index: 10000;
       backdrop-filter: blur(6px);
     }
+    /* iter #4: [hidden] attribute가 display:flex를 이기도록 강제.
+       그렇지 않으면 에러 오버레이가 페이지 로드 순간부터 표시되어 이름 입력 모달을 덮는다. */
+    #join-modal[hidden], #error-overlay[hidden] { display: none !important; }
     .modal-card {
       background: #ffffff; border-radius: 16px; padding: 28px 24px;
       width: min(360px, 92vw); box-shadow: 0 20px 60px rgba(0,0,0,0.3);
