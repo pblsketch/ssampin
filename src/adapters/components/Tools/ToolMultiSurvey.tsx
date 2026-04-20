@@ -11,6 +11,8 @@ import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 import { TeacherControlPanel } from './TeacherControlPanel';
 import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
 import { SpreadsheetView } from './Results/SpreadsheetView';
+import { FeedbackWallView } from './FeedbackWall/FeedbackWallView';
+import { FEEDBACK_PRESETS, type FeedbackPreset } from '@adapters/constants/feedbackPresets';
 
 interface ToolMultiSurveyProps {
   onBack: () => void;
@@ -447,6 +449,22 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
     setQuestions(template.questions.map(templateToEditable));
   }, []);
 
+  const handleFeedbackPreset = useCallback((preset: FeedbackPreset) => {
+    setTitle(preset.label);
+    // FeedbackPreset.questions는 readonly/unknown 호환성을 위해 templateToEditable이 수용하도록 구조 동일
+    setQuestions(preset.questions.map((q) => templateToEditable({
+      type: q.type,
+      question: q.question,
+      required: q.required,
+      options: q.options ? [...q.options] : undefined,
+      maxLength: q.maxLength,
+      scaleMin: q.scaleMin,
+      scaleMax: q.scaleMax,
+      scaleMinLabel: q.scaleMinLabel,
+      scaleMaxLabel: q.scaleMaxLabel,
+    })));
+  }, []);
+
   const handleLoadFromTemplate = useCallback((tmpl: ToolTemplate) => {
     onLoadFromTemplate(tmpl);
     if (tmpl.config.type !== 'multi-survey') return;
@@ -493,18 +511,35 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
       />
 
       {/* Templates */}
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs text-sp-muted font-medium">빠른 템플릿:</span>
-        <div className="flex flex-wrap gap-1.5">
-          {TEMPLATES.map((t) => (
-            <button
-              key={t.label}
-              onClick={() => handleTemplate(t)}
-              className="px-3 py-1.5 rounded-lg bg-sp-card border border-sp-border text-xs text-sp-muted hover:text-sp-text hover:border-sp-accent/50 transition-all"
-            >
-              {t.label}
-            </button>
-          ))}
+      <div className="flex flex-col gap-2 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-sp-muted font-medium">빠른 템플릿:</span>
+          <div className="flex flex-wrap gap-1.5">
+            {TEMPLATES.map((t) => (
+              <button
+                key={t.label}
+                onClick={() => handleTemplate(t)}
+                className="px-3 py-1.5 rounded-lg bg-sp-card border border-sp-border text-xs text-sp-muted hover:text-sp-text hover:border-sp-accent transition-all"
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-sp-muted font-medium">🎯 피드백 프리셋:</span>
+          <div className="flex flex-wrap gap-1.5">
+            {FEEDBACK_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handleFeedbackPreset(p)}
+                title={p.description}
+                className="px-3 py-1.5 rounded-lg bg-sp-card border border-sp-border text-xs text-sp-text hover:border-sp-highlight hover:text-sp-highlight transition-all"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1014,6 +1049,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   // Word cloud / step mode state
   const [stepMode, setStepMode] = useState(false);
   const [useStopwords, setUseStopwords] = useState(true);
+  const [showFeedbackWall, setShowFeedbackWall] = useState(false);
 
   // Live mode state
   const [isLiveMode, setIsLiveMode] = useState(false);
@@ -1202,6 +1238,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
       handleStopLive();
     }
     setPhase('results');
+    setShowFeedbackWall(false);
   }, [isLiveMode, handleStopLive]);
 
   const handleReset = useCallback(() => {
@@ -1212,6 +1249,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
     setTitle('');
     setQuestions([defaultQuestion()]);
     setSubmissions([]);
+    setShowFeedbackWall(false);
   }, [isLiveMode, handleStopLive]);
 
   const handleToggleQRFullscreen = useCallback(() => {
@@ -1353,8 +1391,30 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           onTemplateApplied={() => { setPendingTitle(null); setPendingQuestions(null); }}
         />
       )}
-      {phase === 'running' && (
-        <RunningView
+      {phase === 'running' && showFeedbackWall && (
+        <FeedbackWallView
+          title={title}
+          questions={questions}
+          submissions={submissions}
+          isFullscreen={isFullscreen}
+          onClose={() => setShowFeedbackWall(false)}
+        />
+      )}
+      {phase === 'running' && !showFeedbackWall && (
+        <div className="relative flex h-full w-full flex-col">
+          {/* 텍스트 질문이 하나라도 있으면 피드백 월 토글 버튼 노출 */}
+          {questions.some((q) => q.type === 'text') && (
+            <button
+              type="button"
+              onClick={() => setShowFeedbackWall(true)}
+              className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs font-medium text-sp-text shadow-sm transition hover:border-sp-highlight hover:text-sp-highlight"
+              title="프로젝터용 라이브 피드백 월 (텍스트 응답만 카드로 표시)"
+            >
+              <span aria-hidden>📋</span>
+              <span>피드백 월</span>
+            </button>
+          )}
+          <RunningView
           title={title}
           questions={questions}
           submissions={submissions}
@@ -1395,7 +1455,8 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
             void window.electronAPI?.liveMultiSurveyEndSession?.();
             handleStopLive();
           }}
-        />
+          />
+        </div>
       )}
       {phase === 'results' && (() => {
         const spreadsheetData = {
