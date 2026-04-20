@@ -61,6 +61,9 @@ interface YwsUtilsShape {
 const ywsUtils = ywsDefault as unknown as YwsUtilsShape;
 
 export type HtmlProvider = (ctx: {
+  /** 서버 측 docName과 동기화용 (WebsocketProvider room name). `bd-xxx` 형태 */
+  readonly boardId: BoardId;
+  /** 학생 HTML 제목·입장 모달에 노출될 사용자-대면 이름 */
   readonly boardName: string;
   readonly authToken: BoardAuthToken;
   readonly sessionCode: BoardSessionCode;
@@ -100,6 +103,7 @@ export class YDocBoardServer implements IBoardServerPort {
     const participants = new Map<number, string>();
 
     const html = this.htmlProvider({
+      boardId: opts.boardId,
       boardName: opts.boardName,
       authToken,
       sessionCode,

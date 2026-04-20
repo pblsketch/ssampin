@@ -6,6 +6,7 @@
  */
 import type { BoardAuthToken } from '@domain/valueObjects/BoardAuthToken';
 import type { BoardSessionCode } from '@domain/valueObjects/BoardSessionCode';
+import type { BoardId } from '@domain/valueObjects/BoardId';
 
 import {
   EXCALIDRAW_VERSION,
@@ -17,6 +18,8 @@ import {
 } from './constants';
 
 export interface GenerateBoardHtmlInput {
+  /** WebsocketProvider roomName = 서버 docName 일치용. `bd-xxx` 형태 */
+  readonly boardId: BoardId;
   readonly boardName: string;
   readonly authToken: BoardAuthToken;
   readonly sessionCode: BoardSessionCode;
@@ -36,7 +39,7 @@ function jsString(s: string): string {
 }
 
 export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
-  const { boardName, authToken, sessionCode } = input;
+  const { boardId, boardName, authToken, sessionCode } = input;
   const title = `쌤핀 협업 보드 — ${escapeHtml(boardName)}`;
 
   return `<!doctype html>
@@ -133,6 +136,7 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
 
     const AUTH_TOKEN   = ${jsString(authToken)};
     const SESSION_CODE = ${jsString(sessionCode)};
+    const BOARD_ID     = ${jsString(String(boardId))};
     const BOARD_NAME   = ${jsString(boardName)};
 
     const statusEl = document.getElementById('status');
@@ -174,7 +178,10 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
       const wsUrl = \`\${wsProto}://\${location.host}/?t=\${AUTH_TOKEN}&code=\${SESSION_CODE}\`;
 
-      const provider = new WebsocketProvider(wsUrl, BOARD_NAME, ydoc);
+      // R-5 (iter #1): WebsocketProvider 두 번째 인자(roomName)는 서버 docName과 일치해야 함.
+      // 서버는 docName=boardId를 사용하므로 클라이언트도 BOARD_ID(bd-xxx)로 전달.
+      // 이전: BOARD_NAME(한국어) → sync 엇갈림 가능성 있었음.
+      const provider = new WebsocketProvider(wsUrl, BOARD_ID, ydoc);
 
       provider.on('status', (ev) => {
         if (ev.status === 'connected') setStatus('connected', '연결됨');

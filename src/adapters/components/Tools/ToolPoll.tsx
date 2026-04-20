@@ -6,7 +6,10 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
+import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
+import { TeacherControlPanel } from './TeacherControlPanel';
+import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
 
 interface ToolPollProps {
   onBack: () => void;
@@ -88,11 +91,12 @@ interface CreateViewProps {
   onLoadTemplate?: (template: ToolTemplate) => void;
   loadedDraft?: Array<{ question: string; options: string[] }> | null;
   onShowPastResults?: () => void;
+  stepMode: boolean;
+  onStepModeChange: (v: boolean) => void;
 }
 
-function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, loadedDraft, onShowPastResults }: CreateViewProps) {
+function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, loadedDraft, onShowPastResults, stepMode, onStepModeChange }: CreateViewProps) {
   const [drafts, setDrafts] = useState<QuestionDraft[]>([makeQuestionDraft()]);
-  const [stepMode, setStepMode] = useState(false);
   const [exampleIdx, setExampleIdx] = useState(-1);
   const inputRefs = useRef<Map<string, (HTMLInputElement | null)[]>>(new Map());
 
@@ -347,21 +351,23 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
         </button>
       )}
 
-      {/* Response mode toggle */}
+      {/* Response mode toggle — 다문항일 때만 교사 주도 선택 가능 */}
       <div className="flex items-center gap-2 shrink-0">
         <span className="text-sm text-sp-muted font-medium">응답 모드:</span>
         <button
-          onClick={() => setStepMode(false)}
+          onClick={() => onStepModeChange(false)}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${!stepMode ? 'bg-sp-accent/20 border-sp-accent text-sp-accent' : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'}`}
         >
           📜 전체 한 화면
         </button>
-        <button
-          onClick={() => setStepMode(true)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${stepMode ? 'bg-sp-accent/20 border-sp-accent text-sp-accent' : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'}`}
-        >
-          ➡️ 문항별 순서
-        </button>
+        {drafts.length >= 2 && (
+          <button
+            onClick={() => onStepModeChange(true)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${stepMode ? 'bg-sp-accent/20 border-sp-accent text-sp-accent' : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'}`}
+          >
+            👨‍🏫 교사 주도 진행
+          </button>
+        )}
       </div>
 
       {/* Template actions */}
@@ -1121,7 +1127,20 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
   const [customCodeError, setCustomCodeError] = useState<string | null>(null);
   const liveSessionClientRef = useRef(new LiveSessionClient());
 
+  // ── 교사 주도 진행 모드 상태 (stepMode=true + 다문항 + 라이브 모드일 때만 사용) ──
+  const [stepMode, setStepMode] = useState(false);
+  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>('lobby');
+  const [teacherQuestionIndex, setTeacherQuestionIndex] = useState(0);
+  const [teacherTotalConnected, setTeacherTotalConnected] = useState(0);
+  const [teacherTotalAnswered, setTeacherTotalAnswered] = useState(0);
+  const [teacherAggregated, setTeacherAggregated] = useState<AggregatedResult | undefined>(undefined);
+  const [teacherRoster, setTeacherRoster] = useState<RosterEntry[]>([]);
+  const [teacherTextDetail, setTeacherTextDetail] = useState<TextAnswerEntry[] | undefined>(undefined);
+
   const isMultiQuestion = questions.length > 1;
+
+  // stepMode=true + 라이브 + 다문항 ⇒ TeacherControlPanel이 메인 (기존 Live/Voting 카드 전부 숨김)
+  const isTeacherDrivenLive = isLiveMode && stepMode && questions.length >= 2;
 
   const handleStart = useCallback((qs: PollQuestion[]) => {
     setQuestions(qs);
@@ -1170,6 +1189,12 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
     try {
       setLiveError(null);
 
+      // R-1/R-2 iter #1: 협업 보드가 실행 중이면 라이브 도구 시작 차단 (터널 파괴 방지)
+      if (useBoardSessionStore.getState().active !== null) {
+        setLiveError('협업 보드가 실행 중입니다. 먼저 보드를 종료해주세요.');
+        return;
+      }
+
       if (isMultiQuestion) {
         // Multi-question: use liveMultiSurvey IPC
         if (!window.electronAPI?.startLiveMultiSurvey) {
@@ -1183,7 +1208,7 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           required: true,
           options: q.options.map((o) => ({ id: o.id, text: o.text })),
         }));
-        const info = await window.electronAPI.startLiveMultiSurvey({ questions: surveyQuestions });
+        const info = await window.electronAPI.startLiveMultiSurvey({ questions: surveyQuestions, stepMode });
         if (info.localIPs.length === 0) {
           setLiveError('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
           return;
@@ -1191,6 +1216,16 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
         setLiveServerInfo(info);
         setIsLiveMode(true);
         setConnectedStudents(0);
+        // 교사 주도 모드 상태 초기화
+        if (stepMode) {
+          setTeacherPhase('lobby');
+          setTeacherQuestionIndex(0);
+          setTeacherTotalConnected(0);
+          setTeacherTotalAnswered(0);
+          setTeacherAggregated(undefined);
+          setTeacherRoster([]);
+          setTeacherTextDetail(undefined);
+        }
         setTunnelLoading(true);
         setTunnelError(null);
         try {
@@ -1360,6 +1395,84 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
     }
   }, [isLiveMode, isMultiQuestion, questions, handleVote]);
 
+  // 교사 주도 모드 IPC 이벤트 구독 (다문항 + stepMode=true + 라이브 활성 시에만)
+  useEffect(() => {
+    if (!isLiveMode || !stepMode || questions.length < 2) return;
+    if (!window.electronAPI) return;
+
+    const unsubPhase = window.electronAPI.onLiveMultiSurveyPhaseChanged?.((data) => {
+      setTeacherPhase(data.phase);
+      setTeacherQuestionIndex(data.currentQuestionIndex);
+      setTeacherTotalAnswered(data.totalAnswered);
+      setTeacherTotalConnected(data.totalConnected);
+      if (data.aggregated !== undefined) {
+        setTeacherAggregated(data.aggregated);
+      } else {
+        setTeacherAggregated(undefined);
+      }
+
+      // ── Bug #B fix ──
+      // 교사 주도 모드(stepMode=true)에서는 학생 답변이 백엔드 aggregated로 도착한다.
+      // phase='revealed' 진입 시 해당 문항의 확정 집계(aggregated)를
+      // 기존 voteCounts 구조인 questions[i].options[j].votes 에 덮어써서
+      // 세션 종료 후 "결과 보기" 페이지(VotingView/ResultsView)에서 0표가 아닌
+      // 실제 집계가 보이도록 한다. 각 문항의 REVEALED 도달 시점마다 누적 반영되므로
+      // 사용자가 중간에 결과 페이지로 이동해도 정상 표시된다.
+      //
+      // 주의: stepMode=false 경로는 이 useEffect 자체가 비활성이므로 영향 없음.
+      // 수동 +1 버튼(handleVote)은 REVEALED 이후(세션 종료 후)에만 노출되므로 충돌 없음.
+      if (data.phase === 'revealed' && data.aggregated && 'counts' in data.aggregated) {
+        const counts = data.aggregated.counts;
+        const qIdx = data.currentQuestionIndex;
+        setQuestions((prev) =>
+          prev.map((q, i) => {
+            if (i !== qIdx) return q;
+            return {
+              ...q,
+              options: q.options.map((o) => ({
+                ...o,
+                votes: counts[o.id] ?? 0,
+              })),
+            };
+          }),
+        );
+      }
+    });
+
+    const unsubRoster = window.electronAPI.onLiveMultiSurveyRoster?.((data) => {
+      setTeacherRoster(
+        data.roster.map((r) => ({
+          sessionId: r.sessionId,
+          nickname: r.nickname,
+          answeredCurrent: r.answeredQuestions.includes(teacherQuestionIndex),
+        }))
+      );
+    });
+
+    const unsubAnswered = window.electronAPI.onLiveMultiSurveyStudentAnswered?.((data) => {
+      setTeacherTotalAnswered(data.totalAnswered);
+      setTeacherTotalConnected(data.totalConnected);
+      // OPEN phase 실시간 카운트 업데이트
+      if (data.aggregatedPreview) setTeacherAggregated(data.aggregatedPreview);
+    });
+
+    const unsubTextDetail = window.electronAPI.onLiveMultiSurveyTextAnswerDetail?.((data) => {
+      setTeacherTextDetail(data.entries);
+    });
+
+    const unsubCount = window.electronAPI.onLiveMultiSurveyConnectionCount?.((data) => {
+      setTeacherTotalConnected(data.count);
+    });
+
+    return () => {
+      unsubPhase?.();
+      unsubRoster?.();
+      unsubAnswered?.();
+      unsubTextDetail?.();
+      unsubCount?.();
+    };
+  }, [isLiveMode, stepMode, questions.length, teacherQuestionIndex]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1400,38 +1513,82 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           onLoadTemplate={handleLoadTemplate}
           loadedDraft={loadedDraft}
           onShowPastResults={() => setShowPastResults(true)}
+          stepMode={stepMode}
+          onStepModeChange={setStepMode}
         />
       )}
       {!showPastResults && viewMode === 'voting' && (
-        <VotingView
-          questions={questions}
-          isOpen={isOpen}
-          showResults={showResults}
-          isFullscreen={isFullscreen}
-          onVote={handleVote}
-          onToggleResults={handleToggleResults}
-          onClose={handleClose}
-          onReset={handleReset}
-          onShowFinalResults={handleShowFinalResults}
-          isLiveMode={isLiveMode}
-          liveServerInfo={liveServerInfo}
-          connectedStudents={connectedStudents}
-          onStartLive={handleStartLive}
-          onStopLive={handleStopLive}
-          showQRFullscreen={showQRFullscreen}
-          onToggleQRFullscreen={handleToggleQRFullscreen}
-          liveError={liveError}
-          liveDisabled={false}
-          tunnelUrl={tunnelUrl}
-          tunnelLoading={tunnelLoading}
-          tunnelError={tunnelError}
-          shortUrl={shortUrl}
-          shortCode={shortCode}
-          customCodeInput={customCodeInput}
-          customCodeError={customCodeError}
-          onCustomCodeChange={setCustomCodeInput}
-          onSetCustomCode={handleSetCustomCode}
-        />
+        isTeacherDrivenLive ? (
+          /* ── stepMode=true 라이브: TeacherControlPanel이 메인 (LIVE+QR+문항리스트 전부 숨김) ── */
+          <TeacherControlPanel
+            phase={teacherPhase}
+            currentQuestionIndex={teacherQuestionIndex}
+            totalQuestions={questions.length}
+            totalConnected={teacherTotalConnected}
+            totalAnswered={teacherTotalAnswered}
+            currentQuestion={
+              teacherPhase !== 'lobby' && teacherPhase !== 'ended'
+                ? {
+                    id: questions[teacherQuestionIndex]?.id ?? '',
+                    type: 'single-choice' as const,
+                    question: questions[teacherQuestionIndex]?.question ?? '',
+                    required: true,
+                    options: questions[teacherQuestionIndex]?.options.map((o) => ({
+                      id: o.id,
+                      text: o.text,
+                    })),
+                  }
+                : undefined
+            }
+            aggregated={teacherAggregated}
+            roster={teacherRoster}
+            textAnswerDetail={teacherTextDetail}
+            liveDisplayUrl={shortUrl ?? tunnelUrl ?? undefined}
+            liveFullUrl={tunnelUrl ?? undefined}
+            liveShortUrl={shortUrl ?? undefined}
+            liveTunnelLoading={tunnelLoading}
+            onActivate={() => window.electronAPI?.liveMultiSurveyActivateSession?.()}
+            onReveal={() => window.electronAPI?.liveMultiSurveyReveal?.()}
+            onAdvance={() => window.electronAPI?.liveMultiSurveyAdvance?.()}
+            onPrev={() => window.electronAPI?.liveMultiSurveyPrev?.()}
+            onReopen={() => window.electronAPI?.liveMultiSurveyReopen?.()}
+            onEnd={() => {
+              void window.electronAPI?.liveMultiSurveyEndSession?.();
+              void handleStopLive();
+            }}
+          />
+        ) : (
+          /* ── stepMode=false 또는 라이브 아님: 기존 UI (회귀 방지) ── */
+          <VotingView
+            questions={questions}
+            isOpen={isOpen}
+            showResults={showResults}
+            isFullscreen={isFullscreen}
+            onVote={handleVote}
+            onToggleResults={handleToggleResults}
+            onClose={handleClose}
+            onReset={handleReset}
+            onShowFinalResults={handleShowFinalResults}
+            isLiveMode={isLiveMode}
+            liveServerInfo={liveServerInfo}
+            connectedStudents={connectedStudents}
+            onStartLive={handleStartLive}
+            onStopLive={handleStopLive}
+            showQRFullscreen={showQRFullscreen}
+            onToggleQRFullscreen={handleToggleQRFullscreen}
+            liveError={liveError}
+            liveDisabled={false}
+            tunnelUrl={tunnelUrl}
+            tunnelLoading={tunnelLoading}
+            tunnelError={tunnelError}
+            shortUrl={shortUrl}
+            shortCode={shortCode}
+            customCodeInput={customCodeInput}
+            customCodeError={customCodeError}
+            onCustomCodeChange={setCustomCodeInput}
+            onSetCustomCode={handleSetCustomCode}
+          />
+        )
       )}
       {!showPastResults && viewMode === 'results' && (
         <ResultsView

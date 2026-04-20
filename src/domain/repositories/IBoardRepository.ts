@@ -24,4 +24,9 @@ export interface IBoardRepository {
   loadSnapshot(id: BoardId): Promise<Uint8Array | null>;
   /** 참여자 이름 히스토리 병합 저장 (canonical 기준 중복 제거는 구현체가) */
   appendParticipantHistory(id: BoardId, names: ReadonlyArray<string>): Promise<void>;
+  /**
+   * 세션 종료 타임스탬프 갱신 (Board.lastSessionAt).
+   * Design §2.2 — 보드 목록 "최근 실행순" 정렬에 쓰인다. 실패해도 세션 종료는 계속 진행.
+   */
+  touchSessionEnd(id: BoardId, endedAt?: number): Promise<void>;
 }

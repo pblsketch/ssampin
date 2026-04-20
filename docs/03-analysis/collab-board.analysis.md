@@ -229,3 +229,45 @@ Step 8 실기기 테스트 전 **High 4건(R-1/R-2/R-4/R-5)** 수정. 합계 약
 |---|---|---|
 | 0.1 | 2026-04-19 | Step 1+2 완료 시점 분석. 충실도 98%, 전체 진행률 30.8%. iteration 불필요, Step 3 계속 진행 권고. |
 | 0.2 | 2026-04-20 | Step 7 완료 시점 재분석. 충실도 96%, 진행률 80.0%. Step 8 착수 전 **High 4건(R-1/R-2/R-4/R-5) 수정 권고** → `/pdca iterate`. 그 외 3건은 Medium/Low로 병행 가능. |
+| 0.3 | 2026-04-19 | **Iteration #1 완료** — R-5/R-4/R-1/R-2/R-3 모두 해결. `npx tsc --noEmit` + `npm run build` green. 충실도 **98.5%**, Overall match rate **97.5%** 달성. |
+
+---
+
+## Iteration #1 — 실행 결과 (2026-04-19)
+
+`/pdca iterate collab-board` 실행으로 §6 권고 5건 전체를 한 회차에 처리했다.
+
+### 수정 상세
+
+| Risk | 수정 내용 | 주요 파일 |
+|---|---|---|
+| **R-5 Critical** | `WebsocketProvider` roomName을 서버 `docName`(=`BoardId`)으로 정렬. `generateBoardHTML`에 `boardId` 파라미터 추가, `YDocBoardServer.HtmlProvider`·`provideHTML` 시그니처 확장. | `src/infrastructure/board/generateBoardHTML.ts`, `src/infrastructure/board/YDocBoardServer.ts` |
+| **R-4 Major** | `electron/ipc/board.ts`가 `BoardFilePersistence`·`repo`·`serverPort`·`tunnelPort` 모듈-전역 핸들을 보유하도록 변경. `endActiveBoardSessionSync`가 `persistence.saveSnapshotSync(...)`를 직접 호출해 before-quit 동기 저장 보장. 서버·터널은 2초 deadline race. | `electron/ipc/board.ts` |
+| **R-1/R-2 Major** | 6개 라이브 도구(`ToolPoll`, `ToolSurvey`, `ToolMultiSurvey`, `ToolWordCloud`, `Discussion/ToolValueLine`, `Discussion/ToolTrafficLightDiscussion`)의 시작 핸들러에 `useBoardSessionStore.getState().active !== null` 가드 추가. 보드 실행 중 시작 시 `"협업 보드가 실행 중입니다. 먼저 보드를 종료해주세요."` 에러 메시지 표시 후 조기 반환. 터널 race condition 차단. | 6개 Tool 파일 |
+| **R-3 Medium** | `IBoardRepository.touchSessionEnd(id, endedAt?)` 포트 추가 + `FileBoardRepository` 구현. `EndBoardSession.execute` 마지막 단계에서 호출해 참여자 0명 세션에도 `lastSessionEndedAt`/`updatedAt` 메타 갱신. best-effort (실패 시 세션 종료 강행). | `src/domain/repositories/IBoardRepository.ts`, `src/infrastructure/board/FileBoardRepository.ts`, `src/usecases/board/EndBoardSession.ts` |
+
+**보드 측 역방향 대칭(R-1/R-2)**: `ToolCollabBoard`는 기존 라이브 도구 `active?.toolType` 검증이 들어 있는 IPC 경로(`collab-board:start-session`의 `BOARD_TUNNEL_BUSY`)를 이미 사용하므로 별도 수정 불필요. 대신 세션 패널 UI에 `BoardControls.tsx`가 `liveVote`·`liveSurvey` 등 실행 중 터널을 감지해 안내하는 기존 흐름이 유지됨.
+
+### 검증
+
+- `npx tsc --noEmit`: **0 error**
+- `npm run build`: **success** (Vite + tsc 통합) — 4.08 MB 번들, 9.4s
+- 기존 경고(동적/정적 이중 import)는 collab-board와 무관한 기존 이슈
+
+### 신규 Match Rate
+
+| 지표 | iter 0 | iter 1 | Δ |
+|---|:-:|:-:|:-:|
+| Design 충실도 | 96% | **98.5%** | +2.5 |
+| Overall match rate | 95% | **97.5%** | +2.5 |
+| 구현 전체 진행률 | 80.0% | **87.5%** | +7.5 |
+
+임계치 **90% 도달**. `pdca-iterator` 추가 회차 불필요 — Step 8 수동 QA → Step 9 릴리즈 준비로 진행 가능.
+
+### Step 8 진입 전 체크
+
+- [x] iter #1 5건 수정 완료
+- [x] tsc + build green
+- [ ] `git commit` + PR #1 업데이트
+- [ ] QA 체크리스트 실기기 수동 진행 (`collab-board.qa-checklist.md` 13섹션)
+- [ ] Step 9 — `release-notes.json` v1.12.0 + 챗봇 KB 재임베딩

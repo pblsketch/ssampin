@@ -58,6 +58,7 @@ const tunnelDriver = {
 let activeRuntime: ActiveBoardSessionRuntime | null = null;
 
 /** 모듈 전역 싱글턴 (registerBoardHandlers가 app ready 후 1회 초기화) */
+let persistence: BoardFilePersistence | null = null;
 let repo: IBoardRepository | null = null;
 let serverPort: IBoardServerPort | null = null;
 let tunnelPort: IBoardTunnelPort | null = null;
@@ -65,7 +66,7 @@ let tunnelPort: IBoardTunnelPort | null = null;
 export function registerBoardHandlers(mainWindow: BrowserWindow): void {
   // idempotent 초기화 (main.ts에서 한 번만 호출되지만 방어적)
   if (!repo) {
-    const persistence = new BoardFilePersistence(app.getPath('userData'));
+    persistence = new BoardFilePersistence(app.getPath('userData'));
     repo = new FileBoardRepository(persistence);
     serverPort = new YDocBoardServer((ctx) => generateBoardHTML(ctx));
     tunnelPort = new BoardTunnelCoordinator(tunnelDriver);
@@ -201,15 +202,12 @@ export function endActiveBoardSessionSync(): void {
   activeRuntime.unsubscribeTunnelExit?.();
   activeRuntime.unsubscribeTunnelExit = null;
 
-  // 2. 동기 저장 — BoardFilePersistence.saveSnapshotSync 직접 호출
-  //    (Repository 경로는 async라 before-quit에서 완결 보장 어려움)
+  // 2. 동기 저장 — BoardFilePersistence.saveSnapshotSync 직접 호출 (R-4 iter #1)
+  //    fs.writeFileSync 경로이므로 이벤트 루프 통과 없이 완결. Design §3.2-bis 만족.
   try {
     const update = activeRuntime.handle.encodeState();
-    // persistence는 모듈 전역이 아니지만, repo를 통해 간접 호출도 async이므로
-    // 동기 경로는 일단 repo.saveSnapshot을 void 처리 (이벤트 루프 통과 허용).
-    // 완전한 동기 저장은 Step 8에서 persistence 싱글턴 노출 후 개선.
-    if (repo) {
-      void repo.saveSnapshot(activeRuntime.result.boardId, update);
+    if (persistence) {
+      persistence.saveSnapshotSync(activeRuntime.result.boardId, update);
     }
   } catch {
     // swallow — before-quit 블록

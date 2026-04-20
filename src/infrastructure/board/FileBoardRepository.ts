@@ -100,6 +100,18 @@ export class FileBoardRepository implements IBoardRepository {
     };
     await this.persistence.saveMeta(updated);
   }
+
+  async touchSessionEnd(id: BoardId, endedAt?: number): Promise<void> {
+    const current = await this.persistence.getMeta(id);
+    if (!current) return;
+    const ts = endedAt ?? Date.now();
+    const updated: Board = {
+      ...current,
+      lastSessionEndedAt: ts,
+      updatedAt: ts,
+    };
+    await this.persistence.saveMeta(updated);
+  }
 }
 
 /** `bd-` + 14자 url-safe — Design §2.2 포맷 */

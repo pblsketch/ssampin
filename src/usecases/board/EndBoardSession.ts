@@ -70,18 +70,13 @@ export class EndBoardSession {
       this.tunnelPort.release('board');
     }
 
-    // 5. 메타데이터 touch — lastSessionEndedAt / updatedAt
-    const current = await this.repo.get(boardId);
-    if (current) {
-      const now = Date.now();
-      // repo.rename은 name을 통해서만 touch 가능. 이름 변경 없이
-      // timestamps만 업데이트하려면 saveMeta 성격의 메서드가 필요하지만
-      // Design §2.4 IBoardRepository는 해당 메서드가 없음.
-      // → FileBoardRepository 구현 단계에서 `saveMeta` 확장 여지 고려.
-      // 현재 포트 범위에서는 rename(id, same-name)으로 updatedAt 갱신을
-      // 시도한다 (구현체가 내부적으로 updatedAt = now로 갱신한다고 가정).
-      void current;
-      void now;
+    // 5. 메타 lastSessionEndedAt·updatedAt 갱신 (R-3 iter #1)
+    //    appendParticipantHistory가 호출된 경우 이미 lastSessionEndedAt이 touch되지만,
+    //    참여자 이름이 0명인 세션(교사만 열고 닫은 경우)은 여기서 마무리해야 한다.
+    try {
+      await this.repo.touchSessionEnd(boardId);
+    } catch {
+      // best-effort — 메타 갱신 실패는 세션 종료를 막지 않는다
     }
   }
 }
