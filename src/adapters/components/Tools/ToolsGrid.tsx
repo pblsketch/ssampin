@@ -79,7 +79,7 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
             <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
               {tool.name}
               {tool.badge && (
-                <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                <span className="text-[10px] font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
                   {tool.badge}
                 </span>
               )}

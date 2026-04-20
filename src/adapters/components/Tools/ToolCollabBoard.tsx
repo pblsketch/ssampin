@@ -53,19 +53,21 @@ export function ToolCollabBoard({ onBack, isFullscreen }: ToolCollabBoardProps):
         />
         <div className="space-y-4">
           {/* 베타 안내 — MVP 단계 기능 */}
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+          <div className="bg-sp-card/60 border border-amber-400/30 rounded-xl p-3.5 flex items-start gap-2.5">
             <span className="material-symbols-outlined text-amber-400 text-icon-sm mt-0.5">science</span>
-            <div className="text-xs text-amber-200/90 leading-relaxed">
-              <span className="font-bold text-amber-300">베타 기능입니다.</span>{' '}
-              아직 개선 중인 기능이라 드문 상황에서 연결이 끊기거나 그림이 저장되지 않을 수 있어요.
+            <div className="text-[13px] text-sp-text leading-relaxed">
+              <span className="inline-block text-[10px] font-extrabold tracking-wider px-2 py-[3px] mr-2 rounded bg-amber-400 text-amber-950 align-middle">
+                BETA
+              </span>
+              아직 개선 중인 기능이라 드문 상황에서 연결이 끊기거나 기록이 저장되지 않을 수 있어요.
               중요한 수업 자료는 한 번 더 백업을 권장하며, 불편한 점은{' '}
               <a
                 href="mailto:wnsdlf1212@gmail.com?subject=%5B%EC%8C%A4%ED%95%80%5D%20%ED%98%91%EC%97%85%20%EB%B3%B4%EB%93%9C%20%ED%94%BC%EB%93%9C%EB%B0%B1"
-                className="underline hover:text-amber-200"
+                className="text-amber-300 underline underline-offset-2 font-semibold hover:text-amber-200 transition-colors"
               >
                 개발자에게 피드백
-              </a>{' '}
-              부탁드려요.
+              </a>
+              을 부탁드려요.
             </div>
           </div>
 
