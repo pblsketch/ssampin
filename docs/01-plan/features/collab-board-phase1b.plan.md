@@ -179,7 +179,7 @@ Phase 1b 판단 사항:
 ## 8. Next Actions
 
 1. **2~4주간 베타 피드백 수집** — 통합 Google Form(`forms.gle/o1X4zLYocUpFKCzy7`) + 직접 요청한 교사 3~5명 인터뷰
-2. **Form 응답 분류** — 버그(hotfix 대상) / 협업보드 UX / 발제피드백 UX / 기타 기능 요청. Form 응답 수동 확인 또는 자동 라벨링(Google Apps Script) 검토
+2. **Form 응답 분류 (수동)** — Phase 1b 착수 시점에 Form 응답을 직접 훑어 버그(hotfix 대상) / 협업보드 UX / 발제피드백 UX / 기타 기능 요청으로 라벨링. 베타 기간에는 별도 분류 파이프라인을 만들지 않고 **원문 그대로 누적**. (결정: 2026-04-21 C안 — 드롭다운 추가·Apps Script 자동 라벨링 모두 보류)
 3. **§2 Scope 확정** — Q1~Q5 답변 반영
 4. **§6 Release workflow 결정** — Option A/B 선택
 5. **Design 단계로 진행** — `docs/02-design/features/collab-board-phase1b.design.md` 작성
