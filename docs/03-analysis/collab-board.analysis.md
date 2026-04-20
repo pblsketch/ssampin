@@ -230,6 +230,7 @@ Step 8 실기기 테스트 전 **High 4건(R-1/R-2/R-4/R-5)** 수정. 합계 약
 | 0.1 | 2026-04-19 | Step 1+2 완료 시점 분석. 충실도 98%, 전체 진행률 30.8%. iteration 불필요, Step 3 계속 진행 권고. |
 | 0.2 | 2026-04-20 | Step 7 완료 시점 재분석. 충실도 96%, 진행률 80.0%. Step 8 착수 전 **High 4건(R-1/R-2/R-4/R-5) 수정 권고** → `/pdca iterate`. 그 외 3건은 Medium/Low로 병행 가능. |
 | 0.3 | 2026-04-19 | **Iteration #1 완료** — R-5/R-4/R-1/R-2/R-3 모두 해결. `npx tsc --noEmit` + `npm run build` green. 충실도 **98.5%**, Overall match rate **97.5%** 달성. |
+| 0.4 | 2026-04-20 | **Iteration #2~#4 완료** — 실기기 QA 중 발견된 학생 접속 불가 현상 해결. 핵심 원인: **CSS `[hidden]` vs `display:flex` 우선순위 버그** (iter #4). y-websocket params 전달 방식 예방 수정(iter #2)과 클라이언트 진단 로그(iter #3) 병행. 14:41 빌드 실기기 검증 통과. |
 
 ---
 
@@ -268,6 +269,75 @@ Step 8 실기기 테스트 전 **High 4건(R-1/R-2/R-4/R-5)** 수정. 합계 약
 
 - [x] iter #1 5건 수정 완료
 - [x] tsc + build green
-- [ ] `git commit` + PR #1 업데이트
-- [ ] QA 체크리스트 실기기 수동 진행 (`collab-board.qa-checklist.md` 13섹션)
-- [ ] Step 9 — `release-notes.json` v1.12.0 + 챗봇 KB 재임베딩
+- [x] `git commit` + PR #1 업데이트
+- [x] QA 체크리스트 실기기 수동 진행 (접속/드로잉 핵심 플로우 통과)
+- [ ] Step 9 — `release-notes.json` v1.12.0 + 챗봇 KB 재임베딩 (**릴리즈 보류 중**, 타 세션 기능 준비 완료 대기)
+
+---
+
+## Iteration #2~#4 — 실기기 QA 중 발견된 후속 수정 (2026-04-20 오후)
+
+Step 8 수동 QA 착수 직후 **학생이 QR 접속 시 "연결할 수 없습니다" 오버레이만 뜨고 입장 불가** 현상이 보고되었다. 초기 가설은 WebSocket 인증 실패였으나 진단 로그를 붙여 검증한 결과 **CSS 우선순위 버그**가 진짜 원인이었다. 3회의 소규모 iter로 해결.
+
+### iter #2 — y-websocket URL 조립 버그 예방 수정 (commit `faadfac`)
+
+**현상**: (당시 추정) 학생 브라우저에서 WebSocket close code 1008 → 인증 실패 오버레이.
+
+**분석**: y-websocket 2.x 내부는 `serverUrl + "/" + roomName + "?" + encodedParams` 방식으로 URL을 조립 (`y-websocket.js:404-406`). `serverUrl`에 쿼리를 직접 넣으면 최종 URL이 `wss://host/?t=X&code=Y/bd-xxx` 형태가 되어 서버 파서가 `code` 값을 `"Y/bd-xxx"`로 해석 → `isSessionCode()` false.
+
+**수정**:
+1. `generateBoardHTML.ts`: `new WebsocketProvider(wsUrl, BOARD_ID, ydoc, { params: { t, code } })` — 쿼리를 params 옵션으로 분리 전달해 `wss://host/bd-xxx?t=X&code=Y` 정상 조립.
+2. `YDocBoardServer.ts`: 인증 실패 시 `HTTP/1.1 1008 Policy Violation`(= HTTP 프로토콜 위반, 유효 상태는 100~599) 대신 `handleUpgrade` 후 `ws.close(1008)` WebSocket close frame 사용. 클라이언트의 `ev.code === 1008` 분기와 정확히 맞물림.
+3. 서버에 `[board] auth failed` 경고 로그 추가(디버깅용).
+
+> 결과적으로 이건 **핵심 증상의 원인이 아니었다**. 하지만 실제 URL 꼬임 버그를 예방하므로 수정은 유지. 향후 정식 운영에서 발생 가능한 연결 실패를 1건 제거.
+
+### iter #3 — 클라이언트 진단 로그 (commit `c147914`)
+
+**목적**: 서버 `console.warn`은 Electron main process에 출력되어 렌더러 DevTools 콘솔에 **보이지 않는다**. 학생 브라우저에서 실제 WebSocket 상태를 확인할 경로 필요.
+
+**추가 로그**:
+```js
+console.log('[board] provider url:', provider.url);
+console.log('[board] boardId:', BOARD_ID, 'token head:', …, 'code:', SESSION_CODE);
+provider.on('status', ev => console.log('[board] status:', ev.status));
+provider.on('connection-close', ev => console.warn('[board] connection-close:', ev.code, ev.reason));
+provider.on('connection-error', ev => console.error('[board] connection-error:', ev));
+```
+
+**효과**: 진단 로그가 붙은 빌드로 재테스트했으나 학생 브라우저 콘솔에 `[board]` 로그가 **하나도 찍히지 않음**. 이는 **`startBoard()` 자체가 호출되지 않았다**는 결정적 단서였다. → iter #4로 이어짐.
+
+**유지 결정**: 학교 Wi-Fi 등 다양한 네트워크 환경에서 문제가 재발할 경우 원인 파악이 쉽도록 **정식 릴리즈에도 유지**.
+
+### iter #4 — **실제 원인** CSS cascade 버그 수정 (commit `1735b36`)
+
+**현상**: 학생이 QR 접속 직후 이름 입력 모달이 **보이긴 하지만** 에러 오버레이가 위에 덮여 "입장하기" 버튼 클릭 불가. 결과적으로 WebSocket 시도 자체가 발생하지 않음.
+
+**근본 원인**:
+```css
+#join-modal, #error-overlay { display: flex; ... }
+```
+
+HTML `<div id="error-overlay" hidden>`로 숨기려 했으나, **브라우저 UA의 `[hidden] { display: none }`(약한 우선순위)**이 **페이지 ID 셀렉터의 `display: flex`(강한 우선순위)**에 밀려 무효화. 페이지 로드 순간부터 에러 오버레이가 DOM 순서상 뒤에 있어 join-modal 위에 덮임.
+
+**수정** (한 줄):
+```css
+#join-modal[hidden], #error-overlay[hidden] { display: none !important; }
+```
+
+**검증**: 14:41 빌드 재설치 후 학생이 정상 입장, 드로잉 동기화, "연결됨" 상태 배지 모두 확인.
+
+### iter #2~#4 교훈
+
+- **초기 가설이 그럴듯할수록 검증에 시간을 써야** 한다. iter #2의 y-websocket 파싱 버그 가설은 소스 코드 증거도 명확했지만, 실제 증상의 원인은 전혀 달랐다.
+- **서버 console.warn은 main process에서 보이지 않음**. 협업 보드처럼 서버 측 동작을 가진 Electron 기능은 **클라이언트 측 진단 로그**가 필수.
+- **HTML `hidden` attribute는 CSS 우선순위 cascade에 취약**. 모달 류 요소에 ID 기반 `display: flex`를 쓸 때는 반드시 `[hidden]` 지정 셀렉터를 함께 둬야 한다 — Design System 규칙으로 승격할 만한 패턴.
+
+### 다음 단계
+
+- [ ] Step 9 — 타 세션 기능 준비 완료 대기 후 v1.12.0 릴리즈 워크플로우 8단계 실행
+- [ ] `release-notes.json`에 협업 보드 + iter #2~#4 버그 수정 반영
+- [ ] 챗봇 KB 재임베딩 (`scripts/ingest-chatbot-qa.mjs`)
+- [ ] 노션 사용자 가이드 업데이트
+
+**참고**: PR #1은 draft로 유지. 타 세션 작업이 main에 머지된 후 최종 리베이스·리뷰 단계 진입.
