@@ -44,18 +44,20 @@ import {
 // @ts-ignore — y-websocket 패키지가 /bin/utils 타입을 제공하지 않음
 import ywsDefault from 'y-websocket/bin/utils';
 
+interface YwsSharedDoc extends Y.Doc {
+  readonly awareness: {
+    on: (ev: 'change', cb: () => void) => void;
+    getStates: () => Map<number, unknown>;
+  };
+}
+
 interface YwsUtilsShape {
   readonly setupWSConnection: (
     ws: WebSocket,
     req: http.IncomingMessage,
     opts?: { readonly docName?: string; readonly gc?: boolean },
   ) => void;
-  readonly docs: Map<string, {
-    readonly awareness: {
-      on: (ev: 'change', cb: () => void) => void;
-      getStates: () => Map<number, unknown>;
-    };
-  }>;
+  readonly docs: Map<string, YwsSharedDoc>;
 }
 
 const ywsUtils = ywsDefault as unknown as YwsUtilsShape;
@@ -73,7 +75,6 @@ interface RunningSession {
   readonly boardId: BoardId;
   readonly httpServer: http.Server;
   readonly wss: WebSocketServer;
-  readonly ydoc: Y.Doc;
   readonly authToken: BoardAuthToken;
   readonly sessionCode: BoardSessionCode;
   readonly roomName: string;
@@ -94,10 +95,6 @@ export class YDocBoardServer implements IBoardServerPort {
 
     const authToken = crypto.randomBytes(16).toString('hex') as BoardAuthToken;
     const sessionCode = generateSessionCode();
-    const ydoc = new Y.Doc();
-    if (opts.initialState) {
-      Y.applyUpdate(ydoc, opts.initialState);
-    }
 
     const roomName = String(opts.boardId);
     const participants = new Map<number, string>();
@@ -193,8 +190,28 @@ export class YDocBoardServer implements IBoardServerPort {
       });
     });
 
+    // iter #5 (R-7): y-websocket의 setupWSConnection은 내부 docs 맵에
+    //   자체 Y.Doc(WSSharedDoc)을 생성한다. 외부에서 별도로 new Y.Doc()을
+    //   만들어 update 리스너를 걸어도 **클라이언트 드로잉은 내부 문서에만**
+    //   반영되어 dirty flag가 영원히 false, 자동 저장이 실질 동작하지 않았다.
+    //   첫 연결 직후 실제 문서를 획득해 initialState 적용 + update 구독 수행.
+    let initializedDoc = false;
     wss.on('connection', (ws, req) => {
       ywsUtils.setupWSConnection(ws, req, { docName: roomName, gc: true });
+      if (initializedDoc) return;
+      const doc = ywsUtils.docs.get(roomName);
+      if (!doc) return;
+      initializedDoc = true;
+      if (opts.initialState) {
+        try {
+          Y.applyUpdate(doc, opts.initialState);
+        } catch {
+          /* applyUpdate 실패는 세션을 막지 않는다 (복원만 실패) */
+        }
+      }
+      doc.on('update', () => {
+        opts.onStateChange();
+      });
     });
 
     // awareness 변경 감지 → participants 갱신 + onParticipantsChange
@@ -213,10 +230,6 @@ export class YDocBoardServer implements IBoardServerPort {
       opts.onParticipantsChange([...participants.values()]);
     }, 1000);
 
-    ydoc.on('update', () => {
-      opts.onStateChange();
-    });
-
     const heartbeatTimer = setInterval(() => {
       for (const ws of wss.clients) {
         if (ws.readyState === ws.OPEN) {
@@ -229,7 +242,6 @@ export class YDocBoardServer implements IBoardServerPort {
       boardId: opts.boardId,
       httpServer,
       wss,
-      ydoc,
       authToken,
       sessionCode,
       roomName,
@@ -245,7 +257,12 @@ export class YDocBoardServer implements IBoardServerPort {
       sessionCode,
       participantCount: () => participants.size,
       getParticipantNames: () => [...participants.values()],
-      encodeState: () => Y.encodeStateAsUpdate(ydoc),
+      encodeState: () => {
+        // 실제 y-websocket 내부 문서에서 추출. 미접속(첫 학생 오기 전 종료)
+        // 상태라면 빈 배열 반환 → 이전 스냅샷이 그대로 보존됨.
+        const doc = ywsUtils.docs.get(roomName);
+        return doc ? Y.encodeStateAsUpdate(doc) : new Uint8Array();
+      },
     };
   }
 
@@ -262,14 +279,20 @@ export class YDocBoardServer implements IBoardServerPort {
     await new Promise<void>((resolve) => s.wss.close(() => resolve()));
     await new Promise<void>((resolve) => s.httpServer.close(() => resolve()));
 
-    s.ydoc.destroy();
+    // y-websocket 내부 docs 정리 (GC 의존이지만 명시적으로 제거)
+    const doc = ywsUtils.docs.get(s.roomName);
+    if (doc) {
+      try { doc.destroy(); } catch { /* noop */ }
+      ywsUtils.docs.delete(s.roomName);
+    }
     this.session = null;
   }
 
   /** before-quit 동기 저장 경로 — Design §3.2-bis */
   encodeStateSync(boardId: BoardId): Uint8Array | null {
     if (!this.session || this.session.boardId !== boardId) return null;
-    return Y.encodeStateAsUpdate(this.session.ydoc);
+    const doc = ywsUtils.docs.get(this.session.roomName);
+    return doc ? Y.encodeStateAsUpdate(doc) : null;
   }
 
   getActiveBoardId(): BoardId | null {

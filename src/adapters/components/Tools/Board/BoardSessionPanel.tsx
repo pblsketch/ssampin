@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react';
 
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
+import { useBoardStore } from '@adapters/stores/useBoardStore';
 
 import { BoardQRCard } from './BoardQRCard';
 import { BoardParticipantList } from './BoardParticipantList';
@@ -30,6 +31,12 @@ export function BoardSessionPanel(): JSX.Element | null {
   const participants = useBoardSessionStore((s) => s.participants);
   const lastSavedAt = useBoardSessionStore((s) => s.lastSavedAt);
   const lastError = useBoardSessionStore((s) => s.lastError);
+
+  // 과거 참여자 이력 조회 (보드 메타에서)
+  const boards = useBoardStore((s) => s.boards);
+  const boardMeta = active ? boards.find((b) => b.id === active.boardId) : null;
+  const history = boardMeta?.participantHistory ?? [];
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // 1초마다 "방금/N초 전" 표시 갱신
   const [tick, setTick] = useState(0);
@@ -52,6 +59,45 @@ export function BoardSessionPanel(): JSX.Element | null {
       />
 
       <BoardParticipantList participants={participants} />
+
+      {/* 과거 참여 이력 (토글) */}
+      {history.length > 0 && (
+        <div className="bg-sp-card rounded-xl p-4">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="w-full flex items-center justify-between text-xs text-sp-muted hover:text-sp-text"
+          >
+            <span className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-icon-sm">history</span>
+              이 보드를 썼던 학생들 ({history.length}명)
+            </span>
+            <span className="material-symbols-outlined text-icon-sm">
+              {historyOpen ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+          {historyOpen && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {history.map((name) => {
+                const stillHere = participants.includes(name);
+                return (
+                  <span
+                    key={name}
+                    className={`px-2 py-0.5 rounded-md text-xs ${
+                      stillHere
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-sp-bg/60 text-sp-muted border border-sp-border/60'
+                    }`}
+                    title={stillHere ? '현재 접속 중' : '과거 접속'}
+                  >
+                    {name}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 자동 저장 상태 */}
       <div className="bg-sp-card rounded-xl p-4 flex items-center gap-2 text-xs">

@@ -9,6 +9,7 @@
 import { useState } from 'react';
 
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
+import { useBoardStore } from '@adapters/stores/useBoardStore';
 
 interface BoardControlsProps {
   /** 현재 교사가 선택한 보드 id (목록에서 선택) */
@@ -53,6 +54,8 @@ export function BoardControls({ selectedBoardId, selectedBoardName }: BoardContr
     if (!selectedBoardId) return;
     setBusy(true);
     await end(selectedBoardId, false);
+    // 세션 종료 직후 참여자 이력·lastSessionEndedAt 반영된 메타로 갱신
+    await useBoardStore.getState().load();
     setBusy(false);
   }
 
