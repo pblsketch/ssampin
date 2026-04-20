@@ -10,6 +10,8 @@ interface ToolCard {
   name: string;
   description: string;
   externalUrl?: string;
+  /** 'BETA' 등 상태 배지 표시 */
+  badge?: string;
 }
 
 const TOOLS: ToolCard[] = [
@@ -32,7 +34,7 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-valueline', emoji: '📏', name: '가치수직선 토론', description: '입장을 수직선 위에 표현' },
   { id: 'tool-traffic-discussion', emoji: '🚦', name: '신호등 토론', description: '찬성·보류·반대 의사 표현' },
   { id: 'tool-chalkboard', emoji: '🖍️', name: '칠판', description: '분필로 판서하기' },
-  { id: 'tool-collab-board', emoji: '🎨', name: '협업 보드', description: '학생들과 실시간 협업 작업하기' },
+  { id: 'tool-collab-board', emoji: '🎨', name: '협업 보드', description: '학생들과 실시간 협업 작업하기', badge: 'BETA' },
   { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진', externalUrl: 'https://supsori.com' },
   { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구', externalUrl: 'https://pblsketch.xyz' },
 ];
@@ -74,8 +76,13 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
             className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
           >
             <div className="text-4xl mb-3">{tool.emoji}</div>
-            <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1">
+            <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
               {tool.name}
+              {tool.badge && (
+                <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  {tool.badge}
+                </span>
+              )}
               {tool.externalUrl && (
                 <span className="material-symbols-outlined text-icon-sm text-sp-muted">open_in_new</span>
               )}
