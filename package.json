@@ -18,6 +18,9 @@
     "embed:dry": "tsx scripts/embed-docs.ts --all --dry-run",
     "embed:file": "tsx scripts/embed-docs.ts --file",
     "test:chatbot": "tsx scripts/test-chatbot.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
     "dev:mobile": "vite --config vite.mobile.config.ts --port 5174",
     "build:mobile": "vite build --config vite.mobile.config.ts",
     "preview:mobile": "vite preview --config vite.mobile.config.ts",
@@ -54,6 +57,7 @@
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^4.1.4",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
     "electron": "^32.3.3",
@@ -68,6 +72,7 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^6.1.0",
     "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.1.4",
     "workbox-precaching": "^7.4.0",
     "workbox-routing": "^7.4.0"
   }
