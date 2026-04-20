@@ -176,12 +176,15 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       const yAssets = ydoc.getMap('assets');
 
       const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = \`\${wsProto}://\${location.host}/?t=\${AUTH_TOKEN}&code=\${SESSION_CODE}\`;
-
-      // R-5 (iter #1): WebsocketProvider 두 번째 인자(roomName)는 서버 docName과 일치해야 함.
-      // 서버는 docName=boardId를 사용하므로 클라이언트도 BOARD_ID(bd-xxx)로 전달.
-      // 이전: BOARD_NAME(한국어) → sync 엇갈림 가능성 있었음.
-      const provider = new WebsocketProvider(wsUrl, BOARD_ID, ydoc);
+      // R-6 (iter #2): y-websocket은 serverUrl + "/" + roomname + "?" + encodedParams
+      // 방식으로 URL을 조립한다. serverUrl에 쿼리를 직접 넣으면
+      // "wss://host/?t=X&code=Y/bd-xxx" 형태가 되어 code 값에 "/bd-xxx"가 섞여
+      // 서버 검증 실패(1008). 반드시 params 옵션으로 전달해야 올바른
+      // "wss://host/bd-xxx?t=X&code=Y"가 된다.
+      const wsUrl = \`\${wsProto}://\${location.host}\`;
+      const provider = new WebsocketProvider(wsUrl, BOARD_ID, ydoc, {
+        params: { t: AUTH_TOKEN, code: SESSION_CODE },
+      });
 
       provider.on('status', (ev) => {
         if (ev.status === 'connected') setStatus('connected', '연결됨');

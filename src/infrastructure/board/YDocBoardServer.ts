@@ -148,20 +148,43 @@ export class YDocBoardServer implements IBoardServerPort {
       const providedToken = url.searchParams.get('t') ?? '';
       const providedCode = url.searchParams.get('code') ?? '';
 
-      if (!verifyJoinCredentials(providedToken, providedCode, { token: authToken, code: sessionCode })) {
-        socket.write(
-          `HTTP/1.1 ${WS_CLOSE_AUTH_FAILED} Policy Violation\r\n` +
-          'Connection: close\r\nContent-Length: 0\r\n\r\n',
-        );
-        socket.destroy();
+      const authOk = verifyJoinCredentials(providedToken, providedCode, {
+        token: authToken,
+        code: sessionCode,
+      });
+
+      if (!authOk) {
+        // 진단 로그 — 디버깅 후 제거/downgrade 가능. 토큰 전체는 로그에 남기지 않는다.
+        // eslint-disable-next-line no-console
+        console.warn('[board] auth failed', {
+          path: url.pathname,
+          providedTokenLen: providedToken.length,
+          providedTokenHead: providedToken.slice(0, 6),
+          providedCode,
+          expectedTokenHead: authToken.slice(0, 6),
+          expectedCode: sessionCode,
+        });
+        // HTTP 상태 코드는 반드시 유효(100~599). WebSocket close code 1008을 그대로
+        // 쓰면 프로토콜 위반 → cloudflared가 502로 변환할 수 있음.
+        // handleUpgrade 후 ws.close(1008)로 클라이언트가 정확한 close code를 받게 한다.
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          try {
+            ws.close(WS_CLOSE_AUTH_FAILED, 'auth failed');
+          } catch {
+            /* noop */
+          }
+        });
         return;
       }
+
       if (wss.clients.size >= MAX_PARTICIPANTS) {
-        socket.write(
-          `HTTP/1.1 ${WS_CLOSE_SERVER_FULL} Too Many\r\n` +
-          'Connection: close\r\nContent-Length: 0\r\n\r\n',
-        );
-        socket.destroy();
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          try {
+            ws.close(WS_CLOSE_SERVER_FULL, 'server full');
+          } catch {
+            /* noop */
+          }
+        });
         return;
       }
 
