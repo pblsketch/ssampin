@@ -62,12 +62,14 @@ export function ToolCollabBoard({ onBack, isFullscreen }: ToolCollabBoardProps):
               아직 개선 중인 기능이라 드문 상황에서 연결이 끊기거나 기록이 저장되지 않을 수 있어요.
               중요한 수업 자료는 한 번 더 백업을 권장하며, 불편한 점은{' '}
               <a
-                href="mailto:wnsdlf1212@gmail.com?subject=%5B%EC%8C%A4%ED%95%80%5D%20%ED%98%91%EC%97%85%20%EB%B3%B4%EB%93%9C%20%ED%94%BC%EB%93%9C%EB%B0%B1"
+                href="https://forms.gle/o1X4zLYocUpFKCzy7"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-amber-300 underline underline-offset-2 font-semibold hover:text-amber-200 transition-colors"
               >
-                개발자에게 피드백
+                피드백 남기기
               </a>
-              을 부탁드려요.
+              로 알려주세요.
             </div>
           </div>
 
