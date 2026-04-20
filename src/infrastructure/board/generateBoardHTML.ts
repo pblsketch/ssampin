@@ -186,14 +186,23 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
         params: { t: AUTH_TOKEN, code: SESSION_CODE },
       });
 
+      // iter #3 진단 로그 — 실제 WebSocket 상태를 학생 브라우저 콘솔에서 확인.
+      console.log('[board] provider url:', provider.url);
+      console.log('[board] boardId:', BOARD_ID, 'token head:', AUTH_TOKEN.slice(0, 6), 'code:', SESSION_CODE);
+
       provider.on('status', (ev) => {
+        console.log('[board] status:', ev.status);
         if (ev.status === 'connected') setStatus('connected', '연결됨');
         else if (ev.status === 'disconnected') setStatus('disconnected', '연결 끊김 — 재연결 시도 중…');
         else setStatus('connecting', '연결 중…');
       });
       provider.on('connection-close', (ev) => {
+        console.warn('[board] connection-close:', ev && ev.code, ev && ev.reason);
         if (ev && ev.code === 1008) showError('연결할 수 없습니다', '선생님께 QR 코드를 다시 받아주세요.');
         else if (ev && ev.code === 1013) showError('접속 인원 초과', '참여 인원이 가득 찼습니다. 선생님께 문의해주세요.');
+      });
+      provider.on('connection-error', (ev) => {
+        console.error('[board] connection-error:', ev);
       });
 
       provider.awareness.setLocalStateField('user', {
