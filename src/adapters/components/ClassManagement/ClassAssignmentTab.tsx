@@ -9,6 +9,7 @@ import type { AssignmentWithStatus } from '@usecases/assignment/GetAssignments';
 import { AssignmentDetail } from '@adapters/components/Tools/Assignment/AssignmentDetail';
 import { AssignmentCreateModal } from '@adapters/components/Tools/Assignment/AssignmentCreateModal';
 import { OfflineNotice } from '@adapters/components/Tools/Assignment/OfflineNotice';
+import { useStudentLists } from '@adapters/hooks/useStudentLists';
 
 /* ──────────────── ClassAssignmentCard ──────────────── */
 
@@ -124,6 +125,7 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
   const showToast = useToastStore((s) => s.show);
   const classes = useTeachingClassStore((s) => s.classes);
   const { isOnline, checkOnline } = useOnlineStatus();
+  const studentLists = useStudentLists();
 
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -136,12 +138,21 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
   );
   const targetName = currentClass ? `${currentClass.name} (${currentClass.subject})` : '';
 
+  // 이 수업반에 해당하는 대상 옵션 (새 과제 기본값으로 전달 + 잠금)
+  const defaultTargetOption = useMemo(
+    () => studentLists.find((sl) => sl.type === 'teaching' && sl.teachingClassId === classId),
+    [studentLists, classId],
+  );
+
   // 이 수업반의 과제만 필터
+  // id 기반이 정확. 구버전 과제(teachingClassId 없음)는 name 폴백으로 구제 — 단 담임반과 수업반 이름이 같은 경우엔 담임반 과제가 여기로 새지 않도록 type='teaching' 강제.
   const classAssignments = useMemo(
-    () => assignments.filter(
-      (a) => a.target.type === 'teaching' && a.target.name === targetName,
-    ),
-    [assignments, targetName],
+    () => assignments.filter((a) => {
+      if (a.target.type !== 'teaching') return false;
+      if (a.target.teachingClassId) return a.target.teachingClassId === classId;
+      return a.target.name === targetName;
+    }),
+    [assignments, classId, targetName],
   );
   const activeAssignments = useMemo(() => classAssignments.filter((a) => !a.isExpired), [classAssignments]);
   const expiredAssignments = useMemo(() => classAssignments.filter((a) => a.isExpired), [classAssignments]);
@@ -347,6 +358,7 @@ export function ClassAssignmentTab({ classId }: ClassAssignmentTabProps) {
       {/* 과제 생성 모달 */}
       {showCreateModal && (
         <AssignmentCreateModal
+          defaultTarget={defaultTargetOption}
           onClose={() => setShowCreateModal(false)}
           onCreated={(assignmentId) => {
             setShowCreateModal(false);

@@ -7,6 +7,8 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 export interface StudentListOption {
   readonly type: 'class' | 'teaching';
   readonly name: string;
+  /** 수업반 UUID (type='teaching'일 때만). 담임반·수업반 이름 충돌 해결용 */
+  readonly teachingClassId?: string;
   readonly students: StudentInfo[];
 }
 
@@ -53,6 +55,7 @@ export function useStudentLists(): StudentListOption[] {
         lists.push({
           type: 'teaching',
           name: `${tc.name} (${tc.subject})`,
+          teachingClassId: tc.id,
           students: activeStudentsInClass.map((s) => ({
             id: `tc-${tc.id}-${s.grade ?? 0}-${s.classNum ?? 0}-${s.number}`,
             number: s.number,

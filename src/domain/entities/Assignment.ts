@@ -13,6 +13,12 @@ export interface AssignmentTarget {
   readonly type: 'class' | 'teaching';
   /** 학급 이름 (예: "1학년 2반") 또는 수업반 이름 */
   readonly name: string;
+  /**
+   * 수업반 UUID (type='teaching'일 때만 의미).
+   * 담임반과 수업반 이름이 같아도 이 id로 정확히 구분한다.
+   * 수업반 이름이 바뀌어도 과제와의 연결이 끊기지 않는다.
+   */
+  readonly teachingClassId?: string;
   readonly students: readonly StudentInfo[];
 }
 

@@ -9,6 +9,7 @@ import { AssignmentCard } from '@adapters/components/Tools/Assignment/Assignment
 import { AssignmentDetail } from '@adapters/components/Tools/Assignment/AssignmentDetail';
 import { AssignmentCreateModal } from '@adapters/components/Tools/Assignment/AssignmentCreateModal';
 import { OfflineNotice } from '@adapters/components/Tools/Assignment/OfflineNotice';
+import { useStudentLists } from '@adapters/hooks/useStudentLists';
 
 export function AssignmentTab() {
   const {
@@ -24,6 +25,11 @@ export function AssignmentTab() {
   const { startAuth, isConnected: googleConnected, isLoading: googleAuthLoading } = useCalendarSyncStore();
   const showToast = useToastStore((s) => s.show);
   const { isOnline, checkOnline } = useOnlineStatus();
+  const studentLists = useStudentLists();
+  const homeroomTarget = useMemo(
+    () => studentLists.find((sl) => sl.type === 'class'),
+    [studentLists],
+  );
 
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -260,6 +266,7 @@ export function AssignmentTab() {
       {/* 과제 생성 모달 */}
       {showCreateModal && (
         <AssignmentCreateModal
+          defaultTarget={homeroomTarget}
           onClose={() => setShowCreateModal(false)}
           onCreated={(id) => {
             setShowCreateModal(false);
