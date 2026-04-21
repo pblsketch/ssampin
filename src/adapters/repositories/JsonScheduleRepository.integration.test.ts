@@ -24,6 +24,10 @@ class FakeStorage implements IStoragePort {
     // JSON 직렬화 왕복을 강제 (실제 파일 저장소와 동일한 제약)
     this.store.set(filename, JSON.parse(JSON.stringify(data)));
   }
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async remove(filename: string): Promise<void> {
+    this.store.delete(filename);
+  }
   getRaw(filename: string): unknown {
     return this.store.get(filename);
   }

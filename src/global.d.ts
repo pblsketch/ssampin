@@ -10,6 +10,7 @@ type AggregatedResult = AggregatedSingleMulti | AggregatedScale | AggregatedText
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   writeData: (filename: string, data: string) => Promise<void>;
+  removeData: (filename: string) => Promise<void>;
   setAlwaysOnTop: (flag: boolean) => Promise<void>;
   setWidget: (options: {
     width: number;

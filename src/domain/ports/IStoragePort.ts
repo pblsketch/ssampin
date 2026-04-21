@@ -5,6 +5,7 @@
 export interface IStoragePort {
   read<T>(filename: string): Promise<T | null>;
   write<T>(filename: string, data: T): Promise<void>;
+  remove(filename: string): Promise<void>;
 
   /** 바이너리 파일 읽기. 미존재 시 null (예외 X). */
   readBinary(relPath: string): Promise<Uint8Array | null>;
