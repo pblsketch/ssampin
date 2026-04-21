@@ -9,6 +9,7 @@ export type PageId =
   | 'student-records'
   | 'meal'
   | 'memo'
+  | 'note'
   | 'todo'
   | 'class-management'
   | 'bookmarks'
@@ -27,6 +28,7 @@ export type PageId =
   | 'tool-poll'
   | 'tool-survey'
   | 'tool-multi-survey'
+  | 'tool-realtime-bulletin'
   | 'tool-wordcloud'
   | 'tool-seat-picker'
   | 'tool-supsori'
@@ -66,6 +68,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'schedule', label: '일정', icon: 'event_note' },
   { id: 'homeroom', label: '담임 업무', icon: 'school' },
   { id: 'memo', label: '메모', icon: 'sticky_note_2' },
+  { id: 'note', label: '쌤핀 노트', icon: 'edit_note' },
   { id: 'todo', label: '할 일', icon: 'check_circle' },
   { id: 'class-management', label: '수업 관리', icon: 'menu_book' },
   { id: 'bookmarks', label: '즐겨찾기', icon: 'bookmark' },
@@ -95,6 +98,7 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
   'student-records': 'studentRecords',
   meal: 'meal',
   memo: 'memo',
+  note: 'note',
   todo: 'todo',
   'class-management': 'classManagement',
   bookmarks: 'bookmarks',

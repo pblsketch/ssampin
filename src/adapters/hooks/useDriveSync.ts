@@ -4,6 +4,18 @@
 export async function reloadStores(downloadedFiles: string[]): Promise<void> {
   for (const file of downloadedFiles) {
     try {
+      if (
+        file === 'note-notebooks' ||
+        file === 'note-sections' ||
+        file === 'note-pages-meta' ||
+        file.startsWith('note-body--')
+      ) {
+        const { useNoteStore } = await import('@adapters/stores/useNoteStore');
+        useNoteStore.setState({ loaded: false });
+        await useNoteStore.getState().load(true);
+        continue;
+      }
+
       switch (file) {
         case 'settings': {
           const { useSettingsStore } = await import('@adapters/stores/useSettingsStore');

@@ -38,6 +38,7 @@ import type { IToolTemplateRepository } from '@domain/repositories/IToolTemplate
 import type { IToolResultRepository } from '@domain/repositories/IToolResultRepository';
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
+import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
 import type { IThumbnailer, IPreviewExtractor, IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
@@ -81,6 +82,7 @@ import { JsonToolTemplateRepository } from '@adapters/repositories/JsonToolTempl
 import { JsonToolResultRepository } from '@adapters/repositories/JsonToolResultRepository';
 import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
+import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
 import { PdfJsThumbnailer } from '@infrastructure/forms/PdfJsThumbnailer';
 import { HwpxExcelPreviewExtractor } from '@infrastructure/forms/HwpxExcelPreviewExtractor';
 import { ElectronPrinterAdapter } from '@infrastructure/print/ElectronPrinterAdapter';
@@ -167,6 +169,9 @@ export const toolResultRepository: IToolResultRepository =
 
 export const observationRepository: IObservationRepository =
   new JsonObservationRepository(storage);
+
+export const noteRepository: INotebookRepository =
+  new JsonNotebookRepository(storage);
 
 // === 서식 관리 ===
 export const formRepository: IFormTemplateRepository =

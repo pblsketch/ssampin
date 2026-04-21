@@ -5,6 +5,7 @@ export type ProtectedFeatureKey =
   | 'studentRecords'
   | 'meal'
   | 'memo'
+  | 'note'
   | 'todo'
   | 'classManagement'
   | 'bookmarks';
@@ -16,6 +17,7 @@ export interface ProtectedFeatures {
   readonly studentRecords: boolean;
   readonly meal: boolean;
   readonly memo: boolean;
+  readonly note: boolean;
   readonly todo: boolean;
   readonly classManagement: boolean;
   readonly bookmarks: boolean;

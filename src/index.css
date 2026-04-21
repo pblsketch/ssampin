@@ -660,3 +660,66 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── 쌤핀 노트 (BlockNote) 여백 정리 ─── */
+.ssampin-note-editor .bn-container {
+  height: 100%;
+  background: transparent;
+}
+
+.ssampin-note-editor .bn-editor {
+  /* 에디터 카드 폭 전체 사용. 좌우 여백은 패딩으로만 제어. */
+  padding: 2rem 1.5rem 3rem;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* 큰 화면에서는 상하 여백만 살짝 더 */
+@media (min-width: 1280px) {
+  .ssampin-note-editor .bn-editor {
+    padding: 2.5rem 2rem 4rem;
+  }
+}
+
+/* 긴 연속 문자열(e.g. eeeeeee…)이 가로 스크롤을 만들지 않도록 강제 래핑 */
+.ssampin-note-editor,
+.ssampin-note-editor .bn-container,
+.ssampin-note-editor .bn-editor,
+.ssampin-note-editor .bn-block-group,
+.ssampin-note-editor .bn-block-outer,
+.ssampin-note-editor .bn-block,
+.ssampin-note-editor .bn-block-content,
+.ssampin-note-editor .bn-inline-content {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ssampin-note-editor .bn-editor {
+  overflow-x: hidden;
+}
+
+/* 블록 간격 살짝 늘려 리듬감 부여 */
+.ssampin-note-editor .bn-block-group > .bn-block-outer + .bn-block-outer {
+  margin-top: 2px;
+}
+
+/* 에디터 스크롤 영역 */
+.ssampin-note-editor .bn-editor::-webkit-scrollbar {
+  width: 10px;
+}
+.ssampin-note-editor .bn-editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ssampin-note-editor .bn-editor::-webkit-scrollbar-thumb {
+  background: var(--sp-border);
+  border-radius: 8px;
+  border: 2px solid var(--sp-bg);
+}
+.ssampin-note-editor .bn-editor::-webkit-scrollbar-thumb:hover {
+  background: var(--sp-muted);
+}

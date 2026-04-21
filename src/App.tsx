@@ -16,6 +16,9 @@ import { Export } from '@adapters/components/Export/Export';
 const FormsPage = React.lazy(() =>
   import('@adapters/components/Forms/FormsPage').then((m) => ({ default: m.FormsPage })),
 );
+const NotePage = React.lazy(() =>
+  import('@adapters/components/Note/NotePage').then((m) => ({ default: m.NotePage })),
+);
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
 import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
 import { DualToolContainer } from '@adapters/components/Tools/DualToolContainer';
@@ -33,6 +36,7 @@ import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
 import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
 import { ToolMultiSurvey } from '@adapters/components/Tools/ToolMultiSurvey';
+import { ToolRealtimeBulletin } from '@adapters/components/Tools/ToolRealtimeBulletin';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
 import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
 import { ToolGrouping } from '@adapters/components/Tools/ToolGrouping';
@@ -57,6 +61,7 @@ import { OAuthModalsProvider } from '@adapters/components/Settings/modals/OAuthM
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
+import { useNoteStore } from '@adapters/stores/useNoteStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
@@ -128,6 +133,15 @@ function renderPage(
   }
   if (page === 'memo') {
     return <PinGuard feature="memo"><MemoPage /></PinGuard>;
+  }
+  if (page === 'note') {
+    return (
+      <PinGuard feature="note">
+        <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sp-muted text-lg">쌤핀 노트를 준비하는 중...</p></div>}>
+          <NotePage />
+        </Suspense>
+      </PinGuard>
+    );
   }
   if (page === 'class-management') {
     return <PinGuard feature="classManagement"><ClassManagementPage /></PinGuard>;
@@ -203,6 +217,9 @@ function renderPage(
   }
   if (page === 'tool-multi-survey') {
     return wrap(<ToolMultiSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+  }
+  if (page === 'tool-realtime-bulletin') {
+    return wrap(<ToolRealtimeBulletin onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-wordcloud') {
     return wrap(<ToolWordCloud onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
@@ -593,6 +610,7 @@ function MainApp() {
       useSeatingStore.subscribe(() => triggerSaveSync()),
       useEventsStore.subscribe(() => triggerSaveSync()),
       useMemoStore.subscribe(() => triggerSaveSync()),
+      useNoteStore.subscribe(() => triggerSaveSync()),
       useTodoStore.subscribe(() => triggerSaveSync()),
       useStudentRecordsStore.subscribe(() => triggerSaveSync()),
       useTeachingClassStore.subscribe(() => triggerSaveSync()),
