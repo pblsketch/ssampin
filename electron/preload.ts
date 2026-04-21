@@ -428,6 +428,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('forms:removeBinary', { relPath }),
     listBinary: (dirRelPath: string): Promise<string[]> =>
       ipcRenderer.invoke('forms:listBinary', { dirRelPath }),
+    openFile: (relPath: string): Promise<void> =>
+      ipcRenderer.invoke('forms:openFile', { relPath }),
+    printPdf: (relPath: string): Promise<void> =>
+      ipcRenderer.invoke('forms:printPdf', { relPath }),
   },
 
   // === 협업 보드 (collab-board) ===

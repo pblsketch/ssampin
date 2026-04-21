@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { FormTemplate } from '@domain/entities/FormTemplate';
+import type { FormTemplate, FormFormat } from '@domain/entities/FormTemplate';
 import type { FormCategory } from '@domain/entities/FormCategory';
 import type { FormFilterOptions, FormSort } from '@domain/rules/formTemplateRules';
 import {
@@ -28,7 +28,7 @@ interface FormStoreState {
   updateFormAction: (id: string, patch: UpdateFormPatch) => Promise<void>;
   removeForm: (id: string) => Promise<void>;
   toggleStar: (id: string) => Promise<void>;
-  printFormAction: (id: string) => Promise<void>;
+  printFormAction: (id: string) => Promise<FormFormat>;
   downloadForm: (id: string) => Promise<void>;
   upsertCategory: (c: FormCategory) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
@@ -90,7 +90,10 @@ export const useFormStore = create<FormStoreState>((set, get) => ({
   },
 
   printFormAction: async (id) => {
+    const form = get().forms.find((f) => f.id === id);
+    if (!form) throw new Error('서식을 찾을 수 없습니다');
     await printForm(id, formRepository, formPrinter);
+    return form.format;
   },
 
   downloadForm: async (id) => {
