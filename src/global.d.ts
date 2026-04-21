@@ -32,7 +32,20 @@ interface ElectronAPI {
     filters: { name: string; extensions: string[] }[];
   }) => Promise<string | null>;
   writeFile: (filePath: string, data: ArrayBuffer | string) => Promise<void>;
-  printToPDF: () => Promise<ArrayBuffer | null>;
+  printToPDF: (
+    options?: {
+      pageSize?:
+        | 'A3'
+        | 'A4'
+        | 'A5'
+        | 'Letter'
+        | 'Legal'
+        | 'Tabloid'
+        | { width: number; height: number };
+      landscape?: boolean;
+      marginsType?: 0 | 1 | 2;
+    },
+  ) => Promise<ArrayBuffer | null>;
   openFile: (filePath: string) => Promise<void>;
   importAlarmAudio: () => Promise<{ name: string; dataUrl: string } | null>;
   importFont: () => Promise<{ name: string; dataUrl: string; mimeType: string } | null>;

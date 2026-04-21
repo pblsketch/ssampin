@@ -1107,23 +1107,52 @@ function registerIpcHandlers(): void {
   ipcMain.handle(
     'export:writeFile',
     (_event, filePath: string, data: ArrayBuffer | string): void => {
-      if (typeof data === 'string') {
-        fs.writeFileSync(filePath, data, 'utf-8');
-      } else {
-        fs.writeFileSync(filePath, Buffer.from(data));
+      try {
+        if (typeof data === 'string') {
+          fs.writeFileSync(filePath, data, 'utf-8');
+        } else {
+          fs.writeFileSync(filePath, Buffer.from(data));
+        }
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException)?.code;
+        if (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES') {
+          throw new Error(
+            `파일이 다른 프로그램에서 열려 있어 저장할 수 없습니다.\n` +
+            `해당 파일(${path.basename(filePath)})을 닫은 뒤 다시 시도하거나, 다른 이름으로 저장해 주세요.`,
+          );
+        }
+        throw err;
       }
     },
   );
 
-  // export:printToPDF — 현재 윈도우 PDF 출력
+  // export:printToPDF — 현재 윈도우 PDF 출력.
+  // options 인자 (선택): pageSize/landscape/marginsType. 지정 없으면 A4 portrait.
   ipcMain.handle(
     'export:printToPDF',
-    async (): Promise<ArrayBuffer | null> => {
+    async (
+      _event,
+      options?: {
+        pageSize?:
+          | 'A3'
+          | 'A4'
+          | 'A5'
+          | 'Letter'
+          | 'Legal'
+          | 'Tabloid'
+          | { width: number; height: number };
+        landscape?: boolean;
+        marginsType?: 0 | 1 | 2;
+      },
+    ): Promise<ArrayBuffer | null> => {
       if (!mainWindow) return null;
       const data = await mainWindow.webContents.printToPDF({
         printBackground: true,
-        landscape: false,
-        pageSize: 'A4',
+        landscape: options?.landscape ?? false,
+        pageSize: options?.pageSize ?? 'A4',
+        ...(options?.marginsType !== undefined
+          ? { marginsType: options.marginsType }
+          : {}),
       });
       return data.buffer as ArrayBuffer;
     },

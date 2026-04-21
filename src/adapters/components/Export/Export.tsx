@@ -21,6 +21,13 @@ import {
   exportSeatingToHwpx,
   exportStudentRecordsToHwpx,
 } from '@infrastructure/export/HwpxExporter';
+import { exportSeatingToPdf } from '@infrastructure/export/pdf/SeatingPdf';
+import {
+  exportEventsToPdf,
+  exportClassScheduleToPdf,
+  exportTeacherScheduleToPdf,
+  exportStudentRecordsToPdf,
+} from '@infrastructure/export/pdf/AllPdfExporters';
 import { ExportPreviewModal } from './ExportPreviewModal';
 /* eslint-enable no-restricted-imports */
 
@@ -41,14 +48,14 @@ const EXPORT_ITEMS: ExportItemConfig[] = [
     label: '학급 시간표',
     description: '우리 반 요일별 교시 시간표',
     icon: 'calendar_view_day',
-    formats: ['excel', 'hwpx'],
+    formats: ['excel', 'hwpx', 'pdf'],
   },
   {
     id: 'teacherSchedule',
     label: '교사 시간표',
     description: '교사 개인 수업 시간표',
     icon: 'person',
-    formats: ['excel', 'hwpx'],
+    formats: ['excel', 'hwpx', 'pdf'],
   },
   {
     id: 'seating',
@@ -69,7 +76,7 @@ const EXPORT_ITEMS: ExportItemConfig[] = [
     label: '담임 메모',
     description: '담임 메모장 기록 내보내기',
     icon: 'assignment_ind',
-    formats: ['excel', 'hwpx'],
+    formats: ['excel', 'hwpx', 'pdf'],
   },
 ];
 
@@ -103,6 +110,7 @@ export function Export() {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [pdfPreviewBytes, setPdfPreviewBytes] = useState<ArrayBuffer | null>(null);
 
   const classSchedule = useScheduleStore((s) => s.classSchedule);
   const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
@@ -202,15 +210,38 @@ export function Export() {
             defaultFileName = '담임기록부.hwpx';
           }
         } else if (selectedFormat === 'pdf') {
-          if (window.electronAPI) {
-            const pdfData = await window.electronAPI.printToPDF();
-            if (pdfData) {
-              data = pdfData;
-              defaultFileName = item === 'seating' ? '학급자리배치도.pdf' : '학교일정.pdf';
+          // 미리보기에서 만든 바이트가 있으면 재사용 (첫 item 에 해당)
+          let reused: ArrayBuffer | null = null;
+          if (
+            selectedItems.size === 1 &&
+            pdfPreviewBytes &&
+            pdfPreviewBytes.byteLength > 0
+          ) {
+            try {
+              const copy = new ArrayBuffer(pdfPreviewBytes.byteLength);
+              new Uint8Array(copy).set(new Uint8Array(pdfPreviewBytes));
+              reused = copy;
+            } catch {
+              reused = null;
             }
-          } else {
-            window.print();
-            continue;
+          }
+          if (item === 'seating') {
+            data = reused ?? (await exportSeatingToPdf(seating, getStudent, students, className));
+            defaultFileName = '학급자리배치도.pdf';
+          } else if (item === 'events') {
+            data = reused ?? (await exportEventsToPdf(events.filter((e) => !e.isHidden)));
+            defaultFileName = '학교일정.pdf';
+          } else if (item === 'classSchedule') {
+            data = reused ?? (await exportClassScheduleToPdf(classSchedule, maxPeriods));
+            defaultFileName = '학급시간표.pdf';
+          } else if (item === 'teacherSchedule') {
+            data = reused ?? (await exportTeacherScheduleToPdf(teacherSchedule, maxPeriods));
+            defaultFileName = '교사시간표.pdf';
+          } else if (item === 'studentRecords') {
+            data =
+              reused ??
+              (await exportStudentRecordsToPdf(studentRecords, students, studentCategories));
+            defaultFileName = '담임메모.pdf';
           }
         }
 
@@ -257,8 +288,10 @@ export function Export() {
           showToast('파일이 다운로드되었습니다', 'success');
         }
       }
-    } catch {
-      showToast('내보내기 중 오류가 발생했습니다', 'error');
+    } catch (err) {
+      console.error('[Export] handleExport failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`내보내기 오류: ${msg.slice(0, 200)}`, 'error');
     } finally {
       setIsExporting(false);
     }
@@ -279,6 +312,7 @@ export function Export() {
     teacherName,
     showToast,
     track,
+    pdfPreviewBytes,
   ]);
 
   return (
@@ -391,7 +425,35 @@ export function Export() {
       {/* 내보내기 버튼 */}
       {selectedFormat && (
         <button
-          onClick={() => setShowPreview(true)}
+          onClick={() => {
+            setShowPreview(true);
+            if (selectedFormat === 'pdf') {
+              // 단일 항목일 때만 미리보기 렌더. 복수 선택이면 placeholder 유지.
+              if (selectedItems.size !== 1) {
+                setPdfPreviewBytes(null);
+                return;
+              }
+              const only = [...selectedItems][0]!;
+              setPdfPreviewBytes(null);
+              let promise: Promise<ArrayBuffer> | null = null;
+              if (only === 'seating') {
+                promise = exportSeatingToPdf(seating, getStudent, students, className);
+              } else if (only === 'events') {
+                promise = exportEventsToPdf(events.filter((e) => !e.isHidden));
+              } else if (only === 'classSchedule') {
+                promise = exportClassScheduleToPdf(classSchedule, maxPeriods);
+              } else if (only === 'teacherSchedule') {
+                promise = exportTeacherScheduleToPdf(teacherSchedule, maxPeriods);
+              } else if (only === 'studentRecords') {
+                promise = exportStudentRecordsToPdf(studentRecords, students, studentCategories);
+              }
+              if (promise) {
+                void promise
+                  .then((bytes) => setPdfPreviewBytes(bytes))
+                  .catch(() => setPdfPreviewBytes(null));
+              }
+            }
+          }}
           className='w-full py-4 bg-sp-accent hover:bg-sp-accent/90 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2'
         >
           <span className='material-symbols-outlined'>preview</span>
@@ -405,10 +467,17 @@ export function Export() {
           items={selectedItems}
           format={selectedFormat}
           isExporting={isExporting}
+          pdfPreviewBytes={pdfPreviewBytes}
           onConfirm={() => {
-            void handleExport().then(() => setShowPreview(false));
+            void handleExport().then(() => {
+              setShowPreview(false);
+              setPdfPreviewBytes(null);
+            });
           }}
-          onCancel={() => setShowPreview(false)}
+          onCancel={() => {
+            setShowPreview(false);
+            setPdfPreviewBytes(null);
+          }}
         />
       )}
     </div>

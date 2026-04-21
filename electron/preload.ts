@@ -39,8 +39,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('export:showSaveDialog', options),
   writeFile: (filePath: string, data: ArrayBuffer | string): Promise<void> =>
     ipcRenderer.invoke('export:writeFile', filePath, data),
-  printToPDF: (): Promise<ArrayBuffer | null> =>
-    ipcRenderer.invoke('export:printToPDF'),
+  printToPDF: (
+    options?: {
+      pageSize?:
+        | 'A3'
+        | 'A4'
+        | 'A5'
+        | 'Letter'
+        | 'Legal'
+        | 'Tabloid'
+        | { width: number; height: number };
+      landscape?: boolean;
+      marginsType?: 0 | 1 | 2;
+    },
+  ): Promise<ArrayBuffer | null> =>
+    ipcRenderer.invoke('export:printToPDF', options),
   openFile: (filePath: string): Promise<void> =>
     ipcRenderer.invoke('export:openFile', filePath),
   importAlarmAudio: (): Promise<{ name: string; dataUrl: string } | null> =>
