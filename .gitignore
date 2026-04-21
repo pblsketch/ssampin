@@ -17,9 +17,29 @@ NUL
 # 개발 도구 상태 파일
 .claude/
 .omc/
+.agents/
 
 # 카드뉴스 생성 출력
 card-news-output/
 
 # 에이전트 작업 중간 산출물
 _workspace/
+
+# 폰트 서브셋 빌드 캐시 (원본 TTF ~10MB + POC 출력 PDF)
+scripts/font-subset/.cache/
+
+# 빌드 캐시 (tsc incremental / Vite .d.ts)
+*.tsbuildinfo
+vite.mobile.config.d.ts
+
+# 로컬 테스트·검증 산출물
+test/
+verify-check/
+mac-artifacts/
+
+# 홍보 이미지 생성 산출물
+promo-images-output/
+promo-styles-output/
+
+# 개인 작업 캡쳐
+위노트 캡쳐/
