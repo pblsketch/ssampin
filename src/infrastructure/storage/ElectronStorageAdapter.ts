@@ -24,4 +24,34 @@ export class ElectronStorageAdapter implements IStoragePort {
     }
     await api.writeData(filename, JSON.stringify(data, null, 2));
   }
+
+  async readBinary(relPath: string): Promise<Uint8Array | null> {
+    const api = window.electronAPI;
+    if (!api?.forms) return null;
+    const ab = await api.forms.readBinary(relPath);
+    if (ab === null) return null;
+    return new Uint8Array(ab);
+  }
+
+  async writeBinary(relPath: string, bytes: Uint8Array): Promise<void> {
+    const api = window.electronAPI;
+    if (!api?.forms) {
+      throw new Error('electronAPI.forms 사용 불가 (preload 미로드)');
+    }
+    // Uint8Array view 를 정확히 ArrayBuffer 로 잘라 IPC 전송 (share 되는 경우 방지)
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    await api.forms.writeBinary(relPath, ab as ArrayBuffer);
+  }
+
+  async removeBinary(relPath: string): Promise<void> {
+    const api = window.electronAPI;
+    if (!api?.forms) return;
+    await api.forms.removeBinary(relPath);
+  }
+
+  async listBinary(dirRelPath: string): Promise<readonly string[]> {
+    const api = window.electronAPI;
+    if (!api?.forms) return [];
+    return api.forms.listBinary(dirRelPath);
+  }
 }

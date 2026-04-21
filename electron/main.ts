@@ -1311,6 +1311,88 @@ function registerIpcHandlers(): void {
     },
   );
 
+  // ─── forms:* 바이너리 IPC (서식관리 Phase 1) ───
+  // 보안 가드: 모든 relPath 는 userData 경계 안쪽이어야 하며,
+  // 파일 확장자는 화이트리스트(.hwpx/.pdf/.xlsx/.png)만 허용한다.
+  const FORMS_ALLOWED_EXT = new Set(['.hwpx', '.pdf', '.xlsx', '.png']);
+
+  function resolveFormsPath(relPath: string, requireFileExt: boolean): string {
+    if (typeof relPath !== 'string' || relPath.length === 0) {
+      throw new Error('forms: relPath 가 비어있습니다');
+    }
+    if (path.isAbsolute(relPath)) {
+      throw new Error('forms: 절대 경로는 허용되지 않습니다');
+    }
+    const userData = app.getPath('userData');
+    const absolute = path.resolve(userData, relPath);
+    const rel = path.relative(userData, absolute);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error('forms: userData 경계를 벗어난 경로 거부');
+    }
+    if (requireFileExt) {
+      const ext = path.extname(absolute).toLowerCase();
+      if (!FORMS_ALLOWED_EXT.has(ext)) {
+        throw new Error(`forms: 허용되지 않은 확장자 ${ext || '(없음)'}`);
+      }
+    }
+    return absolute;
+  }
+
+  ipcMain.handle(
+    'forms:writeBinary',
+    async (_event, args: { relPath: string; bytes: ArrayBuffer }): Promise<void> => {
+      const abs = resolveFormsPath(args.relPath, true);
+      await fs.promises.mkdir(path.dirname(abs), { recursive: true });
+      await fs.promises.writeFile(abs, Buffer.from(args.bytes));
+    },
+  );
+
+  ipcMain.handle(
+    'forms:readBinary',
+    async (_event, args: { relPath: string }): Promise<ArrayBuffer | null> => {
+      const abs = resolveFormsPath(args.relPath, true);
+      try {
+        const buf = await fs.promises.readFile(abs);
+        // Node Buffer 는 ArrayBuffer 뷰이므로 정확한 범위로 잘라 전달
+        const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+        return ab as ArrayBuffer;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+          return null;
+        }
+        throw err;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'forms:removeBinary',
+    async (_event, args: { relPath: string }): Promise<void> => {
+      const abs = resolveFormsPath(args.relPath, true);
+      try {
+        await fs.promises.unlink(abs);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return; // no-op
+        throw err;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'forms:listBinary',
+    async (_event, args: { dirRelPath: string }): Promise<string[]> => {
+      // 디렉토리 경로는 확장자 체크 건너뜀 (ext 없음)
+      const abs = resolveFormsPath(args.dirRelPath, false);
+      try {
+        const entries = await fs.promises.readdir(abs, { withFileTypes: true });
+        return entries.filter((e) => e.isFile()).map((e) => e.name);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw err;
+      }
+    },
+  );
+
   // update:check — 업데이트 확인
   ipcMain.handle('update:check', (): void => {
     autoUpdater.checkForUpdates().catch((err: Error) => {

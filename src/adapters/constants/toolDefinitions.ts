@@ -29,6 +29,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   { id: 'tool-collab-board', name: '협업 보드', icon: '🎨', color: 'bg-orange-400/20 text-orange-600' },
   { id: 'tool-supsori', name: '숲소리', icon: '🌳', color: 'bg-green-600/20 text-green-700', externalUrl: 'https://supsori.com' },
   { id: 'tool-pblsketch', name: 'PBL스케치', icon: '🎯', color: 'bg-blue-600/20 text-blue-700', externalUrl: 'https://pblsketch.xyz' },
+  { id: 'tool-forms', name: '서식', icon: '📄', color: 'bg-indigo-500/20 text-indigo-600' },
 ];
 
 export const DEFAULT_FAVORITE_TOOLS: readonly string[] = [

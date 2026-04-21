@@ -212,6 +212,14 @@ interface ElectronAPI {
     processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
   }>;
 
+  // === 서식 관리 (forms) — Phase 1 바이너리 IPC ===
+  forms?: {
+    writeBinary: (relPath: string, bytes: ArrayBuffer) => Promise<void>;
+    readBinary: (relPath: string) => Promise<ArrayBuffer | null>;
+    removeBinary: (relPath: string) => Promise<void>;
+    listBinary: (dirRelPath: string) => Promise<string[]>;
+  };
+
   // === 협업 보드 (collab-board) — Design §4.1 ===
   collabBoard?: {
     list: () => Promise<CollabBoardMeta[]>;

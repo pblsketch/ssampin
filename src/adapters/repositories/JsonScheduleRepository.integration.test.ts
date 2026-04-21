@@ -27,6 +27,14 @@ class FakeStorage implements IStoragePort {
   getRaw(filename: string): unknown {
     return this.store.get(filename);
   }
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async readBinary(_relPath: string): Promise<Uint8Array | null> { return null; }
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async writeBinary(_relPath: string, _bytes: Uint8Array): Promise<void> { /* no-op */ }
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async removeBinary(_relPath: string): Promise<void> { /* no-op */ }
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async listBinary(_dirRelPath: string): Promise<readonly string[]> { return []; }
 }
 
 const mk = (partial: Partial<TimetableOverride>): TimetableOverride => ({

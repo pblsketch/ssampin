@@ -2,10 +2,12 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 
 const DB_NAME = 'ssampin-mobile';
-const DB_VERSION = 1;
+/** v2: form-binaries object store 추가 (서식관리 Phase 1) */
+const DB_VERSION = 2;
 const DATA_STORE = 'ssampin-data';
 const AUTH_STORE = 'ssampin-auth';
 const SYNC_STORE = 'ssampin-sync';
+const FORM_BIN_STORE = 'form-binaries';
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -21,6 +23,9 @@ function getDB(): Promise<IDBPDatabase> {
         }
         if (!db.objectStoreNames.contains(SYNC_STORE)) {
           db.createObjectStore(SYNC_STORE);
+        }
+        if (!db.objectStoreNames.contains(FORM_BIN_STORE)) {
+          db.createObjectStore(FORM_BIN_STORE);
         }
       },
     });
@@ -42,6 +47,54 @@ export class IndexedDBStorageAdapter implements IStoragePort {
   async write<T>(filename: string, data: T): Promise<void> {
     const db = await getDB();
     await db.put(DATA_STORE, data, filename);
+  }
+
+  async readBinary(relPath: string): Promise<Uint8Array | null> {
+    try {
+      const db = await getDB();
+      const value = await db.get(FORM_BIN_STORE, relPath);
+      if (value === undefined || value === null) return null;
+      if (value instanceof Uint8Array) return value;
+      if (value instanceof ArrayBuffer) return new Uint8Array(value);
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async writeBinary(relPath: string, bytes: Uint8Array): Promise<void> {
+    const db = await getDB();
+    // IndexedDB 는 Uint8Array 를 그대로 저장 가능
+    await db.put(FORM_BIN_STORE, bytes, relPath);
+  }
+
+  async removeBinary(relPath: string): Promise<void> {
+    try {
+      const db = await getDB();
+      await db.delete(FORM_BIN_STORE, relPath);
+    } catch {
+      // no-op
+    }
+  }
+
+  async listBinary(dirRelPath: string): Promise<readonly string[]> {
+    try {
+      const db = await getDB();
+      const keys = await db.getAllKeys(FORM_BIN_STORE);
+      const prefix = dirRelPath.endsWith('/') ? dirRelPath : `${dirRelPath}/`;
+      const result: string[] = [];
+      for (const k of keys) {
+        if (typeof k !== 'string') continue;
+        if (!k.startsWith(prefix)) continue;
+        const rest = k.slice(prefix.length);
+        // 하위 디렉토리는 제외 (바로 하위 파일만)
+        if (rest.length === 0 || rest.includes('/')) continue;
+        result.push(rest);
+      }
+      return result;
+    } catch {
+      return [];
+    }
   }
 }
 

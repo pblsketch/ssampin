@@ -23,6 +23,10 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
     },
+    optimizeDeps: {
+      // pdfjs-dist 는 서식관리/내보내기 프리뷰에서 동적 import — 사전 번들 제외
+      exclude: ['pdfjs-dist'],
+    },
     define: {
       'process.env.GOOGLE_CLIENT_ID': JSON.stringify((env.VITE_GOOGLE_CLIENT_ID || '').trim()),
       'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify((env.VITE_GOOGLE_CLIENT_SECRET || '').trim()),

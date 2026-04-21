@@ -418,6 +418,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     processes: Array<{ type: string; pid: number; memoryBytes: number; name?: string }>;
   }> => ipcRenderer.invoke('system:getMemoryMetrics'),
 
+  // === 서식 관리 (forms) — Phase 1 바이너리 IPC ===
+  forms: {
+    writeBinary: (relPath: string, bytes: ArrayBuffer): Promise<void> =>
+      ipcRenderer.invoke('forms:writeBinary', { relPath, bytes }),
+    readBinary: (relPath: string): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('forms:readBinary', { relPath }),
+    removeBinary: (relPath: string): Promise<void> =>
+      ipcRenderer.invoke('forms:removeBinary', { relPath }),
+    listBinary: (dirRelPath: string): Promise<string[]> =>
+      ipcRenderer.invoke('forms:listBinary', { dirRelPath }),
+  },
+
   // === 협업 보드 (collab-board) ===
   // Design §4.1 14개 채널을 서브객체로 그루핑 (기존 flat 패턴과의 절충 — 채널 많음)
   collabBoard: {

@@ -36,6 +36,8 @@ import type { IWordCloudRepository } from '@domain/repositories/IWordCloudReposi
 import type { IToolTemplateRepository } from '@domain/repositories/IToolTemplateRepository';
 import type { IToolResultRepository } from '@domain/repositories/IToolResultRepository';
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
+import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
+import type { IThumbnailer, IPreviewExtractor, IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
@@ -76,6 +78,10 @@ import { JsonWordCloudRepository } from '@adapters/repositories/JsonWordCloudRep
 import { JsonToolTemplateRepository } from '@adapters/repositories/JsonToolTemplateRepository';
 import { JsonToolResultRepository } from '@adapters/repositories/JsonToolResultRepository';
 import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
+import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
+import { PdfJsThumbnailer } from '@infrastructure/forms/PdfJsThumbnailer';
+import { HwpxExcelPreviewExtractor } from '@infrastructure/forms/HwpxExcelPreviewExtractor';
+import { ElectronPrinterAdapter } from '@infrastructure/print/ElectronPrinterAdapter';
 import { DriveSyncAdapter } from '@infrastructure/google/DriveSyncAdapter';
 import { ConsultationSupabaseClient } from '@infrastructure/supabase/ConsultationSupabaseClient';
 import { SurveySupabaseClient } from '@infrastructure/supabase/SurveySupabaseClient';
@@ -156,6 +162,14 @@ export const toolResultRepository: IToolResultRepository =
 
 export const observationRepository: IObservationRepository =
   new JsonObservationRepository(storage);
+
+// === 서식 관리 ===
+export const formRepository: IFormTemplateRepository =
+  new JsonFormTemplateRepository(storage);
+
+export const formThumbnailer: IThumbnailer = new PdfJsThumbnailer();
+export const formPreviewExtractor: IPreviewExtractor = new HwpxExcelPreviewExtractor();
+export const formPrinter: IPrinterAdapter = new ElectronPrinterAdapter();
 
 export const neisPort: INeisPort = new NeisApiClient();
 
