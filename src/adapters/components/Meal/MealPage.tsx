@@ -152,6 +152,26 @@ export function MealPage() {
     fileInputRef.current?.click();
   };
 
+  // 양식 다운로드 핸들러 (Electron file:// 환경에서 절대경로가 드라이브 루트로 해석되는 문제 방지)
+  const handleTemplateDownload = async () => {
+    try {
+      const res = await fetch('./meal-template.csv');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '급식_양식.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      setImportResult({ imported: 0, errors: ['양식 파일을 불러올 수 없습니다'] });
+      setTimeout(() => setImportResult(null), 5000);
+    }
+  };
+
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -220,14 +240,14 @@ export function MealPage() {
             <option value="manual">수동 입력만</option>
           </select>
 
-          <a
-            href="/meal-template.csv"
-            download="급식_양식.csv"
+          <button
+            type="button"
+            onClick={handleTemplateDownload}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text border border-sp-border rounded-lg transition-colors"
           >
             <span className="material-symbols-outlined text-sm">download</span>
             양식 다운로드
-          </a>
+          </button>
 
           <button
             type="button"
