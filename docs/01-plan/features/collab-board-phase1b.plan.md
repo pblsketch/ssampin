@@ -139,7 +139,64 @@ Phase 1b 판단 사항:
 
 ---
 
-## 5. Constraints
+## 5. Technical Approach (Phase 1b 선제 분석)
+
+이 섹션은 베타 피드백 없이도 구현 방향이 명확한 **Must-have 3개 항목**과, 피드백 수신 후 도입을 검토할 **Nice-to-have 중 사전 설계가 필요한 2개 주제**를 다룬다. Should-have는 피드백 결과에 따라 달라지므로 여기서 다루지 않는다.
+
+### 5.1 팜 리젝션 (Must-have)
+
+**구현 위치**: `src/infrastructure/board/generateBoardHTML.ts` 인라인 스크립트
+
+**전략**: capture 단계에서 `pointerdown`/`pointermove`/`pointerup` 이벤트를 가로채어 `pointerType === 'touch'`인 이벤트를 `stopPropagation + preventDefault`로 차단. 단 캔버스 영역(`canvas`, `.excalidraw__canvas-container`, `.interactive`)에 한해서만 차단하여 UI 버튼 클릭은 허용.
+
+**예외 정책**: 기본값 "기본 ON" (§6 Q1). 향후 설정으로 조정 가능하도록 주석 처리.
+
+**의존성**: 없음 — 인라인 스크립트만 수정.
+
+**검증**: 실기기 iPad + Apple Pencil 필수 (시뮬레이터 불가).
+
+### 5.2 학생 입장 화면 다듬기 (Must-have)
+
+**구현 위치**: `src/infrastructure/board/generateBoardHTML.ts` 이름 입력 모달 + WebSocket 재연결 로직
+
+**세부 작업**:
+- **중복 이름 감지**: 서버 측에서 awareness 상태 폴링으로 이미 접속한 이름과 충돌 감지 → `boardRules.nextAvailableName`으로 자동 보정 또는 오류 반환
+- **종료된 세션 접속 안내**: 서버가 `close code 1000`(normal)로 끊으면 학생 HTML이 "수업이 종료되었어요" 표시 (C6에서 이미 구현됨 — 재사용)
+- **자동 재연결 토스트**: WebSocket `abnormal` close(1006) 시 5초 뒤 자동 재연결 시도. 토스트 UI로 상태 표시
+
+**의존성**: C6(에러 UI 분기) 완료 후 진행. `boardRules.ts` 함수 재사용.
+
+### 5.3 학생용 에러 처리 UI (Must-have)
+
+**구현 위치**: `src/infrastructure/board/generateBoardHTML.ts` `#error-overlay` div
+
+**상태**: ✅ **Phase 1b 착수 전 선제 구현 완료** (2026-04-21, C6 작업)
+
+close code 1008(auth failed) / 1013(server full) / 1000(normal) / 1006(abnormal) / default 5종 분기 처리. `.error-card` CSS + `showCloseError(code)` 함수. 자세한 내용은 `generateBoardHTML.ts` 소스 참조.
+
+### 5.4 페이지 시스템 Y.Doc 구조 (Nice-to-have 사전 설계)
+
+**관련 문서**: [collab-board-phase1b-ydoc-spike.md](../../02-design/features/collab-board-phase1b-ydoc-spike.md)
+
+**요약**: 현재 단일 Y.Doc + 단일 Excalidraw scene 구조에서 페이지 전환 시 `resetScene()`이 모든 학생 캔버스를 초기화하는 버그 가능성. 3개 옵션 검토 결과 **옵션 A(`docName`을 `{boardId}-page-{n}`으로 확장)** 권장.
+
+**검증 필요**: S1(binding.destroy 메모리), S2(Y.Array swap 지원), S3(재연결 후 복원), S4(awareness 지연), S5(페이지 다수 메모리). 실제 구현 전 PoC로 확인.
+
+**의존성**: 베타 피드백에서 페이지 시스템 수요 확인(Q3) 필수. 수요 없으면 구현 유예.
+
+### 5.5 Excalidraw CSS 커스터마이징 (Should-have 사전 조사)
+
+**관련 문서**: [collab-board-phase1b-excalidraw-css-stability.md](../../02-design/features/collab-board-phase1b-excalidraw-css-stability.md)
+
+**요약**: 공식 API(`UIOptions`, `renderTopRightUI`)는 툴바 숨김·교체 불가. `.App-toolbar` 등 내부 CSS 클래스 오버라이드가 유일 경로. **버전 핀 0.17.6 유지 전제 하에 Low~Medium 리스크**. y-excalidraw 2.0.12가 0.18 미지원이라 버전 핀이 사실상 강제되어 안전.
+
+**구현 방식**: 인라인 `<style>` 블록에 오버라이드 셀렉터. `.excalidraw .App-toolbar { display: none !important; }` 및 좌측 커스텀 툴바는 별도 DOM 주입.
+
+**의존성**: 베타 피드백에서 Should-have(커스텀 툴바) 채택 결정(Q2) 필수.
+
+---
+
+## 6. Constraints
 
 - **기존 아키텍처 유지**: Clean Architecture 4-layer · 인라인 HTML · CDN 로드 · 터널 싱글턴 정책 그대로
 - **Excalidraw 버전 핀**: 0.17.6 고정 (y-excalidraw 2.0.12 peerDeps 호환). 1b 기간 중 업그레이드 금지. CSS 내부 클래스 해킹이 버전에 종속되므로.
@@ -149,7 +206,7 @@ Phase 1b 판단 사항:
 
 ---
 
-## 6. Open Questions — 베타 피드백으로 결정할 것들
+## 7. Open Questions — 베타 피드백으로 결정할 것들
 
 | # | 질문 | 결정 시점 | 기본값 |
 |---|---|---|---|
@@ -163,35 +220,35 @@ Phase 1b 판단 사항:
 
 ---
 
-## 7. TBD — 베타 피드백 수집 후 채울 섹션
+## 8. TBD — 베타 피드백 수집 후 채울 섹션
 
 본 문서는 **피드백 수집 전 Draft**이다. 다음 섹션은 피드백 수신 후 보강한다:
 
 - **2. Scope (확정)** — Must/Should/Nice 우선순위를 피드백에 맞춰 재배치
 - **3. User Stories** — 피드백에서 추출한 실제 교사 시나리오
 - **4. Success Criteria** — 정량 지표 (접속 시간 / 드롭율 / 드로잉 지연 / 만족도)
-- **5. Technical Approach** — 각 작업의 구현 세부안 (계획리뷰 §1 필수 조치 중 페이지별 Y.Doc 분리 설계 포함)
+- **5. Technical Approach** — ~완료 (§5 참조)
 - **6. Timeline** — 2주 범위 안에서 스프린트 분할
-- **8. Risks & Mitigations** — §4 learnings + 페이지 시스템 Y.Doc 충돌 위험 등
+- **9. Risks & Mitigations** — §4 learnings + 페이지 시스템 Y.Doc 충돌 위험 등
 
 ---
 
-## 8. Next Actions
+## 10. Next Actions
 
 1. **2~4주간 베타 피드백 수집** — 통합 Google Form(`forms.gle/o1X4zLYocUpFKCzy7`) + 직접 요청한 교사 3~5명 인터뷰
 2. **Form 응답 분류 (수동)** — Phase 1b 착수 시점에 Form 응답을 직접 훑어 버그(hotfix 대상) / 협업보드 UX / 발제피드백 UX / 기타 기능 요청으로 라벨링. 베타 기간에는 별도 분류 파이프라인을 만들지 않고 **원문 그대로 누적**. (결정: 2026-04-21 C안 — 드롭다운 추가·Apps Script 자동 라벨링 모두 보류)
-3. **§2 Scope 확정** — Q1~Q5 답변 반영
-4. **§6 Release workflow 결정** — Option A/B 선택
+3. **§3 Scope 확정** — Q1~Q5 답변 반영
+4. **§7 Release workflow 결정** — Option A/B 선택
 5. **Design 단계로 진행** — `docs/02-design/features/collab-board-phase1b.design.md` 작성
 
 ---
 
-## 9. 결론
+## 11. 결론
 
 Phase 1a는 성공적으로 베타 배포되었다. Phase 1b는 기술적 리스크보다 **"어떤 UX가 실제로 교사에게 의미 있는가"**라는 우선순위 문제에 가깝다. 따라서 **섣불리 구현에 들어가지 않고 피드백을 먼저 모으는 것이 이 Plan의 핵심 지침**이다.
 
-베타 피드백 3건 이상 수집 + 치명적 버그 없음 + v1.11.x 릴리즈 슬롯 확보가 확인되면, 본 문서의 §7 TBD 섹션을 채우고 Design 단계로 진행한다.
+베타 피드백 3건 이상 수집 + 치명적 버그 없음 + v1.11.x 릴리즈 슬롯 확보가 확인되면, 본 문서의 §8 TBD 섹션을 채우고 Design 단계로 진행한다.
 
 ---
 
-*Last updated: 2026-04-21 — Phase 1a 릴리즈 완료 직후 초안 작성*
+*Last updated: 2026-04-21 — §5 Technical Approach 선제 분석 추가*
