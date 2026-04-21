@@ -20,6 +20,8 @@ export interface CreateAssignmentParams {
   readonly fileTypeRestriction: FileTypeRestriction;
   readonly allowLate: boolean;
   readonly allowResubmit: boolean;
+  /** true면 제출 폼에서 학년/반/번호 숨기고 이름만으로 매칭 */
+  readonly identifyByName?: boolean;
 }
 
 export class CreateAssignment {
@@ -60,6 +62,7 @@ export class CreateAssignment {
       fileTypeRestriction: params.fileTypeRestriction,
       allowLate: params.allowLate,
       allowResubmit: params.allowResubmit,
+      identifyByName: params.identifyByName,
     });
 
     // ③ Assignment 객체 구성
@@ -78,6 +81,7 @@ export class CreateAssignment {
       fileTypeRestriction: params.fileTypeRestriction,
       allowLate: params.allowLate,
       allowResubmit: params.allowResubmit,
+      identifyByName: params.identifyByName,
       shareUrl: `${SITE_URL}/submit/${result.id}`,
       adminKey: result.adminKey,
       createdAt: new Date().toISOString(),

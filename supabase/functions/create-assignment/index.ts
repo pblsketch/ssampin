@@ -55,6 +55,7 @@ serve(async (req: Request) => {
       fileTypeRestriction,
       allowLate,
       allowResubmit,
+      identifyByName,
     } = body;
 
     if (!title || !deadline || !targetName || !studentList || !driveFolderId) {
@@ -87,6 +88,7 @@ serve(async (req: Request) => {
         file_type_restriction: fileTypeRestriction ?? 'all',
         allow_late: allowLate ?? true,
         allow_resubmit: allowResubmit ?? true,
+        identify_by_name: identifyByName ?? false,
       })
       .select('id')
       .single();

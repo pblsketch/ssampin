@@ -20,6 +20,7 @@ export interface CreateAssignmentServiceRequest {
   readonly fileTypeRestriction?: string;
   readonly allowLate?: boolean;
   readonly allowResubmit?: boolean;
+  readonly identifyByName?: boolean;
 }
 
 /** 과제수합 서비스 포트 — Supabase Edge Function 연동 */
