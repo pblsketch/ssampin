@@ -81,8 +81,9 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
     return () => clearInterval(interval);
   }, [assignment.deadline, assignment.allowLate]);
 
-  // Student auto-fill: grade + class + number → name
+  // identifyByName 모드에서는 번호 입력이 없으므로 이 effect 스킵
   useEffect(() => {
+    if (assignment.identifyByName) return;
     const num = parseInt(studentNumber, 10);
     if (isNaN(num)) {
       setStudentName('');
@@ -116,16 +117,20 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
       setStudentName('');
       setNameWarning(hasGradeClass || !assignment.students.some((s) => s.grade != null));
     }
-  }, [studentGrade, studentClass, studentNumber, assignment.students]);
+  }, [studentGrade, studentClass, studentNumber, assignment.students, assignment.identifyByName]);
 
   const acceptAttr = FILE_TYPE_ACCEPT[assignment.fileTypeRestriction] ?? '*/*';
   const st = assignment.submitType ?? 'file'; // 기존 과제 호환: 기본값 'file'
   const showFile = st === 'file' || st === 'both';
   const showText = st === 'text' || st === 'both';
 
+  // identifyByName=true면 모든 식별 필드(학년/반/번호) 숨기고 이름만 받음.
+  // 이름 매칭 시 명단에서 number를 자동으로 주입해 서버 식별에 사용.
+  const identifyByName = assignment.identifyByName === true;
+
   // 학년/반 입력 필요 여부: 명단에 학년 또는 반 정보가 조금이라도 있으면 true.
   // 담임반 / 전학공처럼 명단에 학년·반이 아예 없으면 입력 필드를 숨기고 필수 조건에서도 제외 (000 편법 회피).
-  const hasAnyGradeClass = assignment.students.some(
+  const hasAnyGradeClass = !identifyByName && assignment.students.some(
     (s) => s.grade != null || s.classNum != null,
   );
 
@@ -145,8 +150,20 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   }, []);
 
   async function handleSubmit() {
-    const num = parseInt(studentNumber, 10);
-    if (isNaN(num)) return;
+    // identifyByName 모드: 이름으로 학생 찾고 number를 명단에서 자동 주입
+    let num: number;
+    if (identifyByName) {
+      const matched = assignment.students.find((s) => s.name === studentName);
+      if (!matched) {
+        setError('명단에 없는 학생입니다');
+        return;
+      }
+      num = matched.number;
+    } else {
+      const parsed = parseInt(studentNumber, 10);
+      if (isNaN(parsed)) return;
+      num = parsed;
+    }
 
     const hasFile = !!file;
     const hasText = !!textContent.trim();
@@ -158,8 +175,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
     try {
       const result = await submitAssignment({
         assignmentId: assignment.id,
-        studentGrade: studentGrade.trim(),
-        studentClass: studentClass.trim(),
+        studentGrade: identifyByName ? '' : studentGrade.trim(),
+        studentClass: identifyByName ? '' : studentClass.trim(),
         studentNumber: num,
         studentName,
         file: hasFile ? file : undefined,
@@ -169,8 +186,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
       if (result.success) {
         const now = new Date();
         setSubmittedInfo({
-          grade: studentGrade.trim(),
-          class: studentClass.trim(),
+          grade: identifyByName ? '' : studentGrade.trim(),
+          class: identifyByName ? '' : studentClass.trim(),
           number: num,
           name: studentName,
           fileName: hasFile ? file.name : null,
@@ -218,13 +235,11 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   const hasText = textContent.trim().length > 0;
   const hasSubmitContent = hasFile || hasText;
   const gradeClassOk = !hasAnyGradeClass || (studentGrade.trim().length > 0 && studentClass.trim().length > 0);
-  const canSubmit = Boolean(
-    gradeClassOk &&
-    studentNumber &&
-    studentName &&
-    !isSubmitting &&
-    hasSubmitContent,
-  );
+  // identifyByName 모드는 이름 1개만 필수, 그 외는 번호 + 이름
+  const identityOk = identifyByName
+    ? studentName.length > 0
+    : Boolean(studentNumber) && studentName.length > 0 && gradeClassOk;
+  const canSubmit = Boolean(identityOk && !isSubmitting && hasSubmitContent);
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -251,7 +266,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
         </div>
       )}
 
-      {/* Student grade / class / number — 명단에 학년·반 정보가 없으면 번호만 표시 */}
+      {/* Student grade / class / number — identifyByName 모드면 통째로 숨김, 명단에 학년·반 정보가 없으면 번호만 표시 */}
+      {!identifyByName && (
       <div className="mb-4">
         <label className="block text-sm font-medium text-sp-text mb-1.5">
           {hasAnyGradeClass ? '학년 / 반 / 번호' : '번호'}
@@ -297,6 +313,7 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
           </div>
         </div>
       </div>
+      )}
 
       {/* Student name */}
       <div className="mb-4">

@@ -51,6 +51,11 @@ export interface Assignment {
   readonly allowLate: boolean;
   /** 재제출 허용 여부 */
   readonly allowResubmit: boolean;
+  /**
+   * true면 학생 제출 폼에서 학년/반/번호 입력을 생략하고 이름만으로 매칭.
+   * 전학공·동아리 등 번호 체계가 없는 명단용.
+   */
+  readonly identifyByName?: boolean;
   /** 학생 제출 페이지 공유 URL */
   readonly shareUrl: string;
   /** 축약된 공유 URL (숏링크) */

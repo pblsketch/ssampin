@@ -17,6 +17,8 @@ export interface CreateAssignmentRequest {
     readonly id: string;
     readonly number: number;
     readonly name: string;
+    readonly grade?: number;
+    readonly classNum?: number;
   }>;
   readonly driveFolderId: string;
   readonly driveRootFolderId?: string;
@@ -24,6 +26,7 @@ export interface CreateAssignmentRequest {
   readonly fileTypeRestriction?: string;
   readonly allowLate?: boolean;
   readonly allowResubmit?: boolean;
+  readonly identifyByName?: boolean;
 }
 
 /** Edge Function 에러 응답 */

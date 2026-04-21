@@ -14,6 +14,8 @@ export interface AssignmentPublic {
   fileTypeRestriction: 'all' | 'image' | 'document';
   allowLate: boolean;
   allowResubmit: boolean;
+  /** true면 학생이 학년/반/번호 입력 생략, 이름만으로 매칭 */
+  identifyByName?: boolean;
   students: { number: number; name: string; grade?: number; classNum?: number }[];
 }
 

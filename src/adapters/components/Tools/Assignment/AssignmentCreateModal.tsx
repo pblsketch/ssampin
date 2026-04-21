@@ -46,6 +46,7 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
   const [fileType, setFileType] = useState<FileTypeRestriction>('all');
   const [allowLate, setAllowLate] = useState(true);
   const [allowResubmit, setAllowResubmit] = useState(true);
+  const [identifyByName, setIdentifyByName] = useState(false);
   const [customLinkCode, setCustomLinkCode] = useState('');
   const [linkCodeError, setLinkCodeError] = useState<string | null>(null);
   const [isCheckingCode, setIsCheckingCode] = useState(false);
@@ -110,6 +111,7 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
           teachingClassId: selectedTarget.teachingClassId,
           students: selectedTarget.students,
         },
+        identifyByName,
         driveFolderName: effectiveFolderName,
         submitType,
         fileTypeRestriction: fileType,
@@ -340,6 +342,30 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
                   <div
                     className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
                       allowResubmit ? 'translate-x-6' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Identify by name only — 전학공·동아리처럼 번호 체계가 없는 명단용 */}
+              <div className="flex items-start justify-between mb-4 gap-3">
+                <div className="flex-1">
+                  <label className="text-sm text-sp-text block">이름만으로 제출받기</label>
+                  <p className="text-xs text-sp-muted mt-0.5">
+                    학생이 학년·반·번호를 입력하지 않고 이름만 입력합니다 (전학공, 동아리 등에 추천)
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIdentifyByName(!identifyByName)}
+                  role="switch"
+                  aria-checked={identifyByName}
+                  className={`relative w-12 h-6 rounded-full transition-colors shrink-0 mt-0.5 ${
+                    identifyByName ? 'bg-sp-accent' : 'bg-sp-border'
+                  }`}
+                >
+                  <div
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                      identifyByName ? 'translate-x-6' : 'translate-x-0.5'
                     }`}
                   />
                 </button>
