@@ -10,7 +10,9 @@ import { validateConstraints } from '@domain/rules/seatRules';
 import { seatingRepository } from '@adapters/di/container';
 import { useSeatConstraintsStore } from '@adapters/stores/useSeatConstraintsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useSeatPickerConfigStore } from '@adapters/stores/useSeatPickerConfigStore';
 import { studentKey } from '@domain/entities/TeachingClass';
+import type { SeatPickerScope } from '@domain/entities/SeatPickerConfig';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import type { TeachingClassSeating } from '@domain/entities/TeachingClass';
@@ -56,6 +58,10 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const tcLoaded = useTeachingClassStore((s) => s.loaded);
   const loadTc = useTeachingClassStore((s) => s.load);
   const updateClass = useTeachingClassStore((s) => s.updateClass);
+  const spcLoaded = useSeatPickerConfigStore((s) => s.loaded);
+  const loadSpc = useSeatPickerConfigStore((s) => s.load);
+  const getPrivateAssignmentsForScope = useSeatPickerConfigStore((s) => s.getPrivateAssignmentsForScope);
+  const spcConfig = useSeatPickerConfigStore((s) => s.config);
 
   /* ─── Setup state ─── */
   const [phase, setPhase] = useState<Phase>('setup');
@@ -80,10 +86,14 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
   /* ─── Blocked / Fixed seat state ─── */
   const [blockedSeats, setBlockedSeats] = useState<Set<string>>(new Set());
+  // 공개 고정(setup에서 지정). 자리 뽑기 시작 시 setup의 선택을 세션 상태로 보관.
   const [fixedStudents, setFixedStudents] = useState<Map<string, string>>(new Map()); // key: "row-col", value: studentId
   const [seatConfigOpen, setSeatConfigOpen] = useState(false);
   const [seatConfigMode, setSeatConfigMode] = useState<'block' | 'fix'>('block');
-  const [fixPickerSeat, setFixPickerSeat] = useState<string | null>(null); // "row-col" of seat showing student picker
+  const [fixPickerSeat, setFixPickerSeat] = useState<string | null>(null);
+  // 비공개 고정의 학생→좌석 매핑 (자리 뽑기 실행 시점 스냅샷).
+  // 뽑기 중 해당 학생 차례에 카드 스왑으로 지정 좌석에 도달시키는 데 사용.
+  const [privateFixedMap, setPrivateFixedMap] = useState<Map<string, string>>(new Map());
 
   /* ─── Complete state ─── */
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -97,7 +107,8 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   useEffect(() => {
     if (!loaded) loadSeating();
     if (!tcLoaded) loadTc();
-  }, [loaded, loadSeating, tcLoaded, loadTc]);
+    if (!spcLoaded) loadSpc();
+  }, [loaded, loadSeating, tcLoaded, loadTc, spcLoaded, loadSpc]);
 
   /* ─── Cleanup timers ─── */
   useEffect(() => {
@@ -110,6 +121,29 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
   /* ─── Derived values ─── */
   const selectedTc = teachingClasses.find((c) => c.id === selectedClassId) ?? null;
+
+  // 현재 데이터 소스에 해당하는 scope
+  const currentScope: SeatPickerScope = seatDataSource === 'homeroom'
+    ? 'homeroom'
+    : (selectedTc ? `tc-${selectedTc.id}` : 'homeroom');
+
+  // 현재 scope의 비공개 사전 배정 (학생 공개 UI에는 절대 노출되지 않음)
+  const privateAssignmentsOfScope = useMemo(() => {
+    return getPrivateAssignmentsForScope(currentScope);
+    // spcConfig 변화도 반영되도록
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScope, spcConfig]);
+
+  const privateSeatMap = useMemo(() => {
+    const m = new Map<string, string>(); // seatKey -> studentId
+    for (const a of privateAssignmentsOfScope) m.set(a.seatKey, a.studentId);
+    return m;
+  }, [privateAssignmentsOfScope]);
+
+  const privateStudentSet = useMemo(
+    () => new Set(privateAssignmentsOfScope.map((a) => a.studentId)),
+    [privateAssignmentsOfScope],
+  );
 
   const tcStudentsAsStudents = useMemo((): Student[] => {
     if (!selectedTc) return [];
@@ -133,13 +167,17 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const effectiveCols = seatDataSource === 'homeroom' ? seating.cols : tcSeatingCols;
   const totalSeats = effectiveRows * effectiveCols;
   const availableSeats = totalSeats - blockedSeats.size;
+  // public 고정만 학생 공개 UI에 반영. private 고정은 학생에게 일반 좌석처럼 보임.
   const unfixedStudentCount = activeStudents.length - fixedStudents.size;
   const hasSeatingData = effectiveRows > 0 && effectiveCols > 0;
   const needsAutoGrid = seatDataSource === 'teachingClass' && selectedTc !== null && !selectedTc.seating && activeStudents.length > 0;
+  // 좌석 공간 검증(교사 시점): public + private 고정 좌석은 서로 겹치면 안 됨. 가용 좌석 수도 충분해야 함.
+  const totalFixedSeatCount = fixedStudents.size + privateSeatMap.size;
+  const publicVsPrivateCollision = Array.from(privateSeatMap.keys()).some((k) => fixedStudents.has(k));
   const studentShortage = !needsAutoGrid && activeStudents.length > availableSeats;
   const canStart = seatDataSource === 'homeroom'
-    ? hasSeatingData && activeStudents.length > 0 && !studentShortage && fixedStudents.size <= availableSeats
-    : selectedTc !== null && activeStudents.length > 0 && (hasSeatingData || needsAutoGrid);
+    ? hasSeatingData && activeStudents.length > 0 && !studentShortage && totalFixedSeatCount <= availableSeats && !publicVsPrivateCollision
+    : selectedTc !== null && activeStudents.length > 0 && (hasSeatingData || needsAutoGrid) && !publicVsPrivateCollision;
 
   const assignedCount = assignments.size;
   const totalStudents = studentOrder.length;
@@ -147,19 +185,21 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
 
   /* ─── Start picking ─── */
   const handleStart = useCallback(() => {
-    // Separate fixed students from the rest
-    const fixedStudentIds = new Set(fixedStudents.values());
-    const unfixedActive = activeStudents.filter((s) => !fixedStudentIds.has(s.id));
+    const publicFixedIds = new Set(fixedStudents.values());
+    // 참여자(카드 뽑기 흐름):
+    //  - public 고정 학생은 제외(시작과 동시에 확정 배정되고 📌으로 드러남 — 공개 시나리오)
+    //  - private 고정 학생은 포함(일반 학생처럼 카드 뽑고, 카드 스왑으로 자기 좌석에 도달 — 비공개 시나리오)
+    const participants = activeStudents.filter((s) => !publicFixedIds.has(s.id));
 
     let ordered: Student[];
     if (orderMode === 'random') {
-      ordered = shuffleArray(unfixedActive);
+      ordered = shuffleArray(participants);
     } else if (orderMode === 'numberReverse') {
-      ordered = [...unfixedActive].sort(
+      ordered = [...participants].sort(
         (a, b) => (b.studentNumber ?? 0) - (a.studentNumber ?? 0),
       );
     } else {
-      ordered = [...unfixedActive].sort(
+      ordered = [...participants].sort(
         (a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0),
       );
     }
@@ -172,23 +212,33 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
       rows = Math.max(1, Math.ceil(activeStudents.length / cols));
     }
 
-    // Generate available seat positions (exclude blocked and fixed seats)
+    // 카드 풀에 들어갈 좌석:
+    //  - blockedSeats 제외
+    //  - public 고정 좌석 제외(시작 시 이미 확정되어 학생에게 드러남 — 카드 풀에 넣으면 혼란)
+    //  - private 고정 좌석은 포함(학생에게는 일반 좌석처럼 보여야 함)
     const allSeats: SeatPosition[] = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const key = `${r}-${c}`;
-        if (!blockedSeats.has(key) && !fixedStudents.has(key)) {
-          allSeats.push({ row: r, col: c });
-        }
+        if (blockedSeats.has(key)) continue;
+        if (fixedStudents.has(key)) continue;
+        allSeats.push({ row: r, col: c });
       }
     }
     const shuffled = shuffleArray(allSeats);
 
-    // Pre-assign fixed students
+    // 사전 배정 맵:
+    //  - public: 시작 순간 확정 배정 (기존과 동일)
+    //  - private: 스왑용 맵 구성 (뽑기 진행 중 해당 학생 차례에 자동 도달)
     const preAssignments = new Map<string, Assignment>();
     for (const [seatKey, studentId] of fixedStudents.entries()) {
       const [rStr, cStr] = seatKey.split('-');
       preAssignments.set(studentId, { row: parseInt(rStr!, 10), col: parseInt(cStr!, 10) });
+    }
+
+    const nextPrivateMap = new Map<string, string>(); // studentId -> seatKey
+    for (const a of privateAssignmentsOfScope) {
+      nextPrivateMap.set(a.studentId, a.seatKey);
     }
 
     setPickingRows(rows);
@@ -196,6 +246,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     setStudentOrder(ordered);
     setCurrentIndex(0);
     setAssignments(preAssignments);
+    setPrivateFixedMap(nextPrivateMap);
     setShuffledSeats(shuffled);
     setFlippedCards(new Set());
     setLastAssigned(null);
@@ -203,7 +254,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     setWaitingForNext(false);
     setIsPaused(false);
     setPhase('picking');
-  }, [activeStudents, orderMode, effectiveRows, effectiveCols, needsAutoGrid, blockedSeats, fixedStudents]);
+  }, [activeStudents, orderMode, effectiveRows, effectiveCols, needsAutoGrid, blockedSeats, fixedStudents, privateAssignmentsOfScope, privateStudentSet]);
 
   /* ─── Handle card click ─── */
   const handleCardClick = useCallback(
@@ -211,10 +262,36 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
       if (isPaused || waitingForNext || showPopup || isPickingDone) return;
       if (flippedCards.has(cardIndex)) return;
 
-      const seat = shuffledSeats[cardIndex];
-      if (!seat) return;
+      const clickedSeat = shuffledSeats[cardIndex];
+      if (!clickedSeat) return;
       const currentStudent = studentOrder[currentIndex];
       if (!currentStudent) return;
+
+      // private 고정 학생 차례: 클릭한 카드가 그 학생의 고정 좌석을 가리키도록 shuffledSeats 스왑.
+      // 고정 좌석이 이미 다른 카드에 들어있으므로 그 카드와 clickedSeat 카드의 seat을 맞바꾼다.
+      let seat = clickedSeat;
+      let workingSeats = shuffledSeats;
+      const fixedKey = privateFixedMap.get(currentStudent.id);
+      if (fixedKey) {
+        const [frStr, fcStr] = fixedKey.split('-');
+        const fRow = parseInt(frStr!, 10);
+        const fCol = parseInt(fcStr!, 10);
+        if (clickedSeat.row !== fRow || clickedSeat.col !== fCol) {
+          const targetIdx = shuffledSeats.findIndex(
+            (s, i) => !flippedCards.has(i) && i !== cardIndex && s.row === fRow && s.col === fCol,
+          );
+          if (targetIdx >= 0) {
+            const nextSeats = [...shuffledSeats];
+            const tmp = nextSeats[cardIndex]!;
+            nextSeats[cardIndex] = nextSeats[targetIdx]!;
+            nextSeats[targetIdx] = tmp;
+            workingSeats = nextSeats;
+            setShuffledSeats(nextSeats);
+            seat = nextSeats[cardIndex]!;
+          }
+        }
+      }
+      void workingSeats;
 
       // Flip the card
       setFlippedCards((prev) => new Set(prev).add(cardIndex));
@@ -270,6 +347,8 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
       assignments,
       totalStudents,
       advanceMode,
+      privateFixedMap,
+      playAssignSound,
     ],
   );
 
@@ -356,6 +435,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
     setPickingRows(0);
     setPickingCols(0);
     setFixPickerSeat(null);
+    setPrivateFixedMap(new Map());
   }, []);
 
   /* ─── Save to seating store ─── */
@@ -806,9 +886,22 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                           </button>
                         )}
                       </div>
+
                     </div>
                   )}
                 </div>
+                )}
+
+                {/*
+                 * 비공개 사전 배정은 학생 공개 화면(setup 포함)에 어떤 형태로도 노출되면 안 됨.
+                 * 교사 알림은 handleStart에서 토스트로 1회만 짧게 띄운다.
+                 * 단, 공개/비공개 좌석 충돌은 시작 차단이 필요한 기술 오류이므로 빨간 경고는 유지한다.
+                 * (충돌이 있다는 사실 자체는 "좌석이 겹쳤다"로만 보이고 비공개 내용을 드러내지 않음.)
+                 */}
+                {publicVsPrivateCollision && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2.5 text-red-400 text-xs">
+                    좌석 설정 오류: 같은 자리에 여러 고정이 겹쳐 있습니다. 좌석 설정 또는 설정 &gt; 도구 에서 확인하세요.
+                  </div>
                 )}
 
                 {/* Student order */}
@@ -972,6 +1065,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                     Array.from({ length: pickingCols || effectiveCols }, (_, c) => {
                       const seatKey = `${r}-${c}`;
                       const isBlocked = blockedSeats.has(seatKey);
+                      // public 고정만 학생에게 📌로 노출. private 고정은 일반 배정처럼 보여야 함.
                       const isFixed = fixedStudents.has(seatKey);
                       const assigned = getAssignmentForSeat(r, c);
                       const isLastAssigned =

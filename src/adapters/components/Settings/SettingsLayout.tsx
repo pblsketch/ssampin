@@ -16,6 +16,7 @@ import { SystemTab } from './tabs/SystemTab';
 import { AboutTab } from './tabs/AboutTab';
 import { GoogleIntegrationTab } from './tabs/GoogleIntegrationTab';
 import { TodoTab } from './tabs/TodoTab';
+import { ToolsTab } from './tabs/ToolsTab';
 interface Props {
   activeTab: SettingsTabId;
   onTabChange: (tab: SettingsTabId) => void;
@@ -143,6 +144,7 @@ function TabContent({ activeTab, draft, patch, setDraft }: {
     case 'display':   return <DisplayTab draft={draft} patch={patch} />;
     case 'sidebar':   return <SidebarTab draft={draft} patch={patch} />;
     case 'todo':      return <TodoTab draft={draft} patch={patch} />;
+    case 'tools':     return <ToolsTab />;
     case 'system':    return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
     case 'about':     return <AboutTab />;
     default:          return null;
