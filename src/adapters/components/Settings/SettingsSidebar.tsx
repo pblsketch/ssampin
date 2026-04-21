@@ -19,6 +19,7 @@ const TABS: TabDef[] = [
   { id: 'display',  icon: 'palette',               label: '디스플레이', color: 'bg-yellow-500/10 text-yellow-500' },
   { id: 'sidebar',  icon: 'menu',                  label: '사이드바',   color: 'bg-sp-surface text-sp-muted' },
   { id: 'todo',     icon: 'checklist',             label: '할 일',     color: 'bg-green-500/10 text-green-400' },
+  { id: 'tools',    icon: 'build',                 label: '도구',      color: 'bg-purple-500/10 text-purple-400' },
   { id: 'system',   icon: 'settings_applications', label: '시스템',     color: 'bg-gray-500/10 text-gray-400' },
   { id: 'about',    icon: 'info',                  label: '앱 정보',   color: 'bg-violet-500/10 text-violet-400' },
 ];

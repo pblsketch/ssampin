@@ -18,6 +18,7 @@ import type { IGoogleAuthPort } from '@domain/ports/IGoogleAuthPort';
 import type { IGoogleCalendarPort } from '@domain/ports/IGoogleCalendarPort';
 import type { ICalendarSyncRepository } from '@domain/repositories/ICalendarSyncRepository';
 import type { ISeatConstraintsRepository } from '@domain/repositories/ISeatConstraintsRepository';
+import type { ISeatPickerConfigRepository } from '@domain/repositories/ISeatPickerConfigRepository';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 import type { IBookmarkRepository } from '@domain/repositories/IBookmarkRepository';
 import type { IDDayRepository } from '@domain/repositories/IDDayRepository';
@@ -65,6 +66,7 @@ import { JsonStudentRepository } from '@adapters/repositories/JsonStudentReposit
 import { JsonExternalCalendarRepository } from '@adapters/repositories/JsonExternalCalendarRepository';
 import { GoogleCalendarSyncRepository } from '@adapters/repositories/GoogleCalendarSyncRepository';
 import { JsonSeatConstraintsRepository } from '@adapters/repositories/JsonSeatConstraintsRepository';
+import { JsonSeatPickerConfigRepository } from '@adapters/repositories/JsonSeatPickerConfigRepository';
 import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeachingClassRepository';
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
 import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
@@ -135,6 +137,9 @@ export const externalCalendarRepository: IExternalCalendarRepository =
 
 export const seatConstraintsRepository: ISeatConstraintsRepository =
   new JsonSeatConstraintsRepository(storage);
+
+export const seatPickerConfigRepository: ISeatPickerConfigRepository =
+  new JsonSeatPickerConfigRepository(storage);
 
 export const teachingClassRepository: ITeachingClassRepository =
   new JsonTeachingClassRepository(storage);
