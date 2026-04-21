@@ -14,6 +14,13 @@ const FORMAT_STYLES: Readonly<Record<FormFormat, { label: string; badge: string;
   excel: { label: 'Excel', badge: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',    iconBg: 'bg-gradient-to-br from-emerald-500/30 to-emerald-500/10',      icon: 'table_chart' },
 };
 
+/** 포맷별 액션 버튼 라벨·아이콘: PDF는 직접 인쇄, 그 외는 연결 프로그램에서 열기 */
+function getActionUI(format: FormFormat): { label: string; icon: string } {
+  if (format === 'pdf') return { label: '바로 인쇄', icon: 'print' };
+  if (format === 'hwpx') return { label: '한글에서 열기', icon: 'open_in_new' };
+  return { label: 'Excel에서 열기', icon: 'open_in_new' };
+}
+
 export function FormCard({ form }: FormCardProps) {
   const select = useFormStore((s) => s.select);
   const toggleStar = useFormStore((s) => s.toggleStar);
@@ -60,15 +67,23 @@ export function FormCard({ form }: FormCardProps) {
   const handlePrint = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await printFormAction(form.id);
-      showToast('인쇄 준비 완료', 'success');
+      const format = await printFormAction(form.id);
+      if (format === 'pdf') {
+        showToast('인쇄 대화상자를 여는 중입니다', 'success');
+      } else if (format === 'hwpx') {
+        showToast('한글에서 열었어요. Ctrl+P로 인쇄하세요', 'success');
+      } else {
+        showToast('Excel에서 열었어요. Ctrl+P로 인쇄하세요', 'success');
+      }
     } catch (err) {
       showToast(
-        err instanceof Error ? err.message : '인쇄에 실패했습니다',
+        err instanceof Error ? err.message : '여는 데 실패했습니다',
         'error',
       );
     }
   };
+
+  const actionUI = getActionUI(form.format);
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -191,10 +206,10 @@ export function FormCard({ form }: FormCardProps) {
           <button
             type="button"
             onClick={handlePrint}
-            title="바로 인쇄"
+            title={actionUI.label}
             className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-bg"
           >
-            <span className="material-symbols-outlined text-base">print</span>
+            <span className="material-symbols-outlined text-base">{actionUI.icon}</span>
           </button>
           <div className="relative">
             <button

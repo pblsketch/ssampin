@@ -58,12 +58,21 @@ export function FormPreviewModal() {
 
   const handlePrint = async () => {
     try {
-      await printFormAction(form.id);
-      showToast('인쇄 준비 완료', 'success');
+      const format = await printFormAction(form.id);
+      if (format === 'pdf') {
+        showToast('인쇄 대화상자를 여는 중입니다', 'success');
+      } else if (format === 'hwpx') {
+        showToast('한글에서 열었어요. Ctrl+P로 인쇄하세요', 'success');
+      } else {
+        showToast('Excel에서 열었어요. Ctrl+P로 인쇄하세요', 'success');
+      }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '인쇄 실패', 'error');
+      showToast(err instanceof Error ? err.message : '여는 데 실패', 'error');
     }
   };
+
+  const actionLabel = form.format === 'pdf' ? '바로 인쇄' : form.format === 'hwpx' ? '한글에서 열기' : 'Excel에서 열기';
+  const actionIcon = form.format === 'pdf' ? 'print' : 'open_in_new';
 
   const handleDownload = async () => {
     try {
@@ -187,8 +196,8 @@ export function FormPreviewModal() {
             onClick={handlePrint}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-sp-card text-sp-text rounded-lg text-sm border border-sp-border hover:bg-sp-bg"
           >
-            <span className="material-symbols-outlined text-base">print</span>
-            바로 인쇄
+            <span className="material-symbols-outlined text-base">{actionIcon}</span>
+            {actionLabel}
           </button>
           <button
             type="button"

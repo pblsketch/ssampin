@@ -218,6 +218,9 @@ interface ElectronAPI {
     readBinary: (relPath: string) => Promise<ArrayBuffer | null>;
     removeBinary: (relPath: string) => Promise<void>;
     listBinary: (dirRelPath: string) => Promise<string[]>;
+    openFile: (relPath: string) => Promise<void>;
+    /** PDF 전용: Electron 내장 PDF 뷰어로 로드 후 OS 인쇄 대화상자 표시 */
+    printPdf: (relPath: string) => Promise<void>;
   };
 
   // === 협업 보드 (collab-board) — Design §4.1 ===

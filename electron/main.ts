@@ -1379,6 +1379,96 @@ function registerIpcHandlers(): void {
   );
 
   ipcMain.handle(
+    'forms:openFile',
+    async (_event, args: { relPath: string }): Promise<void> => {
+      const abs = resolveFormsPath(args.relPath, true);
+      try {
+        await fs.promises.access(abs);
+      } catch {
+        throw new Error('forms: 파일이 존재하지 않습니다');
+      }
+      const err = await shell.openPath(abs);
+      if (err) throw new Error(`forms: 기본 프로그램으로 열기 실패 — ${err}`);
+    },
+  );
+
+  // forms:printPdf — PDF 서식 바로 인쇄.
+  // Chromium 내장 PDF 뷰어로 로드 후 webContents.print({ silent: false }) 로 OS 인쇄 대화상자 표시.
+  // OS 연결 프로그램(Acrobat/Edge 등) 의존 제거 — 어떤 환경에서도 일관된 인쇄 흐름 보장.
+  ipcMain.handle(
+    'forms:printPdf',
+    async (_event, args: { relPath: string }): Promise<void> => {
+      const abs = resolveFormsPath(args.relPath, true);
+      const ext = path.extname(abs).toLowerCase();
+      if (ext !== '.pdf') {
+        throw new Error(`forms:printPdf 는 .pdf 전용입니다 (현재: ${ext})`);
+      }
+      try {
+        await fs.promises.access(abs);
+      } catch {
+        throw new Error('forms: 파일이 존재하지 않습니다');
+      }
+
+      // hidden BrowserWindow — Chromium 에 PDF 뷰어 내장되어 있으므로 loadFile 로 직접 로드 가능
+      const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+      const printWin = new BrowserWindow({
+        show: false,
+        width: 800,
+        height: 1000,
+        parent,
+        webPreferences: {
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          // PDF 뷰어 플러그인 사용 허용
+          plugins: true,
+        },
+      });
+
+      try {
+        await printWin.loadFile(abs);
+        // PDF 렌더링은 did-finish-load 이후에도 약간의 시간이 필요 (Chromium 내장 뷰어)
+        await new Promise<void>((r) => setTimeout(r, 600));
+
+        await new Promise<void>((resolve, reject) => {
+          printWin.webContents.print(
+            { silent: false, printBackground: true },
+            (success, failureReason) => {
+              // 사용자 취소(cancelled)는 정상 흐름 — 에러로 취급하지 않음
+              if (success) {
+                resolve();
+              } else if (!failureReason || failureReason === 'cancelled') {
+                resolve();
+              } else {
+                reject(new Error(failureReason));
+              }
+            },
+          );
+        });
+      } catch (err) {
+        // 폴백: Chromium PDF 뷰어 실패(예: 잘못된 PDF, 플러그인 차단 등)
+        // shell.openPath 로 OS 기본 뷰어에서 열도록 시도 → 사용자가 Ctrl+P 로 인쇄
+        try {
+          const openErr = await shell.openPath(abs);
+          if (openErr) {
+            throw new Error(
+              `PDF 인쇄에 실패했습니다. (상세: ${err instanceof Error ? err.message : String(err)}) 폴백도 실패: ${openErr}`,
+            );
+          }
+        } catch (fallbackErr) {
+          throw new Error(
+            `PDF 인쇄에 실패했습니다. (${err instanceof Error ? err.message : String(err)})`,
+          );
+        }
+      } finally {
+        if (!printWin.isDestroyed()) {
+          printWin.destroy();
+        }
+      }
+    },
+  );
+
+  ipcMain.handle(
     'forms:listBinary',
     async (_event, args: { dirRelPath: string }): Promise<string[]> => {
       // 디렉토리 경로는 확장자 체크 건너뜀 (ext 없음)

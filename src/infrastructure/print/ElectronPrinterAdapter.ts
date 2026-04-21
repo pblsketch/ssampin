@@ -2,10 +2,11 @@ import type { FormFormat } from '@domain/entities/FormTemplate';
 import type { IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 /**
- * Phase 1: PDF 만 지원.
- * userData 경계 안쪽 `forms/_print/` 에 임시 파일을 쓴 뒤 기본 PDF 뷰어로 연다.
- * 사용자가 뷰어에서 Ctrl+P 로 인쇄하는 흐름.
- * HWPX/Excel 은 Phase 1 에서 "지원되지 않음" → 상위 UI 에서 안내.
+ * 서식 "바로 인쇄" 어댑터 — 포맷별 분기:
+ *  - PDF: Electron 메인 프로세스가 hidden BrowserWindow 로 PDF 를 열어 OS 인쇄 대화상자를 직접 표시.
+ *         (OS 연결 프로그램 의존 제거 — 어떤 환경에서도 인쇄 가능)
+ *  - HWPX/Excel: userData/forms/_print 에 임시 저장 후 shell.openPath 로 연결 프로그램 실행.
+ *                사용자는 한글/Excel 에서 Ctrl+P 로 인쇄.
  */
 export class ElectronPrinterAdapter implements IPrinterAdapter {
   async print(bytes: Uint8Array, format: FormFormat, filename: string): Promise<void> {
@@ -13,25 +14,61 @@ export class ElectronPrinterAdapter implements IPrinterAdapter {
     if (!api?.forms) {
       throw new Error('Electron 환경에서만 인쇄할 수 있습니다.');
     }
-
-    if (format !== 'pdf') {
-      // Phase 1 제약 — UI 에서 catch 하여 안내 토스트 표시
-      throw new Error('PHASE1_PRINT_UNSUPPORTED');
+    // 구버전 preload 캐시 감지 — 재설치 없이 업데이트만 한 경우를 대비
+    if (typeof api.forms.openFile !== 'function') {
+      throw new Error(
+        '현재 설치된 앱이 최신 버전 파일과 맞지 않습니다. 앱을 완전히 종료한 뒤 최신 설치 파일로 다시 설치해 주세요.',
+      );
+    }
+    // PDF 직접 인쇄 기능(printPdf)이 없는 구버전 preload 도 같은 방식으로 안내
+    if (format === 'pdf' && typeof api.forms.printPdf !== 'function') {
+      throw new Error(
+        '현재 설치된 앱이 최신 PDF 인쇄 기능을 지원하지 않습니다. 앱을 완전히 종료한 뒤 최신 설치 파일로 다시 설치해 주세요.',
+      );
     }
 
-    // 파일명 sanitize (경로 구분자 제거)
+    const ext = format === 'excel' ? 'xlsx' : format;
     const safeBase = filename.replace(/[\\/:*?"<>|]/g, '_');
-    const relPath = `forms/_print/${Date.now()}_${safeBase.endsWith('.pdf') ? safeBase : `${safeBase}.pdf`}`;
+    const base = safeBase.toLowerCase().endsWith(`.${ext}`) ? safeBase : `${safeBase}.${ext}`;
+    const relPath = `forms/_print/${Date.now()}_${base}`;
 
     const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-    await api.forms.writeBinary(relPath, ab as ArrayBuffer);
+    try {
+      await api.forms.writeBinary(relPath, ab as ArrayBuffer);
+    } catch (err) {
+      throw new Error(
+        `임시 파일 저장 실패: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
 
-    // openFile 은 절대 경로를 기대하지만 본 어댑터는 상대경로만 알고 있음 →
-    // preload 의 openPath 는 절대경로용이므로 상대경로를 절대경로로 변환하려면
-    // main 에 별도 API 가 필요. Phase 1 에서는 writeBinary 가 userData 기준으로 기록됨을
-    // 활용하고, 실제 "파일 열기" 는 UI 에서 readBinary 후 Blob URL 로 새 창을 여는 방식으로
-    // 대체하거나, 향후 `forms:openFile` 전용 IPC 를 추가한다.
-    // → Phase 1 MVP: 임시 파일 경로 알림만 남기고 UI 에서 안내.
-    console.log(`[ElectronPrinterAdapter] PDF 임시 저장 완료: ${relPath}`);
+    if (format === 'pdf') {
+      // PDF: Electron 내장 PDF 뷰어 + webContents.print() 로 OS 인쇄 대화상자 표시
+      try {
+        await api.forms.printPdf!(relPath);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new Error(`PDF 인쇄 대화상자를 열지 못했습니다. (상세: ${detail})`);
+      }
+      return;
+    }
+
+    // HWPX / Excel: OS 연결 프로그램에서 열기 (사용자가 Ctrl+P 로 인쇄)
+    try {
+      await api.forms.openFile(relPath);
+    } catch (err) {
+      // shell.openPath 실패: 연결 프로그램 없음(HWPX→한글 미설치, 등)이 가장 흔함
+      const detail = err instanceof Error ? err.message : String(err);
+      if (format === 'hwpx') {
+        throw new Error(
+          `HWPX 파일을 열 수 없습니다. 한글(HWP) 또는 한글뷰어가 설치되어 있는지 확인하세요. (상세: ${detail})`,
+        );
+      }
+      if (format === 'excel') {
+        throw new Error(
+          `Excel 파일을 열 수 없습니다. Microsoft Excel 또는 호환 프로그램 설치를 확인하세요. (상세: ${detail})`,
+        );
+      }
+      throw new Error(`파일을 열 수 없습니다. (상세: ${detail})`);
+    }
   }
 }
