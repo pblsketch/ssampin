@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, Suspense } from 'react';
 import { Sidebar, type PageId } from '@adapters/components/Layout/Sidebar';
 import { EventPopup } from '@adapters/components/Dashboard/EventPopup';
 import { Dashboard } from '@adapters/components/Dashboard/Dashboard';
@@ -13,6 +13,9 @@ import { ClassManagementPage } from '@adapters/components/ClassManagement/ClassM
 import { SettingsPage } from '@adapters/components/Settings/SettingsPage';
 import { Widget } from '@adapters/components/Widget/Widget';
 import { Export } from '@adapters/components/Export/Export';
+const FormsPage = React.lazy(() =>
+  import('@adapters/components/Forms/FormsPage').then((m) => ({ default: m.FormsPage })),
+);
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
 import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
 import { DualToolContainer } from '@adapters/components/Tools/DualToolContainer';
@@ -134,6 +137,13 @@ function renderPage(
   }
   if (page === 'export') {
     return <Export />;
+  }
+  if (page === 'tool-forms') {
+    return (
+      <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sp-muted text-lg">서식 불러오는 중...</p></div>}>
+        <FormsPage onBack={() => onNavigate('tools')} />
+      </Suspense>
+    );
   }
   if (page === 'bookmarks') {
     return <PinGuard feature="bookmarks"><BookmarksPage /></PinGuard>;

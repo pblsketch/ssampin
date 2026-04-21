@@ -14,6 +14,7 @@ export type PageId =
   | 'bookmarks'
   | 'export'
   | 'tools'
+  | 'tool-forms'
   | 'tool-timer'
   | 'tool-random'
   | 'tool-traffic-light'
@@ -102,6 +103,7 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
 /** PIN 보호 불가 페이지 (대시보드, 내보내기, 쌤도구, 설정) */
 const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
   'dashboard', 'export', 'tools',
+  'tool-forms',
   'tool-timer', 'tool-random', 'tool-traffic-light', 'tool-scoreboard',
   'tool-roulette', 'tool-dice', 'tool-coin', 'tool-poll', 'tool-survey', 'tool-seat-picker', 'settings',
 ]);
