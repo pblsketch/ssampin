@@ -123,6 +123,12 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   const showFile = st === 'file' || st === 'both';
   const showText = st === 'text' || st === 'both';
 
+  // 학년/반 입력 필요 여부: 명단에 학년 또는 반 정보가 조금이라도 있으면 true.
+  // 담임반 / 전학공처럼 명단에 학년·반이 아예 없으면 입력 필드를 숨기고 필수 조건에서도 제외 (000 편법 회피).
+  const hasAnyGradeClass = assignment.students.some(
+    (s) => s.grade != null || s.classNum != null,
+  );
+
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
@@ -206,7 +212,19 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
 
   const deadline = new Date(assignment.deadline);
   const deadlineText = `${deadline.getFullYear()}년 ${deadline.getMonth() + 1}월 ${deadline.getDate()}일 ${String(deadline.getHours()).padStart(2, '0')}:${String(deadline.getMinutes()).padStart(2, '0')}`;
-  const canSubmit = studentGrade.trim() && studentClass.trim() && studentNumber && studentName && !isSubmitting && (file || textContent.trim());
+
+  // 명시적 boolean 조합 — 파일/텍스트는 OR 관계 (둘 중 하나만 있으면 제출 가능).
+  const hasFile = file !== null;
+  const hasText = textContent.trim().length > 0;
+  const hasSubmitContent = hasFile || hasText;
+  const gradeClassOk = !hasAnyGradeClass || (studentGrade.trim().length > 0 && studentClass.trim().length > 0);
+  const canSubmit = Boolean(
+    gradeClassOk &&
+    studentNumber &&
+    studentName &&
+    !isSubmitting &&
+    hasSubmitContent,
+  );
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -233,32 +251,38 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
         </div>
       )}
 
-      {/* Student grade / class / number — 한 줄 */}
+      {/* Student grade / class / number — 명단에 학년·반 정보가 없으면 번호만 표시 */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-sp-text mb-1.5">학년 / 반 / 번호</label>
+        <label className="block text-sm font-medium text-sp-text mb-1.5">
+          {hasAnyGradeClass ? '학년 / 반 / 번호' : '번호'}
+        </label>
         <div className="flex gap-2">
-          <div className="flex-1">
-            <input
-              id="student-grade"
-              type="text"
-              inputMode="numeric"
-              value={studentGrade}
-              onChange={(e) => setStudentGrade(e.target.value)}
-              placeholder="학년"
-              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
-            />
-          </div>
-          <div className="flex-1">
-            <input
-              id="student-class"
-              type="text"
-              inputMode="numeric"
-              value={studentClass}
-              onChange={(e) => setStudentClass(e.target.value)}
-              placeholder="반"
-              className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
-            />
-          </div>
+          {hasAnyGradeClass && (
+            <>
+              <div className="flex-1">
+                <input
+                  id="student-grade"
+                  type="text"
+                  inputMode="numeric"
+                  value={studentGrade}
+                  onChange={(e) => setStudentGrade(e.target.value)}
+                  placeholder="학년"
+                  className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
+                />
+              </div>
+              <div className="flex-1">
+                <input
+                  id="student-class"
+                  type="text"
+                  inputMode="numeric"
+                  value={studentClass}
+                  onChange={(e) => setStudentClass(e.target.value)}
+                  placeholder="반"
+                  className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors text-lg text-center"
+                />
+              </div>
+            </>
+          )}
           <div className="flex-1">
             <input
               id="student-number"
@@ -288,11 +312,13 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
             const gradeNum = parseInt(studentGrade, 10);
             const classNum = parseInt(studentClass, 10);
             const num = parseInt(studentNumber, 10);
-            const hasAll = !isNaN(gradeNum) && !isNaN(classNum) && !isNaN(num);
-            // 학년/반/번호가 모두 있으면 복합 매칭, 아니면 이름만
-            const found = hasAll
+            const hasGradeClassInput = !isNaN(gradeNum) && !isNaN(classNum);
+            // 명단에 학년·반이 있고 사용자가 입력한 경우에만 복합 매칭. 번호 + 이름만으로 매칭되는 담임반/전학공 케이스 지원.
+            const found = hasAnyGradeClass && hasGradeClassInput && !isNaN(num)
               ? assignment.students.some((s) => s.name === val && s.grade === gradeNum && s.classNum === classNum && s.number === num)
-              : assignment.students.some((s) => s.name === val);
+              : !isNaN(num)
+                ? assignment.students.some((s) => s.name === val && s.number === num)
+                : assignment.students.some((s) => s.name === val);
             setNameWarning(!found);
           }}
           placeholder="이름을 입력하세요"
@@ -374,6 +400,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
           id="text-content"
           value={textContent}
           onChange={(e) => setTextContent(e.target.value)}
+          // 한글 IME 조합 중에 일부 모바일 브라우저에서 onChange 반영이 늦어, 제출 버튼이 비활성 상태로 잘못 표시되는 문제 방지.
+          onCompositionEnd={(e) => setTextContent(e.currentTarget.value)}
           placeholder="과제 내용을 입력하세요 (선택)"
           rows={5}
           className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none text-sm"
