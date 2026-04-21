@@ -37,9 +37,11 @@ interface EventItemProps {
   event: SchoolEvent;
   today: Date;
   categories: readonly import('@domain/entities/SchoolEvent').CategoryItem[];
+  showGoogle: boolean;
+  showCategory: boolean;
 }
 
-function EventItem({ event, today, categories }: EventItemProps) {
+function EventItem({ event, today, categories, showGoogle, showCategory }: EventItemProps) {
   const dday = calculateDDay(event.date, today);
 
   // D-Day 이벤트: dday <= 0이고 endDate가 아직 지나지 않은 경우
@@ -69,7 +71,7 @@ function EventItem({ event, today, categories }: EventItemProps) {
       {/* 제목 */}
       <span className="flex-1 truncate text-sm text-sp-text">
         {isUrlLike(event.title) ? '(제목 없음)' : event.title}
-        {event.source === 'google' && <GoogleBadge className="ml-1" />}
+        {showGoogle && event.source === 'google' && <GoogleBadge className="ml-1" />}
       </span>
 
       {/* D-Day 배지 */}
@@ -80,9 +82,11 @@ function EventItem({ event, today, categories }: EventItemProps) {
       )}
 
       {/* 카테고리 라벨 */}
-      <span className="shrink-0 rounded px-1.5 py-0.5 text-xs text-sp-muted bg-sp-surface max-w-[80px] truncate">
-        {categoryInfo.name}
-      </span>
+      {showCategory && (
+        <span className="shrink-0 rounded px-1.5 py-0.5 text-xs text-sp-muted bg-sp-surface max-w-[80px] truncate">
+          {categoryInfo.name}
+        </span>
+      )}
     </div>
   );
 }
@@ -152,6 +156,8 @@ export function DashboardEvents() {
   const { events, categories, load } = useEventsStore();
   const { settings, update } = useSettingsStore();
   const rangeDays = settings.eventWidgetRangeDays ?? 14;
+  const showGoogle = settings.eventWidgetShowGoogleBadge !== false;
+  const showCategory = settings.eventWidgetShowCategoryLabel !== false;
   const [showAll, setShowAll] = useState(false);
   const [showRangePicker, setShowRangePicker] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -276,7 +282,7 @@ export function DashboardEvents() {
           ) : (
             <div className="space-y-0.5">
               {visible.map((event) => (
-                <EventItem key={event.id} event={event} today={today} categories={categories} />
+                <EventItem key={event.id} event={event} today={today} categories={categories} showGoogle={showGoogle} showCategory={showCategory} />
               ))}
               {remaining > 0 && (
                 <button
@@ -320,7 +326,7 @@ export function DashboardEvents() {
             <div className="overflow-y-auto flex-1 p-3">
               <div className="space-y-0.5">
                 {filtered.map((event) => (
-                  <EventItem key={event.id} event={event} today={today} categories={categories} />
+                  <EventItem key={event.id} event={event} today={today} categories={categories} showGoogle={showGoogle} showCategory={showCategory} />
                 ))}
               </div>
             </div>
