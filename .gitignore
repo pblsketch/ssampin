@@ -18,6 +18,8 @@ NUL
 .claude/
 .omc/
 .agents/
+docs/.bkit-memory.json
+docs/.pdca-status.json
 
 # 카드뉴스 생성 출력
 card-news-output/
