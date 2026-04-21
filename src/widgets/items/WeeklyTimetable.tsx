@@ -6,6 +6,7 @@ import { useWidgetRefresh } from '../hooks/useWidgetRefresh';
 import type { TeacherPeriod } from '@domain/entities/Timetable';
 import { getDayOfWeek, getCurrentPeriod } from '@domain/rules/periodRules';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { toLocalDateString } from '@shared/utils/localDate';
 
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 
@@ -23,7 +24,7 @@ const DAYS: readonly { key: DayOfWeek; label: string }[] = [
  * 월~금 전체를 격자로 보여줌
  */
 export function WeeklyTimetable() {
-  const { teacherSchedule, load: loadSchedule } = useScheduleStore();
+  const { teacherSchedule, overrides, getEffectiveTeacherSchedule, load: loadSchedule } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
 
   useEffect(() => {
@@ -87,6 +88,22 @@ export function WeeklyTimetable() {
     });
   }, [teacherSchedule]);
 
+  // 이번 주 월~금 날짜 + override 병합된 유효 시간표
+  const effectiveByDay = useMemo(() => {
+    const result = new Map<DayOfWeek, readonly (TeacherPeriod | null)[]>();
+    const jsDay = now.getDay(); // 0=일 ... 6=토
+    const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + mondayOffset);
+    DAYS.forEach(({ key }, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      result.set(key, getEffectiveTeacherSchedule(toLocalDateString(d), weekendDays));
+    });
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, teacherSchedule, overrides, weekendDays]);
+
   if (isEmpty) {
     return (
       <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
@@ -138,7 +155,7 @@ export function WeeklyTimetable() {
                   )}
                 </div>
                 {DAYS.map(({ key }, colIdx) => {
-                  const dayData = teacherSchedule[key] as readonly (TeacherPeriod | null)[] | undefined;
+                  const dayData = effectiveByDay.get(key);
                   const tp = dayData?.[period - 1] ?? null;
                   const subject = tp?.subject ?? '';
                   const colorClass = subject

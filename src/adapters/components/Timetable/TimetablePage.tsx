@@ -23,6 +23,7 @@ import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import { TimetableEditor } from './TimetableEditor';
 import { TempChangeModal } from './TempChangeModal';
+import { TimetableOverridesPanel } from './TimetableOverridesPanel';
 import { InlineColorPalette } from './InlineColorPalette';
 import { NeisImportModal } from './NeisImportModal';
 import { TeacherExcelPreviewModal } from './TeacherExcelPreviewModal';
@@ -48,7 +49,11 @@ export function TimetablePage() {
     overrides,
     load: loadSchedule,
     addOverride,
+    addSwapPair,
+    updateOverride,
     deleteOverride,
+    getEffectiveClassSchedule,
+    getEffectiveTeacherSchedule,
   } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
   useAnalytics();
@@ -135,14 +140,38 @@ export function TimetablePage() {
     });
   }, [now, activeDays]);
 
-  // 오버라이드 맵: 날짜+교시 → override
+  // 오버라이드 맵: 날짜+교시 → override (우클릭 셀 UI에서 "이미 변동 있음" 표시용)
   const overrideMap = useMemo(() => {
     const map = new Map<string, TimetableOverride>();
     for (const o of overrides) {
-      map.set(`${o.date}:${o.period}`, o);
+      // 현재 탭 기준으로 적용되는 override만 지도에 포함
+      const scope = o.scope ?? 'both';
+      const applies = scope === 'both' || scope === (tab === 'class' ? 'class' : 'teacher');
+      if (applies) {
+        map.set(`${o.date}:${o.period}`, o);
+      }
     }
     return map;
-  }, [overrides]);
+  }, [overrides, tab]);
+
+  // 이번 주 날짜별 유효 시간표 (scope 필터 적용)
+  const effectiveClassByDate = useMemo(() => {
+    const map = new Map<string, readonly ClassPeriod[]>();
+    weekDates.forEach((date) => {
+      map.set(date, getEffectiveClassSchedule(date, weekendDays));
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekDates, classSchedule, overrides, weekendDays]);
+
+  const effectiveTeacherByDate = useMemo(() => {
+    const map = new Map<string, readonly (TeacherPeriod | null)[]>();
+    weekDates.forEach((date) => {
+      map.set(date, getEffectiveTeacherSchedule(date, weekendDays));
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekDates, teacherSchedule, overrides, weekendDays]);
 
   // 임시 변경 모달 상태
   const [tempChangeTarget, setTempChangeTarget] = useState<{
@@ -152,6 +181,18 @@ export function TimetablePage() {
     subject: string;
     classroom?: string;
   } | null>(null);
+
+  // 변동 시간표 관리 패널 상태
+  const [overridesPanelOpen, setOverridesPanelOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<TimetableOverride | null>(null);
+  /** 드로어 "+ 변동 추가"에서 열리는 모달 (slotEditable=true) */
+  const [addFromPanelOpen, setAddFromPanelOpen] = useState(false);
+
+  // 미래 변동 개수 (뱃지용)
+  const futureOverrideCount = useMemo(() => {
+    const today = toLocalDateString(new Date());
+    return overrides.filter((o) => o.date >= today).length;
+  }, [overrides]);
 
   const lunchIndex = useMemo(
     () => getLunchBreakIndex(settings.periodTimes, settings.lunchStart, settings.lunchEnd),
@@ -518,6 +559,23 @@ export function TimetablePage() {
             <TabButton active={tab === 'teacher'} onClick={() => handleTabChange('teacher')} label="교사 시간표" />
             <TabButton active={tab === 'class'} onClick={() => handleTabChange('class')} label="학급 시간표" />
           </div>
+          {/* 변동 시간표 버튼 */}
+          <button
+            onClick={() => setOverridesPanelOpen(true)}
+            className="relative flex items-center gap-2 rounded-xl bg-sp-surface border border-sp-border px-4 py-2.5 text-sm font-bold text-sp-text hover:bg-sp-card transition-all active:scale-95"
+            aria-label="변동 시간표 관리"
+          >
+            <span className="material-symbols-outlined text-icon-lg">swap_horiz</span>
+            <span>변동 시간표</span>
+            {futureOverrideCount > 0 && (
+              <span
+                className="ml-1 min-w-[18px] h-[18px] px-1.5 inline-flex items-center justify-center text-[10px] font-bold rounded-full bg-sp-accent text-white"
+                title={`미래 변동 ${futureOverrideCount}건`}
+              >
+                {futureOverrideCount}
+              </span>
+            )}
+          </button>
           {/* 직접 편집 버튼 */}
           <button
             onClick={() => setIsEditing(true)}
@@ -576,11 +634,11 @@ export function TimetablePage() {
                         isCurrent={isCurrent}
                         dayOfWeek={dayOfWeek}
                         tab={tab}
-                        classPeriods={activeDays.map(
-                          (d) => (classSchedule[d] ?? [])[idx] ?? null,
+                        classPeriods={weekDates.map(
+                          (date) => (effectiveClassByDate.get(date) ?? [])[idx] ?? null,
                         )}
-                        teacherPeriods={activeDays.map(
-                          (d) => (teacherSchedule[d] ?? [])[idx] ?? null,
+                        teacherPeriods={weekDates.map(
+                          (date) => (effectiveTeacherByDate.get(date) ?? [])[idx] ?? null,
                         )}
                         lunchBefore={lunchIndex === idx}
                         lunchTimeStr={lunchTimeStr}
@@ -613,15 +671,155 @@ export function TimetablePage() {
         </div>
       </div>
 
-      {/* 임시 변경 모달 */}
+      {/* 임시 변경 모달 (셀 우클릭 경로 — 빠른 입력용, 슬롯 고정) */}
       {tempChangeTarget && (
         <TempChangeModal
           date={tempChangeTarget.date}
           period={tempChangeTarget.period}
           currentSubject={tempChangeTarget.subject}
           currentClassroom={tempChangeTarget.classroom}
-          onSave={(override) => void addOverride(override)}
+          maxPeriods={settings.maxPeriods}
+          defaultScope={tab === 'class' ? 'class' : 'teacher'}
+          resolveBaseSubject={(d, p) => {
+            const dObj = new Date(d + 'T00:00:00');
+            const day = getDayOfWeek(dObj, settings.enableWeekendDays);
+            if (!day) return '';
+            if (tab === 'class') return classSchedule[day]?.[p - 1]?.subject ?? '';
+            return teacherSchedule[day]?.[p - 1]?.subject ?? '';
+          }}
+          resolveBaseClassroom={(d, p) => {
+            const dObj = new Date(d + 'T00:00:00');
+            const day = getDayOfWeek(dObj, settings.enableWeekendDays);
+            if (!day) return '';
+            return teacherSchedule[day]?.[p - 1]?.classroom ?? '';
+          }}
+          onSaveSingle={(input) => {
+            void addOverride({
+              date: input.date,
+              period: input.period,
+              subject: input.subject,
+              classroom: input.classroom,
+              reason: input.reason,
+              kind: input.kind,
+              substituteTeacher: input.substituteTeacher,
+              scope: input.scope,
+            });
+          }}
+          onSaveSwap={(input) => {
+            void addSwapPair(
+              { date: input.slotA.date, period: input.slotA.period, subject: input.slotA.subject, classroom: input.slotA.classroom, reason: input.reason, scope: input.scope },
+              { date: input.slotB.date, period: input.slotB.period, subject: input.slotB.subject, classroom: input.slotB.classroom, reason: input.reason, scope: input.scope },
+            );
+          }}
           onClose={() => setTempChangeTarget(null)}
+        />
+      )}
+
+      {/* 변동 시간표 관리 패널 */}
+      <TimetableOverridesPanel
+        open={overridesPanelOpen}
+        onClose={() => setOverridesPanelOpen(false)}
+        onAddNew={() => setAddFromPanelOpen(true)}
+        onEdit={(o) => setEditTarget(o)}
+      />
+
+      {/* 드로어 "+ 변동 추가"용 모달 */}
+      {addFromPanelOpen && (
+        <TempChangeModal
+          mode="create"
+          slotEditable
+          maxPeriods={settings.maxPeriods}
+          defaultScope={tab === 'class' ? 'class' : 'teacher'}
+          resolveBaseSubject={(d, p) => {
+            const dateObj = new Date(d + 'T00:00:00');
+            const day = getDayOfWeek(dateObj, settings.enableWeekendDays);
+            if (!day) return '';
+            if (tab === 'class') return classSchedule[day]?.[p - 1]?.subject ?? '';
+            return teacherSchedule[day]?.[p - 1]?.subject ?? '';
+          }}
+          resolveBaseClassroom={(d, p) => {
+            const dateObj = new Date(d + 'T00:00:00');
+            const day = getDayOfWeek(dateObj, settings.enableWeekendDays);
+            if (!day) return '';
+            return teacherSchedule[day]?.[p - 1]?.classroom ?? '';
+          }}
+          date={toLocalDateString(new Date())}
+          period={1}
+          currentSubject=""
+          onSaveSingle={(input) => {
+            void addOverride({
+              date: input.date,
+              period: input.period,
+              subject: input.subject,
+              classroom: input.classroom,
+              reason: input.reason,
+              kind: input.kind,
+              substituteTeacher: input.substituteTeacher,
+              scope: input.scope,
+            });
+          }}
+          onSaveSwap={(input) => {
+            void addSwapPair(
+              { date: input.slotA.date, period: input.slotA.period, subject: input.slotA.subject, classroom: input.slotA.classroom, reason: input.reason, scope: input.scope },
+              { date: input.slotB.date, period: input.slotB.period, subject: input.slotB.subject, classroom: input.slotB.classroom, reason: input.reason, scope: input.scope },
+            );
+          }}
+          onClose={() => setAddFromPanelOpen(false)}
+        />
+      )}
+
+      {/* 변동 시간표 수정 모달 — 날짜·교시 포함 전체 편집 */}
+      {editTarget && (
+        <TempChangeModal
+          mode="edit"
+          initialOverride={editTarget}
+          date={editTarget.date}
+          period={editTarget.period}
+          currentSubject={editTarget.subject}
+          currentClassroom={editTarget.classroom}
+          maxPeriods={settings.maxPeriods}
+          resolveBaseSubject={(d, p) => {
+            const dObj = new Date(d + 'T00:00:00');
+            const day = getDayOfWeek(dObj, settings.enableWeekendDays);
+            if (!day) return '';
+            if (tab === 'class') return classSchedule[day]?.[p - 1]?.subject ?? '';
+            return teacherSchedule[day]?.[p - 1]?.subject ?? '';
+          }}
+          resolveBaseClassroom={(d, p) => {
+            const dObj = new Date(d + 'T00:00:00');
+            const day = getDayOfWeek(dObj, settings.enableWeekendDays);
+            if (!day) return '';
+            return teacherSchedule[day]?.[p - 1]?.classroom ?? '';
+          }}
+          onSaveEdit={async (oldId, input) => {
+            const old = overrides.find((o) => o.id === oldId);
+            const slotChanged = !old || old.date !== input.date || old.period !== input.period;
+            if (slotChanged) {
+              // 슬롯(날짜/교시) 변경: 이전 항목 삭제 후 새 슬롯에 upsert
+              await deleteOverride(oldId);
+              await addOverride({
+                date: input.date,
+                period: input.period,
+                subject: input.subject,
+                classroom: input.classroom,
+                reason: input.reason,
+                kind: input.kind,
+                substituteTeacher: input.substituteTeacher,
+                scope: input.scope,
+              });
+            } else {
+              // 같은 슬롯 내 필드만 변경
+              await updateOverride(oldId, {
+                subject: input.subject,
+                classroom: input.classroom,
+                reason: input.reason,
+                kind: input.kind,
+                substituteTeacher: input.substituteTeacher,
+                scope: input.scope,
+              });
+            }
+          }}
+          onClose={() => setEditTarget(null)}
         />
       )}
       <NeisImportModal
@@ -919,7 +1117,7 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
       <span className={`${style.text} font-bold text-sm`}>{displaySubject}</span>
       {displayTeacher && <span className="text-sp-muted text-xs">{displayTeacher}</span>}
       {isOverridden && override.reason && (
-        <span className="text-amber-400/70 text-tiny">{override.reason}</span>
+        <span className="text-amber-300 text-[11px] font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{override.reason}</span>
       )}
     </div>
   );
@@ -1047,7 +1245,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
       <span className={`${style.text} font-bold text-sm`}>{displayPeriod.subject}</span>
       <span className="text-sp-muted text-xs">{displayPeriod.classroom}</span>
       {isOverridden && override.reason && (
-        <span className="text-amber-400/70 text-tiny">{override.reason}</span>
+        <span className="text-amber-300 text-[11px] font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{override.reason}</span>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-20T01:40:35.111Z",
+  "lastUpdated": "2026-04-21T04:48:41.430Z",
   "activeFeatures": [
     "collab-board",
     "ssampin",
@@ -97,7 +97,9 @@
     "board",
     "Results",
     "Board",
-    "dev"
+    "dev",
+    "pdf",
+    "FeedbackWall"
   ],
   "primaryFeature": "ssampin",
   "features": {
@@ -110,9 +112,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:41:40.105Z",
-        "lastUpdated": "2026-04-20T01:35:03.108Z"
+        "lastUpdated": "2026-04-20T15:23:40.562Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\App.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\global.d.ts"
     },
     "electron": {
       "phase": "do",
@@ -123,9 +125,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:08.474Z",
-        "lastUpdated": "2026-04-19T15:10:06.412Z"
+        "lastUpdated": "2026-04-20T15:23:38.950Z"
       },
-      "lastFile": "e:\\github\\ssampin\\electron\\main.ts"
+      "lastFile": "e:\\github\\ssampin\\electron\\preload.ts"
     },
     "entities": {
       "phase": "do",
@@ -136,9 +138,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:29.011Z",
-        "lastUpdated": "2026-04-19T13:46:26.262Z"
+        "lastUpdated": "2026-04-21T03:58:14.262Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\entities\\BoardSession.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\entities\\Timetable.ts"
     },
     "valueObjects": {
       "phase": "do",
@@ -149,9 +151,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:33.723Z",
-        "lastUpdated": "2026-04-19T13:46:07.803Z"
+        "lastUpdated": "2026-04-21T02:01:51.891Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\valueObjects\\BoardAuthToken.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\valueObjects\\SoundSettings.ts"
     },
     "rules": {
       "phase": "do",
@@ -162,9 +164,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:38.490Z",
-        "lastUpdated": "2026-04-20T00:17:12.138Z"
+        "lastUpdated": "2026-04-21T04:03:18.908Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\rules\\toolResultAggregation.test.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\domain\\rules\\timetableOverrideRules.test.ts"
     },
     "ports": {
       "phase": "do",
@@ -188,9 +190,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:42:51.489Z",
-        "lastUpdated": "2026-04-19T13:46:50.251Z"
+        "lastUpdated": "2026-04-21T02:29:10.594Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\domain\\repositories\\IBoardRepository.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\repositories\\JsonScheduleRepository.integration.test.ts"
     },
     "schedule": {
       "phase": "do",
@@ -279,9 +281,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:22.830Z",
-        "lastUpdated": "2026-04-20T00:52:43.619Z"
+        "lastUpdated": "2026-04-21T04:40:59.696Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\stores\\useBoardSessionStore.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\stores\\useScheduleStore.scope.test.ts"
     },
     "adapters": {
       "phase": "do",
@@ -305,9 +307,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:35.268Z",
-        "lastUpdated": "2026-04-17T06:46:16.459Z"
+        "lastUpdated": "2026-04-20T15:39:14.118Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\adapters\\presenters\\surveyProgressionPresenter.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\presenters\\pdfTemplatePresenter.test.ts"
     },
     "di": {
       "phase": "do",
@@ -357,9 +359,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T00:43:52.212Z",
-        "lastUpdated": "2026-04-20T00:38:39.751Z"
+        "lastUpdated": "2026-04-21T02:12:37.005Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\infrastructure\\export\\ExcelExporter.test.ts"
+      "lastFile": "e:\\github\\ssampin\\src\\infrastructure\\export\\index.ts"
     },
     "Layout": {
       "phase": "do",
@@ -383,9 +385,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T01:08:53.740Z",
-        "lastUpdated": "2026-03-26T08:17:25.964Z"
+        "lastUpdated": "2026-04-21T03:42:02.148Z"
       },
-      "lastFile": "e:/github/ssampin/src/adapters/components/Dashboard/DashboardEvents.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Dashboard\\DashboardTimetable.tsx"
     },
     "Seating": {
       "phase": "do",
@@ -409,9 +411,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T02:28:24.487Z",
-        "lastUpdated": "2026-03-23T15:41:30.369Z"
+        "lastUpdated": "2026-04-21T04:46:48.924Z"
       },
-      "lastFile": "e:/github/ssampin/src/adapters/components/Timetable/NeisImportModal.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Timetable\\TimetablePage.tsx"
     },
     "StudentRecords": {
       "phase": "do",
@@ -500,9 +502,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T03:22:49.591Z",
-        "lastUpdated": "2026-03-23T15:43:18.904Z"
+        "lastUpdated": "2026-04-21T04:36:17.716Z"
       },
-      "lastFile": "e:/github/ssampin/src/adapters/components/Export/ExportPreviewModal.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Export\\PdfCanvasPreview.tsx"
     },
     "landing": {
       "phase": "do",
@@ -565,9 +567,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T12:44:00.004Z",
-        "lastUpdated": "2026-03-23T15:39:15.953Z"
+        "lastUpdated": "2026-04-21T02:03:44.306Z"
       },
-      "lastFile": "e:/github/ssampin/src/adapters/components/Meal/MealEditModal.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Meal\\MealPage.tsx"
     },
     "pin": {
       "phase": "do",
@@ -591,7 +593,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-01T13:36:33.469Z",
-        "lastUpdated": "2026-04-20T01:28:39.479Z"
+        "lastUpdated": "2026-04-20T15:29:15.987Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\ToolCollabBoard.tsx"
     },
@@ -617,9 +619,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-02T14:23:59.670Z",
-        "lastUpdated": "2026-03-25T14:18:39.979Z"
+        "lastUpdated": "2026-04-21T03:43:10.426Z"
       },
-      "lastFile": "e:\\github\\ssampin\\src\\widgets\\items\\SurveyWidget.tsx"
+      "lastFile": "e:\\github\\ssampin\\src\\widgets\\items\\ClassTimetable.tsx"
     },
     "calendar": {
       "phase": "do",
@@ -1358,6 +1360,32 @@
         "lastUpdated": "2026-04-20T01:30:16.056Z"
       },
       "lastFile": "e:\\github\\ssampin\\src\\dev\\SpreadsheetDemo.tsx"
+    },
+    "pdf": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-20T15:09:20.728Z",
+        "lastUpdated": "2026-04-21T04:48:41.430Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\src\\infrastructure\\export\\pdf\\FontRegistry.ts"
+    },
+    "FeedbackWall": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-20T15:29:20.681Z",
+        "lastUpdated": "2026-04-20T15:29:20.681Z"
+      },
+      "lastFile": "e:\\github\\ssampin\\src\\adapters\\components\\Tools\\FeedbackWall\\FeedbackWallView.tsx"
     }
   },
   "pipeline": {
@@ -1368,7 +1396,7 @@
   "session": {
     "startedAt": "2026-03-01T00:40:27.620Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-20T01:35:03.108Z"
+    "lastActivity": "2026-04-21T04:48:41.430Z"
   },
   "history": [
     {
@@ -38508,6 +38536,840 @@
       "matchRate": 95,
       "mvpProgress": 80,
       "note": "Step 7b snapshot analysis. 4 High risks identified. Recommend /pdca iterate before Step 8 manual QA."
+    },
+    {
+      "timestamp": "2026-04-20T15:09:20.728Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:09:25.229Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:09:29.178Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:09:30.633Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:09:43.364Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:09:56.886Z",
+      "feature": "export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:09:58.357Z",
+      "feature": "export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:14:32.438Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:15:11.265Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:15:28.612Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:23:36.817Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:23:38.950Z",
+      "feature": "electron",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:23:40.562Z",
+      "feature": "ssampin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:23:58.290Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:24:28.886Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:24:34.833Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:26:19.792Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:29:15.987Z",
+      "feature": "Tools",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:29:20.681Z",
+      "feature": "FeedbackWall",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:30:42.714Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:32:02.083Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:32:36.916Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:32:38.859Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:32:53.842Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:36:47.633Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:37:32.483Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:38:01.625Z",
+      "feature": "presenters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:38:21.537Z",
+      "feature": "presenters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:38:33.464Z",
+      "feature": "presenters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-20T15:39:14.118Z",
+      "feature": "presenters",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:01:51.891Z",
+      "feature": "valueObjects",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:03:37.941Z",
+      "feature": "Meal",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:03:44.306Z",
+      "feature": "Meal",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:08:53.312Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:09:14.403Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:11:06.023Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:11:13.272Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:11:39.502Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:11:49.251Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:12:00.026Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:12:12.008Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:12:28.192Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:12:31.388Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:12:37.005Z",
+      "feature": "export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:12:44.036Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:12:55.793Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:13:13.720Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:13:17.932Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:13:21.958Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:13:32.485Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:13:43.739Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:14:13.036Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:14:16.282Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:14:24.281Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:14:48.206Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:14:58.729Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:15:25.502Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:15:33.356Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:15:40.834Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:15:49.976Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:16:02.548Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:28:50.745Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:29:03.449Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:29:10.594Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:44:35.753Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:44:46.163Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:44:56.642Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:45:14.641Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T02:45:24.427Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:29:10.597Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:29:23.052Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:29:35.000Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:41:51.911Z",
+      "feature": "Dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:42:02.148Z",
+      "feature": "Dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:42:17.901Z",
+      "feature": "items",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:42:23.845Z",
+      "feature": "items",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:42:33.538Z",
+      "feature": "items",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:42:40.041Z",
+      "feature": "items",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:42:53.094Z",
+      "feature": "items",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:43:04.853Z",
+      "feature": "items",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:43:10.426Z",
+      "feature": "items",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:43:36.975Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:44:43.894Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:45:03.162Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:45:15.285Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:45:21.570Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:45:34.330Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:45:48.263Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:46:37.902Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:56:38.617Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:58:05.478Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:58:14.262Z",
+      "feature": "entities",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:58:31.653Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:58:41.298Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:58:47.022Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:58:53.374Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:59:00.574Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:59:10.243Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:59:18.135Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:59:31.682Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:59:42.486Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:59:56.163Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:00:14.323Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:00:30.116Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:00:37.994Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:00:49.527Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:00:57.375Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:01:07.310Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:01:22.363Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:01:36.512Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:01:45.075Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:01:56.682Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:03:18.908Z",
+      "feature": "rules",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:32:59.227Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:33:17.130Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:33:23.555Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:33:33.297Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:33:46.201Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:33:53.917Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:34:02.005Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:34:32.103Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:34:38.428Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:34:48.763Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:34:58.573Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:35:11.955Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:36:17.716Z",
+      "feature": "Export",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:40:13.221Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:40:35.984Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:40:42.428Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:40:59.696Z",
+      "feature": "stores",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:42:21.903Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:42:32.758Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:43:08.932Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:43:29.845Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:45:18.556Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:46:21.089Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:46:24.581Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:46:48.924Z",
+      "feature": "Timetable",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T04:48:41.430Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
     }
   ]
 }
