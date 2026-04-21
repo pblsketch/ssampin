@@ -6,34 +6,66 @@
  * 학생들이 같은 WiFi 없이도 모바일 데이터로 접속 가능.
  */
 import fs from 'fs';
+import path from 'path';
 import { app } from 'electron';
 import { Tunnel, bin, install, use } from 'cloudflared';
 
 let activeTunnel: Tunnel | null = null;
 
 /**
- * 패키지된 Electron 앱에서는 asar 내부 경로가 실제 파일시스템과 다르다.
- * cloudflared 바이너리는 app.asar.unpacked에 있으므로 경로를 보정한다.
+ * 패키지된 앱에서 asar.unpacked 경로(C:\Program Files\...)는 쓰기 권한이 없어
+ * 첫 설치 시 EPERM 오류가 난다. 쓰기 가능한 userData 경로로 설치/다운로드한다.
+ *
+ * 호환성: 이전 버전에서 이미 asar.unpacked에 바이너리가 설치된 사용자는
+ * 그 경로를 그대로 사용한다(재다운로드 방지).
+ */
+function getUnpackedBinPath(): string {
+  return bin.replace('app.asar', 'app.asar.unpacked');
+}
+
+function getUserDataBinPath(): string {
+  const binName = process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared';
+  return path.join(app.getPath('userData'), 'bin', binName);
+}
+
+/**
+ * 실제 사용할 바이너리 경로를 결정한다.
+ * - 개발 모드: cloudflared 패키지 기본 경로
+ * - 패키지 모드: userData 우선, 이전 버전 호환을 위해 asar.unpacked 도 체크
  */
 function getActualBinPath(): string {
-  if (app.isPackaged) {
-    return bin.replace('app.asar', 'app.asar.unpacked');
+  if (!app.isPackaged) {
+    return bin;
   }
-  return bin;
+  const userDataBin = getUserDataBinPath();
+  if (fs.existsSync(userDataBin)) {
+    return userDataBin;
+  }
+  // 이전 버전 호환: 이미 asar.unpacked에 설치된 사용자는 그 경로 유지
+  const unpackedBin = getUnpackedBinPath();
+  if (fs.existsSync(unpackedBin)) {
+    return unpackedBin;
+  }
+  // 신규 설치 대상 경로 (쓰기 가능한 userData)
+  return userDataBin;
 }
 
 /** cloudflared 바이너리가 설치되어 있는지 확인 */
 export function isTunnelAvailable(): boolean {
-  const actualBin = getActualBinPath();
-  return fs.existsSync(actualBin);
+  if (!app.isPackaged) {
+    return fs.existsSync(bin);
+  }
+  return fs.existsSync(getUserDataBinPath()) || fs.existsSync(getUnpackedBinPath());
 }
 
 /** 바이너리 설치 (첫 사용 시, ~40MB 다운로드) */
 export async function installTunnel(): Promise<void> {
-  const actualBin = getActualBinPath();
-  if (!fs.existsSync(actualBin)) {
-    await install(actualBin);
+  if (isTunnelAvailable()) {
+    return;
   }
+  const targetBin = app.isPackaged ? getUserDataBinPath() : bin;
+  fs.mkdirSync(path.dirname(targetBin), { recursive: true });
+  await install(targetBin);
 }
 
 /** 터널 시작 → 공개 URL 반환 */
