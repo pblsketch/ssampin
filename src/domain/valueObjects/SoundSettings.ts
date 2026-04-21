@@ -5,7 +5,9 @@ export interface SoundSettings {
 
 export interface ToolSoundConfig {
   toolId: string;
-  progressSound: string;   // public/sounds/ relative path
+  // Relative path from document base (no leading slash) so it resolves correctly
+  // in both Vite dev server and Electron production (file://) environments.
+  progressSound: string;
   resultSound: string;
   progressLoop: boolean;
   fadeDuration: number;     // ms
@@ -19,50 +21,50 @@ export const DEFAULT_SOUND_SETTINGS: SoundSettings = {
 export const TOOL_SOUND_MAP: Record<string, ToolSoundConfig> = {
   random: {
     toolId: 'random',
-    progressSound: '/sounds/draw-progress.wav',
-    resultSound: '/sounds/draw-result.wav',
+    progressSound: 'sounds/draw-progress.wav',
+    resultSound: 'sounds/draw-result.wav',
     progressLoop: true,
     fadeDuration: 100,
   },
   coin: {
     toolId: 'coin',
-    progressSound: '/sounds/coin-spin.wav',
-    resultSound: '/sounds/coin-land.wav',
+    progressSound: 'sounds/coin-spin.wav',
+    resultSound: 'sounds/coin-land.wav',
     progressLoop: false,
     fadeDuration: 100,
   },
   dice: {
     toolId: 'dice',
-    progressSound: '/sounds/dice-roll.wav',
-    resultSound: '/sounds/dice-stop.wav',
+    progressSound: 'sounds/dice-roll.wav',
+    resultSound: 'sounds/dice-stop.wav',
     progressLoop: false,
     fadeDuration: 100,
   },
   roulette: {
     toolId: 'roulette',
-    progressSound: '/sounds/roulette-spin.wav',
-    resultSound: '/sounds/roulette-stop.wav',
+    progressSound: 'sounds/roulette-spin.wav',
+    resultSound: 'sounds/roulette-stop.wav',
     progressLoop: false,
     fadeDuration: 100,
   },
   seatPicker: {
     toolId: 'seatPicker',
     progressSound: '',
-    resultSound: '/sounds/seat-assign.wav',
+    resultSound: 'sounds/seat-assign.wav',
     progressLoop: false,
     fadeDuration: 0,
   },
   trafficLight: {
     toolId: 'trafficLight',
     progressSound: '',
-    resultSound: '/sounds/traffic-beep.wav',
+    resultSound: 'sounds/traffic-beep.wav',
     progressLoop: false,
     fadeDuration: 0,
   },
   workSymbols: {
     toolId: 'workSymbols',
     progressSound: '',
-    resultSound: '/sounds/symbol-switch.wav',
+    resultSound: 'sounds/symbol-switch.wav',
     progressLoop: false,
     fadeDuration: 0,
   },
