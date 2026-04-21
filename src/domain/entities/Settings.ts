@@ -277,6 +277,10 @@ export interface Settings {
   readonly syncBirthdaysToSchedule?: boolean;
   /** 대시보드 일정 위젯 표시 기간 (일 단위, 기본 14) */
   readonly eventWidgetRangeDays?: number;
+  /** 대시보드 일정 위젯에서 구글 캘린더 배지 표시 여부 (기본: true) */
+  readonly eventWidgetShowGoogleBadge?: boolean;
+  /** 대시보드 일정 위젯에서 카테고리 라벨 표시 여부 (기본: true) */
+  readonly eventWidgetShowCategoryLabel?: boolean;
   /** 주말 수업 요일 — 시간표에 토/일 컬럼 추가 (예: ['토'] 또는 ['토','일']) */
   readonly enableWeekendDays?: readonly ('토' | '일')[];
   /** 사용자 커스텀 폰트 */

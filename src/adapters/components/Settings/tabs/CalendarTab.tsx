@@ -60,6 +60,28 @@ export function CalendarTab({ draft, patch }: Props) {
           <p className="text-xs text-sp-muted">
             D-Day로 설정한 일정은 기간에 관계없이 항상 표시됩니다
           </p>
+
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-sp-text">구글 캘린더 배지 표시</span>
+              <span className="text-xs text-sp-muted">일정명 옆에 &apos;G&apos; 배지 표시</span>
+            </div>
+            <Toggle
+              checked={draft.eventWidgetShowGoogleBadge !== false}
+              onChange={(v) => patch({ eventWidgetShowGoogleBadge: v })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-sp-text">카테고리 라벨 표시</span>
+              <span className="text-xs text-sp-muted">일정 오른쪽에 학사일정/교직원회의 등 카테고리 이름 표시</span>
+            </div>
+            <Toggle
+              checked={draft.eventWidgetShowCategoryLabel !== false}
+              onChange={(v) => patch({ eventWidgetShowCategoryLabel: v })}
+            />
+          </div>
         </div>
       </SettingsSection>
 
