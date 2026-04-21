@@ -88,6 +88,16 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     }
     .modal-card .error { color: #dc2626; font-size: 12px; margin-top: 8px; min-height: 16px; }
     #error-overlay .modal-card h1 { color: #dc2626; }
+    /* 팜 리젝션: 브라우저 기본 스크롤·줌 제스처 차단 (pointer 이벤트는 JS에서 필터) */
+    canvas { touch-action: none; }
+    .error-card {
+      background: #ffffff; border-radius: 16px; padding: 32px 28px;
+      width: min(380px, 92vw); box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      text-align: center;
+    }
+    .error-title { font-size: 20px; font-weight: 700; color: #dc2626; margin-bottom: 10px; }
+    .error-body { font-size: 14px; color: #1e293b; margin-bottom: 8px; line-height: 1.5; }
+    .error-hint { font-size: 12px; color: #94a3b8; line-height: 1.5; }
   </style>
 
   <script type="importmap">
@@ -120,9 +130,10 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
   </div>
 
   <div id="error-overlay" hidden>
-    <div class="modal-card">
-      <h1 id="err-title">연결할 수 없습니다</h1>
-      <p id="err-message">선생님께 QR 코드를 다시 받아주세요.</p>
+    <div class="error-card">
+      <div class="error-title" id="error-title">연결 오류</div>
+      <div class="error-body" id="error-body"></div>
+      <div class="error-hint" id="error-hint"></div>
     </div>
   </div>
 
@@ -146,10 +157,41 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
     const statusText = document.getElementById('status-text');
     const setStatus = (cls, text) => { statusEl.className = cls; statusText.textContent = text; };
 
-    const showError = (title, msg) => {
-      document.getElementById('err-title').textContent = title;
-      document.getElementById('err-message').textContent = msg;
-      document.getElementById('error-overlay').hidden = false;
+    const showCloseError = (code) => {
+      const overlay = document.getElementById('error-overlay');
+      if (!overlay) return;
+      const titleEl = document.getElementById('error-title');
+      const bodyEl  = document.getElementById('error-body');
+      const hintEl  = document.getElementById('error-hint');
+      if (!titleEl || !bodyEl || !hintEl) return;
+      overlay.hidden = false;
+      switch (code) {
+        case 1008:
+          titleEl.textContent = '입장 정보가 맞지 않습니다';
+          bodyEl.textContent  = '세션 코드나 이름이 올바르지 않습니다.';
+          hintEl.textContent  = '선생님께 새 QR 코드를 받아 다시 접속해주세요.';
+          break;
+        case 1013:
+          titleEl.textContent = '접속 인원이 가득 찼습니다';
+          bodyEl.textContent  = '이 보드는 최대 50명까지 접속할 수 있어요.';
+          hintEl.textContent  = '다른 학생이 나간 뒤 다시 시도해주세요.';
+          break;
+        case 1000:
+          titleEl.textContent = '수업이 종료되었어요';
+          bodyEl.textContent  = '선생님이 보드를 마쳤습니다.';
+          hintEl.textContent  = '다음 수업 때 다시 만나요!';
+          break;
+        case 1006:
+          titleEl.textContent = '비정상 연결 종료';
+          bodyEl.textContent  = 'Wi-Fi가 갑자기 끊기거나 서버 오류가 발생했어요.';
+          hintEl.textContent  = '잠시 후 다시 시도해주세요.';
+          break;
+        default:
+          titleEl.textContent = '연결이 끊어졌어요';
+          bodyEl.textContent  = 'Wi-Fi 또는 인터넷을 확인해주세요.';
+          hintEl.textContent  = '5초 뒤 자동으로 다시 연결을 시도합니다.';
+          break;
+      }
     };
 
     const joinModal = document.getElementById('join-modal');
@@ -189,10 +231,6 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
         params: { t: AUTH_TOKEN, code: SESSION_CODE },
       });
 
-      // iter #3 진단 로그 — 실제 WebSocket 상태를 학생 브라우저 콘솔에서 확인.
-      console.log('[board] provider url:', provider.url);
-      console.log('[board] boardId:', BOARD_ID, 'token head:', AUTH_TOKEN.slice(0, 6), 'code:', SESSION_CODE);
-
       provider.on('status', (ev) => {
         console.log('[board] status:', ev.status);
         if (ev.status === 'connected') setStatus('connected', '연결됨');
@@ -201,8 +239,7 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       });
       provider.on('connection-close', (ev) => {
         console.warn('[board] connection-close:', ev && ev.code, ev && ev.reason);
-        if (ev && ev.code === 1008) showError('연결할 수 없습니다', '선생님께 QR 코드를 다시 받아주세요.');
-        else if (ev && ev.code === 1013) showError('접속 인원 초과', '참여 인원이 가득 찼습니다. 선생님께 문의해주세요.');
+        showCloseError(ev?.code || 1006);
       });
       provider.on('connection-error', (ev) => {
         console.error('[board] connection-error:', ev);
@@ -253,6 +290,44 @@ export function generateBoardHTML(input: GenerateBoardHtmlInput): string {
       }
 
       createRoot(document.getElementById('app')).render(React.createElement(App));
+
+      // 팜 리젝션 — iPad + Apple Pencil 사용 시 손바닥 터치 차단
+      // 기본 정책: touch 차단 (Plan §6 Q1 기본값 "기본 ON")
+      // pen / mouse 는 필터 없이 통과 → Excalidraw 기본 동작.
+      // 향후 "iPad 감지 시만 ON" 옵션으로 조정 가능.
+      let palmRetry = 0;
+      let palmInstalled = false;
+      function installPalmRejection() {
+        if (palmInstalled) return;
+        const scope = document.querySelector('.excalidraw');
+        if (!scope) {
+          if (++palmRetry > 10) {
+            console.warn('[board] palm rejection: .excalidraw 요소를 찾지 못해 설치 중단 (10회 초과)');
+            return;
+          }
+          setTimeout(installPalmRejection, 200);
+          return;
+        }
+        const blockTouch = (e) => {
+          if (e.pointerType === 'touch') {
+            // 캔버스 영역만 차단. 버튼·메뉴 등 UI 클릭은 허용.
+            const target = e.target;
+            const isCanvas = target instanceof HTMLCanvasElement
+              || target.closest('.excalidraw__canvas-container')
+              || target.closest('.interactive');
+            if (isCanvas) {
+              e.stopPropagation();
+              e.preventDefault();
+            }
+          }
+        };
+        ['pointerdown', 'pointermove', 'pointerup'].forEach(type => {
+          scope.addEventListener(type, blockTouch, { capture: true, passive: false });
+        });
+        palmInstalled = true;
+        console.log('[board] palm rejection installed (touch blocked on canvas)');
+      }
+      installPalmRejection();
     }
   </script>
 </body>
