@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { getSubjectWidgetStyle } from '@adapters/presenters/timetablePresenter';
+import { toLocalDateString } from '@shared/utils/localDate';
+import type { ClassPeriod } from '@domain/entities/Timetable';
 
 import type { DayOfWeek } from '@domain/valueObjects/DayOfWeek';
 
@@ -19,7 +21,7 @@ const DAYS: readonly { key: DayOfWeek; label: string }[] = [
  * 월~금 학급 시간표를 격자로 보여줌
  */
 export function ClassTimetable() {
-  const { classSchedule, load: loadSchedule } = useScheduleStore();
+  const { classSchedule, overrides, getEffectiveClassSchedule, load: loadSchedule } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
 
   useEffect(() => {
@@ -28,6 +30,7 @@ export function ClassTimetable() {
   }, [loadSchedule, loadSettings]);
 
   const maxPeriods = settings.maxPeriods;
+  const weekendDays = settings.enableWeekendDays;
 
   const periods = useMemo(() => {
     return Array.from({ length: maxPeriods }, (_, i) => i + 1);
@@ -39,6 +42,23 @@ export function ClassTimetable() {
       return !dayData || dayData.length === 0;
     });
   }, [classSchedule]);
+
+  // 이번 주 월~금 날짜 + override 병합된 유효 학급 시간표
+  const effectiveByDay = useMemo(() => {
+    const now = new Date();
+    const result = new Map<DayOfWeek, readonly ClassPeriod[]>();
+    const jsDay = now.getDay();
+    const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + mondayOffset);
+    DAYS.forEach(({ key }, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      result.set(key, getEffectiveClassSchedule(toLocalDateString(d), weekendDays));
+    });
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classSchedule, overrides, weekendDays]);
 
   if (isEmpty) {
     return (
@@ -78,7 +98,7 @@ export function ClassTimetable() {
                 {period}
               </div>
               {DAYS.map(({ key }) => {
-                const dayData = classSchedule[key];
+                const dayData = effectiveByDay.get(key);
                 const cp = dayData?.[period - 1];
                 const subject = cp?.subject ?? '';
                 const colorClass = subject

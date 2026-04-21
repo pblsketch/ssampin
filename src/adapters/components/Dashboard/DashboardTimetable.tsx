@@ -12,7 +12,14 @@ import { DateNavigator, isSameDay } from '@adapters/components/common/DateNaviga
 type TabType = 'class' | 'teacher';
 
 export function DashboardTimetable() {
-  const { classSchedule, teacherSchedule, overrides, getEffectiveTeacherSchedule, load: loadSchedule } = useScheduleStore();
+  const {
+    classSchedule,
+    teacherSchedule,
+    overrides,
+    getEffectiveTeacherSchedule,
+    getEffectiveClassSchedule,
+    load: loadSchedule,
+  } = useScheduleStore();
   const { settings, load: loadSettings } = useSettingsStore();
   const [tab, setTab] = useState<TabType>(() => {
     try {
@@ -101,14 +108,15 @@ export function DashboardTimetable() {
     return map;
   }, [settings.periodTimes]);
 
-  // 해당 날짜의 학급 시간표
+  // 해당 날짜의 학급 시간표 (오버라이드 적용)
+  const viewDateStr = useMemo(() => toLocalDateString(viewDate), [viewDate]);
   const todayClassPeriods: readonly ClassPeriod[] = useMemo(() => {
     if (!dayOfWeek) return [];
-    return classSchedule[dayOfWeek] ?? [];
-  }, [dayOfWeek, classSchedule]);
+    return getEffectiveClassSchedule(viewDateStr, weekendDays);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayOfWeek, viewDateStr, classSchedule, overrides]);
 
   // 해당 날짜의 교사 시간표 (오버라이드 적용)
-  const viewDateStr = useMemo(() => toLocalDateString(viewDate), [viewDate]);
   const todayTeacherPeriods: readonly (TeacherPeriod | null)[] = useMemo(() => {
     if (!dayOfWeek) return [];
     return getEffectiveTeacherSchedule(viewDateStr, weekendDays);
