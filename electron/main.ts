@@ -886,6 +886,29 @@ function registerIpcHandlers(): void {
     },
   );
 
+  ipcMain.handle('data:remove', (_event, filename: string): void => {
+    const dataDir = getDataDir();
+    const filePath = path.join(dataDir, `${filename}.json`);
+    const backupPath = path.join(dataDir, `${filename}.backup.json`);
+    const tempPath = path.join(dataDir, `${filename}.tmp.json`);
+
+    for (const targetPath of [filePath, backupPath, tempPath]) {
+      try {
+        if (fs.existsSync(targetPath)) {
+          fs.unlinkSync(targetPath);
+        }
+      } catch (error) {
+        console.error(`[data:remove] 삭제 실패: ${targetPath}`, error);
+      }
+    }
+
+    for (const win of [mainWindow, widgetWindow]) {
+      if (win && !win.isDestroyed() && win.webContents.id !== _event.sender.id) {
+        win.webContents.send('data:changed', filename);
+      }
+    }
+  });
+
   // system:getMemoryMetrics — 현재 Electron 앱 프로세스별 메모리 사용량 조회 (진단용)
   // 반환: { totalBytes, processes: [{ type, pid, memoryBytes }] }
   ipcMain.handle('system:getMemoryMetrics', async (): Promise<{

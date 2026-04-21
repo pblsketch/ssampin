@@ -25,6 +25,14 @@ export class ElectronStorageAdapter implements IStoragePort {
     await api.writeData(filename, JSON.stringify(data, null, 2));
   }
 
+  async remove(filename: string): Promise<void> {
+    const api = window.electronAPI;
+    if (!api) {
+      return;
+    }
+    await api.removeData(filename);
+  }
+
   async readBinary(relPath: string): Promise<Uint8Array | null> {
     const api = window.electronAPI;
     if (!api?.forms) return null;

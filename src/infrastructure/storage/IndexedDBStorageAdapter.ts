@@ -49,6 +49,11 @@ export class IndexedDBStorageAdapter implements IStoragePort {
     await db.put(DATA_STORE, data, filename);
   }
 
+  async remove(filename: string): Promise<void> {
+    const db = await getDB();
+    await db.delete(DATA_STORE, filename);
+  }
+
   async readBinary(relPath: string): Promise<Uint8Array | null> {
     try {
       const db = await getDB();

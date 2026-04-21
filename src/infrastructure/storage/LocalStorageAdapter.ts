@@ -40,6 +40,10 @@ export class LocalStorageAdapter implements IStoragePort {
     localStorage.setItem(PREFIX + filename, JSON.stringify(data));
   }
 
+  async remove(filename: string): Promise<void> {
+    localStorage.removeItem(PREFIX + filename);
+  }
+
   async readBinary(relPath: string): Promise<Uint8Array | null> {
     try {
       const db = await getBinDB();

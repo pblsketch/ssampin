@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('data:read', filename),
   writeData: (filename: string, data: string): Promise<void> =>
     ipcRenderer.invoke('data:write', filename, data),
+  removeData: (filename: string): Promise<void> =>
+    ipcRenderer.invoke('data:remove', filename),
   setAlwaysOnTop: (flag: boolean): Promise<void> =>
     ipcRenderer.invoke('window:setAlwaysOnTop', flag),
   setWidget: (options: {
