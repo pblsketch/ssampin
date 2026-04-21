@@ -100,6 +100,7 @@ export const usePinStore = create<PinState>((set, get) => ({
         studentRecords: false,
         meal: false,
         memo: false,
+        note: false,
         todo: false,
         classManagement: false,
         bookmarks: false,

@@ -91,6 +91,7 @@ const DEFAULT_SETTINGS: Settings = {
       studentRecords: false,
       meal: false,
       memo: false,
+      note: false,
       todo: false,
       classManagement: false,
       bookmarks: false,
@@ -211,7 +212,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
               autoSync: { ...DEFAULT_SETTINGS.neis.autoSync!, ...(savedAutoSync ?? {}) },
             };
           })(),
-          pin: { ...DEFAULT_SETTINGS.pin, ...((saved as unknown as { pin?: Partial<Settings['pin']> }).pin ?? {}) },
+          pin: (() => {
+            const savedPin = (saved as unknown as { pin?: Partial<Settings['pin']> }).pin ?? {};
+            return {
+              ...DEFAULT_SETTINGS.pin,
+              ...savedPin,
+              protectedFeatures: {
+                ...DEFAULT_SETTINGS.pin.protectedFeatures,
+                ...(savedPin.protectedFeatures ?? {}),
+              },
+            };
+          })(),
           alarmSound: {
             ...DEFAULT_SETTINGS.alarmSound,
             ...((saved as unknown as { alarmSound?: Partial<Settings['alarmSound']> }).alarmSound ?? {}),

@@ -65,6 +65,7 @@ export class SetupPinUseCase {
           studentRecords: false,
           meal: false,
           memo: false,
+          note: false,
           todo: false,
           classManagement: false,
           bookmarks: false,
