@@ -107,6 +107,7 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
         target: {
           type: selectedTarget.type,
           name: selectedTarget.name,
+          teachingClassId: selectedTarget.teachingClassId,
           students: selectedTarget.students,
         },
         driveFolderName: effectiveFolderName,
@@ -211,6 +212,12 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
                 <div className="p-4 bg-sp-surface border border-sp-border/50 rounded-lg text-center">
                   <p className="text-sp-muted text-sm">학생 명단이 없습니다</p>
                   <p className="text-sp-muted/60 text-xs mt-1">담임업무 → 명렬 관리, 또는 수업 관리에서 학생을 먼저 등록해주세요</p>
+                </div>
+              ) : defaultTarget ? (
+                // defaultTarget이 주어진 탭 컨텍스트(수업관리/담임업무)에서는 대상 변경 차단 — 실수로 다른 반에 생성되는 사고 방지
+                <div className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text flex items-center justify-between">
+                  <span>{selectedTarget?.name ?? ''} ({selectedTarget?.students.length ?? 0}명)</span>
+                  <span className="text-xs text-sp-muted">🔒 현재 탭 대상 고정</span>
                 </div>
               ) : (
                 <select
