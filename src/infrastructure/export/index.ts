@@ -17,7 +17,22 @@ export {
 } from './ExcelExporter';
 export type { ParsedExcelEvent, ObservationExportRecord } from './ExcelExporter';
 
-export { exportToPdf } from './PdfExporter';
+export { createPdfExporter, exportToPdf } from './PdfExporter';
+export { exportSeatingToPdf } from './pdf/SeatingPdf';
+export {
+  exportEventsToPdf,
+  exportClassScheduleToPdf,
+  exportTeacherScheduleToPdf,
+  exportStudentRecordsToPdf,
+} from './pdf/AllPdfExporters';
+export type {
+  PdfExporter,
+  PdfFormFillInput,
+  PdfOptions,
+  PdfPageSize,
+  PdfTemplateInput,
+  PdfTemplateSchema,
+} from './PdfExporter';
 
 export {
   exportClassScheduleToHwpx,

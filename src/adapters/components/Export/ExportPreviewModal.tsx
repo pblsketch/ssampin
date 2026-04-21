@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { ExportFormat, ExportItem } from './Export';
+import { PdfCanvasPreview } from './PdfCanvasPreview';
 
 interface ExportPreviewModalProps {
     items: Set<ExportItem>;
@@ -7,6 +8,8 @@ interface ExportPreviewModalProps {
     onConfirm: () => void;
     onCancel: () => void;
     isExporting: boolean;
+    /** PDF 포맷일 때만 사용. 프리뷰 캡처 결과 바이트. null 이면 캡처 중. */
+    pdfPreviewBytes?: ArrayBuffer | null;
 }
 
 export function ExportPreviewModal({
@@ -15,6 +18,7 @@ export function ExportPreviewModal({
     onConfirm,
     onCancel,
     isExporting,
+    pdfPreviewBytes,
 }: ExportPreviewModalProps) {
     // ESC 키로 닫기
     useEffect(() => {
@@ -35,6 +39,13 @@ export function ExportPreviewModal({
             default: return item;
         }
     });
+
+    const placeholderMessage =
+        format === 'pdf'
+            ? '현재 화면이 그대로 PDF 로 저장됩니다.'
+            : format === 'excel'
+                ? '선택 항목의 데이터가 xlsx 시트에 자동 정리됩니다.'
+                : '선택 항목의 데이터가 hwpx 양식에 채워집니다.';
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" aria-hidden="true">
@@ -61,28 +72,31 @@ export function ExportPreviewModal({
                     </button>
                 </div>
 
-                {/* Content (Mock Preview) */}
+                {/* Content */}
                 <div className="p-6 flex-1 overflow-y-auto bg-sp-bg/50">
-                    <div className="bg-white rounded-lg p-8 shadow-inner min-h-[400px] flex flex-col border border-slate-300 relative">
+                    <div className="bg-white rounded-lg p-6 shadow-inner min-h-[400px] flex flex-col border border-slate-300 relative">
 
-                        <div className="text-center mb-8 border-b pb-4 border-slate-200">
-                            <h1 className="text-2xl font-bold text-slate-800 mb-2">문서 미리보기</h1>
-                            <p className="text-slate-500 font-medium">포함된 항목: {itemsList.join(', ')}</p>
+                        <div className="text-center mb-6 border-b pb-4 border-slate-200">
+                            <h1 className="text-xl font-bold text-slate-800 mb-2">문서 미리보기</h1>
+                            <p className="text-slate-500 font-medium text-sm">포함된 항목: {itemsList.join(', ')}</p>
                             <div className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-slate-100 rounded-full text-slate-600 text-sm font-semibold">
                                 <span className="material-symbols-outlined text-icon">insert_drive_file</span>
                                 포맷: {format.toUpperCase()}
                             </div>
                         </div>
 
-                        <div className="flex-1 border-2 border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center p-8 text-slate-400 bg-slate-50">
-                            <span className="material-symbols-outlined text-6xl mb-4 text-slate-300">
-                                {format === 'excel' ? 'table_view' : format === 'hwpx' ? 'description' : 'picture_as_pdf'}
-                            </span>
-                            <p className="font-medium text-center">
-                                실제 내보내기 시 선택한 템플릿과<br />
-                                현재 데이터가 병합되어 저장됩니다.
-                            </p>
-                        </div>
+                        {format === 'pdf' ? (
+                            <div className="flex-1 flex items-center justify-center p-2 bg-slate-50 rounded-lg">
+                                <PdfCanvasPreview pdfBytes={pdfPreviewBytes ?? null} maxSize={520} />
+                            </div>
+                        ) : (
+                            <div className="flex-1 border-2 border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center p-8 text-slate-400 bg-slate-50">
+                                <span className="material-symbols-outlined text-6xl mb-4 text-slate-300">
+                                    {format === 'excel' ? 'table_view' : 'description'}
+                                </span>
+                                <p className="font-medium text-center">{placeholderMessage}</p>
+                            </div>
+                        )}
 
                     </div>
                 </div>
