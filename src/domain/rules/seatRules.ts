@@ -63,6 +63,7 @@ function fisherYatesShuffle<T>(
  * 짝꿍 그룹 구조를 유지한 채 학생만 셔플.
  * 그룹 내 학생 + 그룹 위치를 모두 랜덤화하되
  * 각 그룹의 크기(2명/3명/1명)는 보존.
+ * 원본 `seats`에서 null이었던 좌표는 결과에서도 null로 유지한다 (빈자리 위치 보존).
  */
 export function shuffleSeatsPreservingGroups(
   seats: readonly (readonly (string | null)[])[],
@@ -81,7 +82,8 @@ export function shuffleSeatsPreservingGroups(
   // 3. Fisher-Yates로 학생 셔플
   const shuffled = fisherYatesShuffle(allStudentIds, random);
 
-  // 4. 새 그리드 생성 — 그룹 구조에 맞게 학생 배치
+  // 4. 새 그리드 생성 — 그룹 순회 순서로 non-null 좌표에만 학생 배치
+  //    (원본 null 좌표는 null 유지 → 빈자리 위치 보존)
   const grid: (string | null)[][] = Array.from({ length: rows }, () =>
     Array.from({ length: cols }, () => null),
   );
@@ -90,7 +92,7 @@ export function shuffleSeatsPreservingGroups(
   for (let r = 0; r < rows; r++) {
     for (const group of groups) {
       for (let c = group.startCol; c <= group.endCol; c++) {
-        if (studentIdx < shuffled.length) {
+        if (seats[r]![c] !== null && studentIdx < shuffled.length) {
           grid[r]![c] = shuffled[studentIdx]!;
           studentIdx++;
         }
@@ -104,37 +106,33 @@ export function shuffleSeatsPreservingGroups(
 /**
  * Fisher-Yates 셔플로 학생 랜덤 재배치 (순수 함수)
  * seedRandom을 주입하면 테스트 가능, 기본값은 Math.random
+ * 원본 `seats`에서 null이었던 좌표는 결과에서도 null로 유지한다 (빈자리 위치 보존).
  */
 export function shuffleSeats(
   seats: readonly (readonly (string | null)[])[],
   random: () => number = Math.random,
 ): (string | null)[][] {
-  // 2D → 1D 평탄화
-  const flat: (string | null)[] = seats.flatMap((row) => [...row]);
+  const rows = seats.length;
+  const cols = seats[0]?.length ?? 0;
 
   // 학생 ID만 추출 (빈 자리 제외)
-  const studentIds = flat.filter((id): id is string => id !== null);
-  const emptyCount = flat.length - studentIds.length;
+  const studentIds = seats.flat().filter((id): id is string => id !== null);
 
-  // Fisher-Yates: 학생만 셔플
-  for (let i = studentIds.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    const temp = studentIds[i]!;
-    studentIds[i] = studentIds[j]!;
-    studentIds[j] = temp;
-  }
+  // Fisher-Yates 셔플
+  const shuffled = fisherYatesShuffle(studentIds, random);
 
-  // 학생을 앞에, 빈 자리(null)를 뒤에 배치
-  const arranged: (string | null)[] = [
-    ...studentIds,
-    ...Array.from<null>({ length: emptyCount }).fill(null),
-  ];
-
-  // 1D → 2D 복원
-  const cols = seats[0]?.length ?? 0;
-  const result: (string | null)[][] = [];
-  for (let i = 0; i < arranged.length; i += cols) {
-    result.push(arranged.slice(i, i + cols));
+  // 원본 null 좌표는 null 유지, non-null 좌표에만 학생을 row-major 순서로 배치
+  const result: (string | null)[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => null),
+  );
+  let idx = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (seats[r]![c] !== null && idx < shuffled.length) {
+        result[r]![c] = shuffled[idx]!;
+        idx++;
+      }
+    }
   }
   return result;
 }
@@ -437,6 +435,12 @@ export function shuffleSeatsWithConstraints(
       if (zoneFailed) continue;
 
       // 3단계: 나머지 학생 → 남은 빈 자리에 배치
+      // 원본 seats에서 null이었던 좌표는 "빈자리"로 간주하여 freeSlots에서 제외한다
+      // (단, 고정/영역이 이미 점유한 좌표는 occupied로 별도 관리되므로,
+      //  사용자가 고정좌석으로 원본 빈자리를 지정한 경우는 덮어쓰기가 허용됨)
+      const isOriginallyEmpty = (r: number, c: number): boolean =>
+        seats[r]![c] === null;
+
       const freeSlots: { row: number; col: number }[] = [];
       if (options?.pairMode) {
         // 짝꿍 모드: 그룹 구조 순서로 빈 자리 나열
@@ -444,7 +448,7 @@ export function shuffleSeatsWithConstraints(
         for (let r = 0; r < rows; r++) {
           for (const group of groups) {
             for (let c = group.startCol; c <= group.endCol; c++) {
-              if (!occupied.has(`${r},${c}`)) {
+              if (!occupied.has(`${r},${c}`) && !isOriginallyEmpty(r, c)) {
                 freeSlots.push({ row: r, col: c });
               }
             }
@@ -453,7 +457,7 @@ export function shuffleSeatsWithConstraints(
       } else {
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
-            if (!occupied.has(`${r},${c}`)) {
+            if (!occupied.has(`${r},${c}`) && !isOriginallyEmpty(r, c)) {
               freeSlots.push({ row: r, col: c });
             }
           }
