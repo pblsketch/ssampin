@@ -6,6 +6,7 @@ import type { ChalkboardMode, GridMode } from './types';
 const MAX_HISTORY = 50;
 const MAX_PAGES = 20;
 const GRID_TAG = '__grid__';
+const ERASER_TAG = '__eraser__';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isGrid(obj: any): boolean {
@@ -17,11 +18,22 @@ function markGrid(obj: any): void {
   obj[GRID_TAG] = true;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isEraserStroke(obj: any): boolean {
+  return obj?.[ERASER_TAG] === true;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function markEraserStroke(obj: any): void {
+  obj[ERASER_TAG] = true;
+}
+
 interface UseChalkCanvasOptions {
   canvasElRef: React.RefObject<HTMLCanvasElement | null>;
   mode: ChalkboardMode;
   color: string;
   penSize: number;
+  eraserSize: number;
   boardColor: string;
 }
 
@@ -59,7 +71,7 @@ function createGridObjects(w: number, h: number, gridMode: GridMode): Line[] {
   return lines;
 }
 
-export function useChalkCanvas({ canvasElRef, mode, color, penSize, boardColor }: UseChalkCanvasOptions) {
+export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, boardColor }: UseChalkCanvasOptions) {
   const fabricRef = useRef<Canvas | null>(null);
   const [gridMode, setGridMode] = useState<GridMode>('none');
   const [canUndo, setCanUndo] = useState(false);
@@ -74,12 +86,14 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, boardColor }
   const modeRef = useRef<ChalkboardMode>(mode);
   const colorRef = useRef(color);
   const penSizeRef = useRef(penSize);
+  const eraserSizeRef = useRef(eraserSize);
   const gridModeRef = useRef<GridMode>('none');
   const initializedRef = useRef(false);
 
   modeRef.current = mode;
   colorRef.current = color;
   penSizeRef.current = penSize;
+  eraserSizeRef.current = eraserSize;
   gridModeRef.current = gridMode;
 
   // ── Snapshot (undo/redo) ──────────────────────────────
@@ -108,6 +122,14 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, boardColor }
     if (!canvas) return;
     skipSnapshotRef.current = true;
     await canvas.loadFromJSON(json);
+    // Re-mark eraser strokes after JSON load (custom tag is lost through serialization)
+    canvas.getObjects().forEach((obj) => {
+      if (obj.globalCompositeOperation === 'destination-out') {
+        markEraserStroke(obj);
+        obj.selectable = false;
+        obj.evented = false;
+      }
+    });
     canvas.renderAll();
     skipSnapshotRef.current = false;
   }, []);
@@ -265,7 +287,7 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, boardColor }
     const canvas = fabricRef.current;
     if (!canvas) return;
 
-    if (mode === 'pen') {
+    if (mode === 'pen' || mode === 'pixelEraser') {
       canvas.isDrawingMode = true;
       canvas.selection = false;
       canvas.discardActiveObject();
@@ -273,20 +295,20 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, boardColor }
     } else if (mode === 'select') {
       canvas.isDrawingMode = false;
       canvas.selection = true;
-      // Make all non-grid objects selectable
+      // Make all non-grid/non-eraser objects selectable
       canvas.getObjects().forEach((obj) => {
-        if (!isGrid(obj)) {
+        if (!isGrid(obj) && !isEraserStroke(obj)) {
           obj.selectable = true;
           obj.evented = true;
         }
       });
     } else {
-      // text or eraser
+      // text or eraser (object-delete)
       canvas.isDrawingMode = false;
       canvas.selection = false;
       canvas.discardActiveObject();
       canvas.getObjects().forEach((obj) => {
-        if (!isGrid(obj)) {
+        if (!isGrid(obj) && !isEraserStroke(obj)) {
           obj.selectable = false;
           obj.evented = mode === 'eraser'; // eraser needs click events
         }
@@ -300,16 +322,23 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, boardColor }
     const canvas = fabricRef.current;
     if (!canvas) return;
     const brush = new PencilBrush(canvas);
-    brush.color = color;
-    brush.width = penSize;
-    brush.shadow = new Shadow({
-      blur: 3,
-      offsetX: 0,
-      offsetY: 0,
-      color: color + '40',
-    });
+    if (mode === 'pixelEraser') {
+      // Fully opaque — destination-out will cut through 100% (no semi-transparent remnants)
+      brush.color = '#000000';
+      brush.width = eraserSize;
+      brush.shadow = null;
+    } else {
+      brush.color = color;
+      brush.width = penSize;
+      brush.shadow = new Shadow({
+        blur: 3,
+        offsetX: 0,
+        offsetY: 0,
+        color: color + '40',
+      });
+    }
     canvas.freeDrawingBrush = brush;
-  }, [color, penSize]);
+  }, [color, penSize, eraserSize, mode]);
 
   // ── Apply style to selected objects ───────────────────
   const applyStyleToSelected = useCallback(() => {
@@ -322,7 +351,7 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, boardColor }
       if (obj instanceof IText) {
         obj.set({ fontSize: Math.max(16, penSize * 1.5), fill: color });
         changed = true;
-      } else if (!isGrid(obj)) {
+      } else if (!isGrid(obj) && !isEraserStroke(obj)) {
         obj.set({ stroke: color, strokeWidth: penSize });
         changed = true;
       }
@@ -389,7 +418,22 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, boardColor }
     });
 
     // ── Event: after drawing path ───────────────────────
-    canvas.on('path:created', () => {
+    canvas.on('path:created', (e: { path: unknown }) => {
+      const path = e.path as {
+        globalCompositeOperation?: GlobalCompositeOperation;
+        selectable?: boolean;
+        evented?: boolean;
+        shadow?: unknown;
+        set?: (props: Record<string, unknown>) => void;
+      };
+      if (modeRef.current === 'pixelEraser' && path) {
+        // Mark as eraser stroke: cuts through existing content
+        path.globalCompositeOperation = 'destination-out';
+        path.selectable = false;
+        path.evented = false;
+        path.shadow = null;
+        markEraserStroke(path);
+      }
       pushSnapshot();
     });
 
