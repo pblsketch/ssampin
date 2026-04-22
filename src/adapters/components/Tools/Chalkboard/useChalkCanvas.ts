@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, PencilBrush, IText, Shadow, Line } from 'fabric';
 import type { TPointerEventInfo, TPointerEvent } from 'fabric';
+import { BACKGROUND_ASSETS, BACKGROUND_RENDER_KIND } from './types';
 import type { ChalkboardMode, GridMode } from './types';
 
 const MAX_HISTORY = 50;
@@ -37,10 +38,32 @@ interface UseChalkCanvasOptions {
   boardColor: string;
 }
 
+/**
+ * step 간격으로 total 길이 안에 내부 위치를 중앙 정렬해 배치.
+ * 예: total=800 step=40 → [40, 80, ..., 760] (양쪽 20px 여백).
+ *     total=825 step=40 → [22.5, 62.5, ..., 802.5] 유사하게 균등.
+ * 항상 좌우(또는 상하) 여백이 대칭이 되도록 시작 위치를 계산.
+ */
+function centeredGridPositions(total: number, step: number): number[] {
+  if (step <= 0 || total <= step) return [];
+  const count = Math.floor((total - step) / step); // 내부 간격 개수
+  const span = count * step;
+  const start = (total - span) / 2;
+  const result: number[] = [];
+  for (let i = 0; i <= count; i++) {
+    const pos = start + i * step;
+    if (pos > 0 && pos < total) result.push(pos);
+  }
+  return result;
+}
+
 function createGridObjects(w: number, h: number, gridMode: GridMode): Line[] {
+  // CSS 경로 배경(지도)은 Fabric에 그리지 않음 — 컨테이너 div가 책임
+  if (BACKGROUND_RENDER_KIND[gridMode] !== 'canvas') return [];
   if (gridMode === 'none') return [];
+
   const lines: Line[] = [];
-  const opts = {
+  const baseOpts = {
     stroke: 'rgba(255,255,255,0.12)',
     strokeWidth: 0.5,
     selectable: false,
@@ -50,22 +73,50 @@ function createGridObjects(w: number, h: number, gridMode: GridMode): Line[] {
 
   if (gridMode === 'grid') {
     const step = 40;
-    for (let x = step; x < w; x += step) {
-      const l = new Line([x, 0, x, h], opts);
+    for (const x of centeredGridPositions(w, step)) {
+      const l = new Line([x, 0, x, h], baseOpts);
       markGrid(l);
       lines.push(l);
     }
-    for (let y = step; y < h; y += step) {
-      const l = new Line([0, y, w, y], opts);
+    for (const y of centeredGridPositions(h, step)) {
+      const l = new Line([0, y, w, y], baseOpts);
       markGrid(l);
       lines.push(l);
     }
   } else if (gridMode === 'lines') {
     const step = 48;
-    for (let y = step; y < h; y += step) {
-      const l = new Line([0, y, w, y], opts);
+    for (const y of centeredGridPositions(h, step)) {
+      const l = new Line([0, y, w, y], baseOpts);
       markGrid(l);
       lines.push(l);
+    }
+  } else if (gridMode === 'staff') {
+    // 오선지: 5선 한 세트 + 세트 간 공백을 세로로 반복. 악보처럼 좌우 여백을 넉넉히 두어 수평 중앙 정렬.
+    const STAFF_LINE_GAP = 14;                              // 선 사이 간격
+    const STAFF_SET_HEIGHT = STAFF_LINE_GAP * 4;            // 5선 = 4간격
+    const STAFF_SET_GAP = 60;                               // 세트 사이 공백
+    const SET_PERIOD = STAFF_SET_HEIGHT + STAFF_SET_GAP;
+    const STAFF_WIDTH_RATIO = 0.72;                         // 캔버스 폭의 72%만 사용 → 중앙에 블록처럼 보이게
+    const staffWidth = Math.round(w * STAFF_WIDTH_RATIO);
+    const xStart = Math.round((w - staffWidth) / 2);
+    const xEnd = xStart + staffWidth;
+    const opts = { ...baseOpts, stroke: 'rgba(255,255,255,0.35)', strokeWidth: 0.8 } as const;
+
+    // 세로도 중앙 정렬: 캔버스 높이 안에 들어갈 세트 수를 먼저 계산한 뒤 위/아래 여백을 균등 분배
+    const MARGIN_Y_MIN = 32;
+    const availableH = h - MARGIN_Y_MIN * 2;
+    const setsCount = Math.max(1, Math.floor((availableH + STAFF_SET_GAP) / SET_PERIOD));
+    const usedH = setsCount * STAFF_SET_HEIGHT + (setsCount - 1) * STAFF_SET_GAP;
+    const topMargin = Math.max(MARGIN_Y_MIN, Math.round((h - usedH) / 2));
+
+    for (let s = 0; s < setsCount; s++) {
+      const setStart = topMargin + s * SET_PERIOD;
+      for (let i = 0; i < 5; i++) {
+        const y = setStart + i * STAFF_LINE_GAP;
+        const l = new Line([xStart, y, xEnd, y], opts);
+        markGrid(l);
+        lines.push(l);
+      }
     }
   }
   return lines;
@@ -526,6 +577,8 @@ export function useChalkCanvas({ canvasElRef, mode, color, penSize, eraserSize, 
     saveAsImage,
     gridMode,
     setGridMode,
+    /** 지도 모드에서 컨테이너 div에 주입할 CSS background-image URL. Fabric 경로 모드는 null. */
+    currentBackgroundCssUrl: BACKGROUND_ASSETS[gridMode],
     currentPage,
     totalPages,
     goToPage,
