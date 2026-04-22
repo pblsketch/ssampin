@@ -257,6 +257,10 @@ export interface Settings {
   readonly teacherRoles?: readonly ('homeroom' | 'subject' | 'admin')[];
   /** 자주 쓰는 쌤도구 ID 목록 (대시보드/위젯에 표시) */
   readonly favoriteTools?: readonly string[];
+  /** 쌤도구 페이지 사용자 정렬 순서 (도구 ID 배열). 미설정 시 기본 순서 */
+  readonly toolsOrder?: readonly string[];
+  /** 쌤도구 페이지에서 숨길 도구 ID 목록. 빈 배열/미설정 = 모두 표시 */
+  readonly hiddenTools?: readonly string[];
   /** 즐겨찾기 위젯에서 숨길 북마크 그룹 ID 목록 */
   readonly bookmarkWidgetHiddenGroups?: readonly string[];
   /** 즐겨찾기 위젯에서 숨길 개별 북마크 ID 목록 */
