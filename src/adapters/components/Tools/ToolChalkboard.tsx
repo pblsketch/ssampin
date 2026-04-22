@@ -7,10 +7,12 @@ import {
   BOARD_BACKGROUNDS,
   PEN_SIZE_DEFAULT,
   ERASER_SIZE_DEFAULT,
+  GRID_MODE_ORDER,
   clampPenSize,
   clampEraserSize,
   decrementPenSize,
   incrementPenSize,
+  isGridMode,
 } from './Chalkboard/types';
 import type { ChalkboardMode, GridMode } from './Chalkboard/types';
 import type { KeyboardShortcut } from './types';
@@ -19,6 +21,7 @@ const PEN_SIZE_STORAGE_KEY = 'chalkboard.penSize';
 const ERASER_SIZE_STORAGE_KEY = 'chalkboard.eraserSize';
 const COLOR_INDEX_STORAGE_KEY = 'chalkboard.colorIndex';
 const BOARD_COLOR_INDEX_STORAGE_KEY = 'chalkboard.boardColorIndex';
+const GRID_MODE_STORAGE_KEY = 'chalkboard.gridMode';
 
 function loadNumber(key: string, fallback: number, max: number): number {
   if (typeof window === 'undefined') return fallback;
@@ -56,6 +59,14 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
   const [boardColorIndex, setBoardColorIndex] = useState(() =>
     loadNumber(BOARD_COLOR_INDEX_STORAGE_KEY, 0, BOARD_BACKGROUNDS.length - 1),
   );
+  const [initialGridMode] = useState<GridMode>(() => {
+    if (typeof window === 'undefined') return 'none';
+    const raw = window.localStorage.getItem(GRID_MODE_STORAGE_KEY);
+    return raw && isGridMode(raw) ? raw : 'none';
+  });
+  const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
+  const backgroundPickerOpenRef = useRef(backgroundPickerOpen);
+  backgroundPickerOpenRef.current = backgroundPickerOpen;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -88,6 +99,7 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
     saveAsImage,
     gridMode,
     setGridMode,
+    currentBackgroundCssUrl,
     currentPage,
     totalPages,
     goToPage,
@@ -103,6 +115,36 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
     boardColor: currentBoardBg,
   });
 
+  // 초기 gridMode 복원 (한 번만)
+  useEffect(() => {
+    if (initialGridMode !== 'none') {
+      setGridMode(initialGridMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // gridMode 영속화
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(GRID_MODE_STORAGE_KEY, gridMode);
+  }, [gridMode]);
+
+  // 지도 에셋 로드 실패 시 폴백
+  useEffect(() => {
+    if (!currentBackgroundCssUrl) return;
+    const img = new Image();
+    let cancelled = false;
+    img.onerror = () => {
+      if (cancelled) return;
+      console.warn('[chalkboard] 지도 배경 로드 실패:', currentBackgroundCssUrl);
+      setGridMode('none');
+    };
+    img.src = currentBackgroundCssUrl;
+    return () => {
+      cancelled = true;
+    };
+  }, [currentBackgroundCssUrl, setGridMode]);
+
   // Initialize Fabric canvas on mount
   useEffect(() => {
     const timer = requestAnimationFrame(initCanvas);
@@ -115,10 +157,15 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
     }
   }, [clearAll]);
 
-  const cycleGridMode = useCallback(() => {
-    const order: GridMode[] = ['none', 'grid', 'lines'];
-    const idx = order.indexOf(gridMode);
-    setGridMode(order[(idx + 1) % order.length]!);
+  // G 단축키: 팝오버 닫혀 있으면 열기, 열려 있으면 다음 배경 옵션
+  const handleBackgroundShortcut = useCallback(() => {
+    if (backgroundPickerOpenRef.current) {
+      const idx = GRID_MODE_ORDER.indexOf(gridMode);
+      const next = GRID_MODE_ORDER[(idx + 1) % GRID_MODE_ORDER.length]!;
+      setGridMode(next);
+    } else {
+      setBackgroundPickerOpen(true);
+    }
   }, [gridMode, setGridMode]);
 
   const handleUndo = useCallback(() => { void undo(); }, [undo]);
@@ -137,12 +184,12 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
       { key: 's', label: '저장', description: '이미지 저장', modifiers: { ctrl: true }, handler: saveAsImage },
       { key: '[', label: '크기 줄이기', description: '펜 크기 줄이기', handler: () => setPenSize((s) => decrementPenSize(s)) },
       { key: ']', label: '크기 키우기', description: '펜 크기 키우기', handler: () => setPenSize((s) => incrementPenSize(s)) },
-      { key: 'g', label: '격자', description: '격자 전환', handler: cycleGridMode },
+      { key: 'g', label: '배경', description: '배경 전환 (팝오버 또는 순환)', handler: handleBackgroundShortcut },
       { key: 'ArrowLeft', label: '이전 페이지', description: '이전 페이지', handler: () => handleGoToPage(currentPage - 1) },
       { key: 'ArrowRight', label: '다음 페이지', description: '다음 페이지', handler: () => handleGoToPage(currentPage + 1) },
       { key: 'Delete', label: '삭제', description: '선택 항목 삭제', handler: deleteSelected },
     ],
-    [handleUndo, handleRedo, saveAsImage, cycleGridMode, handleGoToPage, currentPage, deleteSelected],
+    [handleUndo, handleRedo, saveAsImage, handleBackgroundShortcut, handleGoToPage, currentPage, deleteSelected],
   );
 
   const cursorStyle = mode === 'pen'
@@ -155,12 +202,23 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
           ? 'text'
           : 'default';
 
+  const containerStyle: React.CSSProperties = {
+    backgroundColor: currentBoardBg,
+    cursor: cursorStyle,
+    ...(currentBackgroundCssUrl && {
+      backgroundImage: `url("${currentBackgroundCssUrl}")`,
+      backgroundRepeat: 'no-repeat',
+      backgroundPosition: 'center center',
+      backgroundSize: 'contain',
+    }),
+  };
+
   return (
     <ToolLayout title="칠판" emoji="🖍️" onBack={onBack} isFullscreen={isFullscreen} shortcuts={shortcuts} disableZoom>
       <div className="flex-1 min-h-0 flex flex-col">
         <div
           className="relative flex-1 rounded-xl border-4 border-amber-800/60 shadow-inner overflow-hidden"
-          style={{ backgroundColor: currentBoardBg, cursor: cursorStyle }}
+          style={containerStyle}
         >
           {/* Fabric.js canvas */}
           <canvas ref={canvasElRef} className="absolute inset-0" />
@@ -185,6 +243,8 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
             onClearAll={handleClearAll}
             gridMode={gridMode}
             onGridModeChange={setGridMode}
+            backgroundPickerOpen={backgroundPickerOpen}
+            onBackgroundPickerOpenChange={setBackgroundPickerOpen}
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={handleGoToPage}

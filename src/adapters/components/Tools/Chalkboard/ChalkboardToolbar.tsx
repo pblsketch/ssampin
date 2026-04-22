@@ -13,6 +13,7 @@ import {
   incrementPenSize,
 } from './types';
 import type { ChalkboardMode, GridMode } from './types';
+import { BoardBackgroundPicker } from './BoardBackgroundPicker';
 
 const PEN_SIZE_PRESETS = [2, 5, 10, 20, 40] as const;
 const ERASER_SIZE_PRESETS = [16, 32, 60, 100] as const;
@@ -27,6 +28,8 @@ interface ChalkboardToolbarProps {
   onClearAll: () => void;
   gridMode: GridMode;
   onGridModeChange: (mode: GridMode) => void;
+  backgroundPickerOpen: boolean;
+  onBackgroundPickerOpenChange: (open: boolean) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -42,12 +45,6 @@ interface ChalkboardToolbarProps {
   eraserSize: number;
   onEraserSizeChange: (size: number) => void;
 }
-
-const GRID_LABELS: Record<GridMode, string> = {
-  none: '없음',
-  grid: '모눈',
-  lines: '줄선',
-};
 
 function ToolbarButton({
   active,
@@ -90,6 +87,8 @@ export function ChalkboardToolbar({
   onClearAll,
   gridMode,
   onGridModeChange,
+  backgroundPickerOpen,
+  onBackgroundPickerOpenChange,
   currentPage,
   totalPages,
   onPageChange,
@@ -116,12 +115,6 @@ export function ChalkboardToolbar({
   const cycleBoardColor = (dir: 1 | -1) => {
     const next = (boardColorIndex + dir + BOARD_BACKGROUNDS.length) % BOARD_BACKGROUNDS.length;
     onBoardColorIndexChange(next);
-  };
-
-  const cycleGrid = () => {
-    const order: GridMode[] = ['none', 'grid', 'lines'];
-    const idx = order.indexOf(gridMode);
-    onGridModeChange(order[(idx + 1) % order.length]!);
   };
 
   return (
@@ -210,11 +203,13 @@ export function ChalkboardToolbar({
         </button>
       </div>
 
-      {/* 격자 */}
-      <ToolbarButton active={gridMode !== 'none'} onClick={cycleGrid} title="격자 (G)">
-        <span className="material-symbols-outlined text-icon-md">grid_on</span>
-        {GRID_LABELS[gridMode]}
-      </ToolbarButton>
+      {/* 배경 (격자/오선지/지도) */}
+      <BoardBackgroundPicker
+        gridMode={gridMode}
+        onGridModeChange={onGridModeChange}
+        open={backgroundPickerOpen}
+        onOpenChange={onBackgroundPickerOpenChange}
+      />
 
       {/* 페이지 */}
       <div className="flex items-center gap-0.5 bg-white rounded-xl px-2 py-1 border border-gray-200 shrink-0">
