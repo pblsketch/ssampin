@@ -887,6 +887,7 @@ describe('bulkApproveWallPosts (v1.13 Stage C)', () => {
 
 import {
   addWallColumn,
+  cloneWallBoard,
   removeWallColumn,
   renameWallColumn,
   reorderWallColumns,
@@ -1149,5 +1150,145 @@ describe('removeWallColumn', () => {
       { id: 'column-1', title: '주장', order: 0 },
       { id: 'column-3', title: '반박', order: 1 },
     ]);
+  });
+});
+
+// ============================================================
+// v1.13 Stage D — 보드 복제 규칙 테스트
+// Design §6.1 / §6.5 체크리스트
+// ============================================================
+
+describe('cloneWallBoard', () => {
+  const makeSource = (overrides?: Partial<WallBoard>): WallBoard => {
+    const base: WallBoard = {
+      id: 'src-id' as WallBoardId,
+      title: '찬반 토론',
+      description: '1반 수업',
+      layoutMode: 'kanban',
+      columns: [
+        { id: 'column-1', title: '찬성', order: 0 },
+        { id: 'column-2', title: '반대', order: 1 },
+      ],
+      approvalMode: 'manual',
+      posts: [
+        {
+          id: 'p1',
+          nickname: '민수',
+          text: '찬성합니다',
+          status: 'approved',
+          pinned: false,
+          submittedAt: 1000,
+          kanban: { columnId: 'column-1', order: 0 },
+          freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+        },
+      ],
+      createdAt: 100,
+      updatedAt: 200,
+      lastSessionAt: 300,
+      archived: false,
+      shortCode: 'ABCDEF',
+    };
+    return { ...base, ...overrides };
+  };
+
+  it('복제본 기본 필드 검증: title에 " (복제)" 접미, id·createdAt·updatedAt 새로 생성', () => {
+    const source = makeSource();
+    const newId = 'new-id' as WallBoardId;
+    const now = 5000;
+    const clone = cloneWallBoard(source, newId, now);
+
+    expect(clone.id).toBe(newId);
+    expect(clone.title).toBe('찬반 토론 (복제)');
+    expect(clone.createdAt).toBe(now);
+    expect(clone.updatedAt).toBe(now);
+  });
+
+  it('posts는 빈 배열 (학생 데이터 제외, PIPA 준수)', () => {
+    const source = makeSource();
+    const clone = cloneWallBoard(source, 'new' as WallBoardId, 1);
+    expect(clone.posts).toEqual([]);
+    expect(clone.posts).toHaveLength(0);
+    // source의 posts는 원본 유지
+    expect(source.posts).toHaveLength(1);
+  });
+
+  it('columns는 deep clone (원본 수정이 복제본에 영향 없음)', () => {
+    const source = makeSource();
+    const clone = cloneWallBoard(source, 'new' as WallBoardId, 1);
+
+    // columns 배열 자체도 다른 객체
+    expect(clone.columns).not.toBe(source.columns);
+    // 각 컬럼도 다른 객체 (deep clone)
+    expect(clone.columns[0]).not.toBe(source.columns[0]);
+    expect(clone.columns[0]!.title).toBe('찬성');
+
+    // 원본 수정 시도
+    (source.columns as RealtimeWallColumn[])[0] = {
+      id: 'mutated',
+      title: 'mutated',
+      order: 999,
+    };
+
+    // 복제본은 영향 없음
+    expect(clone.columns[0]!.id).toBe('column-1');
+    expect(clone.columns[0]!.title).toBe('찬성');
+  });
+
+  it('layoutMode·approvalMode·description은 동일 복사', () => {
+    const source = makeSource({
+      layoutMode: 'freeform',
+      approvalMode: 'auto',
+      description: '2반 수업',
+    });
+    const clone = cloneWallBoard(source, 'new' as WallBoardId, 1);
+    expect(clone.layoutMode).toBe('freeform');
+    expect(clone.approvalMode).toBe('auto');
+    expect(clone.description).toBe('2반 수업');
+  });
+
+  it('lastSessionAt은 undefined, archived는 false', () => {
+    const source = makeSource({
+      lastSessionAt: 99999,
+      archived: true,
+    });
+    const clone = cloneWallBoard(source, 'new' as WallBoardId, 1);
+    expect(clone.lastSessionAt).toBeUndefined();
+    expect(clone.archived).toBe(false);
+  });
+
+  it('shortCode: options 미주입 시 undefined (Repository가 재발급)', () => {
+    const source = makeSource({ shortCode: 'ORIGIN' });
+    const clone = cloneWallBoard(source, 'new' as WallBoardId, 1);
+    expect(clone.shortCode).toBeUndefined();
+  });
+
+  it('shortCode: options 주입 시 그 값 유지', () => {
+    const source = makeSource();
+    const clone = cloneWallBoard(source, 'new' as WallBoardId, 1, {
+      shortCode: 'NEWXYZ',
+    });
+    expect(clone.shortCode).toBe('NEWXYZ');
+  });
+
+  it('titleSuffix 커스터마이즈 가능', () => {
+    const source = makeSource({ title: '토론' });
+    const clone = cloneWallBoard(source, 'new' as WallBoardId, 1, {
+      titleSuffix: ' - 2반용',
+    });
+    expect(clone.title).toBe('토론 - 2반용');
+  });
+
+  it('원본 source 불변성 (clone이 source를 수정하지 않음)', () => {
+    const source = makeSource();
+    const snapshot = JSON.parse(JSON.stringify(source));
+    cloneWallBoard(source, 'new' as WallBoardId, 9999);
+    // source는 clone 호출 전후 동일해야 함
+    expect(JSON.parse(JSON.stringify(source))).toEqual(snapshot);
+  });
+
+  it('description이 undefined면 복제본에도 description 필드 없음', () => {
+    const source = makeSource({ description: undefined });
+    const clone = cloneWallBoard(source, 'new' as WallBoardId, 1);
+    expect(clone.description).toBeUndefined();
   });
 });

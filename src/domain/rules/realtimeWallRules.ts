@@ -728,3 +728,51 @@ export function removeWallColumn(
   }
 }
 
+// ============================================================
+// v1.13 Stage D — 보드 복제 규칙
+// Design §6.1 참조
+// ============================================================
+
+export interface CloneWallBoardOptions {
+  readonly titleSuffix?: string;
+  readonly shortCode?: string;
+}
+
+/**
+ * 새 WallBoard를 source 기반으로 생성.
+ *
+ * 복제 정책 (Design §6.1):
+ *   - 제목: `{source.title} (복제)` — options.titleSuffix로 커스터마이즈 가능
+ *   - id: newId (호출자가 생성)
+ *   - createdAt = updatedAt = now
+ *   - layoutMode / approvalMode / description: 동일 복사
+ *   - columns: deep clone (원본 수정이 복제본에 영향 없음)
+ *   - **posts: 빈 배열** (학생 데이터 제외 — PIPA 준수, 새 보드로 시작)
+ *   - lastSessionAt: undefined (아직 세션 없음)
+ *   - archived: false
+ *   - shortCode: options.shortCode로 주입. 미주입 시 undefined
+ *                (Repository가 충돌 검사 후 발급하는 패턴을 따라감)
+ */
+export function cloneWallBoard(
+  source: WallBoard,
+  newId: WallBoardId,
+  now: number,
+  options?: CloneWallBoardOptions,
+): WallBoard {
+  const suffix = options?.titleSuffix ?? ' (복제)';
+  const nextTitle = source.title + suffix;
+  const cloned: WallBoard = {
+    id: newId,
+    title: nextTitle,
+    ...(source.description !== undefined ? { description: source.description } : {}),
+    layoutMode: source.layoutMode,
+    columns: source.columns.map((c) => ({ ...c })), // deep clone
+    approvalMode: source.approvalMode,
+    posts: [], // 빈 배열 — 학생 데이터 제외
+    createdAt: now,
+    updatedAt: now,
+    archived: false,
+    ...(options?.shortCode ? { shortCode: options.shortCode } : {}),
+  };
+  return cloned;
+}
