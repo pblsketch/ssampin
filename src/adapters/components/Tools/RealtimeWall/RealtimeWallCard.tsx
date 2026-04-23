@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { RealtimeWallLinkPreview, RealtimeWallPost } from '@domain/entities/RealtimeWall';
 
 export interface RealtimeWallCardProps {
@@ -18,8 +19,10 @@ function getLinkLabel(linkUrl: string): string {
 }
 
 function YoutubeEmbed({ videoId, compact }: { videoId: string; compact: boolean }) {
-  // 카드 내 임베드 — sandbox로 scripts 허용하되 top-navigation은 차단.
-  // referrerpolicy로 refer 정보 최소화.
+  // youtube-nocookie: 추적 쿠키 미설정 (Enhanced Privacy Mode).
+  // sandbox에서 allow-same-origin 제거 — 임베드가 부모 문서에 접근 불가.
+  // YouTube 플레이어는 자체 origin 내부에서 동작하므로 scripts + presentation
+  // 조합만으로 재생 가능.
   return (
     <div
       className={`relative mt-2.5 w-full overflow-hidden rounded-lg border border-sp-border/60 bg-black ${
@@ -27,14 +30,14 @@ function YoutubeEmbed({ videoId, compact }: { videoId: string; compact: boolean 
       }`}
     >
       <iframe
-        src={`https://www.youtube.com/embed/${videoId}`}
+        src={`https://www.youtube-nocookie.com/embed/${videoId}`}
         title="YouTube 영상 미리보기"
         className="absolute inset-0 h-full w-full"
         allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
         loading="lazy"
         referrerPolicy="no-referrer"
-        sandbox="allow-scripts allow-same-origin allow-presentation"
+        sandbox="allow-scripts allow-presentation"
       />
     </div>
   );
@@ -49,8 +52,11 @@ function WebPagePreview({
   linkUrl: string;
   onOpenLink?: (url: string) => void;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const hasMeta = preview.ogTitle || preview.ogDescription || preview.ogImageUrl;
   if (!hasMeta) return null;
+
+  const showImage = preview.ogImageUrl && !imageFailed;
 
   return (
     <button
@@ -58,7 +64,7 @@ function WebPagePreview({
       onClick={() => onOpenLink?.(linkUrl)}
       className="mt-2.5 flex w-full items-stretch gap-2.5 overflow-hidden rounded-lg border border-sp-border/70 bg-sp-surface text-left transition hover:border-sp-accent/40"
     >
-      {preview.ogImageUrl && (
+      {showImage && (
         <div className="w-16 shrink-0 overflow-hidden bg-sp-bg sm:w-20">
           <img
             src={preview.ogImageUrl}
@@ -66,10 +72,7 @@ function WebPagePreview({
             loading="lazy"
             referrerPolicy="no-referrer"
             className="h-full w-full object-cover"
-            onError={(event) => {
-              // 이미지 로드 실패 시 조용히 숨김 (외부 URL 가용성 의존 방어)
-              event.currentTarget.style.display = 'none';
-            }}
+            onError={() => setImageFailed(true)}
           />
         </div>
       )}

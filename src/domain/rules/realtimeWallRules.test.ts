@@ -183,9 +183,10 @@ describe('extractYoutubeVideoId', () => {
     expect(extractYoutubeVideoId('https://youtu.be/dQw4w9WgXcQ?si=abc')).toBe('dQw4w9WgXcQ');
   });
 
-  it('shorts / embed / v 경로 지원', () => {
+  it('shorts / embed / v / live 경로 지원', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
     expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://www.youtube.com/live/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
 
   it('m.youtube.com / music.youtube.com 호스트 지원', () => {

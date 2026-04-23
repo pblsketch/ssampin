@@ -225,11 +225,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('realtime-wall:tunnel-install'),
   realtimeWallTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('realtime-wall:tunnel-start'),
-  fetchRealtimeWallLinkPreview: (url: string): Promise<{
-    ogTitle?: string;
-    ogDescription?: string;
-    ogImageUrl?: string;
-  } | null> =>
+  fetchRealtimeWallLinkPreview: (url: string) =>
     ipcRenderer.invoke('realtime-wall:fetch-link-preview', url),
   onRealtimeWallStudentSubmitted: (callback: (data: {
     post: {

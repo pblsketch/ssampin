@@ -256,15 +256,17 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     if (!isLiveMode || !window.electronAPI) return;
 
     const unsubscribeSubmitted = window.electronAPI.onRealtimeWallStudentSubmitted((data) => {
+      // 링크 정규화·분류는 한 번만 수행 후 동기/비동기 경로에서 공유.
+      const normalizedLink = data.post.linkUrl
+        ? normalizeRealtimeWallLink(data.post.linkUrl)
+        : undefined;
+      const initialPreview = normalizedLink
+        ? classifyRealtimeWallLink(normalizedLink)
+        : undefined;
+
       setPosts((prev) => {
         const nextIndex = prev.length;
         const initialColumnId = columns[0]?.id ?? 'column-1';
-        const normalizedLink = data.post.linkUrl
-          ? normalizeRealtimeWallLink(data.post.linkUrl)
-          : undefined;
-
-        // 링크 종류 1차 분류 (YouTube는 동기 결정, webpage는 비동기 OG fetch 이후 덮어씀)
-        const initialPreview = normalizedLink ? classifyRealtimeWallLink(normalizedLink) : undefined;
 
         const nextPost: RealtimeWallPost = {
           id: data.post.id,
@@ -287,12 +289,12 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         return [nextPost, ...prev];
       });
 
-      // webpage 링크는 Main에서 OG fetch 후 비동기 upsert
-      const normalizedLink = data.post.linkUrl
-        ? normalizeRealtimeWallLink(data.post.linkUrl)
-        : undefined;
-      const initialPreview = normalizedLink ? classifyRealtimeWallLink(normalizedLink) : undefined;
-      if (normalizedLink && initialPreview?.kind === 'webpage' && window.electronAPI?.fetchRealtimeWallLinkPreview) {
+      // webpage 링크는 Main에서 OG fetch 후 비동기 upsert (YouTube는 동기 확정 완료)
+      if (
+        normalizedLink &&
+        initialPreview?.kind === 'webpage' &&
+        window.electronAPI?.fetchRealtimeWallLinkPreview
+      ) {
         void window.electronAPI
           .fetchRealtimeWallLinkPreview(normalizedLink)
           .then((og) => {
