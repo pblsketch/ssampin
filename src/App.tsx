@@ -52,6 +52,7 @@ import { UpdateNotification } from '@adapters/components/common/UpdateNotificati
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { HelpChatPanel } from '@adapters/components/HelpChat';
 import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog';
+import { CommandPalette } from '@adapters/components/common/CommandPalette';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
@@ -764,6 +765,7 @@ function MainApp() {
       <HelpChatPanel />
       <CloseActionDialog />
       <OAuthModalsProvider />
+      <CommandPalette onNavigate={setCurrentPage} />
       </div>
     </div>
   );
