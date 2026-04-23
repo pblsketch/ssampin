@@ -879,3 +879,275 @@ describe('bulkApproveWallPosts (v1.13 Stage C)', () => {
     expect(result.map((p) => p.id)).toEqual(['a', 'b', 'c']);
   });
 });
+
+// ============================================================
+// v1.13 Stage B — 칸반 컬럼 실행 중 편집 규칙 테스트
+// Design §5.1 / §5.4 체크리스트
+// ============================================================
+
+import {
+  addWallColumn,
+  removeWallColumn,
+  renameWallColumn,
+  reorderWallColumns,
+} from './realtimeWallRules';
+
+describe('addWallColumn', () => {
+  const baseColumns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '주장', order: 0 },
+    { id: 'column-2', title: '근거', order: 1 },
+    { id: 'column-3', title: '반박', order: 2 },
+  ];
+
+  it('새 컬럼을 끝에 추가하고 order 0..n 유지', () => {
+    const result = addWallColumn(baseColumns, '결론');
+    expect(result).toHaveLength(4);
+    expect(result[3]).toMatchObject({ title: '결론', order: 3 });
+    expect(result.map((c) => c.order)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('id 충돌 없이 column-N 발급 (기존 최댓값+1)', () => {
+    const result = addWallColumn(baseColumns, '결론');
+    expect(result[3]!.id).toBe('column-4');
+  });
+
+  it('최대 6개 제한 — 7번째 추가는 거부(원본 반환)', () => {
+    const six: RealtimeWallColumn[] = Array.from({ length: 6 }, (_, i) => ({
+      id: `column-${i + 1}`,
+      title: `c${i + 1}`,
+      order: i,
+    }));
+    const result = addWallColumn(six, '일곱');
+    expect(result).toHaveLength(6);
+    expect(result.map((c) => c.title)).not.toContain('일곱');
+  });
+
+  it('빈/공백 제목은 거부', () => {
+    expect(addWallColumn(baseColumns, '   ')).toHaveLength(3);
+    expect(addWallColumn(baseColumns, '')).toHaveLength(3);
+  });
+
+  it('제목은 trim 처리', () => {
+    const result = addWallColumn(baseColumns, '  결론  ');
+    expect(result[3]!.title).toBe('결론');
+  });
+});
+
+describe('renameWallColumn', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '주장', order: 0 },
+    { id: 'column-2', title: '근거', order: 1 },
+  ];
+
+  it('지정 컬럼의 title을 변경', () => {
+    const result = renameWallColumn(columns, 'column-1', '핵심 주장');
+    expect(result[0]!.title).toBe('핵심 주장');
+    expect(result[1]!.title).toBe('근거');
+  });
+
+  it('빈/공백 제목은 거부(원본 반환)', () => {
+    expect(renameWallColumn(columns, 'column-1', '')[0]!.title).toBe('주장');
+    expect(renameWallColumn(columns, 'column-1', '   ')[0]!.title).toBe('주장');
+  });
+
+  it('존재하지 않는 columnId는 불변', () => {
+    const result = renameWallColumn(columns, 'column-99', '이름');
+    expect(result).toEqual(columns);
+  });
+
+  it('새 title은 trim 처리', () => {
+    const result = renameWallColumn(columns, 'column-1', '  제목  ');
+    expect(result[0]!.title).toBe('제목');
+  });
+});
+
+describe('reorderWallColumns', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: 'A', order: 0 },
+    { id: 'column-2', title: 'B', order: 1 },
+    { id: 'column-3', title: 'C', order: 2 },
+  ];
+
+  it('fromIndex < toIndex: 앞→뒤 이동 + order 재계산', () => {
+    const result = reorderWallColumns(columns, 0, 2);
+    expect(result.map((c) => c.id)).toEqual(['column-2', 'column-3', 'column-1']);
+    expect(result.map((c) => c.order)).toEqual([0, 1, 2]);
+  });
+
+  it('fromIndex > toIndex: 뒤→앞 이동 + order 재계산', () => {
+    const result = reorderWallColumns(columns, 2, 0);
+    expect(result.map((c) => c.id)).toEqual(['column-3', 'column-1', 'column-2']);
+    expect(result.map((c) => c.order)).toEqual([0, 1, 2]);
+  });
+
+  it('fromIndex === toIndex: no-op', () => {
+    const result = reorderWallColumns(columns, 1, 1);
+    expect(result.map((c) => c.id)).toEqual(['column-1', 'column-2', 'column-3']);
+  });
+
+  it('범위 벗어난 index는 원본 반환', () => {
+    expect(reorderWallColumns(columns, -1, 0)).toEqual(columns);
+    expect(reorderWallColumns(columns, 0, 99)).toEqual(columns);
+    expect(reorderWallColumns(columns, 99, 0)).toEqual(columns);
+  });
+});
+
+describe('removeWallColumn', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '주장', order: 0 },
+    { id: 'column-2', title: '근거', order: 1 },
+    { id: 'column-3', title: '반박', order: 2 },
+  ];
+
+  function mkPost(
+    id: string,
+    columnId: string,
+    overrides?: Partial<RealtimeWallPost>,
+  ): RealtimeWallPost {
+    return {
+      id,
+      nickname: `n-${id}`,
+      text: `t-${id}`,
+      status: 'approved',
+      pinned: false,
+      submittedAt: Number(id.replace(/\D/g, '')) || 1,
+      kanban: { columnId, order: 0 },
+      freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      ...overrides,
+    };
+  }
+
+  describe('strategy: move-to', () => {
+    it('삭제 컬럼의 카드를 target 컬럼 뒤로 append (order는 기존 target 수부터)', () => {
+      const posts: RealtimeWallPost[] = [
+        mkPost('1', 'column-1', { kanban: { columnId: 'column-1', order: 0 } }),
+        mkPost('2', 'column-1', { kanban: { columnId: 'column-1', order: 1 } }),
+        mkPost('3', 'column-2', { kanban: { columnId: 'column-2', order: 0 } }),
+        mkPost('4', 'column-3', { kanban: { columnId: 'column-3', order: 0 } }),
+      ];
+      const { columns: nextCols, posts: nextPosts } = removeWallColumn(
+        columns,
+        posts,
+        'column-3',
+        { kind: 'move-to', targetColumnId: 'column-1' },
+      );
+
+      expect(nextCols.map((c) => c.id)).toEqual(['column-1', 'column-2']);
+      expect(nextCols.map((c) => c.order)).toEqual([0, 1]);
+
+      const moved = nextPosts.find((p) => p.id === '4')!;
+      expect(moved.kanban.columnId).toBe('column-1');
+      // column-1에 이미 approved 카드 2개 → startOrder=2
+      expect(moved.kanban.order).toBe(2);
+    });
+
+    it('target이 삭제 대상과 같거나 존재하지 않으면 첫 남은 컬럼으로 fallback', () => {
+      const posts: RealtimeWallPost[] = [
+        mkPost('1', 'column-3', { kanban: { columnId: 'column-3', order: 0 } }),
+      ];
+      const { posts: nextPosts } = removeWallColumn(columns, posts, 'column-3', {
+        kind: 'move-to',
+        targetColumnId: 'column-3', // 자기 자신 → fallback
+      });
+      expect(nextPosts[0]!.kanban.columnId).toBe('column-1');
+    });
+
+    it('삭제 컬럼에 카드 2개면 target에 순차 order append', () => {
+      const posts: RealtimeWallPost[] = [
+        mkPost('a', 'column-2', { kanban: { columnId: 'column-2', order: 0 } }),
+        mkPost('b', 'column-3', { kanban: { columnId: 'column-3', order: 0 } }),
+        mkPost('c', 'column-3', { kanban: { columnId: 'column-3', order: 1 } }),
+      ];
+      const { posts: nextPosts } = removeWallColumn(columns, posts, 'column-3', {
+        kind: 'move-to',
+        targetColumnId: 'column-2',
+      });
+      const b = nextPosts.find((p) => p.id === 'b')!;
+      const c = nextPosts.find((p) => p.id === 'c')!;
+      expect(b.kanban.columnId).toBe('column-2');
+      expect(c.kanban.columnId).toBe('column-2');
+      // 기존 column-2 approved 카드 1개 → b=1, c=2
+      expect(b.kanban.order).toBe(1);
+      expect(c.kanban.order).toBe(2);
+    });
+  });
+
+  describe('strategy: hide', () => {
+    it('삭제 컬럼 카드 status=hidden 일괄 전환, 컬럼만 제거', () => {
+      const posts: RealtimeWallPost[] = [
+        mkPost('a', 'column-1'),
+        mkPost('b', 'column-3'),
+        mkPost('c', 'column-3'),
+      ];
+      const { columns: nextCols, posts: nextPosts } = removeWallColumn(
+        columns,
+        posts,
+        'column-3',
+        { kind: 'hide' },
+      );
+      expect(nextCols.map((c) => c.id)).toEqual(['column-1', 'column-2']);
+
+      const a = nextPosts.find((p) => p.id === 'a')!;
+      const b = nextPosts.find((p) => p.id === 'b')!;
+      const c = nextPosts.find((p) => p.id === 'c')!;
+      expect(a.status).toBe('approved');
+      expect(b.status).toBe('hidden');
+      expect(c.status).toBe('hidden');
+    });
+  });
+
+  describe('strategy: delete', () => {
+    it('삭제 컬럼 카드를 posts에서 영구 제거', () => {
+      const posts: RealtimeWallPost[] = [
+        mkPost('a', 'column-1'),
+        mkPost('b', 'column-3'),
+        mkPost('c', 'column-3'),
+      ];
+      const { posts: nextPosts } = removeWallColumn(
+        columns,
+        posts,
+        'column-3',
+        { kind: 'delete' },
+      );
+      expect(nextPosts.map((p) => p.id)).toEqual(['a']);
+    });
+  });
+
+  it('최소 2컬럼 가드: 2개 중 삭제는 거부 (원본 반환)', () => {
+    const twoCols: RealtimeWallColumn[] = [
+      { id: 'column-1', title: 'A', order: 0 },
+      { id: 'column-2', title: 'B', order: 1 },
+    ];
+    const posts: RealtimeWallPost[] = [mkPost('a', 'column-1')];
+    const { columns: nextCols, posts: nextPosts } = removeWallColumn(
+      twoCols,
+      posts,
+      'column-1',
+      { kind: 'delete' },
+    );
+    expect(nextCols).toHaveLength(2);
+    expect(nextPosts).toHaveLength(1);
+  });
+
+  it('존재하지 않는 columnId는 원본 반환', () => {
+    const posts: RealtimeWallPost[] = [mkPost('a', 'column-1')];
+    const { columns: nextCols, posts: nextPosts } = removeWallColumn(
+      columns,
+      posts,
+      'column-999',
+      { kind: 'delete' },
+    );
+    expect(nextCols).toEqual(columns);
+    expect(nextPosts).toEqual(posts);
+  });
+
+  it('3개 컬럼 중 1개 삭제 후 나머지 2개의 order 0..1 재정렬', () => {
+    const { columns: nextCols } = removeWallColumn(columns, [], 'column-2', {
+      kind: 'delete',
+    });
+    expect(nextCols).toEqual([
+      { id: 'column-1', title: '주장', order: 0 },
+      { id: 'column-3', title: '반박', order: 1 },
+    ]);
+  });
+});
