@@ -524,4 +524,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => { ipcRenderer.removeListener('collab-board:session-started', handler); };
     },
   },
+
+  // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
+  // Design §3.4 — Main 프로세스가 fs 직접 접근하여 userData/data/wall-board-*.json 관리.
+  wallBoards: {
+    listMeta: (): Promise<unknown[]> =>
+      ipcRenderer.invoke('realtime-wall:board:list-meta'),
+    load: (args: { id: string }): Promise<unknown | null> =>
+      ipcRenderer.invoke('realtime-wall:board:load', args),
+    save: (args: { board: unknown }): Promise<{ savedAt: number }> =>
+      ipcRenderer.invoke('realtime-wall:board:save', args),
+    delete: (args: { id: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('realtime-wall:board:delete', args),
+    getByCode: (args: { shortCode: string }): Promise<unknown | null> =>
+      ipcRenderer.invoke('realtime-wall:board:get-by-code', args),
+  },
 });
