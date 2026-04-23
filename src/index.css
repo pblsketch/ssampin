@@ -716,8 +716,16 @@ body {
 }
 
 /* ─── 쌤핀 노트 (BlockNote) 여백 정리 ─── */
+.ssampin-note-editor {
+  display: flex;
+  flex-direction: column;
+}
+
 .ssampin-note-editor .bn-container {
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
   background: transparent;
 }
 
@@ -729,6 +737,8 @@ body {
   margin: 0;
   font-size: 15px;
   line-height: 1.7;
+  flex: 1 1 auto;
+  min-height: 100%;
 }
 
 /* 큰 화면에서는 상하 여백만 살짝 더 */
