@@ -36,9 +36,9 @@ const VARIANT_CLASS: Record<Variant, string> = {
 };
 
 const SIZE_CLASS: Record<Size, string> = {
-  sm: 'h-8 px-3 text-xs rounded-sp-sm gap-1.5',
-  md: 'h-9 px-4 text-sm rounded-sp-sm gap-2',
-  lg: 'h-11 px-5 text-base rounded-sp-md gap-2.5',
+  sm: 'h-8 px-3 text-xs rounded-md gap-1.5',
+  md: 'h-9 px-4 text-sm rounded-md gap-2',
+  lg: 'h-11 px-5 text-base rounded-lg gap-2.5',
 };
 
 export function Button({

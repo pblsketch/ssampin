@@ -124,7 +124,7 @@ export function DashboardTimetable() {
   }, [dayOfWeek, viewDateStr, teacherSchedule, overrides]);
 
   return (
-    <div className="rounded-sp-lg bg-sp-card p-4 h-full flex flex-col transition-shadow duration-sp-base ease-sp-out hover:shadow-sp-md">
+    <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col transition-shadow duration-sp-base ease-sp-out hover:shadow-sp-md">
       {/* 헤더 */}
       <div className="mb-4 flex flex-col gap-2">
         {/* 상단 행: 제목 + 탭 */}

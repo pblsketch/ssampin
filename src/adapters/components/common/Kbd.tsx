@@ -43,7 +43,7 @@ function formatKey(key: string): string {
 
 export function Kbd({ children, combo, className = '', title }: KbdProps) {
   const baseClass =
-    'inline-flex items-center rounded-sp-xs border border-sp-border bg-sp-card ' +
+    'inline-flex items-center rounded border border-sp-border bg-sp-card ' +
     'px-1.5 py-0.5 font-mono text-[11px] font-sp-medium leading-none text-sp-muted ' +
     'select-none';
 
