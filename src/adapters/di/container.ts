@@ -95,6 +95,8 @@ import { SyncToGoogle } from '@usecases/calendar/SyncToGoogle';
 import { SyncFromGoogle } from '@usecases/calendar/SyncFromGoogle';
 import { ManageCalendarMapping } from '@usecases/calendar/ManageCalendarMapping';
 
+import { ImportSettingsFromCloud } from '@usecases/sync/ImportSettingsFromCloud';
+
 import { CreateAssignment } from '@usecases/assignment/CreateAssignment';
 import { GetAssignments } from '@usecases/assignment/GetAssignments';
 import { GetSubmissions } from '@usecases/assignment/GetSubmissions';
@@ -300,6 +302,17 @@ export function getDriveSyncAdapter(
 
 export function resetDriveSyncAdapter(): void {
   _driveSyncAdapter = null;
+}
+
+/**
+ * 다른 기기의 Drive 백업에서 settings.json만 가져와 이 기기에 적용하는 유스케이스 팩토리.
+ * (machine-specific 필드는 로컬 값을 유지, 자세한 병합 정책은 ImportSettingsFromCloud 참조)
+ */
+export function createImportSettingsFromCloud(
+  getAccessToken: () => Promise<string>,
+): ImportSettingsFromCloud {
+  const drivePort = getDriveSyncAdapter(getAccessToken);
+  return new ImportSettingsFromCloud(storage, drivePort, driveSyncRepository);
 }
 
 // (협업 보드 조립은 electron/ipc/board.ts 가 담당 — 상단 import 주석 참조)

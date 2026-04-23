@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { DriveSyncStatus, DriveSyncConflict } from '@domain/entities/DriveSyncState';
 import type { SyncProgress } from '@usecases/sync/SyncToCloud';
+import type { ImportSettingsFromCloudErrorCode } from '@usecases/sync/ImportSettingsFromCloud';
 
 export interface SyncResult {
   direction: 'upload' | 'download';
@@ -10,6 +11,10 @@ export interface SyncResult {
   skipped: string[];
   conflicts?: string[];
 }
+
+export type ImportSettingsResult =
+  | { ok: true; remoteUpdatedAt?: string; remoteDeviceName?: string }
+  | { ok: false; code: ImportSettingsFromCloudErrorCode; message: string };
 
 interface DriveSyncState {
   status: DriveSyncStatus;
@@ -22,6 +27,7 @@ interface DriveSyncState {
   // Actions
   syncToCloud: () => Promise<void>;
   syncFromCloud: () => Promise<{ downloaded: string[]; conflicts: DriveSyncConflict[] }>;
+  importSettingsFromCloud: () => Promise<ImportSettingsResult>;
   resolveConflict: (conflict: DriveSyncConflict, resolution: 'local' | 'remote') => Promise<void>;
   deleteCloudData: () => Promise<void>;
   resetStatus: () => void;
@@ -201,6 +207,66 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         });
       }
       return { downloaded: [], conflicts: [] };
+    }
+  },
+
+  importSettingsFromCloud: async () => {
+    if (get().status === 'syncing') {
+      return { ok: false, code: 'UNKNOWN', message: '다른 동기화 작업이 진행 중입니다.' };
+    }
+    // ImportSettingsFromCloudError 클래스는 catch에서 instanceof로 쓰므로 try 바깥에서 import
+    const { ImportSettingsFromCloudError } = await import(
+      '@usecases/sync/ImportSettingsFromCloud'
+    );
+    set({ status: 'syncing', error: null, progress: null });
+    try {
+      const { createImportSettingsFromCloud, authenticateGoogle } = await import(
+        '@adapters/di/container'
+      );
+
+      const getToken = () => authenticateGoogle.getValidAccessToken();
+      const useCase = createImportSettingsFromCloud(getToken);
+      const result = await useCase.execute();
+
+      // settings 리로드 → UI 즉시 반영
+      const { reloadStores } = await import('@adapters/hooks/useDriveSync');
+      await reloadStores(['settings']);
+
+      const now = new Date().toISOString();
+      set({
+        status: 'success',
+        error: null,
+        progress: null,
+        lastSyncResult: {
+          direction: 'download',
+          timestamp: now,
+          downloaded: ['settings'],
+          skipped: [],
+          conflicts: [],
+        },
+      });
+      setTimeout(() => {
+        if (get().status === 'success') set({ status: 'idle' });
+      }, 3000);
+
+      return {
+        ok: true,
+        remoteUpdatedAt: result.remoteUpdatedAt,
+        remoteDeviceName: result.remoteDeviceName,
+      };
+    } catch (err) {
+      console.error('[DriveSync] importSettingsFromCloud error:', err);
+      const imported = err instanceof ImportSettingsFromCloudError ? err : null;
+      const code: ImportSettingsFromCloudErrorCode = imported?.code ?? 'UNKNOWN';
+      const message =
+        imported?.message ??
+        (err instanceof Error ? err.message : '설정 가져오기에 실패했습니다.');
+      set({ status: 'error', error: message, progress: null });
+      setTimeout(() => {
+        const s = get();
+        if (s.status === 'error') set({ status: 'idle', error: null });
+      }, 5000);
+      return { ok: false, code, message };
     }
   },
 
