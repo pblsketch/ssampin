@@ -1,18 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import type { RealtimeWallColumn, RealtimeWallPost } from '@domain/entities/RealtimeWall';
+import type {
+  RealtimeWallColumn,
+  RealtimeWallPost,
+  WallBoard,
+  WallBoardId,
+} from '@domain/entities/RealtimeWall';
 import {
   approveRealtimeWallPost,
   buildRealtimeWallColumns,
+  buildWallPreviewPosts,
   classifyRealtimeWallLink,
   createDefaultFreeformPosition,
   createPendingRealtimeWallPost,
+  createWallBoard,
   extractYoutubeVideoId,
+  generateUniqueWallShortCode,
+  generateWallShortCode,
   heartRealtimeWallPost,
   hideRealtimeWallPost,
   normalizeRealtimeWallLink,
   REALTIME_WALL_MAX_HEARTS,
   sortRealtimeWallPostsForBoard,
   togglePinRealtimeWallPost,
+  toWallBoardMeta,
+  WALL_SHORT_CODE_LENGTH,
 } from './realtimeWallRules';
 
 describe('buildRealtimeWallColumns', () => {
@@ -490,5 +501,200 @@ describe('classifyRealtimeWallLink', () => {
     expect(classifyRealtimeWallLink('ftp://example.com')).toBeUndefined();
     expect(classifyRealtimeWallLink('javascript:alert(1)')).toBeUndefined();
     expect(classifyRealtimeWallLink('')).toBeUndefined();
+  });
+});
+
+// ============================================================
+// v1.13 Stage A — WallBoard 영속화 규칙 테스트
+// Design §3.1 / §3.5.1a / §8.1
+// ============================================================
+
+describe('generateWallShortCode', () => {
+  it('6자 영숫자 코드를 생성한다', () => {
+    const code = generateWallShortCode();
+    expect(code).toHaveLength(WALL_SHORT_CODE_LENGTH);
+    // 0/O/1/I는 알파벳에 포함되지 않아야 한다
+    expect(code).not.toMatch(/[01OI]/);
+    expect(code).toMatch(/^[A-HJ-NP-Z2-9]+$/);
+  });
+
+  it('randomSource 주입으로 결정적 코드 생성', () => {
+    const seq = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
+    let i = 0;
+    const rng = (): number => seq[i++] ?? 0;
+    const code = generateWallShortCode(rng);
+    expect(code).toHaveLength(WALL_SHORT_CODE_LENGTH);
+    // 결정적 입력 → 결정적 출력
+    let j = 0;
+    const rng2 = (): number => seq[j++] ?? 0;
+    expect(generateWallShortCode(rng2)).toBe(code);
+  });
+
+  it('generateUniqueWallShortCode는 기존 코드와 충돌 시 재시도', () => {
+    // 첫 3회는 'AAAAAA'(rng=0), 네 번째부터 'HHHHHH'(rng=0.25*32=8th 근방)
+    // 여기서는 단순히 2개 충돌 후 성공 확인
+    let calls = 0;
+    const rng = (): number => {
+      calls++;
+      // 첫 6 호출(1 code)은 0 → 'AAAAAA', 다음 6 호출은 0.5 → 약간 다른 문자
+      return calls <= 6 ? 0 : 0.5;
+    };
+    const existing = new Set<string>([generateWallShortCode(() => 0)]); // AAAAAA
+    const code = generateUniqueWallShortCode(existing, rng);
+    expect(code).toHaveLength(WALL_SHORT_CODE_LENGTH);
+    expect(existing.has(code)).toBe(false);
+  });
+});
+
+describe('buildWallPreviewPosts', () => {
+  const mkPost = (id: string, overrides?: Partial<RealtimeWallPost>): RealtimeWallPost => ({
+    id,
+    nickname: `n-${id}`,
+    text: `text-${id}`,
+    status: 'approved',
+    pinned: false,
+    submittedAt: Number(id),
+    kanban: { columnId: 'column-1', order: 0 },
+    freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 0 },
+    ...overrides,
+  });
+
+  it('approved만 추출하고 pending/hidden은 제외', () => {
+    const posts: RealtimeWallPost[] = [
+      mkPost('1'),
+      mkPost('2', { status: 'pending' }),
+      mkPost('3', { status: 'hidden' }),
+      mkPost('4'),
+    ];
+    const preview = buildWallPreviewPosts(posts);
+    expect(preview.map((p) => p.id)).toEqual(['4', '1']);
+  });
+
+  it('pinned 우선, 그다음 최신순 정렬 유지', () => {
+    const posts: RealtimeWallPost[] = [
+      mkPost('1'),
+      mkPost('2', { pinned: true }),
+      mkPost('3'),
+      mkPost('4', { pinned: true }),
+    ];
+    const preview = buildWallPreviewPosts(posts);
+    // pinned 2개 먼저 (submittedAt 내림차순 → 4,2), 그 다음 3,1
+    expect(preview.map((p) => p.id)).toEqual(['4', '2', '3', '1']);
+  });
+
+  it('max 상한 적용 + 100자 초과 text 말줄임', () => {
+    const longText = 'x'.repeat(150);
+    const posts: RealtimeWallPost[] = Array.from({ length: 10 }, (_, i) =>
+      mkPost(String(i + 1), { text: longText, submittedAt: i + 1 }),
+    );
+    const preview = buildWallPreviewPosts(posts, 3);
+    expect(preview).toHaveLength(3);
+    expect(preview[0]!.text.length).toBe(100);
+  });
+
+  it('빈 posts는 빈 배열 반환', () => {
+    expect(buildWallPreviewPosts([])).toEqual([]);
+  });
+});
+
+describe('createWallBoard', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '생각', order: 0 },
+    { id: 'column-2', title: '질문', order: 1 },
+  ];
+
+  it('기본값 approvalMode=manual, posts=[], createdAt=updatedAt', () => {
+    const now = 1000;
+    const board = createWallBoard({
+      id: 'board-1' as WallBoardId,
+      title: '토론 1',
+      layoutMode: 'kanban',
+      columns,
+      now,
+    });
+    expect(board.id).toBe('board-1');
+    expect(board.title).toBe('토론 1');
+    expect(board.approvalMode).toBe('manual');
+    expect(board.posts).toEqual([]);
+    expect(board.createdAt).toBe(now);
+    expect(board.updatedAt).toBe(now);
+    expect(board.archived).toBeUndefined();
+    expect(board.shortCode).toBeUndefined();
+  });
+
+  it('columns deep copy로 원본 불변 보장', () => {
+    const board = createWallBoard({
+      id: 'board-2' as WallBoardId,
+      title: '토론 2',
+      layoutMode: 'kanban',
+      columns,
+    });
+    // 원본 columns 수정이 board에 영향 없음
+    (columns[0] as { title: string }).title = 'MUTATED';
+    expect(board.columns[0]!.title).toBe('생각');
+    // 원복
+    (columns[0] as { title: string }).title = '생각';
+  });
+
+  it('shortCode 주입 시 저장 + approvalMode 명시 override', () => {
+    const board = createWallBoard({
+      id: 'board-3' as WallBoardId,
+      title: '자동 승인',
+      layoutMode: 'freeform',
+      columns,
+      approvalMode: 'auto',
+      shortCode: 'ABC123',
+    });
+    expect(board.shortCode).toBe('ABC123');
+    expect(board.approvalMode).toBe('auto');
+  });
+
+  it('빈 title은 "제목 없는 담벼락"으로 대체', () => {
+    const board = createWallBoard({
+      id: 'board-4' as WallBoardId,
+      title: '   ',
+      layoutMode: 'grid',
+      columns,
+    });
+    expect(board.title).toBe('제목 없는 담벼락');
+  });
+});
+
+describe('toWallBoardMeta', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '생각', order: 0 },
+  ];
+  const mkPost = (id: string, status: 'pending' | 'approved' | 'hidden'): RealtimeWallPost => ({
+    id,
+    nickname: `n-${id}`,
+    text: `t-${id}`,
+    status,
+    pinned: false,
+    submittedAt: Number(id),
+    kanban: { columnId: 'column-1', order: 0 },
+    freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 0 },
+  });
+
+  it('postCount / approvedCount / previewPosts 경량 변환', () => {
+    const board = createWallBoard({
+      id: 'board-1' as WallBoardId,
+      title: 'T',
+      layoutMode: 'kanban',
+      columns,
+      now: 100,
+    });
+    const withPosts: WallBoard = {
+      ...board,
+      posts: [
+        mkPost('1', 'approved'),
+        mkPost('2', 'pending'),
+        mkPost('3', 'approved'),
+      ],
+    };
+    const meta = toWallBoardMeta(withPosts);
+    expect(meta.postCount).toBe(3);
+    expect(meta.approvedCount).toBe(2);
+    expect(meta.previewPosts).toHaveLength(2);
+    expect(meta.previewPosts.map((p) => p.id).sort()).toEqual(['1', '3']);
   });
 });
