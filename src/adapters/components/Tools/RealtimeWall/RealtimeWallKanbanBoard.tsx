@@ -122,13 +122,13 @@ function SortableRealtimeWallCardItem({
   onTogglePin,
   onHidePost,
   onOpenLink,
-  onLike,
+  onHeart,
 }: {
   post: RealtimeWallPost;
   onTogglePin?: (postId: string) => void;
   onHidePost?: (postId: string) => void;
   onOpenLink?: (url: string) => void;
-  onLike?: (postId: string) => void;
+  onHeart?: (postId: string) => void;
 }) {
   const {
     attributes,
@@ -155,7 +155,7 @@ function SortableRealtimeWallCardItem({
         post={post}
         compact
         onOpenLink={onOpenLink}
-        onLike={onLike}
+        onHeart={onHeart}
         dragHandle={(
           <button
             type="button"
@@ -205,7 +205,7 @@ function KanbanColumnView({
   onTogglePin,
   onHidePost,
   onOpenLink,
-  onLike,
+  onHeart,
 }: {
   column: RealtimeWallColumn;
   columnIndex: number;
@@ -214,7 +214,7 @@ function KanbanColumnView({
   onTogglePin?: (postId: string) => void;
   onHidePost?: (postId: string) => void;
   onOpenLink?: (url: string) => void;
-  onLike?: (postId: string) => void;
+  onHeart?: (postId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${column.id}`,
@@ -248,7 +248,7 @@ function KanbanColumnView({
               post={post}
               compact
               onOpenLink={onOpenLink}
-              onLike={!readOnly ? onLike : undefined}
+              onHeart={!readOnly ? onHeart : undefined}
             />
           ))
         ) : (
@@ -260,7 +260,7 @@ function KanbanColumnView({
                 onTogglePin={onTogglePin}
                 onHidePost={onHidePost}
                 onOpenLink={onOpenLink}
-                onLike={onLike}
+                onHeart={onHeart}
               />
             ))}
           </SortableContext>
@@ -284,7 +284,7 @@ export function RealtimeWallKanbanBoard({
   onTogglePin,
   onHidePost,
   onOpenLink,
-  onLike,
+  onHeart,
 }: RealtimeWallKanbanBoardProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -366,7 +366,7 @@ export function RealtimeWallKanbanBoard({
                   onTogglePin={onTogglePin}
                   onHidePost={onHidePost}
                   onOpenLink={onOpenLink}
-                  onLike={onLike}
+                  onHeart={onHeart}
                 />
               ))}
             </div>

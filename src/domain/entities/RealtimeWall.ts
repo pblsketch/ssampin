@@ -52,8 +52,8 @@ export interface RealtimeWallPost {
   readonly linkPreview?: RealtimeWallLinkPreview;
   readonly status: RealtimeWallPostStatus;
   readonly pinned: boolean;
-  /** 교사 로컬 좋아요 카운터. 학생에게 노출 금지(단계 5 fix 정책). */
-  readonly likes?: number;
+  /** 교사 로컬 하트 카운터. 학생에게 노출 금지(단계 5 fix 정책). */
+  readonly teacherHearts?: number;
   readonly submittedAt: number;
   readonly kanban: RealtimeWallKanbanPosition;
   readonly freeform: RealtimeWallFreeformPosition;

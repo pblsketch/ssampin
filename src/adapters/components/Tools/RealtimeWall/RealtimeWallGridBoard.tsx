@@ -12,7 +12,7 @@ export function RealtimeWallGridBoard({
   onTogglePin,
   onHidePost,
   onOpenLink,
-  onLike,
+  onHeart,
 }: RealtimeWallGridBoardProps) {
   const approvedPosts = useMemo(
     () => sortRealtimeWallPostsForBoard(
@@ -43,7 +43,7 @@ export function RealtimeWallGridBoard({
                 <RealtimeWallCard
                   post={post}
                   onOpenLink={onOpenLink}
-                  onLike={!readOnly ? onLike : undefined}
+                  onHeart={!readOnly ? onHeart : undefined}
                   actions={
                     !readOnly ? (
                       <RealtimeWallCardActions

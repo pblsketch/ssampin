@@ -7,10 +7,10 @@ import {
   createDefaultFreeformPosition,
   createPendingRealtimeWallPost,
   extractYoutubeVideoId,
+  heartRealtimeWallPost,
   hideRealtimeWallPost,
-  likeRealtimeWallPost,
   normalizeRealtimeWallLink,
-  REALTIME_WALL_MAX_LIKES,
+  REALTIME_WALL_MAX_HEARTS,
   sortRealtimeWallPostsForBoard,
   togglePinRealtimeWallPost,
 } from './realtimeWallRules';
@@ -220,8 +220,8 @@ describe('extractYoutubeVideoId', () => {
   });
 });
 
-describe('likeRealtimeWallPost', () => {
-  function makeLikablePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
+describe('heartRealtimeWallPost', () => {
+  function makeHeartablePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
     return {
       nickname: '학생',
       text: '내용',
@@ -234,38 +234,38 @@ describe('likeRealtimeWallPost', () => {
     };
   }
 
-  it('likes 미설정 카드는 0 → 1로 증가', () => {
-    const posts = [makeLikablePost({ id: 'p1' })];
-    const result = likeRealtimeWallPost(posts, 'p1');
-    expect(result[0]!.likes).toBe(1);
+  it('teacherHearts 미설정 카드는 0 → 1로 증가', () => {
+    const posts = [makeHeartablePost({ id: 'p1' })];
+    const result = heartRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.teacherHearts).toBe(1);
   });
 
-  it('기존 likes는 +1 증가', () => {
-    const posts = [makeLikablePost({ id: 'p1', likes: 3 })];
-    const result = likeRealtimeWallPost(posts, 'p1');
-    expect(result[0]!.likes).toBe(4);
+  it('기존 teacherHearts는 +1 증가', () => {
+    const posts = [makeHeartablePost({ id: 'p1', teacherHearts: 3 })];
+    const result = heartRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.teacherHearts).toBe(4);
   });
 
-  it('상한 REALTIME_WALL_MAX_LIKES를 초과하지 않음', () => {
-    const posts = [makeLikablePost({ id: 'p1', likes: REALTIME_WALL_MAX_LIKES })];
-    const result = likeRealtimeWallPost(posts, 'p1');
-    expect(result[0]!.likes).toBe(REALTIME_WALL_MAX_LIKES);
+  it('상한 REALTIME_WALL_MAX_HEARTS를 초과하지 않음', () => {
+    const posts = [makeHeartablePost({ id: 'p1', teacherHearts: REALTIME_WALL_MAX_HEARTS })];
+    const result = heartRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.teacherHearts).toBe(REALTIME_WALL_MAX_HEARTS);
   });
 
   it('존재하지 않는 postId는 posts 변경 없음', () => {
-    const posts = [makeLikablePost({ id: 'p1', likes: 5 })];
-    const result = likeRealtimeWallPost(posts, 'missing');
+    const posts = [makeHeartablePost({ id: 'p1', teacherHearts: 5 })];
+    const result = heartRealtimeWallPost(posts, 'missing');
     expect(result).toEqual(posts);
   });
 
   it('같은 배열 내 다른 post는 건드리지 않음', () => {
     const posts = [
-      makeLikablePost({ id: 'p1', likes: 2 }),
-      makeLikablePost({ id: 'p2', likes: 5 }),
+      makeHeartablePost({ id: 'p1', teacherHearts: 2 }),
+      makeHeartablePost({ id: 'p2', teacherHearts: 5 }),
     ];
-    const result = likeRealtimeWallPost(posts, 'p1');
-    expect(result[0]!.likes).toBe(3);
-    expect(result[1]!.likes).toBe(5);
+    const result = heartRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.teacherHearts).toBe(3);
+    expect(result[1]!.teacherHearts).toBe(5);
   });
 });
 

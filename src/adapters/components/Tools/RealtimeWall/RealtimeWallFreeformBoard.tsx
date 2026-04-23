@@ -41,7 +41,7 @@ export function RealtimeWallFreeformBoard({
   onTogglePin,
   onHidePost,
   onOpenLink,
-  onLike,
+  onHeart,
 }: RealtimeWallFreeformBoardProps) {
   const approvedPosts = useMemo(
     () => posts
@@ -77,7 +77,7 @@ export function RealtimeWallFreeformBoard({
               <RealtimeWallCard
                 post={post}
                 onOpenLink={onOpenLink}
-                onLike={!readOnly ? onLike : undefined}
+                onHeart={!readOnly ? onHeart : undefined}
                 actions={
                   readOnly ? undefined : (
                     <RealtimeWallCardActions
