@@ -42,6 +42,8 @@ import { WallBoardListView } from './RealtimeWall/WallBoardListView';
 import { formatAbsoluteTime, openExternalLink } from './RealtimeWall/realtimeWallHelpers';
 
 const AUTO_SAVE_DEBOUNCE_MS = 2000;
+/** 30초마다 강제 저장 — debounce 실패 시 safety net. Design §3.3. */
+const AUTO_SAVE_INTERVAL_MS = 30_000;
 
 /** crypto.randomUUID → WallBoardId branded type 캐스팅 */
 function newWallBoardId(): WallBoardId {
@@ -118,34 +120,77 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // v1.13 Stage A: 자동 저장. running 모드에서 posts/title/layoutMode/columns
-  // 변경을 debounce 2s로 repo에 반영. currentBoard가 없으면 no-op
-  // (아직 새 보드를 start하지 않은 상태 — create 화면 등).
-  // Stage C: approvalMode 변경도 동일하게 자동 반영.
+  // 최신 상태를 interval 루프에서 stale 없이 참조하기 위한 ref.
+  // currentBoard는 save 성공 시 setCurrentBoard로 갱신되어 의존성 순환이
+  // 걱정되므로, interval 경로에선 effect deps에 넣지 않고 ref로 읽는다.
+  const latestStateRef = useRef({
+    currentBoard,
+    title: normalizedTitle,
+    layoutMode,
+    columns,
+    approvalMode,
+    posts,
+  });
+  latestStateRef.current = {
+    currentBoard,
+    title: normalizedTitle,
+    layoutMode,
+    columns,
+    approvalMode,
+    posts,
+  };
+
+  // v1.13 Stage A: 자동 저장. running 모드에서 posts/title/layoutMode/columns/
+  // approvalMode 변경을 debounce 2s + interval 30s safety net으로 repo에 반영.
+  // currentBoard가 없으면 no-op (아직 새 보드를 start하지 않은 상태 — create 등).
+  // Design §3.3.
+  //
+  // 추가로 변경 즉시 Main에 stage-dirty IPC를 fire-and-forget으로 푸시해
+  // 강제 종료(before-quit) 시점에도 최신 스냅샷이 동기 저장되도록 보장한다.
   useEffect(() => {
     if (!currentBoard || viewMode !== 'running') return;
 
-    const timer = window.setTimeout(() => {
-      const next: WallBoard = {
-        ...currentBoard,
-        title: normalizedTitle,
-        layoutMode,
-        columns,
-        approvalMode,
-        posts,
+    const buildSnapshot = (): WallBoard | null => {
+      const s = latestStateRef.current;
+      if (!s.currentBoard) return null;
+      return {
+        ...s.currentBoard,
+        title: s.title,
+        layoutMode: s.layoutMode,
+        columns: s.columns,
+        approvalMode: s.approvalMode,
+        posts: s.posts,
         updatedAt: Date.now(),
       };
+    };
+
+    // 변경 즉시 Main에 dirty 스냅샷 푸시 (before-quit 안전망).
+    const dirty = buildSnapshot();
+    if (dirty && window.electronAPI?.wallBoards?.stageDirty) {
+      void window.electronAPI.wallBoards
+        .stageDirty({ board: dirty })
+        .catch(() => {});
+    }
+
+    const saveSnapshot = () => {
+      const next = buildSnapshot();
+      if (!next) return;
       // 저장 실패는 조용히 무시 — 다음 주기에 재시도.
       // 토스트는 수동 "저장/종료" 시에만 노출.
       void wallBoardRepository.save(next).then(() => {
         setCurrentBoard(next);
       }).catch(() => {});
-    }, AUTO_SAVE_DEBOUNCE_MS);
+    };
 
-    return () => window.clearTimeout(timer);
+    const debounceTimer = window.setTimeout(saveSnapshot, AUTO_SAVE_DEBOUNCE_MS);
+    const intervalTimer = window.setInterval(saveSnapshot, AUTO_SAVE_INTERVAL_MS);
+
+    return () => {
+      window.clearTimeout(debounceTimer);
+      window.clearInterval(intervalTimer);
+    };
     // currentBoard를 dep에 넣으면 save → setCurrentBoard → 재-schedule 무한
-    // 루프가 되므로 의도적으로 제외 (currentBoard는 최신 저장본을 보관할 뿐
-    // dependency로서는 stable하게 다뤄야 함).
+    // 루프가 되므로 의도적으로 제외 (latestStateRef로 최신값 참조).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, normalizedTitle, layoutMode, columns, approvalMode, viewMode]);
 
@@ -166,17 +211,50 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       setShortUrl(null);
       setShortCode(null);
 
+      // v1.13 [A] Design §1.1 / §3.7#8: 영속 보드의 고정 shortCode 재적용.
+      // currentBoard.shortCode가 있으면 setCustomCode로 학생 접속 URL을 보드
+      // 고유 코드로 고정 (교사가 학기 내내 동일 코드로 안내 가능).
+      // Supabase 상에 이미 다른 세션이 이 코드를 쓰고 있어 setCustomCode가
+      // 실패하면 registerSession 기본값(랜덤)로 폴백하고 board.shortCode를
+      // 새 코드로 업데이트해 다음 세션부터 충돌 회피.
+      const persistentCode = currentBoard?.shortCode;
+      if (persistentCode) {
+        try {
+          const liveSession = await liveSessionClientRef.current.setCustomCode(
+            result.tunnelUrl,
+            persistentCode,
+          );
+          setShortUrl(liveSession.shortUrl);
+          setShortCode(liveSession.code);
+          return;
+        } catch {
+          // 코드 충돌 — 아래 registerSession fallback으로 진행
+        }
+      }
+
       const liveSession = await liveSessionClientRef.current.registerSession(result.tunnelUrl);
       if (liveSession) {
         setShortUrl(liveSession.shortUrl);
         setShortCode(liveSession.code);
+        // 고정 코드 부재(신규 보드 첫 라이브) 또는 코드 충돌 fallback → 서버가
+        // 발급한 코드를 board.shortCode로 승격. 다음 세션부터 동일 코드 재사용.
+        if (currentBoard && currentBoard.shortCode !== liveSession.code) {
+          const updatedBoard: WallBoard = {
+            ...currentBoard,
+            shortCode: liveSession.code,
+            updatedAt: Date.now(),
+          };
+          void wallBoardRepository.save(updatedBoard).then(() => {
+            setCurrentBoard(updatedBoard);
+          }).catch(() => {});
+        }
       }
     } catch {
       setTunnelError('외부 접속 주소를 만들지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.');
     } finally {
       setTunnelLoading(false);
     }
-  }, []);
+  }, [currentBoard]);
 
   const handleStartLive = useCallback(async () => {
     if (!window.electronAPI?.startRealtimeWall) {

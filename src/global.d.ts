@@ -274,6 +274,8 @@ interface ElectronAPI {
     save: (args: { board: unknown }) => Promise<{ savedAt: number }>;
     delete: (args: { id: string }) => Promise<{ ok: true }>;
     getByCode: (args: { shortCode: string }) => Promise<unknown | null>;
+    stageDirty: (args: { board: unknown }) => Promise<{ ok: true }>;
+    clearDirty: (args: { id: string }) => Promise<{ ok: true }>;
   };
 }
 
