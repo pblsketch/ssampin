@@ -218,7 +218,8 @@ export function MealPage() {
   return (
     <div className="-m-8 flex flex-col h-[calc(100%+4rem)]">
       <PageHeader
-        icon="🍚"
+        icon="restaurant"
+        iconIsMaterial
         title="급식"
         sticky
         leftAddon={schoolName ? (
@@ -281,7 +282,7 @@ export function MealPage() {
       )}
 
       {/* 주간 네비게이션 */}
-      <div className="px-8 pt-6 pb-4 flex items-center justify-between">
+      <div className="px-8 pt-8 pb-4 flex items-center justify-between">
         <button
           type="button"
           onClick={() => goWeek(-1)}

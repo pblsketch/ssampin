@@ -293,7 +293,8 @@ export function Schedule() {
   return (
     <div className="flex flex-col h-full -m-8">
       <PageHeader
-        icon="📋"
+        icon="event_note"
+        iconIsMaterial
         title="일정 관리"
         leftAddon={
           <div className="flex items-center bg-sp-surface/60 rounded-lg p-0.5 border border-sp-border gap-0.5">

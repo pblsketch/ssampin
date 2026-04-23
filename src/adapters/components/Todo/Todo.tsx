@@ -360,7 +360,8 @@ export function Todo() {
   return (
     <div className="flex flex-col h-full -m-8">
       <PageHeader
-        icon="✅"
+        icon="check_circle"
+        iconIsMaterial
         title="할 일"
         leftAddon={tasksEnabled && tasksSyncing ? (
           <span className="inline-flex items-center gap-1 text-xs text-sp-muted">

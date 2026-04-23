@@ -29,7 +29,8 @@ export function HomeroomPage() {
   return (
     <div className="h-full flex flex-col -m-8">
       <PageHeader
-        icon="👩‍🏫"
+        icon="school"
+        iconIsMaterial
         title="담임 업무"
         rightActions={<HomeroomTabBar activeTab={activeTab} onChange={setActiveTab} />}
       />
