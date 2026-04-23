@@ -3,6 +3,7 @@ import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { toLocalDateString } from '@shared/utils/localDate';
@@ -358,50 +359,45 @@ export function Todo() {
 
   return (
     <div className="flex flex-col h-full -m-8">
-      {/* 헤더 */}
-      <header className="h-20 shrink-0 px-8 flex items-center justify-between border-b border-sp-border bg-sp-bg">
-        <h2 className="text-sp-text text-2xl font-bold flex items-center gap-3">
-          <span className="text-3xl">✅</span> 할 일
-          {tasksEnabled && tasksSyncing && (
-            <span className="inline-flex items-center gap-1 text-xs text-sp-muted ml-2">
-              <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-              동기화 중
-            </span>
-          )}
-        </h2>
-
-        <div className="flex items-center gap-4">
-          {/* 아카이브 토글 */}
-          <button
-            type="button"
-            onClick={() => setViewMode(viewMode === 'active' ? 'archive' : 'active')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              viewMode === 'archive'
-                ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'
-            }`}
-          >
-            <span className="text-base">🗃️</span>
-            아카이브
-            {archivedTodos.length > 0 && (
-              <span className="text-xs opacity-70">({archivedTodos.length})</span>
-            )}
-          </button>
-
+      <PageHeader
+        icon="✅"
+        title="할 일"
+        leftAddon={tasksEnabled && tasksSyncing ? (
+          <span className="inline-flex items-center gap-1 text-xs text-sp-muted">
+            <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+            동기화 중
+          </span>
+        ) : undefined}
+        rightActions={<>
           {/* 진행률 바 */}
-          <div className="flex items-center gap-3">
-            <div className="w-40 h-2.5 bg-sp-surface rounded-full overflow-hidden">
+          <div className="flex items-center gap-2 xl:gap-3 mr-2">
+            <div className="w-32 xl:w-40 h-2 bg-sp-surface rounded-full overflow-hidden">
               <div
                 className="h-full bg-sp-accent rounded-full transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <span className="text-sm text-sp-muted font-medium whitespace-nowrap">
-              {completedCount}/{totalCount} 완료 ({progressPercent}%)
+            <span className="text-xs xl:text-sm text-sp-muted font-sp-medium whitespace-nowrap">
+              {completedCount}/{totalCount} ({progressPercent}%)
             </span>
           </div>
-        </div>
-      </header>
+          <button
+            type="button"
+            onClick={() => setViewMode(viewMode === 'active' ? 'archive' : 'active')}
+            className={`flex items-center gap-1.5 px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95 ${
+              viewMode === 'archive'
+                ? 'bg-sp-accent text-white'
+                : 'border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface'
+            }`}
+          >
+            <span className="text-base">🗃️</span>
+            <span className="hidden sm:inline">아카이브</span>
+            {archivedTodos.length > 0 && (
+              <span className="text-xs opacity-70">({archivedTodos.length})</span>
+            )}
+          </button>
+        </>}
+      />
 
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto p-8">

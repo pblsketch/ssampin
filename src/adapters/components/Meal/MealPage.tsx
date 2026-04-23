@@ -229,7 +229,7 @@ export function MealPage() {
             <select
               value={mealSource}
               onChange={(e) => setMealSource(e.target.value as MealSource)}
-              className="bg-sp-surface border border-sp-border rounded-xl px-3 py-2 xl:py-2.5 text-xs xl:text-sm text-sp-text focus:outline-none focus:border-sp-accent cursor-pointer font-sp-semibold"
+              className="bg-sp-surface border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:border-sp-accent cursor-pointer font-medium"
             >
               <option value="merged">자동 (NEIS + 수동)</option>
               <option value="neis">NEIS만</option>
@@ -238,17 +238,17 @@ export function MealPage() {
             <button
               type="button"
               onClick={handleTemplateDownload}
-              className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-sp-muted hover:text-sp-text bg-sp-surface hover:bg-sp-card whitespace-nowrap transition-colors"
             >
-              <span className="material-symbols-outlined text-icon">download</span>
+              <span className="material-symbols-outlined text-icon-sm">download</span>
               <span className="hidden sm:inline">양식 다운로드</span>
             </button>
             <button
               type="button"
               onClick={handleFileImport}
-              className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-sp-muted hover:text-sp-text bg-sp-surface hover:bg-sp-card whitespace-nowrap transition-colors"
             >
-              <span className="material-symbols-outlined text-icon">upload_file</span>
+              <span className="material-symbols-outlined text-icon-sm">upload_file</span>
               <span className="hidden sm:inline">CSV 가져오기</span>
             </button>
             <input

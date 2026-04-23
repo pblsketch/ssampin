@@ -22,6 +22,7 @@ import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { NeisSchedulePanel } from './NeisSchedulePanel';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 
 type ScheduleView = 'month' | 'semester' | 'year';
 type SourceFilter = 'all' | 'ssampin' | 'google' | 'neis';
@@ -291,14 +292,10 @@ export function Schedule() {
 
   return (
     <div className="flex flex-col h-full -m-8">
-      {/* 헤더 */}
-      <header className="shrink-0 px-8 py-4 flex flex-wrap items-center gap-3 border-b border-sp-border bg-sp-bg">
-        <div className="flex items-center gap-4 mr-auto">
-          <h2 className="text-sp-text text-xl xl:text-2xl font-bold flex items-center gap-2">
-            <span className="text-2xl xl:text-3xl">📋</span> 일정 관리
-          </h2>
-
-          {/* 뷰 전환 탭 — Cal.com pill 그룹 패턴 */}
+      <PageHeader
+        icon="📋"
+        title="일정 관리"
+        leftAddon={
           <div className="flex items-center bg-sp-surface/60 rounded-lg p-0.5 border border-sp-border gap-0.5">
             {(['month', 'semester', 'year'] as const).map((v) => (
               <button
@@ -315,10 +312,8 @@ export function Schedule() {
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 xl:gap-2 flex-wrap">
-          {/* NEIS 학사일정 버튼 — custom(직접 설정)일 때 숨김 */}
+        }
+        rightActions={<>
           {schoolLevel !== 'custom' && (
             <button
               type="button"
@@ -412,8 +407,8 @@ export function Schedule() {
             <span className="material-symbols-outlined text-icon-lg">add</span>
             <span className="text-xs xl:text-sm font-bold">일정 추가</span>
           </button>
-        </div>
-      </header>
+        </>}
+      />
 
       {/* 구글 캘린더 오류 인라인 안내 */}
       {googleConnected && googleError && dismissedGoogleError !== googleError && (

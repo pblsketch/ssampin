@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 
 interface ToolsGridProps {
   onNavigate: (page: PageId) => void;
@@ -100,31 +101,20 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
   }, [view, toolsOrder, hiddenTools, isDev]);
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-sp-text flex items-center gap-2">
-            <span className="material-symbols-outlined text-[28px]">construction</span>
-            <span>쌤도구</span>
-          </h1>
-          <p className="text-sp-muted mt-1">
-            {view === 'all'
-              ? '전체 보기 — 모든 도구를 기본 순서대로 보여줍니다'
-              : '내 화면 — 정리한 순서·표시 설정으로 보여줍니다'}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* 내 화면 / 전체 보기 토글 */}
-          <div className="inline-flex rounded-lg border border-sp-border bg-sp-card p-0.5">
+    <div className="flex flex-col h-full -m-8">
+      <PageHeader
+        icon="construction"
+        iconIsMaterial
+        title="쌤도구"
+        leftAddon={
+          <div className="inline-flex rounded-lg border border-sp-border bg-sp-surface/60 p-0.5 gap-0.5">
             <button
               type="button"
               onClick={() => setView('mine')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 xl:px-4 py-1.5 rounded-md text-xs xl:text-sm transition-all duration-sp-base ease-sp-out ${
                 view === 'mine'
-                  ? 'bg-sp-accent text-sp-accent-fg'
-                  : 'text-sp-muted hover:text-sp-text'
+                  ? 'bg-sp-card shadow-sp-sm font-sp-semibold text-sp-text'
+                  : 'font-sp-medium text-sp-muted hover:text-sp-text'
               }`}
             >
               내 화면
@@ -132,28 +122,34 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
             <button
               type="button"
               onClick={() => setView('all')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 xl:px-4 py-1.5 rounded-md text-xs xl:text-sm transition-all duration-sp-base ease-sp-out ${
                 view === 'all'
-                  ? 'bg-sp-accent text-sp-accent-fg'
-                  : 'text-sp-muted hover:text-sp-text'
+                  ? 'bg-sp-card shadow-sp-sm font-sp-semibold text-sp-text'
+                  : 'font-sp-medium text-sp-muted hover:text-sp-text'
               }`}
             >
               전체 보기
             </button>
           </div>
-
-          {/* 정리하기 */}
+        }
+        rightActions={
           <button
             type="button"
             onClick={() => setOrganizing(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-sp-muted hover:text-sp-text rounded-lg border border-sp-border bg-sp-card hover:bg-sp-text/5 transition-colors"
+            className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95"
             title="도구 순서·표시 정리"
           >
-            <span className="material-symbols-outlined text-icon-sm">tune</span>
-            정리하기
+            <span className="material-symbols-outlined text-icon">tune</span>
+            <span className="hidden sm:inline">정리하기</span>
           </button>
-        </div>
-      </div>
+        }
+      />
+      <div className="flex-1 min-h-0 overflow-y-auto p-8">
+      <p className="text-sp-muted text-sm mb-6">
+        {view === 'all'
+          ? '전체 보기 — 모든 도구를 기본 순서대로 보여줍니다'
+          : '내 화면 — 정리한 순서·표시 설정으로 보여줍니다'}
+      </p>
 
       {/* Tool Cards Grid */}
       {visibleTools.length === 0 ? (
@@ -185,6 +181,8 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
           ))}
         </div>
       )}
+
+      </div>
 
       {organizing && (
         <ToolsOrganizerModal

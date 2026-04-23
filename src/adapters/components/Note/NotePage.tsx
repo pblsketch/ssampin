@@ -16,6 +16,7 @@ import { sortNotebooksForSidebar, sortSectionsForNotebook } from '@domain/rules/
 import { sortPagesForSection } from '@domain/rules/notePageRules';
 import { fromEditorDocument, toEditorDocument } from '@adapters/presenters/notePresenter';
 import { useNoteStore } from '@adapters/stores/useNoteStore';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 
 // ─── AutosaveBadge ────────────────────────────────────────────────────────────
 
@@ -404,61 +405,56 @@ export function NotePage() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      {/* ── 헤더 ── */}
-      <header className="flex items-center justify-between gap-4">
-        <h2 className="flex items-center gap-2 text-2xl font-bold text-sp-text">
-          <span>📝</span>
-          <span>쌤핀 노트</span>
-        </h2>
-        <div className="flex items-center gap-2">
+    <div className="flex h-full flex-col -m-8">
+      <PageHeader
+        icon="📝"
+        title="쌤핀 노트"
+        rightActions={<>
           <AutosaveBadge savingState={savingState} updatedAt={activePage?.updatedAt} />
-          {/* 전체 패널 접기/펼치기 */}
           <button
             type="button"
             onClick={toggleAllPanels}
-            className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-card px-2.5 py-1.5 text-xs text-sp-muted hover:border-sp-accent/40 hover:text-sp-text transition-colors"
+            className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-muted hover:border-sp-accent/40 hover:text-sp-text transition-all duration-sp-base ease-sp-out active:scale-95"
             title={allCollapsed ? '패널 모두 펼치기' : '패널 모두 접기'}
           >
-            <span className="material-symbols-outlined text-[15px]">
+            <span className="material-symbols-outlined text-icon">
               {allCollapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'}
             </span>
             <span className="hidden xl:inline">{allCollapsed ? '펼치기' : '접기'}</span>
           </button>
-          {/* 새 노트북 */}
           <button
             type="button"
             onClick={() => void createNotebook()}
-            className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-sp-accent/20 hover:brightness-110 transition"
+            className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-white shadow-sp-accent hover:brightness-110 transition-all duration-sp-base ease-sp-out active:scale-95"
           >
-            <span className="material-symbols-outlined text-[15px]">note_add</span>
-            <span>새 노트북</span>
+            <span className="material-symbols-outlined text-icon">note_add</span>
+            <span className="hidden sm:inline">새 노트북</span>
           </button>
           {activeNotebookId && (
             <button
               type="button"
               onClick={() => void createSection(activeNotebookId)}
-              className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs font-semibold text-sp-text hover:border-sp-accent/30 hover:text-sp-accent transition-colors"
+              className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text hover:border-sp-accent/30 hover:text-sp-accent transition-all duration-sp-base ease-sp-out active:scale-95"
             >
-              <span className="material-symbols-outlined text-[15px]">segment</span>
-              <span>새 섹션</span>
+              <span className="material-symbols-outlined text-icon">segment</span>
+              <span className="hidden sm:inline">새 섹션</span>
             </button>
           )}
           {activeSectionId && (
             <button
               type="button"
               onClick={() => void createPage(activeSectionId)}
-              className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs font-semibold text-sp-text hover:border-sp-accent/30 hover:text-sp-accent transition-colors"
+              className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text hover:border-sp-accent/30 hover:text-sp-accent transition-all duration-sp-base ease-sp-out active:scale-95"
             >
-              <span className="material-symbols-outlined text-[15px]">description</span>
-              <span>새 페이지</span>
+              <span className="material-symbols-outlined text-icon">description</span>
+              <span className="hidden sm:inline">새 페이지</span>
             </button>
           )}
-        </div>
-      </header>
+        </>}
+      />
 
       {/* ── 3컬럼 + 에디터 ── */}
-      <div className="flex min-h-0 flex-1 gap-3">
+      <div className="flex min-h-0 flex-1 gap-3 px-8 py-4">
 
         {/* 노트북 패널 */}
         <CollapsiblePanel

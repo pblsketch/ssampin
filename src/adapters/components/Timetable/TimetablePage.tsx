@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { FormatHint } from '../common/FormatHint';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -481,19 +482,16 @@ export function TimetablePage() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* 헤더 */}
-      <header className="flex flex-shrink-0 items-center justify-between pb-6">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">📅</span>
-            <h2 className="text-3xl font-black text-sp-text tracking-tight">시간표</h2>
-          </div>
-          <p className="text-sp-muted text-sm font-medium pl-1">
-            {yearStr} {semester} | 주간 시간표
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="flex h-full flex-col overflow-hidden -m-8">
+      <PageHeader
+        icon="📅"
+        title="시간표"
+        leftAddon={
+          <span className="text-sp-muted text-sm font-sp-medium">
+            {yearStr} {semester} · 주간 시간표
+          </span>
+        }
+        rightActions={<>
           {/* 나이스에서 불러오기 (학급 시간표, 비-custom 학교급) */}
           {tab === 'class' && settings.schoolLevel !== 'custom' && (
             <button
@@ -612,11 +610,11 @@ export function TimetablePage() {
               </div>
             )}
           </div>
-        </div>
-      </header>
+        </>}
+      />
 
       {/* 시간표 그리드 */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto p-8">
         <div className="mx-auto max-w-7xl flex flex-col gap-6">
           <div className="rounded-2xl border border-sp-border bg-sp-card overflow-hidden shadow-2xl shadow-black/20">
             <div className="w-full overflow-x-auto">
