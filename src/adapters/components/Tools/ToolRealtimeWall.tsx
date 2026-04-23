@@ -18,6 +18,8 @@ import {
 } from '@domain/rules/realtimeWallRules';
 import { RealtimeWallKanbanBoard } from './RealtimeWall/RealtimeWallKanbanBoard';
 import { RealtimeWallFreeformBoard } from './RealtimeWall/RealtimeWallFreeformBoard';
+import { RealtimeWallGridBoard } from './RealtimeWall/RealtimeWallGridBoard';
+import { RealtimeWallStreamBoard } from './RealtimeWall/RealtimeWallStreamBoard';
 import { RealtimeWallCreateView } from './RealtimeWall/RealtimeWallCreateView';
 import { RealtimeWallLiveSharePanel } from './RealtimeWall/RealtimeWallLiveSharePanel';
 import { RealtimeWallQueuePanel } from './RealtimeWall/RealtimeWallQueuePanel';
@@ -298,26 +300,53 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     };
   }, []);
 
-  const boardView = (
-    layoutMode === 'kanban' ? (
-      <RealtimeWallKanbanBoard
-        columns={columns}
-        posts={posts}
-        onChangePosts={setPosts}
-        onTogglePin={handleTogglePin}
-        onHidePost={handleHidePost}
-        onOpenLink={openExternalLink}
-      />
-    ) : (
-      <RealtimeWallFreeformBoard
-        posts={posts}
-        onChangePosts={setPosts}
-        onTogglePin={handleTogglePin}
-        onHidePost={handleHidePost}
-        onOpenLink={openExternalLink}
-      />
-    )
-  );
+  const boardView = (() => {
+    switch (layoutMode) {
+      case 'kanban':
+        return (
+          <RealtimeWallKanbanBoard
+            columns={columns}
+            posts={posts}
+            onChangePosts={setPosts}
+            onTogglePin={handleTogglePin}
+            onHidePost={handleHidePost}
+            onOpenLink={openExternalLink}
+          />
+        );
+      case 'freeform':
+        return (
+          <RealtimeWallFreeformBoard
+            posts={posts}
+            onChangePosts={setPosts}
+            onTogglePin={handleTogglePin}
+            onHidePost={handleHidePost}
+            onOpenLink={openExternalLink}
+          />
+        );
+      case 'grid':
+        return (
+          <RealtimeWallGridBoard
+            posts={posts}
+            onTogglePin={handleTogglePin}
+            onHidePost={handleHidePost}
+            onOpenLink={openExternalLink}
+          />
+        );
+      case 'stream':
+        return (
+          <RealtimeWallStreamBoard
+            posts={posts}
+            onTogglePin={handleTogglePin}
+            onHidePost={handleHidePost}
+            onOpenLink={openExternalLink}
+          />
+        );
+      default: {
+        const _exhaustive: never = layoutMode;
+        throw new Error(`Unknown layout mode: ${String(_exhaustive)}`);
+      }
+    }
+  })();
 
   return (
     <ToolLayout title="실시간 담벼락" emoji="🗂️" onBack={onBack} isFullscreen={isFullscreen}>

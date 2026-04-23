@@ -7,7 +7,16 @@ import { buildRealtimeWallColumns } from '@domain/rules/realtimeWallRules';
 import { ResultSaveButton } from '../TemplateManager';
 import { RealtimeWallKanbanBoard } from './RealtimeWallKanbanBoard';
 import { RealtimeWallFreeformBoard } from './RealtimeWallFreeformBoard';
+import { RealtimeWallGridBoard } from './RealtimeWallGridBoard';
+import { RealtimeWallStreamBoard } from './RealtimeWallStreamBoard';
 import { openExternalLink } from './realtimeWallHelpers';
+
+const LAYOUT_MODE_LABELS: Record<RealtimeWallLayoutMode, string> = {
+  kanban: '칸반형',
+  freeform: '자유 배치형',
+  grid: '격자형',
+  stream: '스트림',
+};
 
 export interface RealtimeWallResultViewProps {
   readonly title: string;
@@ -47,7 +56,7 @@ export function RealtimeWallResultView({
           <div>
             <h2 className="text-lg font-bold text-sp-text">{title}</h2>
             <p className="mt-0.5 text-xs text-sp-muted">
-              {layoutMode === 'kanban' ? '칸반형' : '자유 배치형'} · 수업 결과 복기
+              {LAYOUT_MODE_LABELS[layoutMode]} · 수업 결과 복기
             </p>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -69,20 +78,47 @@ export function RealtimeWallResultView({
       </section>
 
       <section className="min-h-0 flex-1">
-        {layoutMode === 'kanban' ? (
-          <RealtimeWallKanbanBoard
-            columns={columns}
-            posts={posts}
-            readOnly
-            onOpenLink={openExternalLink}
-          />
-        ) : (
-          <RealtimeWallFreeformBoard
-            posts={posts}
-            readOnly
-            onOpenLink={openExternalLink}
-          />
-        )}
+        {(() => {
+          switch (layoutMode) {
+            case 'kanban':
+              return (
+                <RealtimeWallKanbanBoard
+                  columns={columns}
+                  posts={posts}
+                  readOnly
+                  onOpenLink={openExternalLink}
+                />
+              );
+            case 'freeform':
+              return (
+                <RealtimeWallFreeformBoard
+                  posts={posts}
+                  readOnly
+                  onOpenLink={openExternalLink}
+                />
+              );
+            case 'grid':
+              return (
+                <RealtimeWallGridBoard
+                  posts={posts}
+                  readOnly
+                  onOpenLink={openExternalLink}
+                />
+              );
+            case 'stream':
+              return (
+                <RealtimeWallStreamBoard
+                  posts={posts}
+                  readOnly
+                  onOpenLink={openExternalLink}
+                />
+              );
+            default: {
+              const _exhaustive: never = layoutMode;
+              throw new Error(`Unknown layout mode: ${String(_exhaustive)}`);
+            }
+          }
+        })()}
       </section>
 
       <div className="flex flex-wrap items-center justify-end gap-2.5">
