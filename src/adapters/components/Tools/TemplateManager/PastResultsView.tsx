@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { ToolResult, ToolResultType, PollResultData, SurveyResultData, MultiSurveyResultData, WordCloudResultData, RealtimeBulletinResultData } from '@domain/entities/ToolResult';
+import type { ToolResult, ToolResultType, PollResultData, SurveyResultData, MultiSurveyResultData, WordCloudResultData, RealtimeWallResultData } from '@domain/entities/ToolResult';
 import { useToolResultStore } from '@adapters/stores/useToolResultStore';
 import { SpreadsheetView } from '../Results/SpreadsheetView';
 
@@ -35,7 +35,7 @@ function getSummary(result: ToolResult): string {
     case 'valueline-discussion':
     case 'trafficlight-discussion':
       return `${d.rounds.length}라운드`;
-    case 'realtime-bulletin': {
+    case 'realtime-wall': {
       const approved = d.posts.filter((post) => post.status === 'approved').length;
       const layout = d.layoutMode === 'kanban' ? '칸반형' : '자유 배치형';
       return `${approved}개 게시 · ${layout}`;
@@ -123,7 +123,7 @@ function MultiSurveyDetail({
   );
 }
 
-function RealtimeBulletinDetail({ data }: { data: RealtimeBulletinResultData }) {
+function RealtimeWallDetail({ data }: { data: RealtimeWallResultData }) {
   const approved = data.posts.filter((post) => post.status === 'approved');
   const pinned = approved.filter((post) => post.pinned).length;
   return (
@@ -200,8 +200,8 @@ function ResultDetail({
       return <MultiSurveyDetail data={d} onOpenSpreadsheet={() => onOpenSpreadsheet(result)} />;
     case 'wordcloud':
       return <WordCloudDetail data={d} />;
-    case 'realtime-bulletin':
-      return <RealtimeBulletinDetail data={d} />;
+    case 'realtime-wall':
+      return <RealtimeWallDetail data={d} />;
   }
 }
 

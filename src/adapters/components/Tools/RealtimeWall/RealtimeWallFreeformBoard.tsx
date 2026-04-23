@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { Rnd } from 'react-rnd';
-import type { RealtimeBulletinPost } from '@domain/entities/RealtimeBulletin';
-import { RealtimeBulletinCard } from './RealtimeBulletinCard';
+import type { RealtimeWallPost } from '@domain/entities/RealtimeWall';
+import { RealtimeWallCard } from './RealtimeWallCard';
 
-interface RealtimeBulletinFreeformBoardProps {
-  readonly posts: readonly RealtimeBulletinPost[];
+interface RealtimeWallFreeformBoardProps {
+  readonly posts: readonly RealtimeWallPost[];
   readonly readOnly?: boolean;
-  readonly onChangePosts?: (posts: RealtimeBulletinPost[]) => void;
+  readonly onChangePosts?: (posts: RealtimeWallPost[]) => void;
   readonly onTogglePin?: (postId: string) => void;
   readonly onHidePost?: (postId: string) => void;
   readonly onOpenLink?: (url: string) => void;
@@ -48,10 +48,10 @@ function ActionButtons({
 }
 
 function updatePostPosition(
-  posts: readonly RealtimeBulletinPost[],
+  posts: readonly RealtimeWallPost[],
   postId: string,
-  patch: Partial<RealtimeBulletinPost['freeform']>,
-): RealtimeBulletinPost[] {
+  patch: Partial<RealtimeWallPost['freeform']>,
+): RealtimeWallPost[] {
   return posts.map((post) => {
     if (post.id !== postId) return post;
     return {
@@ -65,21 +65,21 @@ function updatePostPosition(
 }
 
 function bringPostToFront(
-  posts: readonly RealtimeBulletinPost[],
+  posts: readonly RealtimeWallPost[],
   postId: string,
-): RealtimeBulletinPost[] {
+): RealtimeWallPost[] {
   const nextZIndex = posts.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
   return updatePostPosition(posts, postId, { zIndex: nextZIndex });
 }
 
-export function RealtimeBulletinFreeformBoard({
+export function RealtimeWallFreeformBoard({
   posts,
   readOnly = false,
   onChangePosts,
   onTogglePin,
   onHidePost,
   onOpenLink,
-}: RealtimeBulletinFreeformBoardProps) {
+}: RealtimeWallFreeformBoardProps) {
   const approvedPosts = useMemo(
     () => posts
       .filter((post) => post.status === 'approved')
@@ -111,7 +111,7 @@ export function RealtimeBulletinFreeformBoard({
 
           {approvedPosts.map((post) => {
             const cardNode = (
-              <RealtimeBulletinCard
+              <RealtimeWallCard
                 post={post}
                 onOpenLink={onOpenLink}
                 actions={
@@ -152,7 +152,7 @@ export function RealtimeBulletinFreeformBoard({
                 style={{ zIndex: post.freeform.zIndex }}
                 minWidth={220}
                 minHeight={150}
-                dragHandleClassName="realtime-bulletin-drag-surface"
+                dragHandleClassName="realtime-wall-drag-surface"
                 onDragStart={() => onChangePosts(bringPostToFront(posts, post.id))}
                 onResizeStart={() => onChangePosts(bringPostToFront(posts, post.id))}
                 onDragStop={(_event, data) => {
@@ -170,7 +170,7 @@ export function RealtimeBulletinFreeformBoard({
                   }));
                 }}
               >
-                <div className="realtime-bulletin-drag-surface h-full cursor-move">
+                <div className="realtime-wall-drag-surface h-full cursor-move">
                   {cardNode}
                 </div>
               </Rnd>

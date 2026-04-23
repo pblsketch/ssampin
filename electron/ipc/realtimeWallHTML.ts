@@ -7,7 +7,7 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
-export function generateRealtimeBulletinHTML(
+export function generateRealtimeWallHTML(
   title: string,
   maxTextLength: number,
 ): string {
@@ -18,7 +18,7 @@ export function generateRealtimeBulletinHTML(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>쌤핀 실시간 게시판</title>
+  <title>쌤핀 실시간 담벼락</title>
   <style>
     [hidden] { display: none !important; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -277,7 +277,7 @@ export function generateRealtimeBulletinHTML(
   <div id="app">
     <div class="brand">
       <span class="brand-pin">🧷</span>
-      쌤핀 실시간 게시판
+      쌤핀 실시간 담벼락
     </div>
 
     <!-- 연결 중 -->
@@ -366,7 +366,7 @@ export function generateRealtimeBulletinHTML(
     (function () {
       'use strict';
 
-      var storageKey = 'ssampin-realtime-bulletin-token';
+      var storageKey = 'ssampin-realtime-wall-token';
       var sessionToken = '';
       try {
         sessionToken = sessionStorage.getItem(storageKey) || '';

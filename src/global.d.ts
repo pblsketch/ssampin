@@ -112,15 +112,15 @@ interface ElectronAPI {
   onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void) => () => void;
   onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Realtime Bulletin
-  startRealtimeBulletin: (data: {
+  startRealtimeWall: (data: {
     title: string;
     maxTextLength: number;
   }) => Promise<{ port: number; localIPs: string[] }>;
-  stopRealtimeBulletin: () => Promise<void>;
-  realtimeBulletinTunnelAvailable: () => Promise<boolean>;
-  realtimeBulletinTunnelInstall: () => Promise<void>;
-  realtimeBulletinTunnelStart: () => Promise<{ tunnelUrl: string }>;
-  onRealtimeBulletinStudentSubmitted: (callback: (data: {
+  stopRealtimeWall: () => Promise<void>;
+  realtimeWallTunnelAvailable: () => Promise<boolean>;
+  realtimeWallTunnelInstall: () => Promise<void>;
+  realtimeWallTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  onRealtimeWallStudentSubmitted: (callback: (data: {
     post: {
       id: string;
       nickname: string;
@@ -130,7 +130,7 @@ interface ElectronAPI {
     };
     totalSubmissions: number;
   }) => void) => () => void;
-  onRealtimeBulletinConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  onRealtimeWallConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
     questions: Array<{

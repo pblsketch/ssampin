@@ -1,10 +1,10 @@
 import { BrowserWindow, ipcMain } from 'electron';
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
-import { generateRealtimeBulletinHTML } from './realtimeBulletinHTML';
+import { generateRealtimeWallHTML } from './realtimeWallHTML';
 import { closeTunnel, installTunnel, isTunnelAvailable, openTunnel } from './tunnel';
 
-interface RealtimeBulletinSubmission {
+interface RealtimeWallSubmission {
   id: string;
   nickname: string;
   text: string;
@@ -12,16 +12,16 @@ interface RealtimeBulletinSubmission {
   submittedAt: number;
 }
 
-interface RealtimeBulletinSession {
+interface RealtimeWallSession {
   server: http.Server;
   wss: WebSocketServer;
   title: string;
   maxTextLength: number;
-  submissions: Map<string, RealtimeBulletinSubmission>;
+  submissions: Map<string, RealtimeWallSubmission>;
   clients: Set<WebSocket>;
 }
 
-let session: RealtimeBulletinSession | null = null;
+let session: RealtimeWallSession | null = null;
 
 function generateSubmissionId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -73,16 +73,16 @@ function closeSession(): void {
   session = null;
 }
 
-function emitConnectionCount(mainWindow: BrowserWindow, current: RealtimeBulletinSession): void {
+function emitConnectionCount(mainWindow: BrowserWindow, current: RealtimeWallSession): void {
   if (mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send('realtime-bulletin:connection-count', {
+  mainWindow.webContents.send('realtime-wall:connection-count', {
     count: current.clients.size,
   });
 }
 
-export function registerRealtimeBulletinHandlers(mainWindow: BrowserWindow): void {
+export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(
-    'realtime-bulletin:start',
+    'realtime-wall:start',
     async (
       _event,
       args: { title: string; maxTextLength: number },
@@ -90,9 +90,9 @@ export function registerRealtimeBulletinHandlers(mainWindow: BrowserWindow): voi
       return new Promise<{ port: number; localIPs: string[] }>((resolve, reject) => {
         closeSession();
 
-        const title = args.title.trim() || '실시간 게시판';
+        const title = args.title.trim() || '실시간 담벼락';
         const maxTextLength = Math.max(80, Math.min(args.maxTextLength, 1000));
-        const html = generateRealtimeBulletinHTML(title, maxTextLength);
+        const html = generateRealtimeWallHTML(title, maxTextLength);
 
         const server = http.createServer((req, res) => {
           const pathname = req.url?.split('?')[0] ?? '/';
@@ -215,7 +215,7 @@ export function registerRealtimeBulletinHandlers(mainWindow: BrowserWindow): voi
                 return;
               }
 
-              const submission: RealtimeBulletinSubmission = {
+              const submission: RealtimeWallSubmission = {
                 id: generateSubmissionId(),
                 nickname,
                 text,
@@ -230,7 +230,7 @@ export function registerRealtimeBulletinHandlers(mainWindow: BrowserWindow): voi
               }
 
               if (!mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('realtime-bulletin:student-submitted', {
+                mainWindow.webContents.send('realtime-wall:student-submitted', {
                   post: submission,
                   totalSubmissions: session.submissions.size,
                 });
@@ -265,20 +265,20 @@ export function registerRealtimeBulletinHandlers(mainWindow: BrowserWindow): voi
     },
   );
 
-  ipcMain.handle('realtime-bulletin:stop', (): void => {
+  ipcMain.handle('realtime-wall:stop', (): void => {
     closeSession();
   });
 
-  ipcMain.handle('realtime-bulletin:tunnel-available', (): boolean => {
+  ipcMain.handle('realtime-wall:tunnel-available', (): boolean => {
     return isTunnelAvailable();
   });
 
-  ipcMain.handle('realtime-bulletin:tunnel-install', async (): Promise<void> => {
+  ipcMain.handle('realtime-wall:tunnel-install', async (): Promise<void> => {
     await installTunnel();
   });
 
-  ipcMain.handle('realtime-bulletin:tunnel-start', async (): Promise<{ tunnelUrl: string }> => {
-    if (!session) throw new Error('실시간 게시판 세션이 없습니다');
+  ipcMain.handle('realtime-wall:tunnel-start', async (): Promise<{ tunnelUrl: string }> => {
+    if (!session) throw new Error('실시간 담벼락 세션이 없습니다');
     const address = session.server.address();
     if (!address || typeof address === 'string') {
       throw new Error('서버가 준비되지 않았습니다');
