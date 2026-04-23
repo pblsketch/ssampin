@@ -3,15 +3,10 @@ import { Rnd } from 'react-rnd';
 import type { RealtimeWallPost } from '@domain/entities/RealtimeWall';
 import { RealtimeWallCard } from './RealtimeWallCard';
 import { RealtimeWallCardActions } from './RealtimeWallCardActions';
+import type { RealtimeWallBoardCommonProps } from './types';
 
-interface RealtimeWallFreeformBoardProps {
-  readonly posts: readonly RealtimeWallPost[];
-  readonly readOnly?: boolean;
+interface RealtimeWallFreeformBoardProps extends RealtimeWallBoardCommonProps {
   readonly onChangePosts?: (posts: RealtimeWallPost[]) => void;
-  readonly onTogglePin?: (postId: string) => void;
-  readonly onHidePost?: (postId: string) => void;
-  readonly onOpenLink?: (url: string) => void;
-  readonly onLike?: (postId: string) => void;
 }
 
 function updatePostPosition(

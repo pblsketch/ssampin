@@ -1,17 +1,10 @@
 import { useMemo } from 'react';
-import type { RealtimeWallPost } from '@domain/entities/RealtimeWall';
 import { sortRealtimeWallPostsForBoard } from '@domain/rules/realtimeWallRules';
 import { RealtimeWallCard } from './RealtimeWallCard';
 import { RealtimeWallCardActions } from './RealtimeWallCardActions';
+import type { RealtimeWallBoardCommonProps } from './types';
 
-export interface RealtimeWallStreamBoardProps {
-  readonly posts: readonly RealtimeWallPost[];
-  readonly readOnly?: boolean;
-  readonly onTogglePin?: (postId: string) => void;
-  readonly onHidePost?: (postId: string) => void;
-  readonly onOpenLink?: (url: string) => void;
-  readonly onLike?: (postId: string) => void;
-}
+export type RealtimeWallStreamBoardProps = RealtimeWallBoardCommonProps;
 
 export function RealtimeWallStreamBoard({
   posts,
