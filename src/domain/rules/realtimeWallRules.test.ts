@@ -6,7 +6,9 @@ import {
   classifyRealtimeWallLink,
   createDefaultFreeformPosition,
   extractYoutubeVideoId,
+  likeRealtimeWallPost,
   normalizeRealtimeWallLink,
+  REALTIME_WALL_MAX_LIKES,
   sortRealtimeWallPostsForBoard,
 } from './realtimeWallRules';
 
@@ -212,6 +214,55 @@ describe('extractYoutubeVideoId', () => {
   it('URL 파싱 실패는 undefined', () => {
     expect(extractYoutubeVideoId('not a url')).toBeUndefined();
     expect(extractYoutubeVideoId('')).toBeUndefined();
+  });
+});
+
+describe('likeRealtimeWallPost', () => {
+  function makeLikablePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
+    return {
+      nickname: '학생',
+      text: '내용',
+      status: 'approved',
+      pinned: false,
+      submittedAt: 1000,
+      kanban: { columnId: 'column-1', order: 0 },
+      freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      ...overrides,
+    };
+  }
+
+  it('likes 미설정 카드는 0 → 1로 증가', () => {
+    const posts = [makeLikablePost({ id: 'p1' })];
+    const result = likeRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.likes).toBe(1);
+  });
+
+  it('기존 likes는 +1 증가', () => {
+    const posts = [makeLikablePost({ id: 'p1', likes: 3 })];
+    const result = likeRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.likes).toBe(4);
+  });
+
+  it('상한 REALTIME_WALL_MAX_LIKES를 초과하지 않음', () => {
+    const posts = [makeLikablePost({ id: 'p1', likes: REALTIME_WALL_MAX_LIKES })];
+    const result = likeRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.likes).toBe(REALTIME_WALL_MAX_LIKES);
+  });
+
+  it('존재하지 않는 postId는 posts 변경 없음', () => {
+    const posts = [makeLikablePost({ id: 'p1', likes: 5 })];
+    const result = likeRealtimeWallPost(posts, 'missing');
+    expect(result).toEqual(posts);
+  });
+
+  it('같은 배열 내 다른 post는 건드리지 않음', () => {
+    const posts = [
+      makeLikablePost({ id: 'p1', likes: 2 }),
+      makeLikablePost({ id: 'p2', likes: 5 }),
+    ];
+    const result = likeRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.likes).toBe(3);
+    expect(result[1]!.likes).toBe(5);
   });
 });
 

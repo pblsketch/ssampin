@@ -15,6 +15,7 @@ import {
   classifyRealtimeWallLink,
   createDefaultFreeformPosition,
   DEFAULT_REALTIME_WALL_COLUMNS,
+  likeRealtimeWallPost,
   normalizeRealtimeWallLink,
   REALTIME_WALL_MAX_TEXT_LENGTH,
 } from '@domain/rules/realtimeWallRules';
@@ -217,6 +218,10 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
   }, [columns]);
 
+  const handleLikePost = useCallback((postId: string) => {
+    setPosts((prev) => likeRealtimeWallPost(prev, postId));
+  }, []);
+
   const handleTogglePin = useCallback((postId: string) => {
     setPosts((prev) => {
       const nextZIndex = prev.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
@@ -344,6 +349,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTogglePin={handleTogglePin}
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
+            onLike={handleLikePost}
           />
         );
       case 'freeform':
@@ -354,6 +360,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTogglePin={handleTogglePin}
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
+            onLike={handleLikePost}
           />
         );
       case 'grid':
@@ -363,6 +370,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTogglePin={handleTogglePin}
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
+            onLike={handleLikePost}
           />
         );
       case 'stream':
@@ -372,6 +380,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTogglePin={handleTogglePin}
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
+            onLike={handleLikePost}
           />
         );
       default: {

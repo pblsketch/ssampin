@@ -11,6 +11,7 @@ interface RealtimeWallFreeformBoardProps {
   readonly onTogglePin?: (postId: string) => void;
   readonly onHidePost?: (postId: string) => void;
   readonly onOpenLink?: (url: string) => void;
+  readonly onLike?: (postId: string) => void;
 }
 
 function updatePostPosition(
@@ -45,6 +46,7 @@ export function RealtimeWallFreeformBoard({
   onTogglePin,
   onHidePost,
   onOpenLink,
+  onLike,
 }: RealtimeWallFreeformBoardProps) {
   const approvedPosts = useMemo(
     () => posts
@@ -80,6 +82,7 @@ export function RealtimeWallFreeformBoard({
               <RealtimeWallCard
                 post={post}
                 onOpenLink={onOpenLink}
+                onLike={!readOnly ? onLike : undefined}
                 actions={
                   readOnly ? undefined : (
                     <RealtimeWallCardActions

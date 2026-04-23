@@ -29,6 +29,7 @@ interface RealtimeWallKanbanBoardProps {
   readonly onTogglePin?: (postId: string) => void;
   readonly onHidePost?: (postId: string) => void;
   readonly onOpenLink?: (url: string) => void;
+  readonly onLike?: (postId: string) => void;
 }
 
 function sortColumnPosts(posts: readonly RealtimeWallPost[], columnId: string): RealtimeWallPost[] {
@@ -126,11 +127,13 @@ function SortableRealtimeWallCardItem({
   onTogglePin,
   onHidePost,
   onOpenLink,
+  onLike,
 }: {
   post: RealtimeWallPost;
   onTogglePin?: (postId: string) => void;
   onHidePost?: (postId: string) => void;
   onOpenLink?: (url: string) => void;
+  onLike?: (postId: string) => void;
 }) {
   const {
     attributes,
@@ -157,6 +160,7 @@ function SortableRealtimeWallCardItem({
         post={post}
         compact
         onOpenLink={onOpenLink}
+        onLike={onLike}
         dragHandle={(
           <button
             type="button"
@@ -206,6 +210,7 @@ function KanbanColumnView({
   onTogglePin,
   onHidePost,
   onOpenLink,
+  onLike,
 }: {
   column: RealtimeWallColumn;
   columnIndex: number;
@@ -214,6 +219,7 @@ function KanbanColumnView({
   onTogglePin?: (postId: string) => void;
   onHidePost?: (postId: string) => void;
   onOpenLink?: (url: string) => void;
+  onLike?: (postId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${column.id}`,
@@ -258,6 +264,7 @@ function KanbanColumnView({
                 onTogglePin={onTogglePin}
                 onHidePost={onHidePost}
                 onOpenLink={onOpenLink}
+                onLike={onLike}
               />
             ))}
           </SortableContext>
@@ -281,6 +288,7 @@ export function RealtimeWallKanbanBoard({
   onTogglePin,
   onHidePost,
   onOpenLink,
+  onLike,
 }: RealtimeWallKanbanBoardProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -362,6 +370,7 @@ export function RealtimeWallKanbanBoard({
                   onTogglePin={onTogglePin}
                   onHidePost={onHidePost}
                   onOpenLink={onOpenLink}
+                  onLike={onLike}
                 />
               ))}
             </div>
