@@ -19,11 +19,19 @@ const DEFAULT_SYNC: SyncSettings = {
 
 export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props, ref) {
   const { settings, update } = useSettingsStore();
-  const { status, syncToCloud, syncFromCloud, deleteCloudData, lastSyncResult } = useDriveSyncStore();
+  const {
+    status,
+    syncToCloud,
+    syncFromCloud,
+    importSettingsFromCloud,
+    deleteCloudData,
+    lastSyncResult,
+  } = useDriveSyncStore();
   const showToast = useToastStore((s) => s.show);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isImportingSettings, setIsImportingSettings] = useState(false);
 
   const sync: SyncSettings = settings.sync ?? DEFAULT_SYNC;
 
@@ -42,6 +50,40 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
     );
     if (!ok) return;
     await syncFromCloud();
+  };
+
+  const handleImportSettings = async () => {
+    const ok = window.confirm(
+      '같은 Google 계정의 다른 기기 설정을 이 컴퓨터에 덮어씁니다. 현재 설정이 사라질 수 있어요. 계속할까요?',
+    );
+    if (!ok) return;
+    setIsImportingSettings(true);
+    try {
+      const result = await importSettingsFromCloud();
+      if (result.ok) {
+        const deviceSuffix = result.remoteDeviceName ? ` (${result.remoteDeviceName})` : '';
+        showToast(`다른 컴퓨터 설정을 가져왔어요${deviceSuffix}`, 'success');
+        return;
+      }
+      switch (result.code) {
+        case 'NO_BACKUP':
+          showToast('클라우드에 저장된 설정 백업이 없어요.', 'info');
+          break;
+        case 'SCOPE_INSUFFICIENT':
+          showToast('Google Drive 권한이 부족해요. Google 계정 연결을 다시 해주세요.', 'error');
+          break;
+        case 'PARSE_ERROR':
+          showToast('설정 파일이 손상됐어요. 관리자에게 문의해주세요.', 'error');
+          break;
+        case 'NETWORK_ERROR':
+        case 'UNKNOWN':
+        default:
+          showToast(result.message, 'error');
+          break;
+      }
+    } finally {
+      setIsImportingSettings(false);
+    }
   };
 
   const handleDeleteCloud = async () => {
@@ -168,6 +210,35 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
           >
             <span className="material-symbols-outlined text-icon-md">download</span>
             복원하기
+          </button>
+        </div>
+
+        {/* 다른 컴퓨터 설정 가져오기 — settings만 선택적으로 덮어쓰는 보조 기능 */}
+        <div className="rounded-lg bg-sp-surface/40 border border-sp-border/60 p-3 space-y-2">
+          <div className="flex items-start gap-2">
+            <span className="material-symbols-outlined text-sp-accent text-icon-md mt-0.5">
+              devices
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-sp-text">다른 컴퓨터 설정 가져오기</p>
+              <p className="text-xs text-sp-muted mt-0.5 leading-relaxed">
+                같은 Google 계정의 Drive 백업에서 설정값만 이 기기에 적용합니다.<br />
+                시간표·학생·메모 등 다른 데이터는 건드리지 않아요.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleImportSettings()}
+            disabled={isSyncing || isImportingSettings}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card text-sp-text hover:bg-sp-surface font-medium text-xs transition-colors disabled:opacity-50"
+          >
+            <span
+              className={`material-symbols-outlined text-icon-sm ${isImportingSettings ? 'animate-spin' : ''}`}
+            >
+              {isImportingSettings ? 'progress_activity' : 'settings_backup_restore'}
+            </span>
+            {isImportingSettings ? '가져오는 중...' : '다른 컴퓨터 설정 가져오기'}
           </button>
         </div>
 
