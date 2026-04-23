@@ -110,6 +110,13 @@ readonly teacherStarred?: number;
 
 ### 2.3 UI 변경
 
+**색상 토큰 정책**: realtime-wall 영역의 상태 강조색(pinned amber-400,
+좋아요 rose-400, hover emerald 등)은 **쌤핀 기존 관례대로 Tailwind
+원색을 직접 사용**한다. `sp-*` 토큰은 구조색(bg/surface/card/border/
+muted/text/accent)만 담당하고, **의미 색(pinned/starred/success/danger)**
+은 Tailwind 원색이라는 것이 `RealtimeWallCard.tsx` 기존 구현에 이미
+확립된 패턴. 본 변경도 이 관례를 따른다.
+
 **RealtimeWallCard.tsx**:
 
 ```diff
@@ -168,6 +175,14 @@ function migratePostFields(post: unknown): RealtimeWallPost {
   return raw;
 }
 ```
+
+**2-way 적용**: 위 fallback은 두 경로에 모두 적용한다:
+1. `JsonWallBoardRepository.load()` — 신규 WallBoard 로드 시점
+2. `useToolResultStore` / `PastResultsView`가 사용하는 `RealtimeWallResultData`
+   로더 — 기존 스냅샷 재생 시점에도 `likes`가 있으면 `teacherStarred`로
+   투명 변환. 이는 `ToolResult.ts` 타입을 건드리지 않고, 소비 측(View)의
+   필드 접근을 `post.teacherStarred ?? (post as { likes?: number }).likes`
+   패턴으로 래핑하는 1회 작업. v1.13.1 릴리즈에서 제거 예정.
 
 ### 2.6 검증 체크리스트 [E]
 
@@ -285,7 +300,30 @@ export const useWallBoardStore = create<WallBoardState>((set, get) => ({
 | `realtime-wall:board:clone` | R→M | 복제 (MUST-D) |
 
 Main 핸들러: `electron/ipc/realtimeWallBoard.ts` (신규)
-preload 노출: `window.electronAPI.wallBoards.{listMeta, load, save, updateMeta, delete, clone}`
+
+**preload 노출 API 시그니처** (global.d.ts에 반영):
+
+```ts
+interface ElectronAPI {
+  // ...기존 채널...
+  wallBoards: {
+    listMeta: () => Promise<readonly WallBoardMeta[]>;
+    load: (id: WallBoardId) => Promise<WallBoard | null>;
+    save: (board: WallBoard) => Promise<void>;
+    updateMeta: (
+      id: WallBoardId,
+      patch: Partial<Pick<WallBoardMeta, 'title' | 'description' | 'archived'>>,
+    ) => Promise<void>;
+    delete: (id: WallBoardId) => Promise<void>;
+    clone: (sourceId: WallBoardId, titleSuffix?: string) => Promise<WallBoardId>;
+  };
+}
+```
+
+- `clone`은 Main에서 `WallBoardId` 생성 + save까지 수행 후 신규 id 반환
+- `updateMeta`의 patch는 안전 필드만 허용 (updatedAt은 Main이 자동 설정)
+- 모든 메서드는 실패 시 `Error`로 rejection (rendering에는 string
+  message만 노출, 경로·stack 등 내부 정보 누설 X)
 
 ### 3.5 UI 플로우
 
@@ -339,6 +377,13 @@ ToolRealtimeWall의 첫 viewMode를 `'list' | 'create' | 'running' | 'results'`
 **중요**: 기존 posts는 **viewMode 'running' 진입 즉시** 화면에 표시.
 라이브 세션 시작 버튼은 별도. 학생 참여 없이도 기존 담벼락 내용을
 프로젝터에 띄워 리뷰 가능.
+
+**신규 세션 제출의 append 규칙**: 라이브 세션이 다시 시작되어 학생이
+새로 제출하면, `createPendingRealtimeWallPost(input, existingPosts, columns)`
+의 order 계산(`existingPosts.filter(status==='approved' && columnId).length`)
+에 의해 **기존 posts 뒤에 자연스럽게 append**된다. 즉 이전 수업 기록은
+그대로 유지되고 새 카드만 추가. `submittedAt` 타임스탬프로 구분 가능.
+UI에서 세션 경계선을 표시하는 기능은 v1.14+.
 
 #### 3.5.4 "수업 마무리" 동작 변경
 
@@ -396,6 +441,28 @@ createWallPost(
 - `'auto'`: status='approved' + kanban.order/freeform.zIndex를 승인 카드
   처럼 계산 (approveRealtimeWallPost와 동일 로직)
 - `'filter'`: 구현 스텁 → pending으로 폴백 (v1.13.2에서 진짜 구현)
+
+**exhaustive switch 방어 코드 예시**:
+
+```ts
+function applyApprovalMode(
+  post: RealtimeWallPost,
+  mode: WallApprovalMode,
+): RealtimeWallPost {
+  switch (mode) {
+    case 'manual': return post;
+    case 'auto':   return { ...post, status: 'approved', ...recomputeOrder() };
+    case 'filter': return post;  // v1.13.2 스텁
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unknown approvalMode: ${String(_exhaustive)}`);
+    }
+  }
+}
+```
+
+v1.13.2에서 `'filter'` 분기만 교체하면 TS가 나머지 분기 누락 시 컴파일
+오류로 강제.
 
 ### 4.3 라이브 중 정책 전환
 
@@ -488,7 +555,20 @@ export type RemoveColumnStrategy =
   | { kind: 'hide' }
   | { kind: 'delete' };
 
-/** 컬럼 삭제 + 안의 approved 카드 migration */
+/**
+ * 컬럼 삭제 + 안의 approved 카드 migration.
+ *
+ * strategy 별 동작:
+ * - 'move-to': 삭제 컬럼의 카드를 targetColumnId **뒤에 append**
+ *   (approveRealtimeWallPost의 order 계산과 동일 패턴).
+ *   기존 targetColumn 카드 수를 시작 order로 하여 +1씩 부여.
+ * - 'hide':    카드 status='hidden' 일괄 전환. 컬럼 자체는 제거.
+ *              hidden 카드는 어떤 컬럼에도 속하지 않으므로 columnId 참조
+ *              유지는 무의미하지만 필드는 남김 (fallback용).
+ * - 'delete':  해당 컬럼 카드를 posts 배열에서 영구 제거. 복구 불가.
+ *
+ * 모든 strategy에서 columns[i].order는 0..n-1로 재계산.
+ */
 export function removeWallColumn(
   columns: readonly RealtimeWallColumn[],
   posts: readonly RealtimeWallPost[],
@@ -599,8 +679,7 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 - [ ] `archived` false
 - [ ] columns deep clone (원본 수정이 복제본에 영향 없음)
 - [ ] 복제본 save 후 원본 부하 없음
-- [ ] title 한국어 기본 "(복제)" (Open Question #4 확정 대기 — 쌤핀 기존
-      복제 패턴 재확인 필요)
+- [ ] title 한국어 "(복제)" 접미 (§9 Q#4 확정 완료)
 
 ---
 
@@ -643,16 +722,19 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 
 | 규칙 | 테스트 수 예상 |
 |---|---|
-| createWallPost (approvalMode 3가지) | 6 |
+| createWallPost — 'manual' (기존 동작) | 2 |
+| createWallPost — 'auto' (즉시 approved) | 2 |
+| createWallPost — 'filter' (pending 폴백) | 1 |
+| createWallPost — exhaustive switch 방어 (never branch) | 1 |
 | bulkApproveWallPosts | 3 |
 | addWallColumn | 3 |
 | renameWallColumn | 3 |
 | reorderWallColumns | 3 |
 | removeWallColumn × 3 strategies | 6 |
 | cloneWallBoard | 4 |
-| starRealtimeWallPost (likes 리네임) | 5 (기존) |
+| starRealtimeWallPost (likes 리네임) | 5 (기존 대체) |
 
-누적 60+ 테스트
+누적 60+ 테스트 (기존 40 + 신규 30)
 
 ### 8.2 Repository 통합 테스트
 
@@ -675,7 +757,9 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 | 1 | 목록 썸네일 형태 | 레이아웃 아이콘 + 메타(카드수/최종 세션)만. mini-preview는 v1.13.1 |
 | 2 | 재열기 시 short-code | 매번 새로 생성 (보안 회전). "고정 코드" 옵션은 v1.13.2 |
 | 3 | manual→auto 전환 시 pending | 확인 대화 + 일괄 승인 (§4.3) |
-| 4 | 복제 title 한/영 | 한국어 "(복제)" — 쌤핀 기존 서식관리 패턴 확인 필요 |
+| 4 | 복제 title 한/영 | **확정: 한국어 "(복제)"**. 쌤핀 코드베이스
+     grep 결과 기존 "(복제)"/"(사본)" UI 관례 없음(useSurveyStore는
+     API 파라미터 기반). 한국어 UI 원칙 + FGI 자연스러움 근거. |
 | 5 | 별 카운트 vs 바이너리 | **카운트 유지**, 강조 임계값만 설정 가능. 바이너리는 제품 정의 변경 필요 |
 | 6 | likes → teacherStarred 호환 레이어 | 1회 릴리즈 임시 fallback (§2.5) |
 
@@ -683,10 +767,21 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 
 ## 10. 수용 기준 (v1.13.0 릴리즈 가능 조건)
 
-- [ ] 5 MUST 모두 구현 완료
-- [ ] 도메인 규칙 테스트 60+ 전수 통과
-- [ ] Playwright 수동 QA 3종 PASS (생성/재열기/자동저장)
-- [ ] 병렬 리뷰 통과 (code-reviewer + bkit:code-analyzer 모든 단계)
-- [ ] 보안 리뷰 PASS (승인 정책 전환·Repository IPC)
-- [ ] 기존 feature/realtime-wall 14커밋 회귀 없음
-- [ ] `realtime-wall.plan.md` 및 본 design 문서의 모든 체크리스트 PASS
+"구현 완료" 판정 기준 = **본 Design의 §2.6 / §3.7 / §4.6 / §5.4 / §6.5
+각 섹션 체크리스트 전 항목 PASS**. 항목별 근거:
+
+- [ ] §2.6 [E] 리네임 — `rg 'likes|favorite|onLike'` 0 + star 테스트 5케이스
+- [ ] §3.7 [A] 영속화 — fs.stat 검증 + 재열기 posts 복원 + 자동저장 주기
+- [ ] §4.6 [C] 승인 정책 — exhaustive switch + bulkApprove 3케이스
+- [ ] §5.4 [B] 컬럼 편집 — 4규칙 + 3 removeStrategy + 최소 2컬럼 가드
+- [ ] §6.5 [D] 복제 — posts 비움 + id 재생성 + deep clone
+- [ ] 도메인 규칙 테스트 60+ 전수 통과 (vitest 기준)
+- [ ] Playwright 수동 QA 3종 PASS (생성/재열기/자동저장 파일 바이트)
+- [ ] 병렬 리뷰 통과: 각 단계마다 code-reviewer-low + bkit:code-analyzer
+      (보안 민감 단계에는 security-reviewer 추가)
+- [ ] 기존 feature/realtime-wall 14커밋 기능 회귀 0 (단계 1~6 수동 재확인)
+- [ ] 기존 PastResults 스냅샷 로드·표시 정상 (후방 호환)
+
+본 설계서가 참조하는 기존 plan은 `realtime-wall-v1.13-enhancement.plan.md`
+이며, 이전 `realtime-wall.plan.md` (v1.2, 단계 1~6 범위)는 하위 호환
+체크리스트로만 역할을 남긴다.
