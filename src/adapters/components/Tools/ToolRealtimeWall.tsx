@@ -144,7 +144,7 @@ function CreateView({
       <section className="rounded-xl border border-sp-border bg-sp-card p-5">
         <div className="mb-3 flex items-center gap-2.5">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sp-accent text-xs font-bold text-white">2</span>
-          <h2 className="text-base font-bold text-sp-text">게시판 제목</h2>
+          <h2 className="text-base font-bold text-sp-text">담벼락 제목</h2>
         </div>
         <input
           type="text"
@@ -208,7 +208,7 @@ function CreateView({
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="rounded-xl border border-sp-border/60 bg-sp-surface px-4 py-3 text-xs text-sp-muted">
           <p className="mb-1 font-semibold text-sp-muted">이렇게 진행돼요</p>
-          <p>게시판 열기 → 학생에게 링크 공유 → 제출된 카드 승인 → 보드에서 정리</p>
+          <p>담벼락 열기 → 학생에게 링크 공유 → 제출된 카드 승인 → 보드에서 정리</p>
           <p className="mt-1 text-sp-muted/60">교사 PC가 인터넷에 연결되어 있어야 학생이 참여할 수 있습니다.</p>
         </div>
         <button
@@ -216,7 +216,7 @@ function CreateView({
           onClick={onStart}
           className="rounded-xl bg-sp-accent px-6 py-3 text-sm font-bold text-white shadow-lg shadow-sp-accent/20 transition hover:bg-sp-accent/85"
         >
-          게시판 열기
+          담벼락 열기
         </button>
       </div>
     </div>
@@ -631,7 +631,7 @@ function ResultView({
           onClick={onNewBoard}
           className="rounded-lg border border-sp-border px-4 py-2.5 text-sm text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
         >
-          새 게시판 만들기
+          새 담벼락 만들기
         </button>
         <ResultSaveButton
           toolType="realtime-wall"

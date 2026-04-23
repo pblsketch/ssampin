@@ -155,7 +155,7 @@ function ActionButtons({
   );
 }
 
-function SortableBulletinCard({
+function SortableRealtimeWallCardItem({
   post,
   onTogglePin,
   onHidePost,
@@ -286,7 +286,7 @@ function KanbanColumnView({
         ) : (
           <SortableContext items={posts.map((post) => post.id)} strategy={verticalListSortingStrategy}>
             {posts.map((post) => (
-              <SortableBulletinCard
+              <SortableRealtimeWallCardItem
                 key={post.id}
                 post={post}
                 onTogglePin={onTogglePin}

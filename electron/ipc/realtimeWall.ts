@@ -161,7 +161,7 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
 
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
-                  type: 'bulletin',
+                  type: 'wall',
                   title: session.title,
                   maxTextLength: session.maxTextLength,
                 }));
