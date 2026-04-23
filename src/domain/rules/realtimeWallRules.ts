@@ -181,6 +181,9 @@ export interface RealtimeWallStudentSubmission {
  *
  * 컨테이너는 이 함수 호출 후 webpage 링크에 대해서만 Main fetch를 트리거해
  * 비동기로 linkPreview를 upsert한다.
+ *
+ * v1.13 Stage C: 새 진입점은 `createWallPost(…, approvalMode)`. 이 함수는
+ * 호출자 점진 이전을 위한 하위호환 경로로 유지한다 (`'manual'` 모드와 동일).
  */
 export function createPendingRealtimeWallPost(
   input: RealtimeWallStudentSubmission,
@@ -207,6 +210,86 @@ export function createPendingRealtimeWallPost(
     kanban: { columnId: initialColumnId, order },
     freeform,
   };
+}
+
+// ============================================================
+// v1.13 Stage C — 승인 정책 옵션 (manual/auto/filter)
+// Design §4.2, §4.3 참조
+// ============================================================
+
+/**
+ * 학생 제출을 보드 카드로 생성. 승인 정책에 따라 status와 배치 index를 결정.
+ *
+ * 책임:
+ *   - `'manual'`: 기존 pending 동작. 교사 대기열 노출.
+ *   - `'auto'`  : 즉시 approved + kanban.order/freeform.zIndex를
+ *                 `approveRealtimeWallPost`와 동일 규칙으로 계산.
+ *   - `'filter'`: v1.13.2 구현 예정. 현재는 pending으로 안전 폴백.
+ *
+ * v1.13.2에서 filter 분기 실제 구현 시 default 케이스의 exhaustive never
+ * 방어가 나머지 분기 누락을 컴파일 오류로 강제한다.
+ *
+ * Design §4.2.
+ */
+export function createWallPost(
+  input: RealtimeWallStudentSubmission,
+  existingPosts: readonly RealtimeWallPost[],
+  columns: readonly RealtimeWallColumn[],
+  approvalMode: WallApprovalMode,
+): RealtimeWallPost {
+  const pendingPost = createPendingRealtimeWallPost(input, existingPosts, columns);
+
+  switch (approvalMode) {
+    case 'manual':
+      return pendingPost;
+    case 'auto': {
+      // 자동 승인: approveRealtimeWallPost와 동일 규칙으로 order/zIndex 계산.
+      // 이 post는 아직 existingPosts에 없으므로 직접 계산한다.
+      const columnId = pendingPost.kanban.columnId;
+      const nextOrder = existingPosts.filter(
+        (post) => post.status === 'approved' && post.kanban.columnId === columnId,
+      ).length;
+      const nextZIndex =
+        existingPosts.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
+      return {
+        ...pendingPost,
+        status: 'approved',
+        kanban: { columnId, order: nextOrder },
+        freeform: { ...pendingPost.freeform, zIndex: nextZIndex },
+      };
+    }
+    case 'filter':
+      // v1.13.2 스텁. 현재는 안전하게 pending 폴백.
+      return pendingPost;
+    default: {
+      const _exhaustive: never = approvalMode;
+      throw new Error(`Unknown approvalMode: ${String(_exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * 모든 pending 카드를 일괄 승인. manual → auto 전환 시 기존 대기열 소화용.
+ *
+ * 전략:
+ *   - pending이 아닌 카드(approved/hidden)는 원본 순서·상태 보존
+ *   - pending 카드에 순차적으로 `approveRealtimeWallPost`를 적용 (각 승인이
+ *     이전 승인 결과를 반영한 order/zIndex를 계산하도록 누적)
+ *
+ * 반환된 배열은 입력과 동일한 카드 순서를 유지한다 (id 순서 불변).
+ *
+ * Design §4.3.
+ */
+export function bulkApproveWallPosts(
+  posts: readonly RealtimeWallPost[],
+  columns: readonly RealtimeWallColumn[],
+): RealtimeWallPost[] {
+  const pendingIds = posts.filter((p) => p.status === 'pending').map((p) => p.id);
+  let current: RealtimeWallPost[] = [...posts];
+  for (const id of pendingIds) {
+    current = approveRealtimeWallPost(current, id, columns);
+  }
+  return current;
 }
 
 /**
