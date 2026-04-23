@@ -36,6 +36,7 @@ import { ToolWorkSymbols } from '@adapters/components/Tools/ToolWorkSymbols';
 import { ToolPoll } from '@adapters/components/Tools/ToolPoll';
 import { ToolSurvey } from '@adapters/components/Tools/ToolSurvey';
 import { ToolMultiSurvey } from '@adapters/components/Tools/ToolMultiSurvey';
+import { ToolRealtimeBulletin } from '@adapters/components/Tools/ToolRealtimeBulletin';
 import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
 import { ToolSeatPicker } from '@adapters/components/Tools/ToolSeatPicker';
 import { ToolGrouping } from '@adapters/components/Tools/ToolGrouping';
@@ -216,6 +217,9 @@ function renderPage(
   }
   if (page === 'tool-multi-survey') {
     return wrap(<ToolMultiSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+  }
+  if (page === 'tool-realtime-bulletin') {
+    return wrap(<ToolRealtimeBulletin onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-wordcloud') {
     return wrap(<ToolWordCloud onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);

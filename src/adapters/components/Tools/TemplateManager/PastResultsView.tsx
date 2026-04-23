@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { ToolResult, ToolResultType, PollResultData, SurveyResultData, MultiSurveyResultData, WordCloudResultData } from '@domain/entities/ToolResult';
+import type { ToolResult, ToolResultType, PollResultData, SurveyResultData, MultiSurveyResultData, WordCloudResultData, RealtimeBulletinResultData } from '@domain/entities/ToolResult';
 import { useToolResultStore } from '@adapters/stores/useToolResultStore';
 import { SpreadsheetView } from '../Results/SpreadsheetView';
 
@@ -35,6 +35,11 @@ function getSummary(result: ToolResult): string {
     case 'valueline-discussion':
     case 'trafficlight-discussion':
       return `${d.rounds.length}라운드`;
+    case 'realtime-bulletin': {
+      const approved = d.posts.filter((post) => post.status === 'approved').length;
+      const layout = d.layoutMode === 'kanban' ? '칸반형' : '자유 배치형';
+      return `${approved}개 게시 · ${layout}`;
+    }
     default:
       return '';
   }
@@ -118,6 +123,47 @@ function MultiSurveyDetail({
   );
 }
 
+function RealtimeBulletinDetail({ data }: { data: RealtimeBulletinResultData }) {
+  const approved = data.posts.filter((post) => post.status === 'approved');
+  const pinned = approved.filter((post) => post.pinned).length;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-sp-muted">
+        <span className="rounded-full bg-sp-surface px-2 py-0.5">
+          {data.layoutMode === 'kanban' ? '칸반형' : '자유 배치형'}
+        </span>
+        <span className="rounded-full bg-sp-surface px-2 py-0.5">승인 {approved.length}</span>
+        {pinned > 0 && (
+          <span className="rounded-full bg-sp-surface px-2 py-0.5">고정 {pinned}</span>
+        )}
+      </div>
+      {approved.length === 0 ? (
+        <p className="text-xs text-sp-muted">승인된 카드가 없습니다</p>
+      ) : (
+        <ul className="space-y-1 max-h-48 overflow-y-auto">
+          {approved.slice(0, 20).map((post) => (
+            <li
+              key={post.id}
+              className="rounded bg-sp-surface px-2 py-1 text-sm text-sp-text"
+            >
+              <div className="flex items-center gap-1.5">
+                {post.pinned && <span className="text-[11px] text-amber-300">📌</span>}
+                <span className="text-xs font-bold text-sp-muted">{post.nickname}</span>
+              </div>
+              <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words text-xs">
+                {post.text}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {approved.length > 20 && (
+        <p className="text-[11px] text-sp-muted">…외 {approved.length - 20}개</p>
+      )}
+    </div>
+  );
+}
+
 function WordCloudDetail({ data }: { data: WordCloudResultData }) {
   const sorted = [...data.words].sort((a, b) => b.count - a.count).slice(0, 20);
   return (
@@ -154,6 +200,8 @@ function ResultDetail({
       return <MultiSurveyDetail data={d} onOpenSpreadsheet={() => onOpenSpreadsheet(result)} />;
     case 'wordcloud':
       return <WordCloudDetail data={d} />;
+    case 'realtime-bulletin':
+      return <RealtimeBulletinDetail data={d} />;
   }
 }
 

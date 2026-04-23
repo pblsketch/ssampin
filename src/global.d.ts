@@ -111,6 +111,26 @@ interface ElectronAPI {
   surveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
   onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void) => () => void;
   onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  // Realtime Bulletin
+  startRealtimeBulletin: (data: {
+    title: string;
+    maxTextLength: number;
+  }) => Promise<{ port: number; localIPs: string[] }>;
+  stopRealtimeBulletin: () => Promise<void>;
+  realtimeBulletinTunnelAvailable: () => Promise<boolean>;
+  realtimeBulletinTunnelInstall: () => Promise<void>;
+  realtimeBulletinTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  onRealtimeBulletinStudentSubmitted: (callback: (data: {
+    post: {
+      id: string;
+      nickname: string;
+      text: string;
+      linkUrl?: string;
+      submittedAt: number;
+    };
+    totalSubmissions: number;
+  }) => void) => () => void;
+  onRealtimeBulletinConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
     questions: Array<{

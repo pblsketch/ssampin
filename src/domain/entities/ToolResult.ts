@@ -1,6 +1,18 @@
 import type { MultiSurveyTemplateQuestion } from './ToolTemplate';
+import type {
+  RealtimeBulletinColumn,
+  RealtimeBulletinLayoutMode,
+  RealtimeBulletinPost,
+} from './RealtimeBulletin';
 
-export type ToolResultType = 'poll' | 'survey' | 'multi-survey' | 'wordcloud' | 'valueline-discussion' | 'trafficlight-discussion';
+export type ToolResultType =
+  | 'poll'
+  | 'survey'
+  | 'multi-survey'
+  | 'wordcloud'
+  | 'valueline-discussion'
+  | 'trafficlight-discussion'
+  | 'realtime-bulletin';
 
 export type PollResultData = {
   readonly type: 'poll';
@@ -53,13 +65,23 @@ export type TrafficLightDiscussionResultData = {
   }[];
 };
 
+export type RealtimeBulletinResultData = {
+  readonly type: 'realtime-bulletin';
+  readonly title: string;
+  readonly layoutMode: RealtimeBulletinLayoutMode;
+  readonly columns: readonly RealtimeBulletinColumn[];
+  readonly posts: readonly RealtimeBulletinPost[];
+  readonly totalParticipants: number;
+};
+
 export type ToolResultData =
   | PollResultData
   | SurveyResultData
   | MultiSurveyResultData
   | WordCloudResultData
   | ValueLineDiscussionResultData
-  | TrafficLightDiscussionResultData;
+  | TrafficLightDiscussionResultData
+  | RealtimeBulletinResultData;
 
 export interface ToolResult {
   readonly id: string;
