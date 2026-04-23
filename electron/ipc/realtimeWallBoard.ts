@@ -106,6 +106,18 @@ import {
 // unused import 방지 (buildWallPreviewPosts는 toWallBoardMeta 내부에서 쓰임)
 void _buildWallPreviewPosts;
 
+/**
+ * before-quit 동기 저장용 dirty 스냅샷 저장소.
+ *
+ * Design §3.3: 라이브 세션 중 강제 종료 시 2s debounce/30s interval 대기
+ * 구간에 쌓인 변경이 유실될 수 있다. 이를 막기 위해 renderer가 상태 변경
+ * 즉시 IPC로 push하는 "dirty 스냅샷"을 Main이 메모리에 보관하고, before-quit
+ * 블록에서 동기적으로 디스크에 반영한다.
+ *
+ * collab-board의 `endActiveBoardSessionSync` 패턴 미러링.
+ */
+const dirtyBoards = new Map<WallBoardId, WallBoard>();
+
 function upsertIndexEntry(board: WallBoard): void {
   const idx = readIndexSync();
   const meta = toWallBoardMeta(board);
@@ -143,7 +155,30 @@ export function registerRealtimeWallBoardHandlers(): void {
     async (_e, args: { board: WallBoard }): Promise<{ savedAt: number }> => {
       writeBoardSync(args.board);
       upsertIndexEntry(args.board);
+      // 저장 성공 시 dirty 슬롯 제거 — before-quit 중복 저장 방지.
+      dirtyBoards.delete(args.board.id);
       return { savedAt: Date.now() };
+    },
+  );
+
+  // Design §3.3: before-quit 동기 저장용 dirty 스테이징. renderer가 상태
+  // 변경 즉시 fire-and-forget으로 push한다. 정식 save가 완료되면 슬롯이
+  // 비워지고, 강제 종료 시 남은 슬롯만 sync 저장한다.
+  ipcMain.handle(
+    'realtime-wall:board:stage-dirty',
+    async (_e, args: { board: WallBoard }): Promise<{ ok: true }> => {
+      dirtyBoards.set(args.board.id, args.board);
+      return { ok: true };
+    },
+  );
+
+  // dirty 슬롯 명시적 비우기 — 보드가 사용자 종료 플로우에서 finalize된 뒤
+  // 다시 새 보드로 진입할 때 호출.
+  ipcMain.handle(
+    'realtime-wall:board:clear-dirty',
+    async (_e, args: { id: WallBoardId }): Promise<{ ok: true }> => {
+      dirtyBoards.delete(args.id);
+      return { ok: true };
     },
   );
 
@@ -166,4 +201,26 @@ export function registerRealtimeWallBoardHandlers(): void {
       return readBoardSync(meta.id);
     },
   );
+}
+
+/**
+ * before-quit 동기 저장 경로 — Design §3.3 실시간 담벼락판.
+ *
+ * `app.on('before-quit')`에서 호출. 메모리에 스테이징된 dirty WallBoard
+ * 스냅샷을 동기 write 후 슬롯을 비운다. collab-board의 `endActiveBoardSessionSync`
+ * 와 동일한 안전망 역할.
+ *
+ * 실패는 swallow — before-quit은 blocking 금지.
+ */
+export function saveDirtyWallBoardsSync(): void {
+  if (dirtyBoards.size === 0) return;
+  for (const board of dirtyBoards.values()) {
+    try {
+      writeBoardSync(board);
+      upsertIndexEntry(board);
+    } catch {
+      // swallow — before-quit 블록
+    }
+  }
+  dirtyBoards.clear();
 }

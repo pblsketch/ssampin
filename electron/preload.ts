@@ -538,5 +538,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('realtime-wall:board:delete', args),
     getByCode: (args: { shortCode: string }): Promise<unknown | null> =>
       ipcRenderer.invoke('realtime-wall:board:get-by-code', args),
+    // before-quit 동기 저장 안전망. renderer가 상태 변경 즉시 스냅샷 push.
+    stageDirty: (args: { board: unknown }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('realtime-wall:board:stage-dirty', args),
+    clearDirty: (args: { id: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('realtime-wall:board:clear-dirty', args),
   },
 });
