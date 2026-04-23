@@ -407,7 +407,8 @@ export function NotePage() {
   return (
     <div className="flex h-full flex-col -m-8">
       <PageHeader
-        icon="📝"
+        icon="edit_note"
+        iconIsMaterial
         title="쌤핀 노트"
         rightActions={<>
           <AutosaveBadge savingState={savingState} updatedAt={activePage?.updatedAt} />

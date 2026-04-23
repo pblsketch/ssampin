@@ -484,7 +484,8 @@ export function TimetablePage() {
   return (
     <div className="flex h-full flex-col overflow-hidden -m-8">
       <PageHeader
-        icon="📅"
+        icon="calendar_view_day"
+        iconIsMaterial
         title="시간표"
         leftAddon={
           <span className="text-sp-muted text-sm font-sp-medium">
