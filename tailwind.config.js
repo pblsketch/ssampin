@@ -40,8 +40,42 @@ export default {
         'icon-xl': ['1.5rem', { lineHeight: '1' }],             // 24px Material Symbol
       },
       fontFamily: {
-        display: ['Noto Sans KR', 'sans-serif'],
-        body: ['Noto Sans KR', 'sans-serif'],
+        display: ['Pretendard Variable', 'Pretendard', 'Noto Sans KR', 'sans-serif'],
+        body: ['Pretendard Variable', 'Pretendard', 'Noto Sans KR', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SF Mono', 'Menlo', 'monospace'],
+      },
+      fontWeight: {
+        /* sp- prefix 신규 4단 — Tailwind 기본 medium(500)/semibold(600)/bold(700)는
+         * 덮어쓰지 않음. 신규 컴포넌트만 font-sp-medium 등으로 opt-in 사용. */
+        'sp-normal':   'var(--sp-weight-normal)',     // 400
+        'sp-medium':   'var(--sp-weight-medium)',     // 510 (Pretendard Variable axis)
+        'sp-semibold': 'var(--sp-weight-semibold)',   // 590
+        'sp-bold':     'var(--sp-weight-bold)',       // 680
+      },
+      borderRadius: {
+        'sp-xs':   'var(--sp-radius-xs)',     // 4px
+        'sp-sm':   'var(--sp-radius-sm)',     // 6px
+        'sp-md':   'var(--sp-radius-md)',     // 8px
+        'sp-lg':   'var(--sp-radius-lg)',     // 12px
+        'sp-xl':   'var(--sp-radius-xl)',     // 16px
+        'sp-pill': 'var(--sp-radius-pill)',   // 9999px
+      },
+      boxShadow: {
+        'sp-none':   'var(--sp-shadow-none)',
+        'sp-sm':     'var(--sp-shadow-sm)',
+        'sp-md':     'var(--sp-shadow-md)',
+        'sp-lg':     'var(--sp-shadow-lg)',
+        'sp-accent': 'var(--sp-shadow-accent)',
+      },
+      transitionDuration: {
+        'sp-quick': 'var(--sp-duration-quick)',  // 120ms
+        'sp-base':  'var(--sp-duration-base)',   // 160ms
+        'sp-slow':  'var(--sp-duration-slow)',   // 200ms
+      },
+      transitionTimingFunction: {
+        'sp-out':       'var(--sp-ease-out)',
+        'sp-out-cubic': 'var(--sp-ease-out-cubic)',
+        'sp-in-out':    'var(--sp-ease-in-out)',
       },
       animation: {
         'slide-in-right': 'slideInRight 0.3s ease-out',

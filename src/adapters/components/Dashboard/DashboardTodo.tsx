@@ -172,7 +172,7 @@ export function DashboardTodo() {
   );
 
   return (
-    <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+    <div ref={containerRef} className="rounded-sp-lg bg-sp-card p-4 h-full flex flex-col transition-shadow duration-sp-base ease-sp-out hover:shadow-sp-md">
       {/* 헤더 */}
       <div
         className="mb-4 flex items-center justify-between cursor-pointer hover:bg-sp-surface/30 rounded-lg -mx-1 px-1 py-0.5 transition-colors"

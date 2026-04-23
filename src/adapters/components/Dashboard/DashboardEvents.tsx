@@ -239,7 +239,7 @@ export function DashboardEvents() {
 
   return (
     <>
-      <div ref={containerRef} className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+      <div ref={containerRef} className="rounded-sp-lg bg-sp-card p-4 h-full flex flex-col transition-shadow duration-sp-base ease-sp-out hover:shadow-sp-md">
         {/* 헤더 */}
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
