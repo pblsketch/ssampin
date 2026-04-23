@@ -86,9 +86,9 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
 
   return (
     <div
-      className={`rounded-2xl px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-colors shadow-lg group relative shrink-0 ${isToday
-        ? 'bg-[var(--sp-today-bg)] ring-2 ring-sp-accent/40 shadow-xl'
-        : 'bg-sp-card hover:bg-sp-surface'
+      className={`rounded-sp-lg px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-all duration-sp-base ease-sp-out shadow-sp-sm group relative shrink-0 ${isToday
+        ? 'bg-[var(--sp-today-bg)] ring-2 ring-sp-accent/40 shadow-sp-md'
+        : `bg-sp-card hover:border-sp-accent/30 hover:bg-sp-card/50 hover:shadow-sp-md`
         } ${isSelected ? 'ring-2 ring-sp-accent/60' : ''}`}
     >
       {/* TODAY 배지 */}
@@ -239,7 +239,7 @@ function HolidayCard({ holiday, showYear }: { holiday: HolidayInfo; showYear?: b
   const dayName = DAY_NAMES[date.getDay()];
 
   return (
-    <div className="rounded-2xl px-4 pt-3 pb-3 border-l-4 border-red-500/60 bg-red-950/20 shadow-sm shrink-0">
+    <div className="rounded-sp-lg px-4 pt-3 pb-3 border-l-4 border-red-500/60 bg-red-950/20 shadow-sp-sm shrink-0 transition-all duration-sp-base ease-sp-out hover:shadow-sp-md hover:border-red-400/50">
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-xs font-semibold text-red-400/80 mb-0.5">
@@ -357,7 +357,7 @@ export function EventList({ events, categories, holidays, allEvents, allHolidays
     <div className="flex flex-col gap-4 overflow-y-auto pr-2 pb-10 h-full">
       {!hideTitle && (
         <div className="flex flex-col gap-2 mb-2 px-2">
-          <h3 className="text-lg font-bold text-sp-text">
+          <h3 className="text-xs font-sp-semibold text-sp-muted uppercase tracking-wider">
             {isSearching ? `검색 결과 (${displayItems.length}건)` : '이번 달 일정'}
           </h3>
           {/* 검색 입력 */}
