@@ -1,12 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodShort } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { exportAttendanceToExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { getDayOfWeek } from '@domain/rules/periodRules';
+import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
 import { AttendanceMatrixView } from './AttendanceMatrixView';
 import { AttendanceDetailEditor } from './shared/AttendanceDetailEditor';
 
@@ -15,6 +17,18 @@ import { AttendanceDetailEditor } from './shared/AttendanceDetailEditor';
 function todayString(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 오늘 날짜일 때만, 교사가 설정한 periodTimes 기준으로 현재 교시를 반환.
+ * 수업 시간 외이거나 오늘이 아니면 null.
+ */
+function computeAutoPeriod(
+  periodTimes: readonly PeriodTime[],
+  targetDate: string,
+): number | null {
+  if (targetDate !== todayString()) return null;
+  return getCurrentPeriod(periodTimes, new Date());
 }
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; badge: string }> = {
@@ -40,8 +54,6 @@ const STAT_COLORS: Record<AttendanceStatus, string> = {
   earlyLeave: 'text-orange-400',
   classAbsence: 'text-purple-400',
 };
-
-const PERIODS = [PERIOD_MORNING, 1, 2, 3, 4, 5, 6, 7, 8, PERIOD_CLOSING] as const;
 
 function isSpecialPeriod(p: number): boolean {
   return p === PERIOD_MORNING || p === PERIOD_CLOSING;
@@ -71,6 +83,10 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
   const [date, setDate] = useState(todayString);
   const [period, setPeriod] = useState(1);
+  // 사용자가 직접 교시를 변경했는지 추적 — true가 되면 이후 자동 재선택 비활성화
+  const [hasManualPeriodOverride, setHasManualPeriodOverride] = useState(false);
+  // 설정 로드 후 초기 자동 선택을 1회만 적용했는지
+  const [initialAutoApplied, setInitialAutoApplied] = useState(false);
   const [localStudents, setLocalStudents] = useState<StudentAttendance[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -86,9 +102,38 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
   const scheduleOverrides = useScheduleStore((s) => s.overrides);
   const loadSchedule = useScheduleStore((s) => s.load);
 
+  // 교시 시간 / 최대 교시 수는 교사별 설정을 source of truth로 사용 (학교마다 다름)
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
+  const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const loadSettings = useSettingsStore((s) => s.load);
+
   useEffect(() => {
     void loadSchedule();
   }, [loadSchedule]);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  // 학급이 바뀌면 교시/수동변경/자동적용 플래그를 리셋하여
+  // 새 학급에서도 현재 시각 기준 자동 선택이 다시 일어나도록 한다.
+  useEffect(() => {
+    setPeriod(1);
+    setHasManualPeriodOverride(false);
+    setInitialAutoApplied(false);
+  }, [classId]);
+
+  // 설정이 로드되면 컴퓨터 현재 시각 기준으로 기본 교시를 1회 자동 선택 (오늘 날짜일 때만).
+  // 사용자 수동 변경이 이미 있었다면 덮어쓰지 않음.
+  useEffect(() => {
+    if (initialAutoApplied || !settingsLoaded) return;
+    if (!hasManualPeriodOverride) {
+      const auto = computeAutoPeriod(periodTimes, date);
+      if (auto !== null) setPeriod(auto);
+    }
+    setInitialAutoApplied(true);
+  }, [initialAutoApplied, settingsLoaded, hasManualPeriodOverride, periodTimes, date]);
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const allStudents = cls?.students ?? [];
@@ -192,14 +237,26 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
   const handleDateChange = useCallback(
     (newDate: string) => {
       setDate(newDate);
-      loadRecord(newDate, period);
+      // 오늘 날짜로 돌아왔고, 사용자가 교시를 수동 변경한 적 없다면
+      // 현재 시각 기준으로 교시를 다시 자동 선택
+      let nextPeriod = period;
+      if (!hasManualPeriodOverride) {
+        const auto = computeAutoPeriod(periodTimes, newDate);
+        if (auto !== null && auto !== period) {
+          nextPeriod = auto;
+          setPeriod(auto);
+        }
+      }
+      loadRecord(newDate, nextPeriod);
     },
-    [period, loadRecord],
+    [period, hasManualPeriodOverride, periodTimes, loadRecord],
   );
 
   const handlePeriodChange = useCallback(
     (newPeriod: number) => {
       setPeriod(newPeriod);
+      // 이후에는 자동 로직이 다시 덮어쓰지 않도록 수동 변경으로 고정
+      setHasManualPeriodOverride(true);
       loadRecord(date, newPeriod);
     },
     [date, loadRecord],
@@ -304,6 +361,15 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     }
   }, [cls, classId, showToast]);
 
+  // 교시 버튼 목록: 학교별 maxPeriods 기준으로 동적 생성 (조회/종례는 양 끝에 고정)
+  const periodButtons = useMemo<readonly number[]>(() => {
+    const list: number[] = [PERIOD_MORNING];
+    const total = Math.max(1, maxPeriods);
+    for (let i = 1; i <= total; i++) list.push(i);
+    list.push(PERIOD_CLOSING);
+    return list;
+  }, [maxPeriods]);
+
   // 통계
   const stats = useMemo(() => {
     const counts: Record<AttendanceStatus, number> = {
@@ -384,7 +450,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
             <div className="flex items-center gap-1.5">
               <label className="text-xs text-sp-muted">교시</label>
               <div className="flex gap-1">
-                {PERIODS.map((p) => {
+                {periodButtons.map((p) => {
                   const isMatching = matchingPeriods.has(p);
                   const special = isSpecialPeriod(p);
                   const label = formatPeriodShort(p);

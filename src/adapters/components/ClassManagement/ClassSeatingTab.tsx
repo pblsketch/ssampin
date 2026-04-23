@@ -9,7 +9,8 @@ import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
-import { getDayOfWeek } from '@domain/rules/periodRules';
+import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
+import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { exportSeatingToExcel, exportSeatingToHwpx } from '@infrastructure/export';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
@@ -24,6 +25,18 @@ function todayString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * 오늘 날짜일 때만, 교사가 설정한 periodTimes 기준으로 현재 교시를 반환.
+ * 수업 시간 외이거나 오늘이 아니면 null.
+ */
+function computeAutoPeriod(
+  periodTimes: readonly PeriodTime[],
+  targetDate: string,
+): number | null {
+  if (targetDate !== todayString()) return null;
+  return getCurrentPeriod(periodTimes, new Date());
+}
+
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; color: string }> = {
   present: { label: '출석', icon: 'check_circle', color: 'green' },
   absent: { label: '결석', icon: 'cancel', color: 'red' },
@@ -31,8 +44,6 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; col
   earlyLeave: { label: '조퇴', icon: 'exit_to_app', color: 'orange' },
   classAbsence: { label: '결과', icon: 'event_busy', color: 'purple' },
 };
-
-const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 const BORDER_COLOR_MAP: Record<AttendanceStatus, string> = {
   present: 'border-green-500/60',
@@ -74,6 +85,11 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   const loadSchedule = useScheduleStore((s) => s.load);
 
   const seatingDefaultView = useSettingsStore((s) => s.settings.seatingDefaultView);
+  // 교사별 교시 시간표를 기준으로 자동 기본 교시를 계산 (학교마다 교시 시간이 다름)
+  const periodTimes = useSettingsStore((s) => s.settings.periodTimes);
+  const maxPeriods = useSettingsStore((s) => s.settings.maxPeriods);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const loadSettings = useSettingsStore((s) => s.load);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isTeacherView, setIsTeacherView] = useState(seatingDefaultView === 'teacher');
@@ -86,6 +102,10 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
   const [isAttendanceMode, setIsAttendanceMode] = useState(false);
   const [attendanceDate, setAttendanceDate] = useState(todayString);
   const [attendancePeriod, setAttendancePeriod] = useState(1);
+  // 사용자가 교시를 직접 변경했으면 자동 로직이 덮어쓰지 않도록 추적
+  const [hasManualPeriodOverride, setHasManualPeriodOverride] = useState(false);
+  // 설정 로드 후 초기 자동 선택을 1회만 적용했는지
+  const [initialAutoApplied, setInitialAutoApplied] = useState(false);
   const [localAttendance, setLocalAttendance] = useState<Map<string, AttendanceStatus>>(new Map());
   const [attendanceReasons, setAttendanceReasons] = useState<Map<string, string>>(new Map());
   const [attendanceMemos, setAttendanceMemos] = useState<Map<string, string>>(new Map());
@@ -106,10 +126,59 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
     void loadSchedule();
   }, [loadSchedule]);
 
+  // 설정 로드 (idempotent)
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
   // 특기사항 로드
   useEffect(() => {
     void loadObs();
   }, [loadObs]);
+
+  // 학급이 바뀌면 출석 교시 관련 플래그를 리셋하여 새 학급에서 다시 자동 선택되도록 한다.
+  useEffect(() => {
+    setAttendancePeriod(1);
+    setHasManualPeriodOverride(false);
+    setInitialAutoApplied(false);
+  }, [classId]);
+
+  // 설정이 로드되면 현재 시각 기준으로 출석 교시를 1회 자동 선택 (오늘 날짜일 때만).
+  // 수동 변경이 이미 있었다면 덮어쓰지 않음.
+  useEffect(() => {
+    if (initialAutoApplied || !settingsLoaded) return;
+    if (!hasManualPeriodOverride) {
+      const auto = computeAutoPeriod(periodTimes, attendanceDate);
+      if (auto !== null) setAttendancePeriod(auto);
+    }
+    setInitialAutoApplied(true);
+  }, [initialAutoApplied, settingsLoaded, hasManualPeriodOverride, periodTimes, attendanceDate]);
+
+  // 날짜 변경 시, 오늘로 돌아왔고 수동 변경이 없다면 현재 시각 기준 교시 재적용
+  const handleAttendanceDateChange = useCallback(
+    (newDate: string) => {
+      setAttendanceDate(newDate);
+      if (!hasManualPeriodOverride) {
+        const auto = computeAutoPeriod(periodTimes, newDate);
+        if (auto !== null) setAttendancePeriod(auto);
+      }
+    },
+    [hasManualPeriodOverride, periodTimes],
+  );
+
+  // 교시 수동 변경 — 이후 자동 재선택 비활성화
+  const handleAttendancePeriodChange = useCallback((p: number) => {
+    setAttendancePeriod(p);
+    setHasManualPeriodOverride(true);
+  }, []);
+
+  // 교시 버튼 목록: 학교별 maxPeriods 기준으로 동적 생성
+  const periodButtons = useMemo<readonly number[]>(() => {
+    const total = Math.max(1, maxPeriods);
+    const list: number[] = [];
+    for (let i = 1; i <= total; i++) list.push(i);
+    return list;
+  }, [maxPeriods]);
 
   // 출석 모드 ON / 날짜·교시 변경 시 기록 로드
   useEffect(() => {
@@ -657,19 +726,19 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
             <input
               type="date"
               value={attendanceDate}
-              onChange={(e) => setAttendanceDate(e.target.value)}
+              onChange={(e) => handleAttendanceDateChange(e.target.value)}
               className="px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg text-sp-text text-sm focus:outline-none focus:border-sp-accent"
             />
           </div>
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-sp-muted">교시</label>
             <div className="flex gap-1">
-              {PERIODS.map((p) => {
+              {periodButtons.map((p) => {
                 const isMatching = matchingPeriods.has(p);
                 return (
                   <button
                     key={p}
-                    onClick={() => setAttendancePeriod(p)}
+                    onClick={() => handleAttendancePeriodChange(p)}
                     title={isMatching ? `${cls?.subject} 수업` : undefined}
                     className={`relative w-8 h-8 rounded-lg text-sm font-medium transition-all
                       ${attendancePeriod === p
