@@ -65,7 +65,9 @@ function YoutubeEmbed({ videoId, compact }: { videoId: string; compact: boolean 
         src={`https://www.youtube-nocookie.com/embed/${videoId}`}
         title="YouTube 영상 미리보기"
         className="absolute inset-0 h-full w-full"
-        allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        // 영상 재생에 필요한 최소 권한만. clipboard-write·accelerometer·gyroscope는
+        // 영상 재생과 무관하며 iframe 권한 최소화 원칙(보안 하드닝 계획)에 따라 제외.
+        allow="encrypted-media; picture-in-picture"
         allowFullScreen
         loading="lazy"
         referrerPolicy="no-referrer"
