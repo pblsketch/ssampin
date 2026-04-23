@@ -39,6 +39,7 @@ import type { IToolResultRepository } from '@domain/repositories/IToolResultRepo
 import type { IObservationRepository } from '@domain/repositories/IObservationRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
+import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
 import type { IThumbnailer, IPreviewExtractor, IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
@@ -83,6 +84,7 @@ import { JsonToolResultRepository } from '@adapters/repositories/JsonToolResultR
 import { JsonObservationRepository } from '@adapters/repositories/JsonObservationRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
+import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRepository';
 import { PdfJsThumbnailer } from '@infrastructure/forms/PdfJsThumbnailer';
 import { HwpxExcelPreviewExtractor } from '@infrastructure/forms/HwpxExcelPreviewExtractor';
 import { ElectronPrinterAdapter } from '@infrastructure/print/ElectronPrinterAdapter';
@@ -174,6 +176,10 @@ export const observationRepository: IObservationRepository =
 
 export const noteRepository: INotebookRepository =
   new JsonNotebookRepository(storage);
+
+// === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
+export const wallBoardRepository: IWallBoardRepository =
+  new JsonWallBoardRepository(storage);
 
 // === 서식 관리 ===
 export const formRepository: IFormTemplateRepository =
