@@ -17,6 +17,7 @@ import { AboutTab } from './tabs/AboutTab';
 import { GoogleIntegrationTab } from './tabs/GoogleIntegrationTab';
 import { TodoTab } from './tabs/TodoTab';
 import { ToolsTab } from './tabs/ToolsTab';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 interface Props {
   activeTab: SettingsTabId;
   onTabChange: (tab: SettingsTabId) => void;
@@ -42,32 +43,32 @@ export function SettingsLayout({
 
   return (
     <div className="-m-8 flex flex-col h-[calc(100%+4rem)]">
-      {/* Header */}
-      <header className="shrink-0 flex items-center justify-between px-8 py-5 bg-sp-bg border-b border-sp-border z-10">
-        <h2 className="text-2xl font-black text-sp-text tracking-tight flex items-center gap-2">
-          <span className="material-symbols-outlined text-sp-muted">settings</span>
-          설정
-        </h2>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setShowReset(true)}
-            className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:bg-sp-text/5 hover:text-sp-text font-medium text-sm transition-colors flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-icon">refresh</span>
-            초기화
-          </button>
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white font-medium text-sm shadow-lg shadow-sp-accent/25 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-icon">save</span>
-            {saving ? '저장 중...' : '저장'}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        icon="settings"
+        iconIsMaterial
+        title="설정"
+        rightActions={
+          <>
+            <button
+              type="button"
+              onClick={() => setShowReset(true)}
+              className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95"
+            >
+              <span className="material-symbols-outlined text-icon">refresh</span>
+              <span className="hidden sm:inline">초기화</span>
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 bg-sp-accent text-white px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold hover:brightness-110 shadow-sp-accent transition-all duration-sp-base ease-sp-out active:scale-95 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-icon">save</span>
+              <span className="hidden sm:inline">{saving ? '저장 중...' : '저장'}</span>
+            </button>
+          </>
+        }
+      />
 
       {/* Body: Sidebar + Content */}
       <div className="flex-1 flex min-h-0">

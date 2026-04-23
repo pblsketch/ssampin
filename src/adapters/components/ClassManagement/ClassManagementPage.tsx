@@ -9,6 +9,7 @@ import { ClassSurveyTab } from './ClassSurveyTab';
 import { ClassAssignmentTab } from './ClassAssignmentTab';
 import { AttendanceTab } from './AttendanceTab';
 import { AddClassModal } from './AddClassModal';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 
 
 type TabId = 'roster' | 'record' | 'attendance' | 'seating' | 'progress' | 'survey' | 'assignment';
@@ -41,24 +42,24 @@ export function ClassManagementPage() {
   }, [load]);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-sp-accent text-2xl">menu_book</span>
-          <h1 className="text-xl font-bold text-sp-text">수업 관리</h1>
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors text-sm font-medium"
-        >
-          <span className="material-symbols-outlined text-lg">add</span>
-          학급 추가
-        </button>
-      </div>
+    <div className="h-full flex flex-col -m-8">
+      <PageHeader
+        icon="menu_book"
+        iconIsMaterial
+        title="수업 관리"
+        rightActions={
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 bg-sp-accent text-white px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold hover:brightness-110 shadow-sp-accent transition-all duration-sp-base ease-sp-out active:scale-95"
+          >
+            <span className="material-symbols-outlined text-icon">add</span>
+            <span className="hidden sm:inline">학급 추가</span>
+          </button>
+        }
+      />
 
       {/* 본문 */}
-      <div className="flex-1 flex gap-6 min-h-0">
+      <div className="flex-1 flex gap-6 min-h-0 p-8">
         {/* 왼쪽: 학급 리스트 */}
         <div className="w-72 shrink-0 bg-sp-card border border-sp-border rounded-xl overflow-hidden flex flex-col">
           <ClassList onAddClass={() => setShowAddModal(true)} />
