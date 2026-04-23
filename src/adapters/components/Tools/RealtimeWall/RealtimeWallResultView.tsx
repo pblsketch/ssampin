@@ -120,7 +120,7 @@ export function RealtimeWallResultView({
           onClick={onNewBoard}
           className="rounded-lg border border-sp-border px-4 py-2.5 text-sm text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
         >
-          새 담벼락 만들기
+          내 담벼락 목록
         </button>
         <ResultSaveButton
           toolType="realtime-wall"
