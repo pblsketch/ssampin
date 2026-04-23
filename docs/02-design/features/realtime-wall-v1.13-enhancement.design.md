@@ -68,6 +68,16 @@ export interface WallBoard {
   readonly lastSessionAt?: number;
   /** 보관 처리된 보드는 목록에서 별도 섹션. 삭제 아님. */
   readonly archived?: boolean;
+  /**
+   * 학생 접속용 고정 short-code (Open Question #2 확정, 사용자 결정
+   * 2026-04-23). 보드 첫 라이브 세션 시 Supabase LiveSessionClient로
+   * 발급 후 여기 보관. 같은 보드 재열기 시 재사용 → 교사가 학기 내내
+   * 동일 코드로 학생에게 공지 가능.
+   *
+   * 만료 정책: archived=true 또는 명시적 "코드 재발급" 메뉴 선택 시
+   * 만료 → 다음 라이브 세션에 새 code 발급.
+   */
+  readonly shortCode?: string;
 }
 ```
 
@@ -77,14 +87,15 @@ export interface WallBoard {
 // Before (단계 6에서 도입)
 readonly likes?: number;
 
-// After (MUST-E)
-readonly teacherStarred?: number;
+// After (MUST-E, 사용자 확정 2026-04-23)
+readonly teacherHearts?: number;
 ```
 
-- 의미: "교사가 별 표시한 횟수" (수업 중 강조용)
+- 의미: "교사가 하트를 누른 횟수" (수업 중 강조용, 교사 소유 명시)
 - 저장 위치는 동일, 필드명만 변경
-- **이름 변경 근거**: FGI에서 "학생이 누르는 걸로 오해"와 "교사 강조와
-  하트 시그널 불일치" 두 가지 지적
+- **이름 변경 근거**: FGI에서 "`likes`라는 이름이 학생 참여 지표로
+  오해된다" 지적. 단 **아이콘(하트)·색상(rose)·카운트 방식은 유지** —
+  사용자가 하트 UX가 교사 직관에 가장 익숙하다고 확정.
 
 ### 1.3 엔티티-세션 관계
 
@@ -95,65 +106,62 @@ readonly teacherStarred?: number;
 
 ---
 
-## 2. [E] 좋아요 → 별/추천 리네임
+## 2. [E] `likes` → `teacherHearts` 필드 리네임 (아이콘 하트 유지)
 
 ### 2.1 엔티티 변경
 
-`likes?: number` → `teacherStarred?: number`
+`likes?: number` → `teacherHearts?: number`
 
 ### 2.2 도메인 규칙 리네임
 
 | Before | After |
 |---|---|
-| `likeRealtimeWallPost` | `starRealtimeWallPost` |
-| `REALTIME_WALL_MAX_LIKES = 999` | `REALTIME_WALL_MAX_STARS = 999` |
+| `likeRealtimeWallPost` | `heartRealtimeWallPost` |
+| `REALTIME_WALL_MAX_LIKES = 999` | `REALTIME_WALL_MAX_HEARTS = 999` |
 
-### 2.3 UI 변경
+### 2.3 UI 변경 (아이콘·색상은 유지, 식별자·라벨만 변경)
 
 **색상 토큰 정책**: realtime-wall 영역의 상태 강조색(pinned amber-400,
-좋아요 rose-400, hover emerald 등)은 **쌤핀 기존 관례대로 Tailwind
-원색을 직접 사용**한다. `sp-*` 토큰은 구조색(bg/surface/card/border/
-muted/text/accent)만 담당하고, **의미 색(pinned/starred/success/danger)**
-은 Tailwind 원색이라는 것이 `RealtimeWallCard.tsx` 기존 구현에 이미
-확립된 패턴. 본 변경도 이 관례를 따른다.
+하트 rose-400, hover emerald 등)은 **쌤핀 기존 관례대로 Tailwind 원색
+을 직접 사용**한다. `sp-*` 토큰은 구조색(bg/surface/card/border/muted/
+text/accent)만 담당하고, **의미 색(pinned/teacherHearts/success/danger)**
+은 Tailwind 원색 — `RealtimeWallCard.tsx` 기존 구현 관례 유지.
 
-**RealtimeWallCard.tsx**:
+**RealtimeWallCard.tsx** (아이콘·색상 변경 없음, 이름·prop만):
 
 ```diff
 - function LikeButton({ count, onClick }) {
-+ function StarButton({ count, onClick }) {
++ function HeartButton({ count, onClick }) {
     const highlighted = count >= 5;
     ...
--   className={`... ${highlighted
--     ? 'border-rose-400/40 bg-rose-400/10 text-rose-300'
--     : 'border-sp-border ... hover:border-rose-400/40 hover:text-rose-300'
--   }`}
-+   className={`... ${highlighted
-+     ? 'border-amber-300/40 bg-amber-300/10 text-amber-200'
-+     : 'border-sp-border ... hover:border-amber-300/40 hover:text-amber-200'
-+   }`}
--   <span className="material-symbols-outlined">favorite</span>
-+   <span className="material-symbols-outlined">star</span>
+-   title={readOnly ? `좋아요 ${count}` : '좋아요'}
++   title={readOnly ? `교사 하트 ${count}` : '교사 하트'}
     ...
+    className={`... ${highlighted
+      ? 'border-rose-400/40 bg-rose-400/10 text-rose-300'
+      : 'border-sp-border ... hover:border-rose-400/40 hover:text-rose-300'
+    }`}
+    <span className="material-symbols-outlined">favorite</span>  {/* 유지 */}
 ```
 
-**기존 pinned UI(amber-400)와 색상 충돌 완화**: 별은 **amber-300**,
-pinned는 **amber-400**. 채도 차이로 구분. 필요시 별을 **sky-300**으로
-대체(Open Question — 디자이너 컨펌 필요).
+- 아이콘 `favorite`(하트) 유지 — 사용자 확정
+- 색상 rose 유지 — 사용자 확정
+- 카운트 +1 누적 유지 — 사용자 확정
+- 상한 999 유지
 
 ### 2.4 Props 연쇄 리네임
 
 ```diff
 // types.ts (RealtimeWallBoardCommonProps)
 -  readonly onLike?: (postId: string) => void;
-+  readonly onStar?: (postId: string) => void;
++  readonly onHeart?: (postId: string) => void;
 
 // ToolRealtimeWall.tsx
 -  const handleLikePost = useCallback((postId: string) => {
 -    setPosts((prev) => likeRealtimeWallPost(prev, postId));
 -  }, []);
-+  const handleStarPost = useCallback((postId: string) => {
-+    setPosts((prev) => starRealtimeWallPost(prev, postId));
++  const handleHeartPost = useCallback((postId: string) => {
++    setPosts((prev) => heartRealtimeWallPost(prev, postId));
 +  }, []);
 
 // 4개 Board + RealtimeWallCard + 테스트
@@ -186,10 +194,16 @@ function migratePostFields(post: unknown): RealtimeWallPost {
 
 ### 2.6 검증 체크리스트 [E]
 
-- [ ] `rg 'likes|favorite|LikeButton|onLike'` 쌤핀 realtime-wall 영역 잔존 0
+- [ ] `rg 'likes|LikeButton|onLike|likeRealtimeWallPost|REALTIME_WALL_MAX_LIKES'`
+      쌤핀 realtime-wall 영역 잔존 0
+- [ ] `favorite` 아이콘은 **유지** (grep 결과 건재해야 함)
+- [ ] rose 색상 클래스 유지 (grep 결과 건재해야 함)
 - [ ] 기존 테스트 모두 통과 (29→29, 이름만 변경)
-- [ ] 신규 테스트: `starRealtimeWallPost` 5케이스
-- [ ] UI 수동 확인: 별 아이콘 + amber-300 색상 + 카운트 증가
+- [ ] 신규 테스트: `heartRealtimeWallPost` 5케이스 (이름만 바꾼 재생성)
+- [ ] UI 수동 확인: 하트 아이콘 그대로 + 카운트 +1 누적 + 5+ rose 강조
+- [ ] 버튼 tooltip "교사 하트 N" / "교사 하트" 표시
+- [ ] PastResultsView가 기존 `likes` 필드를 `teacherHearts`로 fallback
+      매핑해 카운트 표시 정상
 
 ---
 
@@ -231,8 +245,25 @@ export interface WallBoardMeta {
   readonly updatedAt: number;
   readonly lastSessionAt?: number;
   readonly archived?: boolean;
+  /** 학생 접속 고정 short-code (Open Question #2 확정). */
+  readonly shortCode?: string;
+  /** 썸네일 mini-preview용 경량 post snapshot (Open Question #1 확정). */
+  readonly previewPosts: readonly WallPreviewPost[];
+}
+
+export interface WallPreviewPost {
+  readonly id: string;
+  readonly nickname: string;
+  readonly text: string;        // 100자 초과 truncate
+  readonly kanban?: RealtimeWallKanbanPosition;
+  readonly freeform?: RealtimeWallFreeformPosition;
 }
 ```
+
+`save(board)` 내부에서 `buildWallPreviewPosts(board.posts)`로
+previewPosts를 재계산 후 index.json에 반영. 다만 posts 업데이트마다
+index 재쓰기는 부담이므로 **디바운스**: dirty 플래그 + 5초마다 또는
+명시적 `flushIndex()` 호출 시만 index 갱신.
 
 ### 3.2 Repository 구현체
 
@@ -339,14 +370,16 @@ ToolRealtimeWall의 첫 viewMode를 `'list' | 'create' | 'running' | 'results'`
 │ 내 담벼락                                   [+ 새 담벼락 만들기]│
 │                                                              │
 │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐          │
-│ │ 📋 칸반  │ │ 📐 자유  │ │ 📊 격자  │ │ 🎞 스트림 │          │
-│ │          │ │          │ │          │ │          │          │
-│ │ 주장·근거│ │ 학급회의 │ │ 시감상문 │ │ 질문받기 │          │
-│ │ · 반박   │ │ 아이디어 │ │          │ │          │          │
-│ │          │ │          │ │          │ │          │          │
-│ │ 카드 42  │ │ 카드 18  │ │ 카드 31  │ │ 카드 7   │          │
+│ │┌──┬──┬──┐│ │●         │ │┌──┐┌──┐  │ │민수 우리..│          │
+│ ││질│근│정││ │  ●  ●    │ ││..││..│  │ │지연 저는..│          │
+│ ││민│이│경││ │     ●●   │ │└──┘└──┘  │ │성현 선생..│          │
+│ │└──┴──┴──┘│ │  ●       │ │┌──┐┌──┐  │ │          │          │
+│ │ 📋 칸반   │ │ 📐 자유  │ ││..││..│  │ │ 🎞 스트림 │          │
+│ │ 주장·근거·│ │ 학급회의 │ │└──┘└──┘  │ │ 질문받기 │          │
+│ │  반박     │ │ 아이디어 │ │ 📊 격자  │ │          │          │
+│ │ 카드 42   │ │ 카드 18  │ │ 카드 31  │ │ 카드 7   │          │
 │ │ 최종 3일전│ │ 최종 오늘│ │ 최종 1주전│ │ 최종 어제│          │
-│ │       ⋯  │ │       ⋯  │ │       ⋯  │ │       ⋯  │          │
+│ │        ⋯  │ │        ⋯ │ │        ⋯ │ │        ⋯ │          │
 │ └──────────┘ └──────────┘ └──────────┘ └──────────┘          │
 │                                                              │
 │ ▾ 보관함 (3)                                                  │
@@ -354,9 +387,75 @@ ToolRealtimeWall의 첫 viewMode를 `'list' | 'create' | 'running' | 'results'`
 └──────────────────────────────────────────────────────────────┘
 ```
 
+각 카드 상단 120px 영역은 **WallBoardThumbnail** (§3.5.1a) —
+layoutMode별 실제 카드 축약 렌더. 하단은 메타(아이콘, 제목, 카드수,
+최종 세션, ⋯ 메뉴).
+
 ⋯ 메뉴: 이름변경 / 복제 / 보관 / 삭제
 
 **빈 상태**: "아직 만든 담벼락이 없어요" + 큰 "+ 담벼락 만들기" CTA
+
+#### 3.5.1a 카드 Mini-Preview 서브컴포넌트 (Open Question #1 확정)
+
+목록 화면 각 보드 카드는 **실제 승인 카드의 mini-preview**를 렌더한다.
+v1.13.0 포함, 사용자 결정(2026-04-23).
+
+**위치**: `RealtimeWall/WallBoardThumbnail.tsx` (신규, ~120줄)
+
+**렌더 규칙** (레이아웃 mode별):
+
+| layoutMode | Thumbnail 전략 |
+|---|---|
+| `kanban` | 컬럼 헤더 2~3개(title + 카드수 표시) + 각 컬럼 상위 1 post의 nickname + 텍스트 1줄 축약. 좌→우 3 컬럼 박스. 카드 0 시 컬럼 헤더만 |
+| `freeform` | 상위 3 post를 absolute position 그대로 축소(비율 0.18) + 배경 grid 흐리게. 카드가 3개 미만이면 보이는 만큼 |
+| `grid` | approved posts 상위 6개를 2×3 grid로 축약(텍스트 2줄 line-clamp) |
+| `stream` | 상위 3 post를 세로로 쌓아 nickname + 본문 첫 1줄만 |
+
+**공통 제약**:
+- 폭: 카드 고정 240px, 높이 120px
+- 폰트: 매우 작게 (`text-[9px]` ~ `text-[11px]`) — 가독성보다 "무엇이
+  있는지 기억나게" 정도
+- `pointer-events-none` — 썸네일 내부 클릭은 카드 전체 클릭(열기)과
+  구분 안 됨 방지
+- `aria-hidden="true"` — 스크린리더는 meta만 읽음
+
+**성능**:
+- posts가 100장 넘어도 상위 6개만 쓰므로 무관
+- React `memo`로 상위 posts 변경 없으면 리렌더 안 함
+- 목록 화면 초기 로드 시 `listAllMeta()`에 각 보드의 상위 6개 post
+  snapshot 포함 여부 결정 → **포함**. 경량 메타 + 6 post는 수십 KB라
+  전체 로드 부담 낮음. 대안(보드 클릭 시 load) 쓰면 썸네일 비어있다가
+  뜨는 flash 발생 → 비포함.
+
+**WallBoardMeta 확장**:
+
+```ts
+export interface WallBoardMeta {
+  readonly id: WallBoardId;
+  readonly title: string;
+  // ...기존...
+  /** 썸네일용 상위 6개 approved post snapshot (text 최대 100자) */
+  readonly previewPosts: readonly WallPreviewPost[];
+}
+
+export interface WallPreviewPost {
+  readonly id: string;
+  readonly nickname: string;
+  readonly text: string;        // max 100자 truncate
+  readonly kanban?: RealtimeWallKanbanPosition;
+  readonly freeform?: RealtimeWallFreeformPosition;
+}
+```
+
+**도메인 규칙 추가**:
+
+```ts
+/** posts에서 썸네일용 상위 6개 approved post를 경량 포맷으로 추출 */
+export function buildWallPreviewPosts(
+  posts: readonly RealtimeWallPost[],
+  max: number = 6,
+): WallPreviewPost[]
+```
 
 #### 3.5.2 CreateView 변경
 
@@ -693,6 +792,7 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 | `src/adapters/repositories/JsonWallBoardRepository.ts` | IStoragePort 기반 구현 |
 | `src/adapters/stores/useWallBoardStore.ts` | Zustand 저장소 |
 | `src/adapters/components/Tools/RealtimeWall/WallBoardListView.tsx` | 목록 화면 |
+| `src/adapters/components/Tools/RealtimeWall/WallBoardThumbnail.tsx` | 카드 mini-preview (§3.5.1a) |
 | `src/adapters/components/Tools/RealtimeWall/RealtimeWallColumnEditor.tsx` | 컬럼 편집 드로어 |
 | `src/adapters/components/Tools/RealtimeWall/RealtimeWallSessionSettings.tsx` | 라이브 설정 드로어 |
 | `electron/ipc/realtimeWallBoard.ts` | IPC 핸들러 (list/load/save/update-meta/delete/clone) |
@@ -732,9 +832,10 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 | reorderWallColumns | 3 |
 | removeWallColumn × 3 strategies | 6 |
 | cloneWallBoard | 4 |
-| starRealtimeWallPost (likes 리네임) | 5 (기존 대체) |
+| heartRealtimeWallPost (likes 리네임, 아이콘 하트 유지) | 5 (기존 대체) |
+| buildWallPreviewPosts (레이아웃별 상위 N개 추출) | 4 |
 
-누적 60+ 테스트 (기존 40 + 신규 30)
+누적 64+ 테스트 (기존 40 + 신규 24+)
 
 ### 8.2 Repository 통합 테스트
 
