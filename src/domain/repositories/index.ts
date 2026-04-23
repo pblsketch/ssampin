@@ -10,3 +10,4 @@ export type { IStudentRepository } from './IStudentRepository';
 export type { IAssignmentRepository } from './IAssignmentRepository';
 export type { IBoardRepository } from './IBoardRepository';
 export type { INotebookRepository } from './INotebookRepository';
+export type { IWallBoardRepository } from './IWallBoardRepository';
