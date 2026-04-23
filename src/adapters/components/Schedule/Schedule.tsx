@@ -22,7 +22,6 @@ import { GoogleBadge } from '@adapters/components/Calendar/GoogleBadge';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { NeisSchedulePanel } from './NeisSchedulePanel';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { FormatHint } from '../common/FormatHint';
 
 type ScheduleView = 'month' | 'semester' | 'year';
 type SourceFilter = 'all' | 'ssampin' | 'google' | 'neis';
@@ -416,11 +415,6 @@ export function Schedule() {
         </div>
       </header>
 
-      {/* 가져오기 지원 형식 힌트 */}
-      <div className="shrink-0 px-8 py-1.5 border-b border-sp-border/50">
-        <FormatHint formats=".ssampin, .xlsx" />
-      </div>
-
       {/* 구글 캘린더 오류 인라인 안내 */}
       {googleConnected && googleError && dismissedGoogleError !== googleError && (
         <div className="shrink-0 flex items-center gap-2 px-8 py-2 text-xs text-amber-400/70 bg-amber-400/5 border-b border-amber-400/10">
@@ -444,7 +438,7 @@ export function Schedule() {
           {view === 'month' && (
             <>
               {/* 카테고리 탭 */}
-              <div className="flex items-center justify-between overflow-x-auto pb-2">
+              <div className="flex items-center justify-between overflow-x-auto py-1.5">
                 <div className="flex gap-3">
                   <button
                     type="button"
