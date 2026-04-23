@@ -1,8 +1,13 @@
 import type {
   RealtimeWallColumn,
   RealtimeWallFreeformPosition,
+  RealtimeWallLayoutMode,
   RealtimeWallLinkPreview,
   RealtimeWallPost,
+  WallApprovalMode,
+  WallBoard,
+  WallBoardId,
+  WallPreviewPost,
 } from '@domain/entities/RealtimeWall';
 
 export const DEFAULT_REALTIME_WALL_COLUMNS = [
@@ -288,4 +293,153 @@ export function approveRealtimeWallPost(
       },
     };
   });
+}
+
+// ============================================================
+// v1.13 — 영속 보드 (WallBoard) 규칙
+// Design §1.1 / §3 / §3.5.1a
+// ============================================================
+
+/** 목록 썸네일용 max preview post 수 — Design §3.5.1a */
+export const WALL_PREVIEW_POST_MAX = 6;
+/** WallPreviewPost.text 최대 길이 — Design §1.1 WallPreviewPost */
+export const WALL_PREVIEW_TEXT_MAX = 100;
+/** shortCode 길이 (6자 영숫자 대문자) — Design §1.1 */
+export const WALL_SHORT_CODE_LENGTH = 6;
+/** shortCode 허용 문자 — 혼동 쉬운 0/O/1/I 제외 (교사 공지 편의) */
+const WALL_SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+/**
+ * 6자 영숫자 short-code 생성기. 충돌 검사는 호출자(Repository)가 수행.
+ *
+ * 정책:
+ * - 사용 문자: `A-Z` + `2-9` (0/O/1/I 제외) — 학생이 숫자·영문 혼동하지 않도록
+ * - 길이: WALL_SHORT_CODE_LENGTH (6자)
+ * - `randomSource`: 선택적. 테스트 결정적으로 돌리고 싶을 때 주입.
+ *
+ * Design §1.1 shortCode 규정.
+ */
+export function generateWallShortCode(
+  randomSource: () => number = Math.random,
+): string {
+  let code = '';
+  for (let i = 0; i < WALL_SHORT_CODE_LENGTH; i++) {
+    const idx = Math.floor(randomSource() * WALL_SHORT_CODE_ALPHABET.length);
+    code += WALL_SHORT_CODE_ALPHABET[idx];
+  }
+  return code;
+}
+
+/**
+ * 충돌 회피를 고려한 short-code 생성. `existingCodes`에 이미 있으면 재시도.
+ * 최대 `maxAttempts`번까지 시도 후 실패하면 에러. 알파벳 32^6 ≈ 1e9라
+ * 실제 환경에서는 거의 발생 안 함.
+ */
+export function generateUniqueWallShortCode(
+  existingCodes: ReadonlySet<string>,
+  randomSource: () => number = Math.random,
+  maxAttempts: number = 100,
+): string {
+  for (let i = 0; i < maxAttempts; i++) {
+    const code = generateWallShortCode(randomSource);
+    if (!existingCodes.has(code)) return code;
+  }
+  throw new Error('Failed to generate unique wall short-code');
+}
+
+/**
+ * posts에서 썸네일용 상위 N개 approved post를 경량 포맷으로 추출.
+ *
+ * 전략:
+ * - approved 상태만 필터 (pending/hidden은 제외)
+ * - pinned 우선, 그다음 최신순 (sortRealtimeWallPostsForBoard와 같은 기준)
+ * - 상위 `max`개만 WallPreviewPost로 축소
+ * - text는 100자 초과 시 말줄임 (WALL_PREVIEW_TEXT_MAX)
+ * - kanban/freeform position은 그대로 보존 (썸네일 레이아웃 렌더에 필요)
+ *
+ * Design §3.5.1a.
+ */
+export function buildWallPreviewPosts(
+  posts: readonly RealtimeWallPost[],
+  max: number = WALL_PREVIEW_POST_MAX,
+): WallPreviewPost[] {
+  const approved = posts.filter((p) => p.status === 'approved');
+  const sorted = sortRealtimeWallPostsForBoard(approved);
+  return sorted.slice(0, max).map((p) => {
+    const text = p.text.length > WALL_PREVIEW_TEXT_MAX
+      ? p.text.slice(0, WALL_PREVIEW_TEXT_MAX)
+      : p.text;
+    const preview: WallPreviewPost = {
+      id: p.id,
+      nickname: p.nickname,
+      text,
+      kanban: p.kanban,
+      freeform: p.freeform,
+    };
+    return preview;
+  });
+}
+
+export interface CreateWallBoardInput {
+  readonly id: WallBoardId;
+  readonly title: string;
+  readonly description?: string;
+  readonly layoutMode: RealtimeWallLayoutMode;
+  readonly columns: readonly RealtimeWallColumn[];
+  readonly approvalMode?: WallApprovalMode;
+  readonly shortCode?: string;
+  readonly now?: number;
+}
+
+/**
+ * 새 WallBoard 팩토리.
+ *
+ * - posts는 항상 빈 배열로 시작
+ * - `approvalMode` 기본값 'manual' (초·중등 안전 기본, Design §4.4 기본)
+ * - `createdAt === updatedAt === now` (재열기 비교용)
+ * - `shortCode` 없으면 undefined 유지 (Repository가 충돌 검사 후 발급)
+ *
+ * Design §1.1, §6.1(cloneWallBoard는 유사 패턴이지만 별도).
+ */
+export function createWallBoard(input: CreateWallBoardInput): WallBoard {
+  const now = input.now ?? Date.now();
+  const title = input.title.trim() || '제목 없는 담벼락';
+  return {
+    id: input.id,
+    title,
+    ...(input.description !== undefined ? { description: input.description } : {}),
+    layoutMode: input.layoutMode,
+    columns: input.columns.map((c) => ({ ...c })), // defensive copy
+    approvalMode: input.approvalMode ?? 'manual',
+    posts: [],
+    createdAt: now,
+    updatedAt: now,
+    ...(input.shortCode ? { shortCode: input.shortCode } : {}),
+  };
+}
+
+/**
+ * WallBoard → WallBoardMeta 경량 변환. index.json 동기화 및 목록 화면 렌더용.
+ *
+ * posts는 previewPosts(상위 6개) + count로 축약, 나머지 필드는 shallow copy.
+ */
+export function toWallBoardMeta(
+  board: WallBoard,
+): import('@domain/entities/RealtimeWall').WallBoardMeta {
+  const approvedCount = board.posts.filter((p) => p.status === 'approved').length;
+  return {
+    id: board.id,
+    title: board.title,
+    ...(board.description !== undefined ? { description: board.description } : {}),
+    layoutMode: board.layoutMode,
+    approvalMode: board.approvalMode,
+    postCount: board.posts.length,
+    approvedCount,
+    createdAt: board.createdAt,
+    updatedAt: board.updatedAt,
+    ...(board.lastSessionAt !== undefined ? { lastSessionAt: board.lastSessionAt } : {}),
+    ...(board.archived !== undefined ? { archived: board.archived } : {}),
+    ...(board.shortCode !== undefined ? { shortCode: board.shortCode } : {}),
+    previewPosts: buildWallPreviewPosts(board.posts),
+  };
 }
