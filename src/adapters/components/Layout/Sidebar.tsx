@@ -28,7 +28,7 @@ export type PageId =
   | 'tool-poll'
   | 'tool-survey'
   | 'tool-multi-survey'
-  | 'tool-realtime-bulletin'
+  | 'tool-realtime-wall'
   | 'tool-wordcloud'
   | 'tool-seat-picker'
   | 'tool-supsori'

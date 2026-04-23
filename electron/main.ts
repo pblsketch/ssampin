@@ -10,7 +10,13 @@ import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
 import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
 import { registerLiveMultiSurveyHandlers } from './ipc/liveMultiSurvey';
 import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
+import { registerRealtimeWallHandlers } from './ipc/realtimeWall';
+import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPreview';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
+import {
+  registerRealtimeWallBoardHandlers,
+  saveDirtyWallBoardsSync,
+} from './ipc/realtimeWallBoard';
 
 declare const __dirname: string;
 
@@ -1588,7 +1594,10 @@ if (!gotTheLock) {
     registerLiveWordCloudHandlers(mainWindow!);
     registerLiveMultiSurveyHandlers(mainWindow!);
     registerLiveDiscussionHandlers(mainWindow!);
+    registerRealtimeWallHandlers(mainWindow!);
+    registerRealtimeWallLinkPreviewHandler();
     registerBoardHandlers(mainWindow!);
+    registerRealtimeWallBoardHandlers();
     createTray();
     setupAutoUpdater();
 
@@ -1670,6 +1679,8 @@ app.on('before-quit', () => {
   isQuitting = true;
   // 협업 보드 활성 세션이 있으면 동기 저장 (Design §3.2-bis)
   endActiveBoardSessionSync();
+  // 실시간 담벼락 dirty WallBoard 동기 저장 (Design §3.3)
+  saveDirtyWallBoardsSync();
   // Analytics flush 신호 전송
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('analytics:flush');

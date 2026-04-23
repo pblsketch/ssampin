@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import type { MultiSurveySubmission, MultiSurveyQuestion } from '@domain/entities/MultiSurvey';
-import { FeedbackWallCard } from './FeedbackWallCard';
+import { MultiSurveyLiveBoardCard } from './MultiSurveyLiveBoardCard';
 
-interface FeedbackWallViewProps {
+interface MultiSurveyLiveBoardViewProps {
   readonly title: string;
   readonly questions: readonly MultiSurveyQuestion[];
   readonly submissions: readonly MultiSurveySubmission[];
@@ -15,13 +15,13 @@ interface FeedbackWallViewProps {
  * 실시간 설문 `running` 단계에서 토글되며, 텍스트 응답을 포스트잇 카드로 쌓아 보여준다.
  * WebSocket IPC 변경 없이 submissions 배열 변화만 구독한다.
  */
-export function FeedbackWallView({
+export function MultiSurveyLiveBoardView({
   title,
   questions,
   submissions,
   isFullscreen,
   onClose,
-}: FeedbackWallViewProps) {
+}: MultiSurveyLiveBoardViewProps) {
   // 텍스트 질문만 대상 (choice/scale은 워드월에 부적합)
   const textQuestions = useMemo(
     () => questions.filter((q) => q.type === 'text'),
@@ -186,7 +186,7 @@ export function FeedbackWallView({
         ) : (
           <div className={`grid gap-3 ${isFullscreen ? 'grid-cols-4' : 'grid-cols-3'}`}>
             {cards.map((c, i) => (
-              <FeedbackWallCard
+              <MultiSurveyLiveBoardCard
                 key={c.cardId}
                 submissionId={c.submissionId}
                 text={c.text}

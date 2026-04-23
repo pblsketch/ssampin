@@ -16,7 +16,8 @@ await build({
   // y-leveldb: y-websocket/bin/utils.cjs가 optional require하지만
   // YPERSISTENCE 환경변수 없으면 런타임에 호출되지 않음. fresh npm ci 환경
   // (GitHub Actions macOS)에서 resolve 실패 방지를 위해 external 처리.
-  external: ['electron', 'electron-updater', 'y-leveldb'],
+  // undici: Node 18+ 내장 모듈. 번들 불필요, 런타임에 node의 내장으로 로드.
+  external: ['electron', 'electron-updater', 'y-leveldb', 'undici'],
   sourcemap: false,
 });
 

@@ -111,6 +111,29 @@ interface ElectronAPI {
   surveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
   onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void) => () => void;
   onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  // Realtime Wall
+  startRealtimeWall: (data: {
+    title: string;
+    maxTextLength: number;
+  }) => Promise<{ port: number; localIPs: string[] }>;
+  stopRealtimeWall: () => Promise<void>;
+  realtimeWallTunnelAvailable: () => Promise<boolean>;
+  realtimeWallTunnelInstall: () => Promise<void>;
+  realtimeWallTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  fetchRealtimeWallLinkPreview: (
+    url: string,
+  ) => Promise<import('./domain/entities/RealtimeWall').RealtimeWallLinkPreviewOgMeta | null>;
+  onRealtimeWallStudentSubmitted: (callback: (data: {
+    post: {
+      id: string;
+      nickname: string;
+      text: string;
+      linkUrl?: string;
+      submittedAt: number;
+    };
+    totalSubmissions: number;
+  }) => void) => () => void;
+  onRealtimeWallConnectionCount: (callback: (data: { count: number }) => void) => () => void;
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
     questions: Array<{
@@ -241,6 +264,18 @@ interface ElectronAPI {
     onAutoSave: (cb: (data: { boardId: string; savedAt: number }) => void) => () => void;
     onSessionError: (cb: (data: { boardId: string; reason: string }) => void) => () => void;
     onSessionStarted: (cb: (data: CollabBoardSessionStart) => void) => () => void;
+  };
+
+  // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
+  // Design §3.4 — 5 channels (Main-side direct fs access).
+  wallBoards?: {
+    listMeta: () => Promise<unknown[]>;
+    load: (args: { id: string }) => Promise<unknown | null>;
+    save: (args: { board: unknown }) => Promise<{ savedAt: number }>;
+    delete: (args: { id: string }) => Promise<{ ok: true }>;
+    getByCode: (args: { shortCode: string }) => Promise<unknown | null>;
+    stageDirty: (args: { board: unknown }) => Promise<{ ok: true }>;
+    clearDirty: (args: { id: string }) => Promise<{ ok: true }>;
   };
 }
 

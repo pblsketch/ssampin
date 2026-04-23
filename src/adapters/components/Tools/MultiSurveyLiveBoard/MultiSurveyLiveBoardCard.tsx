@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-interface FeedbackWallCardProps {
+interface MultiSurveyLiveBoardCardProps {
   readonly submissionId: string;
   readonly text: string;
   readonly index: number;
@@ -23,7 +23,7 @@ const CARD_COLORS = [
   'bg-fuchsia-100 border-fuchsia-300',
 ] as const;
 
-export function FeedbackWallCard({
+export function MultiSurveyLiveBoardCard({
   submissionId,
   text,
   index,
@@ -32,7 +32,7 @@ export function FeedbackWallCard({
   onToggleHighlight,
   onTogglePin,
   onExpand,
-}: FeedbackWallCardProps) {
+}: MultiSurveyLiveBoardCardProps) {
   const color = CARD_COLORS[index % CARD_COLORS.length];
   const [entered, setEntered] = useState(false);
 

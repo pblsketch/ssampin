@@ -17,6 +17,9 @@ export type {
 } from './SchoolEvent';
 
 export type { Memo, MemosData } from './Memo';
+export type { Notebook, NotebookColor, NotebookContext } from './Notebook';
+export type { NoteSection } from './NoteSection';
+export type { NotePage, NotePageBody } from './NotePage';
 
 export type { Todo, TodosData } from './Todo';
 
