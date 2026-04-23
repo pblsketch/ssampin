@@ -9,14 +9,16 @@ import type {
   RealtimeWallLayoutMode,
   RealtimeWallLinkPreview,
   RealtimeWallPost,
+  WallApprovalMode,
   WallBoard,
   WallBoardId,
 } from '@domain/entities/RealtimeWall';
 import {
   approveRealtimeWallPost,
   buildRealtimeWallColumns,
-  createPendingRealtimeWallPost,
+  bulkApproveWallPosts,
   createWallBoard,
+  createWallPost,
   DEFAULT_REALTIME_WALL_COLUMNS,
   extractYoutubeVideoId,
   generateUniqueWallShortCode,
@@ -34,6 +36,7 @@ import { RealtimeWallCreateView } from './RealtimeWall/RealtimeWallCreateView';
 import { RealtimeWallLiveSharePanel } from './RealtimeWall/RealtimeWallLiveSharePanel';
 import { RealtimeWallQueuePanel } from './RealtimeWall/RealtimeWallQueuePanel';
 import { RealtimeWallResultView } from './RealtimeWall/RealtimeWallResultView';
+import { RealtimeWallApprovalSettingsDrawer } from './RealtimeWall/RealtimeWallApprovalSettingsDrawer';
 import { WallBoardListView } from './RealtimeWall/WallBoardListView';
 import { formatAbsoluteTime, openExternalLink } from './RealtimeWall/realtimeWallHelpers';
 
@@ -67,6 +70,13 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   // 현재 열려있는 영속 보드. list→open 또는 create→start 시점에 set.
   // 자동 저장 및 결과 저장 시 이 식별자로 repo 반영.
   const [currentBoard, setCurrentBoard] = useState<WallBoard | null>(null);
+
+  // v1.13 Stage C: 승인 정책 state.
+  // CreateView에서 선택 → handleStartBoard에서 createWallBoard에 주입.
+  // handleOpenBoard에서는 board.approvalMode를 복원.
+  // 라이브 중 드로어에서 전환 가능(handleChangeApprovalMode).
+  const [approvalMode, setApprovalMode] = useState<WallApprovalMode>('manual');
+  const [isApprovalDrawerOpen, setIsApprovalDrawerOpen] = useState(false);
 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [connectedStudents, setConnectedStudents] = useState(0);
@@ -108,6 +118,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   // v1.13 Stage A: 자동 저장. running 모드에서 posts/title/layoutMode/columns
   // 변경을 debounce 2s로 repo에 반영. currentBoard가 없으면 no-op
   // (아직 새 보드를 start하지 않은 상태 — create 화면 등).
+  // Stage C: approvalMode 변경도 동일하게 자동 반영.
   useEffect(() => {
     if (!currentBoard || viewMode !== 'running') return;
 
@@ -117,6 +128,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         title: normalizedTitle,
         layoutMode,
         columns,
+        approvalMode,
         posts,
         updatedAt: Date.now(),
       };
@@ -132,7 +144,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     // 루프가 되므로 의도적으로 제외 (currentBoard는 최신 저장본을 보관할 뿐
     // dependency로서는 stable하게 다뤄야 함).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posts, normalizedTitle, layoutMode, columns, viewMode]);
+  }, [posts, normalizedTitle, layoutMode, columns, approvalMode, viewMode]);
 
   const connectTunnel = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -236,6 +248,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         title: normalizedTitle,
         layoutMode,
         columns,
+        approvalMode,
         shortCode: generateUniqueWallShortCode(existingCodes),
       });
       await wallBoardRepository.save(board);
@@ -252,7 +265,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setCustomCodeError(null);
     setViewMode('running');
     setShowPastResults(false);
-  }, [columns, currentBoard, layoutMode, normalizedTitle]);
+  }, [approvalMode, columns, currentBoard, layoutMode, normalizedTitle]);
 
   const handleFinish = useCallback(async () => {
     if (isLiveMode) {
@@ -265,6 +278,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         title: normalizedTitle,
         layoutMode,
         columns,
+        approvalMode,
         posts,
         updatedAt: Date.now(),
         lastSessionAt: Date.now(),
@@ -273,7 +287,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       setCurrentBoard(finalBoard);
     }
     setViewMode('results');
-  }, [columns, currentBoard, handleStopLive, isLiveMode, layoutMode, normalizedTitle, posts]);
+  }, [approvalMode, columns, currentBoard, handleStopLive, isLiveMode, layoutMode, normalizedTitle, posts]);
 
   const handleNewBoard = useCallback(() => {
     // 결과 화면 → 목록으로. "새 담벼락 만들기"는 목록 내 버튼이 담당.
@@ -281,6 +295,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setTitle('');
     setLayoutMode('kanban');
     setColumnInputs([...DEFAULT_REALTIME_WALL_COLUMNS]);
+    setApprovalMode('manual');
     setPosts([]);
     setCurrentBoard(null);
     setShortCode(null);
@@ -293,6 +308,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setTitle('');
     setLayoutMode('kanban');
     setColumnInputs([...DEFAULT_REALTIME_WALL_COLUMNS]);
+    setApprovalMode('manual');
     setPosts([]);
     setShortCode(null);
     setViewMode('create');
@@ -309,6 +325,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setTitle(board.title);
     setLayoutMode(board.layoutMode);
     setColumnInputs(board.columns.map((c) => c.title));
+    setApprovalMode(board.approvalMode);
     setPosts([...board.posts]);
     setShortCode(board.shortCode ?? null);
     setViewMode('running');
@@ -358,12 +375,26 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     ));
   }, []);
 
+  // v1.13 Stage C: 라이브 설정 드로어에서 모드 적용.
+  // shouldBulkApprove=true면 현재 pending 카드를 일괄 approved로 승격.
+  const handleApplyApprovalMode = useCallback(
+    (nextMode: WallApprovalMode, shouldBulkApprove: boolean) => {
+      setApprovalMode(nextMode);
+      if (shouldBulkApprove) {
+        setPosts((prev) => bulkApproveWallPosts(prev, columns));
+      }
+    },
+    [columns],
+  );
+
   useEffect(() => {
     if (!isLiveMode || !window.electronAPI) return;
 
     const unsubscribeSubmitted = window.electronAPI.onRealtimeWallStudentSubmitted((data) => {
       setPosts((prev) => {
-        const nextPost = createPendingRealtimeWallPost(
+        // v1.13 Stage C: createPendingRealtimeWallPost → createWallPost로 교체.
+        // approvalMode에 따라 즉시 approved(auto) 또는 pending(manual/filter).
+        const nextPost = createWallPost(
           {
             id: data.post.id,
             nickname: data.post.nickname,
@@ -373,6 +404,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
           },
           prev,
           columns,
+          approvalMode,
         );
         return [nextPost, ...prev];
       });
@@ -417,7 +449,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       unsubscribeSubmitted();
       unsubscribeCount();
     };
-  }, [columns, isLiveMode]);
+  }, [approvalMode, columns, isLiveMode]);
 
   useEffect(() => {
     return () => {
@@ -500,11 +532,13 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
           title={title}
           layoutMode={layoutMode}
           columnInputs={columnInputs}
+          approvalMode={approvalMode}
           onTitleChange={setTitle}
           onLayoutModeChange={setLayoutMode}
           onColumnChange={handleChangeColumnInput}
           onAddColumn={handleAddColumn}
           onRemoveColumn={handleRemoveColumn}
+          onApprovalModeChange={setApprovalMode}
           onStart={() => {
             void handleStartBoard();
           }}
@@ -538,6 +572,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
               onSetCustomCode={() => {
                 void handleSetCustomCode();
               }}
+              onOpenSettings={() => setIsApprovalDrawerOpen(true)}
             />
           ) : (
             <section className="rounded-xl border border-sp-border bg-sp-card px-5 py-4">
@@ -577,10 +612,19 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             </section>
           )}
 
-          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[300px_minmax(0,1fr)]">
+          <div
+            className={
+              // Design §4.5: auto 모드에서 pending 섹션이 숨겨지므로 좌측 컬럼
+              // 폭을 200px로 줄여 보드 영역에 양보. manual 모드는 기존 300px 유지.
+              approvalMode === 'auto'
+                ? 'grid min-h-0 flex-1 gap-3 xl:grid-cols-[200px_minmax(0,1fr)]'
+                : 'grid min-h-0 flex-1 gap-3 xl:grid-cols-[300px_minmax(0,1fr)]'
+            }
+          >
             <RealtimeWallQueuePanel
               pendingPosts={pendingPosts}
               hiddenPosts={hiddenPosts}
+              approvalMode={approvalMode}
               onApprove={handleApprovePost}
               onHide={handleHidePost}
               onRestore={handleRestorePost}
@@ -624,6 +668,14 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
           onNewBoard={handleNewBoard}
         />
       )}
+
+      <RealtimeWallApprovalSettingsDrawer
+        open={isApprovalDrawerOpen}
+        approvalMode={approvalMode}
+        pendingCount={pendingPosts.length}
+        onClose={() => setIsApprovalDrawerOpen(false)}
+        onApply={handleApplyApprovalMode}
+      />
     </ToolLayout>
   );
 }

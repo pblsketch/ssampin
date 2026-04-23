@@ -22,6 +22,8 @@ export interface RealtimeWallLiveSharePanelProps {
   readonly onRetryTunnel: () => void;
   readonly onCustomCodeChange: (value: string) => void;
   readonly onSetCustomCode: () => void;
+  /** 설정 드로어 열기 (v1.13 Stage C) */
+  readonly onOpenSettings: () => void;
 }
 
 export function RealtimeWallLiveSharePanel({
@@ -41,6 +43,7 @@ export function RealtimeWallLiveSharePanel({
   onRetryTunnel,
   onCustomCodeChange,
   onSetCustomCode,
+  onOpenSettings,
 }: RealtimeWallLiveSharePanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fullscreenCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -97,6 +100,15 @@ export function RealtimeWallLiveSharePanel({
           >
             <span className="material-symbols-outlined text-[14px]">qr_code</span>
             QR 크게 보기
+          </button>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            title="담벼락 설정"
+            aria-label="담벼락 설정 열기"
+            className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-2.5 py-1.5 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
+          >
+            <span className="material-symbols-outlined text-[14px]">settings</span>
           </button>
           <button
             type="button"

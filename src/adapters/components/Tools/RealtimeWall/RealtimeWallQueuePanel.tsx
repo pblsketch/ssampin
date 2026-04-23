@@ -1,9 +1,11 @@
-import type { RealtimeWallPost } from '@domain/entities/RealtimeWall';
+import type { RealtimeWallPost, WallApprovalMode } from '@domain/entities/RealtimeWall';
 import { RealtimeWallCard } from './RealtimeWallCard';
 
 export interface RealtimeWallQueuePanelProps {
   readonly pendingPosts: readonly RealtimeWallPost[];
   readonly hiddenPosts: readonly RealtimeWallPost[];
+  /** 현재 보드 승인 정책. 'auto'면 pending 섹션 숨김 (Design §4.5). */
+  readonly approvalMode: WallApprovalMode;
   readonly onApprove: (postId: string) => void;
   readonly onHide: (postId: string) => void;
   readonly onRestore: (postId: string) => void;
@@ -13,11 +15,18 @@ export interface RealtimeWallQueuePanelProps {
 export function RealtimeWallQueuePanel({
   pendingPosts,
   hiddenPosts,
+  approvalMode,
   onApprove,
   onHide,
   onRestore,
   onOpenLink,
 }: RealtimeWallQueuePanelProps) {
+  // auto 모드는 pending이 구조적으로 0건이므로 승인 대기 섹션 숨김.
+  // 단 manual→auto 전환 시 "개별 검토"를 선택한 경우 잔존 pending이 있을 수
+  // 있으므로, approvalMode가 auto여도 pendingPosts가 실제로 있으면 섹션을 보여
+  // 교사가 처리할 수 있게 한다 (안전망).
+  const hidePendingSection = approvalMode === 'auto' && pendingPosts.length === 0;
+
   return (
     <aside className="flex h-full min-h-[560px] flex-col gap-3 rounded-xl border border-sp-border bg-sp-card p-3">
       <div className="flex items-center justify-between gap-2 px-1">
@@ -37,7 +46,8 @@ export function RealtimeWallQueuePanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-auto pr-0.5">
-        {/* 승인 대기 */}
+        {/* 승인 대기 (auto 모드 + pending 0건이면 완전히 숨김) */}
+        {!hidePendingSection && (
         <section>
           <div className="mb-2 flex items-center gap-1.5 px-1">
             <span className="material-symbols-outlined text-[14px] text-sp-accent">inbox</span>
@@ -79,6 +89,7 @@ export function RealtimeWallQueuePanel({
             )}
           </div>
         </section>
+        )}
 
         {/* 숨김 카드 */}
         {hiddenPosts.length > 0 && (
