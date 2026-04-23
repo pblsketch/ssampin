@@ -86,7 +86,7 @@ function EventCard({ event, categories, showYear, onEdit, onDelete, isSelectMode
 
   return (
     <div
-      className={`rounded-sp-lg px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-all duration-sp-base ease-sp-out shadow-sp-sm group relative shrink-0 ${isToday
+      className={`rounded-xl px-4 pt-4 pb-5 border-l-4 ${colors.border} transition-all duration-sp-base ease-sp-out shadow-sp-sm group relative shrink-0 ${isToday
         ? 'bg-[var(--sp-today-bg)] ring-2 ring-sp-accent/40 shadow-sp-md'
         : `bg-sp-card hover:border-sp-accent/30 hover:bg-sp-card/50 hover:shadow-sp-md`
         } ${isSelected ? 'ring-2 ring-sp-accent/60' : ''}`}
@@ -239,7 +239,7 @@ function HolidayCard({ holiday, showYear }: { holiday: HolidayInfo; showYear?: b
   const dayName = DAY_NAMES[date.getDay()];
 
   return (
-    <div className="rounded-sp-lg px-4 pt-3 pb-3 border-l-4 border-red-500/60 bg-red-950/20 shadow-sp-sm shrink-0 transition-all duration-sp-base ease-sp-out hover:shadow-sp-md hover:border-red-400/50">
+    <div className="rounded-xl px-4 pt-3 pb-3 border-l-4 border-red-500/60 bg-red-950/20 shadow-sp-sm shrink-0 transition-all duration-sp-base ease-sp-out hover:shadow-sp-md hover:border-red-400/50">
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-xs font-semibold text-red-400/80 mb-0.5">

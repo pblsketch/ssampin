@@ -245,7 +245,7 @@ export function CalendarView({
   const monthLabel = `${year}년 ${month + 1}월`;
 
   return (
-    <div className="flex flex-col bg-sp-card rounded-sp-xl p-6 border border-sp-border shadow-sp-md h-full min-h-0 flex-1 overflow-hidden">
+    <div className="flex flex-col bg-sp-card rounded-3xl p-6 border border-sp-border shadow-sp-md h-full min-h-0 flex-1 overflow-hidden">
       {/* 월 네비게이션 */}
       <div className="flex items-center justify-between mb-4 px-2">
         <button
