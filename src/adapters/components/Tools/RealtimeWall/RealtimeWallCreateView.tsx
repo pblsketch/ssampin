@@ -1,4 +1,4 @@
-import type { RealtimeWallLayoutMode } from '@domain/entities/RealtimeWall';
+import type { RealtimeWallLayoutMode, WallApprovalMode } from '@domain/entities/RealtimeWall';
 
 interface LayoutOption {
   readonly mode: RealtimeWallLayoutMode;
@@ -38,11 +38,13 @@ export interface RealtimeWallCreateViewProps {
   readonly title: string;
   readonly layoutMode: RealtimeWallLayoutMode;
   readonly columnInputs: string[];
+  readonly approvalMode: WallApprovalMode;
   readonly onTitleChange: (value: string) => void;
   readonly onLayoutModeChange: (value: RealtimeWallLayoutMode) => void;
   readonly onColumnChange: (index: number, value: string) => void;
   readonly onAddColumn: () => void;
   readonly onRemoveColumn: (index: number) => void;
+  readonly onApprovalModeChange: (value: WallApprovalMode) => void;
   readonly onStart: () => void;
   readonly onShowPastResults: () => void;
 }
@@ -51,14 +53,18 @@ export function RealtimeWallCreateView({
   title,
   layoutMode,
   columnInputs,
+  approvalMode,
   onTitleChange,
   onLayoutModeChange,
   onColumnChange,
   onAddColumn,
   onRemoveColumn,
+  onApprovalModeChange,
   onStart,
   onShowPastResults,
 }: RealtimeWallCreateViewProps) {
+  // Step 번호 계산: kanban은 컬럼 설정(3)이 있으므로 승인 방식이 4, 나머지는 3.
+  const approvalStepNumber = layoutMode === 'kanban' ? 4 : 3;
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
       {/* 단계 1: 레이아웃 선택 */}
@@ -173,6 +179,85 @@ export function RealtimeWallCreateView({
           </div>
         </section>
       )}
+
+      {/* 단계 4 (또는 3): 학생 카드 승인 방식 */}
+      <section className="rounded-xl border border-sp-border bg-sp-card p-5">
+        <div className="mb-3 flex items-center gap-2.5">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sp-accent text-xs font-bold text-white">
+            {approvalStepNumber}
+          </span>
+          <h2 className="text-base font-bold text-sp-text">학생 카드 승인 방식</h2>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {/* manual */}
+          <button
+            type="button"
+            onClick={() => onApprovalModeChange('manual')}
+            className={`relative rounded-xl border p-4 text-left transition ${
+              approvalMode === 'manual'
+                ? 'border-sp-accent bg-sp-accent/10 ring-1 ring-sp-accent/30'
+                : 'border-sp-border bg-sp-surface hover:border-sp-accent/40'
+            }`}
+          >
+            {approvalMode === 'manual' && (
+              <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent">
+                <span className="material-symbols-outlined text-[11px] text-white">check</span>
+              </span>
+            )}
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px] text-sp-accent">fact_check</span>
+              <p className="font-bold text-sp-text">승인 필요</p>
+              <span className="rounded-full bg-sp-accent/20 px-2 py-0.5 text-[10px] font-bold text-sp-accent">
+                기본
+              </span>
+            </div>
+            <p className="text-sm leading-relaxed text-sp-muted">
+              교사가 대기열에서 검토 후 보드에 올립니다. 초·중등 권장.
+            </p>
+          </button>
+
+          {/* auto */}
+          <button
+            type="button"
+            onClick={() => onApprovalModeChange('auto')}
+            className={`relative rounded-xl border p-4 text-left transition ${
+              approvalMode === 'auto'
+                ? 'border-sp-accent bg-sp-accent/10 ring-1 ring-sp-accent/30'
+                : 'border-sp-border bg-sp-surface hover:border-sp-accent/40'
+            }`}
+          >
+            {approvalMode === 'auto' && (
+              <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent">
+                <span className="material-symbols-outlined text-[11px] text-white">check</span>
+              </span>
+            )}
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px] text-sp-accent">bolt</span>
+              <p className="font-bold text-sp-text">자동 승인</p>
+            </div>
+            <p className="text-sm leading-relaxed text-sp-muted">
+              학생 제출 즉시 보드에 노출됩니다. 고등 대규모 의견 수합용.
+            </p>
+          </button>
+        </div>
+
+        {/* filter (비활성 — v1.13.2 예정) */}
+        <div className="mt-3">
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="flex w-full cursor-not-allowed items-center gap-2 rounded-lg border border-sp-border/60 bg-sp-surface/40 p-3 text-left opacity-60"
+          >
+            <span className="material-symbols-outlined text-[18px] text-sp-muted/60">filter_alt</span>
+            <div>
+              <p className="text-sm font-semibold text-sp-muted">키워드 필터</p>
+              <p className="text-xs text-sp-muted/60">준비 중 — 다음 업데이트에서 제공될 예정입니다.</p>
+            </div>
+          </button>
+        </div>
+      </section>
 
       {/* 사용 안내 + 시작 버튼 */}
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
