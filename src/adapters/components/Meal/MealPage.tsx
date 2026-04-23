@@ -3,6 +3,7 @@ import { useMealStore } from '@adapters/stores/useMealStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { MealInfo, MealSource, ManualMealInfo } from '@domain/entities/Meal';
 import { MealEditModal } from './MealEditModal';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 
 const DAY_LABELS = ['월', '화', '수', '목', '금'] as const;
 
@@ -216,56 +217,50 @@ export function MealPage() {
 
   return (
     <div className="-m-8 flex flex-col h-[calc(100%+4rem)]">
-      {/* Header */}
-      <header className="flex items-center justify-between px-8 py-6 sticky top-0 bg-sp-bg/95 backdrop-blur-sm z-10 border-b border-sp-border/30">
-        <div>
-          <h2 className="text-3xl font-black text-sp-text tracking-tight flex items-center gap-2">
-            <span className="text-2xl">🍚</span>
-            급식
-          </h2>
-          {schoolName && (
-            <p className="text-sp-muted text-sm mt-1">{schoolName}</p>
-          )}
-        </div>
-
-        {/* 소스 전환 + 파일 가져오기 */}
-        <div className="flex items-center gap-3">
-          <select
-            value={mealSource}
-            onChange={(e) => setMealSource(e.target.value as MealSource)}
-            className="bg-sp-surface border border-sp-border rounded-lg px-3 py-1.5 text-xs text-sp-text focus:outline-none focus:border-sp-accent cursor-pointer"
-          >
-            <option value="merged">자동 (NEIS + 수동)</option>
-            <option value="neis">NEIS만</option>
-            <option value="manual">수동 입력만</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={handleTemplateDownload}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text border border-sp-border rounded-lg transition-colors"
-          >
-            <span className="material-symbols-outlined text-sm">download</span>
-            양식 다운로드
-          </button>
-
-          <button
-            type="button"
-            onClick={handleFileImport}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-sp-muted hover:text-sp-text border border-sp-border rounded-lg transition-colors"
-          >
-            <span className="material-symbols-outlined text-sm">upload_file</span>
-            CSV 가져오기
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={handleFileSelected}
-          />
-        </div>
-      </header>
+      <PageHeader
+        icon="🍚"
+        title="급식"
+        sticky
+        leftAddon={schoolName ? (
+          <span className="text-sp-muted text-sm">{schoolName}</span>
+        ) : undefined}
+        rightActions={
+          <>
+            <select
+              value={mealSource}
+              onChange={(e) => setMealSource(e.target.value as MealSource)}
+              className="bg-sp-surface border border-sp-border rounded-xl px-3 py-2 xl:py-2.5 text-xs xl:text-sm text-sp-text focus:outline-none focus:border-sp-accent cursor-pointer font-sp-semibold"
+            >
+              <option value="merged">자동 (NEIS + 수동)</option>
+              <option value="neis">NEIS만</option>
+              <option value="manual">수동 입력만</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleTemplateDownload}
+              className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95"
+            >
+              <span className="material-symbols-outlined text-icon">download</span>
+              <span className="hidden sm:inline">양식 다운로드</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleFileImport}
+              className="flex items-center gap-1.5 border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-surface px-3 xl:px-4 py-2 xl:py-2.5 rounded-xl text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95"
+            >
+              <span className="material-symbols-outlined text-icon">upload_file</span>
+              <span className="hidden sm:inline">CSV 가져오기</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleFileSelected}
+            />
+          </>
+        }
+      />
 
       {/* Import 결과 메시지 */}
       {importResult && (
@@ -351,8 +346,8 @@ export function MealPage() {
                   key={`meal-${date}`}
                   className={`rounded-b-xl p-3 min-h-[200px] flex flex-col ${
                     isToday
-                      ? 'bg-sp-card ring-1 ring-sp-accent/30'
-                      : 'bg-sp-card ring-1 ring-sp-border/50'
+                      ? 'bg-sp-card ring-1 ring-sp-accent'
+                      : 'bg-sp-card ring-1 ring-sp-border'
                   }`}
                 >
                   <div className="flex-1">
@@ -362,7 +357,7 @@ export function MealPage() {
                   <button
                     type="button"
                     onClick={() => setEditingDate(date)}
-                    className="mt-2 w-full py-1 text-caption text-sp-muted hover:text-sp-accent border border-dashed border-sp-border/50 rounded-lg transition-colors"
+                    className="mt-2 w-full py-1 text-caption text-sp-muted hover:text-sp-accent border border-dashed border-sp-border rounded-lg transition-colors"
                   >
                     <span className="material-symbols-outlined text-xs align-middle mr-0.5">edit</span>
                     수동 입력

@@ -7,6 +7,7 @@ import { AssignmentTab } from './Assignment/AssignmentTab';
 import { ConsultationTab } from './Consultation/ConsultationTab';
 import { Seating } from '@adapters/components/Seating/Seating';
 import { RosterManagementTab } from './RosterManagementTab';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 
 export interface RecordPrefill {
   studentId: string;
@@ -26,23 +27,20 @@ export function HomeroomPage() {
   }, []);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* 헤더 */}
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-sp-text flex items-center gap-2">
-          <span>👩‍🏫</span>
-          <span>담임 업무</span>
-        </h2>
-        <HomeroomTabBar activeTab={activeTab} onChange={setActiveTab} />
+    <div className="h-full flex flex-col -m-8">
+      <PageHeader
+        icon="👩‍🏫"
+        title="담임 업무"
+        rightActions={<HomeroomTabBar activeTab={activeTab} onChange={setActiveTab} />}
+      />
+      <div className="flex-1 min-h-0 p-8 overflow-y-auto">
+        {activeTab === 'roster' && <RosterManagementTab />}
+        {activeTab === 'records' && <RecordsTab prefill={prefillRecord} onPrefillConsumed={() => setPrefillRecord(null)} />}
+        {activeTab === 'survey' && <SurveyTab />}
+        {activeTab === 'assignment' && <AssignmentTab />}
+        {activeTab === 'consultation' && <ConsultationTab onWriteRecord={handleWriteRecord} />}
+        {activeTab === 'seating' && <Seating embedded />}
       </div>
-
-      {/* 탭 콘텐츠 */}
-      {activeTab === 'roster' && <RosterManagementTab />}
-      {activeTab === 'records' && <RecordsTab prefill={prefillRecord} onPrefillConsumed={() => setPrefillRecord(null)} />}
-      {activeTab === 'survey' && <SurveyTab />}
-      {activeTab === 'assignment' && <AssignmentTab />}
-      {activeTab === 'consultation' && <ConsultationTab onWriteRecord={handleWriteRecord} />}
-      {activeTab === 'seating' && <Seating embedded />}
     </div>
   );
 }
