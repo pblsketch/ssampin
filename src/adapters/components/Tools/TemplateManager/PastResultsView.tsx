@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import type { ToolResult, ToolResultType, PollResultData, SurveyResultData, MultiSurveyResultData, WordCloudResultData, RealtimeWallResultData } from '@domain/entities/ToolResult';
 import { useToolResultStore } from '@adapters/stores/useToolResultStore';
 import { SpreadsheetView } from '../Results/SpreadsheetView';
+import { REALTIME_WALL_LAYOUT_LABELS } from '../RealtimeWall/realtimeWallHelpers';
 
 interface PastResultsViewProps {
   toolType: ToolResultType;
@@ -37,7 +38,7 @@ function getSummary(result: ToolResult): string {
       return `${d.rounds.length}라운드`;
     case 'realtime-wall': {
       const approved = d.posts.filter((post) => post.status === 'approved').length;
-      const layout = d.layoutMode === 'kanban' ? '칸반형' : '자유 배치형';
+      const layout = REALTIME_WALL_LAYOUT_LABELS[d.layoutMode];
       return `${approved}개 게시 · ${layout}`;
     }
     default:
@@ -130,7 +131,7 @@ function RealtimeWallDetail({ data }: { data: RealtimeWallResultData }) {
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2 text-xs text-sp-muted">
         <span className="rounded-full bg-sp-surface px-2 py-0.5">
-          {data.layoutMode === 'kanban' ? '칸반형' : '자유 배치형'}
+          {REALTIME_WALL_LAYOUT_LABELS[data.layoutMode]}
         </span>
         <span className="rounded-full bg-sp-surface px-2 py-0.5">승인 {approved.length}</span>
         {pinned > 0 && (
@@ -202,6 +203,15 @@ function ResultDetail({
       return <WordCloudDetail data={d} />;
     case 'realtime-wall':
       return <RealtimeWallDetail data={d} />;
+    case 'valueline-discussion':
+    case 'trafficlight-discussion':
+      // 토론형 결과는 전용 Detail 컴포넌트가 아직 없음. 메타 요약만 getSummary에서 처리 중.
+      // 별 브랜치에서 ValuelineDiscussionDetail/TrafficLightDiscussionDetail 추가 예정.
+      return null;
+    default: {
+      const _exhaustive: never = d;
+      throw new Error(`Unknown tool result type: ${String((_exhaustive as { type?: string }).type)}`);
+    }
   }
 }
 

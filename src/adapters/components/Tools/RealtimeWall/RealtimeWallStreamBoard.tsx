@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { RealtimeWallPost } from '@domain/entities/RealtimeWall';
 import { sortRealtimeWallPostsForBoard } from '@domain/rules/realtimeWallRules';
 import { RealtimeWallCard } from './RealtimeWallCard';
+import { RealtimeWallCardActions } from './RealtimeWallCardActions';
 
 export interface RealtimeWallStreamBoardProps {
   readonly posts: readonly RealtimeWallPost[];
@@ -9,41 +10,6 @@ export interface RealtimeWallStreamBoardProps {
   readonly onTogglePin?: (postId: string) => void;
   readonly onHidePost?: (postId: string) => void;
   readonly onOpenLink?: (url: string) => void;
-}
-
-function StreamActionButtons({
-  onTogglePin,
-  onHide,
-}: {
-  onTogglePin?: () => void;
-  onHide?: () => void;
-}) {
-  if (!onTogglePin && !onHide) return null;
-
-  return (
-    <div className="flex items-center gap-0.5">
-      {onTogglePin && (
-        <button
-          type="button"
-          onClick={onTogglePin}
-          className="rounded-md p-1 text-sp-muted/60 transition hover:bg-amber-400/10 hover:text-amber-300"
-          title="고정 토글"
-        >
-          <span className="material-symbols-outlined text-[16px]">push_pin</span>
-        </button>
-      )}
-      {onHide && (
-        <button
-          type="button"
-          onClick={onHide}
-          className="rounded-md p-1 text-sp-muted/60 transition hover:bg-red-500/10 hover:text-red-400"
-          title="숨기기"
-        >
-          <span className="material-symbols-outlined text-[16px]">visibility_off</span>
-        </button>
-      )}
-    </div>
-  );
 }
 
 export function RealtimeWallStreamBoard({
@@ -78,7 +44,7 @@ export function RealtimeWallStreamBoard({
                 onOpenLink={onOpenLink}
                 actions={
                   !readOnly ? (
-                    <StreamActionButtons
+                    <RealtimeWallCardActions
                       onTogglePin={onTogglePin ? () => onTogglePin(post.id) : undefined}
                       onHide={onHidePost ? () => onHidePost(post.id) : undefined}
                     />
