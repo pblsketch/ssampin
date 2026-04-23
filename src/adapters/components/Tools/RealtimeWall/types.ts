@@ -16,5 +16,5 @@ export interface RealtimeWallBoardCommonProps {
   readonly onTogglePin?: (postId: string) => void;
   readonly onHidePost?: (postId: string) => void;
   readonly onOpenLink?: (url: string) => void;
-  readonly onLike?: (postId: string) => void;
+  readonly onHeart?: (postId: string) => void;
 }

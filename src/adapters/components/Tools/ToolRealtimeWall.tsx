@@ -15,8 +15,8 @@ import {
   createPendingRealtimeWallPost,
   DEFAULT_REALTIME_WALL_COLUMNS,
   extractYoutubeVideoId,
+  heartRealtimeWallPost,
   hideRealtimeWallPost,
-  likeRealtimeWallPost,
   normalizeRealtimeWallLink,
   REALTIME_WALL_MAX_TEXT_LENGTH,
   togglePinRealtimeWallPost,
@@ -214,12 +214,12 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
   }, [columns]);
 
-  const handleLikePost = useCallback(
+  const handleHeartPost = useCallback(
     (postId: string) => {
-      // likeRealtimeWallPost는 (prev, postId) 순수 함수이며 컨테이너 외부 상태
+      // heartRealtimeWallPost는 (prev, postId) 순수 함수이며 컨테이너 외부 상태
       // (columns 등)에 의존하지 않음. setState updater가 최신 prev를 보장하므로
       // deps는 의도적으로 빈 배열.
-      setPosts((prev) => likeRealtimeWallPost(prev, postId));
+      setPosts((prev) => heartRealtimeWallPost(prev, postId));
     },
     [],
   );
@@ -326,7 +326,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTogglePin={handleTogglePin}
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
-            onLike={handleLikePost}
+            onHeart={handleHeartPost}
           />
         );
       case 'freeform':
@@ -337,7 +337,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTogglePin={handleTogglePin}
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
-            onLike={handleLikePost}
+            onHeart={handleHeartPost}
           />
         );
       case 'grid':
@@ -347,7 +347,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTogglePin={handleTogglePin}
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
-            onLike={handleLikePost}
+            onHeart={handleHeartPost}
           />
         );
       case 'stream':
@@ -357,7 +357,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTogglePin={handleTogglePin}
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
-            onLike={handleLikePost}
+            onHeart={handleHeartPost}
           />
         );
       default: {

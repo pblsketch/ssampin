@@ -12,7 +12,7 @@ export function RealtimeWallStreamBoard({
   onTogglePin,
   onHidePost,
   onOpenLink,
-  onLike,
+  onHeart,
 }: RealtimeWallStreamBoardProps) {
   const approvedPosts = useMemo(
     () => sortRealtimeWallPostsForBoard(
@@ -37,7 +37,7 @@ export function RealtimeWallStreamBoard({
                 key={post.id}
                 post={post}
                 onOpenLink={onOpenLink}
-                onLike={!readOnly ? onLike : undefined}
+                onHeart={!readOnly ? onHeart : undefined}
                 actions={
                   !readOnly ? (
                     <RealtimeWallCardActions

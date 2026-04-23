@@ -7,11 +7,11 @@ export interface RealtimeWallCardProps {
   readonly actions?: React.ReactNode;
   readonly dragHandle?: React.ReactNode;
   readonly onOpenLink?: (url: string) => void;
-  /** 교사 로컬 좋아요 증가. 미전달 시 좋아요 UI는 읽기 전용(결과 복기 등). */
-  readonly onLike?: (postId: string) => void;
+  /** 교사 로컬 하트 증가. 미전달 시 하트 UI는 읽기 전용(결과 복기 등). */
+  readonly onHeart?: (postId: string) => void;
 }
 
-function LikeButton({
+function HeartButton({
   count,
   onClick,
 }: {
@@ -24,11 +24,11 @@ function LikeButton({
   return (
     <button
       type="button"
-      // 읽기 전용(복기 화면)일 때도 키보드 포커스 유지 — 스크린리더가 "좋아요 N" 읽도록.
+      // 읽기 전용(복기 화면)일 때도 키보드 포커스 유지 — 스크린리더가 "교사 하트 N" 읽도록.
       // disabled 대신 aria-disabled + onClick 무시로 같은 시맨틱 제공.
       aria-disabled={readOnly}
       onClick={readOnly ? undefined : onClick}
-      title={readOnly ? `좋아요 ${count}` : '좋아요'}
+      title={readOnly ? `교사 하트 ${count}` : '교사 하트'}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition ${
         highlighted
           ? 'border-rose-400/40 bg-rose-400/10 text-rose-300'
@@ -131,13 +131,14 @@ export function RealtimeWallCard({
   actions,
   dragHandle,
   onOpenLink,
-  onLike,
+  onHeart,
 }: RealtimeWallCardProps) {
   const isPinned = post.pinned;
   const preview = post.linkPreview;
-  const likesCount = post.likes ?? 0;
-  // 승인된 카드만 좋아요 버튼 노출. pending/hidden은 대기열이나 숨김 영역이라 의미 없음.
-  const showLikes = post.status === 'approved' && (likesCount > 0 || Boolean(onLike));
+  // 1회 릴리즈 임시 fallback — 기존 likes 저장본을 teacherHearts로 투명 매핑 (v1.13.1에서 제거).
+  const heartsCount = post.teacherHearts ?? (post as { likes?: number }).likes ?? 0;
+  // 승인된 카드만 하트 버튼 노출. pending/hidden은 대기열이나 숨김 영역이라 의미 없음.
+  const showHearts = post.status === 'approved' && (heartsCount > 0 || Boolean(onHeart));
 
   return (
     <article
@@ -207,10 +208,10 @@ export function RealtimeWallCard({
         </button>
       )}
 
-      {/* 교사 로컬 좋아요 — 승인 카드에만, 학생 HTML에는 절대 노출 X */}
-      {showLikes && (
+      {/* 교사 로컬 하트 — 승인 카드에만, 학생 HTML에는 절대 노출 X */}
+      {showHearts && (
         <div className="mt-2 flex items-center">
-          <LikeButton count={likesCount} onClick={onLike ? () => onLike(post.id) : undefined} />
+          <HeartButton count={heartsCount} onClick={onHeart ? () => onHeart(post.id) : undefined} />
         </div>
       )}
     </article>

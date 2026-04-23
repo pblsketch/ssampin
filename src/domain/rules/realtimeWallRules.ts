@@ -152,7 +152,7 @@ export function sortRealtimeWallPostsForBoard(
  * - nextOrder는 같은 컬럼의 approved 카드 개수(자기 자신 제외)로 끝에 추가.
  * - nextZIndex는 전체 post 중 최댓값 + 1 → 최신 승인 카드가 항상 맨 위.
  */
-export const REALTIME_WALL_MAX_LIKES = 999;
+export const REALTIME_WALL_MAX_HEARTS = 999;
 
 /**
  * 학생 제출 raw 입력.
@@ -238,18 +238,18 @@ export function togglePinRealtimeWallPost(
 }
 
 /**
- * 교사 로컬 좋아요 카운터를 +1 증가. 상한 999.
+ * 교사 로컬 하트 카운터를 +1 증가. 상한 999.
  * 학생 HTML에는 노출되지 않으며(단계 5 fix 정책), 결과 저장 시 포함되어
  * 복기 화면에서 읽기 전용으로 노출된다.
  */
-export function likeRealtimeWallPost(
+export function heartRealtimeWallPost(
   posts: readonly RealtimeWallPost[],
   postId: string,
 ): RealtimeWallPost[] {
   return posts.map((post) => {
     if (post.id !== postId) return post;
-    const nextCount = Math.min((post.likes ?? 0) + 1, REALTIME_WALL_MAX_LIKES);
-    return { ...post, likes: nextCount };
+    const nextCount = Math.min((post.teacherHearts ?? 0) + 1, REALTIME_WALL_MAX_HEARTS);
+    return { ...post, teacherHearts: nextCount };
   });
 }
 
