@@ -483,7 +483,7 @@ export function generateRealtimeWallHTML(
             return;
           }
 
-          if (msg.type === 'bulletin') {
+          if (msg.type === 'wall') {
             if (!hasSubmitted) {
               show('form-view');
               updateSubmitState();

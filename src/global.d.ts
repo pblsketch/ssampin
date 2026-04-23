@@ -111,7 +111,7 @@ interface ElectronAPI {
   surveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
   onLiveSurveyStudentSubmitted: (callback: (data: { text: string; totalResponders: number }) => void) => () => void;
   onLiveSurveyConnectionCount: (callback: (data: { count: number }) => void) => () => void;
-  // Realtime Bulletin
+  // Realtime Wall
   startRealtimeWall: (data: {
     title: string;
     maxTextLength: number;

@@ -211,7 +211,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('live-survey:connection-count', handler);
     return () => { ipcRenderer.removeListener('live-survey:connection-count', handler); };
   },
-  // Realtime Bulletin
+  // Realtime Wall
   startRealtimeWall: (data: {
     title: string;
     maxTextLength: number;
