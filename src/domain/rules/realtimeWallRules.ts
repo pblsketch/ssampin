@@ -526,3 +526,205 @@ export function toWallBoardMeta(
     previewPosts: buildWallPreviewPosts(board.posts),
   };
 }
+
+// ============================================================
+// v1.13 Stage B — 칸반 컬럼 실행 중 편집 규칙
+// Design §5.1 참조
+// ============================================================
+
+/**
+ * 새 컬럼 생성용 고유 id 생성. 기존 column id와 충돌 방지.
+ *
+ * 기존 "column-N" 패턴의 최댓값 +1을 시도한 뒤, 만약 같은 id가 이미 있으면
+ * (수동 편집 등으로 인한 엣지) 뒤에 random suffix를 붙여 재시도.
+ */
+function nextColumnId(existing: readonly RealtimeWallColumn[]): string {
+  let maxNum = 0;
+  for (const c of existing) {
+    const match = /^column-(\d+)$/.exec(c.id);
+    if (match && match[1]) {
+      const n = Number(match[1]);
+      if (Number.isFinite(n) && n > maxNum) maxNum = n;
+    }
+  }
+  const candidate = `column-${maxNum + 1}`;
+  if (!existing.some((c) => c.id === candidate)) return candidate;
+  // 극단 엣지: 사용자가 "column-5" 같은 id를 수동 생성해 gap이 꼬인 경우.
+  return `column-${maxNum + 1}-${Date.now().toString(36)}`;
+}
+
+/**
+ * 컬럼 order 필드를 0..n-1로 재계산. columns 배열 순서 기준.
+ *
+ * 삽입·삭제·재배치 후 항상 이 함수로 order를 일관화한다.
+ */
+function normalizeColumnOrder(
+  columns: readonly RealtimeWallColumn[],
+): RealtimeWallColumn[] {
+  return columns.map((c, index) => ({ ...c, order: index }));
+}
+
+/**
+ * 컬럼 추가. 상한 REALTIME_WALL_MAX_COLUMNS(=6) 초과 시 원본 반환.
+ *
+ * - 빈/공백 제목은 거부 → 원본 반환
+ * - 새 컬럼은 배열 끝에 추가 + order 재계산
+ * - id 충돌 없도록 nextColumnId로 발급
+ *
+ * Design §5.1.
+ */
+export function addWallColumn(
+  columns: readonly RealtimeWallColumn[],
+  title: string,
+): RealtimeWallColumn[] {
+  const trimmed = title.trim();
+  if (trimmed.length === 0) return [...columns];
+  if (columns.length >= REALTIME_WALL_MAX_COLUMNS) return [...columns];
+  const id = nextColumnId(columns);
+  return normalizeColumnOrder([
+    ...columns,
+    { id, title: trimmed, order: columns.length },
+  ]);
+}
+
+/**
+ * 컬럼 이름 변경. 빈/공백 제목은 거부 → 원본 반환.
+ * 존재하지 않는 columnId는 불변 (원본 반환).
+ *
+ * Design §5.1.
+ */
+export function renameWallColumn(
+  columns: readonly RealtimeWallColumn[],
+  columnId: string,
+  newTitle: string,
+): RealtimeWallColumn[] {
+  const trimmed = newTitle.trim();
+  if (trimmed.length === 0) return [...columns];
+  if (!columns.some((c) => c.id === columnId)) return [...columns];
+  return columns.map((c) => (c.id === columnId ? { ...c, title: trimmed } : c));
+}
+
+/**
+ * 컬럼 순서 재배치. fromIndex → toIndex로 이동한 뒤 order 0..n-1 재계산.
+ *
+ * - 인덱스 범위 벗어나면 원본 반환
+ * - fromIndex === toIndex 는 no-op (order는 이미 정상일 것이므로 그대로 반환)
+ *
+ * Design §5.1.
+ */
+export function reorderWallColumns(
+  columns: readonly RealtimeWallColumn[],
+  fromIndex: number,
+  toIndex: number,
+): RealtimeWallColumn[] {
+  if (fromIndex < 0 || fromIndex >= columns.length) return [...columns];
+  if (toIndex < 0 || toIndex >= columns.length) return [...columns];
+  if (fromIndex === toIndex) return [...columns];
+  const arr = [...columns];
+  const [moved] = arr.splice(fromIndex, 1);
+  if (!moved) return [...columns];
+  arr.splice(toIndex, 0, moved);
+  return normalizeColumnOrder(arr);
+}
+
+/**
+ * removeWallColumn 삭제 전략.
+ *
+ * - `move-to`: 삭제 컬럼의 카드를 `targetColumnId` 뒤로 append.
+ *              기존 target의 approved 카드 수를 시작 order로 +1씩 부여.
+ *              targetColumnId가 삭제 대상과 같거나 존재하지 않으면
+ *              첫 남은 컬럼으로 fallback.
+ * - `hide`:    카드 status='hidden'으로 일괄 전환, 컬럼만 제거.
+ *              hidden 카드는 컬럼 소속이 무의미하지만 columnId는 보존
+ *              (복구 시 원래 columnId를 살릴 수 있도록).
+ * - `delete`:  해당 컬럼 카드를 posts 배열에서 영구 제거.
+ */
+export type RemoveColumnStrategy =
+  | { readonly kind: 'move-to'; readonly targetColumnId: string }
+  | { readonly kind: 'hide' }
+  | { readonly kind: 'delete' };
+
+/**
+ * 컬럼 삭제 + 안의 카드 migration.
+ *
+ * 제약:
+ *   - 최소 REALTIME_WALL_MIN_COLUMNS(=2) 컬럼 유지. 2개 중 삭제 시도 시 원본 반환.
+ *   - 존재하지 않는 columnId는 원본 반환.
+ *   - move-to에서 targetColumnId가 삭제 대상 또는 없으면 첫 남은 컬럼으로 fallback.
+ *
+ * 모든 전략에서 columns의 order 필드는 0..n-1로 재계산된다.
+ *
+ * Design §5.1.
+ */
+export function removeWallColumn(
+  columns: readonly RealtimeWallColumn[],
+  posts: readonly RealtimeWallPost[],
+  columnId: string,
+  strategy: RemoveColumnStrategy,
+): { columns: RealtimeWallColumn[]; posts: RealtimeWallPost[] } {
+  // 가드: 최소 컬럼 수 유지
+  if (columns.length <= REALTIME_WALL_MIN_COLUMNS) {
+    return { columns: [...columns], posts: [...posts] };
+  }
+  // 가드: 존재하지 않는 컬럼
+  if (!columns.some((c) => c.id === columnId)) {
+    return { columns: [...columns], posts: [...posts] };
+  }
+
+  const remainingColumns = normalizeColumnOrder(
+    columns.filter((c) => c.id !== columnId),
+  );
+
+  switch (strategy.kind) {
+    case 'move-to': {
+      // target 해석: 삭제 대상과 같거나 존재하지 않으면 첫 남은 컬럼 fallback.
+      const explicit = strategy.targetColumnId;
+      const fallback = remainingColumns[0]?.id;
+      if (!fallback) {
+        // 이 분기는 최소 2컬럼 가드 덕에 도달 불가지만 타입 안전 위해.
+        return { columns: [...columns], posts: [...posts] };
+      }
+      const targetId =
+        explicit !== columnId && remainingColumns.some((c) => c.id === explicit)
+          ? explicit
+          : fallback;
+
+      // target 컬럼의 기존 approved 카드 수를 시작 order로 +1씩 부여.
+      // approveRealtimeWallPost와 동일 규칙으로 append.
+      const startOrder = posts.filter(
+        (p) => p.status === 'approved' && p.kanban.columnId === targetId,
+      ).length;
+
+      let appendIndex = 0;
+      const nextPosts = posts.map((p) => {
+        if (p.kanban.columnId !== columnId) return p;
+        const order = startOrder + appendIndex;
+        appendIndex++;
+        return {
+          ...p,
+          kanban: {
+            columnId: targetId,
+            order,
+          },
+        };
+      });
+
+      return { columns: remainingColumns, posts: nextPosts };
+    }
+    case 'hide': {
+      const nextPosts = posts.map((p) =>
+        p.kanban.columnId === columnId ? { ...p, status: 'hidden' as const } : p,
+      );
+      return { columns: remainingColumns, posts: nextPosts };
+    }
+    case 'delete': {
+      const nextPosts = posts.filter((p) => p.kanban.columnId !== columnId);
+      return { columns: remainingColumns, posts: nextPosts };
+    }
+    default: {
+      const _exhaustive: never = strategy;
+      throw new Error(`Unknown removeWallColumn strategy: ${String(_exhaustive)}`);
+    }
+  }
+}
+

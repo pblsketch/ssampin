@@ -37,6 +37,7 @@ import { RealtimeWallLiveSharePanel } from './RealtimeWall/RealtimeWallLiveShare
 import { RealtimeWallQueuePanel } from './RealtimeWall/RealtimeWallQueuePanel';
 import { RealtimeWallResultView } from './RealtimeWall/RealtimeWallResultView';
 import { RealtimeWallApprovalSettingsDrawer } from './RealtimeWall/RealtimeWallApprovalSettingsDrawer';
+import { RealtimeWallColumnEditor } from './RealtimeWall/RealtimeWallColumnEditor';
 import { WallBoardListView } from './RealtimeWall/WallBoardListView';
 import { formatAbsoluteTime, openExternalLink } from './RealtimeWall/realtimeWallHelpers';
 
@@ -77,6 +78,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   // 라이브 중 드로어에서 전환 가능(handleChangeApprovalMode).
   const [approvalMode, setApprovalMode] = useState<WallApprovalMode>('manual');
   const [isApprovalDrawerOpen, setIsApprovalDrawerOpen] = useState(false);
+  // v1.13 Stage B: 칸반 컬럼 편집 드로어 (kanban 모드에서만 노출).
+  const [isColumnEditorOpen, setIsColumnEditorOpen] = useState(false);
 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [connectedStudents, setConnectedStudents] = useState(0);
@@ -387,6 +390,20 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     [columns],
   );
 
+  // v1.13 Stage B: 컬럼 편집 드로어에서 columns/posts 일괄 반영.
+  // columnInputs는 UI 소스(string[])라 title 배열만 추출해 동기화.
+  // posts는 removeWallColumn의 카드 마이그레이션 결과를 그대로 반영.
+  const handleApplyColumnEdit = useCallback(
+    (
+      nextColumns: readonly import('@domain/entities/RealtimeWall').RealtimeWallColumn[],
+      nextPosts: readonly RealtimeWallPost[],
+    ) => {
+      setColumnInputs(nextColumns.map((c) => c.title));
+      setPosts([...nextPosts]);
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!isLiveMode || !window.electronAPI) return;
 
@@ -642,6 +659,16 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                     )}
                   </p>
                 </div>
+                {layoutMode === 'kanban' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsColumnEditorOpen(true)}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-semibold text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">view_column</span>
+                    컬럼 편집
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -675,6 +702,14 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         pendingCount={pendingPosts.length}
         onClose={() => setIsApprovalDrawerOpen(false)}
         onApply={handleApplyApprovalMode}
+      />
+
+      <RealtimeWallColumnEditor
+        open={isColumnEditorOpen}
+        columns={columns}
+        posts={posts}
+        onClose={() => setIsColumnEditorOpen(false)}
+        onApply={handleApplyColumnEdit}
       />
     </ToolLayout>
   );
