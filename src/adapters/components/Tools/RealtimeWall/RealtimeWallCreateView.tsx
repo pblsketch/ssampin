@@ -1,5 +1,39 @@
 import type { RealtimeWallLayoutMode } from '@domain/entities/RealtimeWall';
 
+interface LayoutOption {
+  readonly mode: RealtimeWallLayoutMode;
+  readonly icon: string;
+  readonly label: string;
+  readonly description: string;
+}
+
+const LAYOUT_OPTIONS: readonly LayoutOption[] = [
+  {
+    mode: 'kanban',
+    icon: 'view_kanban',
+    label: '칸반형',
+    description: '주제별 컬럼에 카드를 나눠 토론 흐름을 정리합니다.',
+  },
+  {
+    mode: 'freeform',
+    icon: 'dashboard',
+    label: '자유 배치형',
+    description: '보드 위에서 카드를 옮기고 크기를 바꾸며 자유롭게 정리합니다.',
+  },
+  {
+    mode: 'grid',
+    icon: 'grid_view',
+    label: '격자형',
+    description: '같은 크기 카드가 빈틈 없이 차곡차곡 채워집니다. 수 많은 의견을 한눈에.',
+  },
+  {
+    mode: 'stream',
+    icon: 'view_stream',
+    label: '스트림',
+    description: '세로 한 줄로 최신 카드가 위에 쌓입니다. 질문 받기·의견 흐름에 적합.',
+  },
+];
+
 export interface RealtimeWallCreateViewProps {
   readonly title: string;
   readonly layoutMode: RealtimeWallLayoutMode;
@@ -45,50 +79,34 @@ export function RealtimeWallCreateView({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => onLayoutModeChange('kanban')}
-            className={`relative rounded-xl border p-4 text-left transition ${
-              layoutMode === 'kanban'
-                ? 'border-sp-accent bg-sp-accent/10 ring-1 ring-sp-accent/30'
-                : 'border-sp-border bg-sp-surface hover:border-sp-accent/40'
-            }`}
-          >
-            {layoutMode === 'kanban' && (
-              <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent">
-                <span className="material-symbols-outlined text-[11px] text-white">check</span>
-              </span>
-            )}
-            <div className="mb-2 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-sp-accent">view_kanban</span>
-              <p className="font-bold text-sp-text">칸반형</p>
-            </div>
-            <p className="text-sm leading-relaxed text-sp-muted">
-              주제별 컬럼에 카드를 나눠 토론 흐름을 정리합니다.
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => onLayoutModeChange('freeform')}
-            className={`relative rounded-xl border p-4 text-left transition ${
-              layoutMode === 'freeform'
-                ? 'border-sp-accent bg-sp-accent/10 ring-1 ring-sp-accent/30'
-                : 'border-sp-border bg-sp-surface hover:border-sp-accent/40'
-            }`}
-          >
-            {layoutMode === 'freeform' && (
-              <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent">
-                <span className="material-symbols-outlined text-[11px] text-white">check</span>
-              </span>
-            )}
-            <div className="mb-2 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-sp-accent">dashboard</span>
-              <p className="font-bold text-sp-text">자유 배치형</p>
-            </div>
-            <p className="text-sm leading-relaxed text-sp-muted">
-              보드 위에서 카드를 옮기고 크기를 바꾸며 자유롭게 정리합니다.
-            </p>
-          </button>
+          {LAYOUT_OPTIONS.map((option) => {
+            const selected = layoutMode === option.mode;
+            return (
+              <button
+                key={option.mode}
+                type="button"
+                onClick={() => onLayoutModeChange(option.mode)}
+                className={`relative rounded-xl border p-4 text-left transition ${
+                  selected
+                    ? 'border-sp-accent bg-sp-accent/10 ring-1 ring-sp-accent/30'
+                    : 'border-sp-border bg-sp-surface hover:border-sp-accent/40'
+                }`}
+              >
+                {selected && (
+                  <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent">
+                    <span className="material-symbols-outlined text-[11px] text-white">check</span>
+                  </span>
+                )}
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[20px] text-sp-accent">{option.icon}</span>
+                  <p className="font-bold text-sp-text">{option.label}</p>
+                </div>
+                <p className="text-sm leading-relaxed text-sp-muted">
+                  {option.description}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </section>
 

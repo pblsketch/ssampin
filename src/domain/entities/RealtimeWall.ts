@@ -1,4 +1,4 @@
-export type RealtimeWallLayoutMode = 'kanban' | 'freeform';
+export type RealtimeWallLayoutMode = 'kanban' | 'freeform' | 'grid' | 'stream';
 
 export type RealtimeWallPostStatus = 'pending' | 'approved' | 'hidden';
 
