@@ -108,9 +108,9 @@ export function SemesterView({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
       {/* 좌측: 미니 캘린더 6개 */}
-      <div className="lg:w-[55%]">
+      <div className="lg:w-[55%] min-h-0 flex flex-col">
         <div className="bg-sp-card rounded-3xl p-6 border border-sp-border shadow-xl">
           <div className="flex items-center justify-between mb-4 px-2">
             <h3 className="text-lg font-bold text-sp-text">

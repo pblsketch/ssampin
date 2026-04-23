@@ -131,7 +131,7 @@ export function DayScheduleModal({
             aria-hidden="true"
         >
             <div
-                className="bg-sp-bg w-full max-w-md rounded-sp-xl shadow-sp-lg flex flex-col overflow-hidden max-h-[85vh] border border-sp-border"
+                className="bg-sp-bg w-full max-w-md rounded-2xl shadow-sp-lg flex flex-col overflow-hidden max-h-[85vh] border border-sp-border"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"

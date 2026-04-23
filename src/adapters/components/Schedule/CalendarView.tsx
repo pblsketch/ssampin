@@ -142,8 +142,8 @@ function MultiDayBar({
 }) {
   const colors = getColorsForCategory(bar.category, categories);
 
-  const roundedLeft = bar.isContinuation ? '' : 'rounded-l-sp-xs';
-  const roundedRight = bar.isContinued ? '' : 'rounded-r-sp-xs';
+  const roundedLeft = bar.isContinuation ? '' : 'rounded-l-md';
+  const roundedRight = bar.isContinued ? '' : 'rounded-r-md';
 
   return (
     <div
@@ -173,7 +173,7 @@ function SingleEventChip({
   return (
     <button
       type="button"
-      className={`w-full text-left text-[10px] leading-none px-1 py-0.5 rounded-sp-xs text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
+      className={`w-full text-left text-[10px] leading-none px-1 py-0.5 rounded-md text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       title={title}
     >
@@ -238,7 +238,7 @@ export function CalendarView({
   const monthLabel = `${year}년 ${month + 1}월`;
 
   return (
-    <div className="flex flex-col bg-sp-card rounded-sp-xl p-6 border border-sp-border shadow-sp-md h-full min-h-0 flex-1 overflow-hidden">
+    <div className="flex flex-col bg-sp-card rounded-3xl p-6 border border-sp-border shadow-sp-md h-full min-h-0 flex-1 overflow-hidden">
       {/* 월 네비게이션 */}
       <div className="flex items-center justify-between mb-4 px-2">
         <button
@@ -305,11 +305,11 @@ export function CalendarView({
                   const chipOverflow = singleEvts.length - chipsToShow.length;
 
                   // ── cell 상태 클래스 ──
-                  let cellClass = 'group relative flex flex-col py-1 px-0.5 rounded-sp-md cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
+                  let cellClass = 'group relative flex flex-col py-1 px-0.5 rounded-xl cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
 
-                  if (d.isToday) {
-                    cellClass += 'ring-2 ring-sp-accent ring-offset-1 ring-offset-sp-card bg-sp-accent/10 ';
-                  } else if (isSelected) {
+                  // today는 숫자의 원형 파란 배지 + cell 하단 accent bar로 강조
+                  // (ring-offset은 overflow-hidden 부모에 잘리므로 사용 안 함)
+                  if (isSelected) {
                     cellClass += 'bg-sp-accent/15 border border-sp-accent/40 ';
                   } else {
                     cellClass += 'border border-transparent hover:bg-sp-text/5 hover:border-sp-border/40 ';
@@ -337,7 +337,7 @@ export function CalendarView({
                       {/* 날짜 숫자 */}
                       <div className="flex items-center justify-center mb-0.5 pt-0.5">
                         {d.isToday ? (
-                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-sp-accent text-white font-sp-bold text-sm shadow-sp-sm">
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-sp-accent text-white font-sp-bold text-sm shadow-sp-accent">
                             {d.day}
                           </span>
                         ) : (
