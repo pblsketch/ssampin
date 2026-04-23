@@ -3,7 +3,9 @@ import type { RealtimeWallColumn, RealtimeWallPost } from '@domain/entities/Real
 import {
   approveRealtimeWallPost,
   buildRealtimeWallColumns,
+  classifyRealtimeWallLink,
   createDefaultFreeformPosition,
+  extractYoutubeVideoId,
   normalizeRealtimeWallLink,
   sortRealtimeWallPostsForBoard,
 } from './realtimeWallRules';
@@ -167,5 +169,68 @@ describe('approveRealtimeWallPost', () => {
     const posts = [makePost({ id: 'p1', status: 'approved' })];
     const result = approveRealtimeWallPost(posts, 'missing', columns);
     expect(result).toEqual(posts);
+  });
+});
+
+describe('extractYoutubeVideoId', () => {
+  it('표준 watch URL에서 v 파라미터를 추출', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://youtube.com/watch?v=dQw4w9WgXcQ&t=30')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('youtu.be 단축 URL 지원', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://youtu.be/dQw4w9WgXcQ?si=abc')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('shorts / embed / v 경로 지원', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('m.youtube.com / music.youtube.com 호스트 지원', () => {
+    expect(extractYoutubeVideoId('https://m.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://music.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('유효하지 않은 videoId 길이는 거부', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/short')).toBeUndefined();
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=tooLongId1234567')).toBeUndefined();
+  });
+
+  it('유튜브가 아닌 호스트는 undefined', () => {
+    expect(extractYoutubeVideoId('https://example.com/watch?v=dQw4w9WgXcQ')).toBeUndefined();
+    expect(extractYoutubeVideoId('https://fakeyoutube.com/watch?v=dQw4w9WgXcQ')).toBeUndefined();
+  });
+
+  it('http/https 외 스킴 거부', () => {
+    expect(extractYoutubeVideoId('javascript:alert(1)')).toBeUndefined();
+    expect(extractYoutubeVideoId('file:///etc/passwd')).toBeUndefined();
+  });
+
+  it('URL 파싱 실패는 undefined', () => {
+    expect(extractYoutubeVideoId('not a url')).toBeUndefined();
+    expect(extractYoutubeVideoId('')).toBeUndefined();
+  });
+});
+
+describe('classifyRealtimeWallLink', () => {
+  it('YouTube URL은 youtube kind 반환', () => {
+    expect(classifyRealtimeWallLink('https://youtu.be/dQw4w9WgXcQ')).toEqual({
+      kind: 'youtube',
+      videoId: 'dQw4w9WgXcQ',
+    });
+  });
+
+  it('일반 http(s) URL은 webpage kind 반환 (OG는 빈 shell)', () => {
+    expect(classifyRealtimeWallLink('https://example.com/article')).toEqual({
+      kind: 'webpage',
+    });
+  });
+
+  it('유효하지 않은 URL은 undefined', () => {
+    expect(classifyRealtimeWallLink('ftp://example.com')).toBeUndefined();
+    expect(classifyRealtimeWallLink('javascript:alert(1)')).toBeUndefined();
+    expect(classifyRealtimeWallLink('')).toBeUndefined();
   });
 });

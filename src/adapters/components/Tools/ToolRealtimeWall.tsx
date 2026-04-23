@@ -6,11 +6,13 @@ import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import type {
   RealtimeWallLayoutMode,
+  RealtimeWallLinkPreview,
   RealtimeWallPost,
 } from '@domain/entities/RealtimeWall';
 import {
   approveRealtimeWallPost,
   buildRealtimeWallColumns,
+  classifyRealtimeWallLink,
   createDefaultFreeformPosition,
   DEFAULT_REALTIME_WALL_COLUMNS,
   normalizeRealtimeWallLink,
@@ -261,11 +263,15 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
           ? normalizeRealtimeWallLink(data.post.linkUrl)
           : undefined;
 
+        // 링크 종류 1차 분류 (YouTube는 동기 결정, webpage는 비동기 OG fetch 이후 덮어씀)
+        const initialPreview = normalizedLink ? classifyRealtimeWallLink(normalizedLink) : undefined;
+
         const nextPost: RealtimeWallPost = {
           id: data.post.id,
           nickname: data.post.nickname,
           text: data.post.text,
           ...(normalizedLink ? { linkUrl: normalizedLink } : {}),
+          ...(initialPreview ? { linkPreview: initialPreview } : {}),
           status: 'pending',
           pinned: false,
           submittedAt: data.post.submittedAt,
@@ -280,6 +286,31 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
 
         return [nextPost, ...prev];
       });
+
+      // webpage 링크는 Main에서 OG fetch 후 비동기 upsert
+      const normalizedLink = data.post.linkUrl
+        ? normalizeRealtimeWallLink(data.post.linkUrl)
+        : undefined;
+      const initialPreview = normalizedLink ? classifyRealtimeWallLink(normalizedLink) : undefined;
+      if (normalizedLink && initialPreview?.kind === 'webpage' && window.electronAPI?.fetchRealtimeWallLinkPreview) {
+        void window.electronAPI
+          .fetchRealtimeWallLinkPreview(normalizedLink)
+          .then((og) => {
+            if (!og) return;
+            const nextPreview: RealtimeWallLinkPreview = {
+              kind: 'webpage',
+              ...(og.ogTitle ? { ogTitle: og.ogTitle } : {}),
+              ...(og.ogDescription ? { ogDescription: og.ogDescription } : {}),
+              ...(og.ogImageUrl ? { ogImageUrl: og.ogImageUrl } : {}),
+            };
+            setPosts((curr) =>
+              curr.map((post) =>
+                post.id === data.post.id ? { ...post, linkPreview: nextPreview } : post,
+              ),
+            );
+          })
+          .catch(() => undefined);
+      }
     });
 
     const unsubscribeCount = window.electronAPI.onRealtimeWallConnectionCount((data) => {

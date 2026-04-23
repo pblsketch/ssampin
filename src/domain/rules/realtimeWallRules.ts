@@ -1,6 +1,7 @@
 import type {
   RealtimeWallColumn,
   RealtimeWallFreeformPosition,
+  RealtimeWallLinkPreview,
   RealtimeWallPost,
 } from '@domain/entities/RealtimeWall';
 
@@ -40,6 +41,63 @@ export function buildRealtimeWallColumns(
     title,
     order: index,
   }));
+}
+
+/**
+ * YouTube URL에서 videoId(11자 영숫자/_/-)를 추출.
+ * 지원 패턴:
+ *   - youtube.com/watch?v=XXXX
+ *   - youtu.be/XXXX
+ *   - youtube.com/shorts/XXXX
+ *   - youtube.com/embed/XXXX
+ * 외 경로는 undefined.
+ */
+export function extractYoutubeVideoId(rawUrl: string): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  const validIdPattern = /^[A-Za-z0-9_-]{11}$/;
+
+  if (host === 'youtu.be') {
+    const id = url.pathname.replace(/^\//, '').split('/')[0];
+    return id && validIdPattern.test(id) ? id : undefined;
+  }
+
+  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+    const segments = url.pathname.split('/').filter(Boolean);
+    if (url.pathname === '/watch') {
+      const id = url.searchParams.get('v');
+      return id && validIdPattern.test(id) ? id : undefined;
+    }
+    if (segments[0] === 'shorts' || segments[0] === 'embed' || segments[0] === 'v') {
+      const id = segments[1];
+      return id && validIdPattern.test(id) ? id : undefined;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 링크를 youtube / webpage 로 1차 분류.
+ * webpage의 경우 OG 메타 필드는 인프라가 채워넣음 (도메인 함수는 빈 shell만 반환).
+ */
+export function classifyRealtimeWallLink(rawUrl: string): RealtimeWallLinkPreview | undefined {
+  const videoId = extractYoutubeVideoId(rawUrl);
+  if (videoId) {
+    return { kind: 'youtube', videoId };
+  }
+
+  const normalized = normalizeRealtimeWallLink(rawUrl);
+  if (!normalized) return undefined;
+
+  return { kind: 'webpage' };
 }
 
 export function normalizeRealtimeWallLink(raw: string): string | undefined {

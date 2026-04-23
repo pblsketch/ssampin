@@ -11,6 +11,7 @@ import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
 import { registerLiveMultiSurveyHandlers } from './ipc/liveMultiSurvey';
 import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
 import { registerRealtimeWallHandlers } from './ipc/realtimeWall';
+import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPreview';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 
 declare const __dirname: string;
@@ -1590,6 +1591,7 @@ if (!gotTheLock) {
     registerLiveMultiSurveyHandlers(mainWindow!);
     registerLiveDiscussionHandlers(mainWindow!);
     registerRealtimeWallHandlers(mainWindow!);
+    registerRealtimeWallLinkPreviewHandler();
     registerBoardHandlers(mainWindow!);
     createTray();
     setupAutoUpdater();
