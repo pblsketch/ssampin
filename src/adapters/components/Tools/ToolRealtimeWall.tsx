@@ -9,6 +9,7 @@ import type {
   RealtimeWallPost,
 } from '@domain/entities/RealtimeWall';
 import {
+  approveRealtimeWallPost,
   buildRealtimeWallColumns,
   createDefaultFreeformPosition,
   DEFAULT_REALTIME_WALL_COLUMNS,
@@ -195,36 +196,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   }, []);
 
   const handleApprovePost = useCallback((postId: string) => {
-    setPosts((prev) => {
-      const targetPost = prev.find((post) => post.id === postId);
-      const fallbackColumnId = columns[0]?.id ?? 'column-1';
-      const columnId = targetPost && columns.some((column) => column.id === targetPost.kanban.columnId)
-        ? targetPost.kanban.columnId
-        : fallbackColumnId;
-      const nextOrder = prev.filter(
-        (post) =>
-          post.id !== postId &&
-          post.status === 'approved' &&
-          post.kanban.columnId === columnId,
-      ).length;
-      const nextZIndex = prev.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
-
-      return prev.map((post) => {
-        if (post.id !== postId) return post;
-        return {
-          ...post,
-          status: 'approved',
-          kanban: {
-            columnId,
-            order: nextOrder,
-          },
-          freeform: {
-            ...post.freeform,
-            zIndex: nextZIndex,
-          },
-        };
-      });
-    });
+    setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
   }, [columns]);
 
   const handleHidePost = useCallback((postId: string) => {
@@ -238,36 +210,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   }, []);
 
   const handleRestorePost = useCallback((postId: string) => {
-    setPosts((prev) => {
-      const targetPost = prev.find((post) => post.id === postId);
-      const fallbackColumnId = columns[0]?.id ?? 'column-1';
-      const columnId = targetPost && columns.some((column) => column.id === targetPost.kanban.columnId)
-        ? targetPost.kanban.columnId
-        : fallbackColumnId;
-      const nextOrder = prev.filter(
-        (post) =>
-          post.id !== postId &&
-          post.status === 'approved' &&
-          post.kanban.columnId === columnId,
-      ).length;
-      const nextZIndex = prev.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
-
-      return prev.map((post) => {
-        if (post.id !== postId) return post;
-        return {
-          ...post,
-          status: 'approved',
-          kanban: {
-            columnId,
-            order: nextOrder,
-          },
-          freeform: {
-            ...post.freeform,
-            zIndex: nextZIndex,
-          },
-        };
-      });
-    });
+    setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
   }, [columns]);
 
   const handleTogglePin = useCallback((postId: string) => {

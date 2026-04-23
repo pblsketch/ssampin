@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { RealtimeWallColumn, RealtimeWallPost } from '@domain/entities/RealtimeWall';
 import {
+  approveRealtimeWallPost,
   buildRealtimeWallColumns,
   createDefaultFreeformPosition,
   normalizeRealtimeWallLink,
@@ -88,5 +90,82 @@ describe('sortRealtimeWallPostsForBoard', () => {
     ]);
 
     expect(sorted.map((post) => post.id)).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('approveRealtimeWallPost', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '생각', order: 0 },
+    { id: 'column-2', title: '질문', order: 1 },
+  ];
+
+  function makePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
+    return {
+      nickname: '학생',
+      text: '내용',
+      status: 'pending',
+      pinned: false,
+      submittedAt: 1000,
+      kanban: { columnId: 'column-1', order: 0 },
+      freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      ...overrides,
+    };
+  }
+
+  it('pending 카드를 approved로 승격하며 기존 컬럼을 유지한다', () => {
+    const posts = [
+      makePost({ id: 'p1', status: 'approved', kanban: { columnId: 'column-2', order: 0 } }),
+      makePost({ id: 'p2', status: 'pending', kanban: { columnId: 'column-2', order: 0 } }),
+    ];
+
+    const result = approveRealtimeWallPost(posts, 'p2', columns);
+    const approved = result.find((p) => p.id === 'p2')!;
+
+    expect(approved.status).toBe('approved');
+    expect(approved.kanban.columnId).toBe('column-2');
+    expect(approved.kanban.order).toBe(1);
+  });
+
+  it('hidden 카드 복구에도 동일 로직이 적용된다', () => {
+    const posts = [
+      makePost({ id: 'p1', status: 'approved', kanban: { columnId: 'column-1', order: 0 } }),
+      makePost({ id: 'p2', status: 'hidden', kanban: { columnId: 'column-1', order: 3 } }),
+    ];
+
+    const result = approveRealtimeWallPost(posts, 'p2', columns);
+    const restored = result.find((p) => p.id === 'p2')!;
+
+    expect(restored.status).toBe('approved');
+    expect(restored.kanban.order).toBe(1);
+  });
+
+  it('대상 post의 컬럼이 현재 컬럼 목록에 없으면 첫 컬럼으로 fallback', () => {
+    const posts = [
+      makePost({ id: 'p1', status: 'pending', kanban: { columnId: 'column-9-deleted', order: 5 } }),
+    ];
+
+    const result = approveRealtimeWallPost(posts, 'p1', columns);
+    const approved = result[0]!;
+
+    expect(approved.kanban.columnId).toBe('column-1');
+    expect(approved.kanban.order).toBe(0);
+  });
+
+  it('zIndex는 전체 posts의 최댓값 + 1로 승격된다', () => {
+    const posts = [
+      makePost({ id: 'p1', status: 'approved', freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 42 } }),
+      makePost({ id: 'p2', status: 'pending', freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 3 } }),
+    ];
+
+    const result = approveRealtimeWallPost(posts, 'p2', columns);
+    const approved = result.find((p) => p.id === 'p2')!;
+
+    expect(approved.freeform.zIndex).toBe(43);
+  });
+
+  it('존재하지 않는 postId는 posts를 변경하지 않는다', () => {
+    const posts = [makePost({ id: 'p1', status: 'approved' })];
+    const result = approveRealtimeWallPost(posts, 'missing', columns);
+    expect(result).toEqual(posts);
   });
 });
