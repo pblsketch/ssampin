@@ -12,12 +12,14 @@ import type {
 import {
   approveRealtimeWallPost,
   buildRealtimeWallColumns,
-  classifyRealtimeWallLink,
-  createDefaultFreeformPosition,
+  createPendingRealtimeWallPost,
   DEFAULT_REALTIME_WALL_COLUMNS,
+  extractYoutubeVideoId,
+  hideRealtimeWallPost,
   likeRealtimeWallPost,
   normalizeRealtimeWallLink,
   REALTIME_WALL_MAX_TEXT_LENGTH,
+  togglePinRealtimeWallPost,
 } from '@domain/rules/realtimeWallRules';
 import { RealtimeWallKanbanBoard } from './RealtimeWall/RealtimeWallKanbanBoard';
 import { RealtimeWallFreeformBoard } from './RealtimeWall/RealtimeWallFreeformBoard';
@@ -205,13 +207,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   }, [columns]);
 
   const handleHidePost = useCallback((postId: string) => {
-    setPosts((prev) =>
-      prev.map((post) =>
-        post.id === postId
-          ? { ...post, status: 'hidden' }
-          : post,
-      ),
-    );
+    setPosts((prev) => hideRealtimeWallPost(prev, postId));
   }, []);
 
   const handleRestorePost = useCallback((postId: string) => {
@@ -229,20 +225,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   );
 
   const handleTogglePin = useCallback((postId: string) => {
-    setPosts((prev) => {
-      const nextZIndex = prev.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
-      return prev.map((post) => {
-        if (post.id !== postId) return post;
-        return {
-          ...post,
-          pinned: !post.pinned,
-          freeform: {
-            ...post.freeform,
-            zIndex: nextZIndex,
-          },
-        };
-      });
-    });
+    setPosts((prev) => togglePinRealtimeWallPost(prev, postId));
   }, []);
 
   const handleChangeColumnInput = useCallback((index: number, value: string) => {
@@ -267,43 +250,31 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     if (!isLiveMode || !window.electronAPI) return;
 
     const unsubscribeSubmitted = window.electronAPI.onRealtimeWallStudentSubmitted((data) => {
-      // 링크 정규화·분류는 한 번만 수행 후 동기/비동기 경로에서 공유.
-      const normalizedLink = data.post.linkUrl
-        ? normalizeRealtimeWallLink(data.post.linkUrl)
-        : undefined;
-      const initialPreview = normalizedLink
-        ? classifyRealtimeWallLink(normalizedLink)
-        : undefined;
-
       setPosts((prev) => {
-        const nextIndex = prev.length;
-        const initialColumnId = columns[0]?.id ?? 'column-1';
-
-        const nextPost: RealtimeWallPost = {
-          id: data.post.id,
-          nickname: data.post.nickname,
-          text: data.post.text,
-          ...(normalizedLink ? { linkUrl: normalizedLink } : {}),
-          ...(initialPreview ? { linkPreview: initialPreview } : {}),
-          status: 'pending',
-          pinned: false,
-          submittedAt: data.post.submittedAt,
-          kanban: {
-            columnId: initialColumnId,
-            order: prev.filter(
-              (post) => post.status === 'approved' && post.kanban.columnId === initialColumnId,
-            ).length,
+        const nextPost = createPendingRealtimeWallPost(
+          {
+            id: data.post.id,
+            nickname: data.post.nickname,
+            text: data.post.text,
+            ...(data.post.linkUrl ? { linkUrl: data.post.linkUrl } : {}),
+            submittedAt: data.post.submittedAt,
           },
-          freeform: createDefaultFreeformPosition(nextIndex),
-        };
-
+          prev,
+          columns,
+        );
         return [nextPost, ...prev];
       });
 
-      // webpage 링크는 Main에서 OG fetch 후 비동기 upsert (YouTube는 동기 확정 완료)
+      // webpage 링크는 Main에서 OG fetch 후 비동기 upsert.
+      // createPendingRealtimeWallPost 내부와 동일한 normalize + classify를 한 번 더
+      // 수행해 '웹페이지 여부' 분기만 얻음. (post.linkPreview 직접 읽는 건 setPosts
+      // 콜백 밖이라 신뢰 불가.)
+      const normalizedLink = data.post.linkUrl
+        ? normalizeRealtimeWallLink(data.post.linkUrl)
+        : undefined;
       if (
         normalizedLink &&
-        initialPreview?.kind === 'webpage' &&
+        !extractYoutubeVideoId(normalizedLink) &&
         window.electronAPI?.fetchRealtimeWallLinkPreview
       ) {
         void window.electronAPI

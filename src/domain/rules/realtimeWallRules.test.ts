@@ -5,11 +5,14 @@ import {
   buildRealtimeWallColumns,
   classifyRealtimeWallLink,
   createDefaultFreeformPosition,
+  createPendingRealtimeWallPost,
   extractYoutubeVideoId,
+  hideRealtimeWallPost,
   likeRealtimeWallPost,
   normalizeRealtimeWallLink,
   REALTIME_WALL_MAX_LIKES,
   sortRealtimeWallPostsForBoard,
+  togglePinRealtimeWallPost,
 } from './realtimeWallRules';
 
 describe('buildRealtimeWallColumns', () => {
@@ -263,6 +266,209 @@ describe('likeRealtimeWallPost', () => {
     const result = likeRealtimeWallPost(posts, 'p1');
     expect(result[0]!.likes).toBe(3);
     expect(result[1]!.likes).toBe(5);
+  });
+});
+
+describe('createPendingRealtimeWallPost', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '생각', order: 0 },
+    { id: 'column-2', title: '질문', order: 1 },
+  ];
+
+  it('linkUrl 없는 기본 제출은 pending + 첫 컬럼 + order=0', () => {
+    const post = createPendingRealtimeWallPost(
+      { id: 's1', nickname: '민수', text: '안녕', submittedAt: 1000 },
+      [],
+      columns,
+    );
+    expect(post).toMatchObject({
+      id: 's1',
+      nickname: '민수',
+      text: '안녕',
+      status: 'pending',
+      pinned: false,
+      submittedAt: 1000,
+      kanban: { columnId: 'column-1', order: 0 },
+    });
+    expect(post.linkUrl).toBeUndefined();
+    expect(post.linkPreview).toBeUndefined();
+    expect(post.freeform.zIndex).toBe(1);
+  });
+
+  it('YouTube 링크는 linkPreview.kind = youtube로 즉시 분류', () => {
+    const post = createPendingRealtimeWallPost(
+      {
+        id: 's1',
+        nickname: '지연',
+        text: '이거 보세요',
+        linkUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        submittedAt: 1000,
+      },
+      [],
+      columns,
+    );
+    expect(post.linkUrl).toBe('https://youtu.be/dQw4w9WgXcQ');
+    expect(post.linkPreview).toEqual({ kind: 'youtube', videoId: 'dQw4w9WgXcQ' });
+  });
+
+  it('일반 웹페이지 링크는 linkPreview.kind = webpage 빈 shell', () => {
+    const post = createPendingRealtimeWallPost(
+      {
+        id: 's1',
+        nickname: '지연',
+        text: '',
+        linkUrl: 'https://example.com/article',
+        submittedAt: 1000,
+      },
+      [],
+      columns,
+    );
+    expect(post.linkPreview).toEqual({ kind: 'webpage' });
+  });
+
+  it('무효 스킴의 linkUrl은 완전 제거', () => {
+    const post = createPendingRealtimeWallPost(
+      {
+        id: 's1',
+        nickname: '지연',
+        text: '',
+        linkUrl: 'javascript:alert(1)',
+        submittedAt: 1000,
+      },
+      [],
+      columns,
+    );
+    expect(post.linkUrl).toBeUndefined();
+    expect(post.linkPreview).toBeUndefined();
+  });
+
+  it('기존 approved 카드 수로 order 계산', () => {
+    const existing: RealtimeWallPost[] = [
+      {
+        id: 'a',
+        nickname: '가',
+        text: '',
+        status: 'approved',
+        pinned: false,
+        submittedAt: 100,
+        kanban: { columnId: 'column-1', order: 0 },
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      },
+      {
+        id: 'b',
+        nickname: '나',
+        text: '',
+        status: 'approved',
+        pinned: false,
+        submittedAt: 200,
+        kanban: { columnId: 'column-1', order: 1 },
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 2 },
+      },
+      {
+        id: 'c',
+        nickname: '다',
+        text: '',
+        status: 'pending',
+        pinned: false,
+        submittedAt: 300,
+        kanban: { columnId: 'column-1', order: 0 },
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 3 },
+      },
+    ];
+    const post = createPendingRealtimeWallPost(
+      { id: 's1', nickname: '라', text: '', submittedAt: 400 },
+      existing,
+      columns,
+    );
+    // pending은 제외되고 approved 2개만 카운트
+    expect(post.kanban.order).toBe(2);
+    // freeform zIndex는 existingPosts.length(=3) 인덱스 기반
+    expect(post.freeform.zIndex).toBe(4);
+  });
+
+  it('columns 비어있으면 fallback column-1', () => {
+    const post = createPendingRealtimeWallPost(
+      { id: 's1', nickname: '학생', text: '', submittedAt: 1 },
+      [],
+      [],
+    );
+    expect(post.kanban.columnId).toBe('column-1');
+  });
+});
+
+describe('hideRealtimeWallPost', () => {
+  it('지정 post를 hidden으로 전환', () => {
+    const posts: RealtimeWallPost[] = [
+      {
+        id: 'p1',
+        nickname: '가',
+        text: '',
+        status: 'approved',
+        pinned: false,
+        submittedAt: 1,
+        kanban: { columnId: 'column-1', order: 0 },
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      },
+    ];
+    const result = hideRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.status).toBe('hidden');
+  });
+
+  it('없는 postId는 불변', () => {
+    const posts: RealtimeWallPost[] = [
+      {
+        id: 'p1',
+        nickname: '가',
+        text: '',
+        status: 'approved',
+        pinned: false,
+        submittedAt: 1,
+        kanban: { columnId: 'column-1', order: 0 },
+        freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      },
+    ];
+    const result = hideRealtimeWallPost(posts, 'missing');
+    expect(result[0]!.status).toBe('approved');
+  });
+});
+
+describe('togglePinRealtimeWallPost', () => {
+  function makePinnablePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
+    return {
+      nickname: '학생',
+      text: '',
+      status: 'approved',
+      pinned: false,
+      submittedAt: 1,
+      kanban: { columnId: 'column-1', order: 0 },
+      freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      ...overrides,
+    };
+  }
+
+  it('pinned false → true 전환 + zIndex 승격', () => {
+    const posts = [
+      makePinnablePost({ id: 'p1', pinned: false, freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 3 } }),
+      makePinnablePost({ id: 'p2', pinned: false, freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 7 } }),
+    ];
+    const result = togglePinRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.pinned).toBe(true);
+    expect(result[0]!.freeform.zIndex).toBe(8); // max+1
+  });
+
+  it('pinned true → false 전환 (zIndex 는 여전히 승격)', () => {
+    const posts = [
+      makePinnablePost({ id: 'p1', pinned: true, freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 2 } }),
+    ];
+    const result = togglePinRealtimeWallPost(posts, 'p1');
+    expect(result[0]!.pinned).toBe(false);
+    expect(result[0]!.freeform.zIndex).toBe(3);
+  });
+
+  it('없는 postId는 불변', () => {
+    const posts = [makePinnablePost({ id: 'p1', pinned: false })];
+    const result = togglePinRealtimeWallPost(posts, 'missing');
+    expect(result[0]!.pinned).toBe(false);
   });
 });
 
