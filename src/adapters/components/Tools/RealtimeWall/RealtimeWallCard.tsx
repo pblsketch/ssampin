@@ -24,14 +24,16 @@ function LikeButton({
   return (
     <button
       type="button"
-      onClick={onClick}
-      disabled={readOnly}
+      // 읽기 전용(복기 화면)일 때도 키보드 포커스 유지 — 스크린리더가 "좋아요 N" 읽도록.
+      // disabled 대신 aria-disabled + onClick 무시로 같은 시맨틱 제공.
+      aria-disabled={readOnly}
+      onClick={readOnly ? undefined : onClick}
       title={readOnly ? `좋아요 ${count}` : '좋아요'}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition ${
         highlighted
           ? 'border-rose-400/40 bg-rose-400/10 text-rose-300'
           : 'border-sp-border bg-sp-surface text-sp-muted hover:border-rose-400/40 hover:text-rose-300'
-      } ${readOnly ? 'cursor-default' : ''} disabled:opacity-80`}
+      } ${readOnly ? 'cursor-default opacity-80' : ''}`}
     >
       <span className="material-symbols-outlined text-[13px]">favorite</span>
       <span className="tabular-nums">{count}</span>

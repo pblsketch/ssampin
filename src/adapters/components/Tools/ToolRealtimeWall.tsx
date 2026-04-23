@@ -218,9 +218,15 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setPosts((prev) => approveRealtimeWallPost(prev, postId, columns));
   }, [columns]);
 
-  const handleLikePost = useCallback((postId: string) => {
-    setPosts((prev) => likeRealtimeWallPost(prev, postId));
-  }, []);
+  const handleLikePost = useCallback(
+    (postId: string) => {
+      // likeRealtimeWallPost는 (prev, postId) 순수 함수이며 컨테이너 외부 상태
+      // (columns 등)에 의존하지 않음. setState updater가 최신 prev를 보장하므로
+      // deps는 의도적으로 빈 배열.
+      setPosts((prev) => likeRealtimeWallPost(prev, postId));
+    },
+    [],
+  );
 
   const handleTogglePin = useCallback((postId: string) => {
     setPosts((prev) => {

@@ -20,16 +20,11 @@ import type {
 } from '@domain/entities/RealtimeWall';
 import { RealtimeWallCard } from './RealtimeWallCard';
 import { RealtimeWallCardActions } from './RealtimeWallCardActions';
+import type { RealtimeWallBoardCommonProps } from './types';
 
-interface RealtimeWallKanbanBoardProps {
+interface RealtimeWallKanbanBoardProps extends RealtimeWallBoardCommonProps {
   readonly columns: readonly RealtimeWallColumn[];
-  readonly posts: readonly RealtimeWallPost[];
-  readonly readOnly?: boolean;
   readonly onChangePosts?: (posts: RealtimeWallPost[]) => void;
-  readonly onTogglePin?: (postId: string) => void;
-  readonly onHidePost?: (postId: string) => void;
-  readonly onOpenLink?: (url: string) => void;
-  readonly onLike?: (postId: string) => void;
 }
 
 function sortColumnPosts(posts: readonly RealtimeWallPost[], columnId: string): RealtimeWallPost[] {
@@ -253,6 +248,7 @@ function KanbanColumnView({
               post={post}
               compact
               onOpenLink={onOpenLink}
+              onLike={!readOnly ? onLike : undefined}
             />
           ))
         ) : (
