@@ -79,3 +79,49 @@ export function sortRealtimeWallPostsForBoard(
     return b.submittedAt - a.submittedAt;
   });
 }
+
+/**
+ * 게시물을 승인 상태로 전환하면서 칸반 컬럼 위치와 자유 배치 z-index를
+ * 재정렬한다. pending → approved, hidden → approved 전환 모두 동일 규칙.
+ *
+ * 결정 포인트:
+ * - 대상 post의 기존 columnId가 유효하면 유지, 아니면 첫 컬럼으로 fallback.
+ * - nextOrder는 같은 컬럼의 approved 카드 개수(자기 자신 제외)로 끝에 추가.
+ * - nextZIndex는 전체 post 중 최댓값 + 1 → 최신 승인 카드가 항상 맨 위.
+ */
+export function approveRealtimeWallPost(
+  posts: readonly RealtimeWallPost[],
+  postId: string,
+  columns: readonly RealtimeWallColumn[],
+): RealtimeWallPost[] {
+  const targetPost = posts.find((post) => post.id === postId);
+  const fallbackColumnId = columns[0]?.id ?? 'column-1';
+  const columnId =
+    targetPost && columns.some((column) => column.id === targetPost.kanban.columnId)
+      ? targetPost.kanban.columnId
+      : fallbackColumnId;
+  const nextOrder = posts.filter(
+    (post) =>
+      post.id !== postId &&
+      post.status === 'approved' &&
+      post.kanban.columnId === columnId,
+  ).length;
+  const nextZIndex =
+    posts.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
+
+  return posts.map((post) => {
+    if (post.id !== postId) return post;
+    return {
+      ...post,
+      status: 'approved',
+      kanban: {
+        columnId,
+        order: nextOrder,
+      },
+      freeform: {
+        ...post.freeform,
+        zIndex: nextZIndex,
+      },
+    };
+  });
+}
