@@ -41,7 +41,7 @@ supersedes: realtime-wall-management.plan.md (의 일부)
 | B | **칸반 컬럼 실행 중 편집** | 3/4 | "토론 중 '결론' 컬럼 추가 필요했는데 막혀" |
 | C | **승인 정책 옵션** (수동/자동/필터) | 3/4 | 45명 대규모는 자동, 초등은 수동 — 세션별 다름 |
 | D | **보드 복제** | 3/4 | "올해 잘 된 토론을 내년 복제해서 재사용" |
-| E | **좋아요 → 별/추천 리네임** | 2/4 | 현재 하트 아이콘이 교사 강조 의미와 불일치 |
+| E | **`likes` → `teacherHearts` 필드 리네임** (아이콘은 하트 유지) | 2/4 | 필드명이 학생 참여 지표로 오해 유발. 아이콘(하트)은 교사 직관·FGI 참가자 취향으로 유지 |
 
 ### 1.3 기존 realtime-wall-management 계획과의 관계
 
@@ -193,27 +193,36 @@ supersedes: realtime-wall-management.plan.md (의 일부)
 - posts 포함 복제 (수업 컨셉과 맞지 않음)
 - 템플릿 export/import(.ssampin) → COULD로 연기
 
-### 3.5 [E] "좋아요" → "별/추천" 리네임
+### 3.5 [E] `likes` → `teacherHearts` 필드 리네임 (아이콘 하트 유지)
 
 #### FGI 인용
 > **P4**: "좋아요 하트 UI가 학생이 누르는 것처럼 보여요. '교사 추천'
-> 아이콘이 더 맞지 않을까요?"
+> 의미로 읽히지 않아요."
 >
-> **P1**: "의미가 안 맞아요. ⭐ 별이나 📌 핀이 명확. 핀은 이미 있으니
-> 별이 좋겠어요."
+> **P1**: "의미가 안 맞아요."
+
+#### 사용자 확정 (Open Question #5, 2026-04-23)
+- **아이콘은 하트 유지** — 교사 직관에 가장 익숙, FGI 후 사용자 선택
+- **카운트 방식 유지** — 한 카드에 여러 번 눌러 강조 누적 가능
+- **핵심 수정**: 엔티티 필드명만 교사 소유임을 명시 (`teacherHearts`).
+  UI 라벨도 "교사 하트"로 명시화해 "학생 좋아요"와 의미 구분
+- 결과: 코드 부채(의미 불명확) 해소 + UI 시각 변화 **최소** + 정책
+  문구(학생 HTML 미노출) 그대로 유지
 
 #### 기능 범위
-1. **엔티티 필드 리네임**: `RealtimeWallPost.likes?` → `RealtimeWallPost.teacherStarred?` (number, 0~999)
-2. **도메인 규칙 리네임**: `likeRealtimeWallPost` → `starRealtimeWallPost`
-3. **UI 아이콘**: `favorite`(하트) → `star`(별)
-4. **라벨**: "좋아요" → "추천" 또는 "별 표시"
-5. **색상**: rose-400 → amber-400 (이미 pinned에 amber 사용 중이라 톤
-   충돌 가능 — 선택: `border-yellow-400/40 bg-yellow-400/10 text-yellow-300`)
-6. **마이그레이션**: WallBoard 저장본 로드 시 `likes` → `teacherStarred`
-   자동 매핑 (WIP 릴리즈 전이라 실제 영향 0이지만 안전망)
+1. **엔티티 필드 리네임**: `RealtimeWallPost.likes?` → `RealtimeWallPost.teacherHearts?`
+   (number, 0~999)
+2. **도메인 규칙 리네임**: `likeRealtimeWallPost` → `heartRealtimeWallPost` /
+   `REALTIME_WALL_MAX_LIKES` → `REALTIME_WALL_MAX_HEARTS`
+3. **UI 아이콘**: `favorite` **유지** (변경 없음)
+4. **라벨**: 버튼 tooltip "좋아요" → "**교사 하트**" (교사 소유 의미 명시)
+5. **색상**: rose 계열 **유지** (변경 없음)
+6. **Props**: `onLike` → `onHeart`
+7. **마이그레이션**: Repository 로더에 `likes` → `teacherHearts` fallback
 
 #### 비범위
-- 학생이 별을 누르는 모드는 Y(WON'T) — 정책 위반
+- 학생이 하트 누르는 모드는 Y(WON'T) — 단계 5 fix 정책 위반
+- 별/북마크 아이콘 도입 — 사용자 반대
 
 ---
 
@@ -311,21 +320,30 @@ A (보드 영속화) ─── 핵심 기반
 
 ---
 
-## 8. Open Questions
+## 8. Open Questions (2026-04-23 사용자 확정 완료)
 
-1. **보드 목록의 썸네일**: 레이아웃 아이콘만으로 충분한가, 실제 카드
-   mini-preview가 필요한가? (FGI에서 썸네일 언급 3명)
-2. **재열기 시 학생 URL**: 같은 보드 재세션 시 **동일 short-code 유지**
-   vs 매번 새 code? 교사 공지 일관성 vs 보안 회전 트레이드오프
-3. **승인 모드 라이브 전환 시 기존 pending 카드**: 자동 approve가 맞나,
-   아니면 명시적 일괄 승인 버튼 제공?
-4. **복제 시 title 포맷**: "XX (복제)" 한국어 vs "XX (copy)" 영어?
-   쌤핀 기존 복제 패턴(서식 관리 등) 확인 필요
-5. **별 표시 강조 임계값**: 현재 5개부터 색상 강화. 별 5개 의미가 교사
-   별점처럼 별 1~5 단계로 보이나? 오해 우려. **토글(별 있음/없음)**
-   + **카운트 없이 0 or 1**만 허용으로 단순화 검토
-6. **likes → teacherStarred 마이그레이션**: optional 필드니 무마이그레이션
-   해도 되지만, JSON key rename 로드 시점 호환 레이어 추가?
+1. **보드 목록의 썸네일**: ✅ **실제 카드 mini-preview 렌더** (v1.13.0
+   scope 포함). 레이아웃별 렌더 방식 — kanban은 컬럼 헤더+카드 개수,
+   freeform은 썸네일 캡처, grid/stream은 상위 3장 축소판. 구현 위치:
+   `WallBoardListView` 내 `WallBoardThumbnail` 서브컴포넌트.
+
+2. **재열기 시 학생 URL**: ✅ **고정 short-code 유지**. 교사가 학기 내내
+   학생에게 동일 코드로 공지할 수 있어 UX 우선. 보안 보조: 보드 "보관"
+   시 자동 만료, "재활성화" 시 새 코드 발급. 이건 v1.13.0에 포함
+   (WallBoard.shortCode?: string 필드 신설, Supabase LiveSessionClient
+   의 reuseExistingCode 옵션 확장).
+
+3. **승인 모드 라이브 전환 시 기존 pending 카드**: 기본 확인 대화 +
+   일괄 승인 (§4.3 기본안 채택).
+
+4. **복제 시 title 포맷**: ✅ **한국어 "(복제)"** (쌤핀 기존 UI 관례
+   없음, 한국어 원칙).
+
+5. **하트 카운트 vs 바이너리**: ✅ **카운트 유지 + 하트 아이콘 유지**.
+   필드명만 `likes → teacherHearts`로 의미 명료화 (§3.5 재정의).
+
+6. **likes → teacherHearts 마이그레이션**: 1회 릴리즈 임시 fallback
+   레이어 (§2.5 동일 원칙).
 
 ---
 
