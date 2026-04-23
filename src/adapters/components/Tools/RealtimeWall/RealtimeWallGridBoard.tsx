@@ -10,6 +10,7 @@ export interface RealtimeWallGridBoardProps {
   readonly onTogglePin?: (postId: string) => void;
   readonly onHidePost?: (postId: string) => void;
   readonly onOpenLink?: (url: string) => void;
+  readonly onLike?: (postId: string) => void;
 }
 
 export function RealtimeWallGridBoard({
@@ -18,6 +19,7 @@ export function RealtimeWallGridBoard({
   onTogglePin,
   onHidePost,
   onOpenLink,
+  onLike,
 }: RealtimeWallGridBoardProps) {
   const approvedPosts = useMemo(
     () => sortRealtimeWallPostsForBoard(
@@ -48,6 +50,7 @@ export function RealtimeWallGridBoard({
                 <RealtimeWallCard
                   post={post}
                   onOpenLink={onOpenLink}
+                  onLike={!readOnly ? onLike : undefined}
                   actions={
                     !readOnly ? (
                       <RealtimeWallCardActions

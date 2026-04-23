@@ -7,6 +7,36 @@ export interface RealtimeWallCardProps {
   readonly actions?: React.ReactNode;
   readonly dragHandle?: React.ReactNode;
   readonly onOpenLink?: (url: string) => void;
+  /** 교사 로컬 좋아요 증가. 미전달 시 좋아요 UI는 읽기 전용(결과 복기 등). */
+  readonly onLike?: (postId: string) => void;
+}
+
+function LikeButton({
+  count,
+  onClick,
+}: {
+  count: number;
+  onClick?: () => void;
+}) {
+  const highlighted = count >= 5;
+  const readOnly = !onClick;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={readOnly}
+      title={readOnly ? `좋아요 ${count}` : '좋아요'}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition ${
+        highlighted
+          ? 'border-rose-400/40 bg-rose-400/10 text-rose-300'
+          : 'border-sp-border bg-sp-surface text-sp-muted hover:border-rose-400/40 hover:text-rose-300'
+      } ${readOnly ? 'cursor-default' : ''} disabled:opacity-80`}
+    >
+      <span className="material-symbols-outlined text-[13px]">favorite</span>
+      <span className="tabular-nums">{count}</span>
+    </button>
+  );
 }
 
 function getLinkLabel(linkUrl: string): string {
@@ -97,9 +127,13 @@ export function RealtimeWallCard({
   actions,
   dragHandle,
   onOpenLink,
+  onLike,
 }: RealtimeWallCardProps) {
   const isPinned = post.pinned;
   const preview = post.linkPreview;
+  const likesCount = post.likes ?? 0;
+  // 승인된 카드만 좋아요 버튼 노출. pending/hidden은 대기열이나 숨김 영역이라 의미 없음.
+  const showLikes = post.status === 'approved' && (likesCount > 0 || Boolean(onLike));
 
   return (
     <article
@@ -167,6 +201,13 @@ export function RealtimeWallCard({
           <span className="material-symbols-outlined text-[13px]">open_in_new</span>
           <span className="truncate">{getLinkLabel(post.linkUrl)}</span>
         </button>
+      )}
+
+      {/* 교사 로컬 좋아요 — 승인 카드에만, 학생 HTML에는 절대 노출 X */}
+      {showLikes && (
+        <div className="mt-2 flex items-center">
+          <LikeButton count={likesCount} onClick={onLike ? () => onLike(post.id) : undefined} />
+        </div>
       )}
     </article>
   );
