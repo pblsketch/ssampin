@@ -146,8 +146,8 @@ function MultiDayBar({
 }) {
   const colors = getColorsForCategory(bar.category, categories);
 
-  const roundedLeft = bar.isContinuation ? '' : 'rounded-l-sp-md';
-  const roundedRight = bar.isContinued ? '' : 'rounded-r-sp-md';
+  const roundedLeft = bar.isContinuation ? '' : 'rounded-l-md';
+  const roundedRight = bar.isContinued ? '' : 'rounded-r-md';
 
   return (
     <div
@@ -177,7 +177,7 @@ function SingleEventChip({
   return (
     <button
       type="button"
-      className={`w-full text-left text-[10px] leading-none px-1 py-0.5 rounded-sp-xs text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
+      className={`w-full text-left text-[10px] leading-none px-1 py-0.5 rounded-md text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
@@ -317,7 +317,7 @@ export function CalendarView({
 
                   // cell 상태 클래스
                   let cellClass =
-                    'group relative flex flex-col py-1 px-0.5 rounded-sp-md cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
+                    'group relative flex flex-col py-1 px-0.5 rounded-xl cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
 
                   if (isSelected) {
                     cellClass += 'bg-sp-accent/15 border border-sp-accent/40 ';
