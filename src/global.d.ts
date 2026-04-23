@@ -265,6 +265,16 @@ interface ElectronAPI {
     onSessionError: (cb: (data: { boardId: string; reason: string }) => void) => () => void;
     onSessionStarted: (cb: (data: CollabBoardSessionStart) => void) => () => void;
   };
+
+  // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
+  // Design §3.4 — 5 channels (Main-side direct fs access).
+  wallBoards?: {
+    listMeta: () => Promise<unknown[]>;
+    load: (args: { id: string }) => Promise<unknown | null>;
+    save: (args: { board: unknown }) => Promise<{ savedAt: number }>;
+    delete: (args: { id: string }) => Promise<{ ok: true }>;
+    getByCode: (args: { shortCode: string }) => Promise<unknown | null>;
+  };
 }
 
 /** 협업 보드 메타데이터 (Board 엔티티의 renderer-facing 뷰) */

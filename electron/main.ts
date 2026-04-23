@@ -13,6 +13,7 @@ import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
 import { registerRealtimeWallHandlers } from './ipc/realtimeWall';
 import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPreview';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
+import { registerRealtimeWallBoardHandlers } from './ipc/realtimeWallBoard';
 
 declare const __dirname: string;
 
@@ -1593,6 +1594,7 @@ if (!gotTheLock) {
     registerRealtimeWallHandlers(mainWindow!);
     registerRealtimeWallLinkPreviewHandler();
     registerBoardHandlers(mainWindow!);
+    registerRealtimeWallBoardHandlers();
     createTray();
     setupAutoUpdater();
 
