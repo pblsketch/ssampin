@@ -1,4 +1,80 @@
-export type ChalkboardMode = 'select' | 'pen' | 'text' | 'eraser' | 'pixelEraser';
+export type ChalkboardMode = 'select' | 'pen' | 'text' | 'eraser' | 'pixelEraser' | 'shape';
+
+/** 도형 그리기 서브 모드. 모두 드래그(시작점 → 끝점)로 그려진다. */
+export type ShapeKind =
+  | 'line'
+  | 'rect'
+  | 'roundedRect'
+  | 'ellipse'
+  | 'triangleEq'
+  | 'triangleIso'
+  | 'triangleRight'
+  | 'diamond'
+  | 'parallelogram'
+  | 'star'
+  | 'heart'
+  | 'arrow'
+  | 'arrowDouble'
+  | 'axes';
+
+export const SHAPE_KIND_ORDER: readonly ShapeKind[] = [
+  'line', 'rect', 'roundedRect', 'ellipse',
+  'triangleEq', 'triangleIso', 'triangleRight',
+  'diamond', 'parallelogram', 'star', 'heart',
+  'arrow', 'arrowDouble', 'axes',
+] as const;
+
+export const SHAPE_LABELS: Record<ShapeKind, string> = {
+  line: '직선',
+  rect: '사각형',
+  roundedRect: '둥근 사각형',
+  ellipse: '타원',
+  triangleEq: '정삼각형',
+  triangleIso: '이등변삼각형',
+  triangleRight: '직각삼각형',
+  diamond: '마름모',
+  parallelogram: '평행사변형',
+  star: '별',
+  heart: '하트',
+  arrow: '화살표',
+  arrowDouble: '양방향 화살표',
+  axes: '좌표축',
+};
+
+/** 토글 버튼용 Material Symbols icon 이름. 일부 도형은 Material에 직접 대응이 없어 근사 아이콘 사용. */
+export const SHAPE_ICONS: Record<ShapeKind, string> = {
+  line: 'horizontal_rule',
+  rect: 'rectangle',
+  roundedRect: 'check_box_outline_blank',
+  ellipse: 'circle',
+  triangleEq: 'change_history',
+  triangleIso: 'change_history',
+  triangleRight: 'change_history',
+  diamond: 'diamond',
+  parallelogram: 'rectangle',
+  star: 'star',
+  heart: 'favorite',
+  arrow: 'arrow_forward',
+  arrowDouble: 'sync_alt',
+  axes: 'add',
+};
+
+/** 팝오버에서 카테고리별로 그룹핑해 보여주기 위한 순서. */
+export interface ShapeCategory {
+  label: string;
+  kinds: ShapeKind[];
+}
+
+export const SHAPE_CATEGORIES: readonly ShapeCategory[] = [
+  { label: '기본', kinds: ['line', 'rect', 'roundedRect', 'ellipse'] },
+  { label: '삼각형', kinds: ['triangleEq', 'triangleIso', 'triangleRight'] },
+  { label: '다각형', kinds: ['diamond', 'parallelogram', 'star', 'heart'] },
+  { label: '기능', kinds: ['arrow', 'arrowDouble', 'axes'] },
+];
+
+export function isShapeKind(value: string): value is ShapeKind {
+  return (SHAPE_KIND_ORDER as readonly string[]).includes(value);
+}
 
 export interface ChalkColor {
   name: string;

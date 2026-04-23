@@ -11,7 +11,7 @@ import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 import { TeacherControlPanel } from './TeacherControlPanel';
 import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
 import { SpreadsheetView } from './Results/SpreadsheetView';
-import { FeedbackWallView } from './FeedbackWall/FeedbackWallView';
+import { MultiSurveyLiveBoardView } from './MultiSurveyLiveBoard/MultiSurveyLiveBoardView';
 import { FEEDBACK_PRESETS, type FeedbackPreset } from '@adapters/constants/feedbackPresets';
 
 interface ToolMultiSurveyProps {
@@ -1049,7 +1049,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   // Word cloud / step mode state
   const [stepMode, setStepMode] = useState(false);
   const [useStopwords, setUseStopwords] = useState(true);
-  const [showFeedbackWall, setShowFeedbackWall] = useState(false);
+  const [showLiveBoard, setShowLiveBoard] = useState(false);
 
   // Live mode state
   const [isLiveMode, setIsLiveMode] = useState(false);
@@ -1238,7 +1238,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
       handleStopLive();
     }
     setPhase('results');
-    setShowFeedbackWall(false);
+    setShowLiveBoard(false);
   }, [isLiveMode, handleStopLive]);
 
   const handleReset = useCallback(() => {
@@ -1249,7 +1249,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
     setTitle('');
     setQuestions([defaultQuestion()]);
     setSubmissions([]);
-    setShowFeedbackWall(false);
+    setShowLiveBoard(false);
   }, [isLiveMode, handleStopLive]);
 
   const handleToggleQRFullscreen = useCallback(() => {
@@ -1391,22 +1391,22 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           onTemplateApplied={() => { setPendingTitle(null); setPendingQuestions(null); }}
         />
       )}
-      {phase === 'running' && showFeedbackWall && (
-        <FeedbackWallView
+      {phase === 'running' && showLiveBoard && (
+        <MultiSurveyLiveBoardView
           title={title}
           questions={questions}
           submissions={submissions}
           isFullscreen={isFullscreen}
-          onClose={() => setShowFeedbackWall(false)}
+          onClose={() => setShowLiveBoard(false)}
         />
       )}
-      {phase === 'running' && !showFeedbackWall && (
+      {phase === 'running' && !showLiveBoard && (
         <div className="relative flex h-full w-full flex-col">
           {/* 텍스트 질문이 하나라도 있으면 피드백 월 토글 버튼 노출 */}
           {questions.some((q) => q.type === 'text') && (
             <button
               type="button"
-              onClick={() => setShowFeedbackWall(true)}
+              onClick={() => setShowLiveBoard(true)}
               className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs font-medium text-sp-text shadow-sm transition hover:border-sp-highlight hover:text-sp-highlight"
               title="프로젝터용 라이브 피드백 월 (텍스트 응답만 카드로 표시)"
             >

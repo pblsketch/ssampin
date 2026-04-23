@@ -63,7 +63,8 @@ export type ToolName =
   | 'grouping'
   | 'multi-survey'
   | 'valueline-discussion'
-  | 'trafficlight-discussion';
+  | 'trafficlight-discussion'
+  | 'realtime-wall';
 
 /** 이벤트별 properties 타입 매핑 */
 export interface AnalyticsEventProperties {
