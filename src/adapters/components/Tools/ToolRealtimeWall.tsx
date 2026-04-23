@@ -36,8 +36,8 @@ import { RealtimeWallCreateView } from './RealtimeWall/RealtimeWallCreateView';
 import { RealtimeWallLiveSharePanel } from './RealtimeWall/RealtimeWallLiveSharePanel';
 import { RealtimeWallQueuePanel } from './RealtimeWall/RealtimeWallQueuePanel';
 import { RealtimeWallResultView } from './RealtimeWall/RealtimeWallResultView';
-import { RealtimeWallApprovalSettingsDrawer } from './RealtimeWall/RealtimeWallApprovalSettingsDrawer';
-import { RealtimeWallColumnEditor } from './RealtimeWall/RealtimeWallColumnEditor';
+import { RealtimeWallBoardSettingsDrawer } from './RealtimeWall/RealtimeWallBoardSettingsDrawer';
+import type { BoardSettingsSection } from './RealtimeWall/RealtimeWallBoardSettingsDrawer';
 import { WallBoardListView } from './RealtimeWall/WallBoardListView';
 import { formatAbsoluteTime, openExternalLink } from './RealtimeWall/realtimeWallHelpers';
 
@@ -77,11 +77,10 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   // v1.13 Stage C: 승인 정책 state.
   // CreateView에서 선택 → handleStartBoard에서 createWallBoard에 주입.
   // handleOpenBoard에서는 board.approvalMode를 복원.
-  // 라이브 중 드로어에서 전환 가능(handleChangeApprovalMode).
+  // 라이브 중 통합 드로어에서 전환 가능(handleChangeApprovalMode).
   const [approvalMode, setApprovalMode] = useState<WallApprovalMode>('manual');
-  const [isApprovalDrawerOpen, setIsApprovalDrawerOpen] = useState(false);
-  // v1.13 Stage B: 칸반 컬럼 편집 드로어 (kanban 모드에서만 노출).
-  const [isColumnEditorOpen, setIsColumnEditorOpen] = useState(false);
+  // v1.13: 통합 설정 드로어. null = 닫힘, 'basic'/'columns'/'approval' = 해당 섹션 열림.
+  const [boardSettingsDrawer, setBoardSettingsDrawer] = useState<BoardSettingsSection | null>(null);
 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [connectedStudents, setConnectedStudents] = useState(0);
@@ -667,7 +666,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
               onSetCustomCode={() => {
                 void handleSetCustomCode();
               }}
-              onOpenSettings={() => setIsApprovalDrawerOpen(true)}
+              onOpenSettings={() => setBoardSettingsDrawer('approval')}
             />
           ) : (
             <section className="rounded-xl border border-sp-border bg-sp-card px-5 py-4">
@@ -684,7 +683,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                 <div className="ml-auto flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setViewMode('create')}
+                    onClick={() => setBoardSettingsDrawer('basic')}
                     className="rounded-lg border border-sp-border px-3 py-2 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
                   >
                     설정 수정
@@ -740,7 +739,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                 {layoutMode === 'kanban' && (
                   <button
                     type="button"
-                    onClick={() => setIsColumnEditorOpen(true)}
+                    onClick={() => setBoardSettingsDrawer('columns')}
                     className="flex shrink-0 items-center gap-1.5 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-semibold text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
                   >
                     <span className="material-symbols-outlined text-[14px]">view_column</span>
@@ -774,20 +773,18 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         />
       )}
 
-      <RealtimeWallApprovalSettingsDrawer
-        open={isApprovalDrawerOpen}
-        approvalMode={approvalMode}
-        pendingCount={pendingPosts.length}
-        onClose={() => setIsApprovalDrawerOpen(false)}
-        onApply={handleApplyApprovalMode}
-      />
-
-      <RealtimeWallColumnEditor
-        open={isColumnEditorOpen}
+      <RealtimeWallBoardSettingsDrawer
+        openSection={boardSettingsDrawer}
+        title={title}
+        layoutMode={layoutMode}
         columns={columns}
         posts={posts}
-        onClose={() => setIsColumnEditorOpen(false)}
-        onApply={handleApplyColumnEdit}
+        approvalMode={approvalMode}
+        onClose={() => setBoardSettingsDrawer(null)}
+        onTitleChange={setTitle}
+        onLayoutModeChange={setLayoutMode}
+        onApplyColumnEdit={handleApplyColumnEdit}
+        onApplyApprovalMode={handleApplyApprovalMode}
       />
     </ToolLayout>
   );
