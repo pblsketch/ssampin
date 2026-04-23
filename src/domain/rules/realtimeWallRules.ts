@@ -155,6 +155,89 @@ export function sortRealtimeWallPostsForBoard(
 export const REALTIME_WALL_MAX_LIKES = 999;
 
 /**
+ * 학생 제출 raw 입력.
+ * `linkUrl`은 정규화되지 않은 원본. 규칙 함수가 normalize + classify를 수행.
+ */
+export interface RealtimeWallStudentSubmission {
+  readonly id: string;
+  readonly nickname: string;
+  readonly text: string;
+  readonly linkUrl?: string;
+  readonly submittedAt: number;
+}
+
+/**
+ * 학생이 방금 제출한 raw 입력으로부터 pending 상태의 RealtimeWallPost를 생성.
+ *
+ * 책임:
+ *   - linkUrl 정규화 + youtube/webpage 분류 (linkPreview 초기 shell)
+ *   - 첫 컬럼 id로 kanban position 초기화, order는 같은 컬럼 approved 카드 수
+ *   - freeform position은 existingPosts.length 인덱스 기반 3열 그리드
+ *
+ * 컨테이너는 이 함수 호출 후 webpage 링크에 대해서만 Main fetch를 트리거해
+ * 비동기로 linkPreview를 upsert한다.
+ */
+export function createPendingRealtimeWallPost(
+  input: RealtimeWallStudentSubmission,
+  existingPosts: readonly RealtimeWallPost[],
+  columns: readonly RealtimeWallColumn[],
+): RealtimeWallPost {
+  const normalizedLink = input.linkUrl ? normalizeRealtimeWallLink(input.linkUrl) : undefined;
+  const initialPreview = normalizedLink ? classifyRealtimeWallLink(normalizedLink) : undefined;
+  const initialColumnId = columns[0]?.id ?? 'column-1';
+  const order = existingPosts.filter(
+    (post) => post.status === 'approved' && post.kanban.columnId === initialColumnId,
+  ).length;
+  const freeform = createDefaultFreeformPosition(existingPosts.length);
+
+  return {
+    id: input.id,
+    nickname: input.nickname,
+    text: input.text,
+    ...(normalizedLink ? { linkUrl: normalizedLink } : {}),
+    ...(initialPreview ? { linkPreview: initialPreview } : {}),
+    status: 'pending',
+    pinned: false,
+    submittedAt: input.submittedAt,
+    kanban: { columnId: initialColumnId, order },
+    freeform,
+  };
+}
+
+/**
+ * 특정 post의 status를 'hidden'으로 전환. 다른 필드는 보존.
+ */
+export function hideRealtimeWallPost(
+  posts: readonly RealtimeWallPost[],
+  postId: string,
+): RealtimeWallPost[] {
+  return posts.map((post) => (post.id === postId ? { ...post, status: 'hidden' } : post));
+}
+
+/**
+ * pinned 상태 토글 + freeform zIndex를 전체 최댓값+1로 승격 (핀된 카드가
+ * 앞으로 오도록).
+ */
+export function togglePinRealtimeWallPost(
+  posts: readonly RealtimeWallPost[],
+  postId: string,
+): RealtimeWallPost[] {
+  const nextZIndex =
+    posts.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
+  return posts.map((post) => {
+    if (post.id !== postId) return post;
+    return {
+      ...post,
+      pinned: !post.pinned,
+      freeform: {
+        ...post.freeform,
+        zIndex: nextZIndex,
+      },
+    };
+  });
+}
+
+/**
  * 교사 로컬 좋아요 카운터를 +1 증가. 상한 999.
  * 학생 HTML에는 노출되지 않으며(단계 5 fix 정책), 결과 저장 시 포함되어
  * 복기 화면에서 읽기 전용으로 노출된다.
