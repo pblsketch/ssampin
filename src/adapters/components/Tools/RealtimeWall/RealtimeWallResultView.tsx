@@ -9,14 +9,7 @@ import { RealtimeWallKanbanBoard } from './RealtimeWallKanbanBoard';
 import { RealtimeWallFreeformBoard } from './RealtimeWallFreeformBoard';
 import { RealtimeWallGridBoard } from './RealtimeWallGridBoard';
 import { RealtimeWallStreamBoard } from './RealtimeWallStreamBoard';
-import { openExternalLink } from './realtimeWallHelpers';
-
-const LAYOUT_MODE_LABELS: Record<RealtimeWallLayoutMode, string> = {
-  kanban: '칸반형',
-  freeform: '자유 배치형',
-  grid: '격자형',
-  stream: '스트림',
-};
+import { openExternalLink, REALTIME_WALL_LAYOUT_LABELS } from './realtimeWallHelpers';
 
 export interface RealtimeWallResultViewProps {
   readonly title: string;
@@ -56,7 +49,7 @@ export function RealtimeWallResultView({
           <div>
             <h2 className="text-lg font-bold text-sp-text">{title}</h2>
             <p className="mt-0.5 text-xs text-sp-muted">
-              {LAYOUT_MODE_LABELS[layoutMode]} · 수업 결과 복기
+              {REALTIME_WALL_LAYOUT_LABELS[layoutMode]} · 수업 결과 복기
             </p>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
