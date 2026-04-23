@@ -64,7 +64,7 @@ export type ToolName =
   | 'multi-survey'
   | 'valueline-discussion'
   | 'trafficlight-discussion'
-  | 'realtime-bulletin';
+  | 'realtime-wall';
 
 /** 이벤트별 properties 타입 매핑 */
 export interface AnalyticsEventProperties {

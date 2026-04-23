@@ -10,7 +10,7 @@ import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
 import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
 import { registerLiveMultiSurveyHandlers } from './ipc/liveMultiSurvey';
 import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
-import { registerRealtimeBulletinHandlers } from './ipc/realtimeBulletin';
+import { registerRealtimeWallHandlers } from './ipc/realtimeWall';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 
 declare const __dirname: string;
@@ -1589,7 +1589,7 @@ if (!gotTheLock) {
     registerLiveWordCloudHandlers(mainWindow!);
     registerLiveMultiSurveyHandlers(mainWindow!);
     registerLiveDiscussionHandlers(mainWindow!);
-    registerRealtimeBulletinHandlers(mainWindow!);
+    registerRealtimeWallHandlers(mainWindow!);
     registerBoardHandlers(mainWindow!);
     createTray();
     setupAutoUpdater();

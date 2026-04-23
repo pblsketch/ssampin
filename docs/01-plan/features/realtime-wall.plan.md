@@ -1,16 +1,16 @@
 ---
 template: plan
 version: 1.2
-feature: realtime-bulletin
+feature: realtime-wall
 date: 2026-04-21
 author: codex
 project: ssampin
 version_target: TBD
 ---
 
-# 쌤핀 실시간 게시판 기획안
+# 쌤핀 실시간 담벼락 기획안
 
-> **요약**: `실시간 게시판`은 외부 URL로 학생이 참여하고, 교사가 실시간으로 내용을 큐레이션하는 수업용 보드다.  
+> **요약**: `실시간 담벼락`은 외부 URL로 학생이 참여하고, 교사가 실시간으로 내용을 큐레이션하는 수업용 보드다.  
 > **핵심 방향**: 학생 입력은 `이름 + 텍스트 + 선택 링크 1개`로 단순화하고, 교사용 레이아웃은 **칸반형 + 자유 배치형**을 기본으로 설계한다.  
 > **중요 전제**: Wi-Fi 직결은 지원하지 않고, 외부 URL 공유만 사용한다. 이미지/파일 업로드는 MVP 범위 밖이다.
 
@@ -20,7 +20,7 @@ version_target: TBD
 
 ### 1.1 이 기능을 어떻게 정의할 것인가
 
-쌤핀의 `실시간 게시판`은 Padlet의 모든 모드를 복제하는 도구가 아니다.  
+쌤핀의 `실시간 담벼락`은 Padlet의 모든 모드를 복제하는 도구가 아니다.  
 쌤핀식 정의는 다음에 가깝다.
 
 - 학생은 외부 URL 또는 QR로 참여한다
@@ -31,11 +31,11 @@ version_target: TBD
 
 즉 제품 정체성은 다음과 같다.
 
-**외부 URL 기반 교사 주도형 실시간 게시판**
+**외부 URL 기반 교사 주도형 실시간 담벼락**
 
 ### 1.2 이번 수정에서 확정한 전제
 
-- 도구 표시명: `실시간 게시판`
+- 도구 표시명: `실시간 담벼락`
 - 공유 방식: 외부 URL 공유만 사용
 - 네트워크 전제: 인터넷 연결 필요
 - 학생 입력: 텍스트 필수, 링크 선택
@@ -258,8 +258,8 @@ version_target: TBD
 ### 5.3 데이터 모델 초안
 
 ```ts
-type RealtimeBulletinLayoutMode = 'kanban' | 'freeform';
-type RealtimeBulletinPostStatus = 'pending' | 'approved' | 'hidden';
+type RealtimeWallLayoutMode = 'kanban' | 'freeform';
+type RealtimeWallPostStatus = 'pending' | 'approved' | 'hidden';
 
 type BulletinKanbanPosition = {
   columnId: string;
@@ -274,24 +274,24 @@ type BulletinFreeformPosition = {
   zIndex: number;
 };
 
-type RealtimeBulletinPost = {
+type RealtimeWallPost = {
   id: string;
   sessionId: string;
   nickname: string;
   text: string;
   linkUrl?: string;
-  status: RealtimeBulletinPostStatus;
+  status: RealtimeWallPostStatus;
   pinned: boolean;
   submittedAt: number;
   kanban?: BulletinKanbanPosition;
   freeform?: BulletinFreeformPosition;
 };
 
-type RealtimeBulletinBoard = {
+type RealtimeWallBoard = {
   sessionId: string;
-  layoutMode: RealtimeBulletinLayoutMode;
+  layoutMode: RealtimeWallLayoutMode;
   columns: Array<{ id: string; title: string; order: number }>;
-  posts: RealtimeBulletinPost[];
+  posts: RealtimeWallPost[];
 };
 ```
 
@@ -309,15 +309,15 @@ type RealtimeBulletinBoard = {
 
 #### 새 파일
 
-- `electron/ipc/realtimeBulletin.ts`
-- `electron/ipc/realtimeBulletinHTML.ts`
-- `src/adapters/components/Tools/ToolRealtimeBulletin.tsx`
-- `src/adapters/components/Tools/RealtimeBulletin/RealtimeBulletinShell.tsx`
-- `src/adapters/components/Tools/RealtimeBulletin/RealtimeBulletinQueue.tsx`
-- `src/adapters/components/Tools/RealtimeBulletin/RealtimeBulletinKanbanBoard.tsx`
-- `src/adapters/components/Tools/RealtimeBulletin/RealtimeBulletinFreeformBoard.tsx`
-- `src/adapters/components/Tools/RealtimeBulletin/RealtimeBulletinCard.tsx`
-- `src/adapters/components/Tools/RealtimeBulletin/RealtimeBulletinShareModal.tsx`
+- `electron/ipc/realtimeWall.ts`
+- `electron/ipc/realtimeWallHTML.ts`
+- `src/adapters/components/Tools/ToolRealtimeWall.tsx`
+- `src/adapters/components/Tools/RealtimeWall/RealtimeWallShell.tsx`
+- `src/adapters/components/Tools/RealtimeWall/RealtimeWallQueue.tsx`
+- `src/adapters/components/Tools/RealtimeWall/RealtimeWallKanbanBoard.tsx`
+- `src/adapters/components/Tools/RealtimeWall/RealtimeWallFreeformBoard.tsx`
+- `src/adapters/components/Tools/RealtimeWall/RealtimeWallCard.tsx`
+- `src/adapters/components/Tools/RealtimeWall/RealtimeWallShareModal.tsx`
 
 #### 수정 파일
 
@@ -366,7 +366,7 @@ MVP는 다음 조합이 가장 현실적이다.
 
 먼저 해야 할 것:
 
-- 전용 IPC 엔트리 `realtimeBulletin.ts` 생성
+- 전용 IPC 엔트리 `realtimeWall.ts` 생성
 - 학생 제출 모델 정의
 - moderation 상태 정의
 - 결과 저장 타입 추가
@@ -429,7 +429,7 @@ MVP는 다음 조합이 가장 현실적이다.
 
 ### 8.1 In Scope
 
-- 새 도구 `실시간 게시판`
+- 새 도구 `실시간 담벼락`
 - 외부 URL 공유
 - 학생 텍스트 + 링크 제출
 - 승인 대기열
@@ -501,10 +501,10 @@ MVP는 다음 조합이 가장 현실적이다.
 
 ## 12. 이름 정렬 기준
 
-- 도구 표시명: `실시간 게시판`
-- feature slug: `realtime-bulletin`
-- 권장 컴포넌트 접두사: `RealtimeBulletin`
-- 권장 ToolResultType: `realtime-bulletin`
+- 도구 표시명: `실시간 담벼락`
+- feature slug: `realtime-wall`
+- 권장 컴포넌트 접두사: `RealtimeWall`
+- 권장 ToolResultType: `realtime-wall`
 
 ---
 
@@ -524,4 +524,4 @@ MVP는 다음 조합이 가장 현실적이다.
 
 ## 14. 한 줄 결론
 
-`실시간 게시판`의 현실적인 MVP는 **외부 URL 기반 텍스트+링크 게시판** 위에, **칸반형은 기존 `dnd-kit`로**, **자유 배치형은 `react-rnd`로** 얹는 구조가 가장 적합하다.
+`실시간 담벼락`의 현실적인 MVP는 **외부 URL 기반 텍스트+링크 게시판** 위에, **칸반형은 기존 `dnd-kit`로**, **자유 배치형은 `react-rnd`로** 얹는 구조가 가장 적합하다.

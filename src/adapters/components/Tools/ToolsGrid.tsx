@@ -39,9 +39,9 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-traffic-discussion', emoji: '🚦', name: '신호등 토론', description: '찬성·보류·반대 의사 표현' },
   { id: 'tool-chalkboard', emoji: '🖍️', name: '칠판', description: '분필로 판서하기' },
   { id: 'tool-collab-board', emoji: '🎨', name: '협업 보드', description: '학생들과 실시간 협업 작업하기', badge: 'BETA' },
-  // 실시간 게시판: 관리 기능(프리셋/자동저장/보드 엔티티화) 완성 전까지 릴리즈 빌드에서 숨김.
+  // 실시간 담벼락: 관리 기능(프리셋/자동저장/보드 엔티티화) 완성 전까지 릴리즈 빌드에서 숨김.
   // dev 모드에서만 노출되며, 기능 자체는 라우팅(App.tsx)·IPC·저장소 모두 살아있음.
-  { id: 'tool-realtime-bulletin', emoji: '🗂️', name: '실시간 게시판', description: '학생 글을 실시간으로 모아 칸반형·자유 배치형으로 정리', badge: 'BETA', hidden: true },
+  { id: 'tool-realtime-wall', emoji: '🗂️', name: '실시간 담벼락', description: '학생 글을 실시간으로 모아 칸반형·자유 배치형으로 정리', badge: 'BETA', hidden: true },
   { id: 'tool-forms', emoji: '📄', name: '서식', description: 'HWPX · PDF · Excel 서식 모아보기' },
   { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진', externalUrl: 'https://supsori.com' },
   { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구', externalUrl: 'https://pblsketch.xyz' },

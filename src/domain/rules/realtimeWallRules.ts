@@ -1,19 +1,19 @@
 import type {
-  RealtimeBulletinColumn,
-  RealtimeBulletinFreeformPosition,
-  RealtimeBulletinPost,
-} from '@domain/entities/RealtimeBulletin';
+  RealtimeWallColumn,
+  RealtimeWallFreeformPosition,
+  RealtimeWallPost,
+} from '@domain/entities/RealtimeWall';
 
-export const DEFAULT_REALTIME_BULLETIN_COLUMNS = [
+export const DEFAULT_REALTIME_WALL_COLUMNS = [
   '생각',
   '질문',
   '정리',
 ] as const;
 
-export const REALTIME_BULLETIN_MIN_COLUMNS = 2;
-export const REALTIME_BULLETIN_MAX_COLUMNS = 6;
-export const REALTIME_BULLETIN_MAX_NICKNAME_LENGTH = 20;
-export const REALTIME_BULLETIN_MAX_TEXT_LENGTH = 280;
+export const REALTIME_WALL_MIN_COLUMNS = 2;
+export const REALTIME_WALL_MAX_COLUMNS = 6;
+export const REALTIME_WALL_MAX_NICKNAME_LENGTH = 20;
+export const REALTIME_WALL_MAX_TEXT_LENGTH = 280;
 
 const FREEFORM_COLUMN_COUNT = 3;
 const FREEFORM_CARD_WIDTH = 260;
@@ -23,17 +23,17 @@ const FREEFORM_Y_GAP = 28;
 const FREEFORM_START_X = 24;
 const FREEFORM_START_Y = 24;
 
-export function buildRealtimeBulletinColumns(
+export function buildRealtimeWallColumns(
   titles: readonly string[],
-): RealtimeBulletinColumn[] {
+): RealtimeWallColumn[] {
   const normalized = titles
     .map((title) => title.trim())
     .filter((title, index, arr) => title.length > 0 && arr.indexOf(title) === index)
-    .slice(0, REALTIME_BULLETIN_MAX_COLUMNS);
+    .slice(0, REALTIME_WALL_MAX_COLUMNS);
 
-  const safeTitles = normalized.length >= REALTIME_BULLETIN_MIN_COLUMNS
+  const safeTitles = normalized.length >= REALTIME_WALL_MIN_COLUMNS
     ? normalized
-    : [...DEFAULT_REALTIME_BULLETIN_COLUMNS];
+    : [...DEFAULT_REALTIME_WALL_COLUMNS];
 
   return safeTitles.map((title, index) => ({
     id: `column-${index + 1}`,
@@ -42,7 +42,7 @@ export function buildRealtimeBulletinColumns(
   }));
 }
 
-export function normalizeRealtimeBulletinLink(raw: string): string | undefined {
+export function normalizeRealtimeWallLink(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (trimmed.length === 0) return undefined;
 
@@ -57,7 +57,7 @@ export function normalizeRealtimeBulletinLink(raw: string): string | undefined {
   }
 }
 
-export function createDefaultFreeformPosition(index: number): RealtimeBulletinFreeformPosition {
+export function createDefaultFreeformPosition(index: number): RealtimeWallFreeformPosition {
   const safeIndex = Math.max(0, index);
   const column = safeIndex % FREEFORM_COLUMN_COUNT;
   const row = Math.floor(safeIndex / FREEFORM_COLUMN_COUNT);
@@ -71,9 +71,9 @@ export function createDefaultFreeformPosition(index: number): RealtimeBulletinFr
   };
 }
 
-export function sortRealtimeBulletinPostsForBoard(
-  posts: readonly RealtimeBulletinPost[],
-): RealtimeBulletinPost[] {
+export function sortRealtimeWallPostsForBoard(
+  posts: readonly RealtimeWallPost[],
+): RealtimeWallPost[] {
   return [...posts].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return b.submittedAt - a.submittedAt;

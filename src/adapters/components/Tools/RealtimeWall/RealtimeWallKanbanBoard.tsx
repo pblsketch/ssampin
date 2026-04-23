@@ -15,33 +15,33 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type {
-  RealtimeBulletinColumn,
-  RealtimeBulletinPost,
-} from '@domain/entities/RealtimeBulletin';
-import { RealtimeBulletinCard } from './RealtimeBulletinCard';
+  RealtimeWallColumn,
+  RealtimeWallPost,
+} from '@domain/entities/RealtimeWall';
+import { RealtimeWallCard } from './RealtimeWallCard';
 
-interface RealtimeBulletinKanbanBoardProps {
-  readonly columns: readonly RealtimeBulletinColumn[];
-  readonly posts: readonly RealtimeBulletinPost[];
+interface RealtimeWallKanbanBoardProps {
+  readonly columns: readonly RealtimeWallColumn[];
+  readonly posts: readonly RealtimeWallPost[];
   readonly readOnly?: boolean;
-  readonly onChangePosts?: (posts: RealtimeBulletinPost[]) => void;
+  readonly onChangePosts?: (posts: RealtimeWallPost[]) => void;
   readonly onTogglePin?: (postId: string) => void;
   readonly onHidePost?: (postId: string) => void;
   readonly onOpenLink?: (url: string) => void;
 }
 
-function sortColumnPosts(posts: readonly RealtimeBulletinPost[], columnId: string): RealtimeBulletinPost[] {
+function sortColumnPosts(posts: readonly RealtimeWallPost[], columnId: string): RealtimeWallPost[] {
   return posts
     .filter((post) => post.status === 'approved' && post.kanban.columnId === columnId)
     .sort((a, b) => a.kanban.order - b.kanban.order);
 }
 
 function moveKanbanPost(
-  posts: readonly RealtimeBulletinPost[],
+  posts: readonly RealtimeWallPost[],
   postId: string,
   targetColumnId: string,
   targetIndex: number,
-): RealtimeBulletinPost[] {
+): RealtimeWallPost[] {
   const activePost = posts.find((post) => post.id === postId && post.status === 'approved');
   if (!activePost) return [...posts];
 
@@ -161,7 +161,7 @@ function SortableBulletinCard({
   onHidePost,
   onOpenLink,
 }: {
-  post: RealtimeBulletinPost;
+  post: RealtimeWallPost;
   onTogglePin?: (postId: string) => void;
   onHidePost?: (postId: string) => void;
   onOpenLink?: (url: string) => void;
@@ -187,7 +187,7 @@ function SortableBulletinCard({
         opacity: isDragging ? 0.4 : 1,
       }}
     >
-      <RealtimeBulletinCard
+      <RealtimeWallCard
         post={post}
         compact
         onOpenLink={onOpenLink}
@@ -241,9 +241,9 @@ function KanbanColumnView({
   onHidePost,
   onOpenLink,
 }: {
-  column: RealtimeBulletinColumn;
+  column: RealtimeWallColumn;
   columnIndex: number;
-  posts: readonly RealtimeBulletinPost[];
+  posts: readonly RealtimeWallPost[];
   readOnly: boolean;
   onTogglePin?: (postId: string) => void;
   onHidePost?: (postId: string) => void;
@@ -276,7 +276,7 @@ function KanbanColumnView({
       >
         {readOnly ? (
           posts.map((post) => (
-            <RealtimeBulletinCard
+            <RealtimeWallCard
               key={post.id}
               post={post}
               compact
@@ -307,7 +307,7 @@ function KanbanColumnView({
   );
 }
 
-export function RealtimeBulletinKanbanBoard({
+export function RealtimeWallKanbanBoard({
   columns,
   posts,
   readOnly = false,
@@ -315,7 +315,7 @@ export function RealtimeBulletinKanbanBoard({
   onTogglePin,
   onHidePost,
   onOpenLink,
-}: RealtimeBulletinKanbanBoardProps) {
+}: RealtimeWallKanbanBoardProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const approvedPosts = useMemo(

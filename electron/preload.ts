@@ -212,20 +212,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => { ipcRenderer.removeListener('live-survey:connection-count', handler); };
   },
   // Realtime Bulletin
-  startRealtimeBulletin: (data: {
+  startRealtimeWall: (data: {
     title: string;
     maxTextLength: number;
   }): Promise<{ port: number; localIPs: string[] }> =>
-    ipcRenderer.invoke('realtime-bulletin:start', data),
-  stopRealtimeBulletin: (): Promise<void> =>
-    ipcRenderer.invoke('realtime-bulletin:stop'),
-  realtimeBulletinTunnelAvailable: (): Promise<boolean> =>
-    ipcRenderer.invoke('realtime-bulletin:tunnel-available'),
-  realtimeBulletinTunnelInstall: (): Promise<void> =>
-    ipcRenderer.invoke('realtime-bulletin:tunnel-install'),
-  realtimeBulletinTunnelStart: (): Promise<{ tunnelUrl: string }> =>
-    ipcRenderer.invoke('realtime-bulletin:tunnel-start'),
-  onRealtimeBulletinStudentSubmitted: (callback: (data: {
+    ipcRenderer.invoke('realtime-wall:start', data),
+  stopRealtimeWall: (): Promise<void> =>
+    ipcRenderer.invoke('realtime-wall:stop'),
+  realtimeWallTunnelAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('realtime-wall:tunnel-available'),
+  realtimeWallTunnelInstall: (): Promise<void> =>
+    ipcRenderer.invoke('realtime-wall:tunnel-install'),
+  realtimeWallTunnelStart: (): Promise<{ tunnelUrl: string }> =>
+    ipcRenderer.invoke('realtime-wall:tunnel-start'),
+  onRealtimeWallStudentSubmitted: (callback: (data: {
     post: {
       id: string;
       nickname: string;
@@ -245,13 +245,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       };
       totalSubmissions: number;
     }) => callback(data);
-    ipcRenderer.on('realtime-bulletin:student-submitted', handler);
-    return () => { ipcRenderer.removeListener('realtime-bulletin:student-submitted', handler); };
+    ipcRenderer.on('realtime-wall:student-submitted', handler);
+    return () => { ipcRenderer.removeListener('realtime-wall:student-submitted', handler); };
   },
-  onRealtimeBulletinConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
+  onRealtimeWallConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
     const handler = (_event: unknown, data: { count: number }) => callback(data);
-    ipcRenderer.on('realtime-bulletin:connection-count', handler);
-    return () => { ipcRenderer.removeListener('realtime-bulletin:connection-count', handler); };
+    ipcRenderer.on('realtime-wall:connection-count', handler);
+    return () => { ipcRenderer.removeListener('realtime-wall:connection-count', handler); };
   },
   // Live Multi Survey
   startLiveMultiSurvey: (data: {

@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildRealtimeBulletinColumns,
+  buildRealtimeWallColumns,
   createDefaultFreeformPosition,
-  normalizeRealtimeBulletinLink,
-  sortRealtimeBulletinPostsForBoard,
-} from './realtimeBulletinRules';
+  normalizeRealtimeWallLink,
+  sortRealtimeWallPostsForBoard,
+} from './realtimeWallRules';
 
-describe('buildRealtimeBulletinColumns', () => {
+describe('buildRealtimeWallColumns', () => {
   it('빈 제목을 제거하고 순서를 다시 매긴다', () => {
-    expect(buildRealtimeBulletinColumns([' 질문 ', '', '정리 '])).toEqual([
+    expect(buildRealtimeWallColumns([' 질문 ', '', '정리 '])).toEqual([
       { id: 'column-1', title: '질문', order: 0 },
       { id: 'column-2', title: '정리', order: 1 },
     ]);
   });
 
   it('유효한 제목이 2개 미만이면 기본 컬럼으로 대체한다', () => {
-    expect(buildRealtimeBulletinColumns(['토론'])).toEqual([
+    expect(buildRealtimeWallColumns(['토론'])).toEqual([
       { id: 'column-1', title: '생각', order: 0 },
       { id: 'column-2', title: '질문', order: 1 },
       { id: 'column-3', title: '정리', order: 2 },
@@ -23,24 +23,24 @@ describe('buildRealtimeBulletinColumns', () => {
   });
 });
 
-describe('normalizeRealtimeBulletinLink', () => {
+describe('normalizeRealtimeWallLink', () => {
   it('http/https 링크는 정규화해서 반환한다', () => {
-    expect(normalizeRealtimeBulletinLink(' https://example.com/path?q=1 ')).toBe(
+    expect(normalizeRealtimeWallLink(' https://example.com/path?q=1 ')).toBe(
       'https://example.com/path?q=1',
     );
   });
 
   it('빈 문자열은 undefined를 반환한다', () => {
-    expect(normalizeRealtimeBulletinLink('   ')).toBeUndefined();
+    expect(normalizeRealtimeWallLink('   ')).toBeUndefined();
   });
 
   it('http/https 외 스킴은 거부한다', () => {
-    expect(normalizeRealtimeBulletinLink('javascript:alert(1)')).toBeUndefined();
-    expect(normalizeRealtimeBulletinLink('ftp://example.com')).toBeUndefined();
+    expect(normalizeRealtimeWallLink('javascript:alert(1)')).toBeUndefined();
+    expect(normalizeRealtimeWallLink('ftp://example.com')).toBeUndefined();
   });
 
   it('유효하지 않은 URL은 거부한다', () => {
-    expect(normalizeRealtimeBulletinLink('not a url')).toBeUndefined();
+    expect(normalizeRealtimeWallLink('not a url')).toBeUndefined();
   });
 });
 
@@ -52,9 +52,9 @@ describe('createDefaultFreeformPosition', () => {
   });
 });
 
-describe('sortRealtimeBulletinPostsForBoard', () => {
+describe('sortRealtimeWallPostsForBoard', () => {
   it('고정 글 우선, 그다음 최신순으로 정렬한다', () => {
-    const sorted = sortRealtimeBulletinPostsForBoard([
+    const sorted = sortRealtimeWallPostsForBoard([
       {
         id: 'a',
         nickname: '가',

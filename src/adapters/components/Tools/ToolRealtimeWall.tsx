@@ -6,21 +6,21 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import type {
-  RealtimeBulletinLayoutMode,
-  RealtimeBulletinPost,
-} from '@domain/entities/RealtimeBulletin';
+  RealtimeWallLayoutMode,
+  RealtimeWallPost,
+} from '@domain/entities/RealtimeWall';
 import {
-  buildRealtimeBulletinColumns,
+  buildRealtimeWallColumns,
   createDefaultFreeformPosition,
-  DEFAULT_REALTIME_BULLETIN_COLUMNS,
-  normalizeRealtimeBulletinLink,
-  REALTIME_BULLETIN_MAX_TEXT_LENGTH,
-} from '@domain/rules/realtimeBulletinRules';
-import { RealtimeBulletinCard } from './RealtimeBulletin/RealtimeBulletinCard';
-import { RealtimeBulletinKanbanBoard } from './RealtimeBulletin/RealtimeBulletinKanbanBoard';
-import { RealtimeBulletinFreeformBoard } from './RealtimeBulletin/RealtimeBulletinFreeformBoard';
+  DEFAULT_REALTIME_WALL_COLUMNS,
+  normalizeRealtimeWallLink,
+  REALTIME_WALL_MAX_TEXT_LENGTH,
+} from '@domain/rules/realtimeWallRules';
+import { RealtimeWallCard } from './RealtimeWall/RealtimeWallCard';
+import { RealtimeWallKanbanBoard } from './RealtimeWall/RealtimeWallKanbanBoard';
+import { RealtimeWallFreeformBoard } from './RealtimeWall/RealtimeWallFreeformBoard';
 
-interface ToolRealtimeBulletinProps {
+interface ToolRealtimeWallProps {
   onBack: () => void;
   isFullscreen: boolean;
 }
@@ -50,10 +50,10 @@ function formatAbsoluteTime(timestamp: number): string {
 
 interface CreateViewProps {
   readonly title: string;
-  readonly layoutMode: RealtimeBulletinLayoutMode;
+  readonly layoutMode: RealtimeWallLayoutMode;
   readonly columnInputs: string[];
   readonly onTitleChange: (value: string) => void;
-  readonly onLayoutModeChange: (value: RealtimeBulletinLayoutMode) => void;
+  readonly onLayoutModeChange: (value: RealtimeWallLayoutMode) => void;
   readonly onColumnChange: (index: number, value: string) => void;
   readonly onAddColumn: () => void;
   readonly onRemoveColumn: (index: number) => void;
@@ -154,7 +154,7 @@ function CreateView({
           placeholder="예: 2학년 3반 주장 모으기"
           className="w-full rounded-lg border border-sp-border bg-sp-bg px-4 py-3 text-sp-text outline-none transition focus:border-sp-accent"
         />
-        <p className="mt-2 text-xs text-sp-muted">비워두면 '실시간 게시판'으로 표시됩니다.</p>
+        <p className="mt-2 text-xs text-sp-muted">비워두면 '실시간 담벼락'으로 표시됩니다.</p>
       </section>
 
       {/* 단계 3: 컬럼 설정 (칸반만) */}
@@ -443,8 +443,8 @@ function LiveSharePanel({
 }
 
 interface QueuePanelProps {
-  readonly pendingPosts: readonly RealtimeBulletinPost[];
-  readonly hiddenPosts: readonly RealtimeBulletinPost[];
+  readonly pendingPosts: readonly RealtimeWallPost[];
+  readonly hiddenPosts: readonly RealtimeWallPost[];
   readonly onApprove: (postId: string) => void;
   readonly onHide: (postId: string) => void;
   readonly onRestore: (postId: string) => void;
@@ -496,7 +496,7 @@ function QueuePanel({
                   key={post.id}
                   className="rounded-lg border border-sp-accent/15 bg-sp-accent/5 p-2.5"
                 >
-                  <RealtimeBulletinCard post={post} compact onOpenLink={onOpenLink} />
+                  <RealtimeWallCard post={post} compact onOpenLink={onOpenLink} />
                   <div className="mt-2 flex gap-1.5">
                     <button
                       type="button"
@@ -531,7 +531,7 @@ function QueuePanel({
             <div className="space-y-2">
               {hiddenPosts.map((post) => (
                 <div key={post.id} className="opacity-60">
-                  <RealtimeBulletinCard post={post} compact onOpenLink={onOpenLink} />
+                  <RealtimeWallCard post={post} compact onOpenLink={onOpenLink} />
                   <button
                     type="button"
                     onClick={() => onRestore(post.id)}
@@ -551,9 +551,9 @@ function QueuePanel({
 
 interface ResultViewProps {
   readonly title: string;
-  readonly layoutMode: RealtimeBulletinLayoutMode;
-  readonly columns: ReturnType<typeof buildRealtimeBulletinColumns>;
-  readonly posts: readonly RealtimeBulletinPost[];
+  readonly layoutMode: RealtimeWallLayoutMode;
+  readonly columns: ReturnType<typeof buildRealtimeWallColumns>;
+  readonly posts: readonly RealtimeWallPost[];
   readonly onNewBoard: () => void;
 }
 
@@ -570,7 +570,7 @@ function ResultView({
 
   const resultData = useMemo(
     () => ({
-      type: 'realtime-bulletin' as const,
+      type: 'realtime-wall' as const,
       title,
       layoutMode,
       columns,
@@ -610,14 +610,14 @@ function ResultView({
 
       <section className="min-h-0 flex-1">
         {layoutMode === 'kanban' ? (
-          <RealtimeBulletinKanbanBoard
+          <RealtimeWallKanbanBoard
             columns={columns}
             posts={posts}
             readOnly
             onOpenLink={openExternalLink}
           />
         ) : (
-          <RealtimeBulletinFreeformBoard
+          <RealtimeWallFreeformBoard
             posts={posts}
             readOnly
             onOpenLink={openExternalLink}
@@ -634,7 +634,7 @@ function ResultView({
           새 게시판 만들기
         </button>
         <ResultSaveButton
-          toolType="realtime-bulletin"
+          toolType="realtime-wall"
           defaultName={title}
           resultData={resultData}
         />
@@ -643,14 +643,14 @@ function ResultView({
   );
 }
 
-export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulletinProps) {
+export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps) {
   const { track } = useAnalytics();
   const [viewMode, setViewMode] = useState<ViewMode>('create');
   const [showPastResults, setShowPastResults] = useState(false);
   const [title, setTitle] = useState('');
-  const [layoutMode, setLayoutMode] = useState<RealtimeBulletinLayoutMode>('kanban');
-  const [columnInputs, setColumnInputs] = useState<string[]>([...DEFAULT_REALTIME_BULLETIN_COLUMNS]);
-  const [posts, setPosts] = useState<RealtimeBulletinPost[]>([]);
+  const [layoutMode, setLayoutMode] = useState<RealtimeWallLayoutMode>('kanban');
+  const [columnInputs, setColumnInputs] = useState<string[]>([...DEFAULT_REALTIME_WALL_COLUMNS]);
+  const [posts, setPosts] = useState<RealtimeWallPost[]>([]);
 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [connectedStudents, setConnectedStudents] = useState(0);
@@ -666,8 +666,8 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
 
   const liveSessionClientRef = useRef(new LiveSessionClient());
 
-  const normalizedTitle = title.trim() || '실시간 게시판';
-  const columns = useMemo(() => buildRealtimeBulletinColumns(columnInputs), [columnInputs]);
+  const normalizedTitle = title.trim() || '실시간 담벼락';
+  const columns = useMemo(() => buildRealtimeWallColumns(columnInputs), [columnInputs]);
 
   const pendingPosts = useMemo(
     () =>
@@ -685,7 +685,7 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
   );
 
   useEffect(() => {
-    track('tool_use', { tool: 'realtime-bulletin' });
+    track('tool_use', { tool: 'realtime-wall' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -696,12 +696,12 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
     setTunnelError(null);
 
     try {
-      const available = await window.electronAPI.realtimeBulletinTunnelAvailable();
+      const available = await window.electronAPI.realtimeWallTunnelAvailable();
       if (!available) {
-        await window.electronAPI.realtimeBulletinTunnelInstall();
+        await window.electronAPI.realtimeWallTunnelInstall();
       }
 
-      const result = await window.electronAPI.realtimeBulletinTunnelStart();
+      const result = await window.electronAPI.realtimeWallTunnelStart();
       setTunnelUrl(result.tunnelUrl);
       setShortUrl(null);
       setShortCode(null);
@@ -719,8 +719,8 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
   }, []);
 
   const handleStartLive = useCallback(async () => {
-    if (!window.electronAPI?.startRealtimeBulletin) {
-      setLiveError('실시간 게시판은 데스크톱 앱에서만 열 수 있습니다.');
+    if (!window.electronAPI?.startRealtimeWall) {
+      setLiveError('실시간 담벼락은 데스크톱 앱에서만 열 수 있습니다.');
       return;
     }
 
@@ -731,22 +731,22 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
 
     try {
       setLiveError(null);
-      await window.electronAPI.startRealtimeBulletin({
+      await window.electronAPI.startRealtimeWall({
         title: normalizedTitle,
-        maxTextLength: REALTIME_BULLETIN_MAX_TEXT_LENGTH,
+        maxTextLength: REALTIME_WALL_MAX_TEXT_LENGTH,
       });
 
       setIsLiveMode(true);
       setConnectedStudents(0);
       await connectTunnel();
     } catch {
-      setLiveError('실시간 게시판 서버를 시작할 수 없습니다.');
+      setLiveError('실시간 담벼락 서버를 시작할 수 없습니다.');
     }
   }, [connectTunnel, normalizedTitle]);
 
   const handleStopLive = useCallback(async () => {
-    if (window.electronAPI?.stopRealtimeBulletin) {
-      await window.electronAPI.stopRealtimeBulletin();
+    if (window.electronAPI?.stopRealtimeWall) {
+      await window.electronAPI.stopRealtimeWall();
     }
     setIsLiveMode(false);
     setConnectedStudents(0);
@@ -802,7 +802,7 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
     setViewMode('create');
     setTitle('');
     setLayoutMode('kanban');
-    setColumnInputs([...DEFAULT_REALTIME_BULLETIN_COLUMNS]);
+    setColumnInputs([...DEFAULT_REALTIME_WALL_COLUMNS]);
     setPosts([]);
     setShowPastResults(false);
   }, []);
@@ -921,15 +921,15 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
   useEffect(() => {
     if (!isLiveMode || !window.electronAPI) return;
 
-    const unsubscribeSubmitted = window.electronAPI.onRealtimeBulletinStudentSubmitted((data) => {
+    const unsubscribeSubmitted = window.electronAPI.onRealtimeWallStudentSubmitted((data) => {
       setPosts((prev) => {
         const nextIndex = prev.length;
         const initialColumnId = columns[0]?.id ?? 'column-1';
         const normalizedLink = data.post.linkUrl
-          ? normalizeRealtimeBulletinLink(data.post.linkUrl)
+          ? normalizeRealtimeWallLink(data.post.linkUrl)
           : undefined;
 
-        const nextPost: RealtimeBulletinPost = {
+        const nextPost: RealtimeWallPost = {
           id: data.post.id,
           nickname: data.post.nickname,
           text: data.post.text,
@@ -950,7 +950,7 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
       });
     });
 
-    const unsubscribeCount = window.electronAPI.onRealtimeBulletinConnectionCount((data) => {
+    const unsubscribeCount = window.electronAPI.onRealtimeWallConnectionCount((data) => {
       setConnectedStudents(data.count);
     });
 
@@ -962,15 +962,15 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
 
   useEffect(() => {
     return () => {
-      if (window.electronAPI?.stopRealtimeBulletin) {
-        void window.electronAPI.stopRealtimeBulletin();
+      if (window.electronAPI?.stopRealtimeWall) {
+        void window.electronAPI.stopRealtimeWall();
       }
     };
   }, []);
 
   const boardView = (
     layoutMode === 'kanban' ? (
-      <RealtimeBulletinKanbanBoard
+      <RealtimeWallKanbanBoard
         columns={columns}
         posts={posts}
         onChangePosts={setPosts}
@@ -979,7 +979,7 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
         onOpenLink={openExternalLink}
       />
     ) : (
-      <RealtimeBulletinFreeformBoard
+      <RealtimeWallFreeformBoard
         posts={posts}
         onChangePosts={setPosts}
         onTogglePin={handleTogglePin}
@@ -990,9 +990,9 @@ export function ToolRealtimeBulletin({ onBack, isFullscreen }: ToolRealtimeBulle
   );
 
   return (
-    <ToolLayout title="실시간 게시판" emoji="🗂️" onBack={onBack} isFullscreen={isFullscreen}>
+    <ToolLayout title="실시간 담벼락" emoji="🗂️" onBack={onBack} isFullscreen={isFullscreen}>
       {showPastResults ? (
-        <PastResultsView toolType="realtime-bulletin" onClose={() => setShowPastResults(false)} />
+        <PastResultsView toolType="realtime-wall" onClose={() => setShowPastResults(false)} />
       ) : null}
 
       {!showPastResults && viewMode === 'create' && (

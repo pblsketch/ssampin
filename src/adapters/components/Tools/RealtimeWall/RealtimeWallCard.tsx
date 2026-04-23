@@ -1,7 +1,7 @@
-import type { RealtimeBulletinPost } from '@domain/entities/RealtimeBulletin';
+import type { RealtimeWallPost } from '@domain/entities/RealtimeWall';
 
-interface RealtimeBulletinCardProps {
-  readonly post: RealtimeBulletinPost;
+interface RealtimeWallCardProps {
+  readonly post: RealtimeWallPost;
   readonly compact?: boolean;
   readonly actions?: React.ReactNode;
   readonly dragHandle?: React.ReactNode;
@@ -17,13 +17,13 @@ function getLinkLabel(linkUrl: string): string {
   }
 }
 
-export function RealtimeBulletinCard({
+export function RealtimeWallCard({
   post,
   compact = false,
   actions,
   dragHandle,
   onOpenLink,
-}: RealtimeBulletinCardProps) {
+}: RealtimeWallCardProps) {
   const isPinned = post.pinned;
 
   return (
