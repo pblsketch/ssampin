@@ -299,17 +299,17 @@ export function Schedule() {
             <span className="text-2xl xl:text-3xl">📋</span> 일정 관리
           </h2>
 
-          {/* 뷰 전환 탭 */}
-          <div className="flex bg-sp-surface rounded-xl p-1 gap-1">
+          {/* 뷰 전환 탭 — Cal.com pill 그룹 패턴 */}
+          <div className="flex items-center bg-sp-surface/60 rounded-sp-md p-0.5 border border-sp-border gap-0.5">
             {(['month', 'semester', 'year'] as const).map((v) => (
               <button
                 key={v}
                 type="button"
                 onClick={() => setView(v)}
-                className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs xl:text-sm font-medium transition-colors ${
+                className={`px-3 xl:px-4 py-1.5 rounded-sp-sm text-xs xl:text-sm transition-all duration-sp-base ease-sp-out ${
                   view === v
-                    ? 'bg-sp-accent text-white'
-                    : 'text-sp-muted hover:text-sp-text'
+                    ? 'bg-sp-card shadow-sp-sm font-sp-semibold text-sp-text'
+                    : 'font-sp-medium text-sp-muted hover:text-sp-text'
                 }`}
               >
                 {VIEW_LABELS[v]}

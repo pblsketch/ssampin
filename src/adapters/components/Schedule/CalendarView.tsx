@@ -30,6 +30,7 @@ interface CalendarDay {
   isHoliday: boolean;
   holidayName: string | null;
   categoryColors: readonly string[]; // 단일 일정 dot 색상 (다일 제외)
+  dateKey: string; // yyyy-mm-dd
 }
 
 function getCalendarDays(year: number, month: number): CalendarDay[] {
@@ -51,6 +52,7 @@ function getCalendarDays(year: number, month: number): CalendarDay[] {
   for (let i = startDow - 1; i >= 0; i--) {
     const d = prevMonthLastDay - i;
     const date = new Date(year, month - 1, d);
+    const dk = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     days.push({
       date,
       day: d,
@@ -61,6 +63,7 @@ function getCalendarDays(year: number, month: number): CalendarDay[] {
       isHoliday: false,
       holidayName: null,
       categoryColors: [],
+      dateKey: dk,
     });
   }
 
@@ -84,6 +87,7 @@ function getCalendarDays(year: number, month: number): CalendarDay[] {
       isHoliday: holidayName !== null,
       holidayName,
       categoryColors: colors,
+      dateKey,
     });
   }
 
@@ -92,6 +96,7 @@ function getCalendarDays(year: number, month: number): CalendarDay[] {
   let nextDay = 1;
   while (days.length < totalCells) {
     const date = new Date(year, month + 1, nextDay);
+    const dk = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(nextDay).padStart(2, '0')}`;
     days.push({
       date,
       day: nextDay,
@@ -102,6 +107,7 @@ function getCalendarDays(year: number, month: number): CalendarDay[] {
       isHoliday: false,
       holidayName: null,
       categoryColors: [],
+      dateKey: dk,
     });
     nextDay++;
   }
@@ -136,12 +142,12 @@ function MultiDayBar({
 }) {
   const colors = getColorsForCategory(bar.category, categories);
 
-  const roundedLeft = bar.isContinuation ? '' : 'rounded-l-md';
-  const roundedRight = bar.isContinued ? '' : 'rounded-r-md';
+  const roundedLeft = bar.isContinuation ? '' : 'rounded-l-sp-xs';
+  const roundedRight = bar.isContinued ? '' : 'rounded-r-sp-xs';
 
   return (
     <div
-      className={`h-4 ${colors.bar} text-white text-[10px] leading-4 px-1 truncate cursor-pointer hover:brightness-110 transition-all ${roundedLeft} ${roundedRight}`}
+      className={`h-4 ${colors.bar} text-white text-[10px] leading-4 px-1 truncate cursor-pointer hover:brightness-110 transition-all duration-sp-quick ease-sp-out ${roundedLeft} ${roundedRight}`}
       style={{
         gridColumn: `${bar.startCol + 1} / span ${bar.span}`,
         gridRow: bar.row + 1,
@@ -152,6 +158,41 @@ function MultiDayBar({
       {!bar.isContinuation && bar.title}
     </div>
   );
+}
+
+/** 단일 일정 칩 — 다일 바 없는 날의 이벤트를 표시 */
+function SingleEventChip({
+  title,
+  barClass,
+  onClick,
+}: {
+  title: string;
+  barClass: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`w-full text-left text-[10px] leading-none px-1 py-0.5 rounded-sp-xs text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={title}
+    >
+      {title}
+    </button>
+  );
+}
+
+/** 날짜별 단일 이벤트 조회 (다일 이벤트 제외, 숨긴 일정 제외) */
+function getSingleDayEventsForDate(
+  events: readonly SchoolEvent[],
+  dateKey: string,
+): readonly SchoolEvent[] {
+  return events.filter((e) => {
+    if (e.isHidden) return false;
+    // endDate 있고 다른 날이면 다일 바로 처리됨 — 칩 제외
+    if (e.endDate && e.endDate !== e.date) return false;
+    return e.date === dateKey;
+  });
 }
 
 export function CalendarView({
@@ -184,24 +225,34 @@ export function CalendarView({
     [weeks, events],
   );
 
+  // 날짜별 단일 이벤트 맵
+  const singleEventMap = useMemo(() => {
+    const map = new Map<string, readonly SchoolEvent[]>();
+    for (const day of days) {
+      if (!day.isCurrentMonth) continue;
+      map.set(day.dateKey, getSingleDayEventsForDate(events, day.dateKey));
+    }
+    return map;
+  }, [days, events]);
+
   const monthLabel = `${year}년 ${month + 1}월`;
 
   return (
-    <div className="flex flex-col bg-sp-card rounded-3xl p-6 border border-sp-border shadow-xl h-full min-h-0 flex-1 overflow-hidden">
+    <div className="flex flex-col bg-sp-card rounded-sp-xl p-6 border border-sp-border shadow-sp-md h-full min-h-0 flex-1 overflow-hidden">
       {/* 월 네비게이션 */}
       <div className="flex items-center justify-between mb-4 px-2">
         <button
           type="button"
           onClick={onPrevMonth}
-          className="p-2 hover:bg-sp-surface rounded-full transition-colors text-sp-muted hover:text-sp-text"
+          className="p-2 hover:bg-sp-surface rounded-full transition-all duration-sp-quick ease-sp-out text-sp-muted hover:text-sp-text"
         >
           <span className="material-symbols-outlined">chevron_left</span>
         </button>
-        <h3 className="text-xl font-bold text-sp-text">{monthLabel}</h3>
+        <h3 className="text-xl font-sp-bold text-sp-text">{monthLabel}</h3>
         <button
           type="button"
           onClick={onNextMonth}
-          className="p-2 hover:bg-sp-surface rounded-full transition-colors text-sp-muted hover:text-sp-text"
+          className="p-2 hover:bg-sp-surface rounded-full transition-all duration-sp-quick ease-sp-out text-sp-muted hover:text-sp-text"
         >
           <span className="material-symbols-outlined">chevron_right</span>
         </button>
@@ -212,8 +263,8 @@ export function CalendarView({
         {DAY_HEADERS.map((day, i) => (
           <div
             key={day}
-            className={`text-center text-sm py-2 font-medium ${
-              i === 0 ? 'text-red-400 font-bold' : i === 6 ? 'text-blue-400 font-bold' : 'text-sp-muted'
+            className={`text-center text-xs py-2 font-sp-semibold uppercase tracking-wider ${
+              i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-sp-muted'
             }`}
           >
             {day}
@@ -230,6 +281,15 @@ export function CalendarView({
           const { bars, overflowCounts } = weekBars[weekIdx] ?? { bars: [], overflowCounts: Array(7).fill(0) as number[] };
           const maxRow = bars.length > 0 ? Math.max(...bars.map((b) => b.row)) + 1 : 0;
 
+          // 이번 주에서 다일 바가 차지하는 날 목록 (칩 표시 억제)
+          const multiDayDateKeys = new Set<string>();
+          for (const bar of bars) {
+            for (let col = bar.startCol; col < bar.startCol + bar.span; col++) {
+              const wd = weekDays[col];
+              if (wd) multiDayDateKeys.add(wd.dateKey);
+            }
+          }
+
           return (
             <div key={weekIdx} className="flex flex-col min-h-0 overflow-hidden">
               {/* 날짜 셀 */}
@@ -237,19 +297,28 @@ export function CalendarView({
                 {weekDays.map((d, dayIdx) => {
                   const isSelected = selectedDate !== null && isSameDate(d.date, selectedDate);
 
-                  let cellClass = 'group relative flex flex-col items-center gap-1 py-1 px-1 rounded-xl cursor-pointer transition-colors h-full justify-center ';
-                  let textClass = 'text-sm font-medium ';
+                  // 단일 이벤트 칩 (이번 달, 다일 바 없는 날만)
+                  const singleEvts = (d.isCurrentMonth && !multiDayDateKeys.has(d.dateKey))
+                    ? (singleEventMap.get(d.dateKey) ?? [])
+                    : [];
+                  const chipsToShow = singleEvts.slice(0, 2);
+                  const chipOverflow = singleEvts.length - chipsToShow.length;
+
+                  // ── cell 상태 클래스 ──
+                  let cellClass = 'group relative flex flex-col py-1 px-0.5 rounded-sp-md cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
 
                   if (d.isToday) {
-                    cellClass += 'bg-sp-accent/20 border border-sp-accent shadow-[0_0_15px_rgba(59,130,246,0.2)] ';
+                    cellClass += 'ring-2 ring-sp-accent ring-offset-1 ring-offset-sp-card bg-sp-accent/10 ';
                   } else if (isSelected) {
                     cellClass += 'bg-sp-accent/15 border border-sp-accent/40 ';
                   } else {
-                    cellClass += 'hover:bg-sp-surface border border-transparent hover:border-sp-border ';
+                    cellClass += 'border border-transparent hover:bg-sp-text/5 hover:border-sp-border/40 ';
                   }
 
+                  // ── 날짜 숫자 색상 ──
+                  let textClass = 'text-sm font-sp-medium leading-none ';
                   if (!d.isCurrentMonth) {
-                    textClass += 'text-sp-muted opacity-40';
+                    textClass += 'text-sp-muted opacity-30';
                   } else if (d.isSunday || d.isHoliday) {
                     textClass += 'text-red-400';
                   } else if (d.isSaturday) {
@@ -265,25 +334,51 @@ export function CalendarView({
                       onClick={() => onSelectDate(d.date)}
                       title={d.holidayName ?? undefined}
                     >
-                      {d.isToday ? (
-                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-sp-accent text-white font-bold text-sm shadow-md">
-                          {d.day}
-                        </span>
-                      ) : (
-                        <span className={textClass}>{d.day}</span>
-                      )}
+                      {/* 날짜 숫자 */}
+                      <div className="flex items-center justify-center mb-0.5 pt-0.5">
+                        {d.isToday ? (
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-sp-accent text-white font-sp-bold text-sm shadow-sp-sm">
+                            {d.day}
+                          </span>
+                        ) : (
+                          <span className={textClass}>{d.day}</span>
+                        )}
+                      </div>
+
                       {/* 공휴일 이름 */}
                       {d.isHoliday && d.isCurrentMonth && (
-                        <span className="text-tiny text-red-400/80 leading-tight truncate w-full text-center">
+                        <span className="text-[9px] leading-none text-red-400/70 truncate w-full text-center px-0.5 mb-0.5">
                           {d.holidayName}
                         </span>
+                      )}
+
+                      {/* 단일 이벤트 칩 */}
+                      {chipsToShow.length > 0 && (
+                        <div className="flex flex-col gap-px w-full px-0.5">
+                          {chipsToShow.map((evt) => {
+                            const colors = getColorsForCategory(evt.category, categories);
+                            return (
+                              <SingleEventChip
+                                key={evt.id}
+                                title={evt.title}
+                                barClass={colors.bar}
+                                onClick={() => onSelectDate(d.date)}
+                              />
+                            );
+                          })}
+                          {chipOverflow > 0 && (
+                            <span className="text-[10px] text-sp-muted hover:text-sp-accent font-sp-medium text-center leading-none transition-colors duration-sp-quick">
+                              +{chipOverflow}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
                 })}
               </div>
 
-              {/* 바 오버레이 */}
+              {/* 다일 바 오버레이 */}
               {bars.length > 0 && (
                 <div
                   className="grid grid-cols-7 gap-x-1 mt-0.5"
@@ -300,7 +395,7 @@ export function CalendarView({
                 </div>
               )}
 
-              {/* +N 더보기 */}
+              {/* +N 다일 오버플로 */}
               {overflowCounts.some((c) => c > 0) && (
                 <div className="grid grid-cols-7 gap-x-1">
                   {overflowCounts.map((count, colIdx) => (
@@ -308,7 +403,7 @@ export function CalendarView({
                       {count > 0 ? (
                         <button
                           type="button"
-                          className="text-[10px] text-sp-muted hover:text-sp-accent font-medium leading-3 transition-colors"
+                          className="text-[10px] text-sp-muted hover:text-sp-accent font-sp-medium leading-3 transition-colors duration-sp-quick"
                           onClick={() => onSelectDate(weekDays[colIdx]!.date)}
                         >
                           +{count}

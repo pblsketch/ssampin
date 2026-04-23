@@ -188,7 +188,7 @@ export function EventFormModal({
       {/* 모달 */}
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <div
-          className="w-full max-w-[520px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden"
+          className="w-full max-w-[520px] bg-sp-card rounded-sp-xl border border-sp-border shadow-sp-lg overflow-hidden"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
