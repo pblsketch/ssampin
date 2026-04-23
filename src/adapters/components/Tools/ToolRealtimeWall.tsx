@@ -3,18 +3,23 @@ import { ToolLayout } from './ToolLayout';
 import { PastResultsView } from './TemplateManager';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
+import { wallBoardRepository } from '@adapters/di/container';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import type {
   RealtimeWallLayoutMode,
   RealtimeWallLinkPreview,
   RealtimeWallPost,
+  WallBoard,
+  WallBoardId,
 } from '@domain/entities/RealtimeWall';
 import {
   approveRealtimeWallPost,
   buildRealtimeWallColumns,
   createPendingRealtimeWallPost,
+  createWallBoard,
   DEFAULT_REALTIME_WALL_COLUMNS,
   extractYoutubeVideoId,
+  generateUniqueWallShortCode,
   heartRealtimeWallPost,
   hideRealtimeWallPost,
   normalizeRealtimeWallLink,
@@ -29,23 +34,39 @@ import { RealtimeWallCreateView } from './RealtimeWall/RealtimeWallCreateView';
 import { RealtimeWallLiveSharePanel } from './RealtimeWall/RealtimeWallLiveSharePanel';
 import { RealtimeWallQueuePanel } from './RealtimeWall/RealtimeWallQueuePanel';
 import { RealtimeWallResultView } from './RealtimeWall/RealtimeWallResultView';
+import { WallBoardListView } from './RealtimeWall/WallBoardListView';
 import { formatAbsoluteTime, openExternalLink } from './RealtimeWall/realtimeWallHelpers';
+
+const AUTO_SAVE_DEBOUNCE_MS = 2000;
+
+/** crypto.randomUUID → WallBoardId branded type 캐스팅 */
+function newWallBoardId(): WallBoardId {
+  const raw = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `wb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return raw as WallBoardId;
+}
 
 interface ToolRealtimeWallProps {
   onBack: () => void;
   isFullscreen: boolean;
 }
 
-type ViewMode = 'create' | 'running' | 'results';
+type ViewMode = 'list' | 'create' | 'running' | 'results';
 
 export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps) {
   const { track } = useAnalytics();
-  const [viewMode, setViewMode] = useState<ViewMode>('create');
+  // v1.13 Stage A: 기본 진입점을 '보드 목록'으로. 사용자가 이전 담벼락을
+  // 재사용할 수 있도록. 새 보드는 list → create로 진입.
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showPastResults, setShowPastResults] = useState(false);
   const [title, setTitle] = useState('');
   const [layoutMode, setLayoutMode] = useState<RealtimeWallLayoutMode>('kanban');
   const [columnInputs, setColumnInputs] = useState<string[]>([...DEFAULT_REALTIME_WALL_COLUMNS]);
   const [posts, setPosts] = useState<RealtimeWallPost[]>([]);
+  // 현재 열려있는 영속 보드. list→open 또는 create→start 시점에 set.
+  // 자동 저장 및 결과 저장 시 이 식별자로 repo 반영.
+  const [currentBoard, setCurrentBoard] = useState<WallBoard | null>(null);
 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [connectedStudents, setConnectedStudents] = useState(0);
@@ -83,6 +104,35 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     track('tool_use', { tool: 'realtime-wall' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // v1.13 Stage A: 자동 저장. running 모드에서 posts/title/layoutMode/columns
+  // 변경을 debounce 2s로 repo에 반영. currentBoard가 없으면 no-op
+  // (아직 새 보드를 start하지 않은 상태 — create 화면 등).
+  useEffect(() => {
+    if (!currentBoard || viewMode !== 'running') return;
+
+    const timer = window.setTimeout(() => {
+      const next: WallBoard = {
+        ...currentBoard,
+        title: normalizedTitle,
+        layoutMode,
+        columns,
+        posts,
+        updatedAt: Date.now(),
+      };
+      // 저장 실패는 조용히 무시 — 다음 주기에 재시도.
+      // 토스트는 수동 "저장/종료" 시에만 노출.
+      void wallBoardRepository.save(next).then(() => {
+        setCurrentBoard(next);
+      }).catch(() => {});
+    }, AUTO_SAVE_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+    // currentBoard를 dep에 넣으면 save → setCurrentBoard → 재-schedule 무한
+    // 루프가 되므로 의도적으로 제외 (currentBoard는 최신 저장본을 보관할 뿐
+    // dependency로서는 stable하게 다뤄야 함).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts, normalizedTitle, layoutMode, columns, viewMode]);
 
   const connectTunnel = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -172,34 +222,96 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     }
   }, [customCodeInput, tunnelUrl]);
 
-  const handleStartBoard = useCallback(() => {
-    setPosts([]);
+  const handleStartBoard = useCallback(async () => {
+    // create → running 진입 시 새 WallBoard 생성·영속화. 이미 currentBoard가
+    // 있으면(list→open 후 설정 수정 경로) 새로 만들지 않고 재사용.
+    let board = currentBoard;
+    if (!board) {
+      const existingMetas = await wallBoardRepository.listAllMeta();
+      const existingCodes = new Set(
+        existingMetas.map((m) => m.shortCode).filter((c): c is string => Boolean(c)),
+      );
+      board = createWallBoard({
+        id: newWallBoardId(),
+        title: normalizedTitle,
+        layoutMode,
+        columns,
+        shortCode: generateUniqueWallShortCode(existingCodes),
+      });
+      await wallBoardRepository.save(board);
+      setCurrentBoard(board);
+    }
+    setPosts([...board.posts]);
     setConnectedStudents(0);
     setLiveError(null);
     setTunnelUrl(null);
     setTunnelError(null);
     setShortUrl(null);
-    setShortCode(null);
+    setShortCode(board.shortCode ?? null);
     setCustomCodeInput('');
     setCustomCodeError(null);
     setViewMode('running');
     setShowPastResults(false);
-  }, []);
+  }, [columns, currentBoard, layoutMode, normalizedTitle]);
 
   const handleFinish = useCallback(async () => {
     if (isLiveMode) {
       await handleStopLive();
     }
+    // 마지막 세션 종료 시각 기록 + 현재 상태 즉시 저장.
+    if (currentBoard) {
+      const finalBoard: WallBoard = {
+        ...currentBoard,
+        title: normalizedTitle,
+        layoutMode,
+        columns,
+        posts,
+        updatedAt: Date.now(),
+        lastSessionAt: Date.now(),
+      };
+      await wallBoardRepository.save(finalBoard);
+      setCurrentBoard(finalBoard);
+    }
     setViewMode('results');
-  }, [handleStopLive, isLiveMode]);
+  }, [columns, currentBoard, handleStopLive, isLiveMode, layoutMode, normalizedTitle, posts]);
 
   const handleNewBoard = useCallback(() => {
-    setViewMode('create');
+    // 결과 화면 → 목록으로. "새 담벼락 만들기"는 목록 내 버튼이 담당.
+    setViewMode('list');
     setTitle('');
     setLayoutMode('kanban');
     setColumnInputs([...DEFAULT_REALTIME_WALL_COLUMNS]);
     setPosts([]);
+    setCurrentBoard(null);
+    setShortCode(null);
     setShowPastResults(false);
+  }, []);
+
+  // 목록 → "+ 새 담벼락" → create 진입 (신규 보드)
+  const handleOpenCreate = useCallback(() => {
+    setCurrentBoard(null);
+    setTitle('');
+    setLayoutMode('kanban');
+    setColumnInputs([...DEFAULT_REALTIME_WALL_COLUMNS]);
+    setPosts([]);
+    setShortCode(null);
+    setViewMode('create');
+  }, []);
+
+  // 목록 → 보드 선택 → 복원 후 running 진입
+  const handleOpenBoard = useCallback(async (id: WallBoardId) => {
+    const board = await wallBoardRepository.load(id);
+    if (!board) {
+      setLiveError('담벼락을 불러오지 못했습니다. 파일이 손상되었을 수 있습니다.');
+      return;
+    }
+    setCurrentBoard(board);
+    setTitle(board.title);
+    setLayoutMode(board.layoutMode);
+    setColumnInputs(board.columns.map((c) => c.title));
+    setPosts([...board.posts]);
+    setShortCode(board.shortCode ?? null);
+    setViewMode('running');
   }, []);
 
   const handleApprovePost = useCallback((postId: string) => {
@@ -373,6 +485,16 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         <PastResultsView toolType="realtime-wall" onClose={() => setShowPastResults(false)} />
       ) : null}
 
+      {!showPastResults && viewMode === 'list' && (
+        <WallBoardListView
+          repo={wallBoardRepository}
+          onCreate={handleOpenCreate}
+          onOpen={(id) => {
+            void handleOpenBoard(id);
+          }}
+        />
+      )}
+
       {!showPastResults && viewMode === 'create' && (
         <RealtimeWallCreateView
           title={title}
@@ -383,7 +505,9 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
           onColumnChange={handleChangeColumnInput}
           onAddColumn={handleAddColumn}
           onRemoveColumn={handleRemoveColumn}
-          onStart={handleStartBoard}
+          onStart={() => {
+            void handleStartBoard();
+          }}
           onShowPastResults={() => setShowPastResults(true)}
         />
       )}
