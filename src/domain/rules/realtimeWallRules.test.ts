@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   RealtimeWallColumn,
   RealtimeWallPost,
+  WallApprovalMode,
   WallBoard,
   WallBoardId,
 } from '@domain/entities/RealtimeWall';
@@ -9,10 +10,12 @@ import {
   approveRealtimeWallPost,
   buildRealtimeWallColumns,
   buildWallPreviewPosts,
+  bulkApproveWallPosts,
   classifyRealtimeWallLink,
   createDefaultFreeformPosition,
   createPendingRealtimeWallPost,
   createWallBoard,
+  createWallPost,
   extractYoutubeVideoId,
   generateUniqueWallShortCode,
   generateWallShortCode,
@@ -696,5 +699,183 @@ describe('toWallBoardMeta', () => {
     expect(meta.approvedCount).toBe(2);
     expect(meta.previewPosts).toHaveLength(2);
     expect(meta.previewPosts.map((p) => p.id).sort()).toEqual(['1', '3']);
+  });
+});
+
+// ============================================================
+// v1.13 Stage C — 승인 정책 옵션
+// Design §4.2, §4.3, §4.6
+// ============================================================
+
+describe('createWallPost (v1.13 Stage C)', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '생각', order: 0 },
+    { id: 'column-2', title: '질문', order: 1 },
+  ];
+
+  function makePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
+    return {
+      nickname: '기존',
+      text: '기존 카드',
+      status: 'approved',
+      pinned: false,
+      submittedAt: 500,
+      kanban: { columnId: 'column-1', order: 0 },
+      freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      ...overrides,
+    };
+  }
+
+  const submission = {
+    id: 's-new',
+    nickname: '민수',
+    text: '새 제출',
+    submittedAt: 2000,
+  };
+
+  it("'manual' 모드는 기존 createPendingRealtimeWallPost와 동일하게 pending 생성", () => {
+    const existing = [
+      makePost({ id: 'p1', status: 'approved', kanban: { columnId: 'column-1', order: 0 } }),
+    ];
+    const viaManual = createWallPost(submission, existing, columns, 'manual');
+    const viaLegacy = createPendingRealtimeWallPost(submission, existing, columns);
+
+    expect(viaManual).toEqual(viaLegacy);
+    expect(viaManual.status).toBe('pending');
+  });
+
+  it("'auto' 모드는 즉시 approved + 같은 컬럼 approved 카드 수로 order 계산", () => {
+    const existing = [
+      makePost({ id: 'p1', status: 'approved', kanban: { columnId: 'column-1', order: 0 } }),
+      makePost({ id: 'p2', status: 'approved', kanban: { columnId: 'column-1', order: 1 } }),
+      makePost({ id: 'p3', status: 'pending', kanban: { columnId: 'column-1', order: 0 } }),
+    ];
+    const post = createWallPost(submission, existing, columns, 'auto');
+
+    expect(post.status).toBe('approved');
+    expect(post.kanban.columnId).toBe('column-1');
+    // approved 2건만 카운트 (pending 제외)
+    expect(post.kanban.order).toBe(2);
+  });
+
+  it("'auto' 모드의 zIndex는 전체 최댓값 + 1", () => {
+    const existing = [
+      makePost({ id: 'p1', freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 7 } }),
+      makePost({ id: 'p2', freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 42 } }),
+    ];
+    const post = createWallPost(submission, existing, columns, 'auto');
+    expect(post.freeform.zIndex).toBe(43);
+  });
+
+  it("'auto' 모드라도 existingPosts가 비면 zIndex=1, order=0", () => {
+    const post = createWallPost(submission, [], columns, 'auto');
+    expect(post.status).toBe('approved');
+    expect(post.kanban.order).toBe(0);
+    expect(post.freeform.zIndex).toBe(1);
+  });
+
+  it("'filter' 모드는 v1.13.2 스텁: pending으로 안전 폴백", () => {
+    const post = createWallPost(submission, [], columns, 'filter');
+    expect(post.status).toBe('pending');
+  });
+
+  it('알 수 없는 승인 모드는 never exhaustive 방어로 에러', () => {
+    expect(() =>
+      createWallPost(submission, [], columns, 'unknown' as WallApprovalMode),
+    ).toThrow(/Unknown approvalMode/);
+  });
+
+  it("'auto' 모드 링크 분류는 manual과 동일 (youtube kind 유지)", () => {
+    const post = createWallPost(
+      { ...submission, linkUrl: 'https://youtu.be/dQw4w9WgXcQ' },
+      [],
+      columns,
+      'auto',
+    );
+    expect(post.status).toBe('approved');
+    expect(post.linkPreview).toEqual({ kind: 'youtube', videoId: 'dQw4w9WgXcQ' });
+  });
+});
+
+describe('bulkApproveWallPosts (v1.13 Stage C)', () => {
+  const columns: RealtimeWallColumn[] = [
+    { id: 'column-1', title: '생각', order: 0 },
+    { id: 'column-2', title: '질문', order: 1 },
+  ];
+
+  function makePost(overrides: Partial<RealtimeWallPost> & { id: string }): RealtimeWallPost {
+    return {
+      nickname: '학생',
+      text: '내용',
+      status: 'pending',
+      pinned: false,
+      submittedAt: 1000,
+      kanban: { columnId: 'column-1', order: 0 },
+      freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 1 },
+      ...overrides,
+    };
+  }
+
+  it('혼합 상태 배열: pending만 approved로 승격, approved/hidden은 보존', () => {
+    const posts = [
+      makePost({ id: 'a', status: 'approved', kanban: { columnId: 'column-1', order: 0 } }),
+      makePost({ id: 'b', status: 'pending', kanban: { columnId: 'column-1', order: 0 } }),
+      makePost({ id: 'c', status: 'hidden', kanban: { columnId: 'column-2', order: 9 } }),
+      makePost({ id: 'd', status: 'pending', kanban: { columnId: 'column-2', order: 0 } }),
+    ];
+
+    const result = bulkApproveWallPosts(posts, columns);
+    const byId = new Map(result.map((p) => [p.id, p]));
+
+    expect(byId.get('a')!.status).toBe('approved');
+    expect(byId.get('b')!.status).toBe('approved');
+    // b는 column-1에서 a(이미 approved) 뒤 order 1
+    expect(byId.get('b')!.kanban.order).toBe(1);
+    // c는 hidden이므로 승인 대상 아님 (order 보존)
+    expect(byId.get('c')!.status).toBe('hidden');
+    expect(byId.get('c')!.kanban.order).toBe(9);
+    expect(byId.get('d')!.status).toBe('approved');
+    // d는 column-2 첫 approved → order 0
+    expect(byId.get('d')!.kanban.order).toBe(0);
+  });
+
+  it('전부 pending: 순차 승인으로 같은 컬럼 내 order가 0,1,2... 누적', () => {
+    const posts = [
+      makePost({ id: 'a', status: 'pending', kanban: { columnId: 'column-1', order: 0 } }),
+      makePost({ id: 'b', status: 'pending', kanban: { columnId: 'column-1', order: 0 } }),
+      makePost({ id: 'c', status: 'pending', kanban: { columnId: 'column-1', order: 0 } }),
+    ];
+
+    const result = bulkApproveWallPosts(posts, columns);
+    const orders = result.map((p) => p.kanban.order).sort();
+
+    expect(result.every((p) => p.status === 'approved')).toBe(true);
+    expect(orders).toEqual([0, 1, 2]);
+  });
+
+  it('전부 hidden: 어떤 카드도 변경되지 않음 (참조/상태 보존)', () => {
+    const posts = [
+      makePost({ id: 'a', status: 'hidden', kanban: { columnId: 'column-1', order: 0 } }),
+      makePost({ id: 'b', status: 'hidden', kanban: { columnId: 'column-2', order: 5 } }),
+    ];
+    const result = bulkApproveWallPosts(posts, columns);
+
+    expect(result.every((p) => p.status === 'hidden')).toBe(true);
+    expect(result[0]!.kanban.order).toBe(0);
+    expect(result[1]!.kanban.order).toBe(5);
+  });
+
+  it('빈 배열은 빈 배열 반환', () => {
+    expect(bulkApproveWallPosts([], columns)).toEqual([]);
+  });
+
+  it('입력 배열 순서(id)는 반환 배열에서 그대로 유지', () => {
+    const posts = [
+      makePost({ id: 'a', status: 'pending' }),
+      makePost({ id: 'b', status: 'approved' }),
+      makePost({ id: 'c', status: 'pending' }),
+    ];
+    const result = bulkApproveWallPosts(posts, columns);
+    expect(result.map((p) => p.id)).toEqual(['a', 'b', 'c']);
   });
 });
