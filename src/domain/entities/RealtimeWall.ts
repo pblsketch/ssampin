@@ -3,20 +3,26 @@ export type RealtimeWallLayoutMode = 'kanban' | 'freeform' | 'grid' | 'stream';
 export type RealtimeWallPostStatus = 'pending' | 'approved' | 'hidden';
 
 /**
+ * OG 메타 공통 필드. Main 프로세스 fetch IPC 응답과 webpage variant가 공유.
+ * 이미지는 원격 URL만 보관 — 쌤핀 용량 정책.
+ */
+export interface RealtimeWallLinkPreviewOgMeta {
+  readonly ogTitle?: string;
+  readonly ogDescription?: string;
+  readonly ogImageUrl?: string;
+}
+
+/**
  * 학생이 제출한 linkUrl을 서버가 분류·해석한 결과.
- * 이미지 파일은 저장하지 않고 원격 URL만 보관 — 쌤핀 용량 정책.
  */
 export type RealtimeWallLinkPreview =
   | {
       readonly kind: 'youtube';
       readonly videoId: string;
     }
-  | {
+  | ({
       readonly kind: 'webpage';
-      readonly ogTitle?: string;
-      readonly ogDescription?: string;
-      readonly ogImageUrl?: string;
-    };
+    } & RealtimeWallLinkPreviewOgMeta);
 
 export interface RealtimeWallColumn {
   readonly id: string;

@@ -75,7 +75,12 @@ export function extractYoutubeVideoId(rawUrl: string): string | undefined {
       const id = url.searchParams.get('v');
       return id && validIdPattern.test(id) ? id : undefined;
     }
-    if (segments[0] === 'shorts' || segments[0] === 'embed' || segments[0] === 'v') {
+    if (
+      segments[0] === 'shorts' ||
+      segments[0] === 'embed' ||
+      segments[0] === 'v' ||
+      segments[0] === 'live'
+    ) {
       const id = segments[1];
       return id && validIdPattern.test(id) ? id : undefined;
     }
