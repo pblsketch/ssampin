@@ -211,6 +211,48 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('live-survey:connection-count', handler);
     return () => { ipcRenderer.removeListener('live-survey:connection-count', handler); };
   },
+  // Realtime Bulletin
+  startRealtimeBulletin: (data: {
+    title: string;
+    maxTextLength: number;
+  }): Promise<{ port: number; localIPs: string[] }> =>
+    ipcRenderer.invoke('realtime-bulletin:start', data),
+  stopRealtimeBulletin: (): Promise<void> =>
+    ipcRenderer.invoke('realtime-bulletin:stop'),
+  realtimeBulletinTunnelAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('realtime-bulletin:tunnel-available'),
+  realtimeBulletinTunnelInstall: (): Promise<void> =>
+    ipcRenderer.invoke('realtime-bulletin:tunnel-install'),
+  realtimeBulletinTunnelStart: (): Promise<{ tunnelUrl: string }> =>
+    ipcRenderer.invoke('realtime-bulletin:tunnel-start'),
+  onRealtimeBulletinStudentSubmitted: (callback: (data: {
+    post: {
+      id: string;
+      nickname: string;
+      text: string;
+      linkUrl?: string;
+      submittedAt: number;
+    };
+    totalSubmissions: number;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      post: {
+        id: string;
+        nickname: string;
+        text: string;
+        linkUrl?: string;
+        submittedAt: number;
+      };
+      totalSubmissions: number;
+    }) => callback(data);
+    ipcRenderer.on('realtime-bulletin:student-submitted', handler);
+    return () => { ipcRenderer.removeListener('realtime-bulletin:student-submitted', handler); };
+  },
+  onRealtimeBulletinConnectionCount: (callback: (data: { count: number }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { count: number }) => callback(data);
+    ipcRenderer.on('realtime-bulletin:connection-count', handler);
+    return () => { ipcRenderer.removeListener('realtime-bulletin:connection-count', handler); };
+  },
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
     questions: Array<{
