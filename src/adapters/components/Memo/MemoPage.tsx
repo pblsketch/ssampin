@@ -3,6 +3,7 @@ import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 import { MEMO_COLORS } from '@domain/valueObjects/MemoColor';
 import { MemoCard } from './MemoCard';
 import { MemoDetailPopup } from './MemoDetailPopup';
@@ -107,41 +108,35 @@ export function MemoPage() {
 
   return (
     <div className="flex h-full flex-col -m-8">
-      {/* Header */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-sp-border bg-sp-surface/80 px-8 backdrop-blur-sm">
-        <h2 className="flex items-center gap-2 text-2xl font-black tracking-tight text-sp-text">
-          <span className="material-symbols-outlined text-[28px]">sticky_note_2</span>
-          나의 메모장
-        </h2>
-        <div className="flex items-center gap-6">
-          {/* Color Picker */}
-          {!showArchived && (
-            <div className="flex items-center gap-3 rounded-full border border-sp-border bg-sp-card px-4 py-2">
-              <span className="mr-1 text-xs font-medium text-sp-muted">색상 선택</span>
-              {MEMO_COLORS.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => setSelectedColor(color)}
-                  className={`h-6 w-6 rounded-full ${COLOR_BG[color]} ring-2 transition-all hover:scale-110 ${selectedColor === color ? 'ring-white' : 'ring-transparent'
-                    }`}
-                  aria-label={`${color} 색상 선택`}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Archive Toggle Button */}
+      <PageHeader
+        icon="sticky_note_2"
+        iconIsMaterial
+        title="나의 메모장"
+        leftAddon={!showArchived ? (
+          <div className="flex items-center gap-2 rounded-full border border-sp-border bg-sp-card px-3 py-1.5">
+            <span className="text-xs font-sp-medium text-sp-muted">색상</span>
+            {MEMO_COLORS.map((color) => (
+              <button
+                key={color}
+                onClick={() => setSelectedColor(color)}
+                className={`h-5 w-5 rounded-full ${COLOR_BG[color]} ring-2 transition-all hover:scale-110 ${selectedColor === color ? 'ring-white' : 'ring-transparent'}`}
+                aria-label={`${color} 색상 선택`}
+              />
+            ))}
+          </div>
+        ) : undefined}
+        rightActions={<>
           <button
             onClick={() => setShowArchived((v) => !v)}
-            className={`relative flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all active:scale-95 shadow-sm ${
+            className={`flex items-center gap-1.5 rounded-xl border px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold transition-all duration-sp-base ease-sp-out active:scale-95 ${
               showArchived
                 ? 'bg-sp-accent border-sp-accent text-white'
                 : 'bg-sp-card border-sp-border text-sp-text hover:bg-sp-surface'
             }`}
             title="보관함 보기"
           >
-            <span className="material-symbols-outlined text-icon-lg">archive</span>
-            보관함
+            <span className="material-symbols-outlined text-icon">archive</span>
+            <span className="hidden sm:inline">보관함</span>
             {archivedMemos.length > 0 && (
               <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-xs font-bold ${
                 showArchived ? 'bg-white/20 text-white' : 'bg-sp-accent text-white'
@@ -150,31 +145,27 @@ export function MemoPage() {
               </span>
             )}
           </button>
-
-          {/* Arrange in Grid Button */}
           {!showArchived && (
             <button
               onClick={() => void arrangeInGrid(canvasRef.current?.clientWidth || 800)}
-              className="flex items-center gap-2 rounded-lg bg-sp-card border border-sp-border px-4 py-2.5 text-sm font-medium text-sp-text transition-all hover:bg-sp-surface active:scale-95 shadow-sm"
+              className="flex items-center gap-1.5 rounded-xl border border-sp-border bg-sp-card px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-sp-text transition-all duration-sp-base ease-sp-out hover:bg-sp-surface active:scale-95"
               title="격자로 정렬"
             >
-              <span className="material-symbols-outlined text-icon-lg">grid_view</span>
-              격자 정렬
+              <span className="material-symbols-outlined text-icon">grid_view</span>
+              <span className="hidden sm:inline">격자 정렬</span>
             </button>
           )}
-
-          {/* Add Button */}
           {!showArchived && (
             <button
               onClick={handleAddMemo}
-              className="flex items-center gap-2 rounded-lg bg-sp-accent px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-600 active:scale-95"
+              className="flex items-center gap-1.5 rounded-xl bg-sp-accent px-3 xl:px-4 py-2 xl:py-2.5 text-xs xl:text-sm font-sp-semibold text-white shadow-sp-accent transition-all duration-sp-base ease-sp-out hover:brightness-110 active:scale-95"
             >
-              <span className="material-symbols-outlined text-icon-lg">add</span>
-              새 메모
+              <span className="material-symbols-outlined text-icon">add</span>
+              <span className="hidden sm:inline">새 메모</span>
             </button>
           )}
-        </div>
-      </header>
+        </>}
+      />
 
       {showArchived ? (
         /* Archived View */

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -229,7 +230,8 @@ function SeatCard({
 
 /* ──────────────────────── 메인 Seating 페이지 ──────────────────────── */
 
-export function Seating(_props?: { embedded?: boolean }) {
+export function Seating(props?: { embedded?: boolean }) {
+  const embedded = props?.embedded ?? false;
   const { track } = useAnalytics();
   const {
     seating,
@@ -454,22 +456,21 @@ export function Seating(_props?: { embedded?: boolean }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 헤더 */}
-      <header className="flex items-center justify-between pb-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-sp-accent/20 p-2 rounded-lg text-sp-accent">
-            <span className="material-symbols-outlined">chair_alt</span>
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-sp-text tracking-tight">학급 자리 배치도</h2>
-            <p className="text-xs text-sp-muted">
+    <div className={`flex flex-col h-full ${embedded ? '' : '-m-8'}`}>
+      {!embedded && (
+        <PageHeader
+          icon="chair_alt"
+          iconIsMaterial
+          title="학급 자리 배치도"
+          leftAddon={
+            <span className="text-sp-muted text-sm font-sp-medium">
               {className || '학급 미설정'} ({totalStudents}명)
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
+            </span>
+          }
+        />
+      )}
+      <div className={embedded ? '' : 'p-8 flex flex-col flex-1 min-h-0'}>
+      <div className="flex items-center justify-end gap-2 flex-wrap mb-4">
               {/* 레이아웃 모드 스위치 */}
               <div className="flex items-center gap-0.5 bg-sp-surface rounded-lg p-0.5 shrink-0">
                 <button
@@ -632,8 +633,7 @@ export function Seating(_props?: { embedded?: boolean }) {
               </div>
             )}
           </div>
-        </div>
-      </header>
+      </div>
 
       {/* 컨텐츠 영역 */}
       <div className="flex-1 overflow-y-auto flex flex-col items-center">
@@ -995,6 +995,7 @@ export function Seating(_props?: { embedded?: boolean }) {
         open={showConstraintModal}
         onClose={() => setShowConstraintModal(false)}
       />
+      </div>
     </div>
   );
 }

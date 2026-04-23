@@ -3,6 +3,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { PageHeader } from '@adapters/components/common/PageHeader';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
@@ -316,16 +317,19 @@ export function Export() {
   ]);
 
   return (
-    <div className='max-w-3xl mx-auto'>
-      <div className='flex items-center gap-3 mb-8'>
-        <div className='bg-sp-accent/20 p-2 rounded-lg'>
-          <span className='material-symbols-outlined text-sp-accent text-2xl'>ios_share</span>
-        </div>
-        <div>
-          <h2 className='text-2xl font-bold text-white'>내보내기</h2>
-          <p className='text-sp-muted text-sm'>데이터를 파일로 내보냅니다</p>
-        </div>
-      </div>
+    <div className="flex flex-col h-full -m-8">
+      <PageHeader
+        icon="ios_share"
+        iconIsMaterial
+        title="내보내기"
+        leftAddon={
+          <span className="text-sp-muted text-sm font-sp-medium">
+            데이터를 파일로 내보냅니다
+          </span>
+        }
+      />
+      <div className="flex-1 min-h-0 overflow-y-auto p-8">
+      <div className='max-w-3xl mx-auto'>
 
       {/* Step 1: 항목 선택 */}
       <div className='mb-8'>
@@ -480,6 +484,8 @@ export function Export() {
           }}
         />
       )}
+      </div>
+      </div>
     </div>
   );
 }
