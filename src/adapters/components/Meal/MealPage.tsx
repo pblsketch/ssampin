@@ -281,8 +281,9 @@ export function MealPage() {
         </div>
       )}
 
-      {/* 주간 네비게이션 */}
-      <div className="px-8 pt-8 pb-4 flex items-center justify-between">
+      {/* ── 본문 영역 (주간 네비게이션 + 주간 급식표) ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-8">
+      <div className="mb-6 flex items-center justify-between">
         <button
           type="button"
           onClick={() => goWeek(-1)}
@@ -312,7 +313,7 @@ export function MealPage() {
       </div>
 
       {/* 주간 급식표 */}
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
+      <div>
         {weekLoading && mealSource !== 'manual' ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 border-2 border-sp-accent border-t-transparent rounded-full animate-spin" />
@@ -368,6 +369,7 @@ export function MealPage() {
             })}
           </div>
         )}
+      </div>
       </div>
 
       {/* 수동 입력 모달 */}
