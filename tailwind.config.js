@@ -52,13 +52,18 @@ export default {
         'sp-semibold': 'var(--sp-weight-semibold)',   // 590
         'sp-bold':     'var(--sp-weight-bold)',       // 680
       },
+      /* ⚠️ DEPRECATED — rounded-sp-* 사용 금지.
+       * 사용자 환경(Vite + Electron HMR)에서 간헐적으로 반영 누락 이슈 발생.
+       * Tailwind 기본 키 사용: rounded / rounded-md(6) / rounded-lg(8) /
+       * rounded-xl(12, 쌤핀 카드 기본) / rounded-2xl(16) / rounded-3xl(24).
+       * 정책 근거: memory/feedback_rounding_policy.md */
       borderRadius: {
-        'sp-xs':   'var(--sp-radius-xs)',     // 4px
-        'sp-sm':   'var(--sp-radius-sm)',     // 6px
-        'sp-md':   'var(--sp-radius-md)',     // 8px
-        'sp-lg':   'var(--sp-radius-lg)',     // 12px
-        'sp-xl':   'var(--sp-radius-xl)',     // 16px
-        'sp-pill': 'var(--sp-radius-pill)',   // 9999px
+        'sp-xs':   'var(--sp-radius-xs)',     // 4px  — deprecated
+        'sp-sm':   'var(--sp-radius-sm)',     // 6px  — deprecated
+        'sp-md':   'var(--sp-radius-md)',     // 8px  — deprecated
+        'sp-lg':   'var(--sp-radius-lg)',     // 12px — deprecated
+        'sp-xl':   'var(--sp-radius-xl)',     // 16px — deprecated
+        'sp-pill': 'var(--sp-radius-pill)',   // 9999px — deprecated
       },
       boxShadow: {
         'sp-none':   'var(--sp-shadow-none)',

@@ -217,7 +217,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           aria-label={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
           aria-expanded={!sidebarCollapsed}
           title={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
-          className="text-sp-muted hover:text-sp-text hover:bg-sp-text/5 rounded-sp-sm p-1.5 transition-colors duration-sp-quick ease-sp-out shrink-0"
+          className="text-sp-muted hover:text-sp-text hover:bg-sp-text/5 rounded-md p-1.5 transition-colors duration-sp-quick ease-sp-out shrink-0"
         >
           <span className="material-symbols-outlined text-xl">
             {sidebarCollapsed ? 'menu' : 'menu_open'}
@@ -247,7 +247,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
                 track('feature_discovery', { feature: item.id, source: 'menu' });
                 onNavigate(item.id);
               }}
-              className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-4'} py-3 rounded-sp-lg transition-all duration-sp-base ease-sp-out text-left group ${
+              className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-4'} py-3 rounded-xl transition-all duration-sp-base ease-sp-out text-left group ${
                 !isDragged ? 'active:scale-[0.98]' : ''
               } ${
                 isActive

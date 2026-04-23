@@ -85,7 +85,7 @@ export function DashboardMeal() {
   // 학교 미설정 (수동 모드에서는 허용)
   if (!schoolCode && mealSource !== 'manual') {
     return (
-      <div className="rounded-sp-lg bg-sp-card p-4 h-full flex flex-col transition-shadow duration-sp-base ease-sp-out hover:shadow-sp-md">
+      <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col transition-shadow duration-sp-base ease-sp-out hover:shadow-sp-md">
         {renderHeader()}
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sp-muted text-sm text-center">
@@ -102,7 +102,7 @@ export function DashboardMeal() {
   const isEmpty = !showLoading && !showError && displayMeals.length === 0;
 
   return (
-    <div className="rounded-sp-lg bg-sp-card p-4 flex flex-col transition-shadow duration-sp-base ease-sp-out hover:shadow-sp-md">
+    <div className="rounded-xl bg-sp-card p-4 flex flex-col transition-shadow duration-sp-base ease-sp-out hover:shadow-sp-md">
       {renderHeader()}
 
       <div className="flex-1 overflow-y-auto">
