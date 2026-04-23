@@ -120,6 +120,11 @@ interface ElectronAPI {
   realtimeWallTunnelAvailable: () => Promise<boolean>;
   realtimeWallTunnelInstall: () => Promise<void>;
   realtimeWallTunnelStart: () => Promise<{ tunnelUrl: string }>;
+  fetchRealtimeWallLinkPreview: (url: string) => Promise<{
+    ogTitle?: string;
+    ogDescription?: string;
+    ogImageUrl?: string;
+  } | null>;
   onRealtimeWallStudentSubmitted: (callback: (data: {
     post: {
       id: string;
