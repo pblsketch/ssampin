@@ -7,12 +7,15 @@ import {
   PEN_SIZE_MAX,
   ERASER_SIZE_MIN,
   ERASER_SIZE_MAX,
+  SHAPE_CATEGORIES,
+  SHAPE_LABELS,
+  SHAPE_ICONS,
   clampPenSize,
   clampEraserSize,
   decrementPenSize,
   incrementPenSize,
 } from './types';
-import type { ChalkboardMode, GridMode } from './types';
+import type { ChalkboardMode, GridMode, ShapeKind } from './types';
 import { BoardBackgroundPicker } from './BoardBackgroundPicker';
 
 const PEN_SIZE_PRESETS = [2, 5, 10, 20, 40] as const;
@@ -44,6 +47,8 @@ interface ChalkboardToolbarProps {
   onDeleteSelected: () => void;
   eraserSize: number;
   onEraserSizeChange: (size: number) => void;
+  shapeKind: ShapeKind;
+  onShapeKindChange: (kind: ShapeKind) => void;
 }
 
 function ToolbarButton({
@@ -103,6 +108,8 @@ export function ChalkboardToolbar({
   onDeleteSelected,
   eraserSize,
   onEraserSizeChange,
+  shapeKind,
+  onShapeKindChange,
 }: ChalkboardToolbarProps) {
   const currentColor = CHALK_COLORS[colorIndex] ?? CHALK_COLORS[0];
   const currentBoard = BOARD_BACKGROUNDS[boardColorIndex] ?? BOARD_BACKGROUNDS[0];
@@ -136,6 +143,14 @@ export function ChalkboardToolbar({
         <span className="text-base font-bold">Aa</span>
         텍스트
       </ToolbarButton>
+
+      {/* 도형 (직선/사각형/타원) */}
+      <ShapeControl
+        mode={mode}
+        onModeChange={onModeChange}
+        shapeKind={shapeKind}
+        onShapeKindChange={onShapeKindChange}
+      />
 
       {/* 크기 */}
       <PenSizeControl penSize={penSize} onPenSizeChange={onPenSizeChange} />
@@ -551,6 +566,133 @@ function PenSizeControl({
                 </button>
               ))}
             </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function ShapeControl({
+  mode,
+  onModeChange,
+  shapeKind,
+  onShapeKindChange,
+}: {
+  mode: ChalkboardMode;
+  onModeChange: (mode: ChalkboardMode) => void;
+  shapeKind: ShapeKind;
+  onShapeKindChange: (kind: ShapeKind) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+
+  const isShapeActive = mode === 'shape';
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const updatePosition = () => {
+      const btn = triggerRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const popoverWidth = 320;
+      const popoverHeight = 420;
+      let left = rect.left + rect.width / 2 - popoverWidth / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - popoverWidth - 8));
+      const top = rect.top - popoverHeight - 8;
+      setPopoverStyle({ left, top: Math.max(8, top) });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', handle);
+    window.addEventListener('keydown', esc);
+    return () => {
+      window.removeEventListener('mousedown', handle);
+      window.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+
+  const handleTriggerClick = () => {
+    if (!isShapeActive) {
+      onModeChange('shape');
+    }
+    setOpen((v) => !v);
+  };
+
+  const currentIcon = SHAPE_ICONS[shapeKind];
+  const currentLabel = SHAPE_LABELS[shapeKind];
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        onClick={handleTriggerClick}
+        title={`도형 — ${currentLabel} (S)`}
+        className={`rounded-xl px-3 py-2 text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+          isShapeActive
+            ? 'ring-2 ring-amber-400 bg-amber-100 text-amber-900'
+            : 'bg-white hover:bg-gray-50 text-gray-700'
+        }`}
+      >
+        <span className="material-symbols-outlined text-icon-md">{currentIcon}</span>
+        도형
+        <span className="material-symbols-outlined text-icon-sm opacity-60">expand_more</span>
+      </button>
+
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={popoverRef}
+          style={{ position: 'fixed', left: popoverStyle.left, top: popoverStyle.top, width: 320, zIndex: 10000 }}
+          className="bg-white rounded-xl shadow-xl border border-gray-200 p-3 space-y-2"
+        >
+          {SHAPE_CATEGORIES.map((cat) => (
+            <div key={cat.label}>
+              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{cat.label}</div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {cat.kinds.map((kind) => (
+                  <button
+                    key={kind}
+                    onClick={() => {
+                      onShapeKindChange(kind);
+                      onModeChange('shape');
+                    }}
+                    className={`rounded-lg py-1.5 px-1 text-[10px] font-medium flex flex-col items-center gap-0.5 transition-colors ${
+                      shapeKind === kind
+                        ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
+                        : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-icon-md">{SHAPE_ICONS[kind]}</span>
+                    <span className="leading-tight text-center">{SHAPE_LABELS[kind]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="pt-2 border-t border-gray-100 text-[10px] text-gray-500 leading-relaxed space-y-0.5">
+            <div>드래그하여 그리기 · 색상·굵기는 펜 설정과 공유</div>
+            <div><kbd className="px-1 bg-gray-100 rounded border text-[9px]">Shift</kbd> 정비율·15° 직선 · <kbd className="px-1 bg-gray-100 rounded border text-[9px]">Alt</kbd> 중심 기준</div>
           </div>
         </div>,
         document.body,

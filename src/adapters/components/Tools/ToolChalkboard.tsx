@@ -8,13 +8,15 @@ import {
   PEN_SIZE_DEFAULT,
   ERASER_SIZE_DEFAULT,
   GRID_MODE_ORDER,
+  SHAPE_KIND_ORDER,
   clampPenSize,
   clampEraserSize,
   decrementPenSize,
   incrementPenSize,
   isGridMode,
+  isShapeKind,
 } from './Chalkboard/types';
-import type { ChalkboardMode, GridMode } from './Chalkboard/types';
+import type { ChalkboardMode, GridMode, ShapeKind } from './Chalkboard/types';
 import type { KeyboardShortcut } from './types';
 
 const PEN_SIZE_STORAGE_KEY = 'chalkboard.penSize';
@@ -22,6 +24,7 @@ const ERASER_SIZE_STORAGE_KEY = 'chalkboard.eraserSize';
 const COLOR_INDEX_STORAGE_KEY = 'chalkboard.colorIndex';
 const BOARD_COLOR_INDEX_STORAGE_KEY = 'chalkboard.boardColorIndex';
 const GRID_MODE_STORAGE_KEY = 'chalkboard.gridMode';
+const SHAPE_KIND_STORAGE_KEY = 'chalkboard.shapeKind';
 
 function loadNumber(key: string, fallback: number, max: number): number {
   if (typeof window === 'undefined') return fallback;
@@ -64,6 +67,11 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
     const raw = window.localStorage.getItem(GRID_MODE_STORAGE_KEY);
     return raw && isGridMode(raw) ? raw : 'none';
   });
+  const [shapeKind, setShapeKind] = useState<ShapeKind>(() => {
+    if (typeof window === 'undefined') return 'line';
+    const raw = window.localStorage.getItem(SHAPE_KIND_STORAGE_KEY);
+    return raw && isShapeKind(raw) ? raw : 'line';
+  });
   const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
   const backgroundPickerOpenRef = useRef(backgroundPickerOpen);
   backgroundPickerOpenRef.current = backgroundPickerOpen;
@@ -84,6 +92,10 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(BOARD_COLOR_INDEX_STORAGE_KEY, String(boardColorIndex));
   }, [boardColorIndex]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SHAPE_KIND_STORAGE_KEY, shapeKind);
+  }, [shapeKind]);
 
   const canvasElRef = useRef<HTMLCanvasElement>(null);
 
@@ -113,6 +125,8 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
     penSize,
     eraserSize,
     boardColor: currentBoardBg,
+    shapeKind,
+    onShapeDrawn: useCallback(() => setMode('select'), []),
   });
 
   // 초기 gridMode 복원 (한 번만)
@@ -172,6 +186,17 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
   const handleRedo = useCallback(() => { void redo(); }, [redo]);
   const handleGoToPage = useCallback((n: number) => { void goToPage(n); }, [goToPage]);
 
+  // S 단축키: 도형 모드가 아니면 진입, 이미 도형 모드면 다음 종류로 순환
+  const handleShapeShortcut = useCallback(() => {
+    if (mode !== 'shape') {
+      setMode('shape');
+      return;
+    }
+    const idx = SHAPE_KIND_ORDER.indexOf(shapeKind);
+    const next = SHAPE_KIND_ORDER[(idx + 1) % SHAPE_KIND_ORDER.length]!;
+    setShapeKind(next);
+  }, [mode, shapeKind]);
+
   const shortcuts: KeyboardShortcut[] = useMemo(
     () => [
       { key: 'v', label: '선택', description: '선택/이동 모드', handler: () => setMode('select') },
@@ -179,6 +204,7 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
       { key: 't', label: '텍스트', description: '텍스트 모드', handler: () => setMode('text') },
       { key: 'e', label: '개체 지우개', description: '개체 단위 지우개', handler: () => setMode('eraser') },
       { key: 'e', label: '부분 지우개', description: '드래그로 부분 지우개', modifiers: { shift: true }, handler: () => setMode('pixelEraser') },
+      { key: 's', label: '도형', description: '도형 모드 / 종류 순환', handler: handleShapeShortcut },
       { key: 'z', label: '실행취소', description: '실행취소', modifiers: { ctrl: true }, handler: handleUndo },
       { key: 'y', label: '다시실행', description: '다시실행', modifiers: { ctrl: true }, handler: handleRedo },
       { key: 's', label: '저장', description: '이미지 저장', modifiers: { ctrl: true }, handler: saveAsImage },
@@ -200,7 +226,9 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
         ? 'crosshair'
         : mode === 'text'
           ? 'text'
-          : 'default';
+          : mode === 'shape'
+            ? 'crosshair'
+            : 'default';
 
   const containerStyle: React.CSSProperties = {
     backgroundColor: currentBoardBg,
@@ -259,6 +287,8 @@ export function ToolChalkboard({ onBack, isFullscreen }: ToolChalkboardProps) {
             onDeleteSelected={deleteSelected}
             eraserSize={eraserSize}
             onEraserSizeChange={setEraserSize}
+            shapeKind={shapeKind}
+            onShapeKindChange={setShapeKind}
           />
         </div>
       </div>
