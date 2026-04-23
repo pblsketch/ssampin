@@ -146,8 +146,8 @@ function MultiDayBar({
 }) {
   const colors = getColorsForCategory(bar.category, categories);
 
-  const roundedLeft = bar.isContinuation ? '' : 'rounded-l-sp-xs';
-  const roundedRight = bar.isContinued ? '' : 'rounded-r-sp-xs';
+  const roundedLeft = bar.isContinuation ? '' : 'rounded-l-sp-md';
+  const roundedRight = bar.isContinued ? '' : 'rounded-r-sp-md';
 
   return (
     <div
@@ -319,10 +319,7 @@ export function CalendarView({
                   let cellClass =
                     'group relative flex flex-col py-1 px-0.5 rounded-sp-md cursor-pointer transition-all duration-sp-base ease-sp-out h-full overflow-hidden ';
 
-                  if (d.isToday) {
-                    cellClass +=
-                      'ring-2 ring-sp-accent ring-offset-1 ring-offset-sp-card bg-sp-accent/10 ';
-                  } else if (isSelected) {
+                  if (isSelected) {
                     cellClass += 'bg-sp-accent/15 border border-sp-accent/40 ';
                   } else {
                     cellClass +=
