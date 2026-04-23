@@ -170,15 +170,15 @@ text/accent)만 담당하고, **의미 색(pinned/teacherHearts/success/danger)*
 ### 2.5 마이그레이션
 
 - **WIP 릴리즈 전이라 실제 저장본 없음** → 무마이그레이션
-- 단 개발자 로컬에 테스트 데이터가 있을 수 있어 `teacherStarred` 로더에
+- 단 개발자 로컬에 테스트 데이터가 있을 수 있어 `teacherHearts` 로더에
   `likes` fallback 임시 허용 (1회 릴리즈 후 제거):
 
 ```ts
 // adapters/repositories/JsonWallBoardRepository.ts (신규)
 function migratePostFields(post: unknown): RealtimeWallPost {
   const raw = post as RealtimeWallPost & { likes?: number };
-  if (raw.likes !== undefined && raw.teacherStarred === undefined) {
-    return { ...raw, teacherStarred: raw.likes, likes: undefined };
+  if (raw.likes !== undefined && raw.teacherHearts === undefined) {
+    return { ...raw, teacherHearts: raw.likes, likes: undefined };
   }
   return raw;
 }
@@ -187,9 +187,9 @@ function migratePostFields(post: unknown): RealtimeWallPost {
 **2-way 적용**: 위 fallback은 두 경로에 모두 적용한다:
 1. `JsonWallBoardRepository.load()` — 신규 WallBoard 로드 시점
 2. `useToolResultStore` / `PastResultsView`가 사용하는 `RealtimeWallResultData`
-   로더 — 기존 스냅샷 재생 시점에도 `likes`가 있으면 `teacherStarred`로
+   로더 — 기존 스냅샷 재생 시점에도 `likes`가 있으면 `teacherHearts`로
    투명 변환. 이는 `ToolResult.ts` 타입을 건드리지 않고, 소비 측(View)의
-   필드 접근을 `post.teacherStarred ?? (post as { likes?: number }).likes`
+   필드 접근을 `post.teacherHearts ?? (post as { likes?: number }).likes`
    패턴으로 래핑하는 1회 작업. v1.13.1 릴리즈에서 제거 예정.
 
 ### 2.6 검증 체크리스트 [E]
@@ -801,13 +801,13 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 
 | 경로 | 변경 |
 |---|---|
-| `src/domain/entities/RealtimeWall.ts` | WallBoard/WallBoardId/WallApprovalMode 추가, likes → teacherStarred |
-| `src/domain/rules/realtimeWallRules.ts` | createWallPost/bulkApproveWallPosts/add·rename·reorder·removeWallColumn/cloneWallBoard/starRealtimeWallPost |
-| `src/domain/rules/realtimeWallRules.test.ts` | 20+ 테스트 추가 (예상 총 60+) |
+| `src/domain/entities/RealtimeWall.ts` | WallBoard/WallBoardId/WallApprovalMode 추가, `likes → teacherHearts` 필드 리네임 (아이콘 하트 유지) |
+| `src/domain/rules/realtimeWallRules.ts` | createWallPost/bulkApproveWallPosts/add·rename·reorder·removeWallColumn/cloneWallBoard/heartRealtimeWallPost/buildWallPreviewPosts |
+| `src/domain/rules/realtimeWallRules.test.ts` | 24+ 테스트 추가 (예상 총 64+) |
 | `src/adapters/components/Tools/ToolRealtimeWall.tsx` | viewMode='list' 추가, Repository 통합, 자동저장 effect |
-| `src/adapters/components/Tools/RealtimeWall/RealtimeWallCard.tsx` | LikeButton → StarButton, 아이콘·색상 |
-| `src/adapters/components/Tools/RealtimeWall/types.ts` | onLike → onStar |
-| `src/adapters/components/Tools/RealtimeWall/RealtimeWall{Kanban,Freeform,Grid,Stream}Board.tsx` | onStar 전달 |
+| `src/adapters/components/Tools/RealtimeWall/RealtimeWallCard.tsx` | LikeButton → HeartButton (이름만, 아이콘 `favorite`·rose 색상 유지) |
+| `src/adapters/components/Tools/RealtimeWall/types.ts` | onLike → onHeart |
+| `src/adapters/components/Tools/RealtimeWall/RealtimeWall{Kanban,Freeform,Grid,Stream}Board.tsx` | onHeart 전달 |
 | `src/adapters/components/Tools/RealtimeWall/RealtimeWallCreateView.tsx` | 승인 모드 단계 추가 |
 | `electron/main.ts` | registerRealtimeWallBoardHandler 등록 + before-quit 훅 |
 | `electron/preload.ts` | wallBoards.* API 노출 |
@@ -851,18 +851,16 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 
 ---
 
-## 9. Open Questions (Plan §8 대응)
+## 9. Open Questions (2026-04-23 사용자 확정 완료)
 
-| # | 질문 | 기본 제안 |
+| # | 질문 | 확정 결정 |
 |---|---|---|
-| 1 | 목록 썸네일 형태 | 레이아웃 아이콘 + 메타(카드수/최종 세션)만. mini-preview는 v1.13.1 |
-| 2 | 재열기 시 short-code | 매번 새로 생성 (보안 회전). "고정 코드" 옵션은 v1.13.2 |
-| 3 | manual→auto 전환 시 pending | 확인 대화 + 일괄 승인 (§4.3) |
-| 4 | 복제 title 한/영 | **확정: 한국어 "(복제)"**. 쌤핀 코드베이스
-     grep 결과 기존 "(복제)"/"(사본)" UI 관례 없음(useSurveyStore는
-     API 파라미터 기반). 한국어 UI 원칙 + FGI 자연스러움 근거. |
-| 5 | 별 카운트 vs 바이너리 | **카운트 유지**, 강조 임계값만 설정 가능. 바이너리는 제품 정의 변경 필요 |
-| 6 | likes → teacherStarred 호환 레이어 | 1회 릴리즈 임시 fallback (§2.5) |
+| 1 | 목록 썸네일 형태 | ✅ **실제 카드 mini-preview 렌더** (v1.13.0 포함). `WallBoardThumbnail` + `buildWallPreviewPosts` (레이아웃별 상위 N개). 상세: §3.2 / §3.5.1a |
+| 2 | 재열기 시 short-code | ✅ **고정 short-code 유지**. `WallBoard.shortCode?` + `WallBoardMeta.shortCode?` 필드로 영속. 보관 시 만료, 재활성화 시 신규 발급. 상세: §1.1 / §3.2 |
+| 3 | manual→auto 전환 시 pending | ✅ 확인 대화 + 일괄 승인 (§4.3 기본안 채택) |
+| 4 | 복제 title 한/영 | ✅ **한국어 "(복제)"**. 쌤핀 한국어 UI 원칙 + FGI 자연스러움 근거 |
+| 5 | 하트 카운트 vs 바이너리 | ✅ **카운트 + 하트 아이콘 유지**. 필드명만 `likes → teacherHearts`로 의미 명료화 (§2.1). 아이콘(`favorite`)·rose 색상·강조 임계값 5는 현행 유지 |
+| 6 | likes → teacherHearts 호환 레이어 | ✅ 1회 릴리즈 임시 fallback (§2.5) |
 
 ---
 
@@ -871,12 +869,12 @@ MUST 범위에서는 **단일 복제**만. 일괄 복제는 v1.13.1 후속.
 "구현 완료" 판정 기준 = **본 Design의 §2.6 / §3.7 / §4.6 / §5.4 / §6.5
 각 섹션 체크리스트 전 항목 PASS**. 항목별 근거:
 
-- [ ] §2.6 [E] 리네임 — `rg 'likes|favorite|onLike'` 0 + star 테스트 5케이스
-- [ ] §3.7 [A] 영속화 — fs.stat 검증 + 재열기 posts 복원 + 자동저장 주기
+- [ ] §2.6 [E] 리네임 — `rg 'likes|LikeButton|onLike|likeRealtimeWallPost'` 0 + `favorite`·rose 그대로 유지 + `heartRealtimeWallPost` 5케이스
+- [ ] §3.7 [A] 영속화 — fs.stat 검증 + 재열기 posts 복원 + 자동저장 주기 + mini-preview 4케이스 + 고정 short-code
 - [ ] §4.6 [C] 승인 정책 — exhaustive switch + bulkApprove 3케이스
 - [ ] §5.4 [B] 컬럼 편집 — 4규칙 + 3 removeStrategy + 최소 2컬럼 가드
 - [ ] §6.5 [D] 복제 — posts 비움 + id 재생성 + deep clone
-- [ ] 도메인 규칙 테스트 60+ 전수 통과 (vitest 기준)
+- [ ] 도메인 규칙 테스트 64+ 전수 통과 (vitest 기준)
 - [ ] Playwright 수동 QA 3종 PASS (생성/재열기/자동저장 파일 바이트)
 - [ ] 병렬 리뷰 통과: 각 단계마다 code-reviewer-low + bkit:code-analyzer
       (보안 민감 단계에는 security-reviewer 추가)

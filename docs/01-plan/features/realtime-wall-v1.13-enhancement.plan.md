@@ -285,7 +285,7 @@ A (보드 영속화) ─── 핵심 기반
 ### 6.1 데이터 모델 마이그레이션 리스크
 - WallBoard 엔티티 신설 시 **기존 PastResults**(`RealtimeWallResultData`)
   와 공존 필요. 해결: 이전 스냅샷은 읽기 전용, 새 기능은 WallBoard만
-- likes → teacherStarred 필드명 변경은 WIP 릴리즈 전이라 마이그레이션
+- likes → teacherHearts 필드명 변경은 WIP 릴리즈 전이라 마이그레이션
   부담 없음. 단 dev QA에서 저장한 로컬 데이터는 재생성
 
 ### 6.2 라이브 세션 vs 영속 엔티티 분리
