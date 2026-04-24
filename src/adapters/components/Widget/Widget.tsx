@@ -149,7 +149,9 @@ export function Widget() {
   };
 
   // 더블클릭 → 전체 앱으로 전환
-  const handleHeaderDoubleClick = () => {
+  const handleHeaderDoubleClick = (e: React.MouseEvent) => {
+    // 버튼 또는 버튼 내부 요소에서 발생한 더블클릭은 무시 (버튼 자체 동작 보호)
+    if (e.target instanceof Element && e.target.closest('button')) return;
     track('widget_close');
     window.electronAPI?.toggleWidget();
   };
@@ -212,7 +214,9 @@ export function Widget() {
             {/* 새로고침 버튼 */}
             <button
               className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
-              onClick={triggerRefreshAll}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              onClick={(e) => { e.stopPropagation(); triggerRefreshAll(); }}
+              onDoubleClick={(e) => e.stopPropagation()}
               title="모든 위젯 새로고침"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
@@ -228,7 +232,9 @@ export function Widget() {
                   ? 'bg-sp-accent/20 text-sp-accent'
                   : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
               ].join(' ')}
-              onClick={() => setIsEditMode((prev) => !prev)}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              onClick={(e) => { e.stopPropagation(); setIsEditMode((prev) => !prev); }}
+              onDoubleClick={(e) => e.stopPropagation()}
               title="위젯 편집"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
@@ -245,7 +251,9 @@ export function Widget() {
                   ? 'bg-sp-accent/20 text-sp-accent'
                   : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
               ].join(' ')}
-              onClick={() => setShowLayoutSelector((prev) => !prev)}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              onClick={(e) => { e.stopPropagation(); setShowLayoutSelector((prev) => !prev); }}
+              onDoubleClick={(e) => e.stopPropagation()}
               title="레이아웃 선택 (Ctrl+0)"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
@@ -256,7 +264,9 @@ export function Widget() {
             {/* 전체 화면 전환 버튼 */}
             <button
               className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
-              onClick={() => { track('widget_close'); window.electronAPI?.toggleWidget(); }}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              onClick={(e) => { e.stopPropagation(); track('widget_close'); window.electronAPI?.toggleWidget(); }}
+              onDoubleClick={(e) => e.stopPropagation()}
               title="전체 화면으로 전환"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
