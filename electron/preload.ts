@@ -525,6 +525,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // === 글로벌 퀵애드 단축키 ===
+  syncShortcuts: (config: {
+    globalEnabled: boolean;
+    bindings: Array<{ id: string; combo: string; enabled: boolean }>;
+  }): Promise<{ registered: string[]; failed: string[] }> =>
+    ipcRenderer.invoke('shortcuts:sync', config),
+  onShortcutTriggered: (callback: (commandId: string) => void): (() => void) => {
+    const handler = (_event: unknown, commandId: string) => callback(commandId);
+    ipcRenderer.on('shortcut:triggered', handler);
+    return () => { ipcRenderer.removeListener('shortcut:triggered', handler); };
+  },
+
   // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
   // Design §3.4 — Main 프로세스가 fs 직접 접근하여 userData/data/wall-board-*.json 관리.
   wallBoards: {

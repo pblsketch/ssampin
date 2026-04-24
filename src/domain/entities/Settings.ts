@@ -197,6 +197,23 @@ export interface SyncSettings {
   readonly deviceId: string;
 }
 
+/** 글로벌 퀵애드 단축키 ID */
+export type QuickAddShortcutId = 'quickAdd.todo' | 'quickAdd.event' | 'quickAdd.memo' | 'quickAdd.note';
+
+export interface ShortcutBinding {
+  /** 정규화 조합 문자열, 예: "mod+alt+t" */
+  readonly combo: string;
+  /** 사용자가 개별 단축키 비활성화한 경우 false */
+  readonly enabled: boolean;
+}
+
+export interface ShortcutSettings {
+  /** 커맨드 ID → 키 조합 매핑 */
+  readonly bindings: Record<string, ShortcutBinding>;
+  /** OS 전역 단축키(Electron globalShortcut) 활성화 여부. 기본 false */
+  readonly globalEnabled: boolean;
+}
+
 export interface MealSchoolSettings {
   readonly schoolCode: string;      // 급식 조회용 SD_SCHUL_CODE (비어있으면 neis.schoolCode 사용)
   readonly atptCode: string;        // 급식 조회용 ATPT_OFCDC_SC_CODE
@@ -295,4 +312,6 @@ export interface Settings {
   readonly weekdayStart?: 'monday' | 'sunday';
   /** 사이드바 접힘 상태 (기본: false = 펼침) */
   readonly sidebarCollapsed?: boolean;
+  /** 글로벌 퀵애드 단축키 설정 */
+  readonly shortcuts?: ShortcutSettings;
 }

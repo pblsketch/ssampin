@@ -107,6 +107,14 @@ body {
   body {
     @apply bg-sp-bg text-sp-text;
   }
+
+  /* QuickAdd 팝업 창 (transparent BrowserWindow) — body 투명 강제해서
+     카드 밖 rounded 영역이 실제로 투명하게 보이도록. */
+  body.ssampin-quickadd-popup,
+  html:has(body.ssampin-quickadd-popup) {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
 }
 
 /* 

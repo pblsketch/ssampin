@@ -266,6 +266,13 @@ interface ElectronAPI {
     onSessionStarted: (cb: (data: CollabBoardSessionStart) => void) => () => void;
   };
 
+  // === 글로벌 퀵애드 단축키 ===
+  syncShortcuts?: (config: {
+    globalEnabled: boolean;
+    bindings: Array<{ id: string; combo: string; enabled: boolean }>;
+  }) => Promise<{ registered: string[]; failed: string[] }>;
+  onShortcutTriggered?: (callback: (commandId: string) => void) => () => void;
+
   // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
   // Design §3.4 — 5 channels (Main-side direct fs access).
   wallBoards?: {

@@ -17,6 +17,7 @@ import { AboutTab } from './tabs/AboutTab';
 import { GoogleIntegrationTab } from './tabs/GoogleIntegrationTab';
 import { TodoTab } from './tabs/TodoTab';
 import { ToolsTab } from './tabs/ToolsTab';
+import { ShortcutsTab } from './tabs/ShortcutsTab';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 interface Props {
   activeTab: SettingsTabId;
@@ -146,6 +147,7 @@ function TabContent({ activeTab, draft, patch, setDraft }: {
     case 'sidebar':   return <SidebarTab draft={draft} patch={patch} />;
     case 'todo':      return <TodoTab draft={draft} patch={patch} />;
     case 'tools':     return <ToolsTab />;
+    case 'shortcuts': return <ShortcutsTab />;
     case 'system':    return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
     case 'about':     return <AboutTab />;
     default:          return null;
