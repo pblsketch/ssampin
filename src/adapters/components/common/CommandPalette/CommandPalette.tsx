@@ -135,12 +135,12 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       role="dialog"
       aria-modal="true"
       aria-label="커맨드 팔레트"
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] animate-fade-in"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-start justify-center pt-[20vh] animate-fade-in"
       onClick={close}
     >
-      {/* Card */}
+      {/* Card — flex centering으로 animate-scale-in transform과 위치 계산 충돌 방지 */}
       <div
-        className="fixed top-[20vh] left-1/2 -translate-x-1/2 w-[min(560px,calc(100vw-32px))] bg-sp-card border border-sp-border rounded-xl shadow-2xl overflow-hidden animate-scale-in"
+        className="w-[min(560px,calc(100vw-32px))] bg-sp-card border border-sp-border rounded-xl shadow-2xl overflow-hidden animate-scale-in"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
