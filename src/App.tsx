@@ -53,6 +53,10 @@ import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { HelpChatPanel } from '@adapters/components/HelpChat';
 import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog';
 import { CommandPalette } from '@adapters/components/common/CommandPalette';
+import { QuickAddModal } from '@adapters/components/common/QuickAdd';
+import { useGlobalShortcuts } from '@adapters/hooks/useGlobalShortcuts';
+import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
+import type { QuickAddKind } from '@adapters/stores/useQuickAddStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
@@ -87,6 +91,23 @@ function isWidgetMode(): boolean {
   if (params.get('mode') === 'widget') return true;
   if (window.location.hash === '#widget') return true;
   return false;
+}
+
+function isQuickAddMode(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('mode') === 'quickAdd';
+}
+
+function getQuickAddKindFromUrl(): QuickAddKind {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('kind');
+  if (raw === 'todo' || raw === 'event' || raw === 'memo' || raw === 'note') return raw;
+  return 'todo';
+}
+
+function isPrewarmMode(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('prewarm') === '1';
 }
 
 function useCallbackForDualEntry(
@@ -296,10 +317,79 @@ function WidgetUpdateBanner() {
 }
 
 export function App() {
+  if (isQuickAddMode()) {
+    return <QuickAddApp />;
+  }
   if (isWidgetMode()) {
     return <WidgetApp />;
   }
   return <MainApp />;
+}
+
+const COMMAND_TO_KIND: Record<string, QuickAddKind> = {
+  'quickAdd.todo': 'todo',
+  'quickAdd.event': 'event',
+  'quickAdd.memo': 'memo',
+  'quickAdd.note': 'note',
+};
+
+function QuickAddApp(): JSX.Element {
+  useThemeApplier();
+  const isOpen = useQuickAddStore((s) => s.isOpen);
+
+  // 마운트 시 body를 투명으로 + 데이터 로드 + (prewarm이 아닌 경우) 초기 kind 오픈
+  useEffect(() => {
+    document.body.classList.add('ssampin-quickadd-popup');
+    document.documentElement.style.background = 'transparent';
+    document.body.style.background = 'transparent';
+    void useTodoStore.getState().load();
+    void useEventsStore.getState().load();
+    void useMemoStore.getState().load();
+    void useNoteStore.getState().load();
+    if (!isPrewarmMode()) {
+      useQuickAddStore.getState().open(getQuickAddKindFromUrl());
+    }
+    // prewarm 모드면 첫 IPC `shortcut:triggered` 수신 시 open (아래 effect)
+    return () => {
+      document.body.classList.remove('ssampin-quickadd-popup');
+      document.documentElement.style.background = '';
+      document.body.style.background = '';
+    };
+  }, []);
+
+  // 데이터 외부 변경 동기화
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onDataChanged) return;
+    return api.onDataChanged((filename: string) => {
+      void reloadStores([filename]);
+    });
+  }, []);
+
+  // 글로벌 단축키 IPC 수신 (창이 떠있는 동안 다른 단축키 누르면 kind swap)
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onShortcutTriggered) return;
+    return api.onShortcutTriggered((commandId: string) => {
+      const kind = COMMAND_TO_KIND[commandId];
+      if (kind) useQuickAddStore.getState().open(kind);
+    });
+  }, []);
+
+  // 모달 닫히면 창 자체 닫기
+  useEffect(() => {
+    if (isOpen) return;
+    const t = setTimeout(() => window.close(), 150);
+    return () => clearTimeout(t);
+  }, [isOpen]);
+
+  // ESC로 즉시 창 닫기 (모달 close → 위 effect로 window.close)
+  return (
+    <div className="h-screen w-screen bg-transparent">
+      <QuickAddModal standalone />
+      <ToastContainer />
+    </div>
+  );
 }
 
 function WidgetApp() {
@@ -464,6 +554,9 @@ function MainApp() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // 글로벌 퀵애드 단축키 (Ctrl+Alt+T/E/M/N) 등록
+  useGlobalShortcuts();
 
   // .ssampin 파일 열기 이벤트 리스너 (Electron에서 파일 더블클릭 시)
   useEffect(() => {
@@ -766,6 +859,7 @@ function MainApp() {
       <CloseActionDialog />
       <OAuthModalsProvider />
       <CommandPalette onNavigate={setCurrentPage} />
+      <QuickAddModal />
       </div>
     </div>
   );

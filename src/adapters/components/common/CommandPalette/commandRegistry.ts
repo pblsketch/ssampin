@@ -1,10 +1,15 @@
 import { NAV_ITEMS } from '@adapters/components/Layout/Sidebar';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
+import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
+import { useSettingsStore, DEFAULT_SHORTCUTS } from '@adapters/stores/useSettingsStore';
+import { comboToDisplay, isMacOS } from '@adapters/hooks/shortcut/keyNormalize';
+
+export type CommandGroupLabel = '페이지' | '빠른 추가' | '설정';
 
 export interface Command {
   id: string;
   label: string;
-  group: '페이지' | '설정';
+  group: CommandGroupLabel;
   icon: string;
   keywords?: string[];
   shortcut?: string;
@@ -12,7 +17,7 @@ export interface Command {
 }
 
 export interface CommandGroup {
-  label: '페이지' | '설정';
+  label: CommandGroupLabel;
   commands: Command[];
 }
 
@@ -46,6 +51,53 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
     run: () => onNavigate(item.id),
   }));
 
+  const mac = isMacOS();
+  const shortcuts = useSettingsStore.getState().settings.shortcuts ?? DEFAULT_SHORTCUTS;
+  const comboFor = (id: string): string | undefined => {
+    const b = shortcuts.bindings[id];
+    if (!b || !b.enabled) return undefined;
+    return comboToDisplay(b.combo, mac);
+  };
+
+  const quickAddCommands: Command[] = [
+    {
+      id: 'quickAdd.todo',
+      label: '할일 빠른 추가',
+      group: '빠른 추가' as const,
+      icon: 'check_circle',
+      keywords: ['할일', 'todo', '추가', '빠른'],
+      shortcut: comboFor('quickAdd.todo'),
+      run: () => useQuickAddStore.getState().open('todo'),
+    },
+    {
+      id: 'quickAdd.event',
+      label: '일정 빠른 추가',
+      group: '빠른 추가' as const,
+      icon: 'event',
+      keywords: ['일정', 'event', 'schedule', '추가', '빠른'],
+      shortcut: comboFor('quickAdd.event'),
+      run: () => useQuickAddStore.getState().open('event'),
+    },
+    {
+      id: 'quickAdd.memo',
+      label: '메모 빠른 추가',
+      group: '빠른 추가' as const,
+      icon: 'sticky_note_2',
+      keywords: ['메모', 'memo', '추가', '빠른'],
+      shortcut: comboFor('quickAdd.memo'),
+      run: () => useQuickAddStore.getState().open('memo'),
+    },
+    {
+      id: 'quickAdd.note',
+      label: '노트 새 페이지',
+      group: '빠른 추가' as const,
+      icon: 'description',
+      keywords: ['노트', 'note', '페이지', '추가', '빠른'],
+      shortcut: comboFor('quickAdd.note'),
+      run: () => useQuickAddStore.getState().open('note'),
+    },
+  ];
+
   const settingsCommands: Command[] = [
     {
       id: 'navigate-settings',
@@ -57,7 +109,7 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
     },
   ];
 
-  return [...pageCommands, ...settingsCommands];
+  return [...pageCommands, ...quickAddCommands, ...settingsCommands];
 }
 
 /** AND 토큰 검색: 쿼리 공백 구분 모든 토큰이 대상 문자열에 포함되면 매치 */
@@ -75,7 +127,7 @@ export function filterAndGroupCommands(
 ): CommandGroup[] {
   const filtered = commands.filter((cmd) => matchesQuery(cmd, query));
 
-  const groupOrder: Array<'페이지' | '설정'> = ['페이지', '설정'];
+  const groupOrder: CommandGroupLabel[] = ['빠른 추가', '페이지', '설정'];
   const groups: CommandGroup[] = groupOrder
     .map((label) => ({
       label,

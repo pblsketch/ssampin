@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, DashboardThemeSettings, WidgetStyleSettings } from '@domain/entities/Settings';
+import type { Settings, WorkSymbolItem, FeedbackConfig, WidgetVisibleSections, DashboardThemeSettings, WidgetStyleSettings, ShortcutSettings } from '@domain/entities/Settings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
@@ -155,6 +155,25 @@ const DEFAULT_SETTINGS: Settings = {
     lastSyncedAt: null,
     deviceId: '',  // 런타임에 generateUUID()로 초기화
   },
+  shortcuts: {
+    globalEnabled: false,
+    bindings: {
+      'quickAdd.todo':  { combo: 'mod+alt+t', enabled: true },
+      'quickAdd.event': { combo: 'mod+alt+e', enabled: true },
+      'quickAdd.memo':  { combo: 'mod+alt+m', enabled: true },
+      'quickAdd.note':  { combo: 'mod+alt+n', enabled: true },
+    },
+  },
+};
+
+export const DEFAULT_SHORTCUTS: ShortcutSettings = {
+  globalEnabled: false,
+  bindings: {
+    'quickAdd.todo':  { combo: 'mod+alt+t', enabled: true },
+    'quickAdd.event': { combo: 'mod+alt+e', enabled: true },
+    'quickAdd.memo':  { combo: 'mod+alt+m', enabled: true },
+    'quickAdd.note':  { combo: 'mod+alt+n', enabled: true },
+  },
 };
 
 interface SettingsState {
@@ -164,6 +183,9 @@ interface SettingsState {
   load: () => Promise<void>;
   update: (patch: Partial<Settings>) => Promise<void>;
   completeOnboarding: (settings: Partial<Settings>) => Promise<void>;
+  setShortcut: (commandId: string, combo: string, enabled?: boolean) => Promise<void>;
+  toggleGlobalShortcuts: (enabled: boolean) => Promise<void>;
+  resetShortcuts: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -238,6 +260,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             const savedSync = (saved as unknown as { sync?: Record<string, unknown> }).sync ?? {};
             const defaults = DEFAULT_SETTINGS.sync!;
             return { ...defaults, ...savedSync };
+          })(),
+          shortcuts: (() => {
+            const savedShortcuts = (saved as unknown as { shortcuts?: Partial<ShortcutSettings> }).shortcuts;
+            if (!savedShortcuts) return DEFAULT_SHORTCUTS;
+            return {
+              globalEnabled: savedShortcuts.globalEnabled ?? DEFAULT_SHORTCUTS.globalEnabled,
+              bindings: { ...DEFAULT_SHORTCUTS.bindings, ...(savedShortcuts.bindings ?? {}) },
+            };
           })(),
           dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings }).dashboardTheme,
           widgetStyle: (saved as unknown as { widgetStyle?: WidgetStyleSettings }).widgetStyle,
@@ -326,6 +356,41 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   completeOnboarding: async (patch) => {
     const next = { ...get().settings, ...patch };
     set({ settings: next, isFirstRun: false });
+    await settingsRepository.saveSettings(next);
+  },
+
+  setShortcut: async (commandId, combo, enabled) => {
+    const current = get().settings;
+    const currentShortcuts = current.shortcuts ?? DEFAULT_SHORTCUTS;
+    const existing = currentShortcuts.bindings[commandId];
+    const nextShortcuts: ShortcutSettings = {
+      globalEnabled: currentShortcuts.globalEnabled,
+      bindings: {
+        ...currentShortcuts.bindings,
+        [commandId]: {
+          combo,
+          enabled: enabled ?? existing?.enabled ?? true,
+        },
+      },
+    };
+    const next: Settings = { ...current, shortcuts: nextShortcuts };
+    set({ settings: next });
+    await settingsRepository.saveSettings(next);
+  },
+
+  toggleGlobalShortcuts: async (enabled) => {
+    const current = get().settings;
+    const currentShortcuts = current.shortcuts ?? DEFAULT_SHORTCUTS;
+    const nextShortcuts: ShortcutSettings = { ...currentShortcuts, globalEnabled: enabled };
+    const next: Settings = { ...current, shortcuts: nextShortcuts };
+    set({ settings: next });
+    await settingsRepository.saveSettings(next);
+  },
+
+  resetShortcuts: async () => {
+    const current = get().settings;
+    const next: Settings = { ...current, shortcuts: DEFAULT_SHORTCUTS };
+    set({ settings: next });
     await settingsRepository.saveSettings(next);
   },
 }));

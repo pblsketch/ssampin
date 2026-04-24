@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor, globalShortcut } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
@@ -22,6 +22,7 @@ declare const __dirname: string;
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
+let quickAddWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
 let widgetActiveBeforeSleep = false;  // suspend/lock 시점의 스냅샷
 let isSystemSuspending = false;       // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
@@ -48,6 +49,200 @@ function getDataDir(): string {
     fs.mkdirSync(dir, { recursive: true });
   }
   return dir;
+}
+
+// ─── 글로벌 퀵애드 단축키 ───
+type ShortcutSyncConfig = {
+  globalEnabled: boolean;
+  bindings: Array<{ id: string; combo: string; enabled: boolean }>;
+};
+
+function comboToAccelerator(combo: string): string {
+  const tokens = combo.toLowerCase().split('+').map((t) => t.trim()).filter(Boolean);
+  const mod = tokens.includes('mod') || tokens.includes('ctrl') || tokens.includes('cmd') || tokens.includes('meta');
+  const alt = tokens.includes('alt') || tokens.includes('option');
+  const shift = tokens.includes('shift');
+  const key = tokens.find((t) => !['mod', 'ctrl', 'cmd', 'meta', 'alt', 'option', 'shift'].includes(t));
+  if (!key) return '';
+  const parts: string[] = [];
+  if (mod) parts.push('CommandOrControl');
+  if (alt) parts.push('Alt');
+  if (shift) parts.push('Shift');
+  parts.push(key.length === 1 ? key.toUpperCase() : key);
+  return parts.join('+');
+}
+
+function isMainWindowVisible(): boolean {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  return mainWindow.isVisible();
+}
+
+function fadeInQuickAddWindow(): void {
+  if (!quickAddWindow || quickAddWindow.isDestroyed()) return;
+  const startTime = Date.now();
+  const duration = 160; // ms — 부드러운 ease-out cubic
+  quickAddWindow.setOpacity(0);
+  const interval = setInterval(() => {
+    if (!quickAddWindow || quickAddWindow.isDestroyed()) {
+      clearInterval(interval);
+      return;
+    }
+    const elapsed = Date.now() - startTime;
+    const t = Math.min(1, elapsed / duration);
+    // ease-out cubic: 1 - (1-t)^3
+    const opacity = 1 - Math.pow(1 - t, 3);
+    quickAddWindow.setOpacity(opacity);
+    if (t >= 1) clearInterval(interval);
+  }, 16);
+}
+
+function showQuickAddWindowAt(): void {
+  if (!quickAddWindow || quickAddWindow.isDestroyed()) return;
+  // 매 트리거마다 화면 중앙 재위치
+  const display = screen.getPrimaryDisplay();
+  const { width: areaWidth, height: areaHeight } = display.workAreaSize;
+  const [winWidth, winHeight] = quickAddWindow.getSize();
+  quickAddWindow.setPosition(
+    Math.round(display.workArea.x + (areaWidth - winWidth) / 2),
+    Math.round(display.workArea.y + areaHeight * 0.22),
+  );
+  quickAddWindow.show();
+  quickAddWindow.focus();
+}
+
+function buildQuickAddWindow(initialKind: string, prewarm: boolean): void {
+  const display = screen.getPrimaryDisplay();
+  const { width: areaWidth, height: areaHeight } = display.workAreaSize;
+  const winWidth = 480;
+  const winHeight = 440;
+
+  quickAddWindow = new BrowserWindow({
+    width: winWidth,
+    height: winHeight,
+    x: Math.round(display.workArea.x + (areaWidth - winWidth) / 2),
+    y: Math.round(display.workArea.y + areaHeight * 0.22),
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    hasShadow: false,
+    opacity: 0,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  quickAddWindow.setAlwaysOnTop(true, 'screen-saver');
+  quickAddWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  const queryBase: Record<string, string> = { mode: 'quickAdd', kind: initialKind };
+  if (prewarm) queryBase.prewarm = '1';
+
+  if (process.env['VITE_DEV_SERVER_URL']) {
+    const qs = new URLSearchParams(queryBase).toString();
+    void quickAddWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?${qs}`);
+  } else {
+    void quickAddWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
+      query: queryBase,
+    });
+  }
+
+  // prewarm이면 ready-to-show에서 show 안 함 — 첫 단축키까지 hidden 대기
+  if (!prewarm) {
+    quickAddWindow.once('ready-to-show', () => {
+      if (!quickAddWindow || quickAddWindow.isDestroyed()) return;
+      showQuickAddWindowAt();
+      fadeInQuickAddWindow();
+    });
+  }
+
+  // 사용자가 닫기 버튼/ESC로 닫으면 → 실제 close 대신 hide (재사용 + 빠른 재오픈)
+  quickAddWindow.on('close', (e) => {
+    if (isQuitting) return;
+    if (!quickAddWindow || quickAddWindow.isDestroyed()) return;
+    e.preventDefault();
+    quickAddWindow.hide();
+    quickAddWindow.setOpacity(0);
+  });
+
+  quickAddWindow.on('closed', () => {
+    quickAddWindow = null;
+  });
+}
+
+function prewarmQuickAddWindow(): void {
+  if (quickAddWindow && !quickAddWindow.isDestroyed()) return;
+  buildQuickAddWindow('todo', true);
+}
+
+function createOrFocusQuickAddWindow(commandId: string): void {
+  // 이미 살아있으면 (visible / hidden / prewarm) → 즉시 show + IPC로 kind 전환
+  if (quickAddWindow && !quickAddWindow.isDestroyed()) {
+    const wasHidden = !quickAddWindow.isVisible();
+    if (quickAddWindow.isMinimized()) quickAddWindow.restore();
+    showQuickAddWindowAt();
+    if (wasHidden) fadeInQuickAddWindow();
+    quickAddWindow.webContents.send('shortcut:triggered', commandId);
+    return;
+  }
+  // 창 자체가 없는 경우 (prewarm 실패/예외) — 즉시 빌드 후 show
+  buildQuickAddWindow(commandId.replace('quickAdd.', ''), false);
+}
+
+function destroyQuickAddWindow(): void {
+  if (!quickAddWindow || quickAddWindow.isDestroyed()) return;
+  // close 이벤트 우회를 위해 destroy 직접 호출
+  quickAddWindow.destroy();
+  quickAddWindow = null;
+}
+
+function triggerShortcut(commandId: string): void {
+  if (isMainWindowVisible()) {
+    // 메인 창이 떠있으면 (최소화 포함) 메인 창에 인앱 모달
+    if (mainWindow!.isMinimized()) mainWindow!.restore();
+    mainWindow!.focus();
+    mainWindow!.webContents.send('shortcut:triggered', commandId);
+    return;
+  }
+  // 메인 창이 hidden/destroyed (위젯 모드 또는 트레이 상태) → 별도 팝업 창
+  createOrFocusQuickAddWindow(commandId);
+}
+
+function applyGlobalShortcuts(config: ShortcutSyncConfig): { registered: string[]; failed: string[] } {
+  globalShortcut.unregisterAll();
+  const registered: string[] = [];
+  const failed: string[] = [];
+  if (!config.globalEnabled) {
+    return { registered, failed };
+  }
+  for (const b of config.bindings) {
+    if (!b.enabled) continue;
+    const accel = comboToAccelerator(b.combo);
+    if (!accel) {
+      failed.push(b.id);
+      continue;
+    }
+    try {
+      const ok = globalShortcut.register(accel, () => {
+        triggerShortcut(b.id);
+      });
+      if (ok) registered.push(b.id);
+      else failed.push(b.id);
+    } catch (err) {
+      console.error('[shortcuts] register 실패', b.id, accel, err);
+      failed.push(b.id);
+    }
+  }
+  return { registered, failed };
 }
 
 /**
@@ -1598,6 +1793,12 @@ if (!gotTheLock) {
     registerRealtimeWallLinkPreviewHandler();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();
+    // 글로벌 퀵애드 단축키 IPC
+    ipcMain.handle('shortcuts:sync', (_event, config: ShortcutSyncConfig) => {
+      return applyGlobalShortcuts(config);
+    });
+    // QuickAdd 팝업 창 prewarm (앱 시작 5초 후) — 첫 단축키 latency 제거
+    setTimeout(() => prewarmQuickAddWindow(), 5000);
     createTray();
     setupAutoUpdater();
 
@@ -1674,6 +1875,11 @@ if (!gotTheLock) {
     });
   });
 }
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  destroyQuickAddWindow();
+});
 
 app.on('before-quit', () => {
   isQuitting = true;
