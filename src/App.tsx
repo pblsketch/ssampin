@@ -68,6 +68,7 @@ import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { useNoteStore } from '@adapters/stores/useNoteStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
@@ -331,6 +332,7 @@ const COMMAND_TO_KIND: Record<string, QuickAddKind> = {
   'quickAdd.event': 'event',
   'quickAdd.memo': 'memo',
   'quickAdd.note': 'note',
+  'quickAdd.bookmark': 'bookmark',
 };
 
 function QuickAddApp(): JSX.Element {
@@ -346,6 +348,7 @@ function QuickAddApp(): JSX.Element {
     void useEventsStore.getState().load();
     void useMemoStore.getState().load();
     void useNoteStore.getState().load();
+    void useBookmarkStore.getState().loadAll();
     if (!isPrewarmMode()) {
       useQuickAddStore.getState().open(getQuickAddKindFromUrl());
     }

@@ -27,9 +27,23 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
   const updateOgMeta = useBookmarkStore((s) => s.updateOgMeta);
   const showToast = useToastStore((s) => s.show);
 
-  // 첫 마운트 시 데이터 로드 + URL 입력에 포커스
+  // 첫 마운트 시 데이터 로드 + 클립보드 자동 채움 + URL 입력에 포커스
   useEffect(() => {
     void loadAll();
+
+    // 클립보드에 URL이 들어 있으면 자동으로 채워넣기 (사용자 편의)
+    void (async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const trimmed = text?.trim();
+        if (trimmed && validateBookmarkUrl(trimmed)) {
+          setUrl(trimmed);
+        }
+      } catch {
+        // 권한 거부/Unfocused 등은 조용히 무시
+      }
+    })();
+
     requestAnimationFrame(() => urlInputRef.current?.focus({ preventScroll: true }));
   }, [loadAll]);
 
