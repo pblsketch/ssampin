@@ -102,7 +102,15 @@ function isQuickAddMode(): boolean {
 function getQuickAddKindFromUrl(): QuickAddKind {
   const params = new URLSearchParams(window.location.search);
   const raw = params.get('kind');
-  if (raw === 'todo' || raw === 'event' || raw === 'memo' || raw === 'note') return raw;
+  if (
+    raw === 'todo' ||
+    raw === 'event' ||
+    raw === 'memo' ||
+    raw === 'note' ||
+    raw === 'bookmark'
+  ) {
+    return raw;
+  }
   return 'todo';
 }
 
