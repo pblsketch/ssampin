@@ -66,23 +66,16 @@ export function BookmarkSection() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  // 단축키 (BookmarksPage는 ToolLayout을 쓰지 않으므로 useToolKeydown으로 직접 등록)
+  // 페이지 로컬 단축키 — "즐겨찾기 추가"는 글로벌 단축키(설정 > 단축키)로 통합되어 있어 여기서는 다루지 않음.
+  // 페이지 컨텍스트에서만 의미가 있는 단축키만 처리: 그룹 추가 / 편집 모드 / 검색 포커스.
   useToolKeydown(
     (e) => {
-      // INPUT/TEXTAREA/SELECT 포커스 중이면 단축키 무시 (검색바 자체에서 텍스트 입력 가능)
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      // 모달 열려있으면 단축키 무시
       if (showBookmarkModal || showGroupModal || showImportExportModal) return;
 
       const ctrl = e.ctrlKey || e.metaKey;
 
-      if (ctrl && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        setEditingBookmark(null);
-        setShowBookmarkModal(true);
-        return;
-      }
       if (ctrl && e.key.toLowerCase() === 'g') {
         e.preventDefault();
         setEditingGroup(null);
@@ -307,7 +300,7 @@ export function BookmarkSection() {
                   setShowBookmarkModal(true);
                 }}
                 className="px-3 py-1.5 text-sm rounded-lg bg-sp-accent hover:bg-blue-600 text-white transition-colors flex items-center gap-1"
-                title="즐겨찾기 추가 (Ctrl+N)"
+                title="즐겨찾기 추가"
               >
                 <span className="material-symbols-outlined text-icon">add</span>
                 즐겨찾기 추가

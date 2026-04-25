@@ -198,7 +198,12 @@ export interface SyncSettings {
 }
 
 /** 글로벌 퀵애드 단축키 ID */
-export type QuickAddShortcutId = 'quickAdd.todo' | 'quickAdd.event' | 'quickAdd.memo' | 'quickAdd.note';
+export type QuickAddShortcutId =
+  | 'quickAdd.todo'
+  | 'quickAdd.event'
+  | 'quickAdd.memo'
+  | 'quickAdd.note'
+  | 'quickAdd.bookmark';
 
 export interface ShortcutBinding {
   /** 정규화 조합 문자열, 예: "mod+alt+t" */

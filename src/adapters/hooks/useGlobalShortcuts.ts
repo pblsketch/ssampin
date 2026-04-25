@@ -9,6 +9,7 @@ const COMMAND_TO_KIND: Record<string, QuickAddKind> = {
   'quickAdd.event': 'event',
   'quickAdd.memo': 'memo',
   'quickAdd.note': 'note',
+  'quickAdd.bookmark': 'bookmark',
 };
 
 /**

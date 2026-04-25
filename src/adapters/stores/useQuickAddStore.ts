@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type QuickAddKind = 'todo' | 'event' | 'memo' | 'note';
+export type QuickAddKind = 'todo' | 'event' | 'memo' | 'note' | 'bookmark';
 
 interface QuickAddState {
   isOpen: boolean;
