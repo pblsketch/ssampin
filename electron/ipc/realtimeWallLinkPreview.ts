@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { lookup } from 'dns/promises';
 import net from 'net';
 import { Agent } from 'undici';
+import ogs from 'open-graph-scraper';
 import type { RealtimeWallLinkPreviewOgMeta } from '../../src/domain/entities/RealtimeWall';
 
 /**
@@ -338,7 +339,7 @@ async function fetchWebPagePreview(rawUrl: string): Promise<RealtimeWallLinkPrev
     throw new Error('Unsupported protocol');
   }
 
-  // 수동 리다이렉트 — 각 hop마다 신규 hostname 재검증
+  // 수동 리다이렉트 — 각 hop마다 신규 hostname 재검증 (SSRF 방어 유지)
   let response: Awaited<ReturnType<typeof fetchSingleHop>> | null = null;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     response = await fetchSingleHop(currentUrl);
@@ -363,27 +364,40 @@ async function fetchWebPagePreview(rawUrl: string): Promise<RealtimeWallLinkPrev
   const charset = detectCharset(response.contentType, response.body);
   const html = safeDecode(response.body, charset);
 
-  const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
-  const scope = headMatch ? headMatch[1] : html.slice(0, MAX_RESPONSE_BYTES);
+  // open-graph-scraper로 HTML 파싱 — og/twitter/dc/jsonld/<title> 모든 fallback 자동
+  // (97k+ weekly DL · 10년 maintenance, 우리 자체 정규식보다 훨씬 견고)
+  let parsed: Awaited<ReturnType<typeof ogs>>;
+  try {
+    parsed = await ogs({ html });
+  } catch {
+    return {};
+  }
+  if (parsed.error) return {};
+  const result = parsed.result;
 
-  // og:title → twitter:title → <title> 순으로 폴백
+  // 우선순위: ogTitle → twitterTitle → dcTitle → <title> (ogs가 .ogTitle에 fallback 채워줌)
   const rawTitle =
-    extractMetaContent(scope, 'og:title') ??
-    extractMetaContent(scope, 'twitter:title') ??
-    extractTitleTag(scope);
-  const ogTitle = truncate(rawTitle, MAX_TITLE_LEN);
+    result.ogTitle ||
+    result.twitterTitle ||
+    result.dcTitle ||
+    (result as { title?: string }).title;
+  const ogTitle = truncate(rawTitle ? sanitizeText(rawTitle) : undefined, MAX_TITLE_LEN);
 
-  // og:description → twitter:description → <meta name="description"> 순
   const rawDesc =
-    extractMetaContent(scope, 'og:description') ??
-    extractMetaContent(scope, 'twitter:description') ??
-    extractMetaContent(scope, 'description');
-  const ogDescription = truncate(rawDesc, MAX_DESCRIPTION_LEN);
+    result.ogDescription ||
+    result.twitterDescription ||
+    result.dcDescription ||
+    (result as { description?: string }).description;
+  const ogDescription = truncate(
+    rawDesc ? sanitizeText(rawDesc) : undefined,
+    MAX_DESCRIPTION_LEN,
+  );
 
-  const ogImageRaw =
-    extractMetaContent(scope, 'og:image') ??
-    extractMetaContent(scope, 'twitter:image');
-  const ogImageUrl = await sanitizeImageUrl(ogImageRaw, currentUrl.toString());
+  // ogImage / twitterImage는 배열 형태 ({ url, width?, height?, type? }[])
+  const firstImage =
+    result.ogImage?.[0]?.url ||
+    result.twitterImage?.[0]?.url;
+  const ogImageUrl = await sanitizeImageUrl(firstImage, currentUrl.toString());
 
   return {
     ...(ogTitle ? { ogTitle } : {}),
