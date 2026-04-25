@@ -189,6 +189,41 @@ function extractMetaContent(html: string, property: string): string | undefined 
   return undefined;
 }
 
+/**
+ * `<title>...</title>` 태그에서 텍스트 추출 — og:title이 없는 페이지(네이버 블로그
+ * 일부, 단순 HTML 등)의 폴백.
+ */
+function extractTitleTag(html: string): string | undefined {
+  const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (!m || !m[1]) return undefined;
+  const t = sanitizeText(decodeHtmlEntities(m[1])).trim();
+  return t || undefined;
+}
+
+/**
+ * Content-Type 헤더와 HTML `<meta charset>`에서 인코딩 추출.
+ * 한국어 사이트(EUC-KR, CP949 등) 대응.
+ */
+function detectCharset(contentType: string, htmlHead: Uint8Array): string {
+  const ctMatch = contentType.match(/charset\s*=\s*"?([^\s;"]+)/i);
+  if (ctMatch && ctMatch[1]) return ctMatch[1].toLowerCase();
+  // <meta charset="..."> or <meta http-equiv="Content-Type" content="text/html;charset=...">
+  const head = new TextDecoder('utf-8', { fatal: false }).decode(htmlHead.subarray(0, 2048));
+  const metaCharset = head.match(/<meta[^>]+charset\s*=\s*["']?([^"'\s>]+)/i);
+  if (metaCharset && metaCharset[1]) return metaCharset[1].toLowerCase();
+  return 'utf-8';
+}
+
+function safeDecode(buf: Uint8Array, charset: string): string {
+  // Node의 TextDecoder는 ICU를 통해 euc-kr/cp949 등 다수 인코딩 지원.
+  // 실패 시 UTF-8 폴백.
+  try {
+    return new TextDecoder(charset, { fatal: false }).decode(buf);
+  } catch {
+    return new TextDecoder('utf-8', { fatal: false }).decode(buf);
+  }
+}
+
 async function sanitizeImageUrl(
   raw: string | undefined,
   baseUrl: string,
@@ -217,20 +252,22 @@ function truncate(s: string | undefined, max: number): string | undefined {
   return s.slice(0, max);
 }
 
-async function fetchWebPagePreview(rawUrl: string): Promise<RealtimeWallLinkPreviewOgMeta> {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    throw new Error('Invalid URL');
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Unsupported protocol');
-  }
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+const MAX_REDIRECTS = 3;
 
+/**
+ * 단일 hop fetch — vetted dispatcher로 한 번만 GET. 리다이렉트는 호출자가 처리.
+ * 각 hop마다 새 hostname 재검증 + 새 dispatcher 생성으로 SSRF 안전성 유지.
+ */
+async function fetchSingleHop(url: URL): Promise<{
+  status: number;
+  location: string | null;
+  contentType: string;
+  body: Uint8Array | null;
+}> {
   const vetted = await resolveAndVetHost(url.hostname);
   const dispatcher = pinDispatcher(vetted);
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -240,21 +277,27 @@ async function fetchWebPagePreview(rawUrl: string): Promise<RealtimeWallLinkPrev
       redirect: 'manual',
       signal: controller.signal,
       headers: {
-        'User-Agent': 'SsamPin Link Preview',
-        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': BROWSER_UA,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
       },
       // @ts-expect-error — undici dispatcher는 Node fetch 확장 옵션
       dispatcher,
     });
 
-    if (response.status >= 300 && response.status < 400) return {};
-    if (!response.ok) return {};
-
     const contentType = response.headers.get('content-type') ?? '';
-    if (!/^(text\/html|application\/xhtml\+xml)/i.test(contentType)) return {};
+    const location = response.headers.get('location');
+
+    // 3xx는 본문 안 읽음 — 호출자가 location 따라감
+    if (response.status >= 300 && response.status < 400) {
+      return { status: response.status, location, contentType, body: null };
+    }
+    if (!response.ok) {
+      return { status: response.status, location: null, contentType, body: null };
+    }
 
     const reader = response.body?.getReader();
-    if (!reader) return {};
+    if (!reader) return { status: response.status, location: null, contentType, body: null };
 
     const chunks: Uint8Array[] = [];
     let total = 0;
@@ -276,25 +319,77 @@ async function fetchWebPagePreview(rawUrl: string): Promise<RealtimeWallLinkPrev
       offset += c.byteLength;
       if (offset >= MAX_RESPONSE_BYTES) break;
     }
-    const html = new TextDecoder('utf-8', { fatal: false }).decode(buf);
 
-    const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
-    const scope = headMatch ? headMatch[1] : html.slice(0, MAX_RESPONSE_BYTES);
-
-    const ogTitle = truncate(extractMetaContent(scope, 'og:title'), MAX_TITLE_LEN);
-    const ogDescription = truncate(extractMetaContent(scope, 'og:description'), MAX_DESCRIPTION_LEN);
-    const ogImageRaw = extractMetaContent(scope, 'og:image');
-    const ogImageUrl = await sanitizeImageUrl(ogImageRaw, url.toString());
-
-    return {
-      ...(ogTitle ? { ogTitle } : {}),
-      ...(ogDescription ? { ogDescription } : {}),
-      ...(ogImageUrl ? { ogImageUrl } : {}),
-    };
+    return { status: response.status, location: null, contentType, body: buf };
   } finally {
     clearTimeout(timer);
     dispatcher.close().catch(() => undefined);
   }
+}
+
+async function fetchWebPagePreview(rawUrl: string): Promise<RealtimeWallLinkPreviewOgMeta> {
+  let currentUrl: URL;
+  try {
+    currentUrl = new URL(rawUrl);
+  } catch {
+    throw new Error('Invalid URL');
+  }
+  if (currentUrl.protocol !== 'http:' && currentUrl.protocol !== 'https:') {
+    throw new Error('Unsupported protocol');
+  }
+
+  // 수동 리다이렉트 — 각 hop마다 신규 hostname 재검증
+  let response: Awaited<ReturnType<typeof fetchSingleHop>> | null = null;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    response = await fetchSingleHop(currentUrl);
+    if (response.status >= 300 && response.status < 400) {
+      if (!response.location || hop === MAX_REDIRECTS) return {};
+      let next: URL;
+      try {
+        next = new URL(response.location, currentUrl);
+      } catch {
+        return {};
+      }
+      if (next.protocol !== 'http:' && next.protocol !== 'https:') return {};
+      currentUrl = next;
+      continue;
+    }
+    break;
+  }
+  if (!response || !response.body) return {};
+
+  if (!/^(text\/html|application\/xhtml\+xml)/i.test(response.contentType)) return {};
+
+  const charset = detectCharset(response.contentType, response.body);
+  const html = safeDecode(response.body, charset);
+
+  const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+  const scope = headMatch ? headMatch[1] : html.slice(0, MAX_RESPONSE_BYTES);
+
+  // og:title → twitter:title → <title> 순으로 폴백
+  const rawTitle =
+    extractMetaContent(scope, 'og:title') ??
+    extractMetaContent(scope, 'twitter:title') ??
+    extractTitleTag(scope);
+  const ogTitle = truncate(rawTitle, MAX_TITLE_LEN);
+
+  // og:description → twitter:description → <meta name="description"> 순
+  const rawDesc =
+    extractMetaContent(scope, 'og:description') ??
+    extractMetaContent(scope, 'twitter:description') ??
+    extractMetaContent(scope, 'description');
+  const ogDescription = truncate(rawDesc, MAX_DESCRIPTION_LEN);
+
+  const ogImageRaw =
+    extractMetaContent(scope, 'og:image') ??
+    extractMetaContent(scope, 'twitter:image');
+  const ogImageUrl = await sanitizeImageUrl(ogImageRaw, currentUrl.toString());
+
+  return {
+    ...(ogTitle ? { ogTitle } : {}),
+    ...(ogDescription ? { ogDescription } : {}),
+    ...(ogImageUrl ? { ogImageUrl } : {}),
+  };
 }
 
 export function registerRealtimeWallLinkPreviewHandler(): void {
