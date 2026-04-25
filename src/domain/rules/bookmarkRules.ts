@@ -58,16 +58,21 @@ export function getBookmarksByGroup(
 }
 
 /**
+ * URL 정규화 (중복 검사용) — 소문자 + 후행 / 제거
+ */
+export function normalizeUrl(url: string): string {
+  return url.toLowerCase().replace(/\/+$/, '');
+}
+
+/**
  * URL 중복 체크
  */
 export function isDuplicateUrl(
   bookmarks: readonly Bookmark[],
   url: string,
 ): boolean {
-  const normalized = url.toLowerCase().replace(/\/+$/, '');
-  return bookmarks.some(
-    (b) => b.url.toLowerCase().replace(/\/+$/, '') === normalized,
-  );
+  const normalized = normalizeUrl(url);
+  return bookmarks.some((b) => normalizeUrl(b.url) === normalized);
 }
 
 /**
@@ -92,6 +97,281 @@ export function filterVisibleBookmarks(
   if (hiddenBookmarkIds.length === 0) return [...bookmarks];
   const hiddenSet = new Set(hiddenBookmarkIds);
   return bookmarks.filter((b) => !hiddenSet.has(b.id));
+}
+
+/**
+ * 활성(아카이브 안 된) 그룹만 반환
+ */
+export function filterActiveGroups(
+  groups: readonly BookmarkGroup[],
+): BookmarkGroup[] {
+  return groups.filter((g) => !g.archived);
+}
+
+/**
+ * 아카이브된 그룹만 반환
+ */
+export function filterArchivedGroups(
+  groups: readonly BookmarkGroup[],
+): BookmarkGroup[] {
+  return groups.filter((g) => g.archived);
+}
+
+/**
+ * 검색 쿼리로 북마크 필터링 (name + url + ogTitle + ogDescription)
+ * 단순 lowercase includes 매칭
+ */
+export function filterBookmarksBySearch(
+  bookmarks: readonly Bookmark[],
+  query: string,
+): Bookmark[] {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return [...bookmarks];
+  return bookmarks.filter((b) => {
+    const haystack = [
+      b.name,
+      b.url,
+      b.ogTitle ?? '',
+      b.ogDescription ?? '',
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(trimmed);
+  });
+}
+
+/** URL에서 호스트네임을 추출, www. 접두사 제거 */
+export function extractDomain(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.startsWith('www.') ? host.slice(4) : host;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 도메인 → 프리셋 그룹 ID 매핑 테이블
+ * 사용자가 이름을 바꿔도 동작하도록 그룹 ID로 매핑.
+ */
+export const DOMAIN_GROUP_MAP: Readonly<Record<string, string>> = {
+  // 💼 업무
+  'neis.go.kr': 'preset-work',
+  'eduro.go.kr': 'preset-work',
+  'gov.kr': 'preset-work',
+  'moe.go.kr': 'preset-work',
+  'schoolinfo.go.kr': 'preset-work',
+  'kedi.re.kr': 'preset-work',
+  // 📚 수업 준비
+  'edunet.net': 'preset-prep',
+  'ebs.co.kr': 'preset-prep',
+  'ebsi.co.kr': 'preset-prep',
+  'kice.re.kr': 'preset-prep',
+  // 🛠️ 수업 도구
+  'mentimeter.com': 'preset-tools',
+  'padlet.com': 'preset-tools',
+  'canva.com': 'preset-tools',
+  'miricanvas.com': 'preset-tools',
+  'kahoot.com': 'preset-tools',
+  'quizlet.com': 'preset-tools',
+  'jamboard.google.com': 'preset-tools',
+  'docs.google.com': 'preset-tools',
+  'youtube.com': 'preset-tools',
+  // 🤖 AI·에듀테크
+  'chat.openai.com': 'preset-ai',
+  'chatgpt.com': 'preset-ai',
+  'gemini.google.com': 'preset-ai',
+  'claude.ai': 'preset-ai',
+  'wrtn.ai': 'preset-ai',
+  'riiid.com': 'preset-ai',
+};
+
+/**
+ * URL에 매칭되는 프리셋 그룹 ID 추천
+ * - 정확 매칭 또는 서브도메인 매칭 (예: docs.google.com → 정확, www.padlet.com → 부모)
+ * - 추천 그룹이 현재 존재하고 archived가 아니어야 반환
+ * - 사용자 정의 그룹은 자동 추천 대상이 아님 (preset-* ID만)
+ */
+export function recommendGroupId(
+  url: string,
+  groups: readonly BookmarkGroup[],
+): string | null {
+  const domain = extractDomain(url);
+  if (!domain) return null;
+
+  let matched: string | null = null;
+  for (const [pattern, groupId] of Object.entries(DOMAIN_GROUP_MAP)) {
+    if (domain === pattern || domain.endsWith('.' + pattern)) {
+      matched = groupId;
+      break;
+    }
+  }
+  if (!matched) return null;
+
+  const exists = groups.some((g) => g.id === matched && !g.archived);
+  return exists ? matched : null;
+}
+
+/** 미사용 북마크 임계값 (일) */
+export const DAYS_FORGOTTEN_THRESHOLD = 30;
+
+interface FindForgottenOptions {
+  daysThreshold?: number;
+  limit?: number;
+  now?: Date;
+}
+
+/**
+ * 잊고 있던 북마크 찾기 — 위젯/카드 뱃지에서 활용
+ * - 폴더 제외
+ * - lastClickedAt이 null이거나 N일 이상 경과
+ * - 정렬: null 우선 → 가장 오래된 순
+ */
+export function findForgottenBookmarks(
+  bookmarks: readonly Bookmark[],
+  options: FindForgottenOptions = {},
+): Bookmark[] {
+  const {
+    daysThreshold = DAYS_FORGOTTEN_THRESHOLD,
+    limit = 3,
+    now = new Date(),
+  } = options;
+
+  const cutoffMs = now.getTime() - daysThreshold * 24 * 60 * 60 * 1000;
+
+  const candidates = bookmarks.filter((b) => {
+    if (b.type === 'folder') return false;
+    if (!b.lastClickedAt) return true;
+    const t = Date.parse(b.lastClickedAt);
+    if (Number.isNaN(t)) return true;
+    return t < cutoffMs;
+  });
+
+  // null/invalid 우선 → 오래된 순 (오름차순)
+  candidates.sort((a, b) => {
+    const aMs = a.lastClickedAt ? Date.parse(a.lastClickedAt) : NaN;
+    const bMs = b.lastClickedAt ? Date.parse(b.lastClickedAt) : NaN;
+    const aNull = !a.lastClickedAt || Number.isNaN(aMs);
+    const bNull = !b.lastClickedAt || Number.isNaN(bMs);
+    if (aNull && !bNull) return -1;
+    if (!aNull && bNull) return 1;
+    if (aNull && bNull) return 0;
+    return aMs - bMs;
+  });
+
+  return candidates.slice(0, limit);
+}
+
+/**
+ * 북마크가 "잊혀진" 상태인지 단건 판정 — 카드 뱃지 표시용
+ */
+export function isBookmarkForgotten(
+  bookmark: Bookmark,
+  daysThreshold: number = DAYS_FORGOTTEN_THRESHOLD,
+  now: Date = new Date(),
+): boolean {
+  if (bookmark.type === 'folder') return false;
+  if (!bookmark.lastClickedAt) return true;
+  const t = Date.parse(bookmark.lastClickedAt);
+  if (Number.isNaN(t)) return true;
+  const cutoffMs = now.getTime() - daysThreshold * 24 * 60 * 60 * 1000;
+  return t < cutoffMs;
+}
+
+/**
+ * Chrome/Edge 등 브라우저 북마크 HTML(`Netscape Bookmark File Format`)을 파싱.
+ * - 폴더(`<H3>`) → BookmarkGroup, 1단계만 사용 (중첩 폴더는 부모 그룹에 병합)
+ * - 링크(`<A HREF="...">이름</A>`) → Bookmark
+ * - 폴더가 없는 최상위 링크는 "가져온 즐겨찾기" 그룹에 모음
+ *
+ * 외부 라이브러리 없이 정규식 기반. cheerio/jsdom 추가 안 함.
+ */
+export function parseBrowserBookmarksHtml(html: string): {
+  groups: BookmarkGroup[];
+  bookmarks: Bookmark[];
+} {
+  const now = new Date().toISOString();
+  const groups: BookmarkGroup[] = [];
+  const bookmarks: Bookmark[] = [];
+
+  const fallbackGroup: BookmarkGroup = {
+    id: 'imported-default',
+    name: '가져온 즐겨찾기',
+    emoji: '📥',
+    order: 0,
+    collapsed: false,
+    createdAt: now,
+  };
+
+  const tokenRe = /<H3[^>]*>([\s\S]*?)<\/H3>|<A\s+([^>]*?)>([\s\S]*?)<\/A>/gi;
+  let groupIndex = 0;
+  let bookmarkOrderInGroup = new Map<string, number>();
+  let currentGroupId: string | null = null;
+
+  const ensureFallbackUsed = (): string => {
+    if (!groups.find((g) => g.id === fallbackGroup.id)) {
+      groups.push(fallbackGroup);
+      bookmarkOrderInGroup.set(fallbackGroup.id, 0);
+    }
+    return fallbackGroup.id;
+  };
+
+  const decode = (s: string): string =>
+    s
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(html)) !== null) {
+    if (match[1] !== undefined) {
+      // <H3> 폴더
+      const folderName = decode(match[1]);
+      if (!folderName) continue;
+      const id = `imported-${groupIndex}`;
+      groups.push({
+        id,
+        name: folderName,
+        emoji: '📁',
+        order: groupIndex,
+        collapsed: false,
+        createdAt: now,
+      });
+      bookmarkOrderInGroup.set(id, 0);
+      currentGroupId = id;
+      groupIndex += 1;
+    } else if (match[2] !== undefined && match[3] !== undefined) {
+      // <A> 링크
+      const attrs = match[2];
+      const linkText = decode(match[3]);
+      const hrefMatch = attrs.match(/HREF\s*=\s*"([^"]+)"/i);
+      if (!hrefMatch) continue;
+      const href = decode(hrefMatch[1]!);
+      if (!validateBookmarkUrl(href)) continue;
+
+      const targetGroupId = currentGroupId ?? ensureFallbackUsed();
+      const order = bookmarkOrderInGroup.get(targetGroupId) ?? 0;
+      bookmarkOrderInGroup.set(targetGroupId, order + 1);
+
+      bookmarks.push({
+        id: `imported-b-${bookmarks.length}`,
+        name: linkText || href,
+        url: href,
+        iconType: 'emoji',
+        iconValue: '🔗',
+        groupId: targetGroupId,
+        order,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+
+  return { groups, bookmarks };
 }
 
 /**

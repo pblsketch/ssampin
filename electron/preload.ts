@@ -64,6 +64,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('font:import'),
   importShareFile: (): Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null> =>
     ipcRenderer.invoke('share:import'),
+  importBookmarksFile: (): Promise<{ content: string; format: 'json' | 'html' } | null> =>
+    ipcRenderer.invoke('bookmarks:import'),
   onFileOpened: (callback: (filePath: string) => void): (() => void) => {
     const handler = (_event: unknown, filePath: string) => callback(filePath);
     ipcRenderer.on('share:file-opened', handler);
@@ -226,6 +228,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   realtimeWallTunnelStart: (): Promise<{ tunnelUrl: string }> =>
     ipcRenderer.invoke('realtime-wall:tunnel-start'),
   fetchRealtimeWallLinkPreview: (url: string) =>
+    ipcRenderer.invoke('realtime-wall:fetch-link-preview', url),
+  // 동일한 OG 파싱 IPC를 도메인 중립적인 이름으로 재노출 (북마크 등에서 사용)
+  fetchLinkPreview: (url: string) =>
     ipcRenderer.invoke('realtime-wall:fetch-link-preview', url),
   onRealtimeWallStudentSubmitted: (callback: (data: {
     post: {

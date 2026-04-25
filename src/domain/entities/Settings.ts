@@ -282,6 +282,8 @@ export interface Settings {
   readonly bookmarkWidgetHiddenGroups?: readonly string[];
   /** 즐겨찾기 위젯에서 숨길 개별 북마크 ID 목록 */
   readonly bookmarkWidgetHiddenBookmarks?: readonly string[];
+  /** 즐겨찾기 위젯의 "잊고 있던 사이트" 섹션 숨김 여부 (기본 false) */
+  readonly bookmarkWidgetHideForgotten?: boolean;
   /** 급식 조회용 별도 학교 설정 (통합학교 대응, 미설정 시 neis 학교 사용) */
   readonly mealSchool?: MealSchoolSettings;
   /** 할 일 타임라인: 시간표 수업 표시 */

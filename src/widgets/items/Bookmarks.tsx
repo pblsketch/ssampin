@@ -7,6 +7,7 @@ import {
   getBookmarksByGroup,
   filterVisibleGroups,
   filterVisibleBookmarks,
+  findForgottenBookmarks,
 } from '@domain/rules/bookmarkRules';
 import {
   DndContext,
@@ -41,6 +42,16 @@ function openBookmark(bookmark: Bookmark) {
   }
 }
 
+function describeForgottenAge(lastClickedAt: string | undefined, now: Date = new Date()): string {
+  if (!lastClickedAt) return '방문 기록 없음';
+  const t = Date.parse(lastClickedAt);
+  if (Number.isNaN(t)) return '방문 기록 없음';
+  const days = Math.floor((now.getTime() - t) / (24 * 60 * 60 * 1000));
+  if (days <= 0) return '오늘 방문';
+  if (days === 1) return '하루 전';
+  return `${days}일 전`;
+}
+
 export function BookmarksWidget() {
   const bookmarks = useBookmarkStore((s) => s.bookmarks);
   const groups = useBookmarkStore((s) => s.groups);
@@ -51,7 +62,9 @@ export function BookmarksWidget() {
 
   const hiddenGroups = useSettingsStore((s) => s.settings.bookmarkWidgetHiddenGroups) ?? [];
   const hiddenBookmarks = useSettingsStore((s) => s.settings.bookmarkWidgetHiddenBookmarks) ?? [];
+  const hideForgotten = useSettingsStore((s) => s.settings.bookmarkWidgetHideForgotten) ?? false;
   const update = useSettingsStore((s) => s.update);
+  const recordClick = useBookmarkStore((s) => s.recordClick);
 
   const [showPicker, setShowPicker] = useState(false);
   const [activeBookmark, setActiveBookmark] = useState<Bookmark | null>(null);
@@ -99,9 +112,10 @@ export function BookmarksWidget() {
     void loadAll();
   }, [loadAll]);
 
-  // 숨김 설정 적용 후 그룹별 정리
+  // 숨김 설정 적용 후 그룹별 정리 (활성 그룹만)
   const groupedBookmarks = useMemo(() => {
-    const visibleGroups = filterVisibleGroups(groups, hiddenGroups);
+    const activeGroups = groups.filter((g) => !g.archived);
+    const visibleGroups = filterVisibleGroups(activeGroups, hiddenGroups);
     const visibleBookmarks = filterVisibleBookmarks(bookmarks, hiddenBookmarks);
     const sortedGroups = sortGroupsByOrder(visibleGroups);
     return sortedGroups.map((group) => ({
@@ -109,6 +123,26 @@ export function BookmarksWidget() {
       items: getBookmarksByGroup(visibleBookmarks, group.id),
     }));
   }, [groups, bookmarks, hiddenGroups, hiddenBookmarks]);
+
+  // 잊고 있던 북마크 (위젯 상단 작은 섹션)
+  const forgottenBookmarks = useMemo(() => {
+    if (hideForgotten) return [];
+    // 활성 그룹의 북마크에서, 사용자가 명시적으로 숨긴 것은 제외
+    const activeGroupIds = new Set(groups.filter((g) => !g.archived).map((g) => g.id));
+    const candidates = bookmarks.filter(
+      (b) => activeGroupIds.has(b.groupId) && !hiddenBookmarks.includes(b.id),
+    );
+    return findForgottenBookmarks(candidates, { limit: 3 });
+  }, [bookmarks, groups, hideForgotten, hiddenBookmarks]);
+
+  const handleForgottenClick = (bookmark: Bookmark) => {
+    void recordClick(bookmark.id);
+    openBookmark(bookmark);
+  };
+
+  const handleHideForgotten = () => {
+    void update({ bookmarkWidgetHideForgotten: true });
+  };
 
   // 북마크가 아예 없으면 안내
   if (groups.length === 0 && bookmarks.length === 0) {
@@ -137,6 +171,46 @@ export function BookmarksWidget() {
           </span>
         </button>
       </div>
+
+      {/* 잊고 있던 사이트 */}
+      {!showPicker && forgottenBookmarks.length > 0 && (
+        <div className="mb-2 rounded-lg bg-amber-500/5 border border-amber-500/20 p-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-caption font-semibold text-amber-300/80 flex items-center gap-1">
+              🔔 잊고 있던 사이트
+            </span>
+            <button
+              onClick={handleHideForgotten}
+              className="text-sp-muted/60 hover:text-sp-text transition-colors"
+              title="이 영역을 숨기기"
+            >
+              <span className="material-symbols-outlined text-xs">close</span>
+            </button>
+          </div>
+          <div className="space-y-0.5">
+            {forgottenBookmarks.map((bm) => (
+              <button
+                key={bm.id}
+                onClick={() => handleForgottenClick(bm)}
+                className="w-full flex items-center gap-2 px-1.5 py-1 rounded hover:bg-sp-card text-left"
+                title={bm.url}
+              >
+                <span className="text-sm flex-shrink-0">
+                  {bm.iconType === 'favicon' ? (
+                    <img src={bm.iconValue} alt="" className="w-4 h-4 rounded" />
+                  ) : (
+                    bm.iconValue
+                  )}
+                </span>
+                <span className="text-xs text-sp-text truncate flex-1">{bm.name}</span>
+                <span className="text-caption text-sp-muted flex-shrink-0">
+                  {describeForgottenAge(bm.lastClickedAt)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showPicker ? (
         <BookmarkVisibilityPicker
@@ -245,6 +319,7 @@ function DroppableGroup({
 /* ─── 정렬 가능한 북마크 아이템 ─── */
 
 function SortableBookmarkItem({ bookmark }: { bookmark: Bookmark }) {
+  const recordClick = useBookmarkStore((s) => s.recordClick);
   const {
     attributes,
     listeners,
@@ -267,7 +342,10 @@ function SortableBookmarkItem({ bookmark }: { bookmark: Bookmark }) {
       {...attributes}
       {...listeners}
       onClick={() => {
-        if (!isDragging) openBookmark(bookmark);
+        if (!isDragging) {
+          void recordClick(bookmark.id);
+          openBookmark(bookmark);
+        }
       }}
       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-sp-card transition-colors text-left group cursor-grab active:cursor-grabbing"
     >

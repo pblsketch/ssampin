@@ -51,6 +51,7 @@ interface ElectronAPI {
   importAlarmAudio: () => Promise<{ name: string; dataUrl: string } | null>;
   importFont: () => Promise<{ name: string; dataUrl: string; mimeType: string } | null>;
   importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
+  importBookmarksFile: () => Promise<{ content: string; format: 'json' | 'html' } | null>;
   onFileOpened: (callback: (filePath: string) => void) => () => void;
   openExternal: (url: string) => Promise<void>;
   openPath: (folderPath: string) => Promise<string>;
@@ -121,6 +122,10 @@ interface ElectronAPI {
   realtimeWallTunnelInstall: () => Promise<void>;
   realtimeWallTunnelStart: () => Promise<{ tunnelUrl: string }>;
   fetchRealtimeWallLinkPreview: (
+    url: string,
+  ) => Promise<import('./domain/entities/RealtimeWall').RealtimeWallLinkPreviewOgMeta | null>;
+  /** 도메인 중립적 OG 메타 파싱 — 북마크 등에서 사용. fetchRealtimeWallLinkPreview와 동일 IPC. */
+  fetchLinkPreview: (
     url: string,
   ) => Promise<import('./domain/entities/RealtimeWall').RealtimeWallLinkPreviewOgMeta | null>;
   onRealtimeWallStudentSubmitted: (callback: (data: {

@@ -1,14 +1,19 @@
 import { create } from 'zustand';
-import type { Bookmark, BookmarkGroup, BookmarkData } from '@domain/entities/Bookmark';
+import type { Bookmark, BookmarkGroup, BookmarkData, BookmarkExportPayload } from '@domain/entities/Bookmark';
 import { bookmarkRepository } from '@adapters/di/container';
-import { ManageBookmarks } from '@usecases/bookmark/ManageBookmarks';
+import {
+  ManageBookmarks,
+  type ImportConflictPolicy,
+  type ImportResult,
+  type OgMetaPatch,
+} from '@usecases/bookmark/ManageBookmarks';
 
 interface BookmarkState {
   groups: readonly BookmarkGroup[];
   bookmarks: readonly Bookmark[];
   isLoading: boolean;
   loadAll: () => Promise<void>;
-  addBookmark: (input: Omit<Bookmark, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addBookmark: (input: Omit<Bookmark, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Bookmark>;
   updateBookmark: (id: string, patch: Partial<Omit<Bookmark, 'id' | 'createdAt'>>) => Promise<void>;
   deleteBookmark: (id: string) => Promise<void>;
   addGroup: (input: Omit<BookmarkGroup, 'id' | 'createdAt'>) => Promise<void>;
@@ -18,6 +23,16 @@ interface BookmarkState {
   reorderGroups: (orderedIds: string[]) => Promise<void>;
   addDefaultPresets: () => Promise<{ groupCount: number; bookmarkCount: number }>;
   toggleGroupCollapse: (groupId: string) => Promise<void>;
+  // Tier 2 액션
+  recordClick: (id: string) => Promise<void>;
+  updateOgMeta: (id: string, og: OgMetaPatch) => Promise<void>;
+  archiveGroup: (id: string) => Promise<void>;
+  unarchiveGroup: (id: string) => Promise<void>;
+  exportData: (groupIds?: readonly string[]) => Promise<BookmarkExportPayload>;
+  importData: (
+    payload: { groups: readonly BookmarkGroup[]; bookmarks: readonly Bookmark[] },
+    conflictPolicy?: ImportConflictPolicy,
+  ) => Promise<ImportResult>;
 }
 
 export const useBookmarkStore = create<BookmarkState>((set, get) => {
@@ -47,6 +62,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => {
     addBookmark: async (input) => {
       const bookmark = await manage.addBookmark(input);
       set((s) => ({ bookmarks: [...s.bookmarks, bookmark] }));
+      return bookmark;
     },
 
     updateBookmark: async (id, patch) => {
@@ -128,6 +144,69 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => {
           g.id === groupId ? { ...g, collapsed } : g,
         ),
       }));
+    },
+
+    recordClick: async (id) => {
+      await manage.recordClick(id);
+      const now = new Date().toISOString();
+      set((s) => ({
+        bookmarks: s.bookmarks.map((b) =>
+          b.id === id
+            ? {
+                ...b,
+                lastClickedAt: now,
+                clickCount: (b.clickCount ?? 0) + 1,
+                updatedAt: now,
+              }
+            : b,
+        ),
+      }));
+    },
+
+    updateOgMeta: async (id, og) => {
+      await manage.updateOgMeta(id, og);
+      const fetchedAt = new Date().toISOString();
+      set((s) => ({
+        bookmarks: s.bookmarks.map((b) =>
+          b.id === id
+            ? {
+                ...b,
+                ogTitle: og.ogTitle,
+                ogDescription: og.ogDescription,
+                ogImageUrl: og.ogImageUrl,
+                ogFetchedAt: fetchedAt,
+                updatedAt: fetchedAt,
+              }
+            : b,
+        ),
+      }));
+    },
+
+    archiveGroup: async (id) => {
+      const archivedAt = new Date().toISOString();
+      await manage.archiveGroup(id);
+      set((s) => ({
+        groups: s.groups.map((g) =>
+          g.id === id ? { ...g, archived: true, archivedAt } : g,
+        ),
+      }));
+    },
+
+    unarchiveGroup: async (id) => {
+      await manage.unarchiveGroup(id);
+      set((s) => ({
+        groups: s.groups.map((g) =>
+          g.id === id ? { ...g, archived: false, archivedAt: undefined } : g,
+        ),
+      }));
+    },
+
+    exportData: async (groupIds) => manage.exportData(groupIds),
+
+    importData: async (payload, conflictPolicy = 'skip') => {
+      const result = await manage.importData(payload, conflictPolicy);
+      await reload();
+      return result;
     },
   };
 });

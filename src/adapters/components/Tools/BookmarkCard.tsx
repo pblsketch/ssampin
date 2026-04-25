@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Bookmark } from '@domain/entities/Bookmark';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
+import { isBookmarkForgotten } from '@domain/rules/bookmarkRules';
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
@@ -37,8 +39,10 @@ export function BookmarkCard({
   onDrop,
 }: BookmarkCardProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { track } = useAnalytics();
+  const recordClick = useBookmarkStore((s) => s.recordClick);
 
   useEffect(() => {
     if (!showMenu) return;
@@ -59,6 +63,7 @@ export function BookmarkCard({
 
     const type = bookmark.type ?? 'url';
     track('bookmark_click', { url: bookmark.url, type });
+    void recordClick(bookmark.id);
 
     if (type === 'folder') {
       if (window.electronAPI?.openPath) {
@@ -81,6 +86,10 @@ export function BookmarkCard({
     setShowMenu(false);
   };
 
+  const showThumbnail = !!bookmark.ogImageUrl && !thumbnailFailed;
+  const description = bookmark.ogDescription?.trim() || bookmark.ogTitle?.trim();
+  const forgotten = !editMode && isBookmarkForgotten(bookmark);
+
   return (
     <div
       className="relative"
@@ -92,7 +101,8 @@ export function BookmarkCard({
         onContextMenu={handleContextMenu}
         draggable={editMode}
         onDragStart={editMode ? (e) => onDragStart?.(e, bookmark) : undefined}
-        className={`w-full bg-sp-card rounded-2xl p-4 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group ${
+        title={forgotten ? '오랜만이에요 — 30일 이상 방문하지 않은 사이트입니다.' : bookmark.name}
+        className={`w-full bg-sp-card rounded-2xl p-4 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group min-h-[110px] ${
           editMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
         }`}
       >
@@ -121,9 +131,24 @@ export function BookmarkCard({
           </span>
         )}
 
-        {/* 아이콘 */}
-        <div className="text-3xl mb-2">
-          {bookmark.iconType === 'favicon' ? (
+        {/* 미사용 뱃지 */}
+        {forgotten && (
+          <span
+            className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-400/80"
+            aria-label="오랜만이에요"
+          />
+        )}
+
+        {/* 아이콘 또는 OG 썸네일 */}
+        <div className="mb-2 h-12 flex items-center">
+          {showThumbnail ? (
+            <img
+              src={bookmark.ogImageUrl}
+              alt={bookmark.name}
+              className="w-12 h-12 rounded-lg object-cover"
+              onError={() => setThumbnailFailed(true)}
+            />
+          ) : bookmark.iconType === 'favicon' ? (
             <img
               src={bookmark.iconValue}
               alt={bookmark.name}
@@ -133,7 +158,7 @@ export function BookmarkCard({
               }}
             />
           ) : (
-            bookmark.iconValue
+            <span className="text-3xl">{bookmark.iconValue}</span>
           )}
         </div>
 
@@ -146,6 +171,13 @@ export function BookmarkCard({
             </span>
           )}
         </h4>
+
+        {/* OG 설명 (1줄 말줄임) */}
+        {description && (
+          <p className="text-xs text-sp-muted truncate mt-1" title={description}>
+            {description}
+          </p>
+        )}
       </button>
 
       {/* 컨텍스트 메뉴 */}

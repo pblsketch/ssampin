@@ -1,11 +1,18 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import type { Bookmark, BookmarkGroup } from '@domain/entities/Bookmark';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
-import { sortGroupsByOrder } from '@domain/rules/bookmarkRules';
+import {
+  sortGroupsByOrder,
+  filterActiveGroups,
+  filterArchivedGroups,
+  filterBookmarksBySearch,
+} from '@domain/rules/bookmarkRules';
 import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
+import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 import { BookmarkGroupCard } from './BookmarkGroupCard';
-import { BookmarkFormModal } from './BookmarkFormModal';
+import { BookmarkFormModal, type BookmarkFormSaveData } from './BookmarkFormModal';
 import { BookmarkGroupModal } from './BookmarkGroupModal';
+import { BookmarkImportExportModal } from './BookmarkImportExportModal';
 
 export function BookmarkSection() {
   const {
@@ -23,19 +30,34 @@ export function BookmarkSection() {
     reorderGroups,
     addDefaultPresets,
     toggleGroupCollapse,
+    archiveGroup,
+    unarchiveGroup,
   } = useBookmarkStore();
 
   const { track } = useAnalytics();
   const [editMode, setEditMode] = useState(false);
   const [showBookmarkModal, setShowBookmarkModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showImportExportModal, setShowImportExportModal] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [editingGroup, setEditingGroup] = useState<BookmarkGroup | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // 검색
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // 아카이브 보기 토글
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  // 검색어 디바운스 200ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 200);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   // 토스트 자동 숨김
   useEffect(() => {
@@ -44,7 +66,63 @@ export function BookmarkSection() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  const sortedGroups = sortGroupsByOrder(groups);
+  // 단축키 (BookmarksPage는 ToolLayout을 쓰지 않으므로 useToolKeydown으로 직접 등록)
+  useToolKeydown(
+    (e) => {
+      // INPUT/TEXTAREA/SELECT 포커스 중이면 단축키 무시 (검색바 자체에서 텍스트 입력 가능)
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      // 모달 열려있으면 단축키 무시
+      if (showBookmarkModal || showGroupModal || showImportExportModal) return;
+
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      if (ctrl && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        setEditingBookmark(null);
+        setShowBookmarkModal(true);
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        setEditingGroup(null);
+        setShowGroupModal(true);
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setEditMode((m) => !m);
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (e.key === '/' && !ctrl && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+    },
+    [showBookmarkModal, showGroupModal, showImportExportModal],
+  );
+
+  const sortedGroups = useMemo(() => sortGroupsByOrder(groups), [groups]);
+  const activeGroups = useMemo(() => filterActiveGroups(sortedGroups), [sortedGroups]);
+  const archivedGroups = useMemo(() => filterArchivedGroups(sortedGroups), [sortedGroups]);
+
+  // 검색 적용된 북마크 (전체)
+  const filteredBookmarks = useMemo(
+    () => filterBookmarksBySearch(bookmarks, debouncedQuery),
+    [bookmarks, debouncedQuery],
+  );
+  // 검색 결과로 표시할 활성 그룹 (검색 시 매칭된 북마크가 있는 그룹만)
+  const displayedActiveGroups = useMemo(() => {
+    if (!debouncedQuery.trim()) return activeGroups;
+    const groupIdsWithMatches = new Set(filteredBookmarks.map((b) => b.groupId));
+    return activeGroups.filter((g) => groupIdsWithMatches.has(g.id));
+  }, [activeGroups, filteredBookmarks, debouncedQuery]);
 
   const handleEditBookmark = useCallback((bookmark: Bookmark) => {
     setEditingBookmark(bookmark);
@@ -75,6 +153,22 @@ export function BookmarkSection() {
       await deleteGroup(id);
     },
     [bookmarks, deleteGroup],
+  );
+
+  const handleArchiveGroup = useCallback(
+    async (id: string) => {
+      await archiveGroup(id);
+      setToastMessage('그룹이 아카이브되었습니다. 페이지 하단에서 복원할 수 있어요.');
+    },
+    [archiveGroup],
+  );
+
+  const handleUnarchiveGroup = useCallback(
+    async (id: string) => {
+      await unarchiveGroup(id);
+      setToastMessage('그룹이 복원되었습니다.');
+    },
+    [unarchiveGroup],
   );
 
   const handleAddDefaultPresets = async () => {
@@ -117,9 +211,7 @@ export function BookmarkSection() {
     [groups, reorderGroups],
   );
 
-  const handleBookmarkSave = async (
-    data: { name: string; url: string; type: 'url' | 'folder'; iconType: 'emoji' | 'favicon'; iconValue: string; groupId: string },
-  ) => {
+  const handleBookmarkSave = async (data: BookmarkFormSaveData) => {
     if (editingBookmark) {
       await updateBookmark(editingBookmark.id, data);
     } else {
@@ -159,18 +251,52 @@ export function BookmarkSection() {
 
   return (
     <div>
-      {/* 액션 버튼 */}
-      <div className="flex items-center justify-end mb-6">
+      {/* 검색바 + 액션 버튼 */}
+      <div className="flex items-center gap-3 mb-6">
+        {!isEmpty && !editMode && (
+          <div className="relative flex-1 max-w-md">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-icon text-sp-muted">
+              search
+            </span>
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="이름, URL, 설명에서 검색…  (Ctrl+F 또는 /)"
+              className="w-full bg-sp-card border border-sp-border rounded-lg pl-10 pr-9 py-2 text-sm text-sp-text placeholder-sp-muted/60 focus:border-sp-accent focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-sp-muted hover:text-sp-text"
+                aria-label="검색어 지우기"
+              >
+                <span className="material-symbols-outlined text-icon">close</span>
+              </button>
+            )}
+          </div>
+        )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           {!isEmpty && (
             <>
+              <button
+                onClick={() => setShowImportExportModal(true)}
+                className="px-3 py-1.5 text-sm rounded-lg bg-sp-card hover:bg-sp-border text-sp-text transition-colors flex items-center gap-1"
+                title="가져오기 / 내보내기"
+              >
+                <span className="material-symbols-outlined text-icon">swap_vert</span>
+                가져오기/내보내기
+              </button>
               <button
                 onClick={() => {
                   setEditingGroup(null);
                   setShowGroupModal(true);
                 }}
                 className="px-3 py-1.5 text-sm rounded-lg bg-sp-card hover:bg-sp-border text-sp-text transition-colors flex items-center gap-1"
+                title="그룹 추가 (Ctrl+G)"
               >
                 <span className="material-symbols-outlined text-icon">create_new_folder</span>
                 그룹 추가
@@ -181,6 +307,7 @@ export function BookmarkSection() {
                   setShowBookmarkModal(true);
                 }}
                 className="px-3 py-1.5 text-sm rounded-lg bg-sp-accent hover:bg-blue-600 text-white transition-colors flex items-center gap-1"
+                title="즐겨찾기 추가 (Ctrl+N)"
               >
                 <span className="material-symbols-outlined text-icon">add</span>
                 즐겨찾기 추가
@@ -192,6 +319,7 @@ export function BookmarkSection() {
                     ? 'bg-sp-accent text-white'
                     : 'bg-sp-card hover:bg-sp-border text-sp-text'
                 }`}
+                title="편집 모드 토글 (Ctrl+E)"
               >
                 <span className="material-symbols-outlined text-icon">
                   {editMode ? 'check' : 'edit'}
@@ -236,8 +364,15 @@ export function BookmarkSection() {
         </div>
       )}
 
-      {/* 그룹 목록 */}
-      {sortedGroups.map((group) => (
+      {/* 검색 결과 안내 */}
+      {!isEmpty && debouncedQuery.trim() && displayedActiveGroups.length === 0 && (
+        <div className="text-center text-sp-muted py-8">
+          "{debouncedQuery}"와 일치하는 즐겨찾기가 없습니다.
+        </div>
+      )}
+
+      {/* 활성 그룹 목록 */}
+      {displayedActiveGroups.map((group) => (
         <BookmarkGroupCard
           key={group.id}
           group={group}
@@ -252,8 +387,48 @@ export function BookmarkSection() {
           onDragGroupStart={handleGroupDragStart}
           onDragGroupOver={handleGroupDragOver}
           onDropGroup={handleGroupDrop}
+          onArchiveGroup={(id) => void handleArchiveGroup(id)}
+          onUnarchiveGroup={(id) => void handleUnarchiveGroup(id)}
+          visibleBookmarks={debouncedQuery.trim() ? filteredBookmarks : undefined}
         />
       ))}
+
+      {/* 아카이브 토글 */}
+      {!isEmpty && archivedGroups.length > 0 && (
+        <div className="mt-8 border-t border-sp-border pt-6">
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            className="flex items-center gap-2 text-sm text-sp-muted hover:text-sp-text transition-colors"
+          >
+            <span className={`material-symbols-outlined text-icon-md transition-transform ${showArchived ? 'rotate-180' : ''}`}>
+              expand_more
+            </span>
+            <span className="material-symbols-outlined text-icon-md">archive</span>
+            아카이브된 그룹 ({archivedGroups.length}개)
+          </button>
+
+          {showArchived && (
+            <div className="mt-4 opacity-75">
+              {archivedGroups.map((group) => (
+                <BookmarkGroupCard
+                  key={group.id}
+                  group={group}
+                  bookmarks={bookmarks}
+                  editMode={true} /* 아카이브 영역은 항상 편집 액션(복원/삭제) 노출 */
+                  onEditGroup={handleEditGroup}
+                  onDeleteGroup={(id) => void handleDeleteGroup(id)}
+                  onEditBookmark={handleEditBookmark}
+                  onDeleteBookmark={(id) => void handleDeleteBookmark(id)}
+                  onToggleCollapse={(id) => void toggleGroupCollapse(id)}
+                  onReorderBookmarks={(gid, ids) => void reorderBookmarks(gid, ids)}
+                  onArchiveGroup={(id) => void handleArchiveGroup(id)}
+                  onUnarchiveGroup={(id) => void handleUnarchiveGroup(id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 모달 */}
       {showBookmarkModal && (
@@ -270,6 +445,13 @@ export function BookmarkSection() {
           group={editingGroup}
           onSave={(data) => void handleGroupSave(data)}
           onClose={() => { setShowGroupModal(false); setEditingGroup(null); }}
+        />
+      )}
+
+      {showImportExportModal && (
+        <BookmarkImportExportModal
+          onClose={() => setShowImportExportModal(false)}
+          onResultMessage={(msg) => setToastMessage(msg)}
         />
       )}
 

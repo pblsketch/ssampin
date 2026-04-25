@@ -1503,6 +1503,29 @@ function registerIpcHandlers(): void {
     },
   );
 
+  // 즐겨찾기 가져오기 — .json (쌤핀 내보내기) 또는 .html (브라우저 내보내기)
+  ipcMain.handle(
+    'bookmarks:import',
+    async (): Promise<{ content: string; format: 'json' | 'html' } | null> => {
+      if (!mainWindow) return null;
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: '즐겨찾기 가져오기',
+        filters: [
+          { name: '지원 파일', extensions: ['json', 'html', 'htm'] },
+          { name: '쌤핀 즐겨찾기 (JSON)', extensions: ['json'] },
+          { name: '브라우저 북마크 (HTML)', extensions: ['html', 'htm'] },
+        ],
+        properties: ['openFile'],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      const filePath = result.filePaths[0]!;
+      const lower = filePath.toLowerCase();
+      const format: 'json' | 'html' = lower.endsWith('.json') ? 'json' : 'html';
+      const content = fs.readFileSync(filePath, 'utf-8');
+      return { content, format };
+    },
+  );
+
   // calendar:fetch-url — 외부 캘린더 URL 페치 (CORS 우회)
   ipcMain.handle(
     'calendar:fetch-url',
