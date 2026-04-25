@@ -6,6 +6,7 @@ import {
   filterActiveGroups,
   filterArchivedGroups,
   filterBookmarksBySearch,
+  findForgottenBookmarks,
 } from '@domain/rules/bookmarkRules';
 import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
@@ -34,6 +35,8 @@ export function BookmarkSection() {
     unarchiveGroup,
   } = useBookmarkStore();
 
+  const recordClick = useBookmarkStore((s) => s.recordClick);
+
   const { track } = useAnalytics();
   const [editMode, setEditMode] = useState(false);
   const [showBookmarkModal, setShowBookmarkModal] = useState(false);
@@ -48,6 +51,8 @@ export function BookmarkSection() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   // 아카이브 보기 토글
   const [showArchived, setShowArchived] = useState(false);
+  // "잊고 있던 사이트" 섹션 접힘 상태
+  const [forgottenCollapsed, setForgottenCollapsed] = useState(false);
 
   useEffect(() => {
     void loadAll();
@@ -116,6 +121,28 @@ export function BookmarkSection() {
     const groupIdsWithMatches = new Set(filteredBookmarks.map((b) => b.groupId));
     return activeGroups.filter((g) => groupIdsWithMatches.has(g.id));
   }, [activeGroups, filteredBookmarks, debouncedQuery]);
+
+  // 잊고 있던 사이트 — 활성 그룹의 폴더 아닌 북마크 중 30일 이상 미사용
+  const forgottenBookmarks = useMemo(() => {
+    const activeGroupIds = new Set(activeGroups.map((g) => g.id));
+    const candidates = bookmarks.filter((b) => activeGroupIds.has(b.groupId));
+    return findForgottenBookmarks(candidates, { limit: 6 });
+  }, [bookmarks, activeGroups]);
+
+  const handleOpenBookmark = useCallback(
+    (bookmark: Bookmark) => {
+      void recordClick(bookmark.id);
+      const type = bookmark.type ?? 'url';
+      if (type === 'folder') {
+        if (window.electronAPI?.openPath) void window.electronAPI.openPath(bookmark.url);
+      } else if (window.electronAPI?.openExternal) {
+        void window.electronAPI.openExternal(bookmark.url);
+      } else {
+        window.open(bookmark.url, '_blank', 'noopener,noreferrer');
+      }
+    },
+    [recordClick],
+  );
 
   const handleEditBookmark = useCallback((bookmark: Bookmark) => {
     setEditingBookmark(bookmark);
@@ -354,6 +381,59 @@ export function BookmarkSection() {
               직접 추가
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 잊고 있던 사이트 — 검색/편집 모드에서는 숨김 */}
+      {!isEmpty && !editMode && !debouncedQuery.trim() && forgottenBookmarks.length > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+          <button
+            onClick={() => setForgottenCollapsed((v) => !v)}
+            className="w-full flex items-center gap-2 text-left"
+          >
+            <span className="text-base">🔔</span>
+            <h3 className="text-sm font-semibold text-sp-text">잊고 있던 사이트</h3>
+            <span className="text-xs text-sp-muted">
+              ({forgottenBookmarks.length}개 · 30일 이상 안 들어간 사이트)
+            </span>
+            <span
+              className={`material-symbols-outlined text-icon-md text-sp-muted ml-auto transition-transform ${
+                forgottenCollapsed ? '' : 'rotate-180'
+              }`}
+            >
+              expand_more
+            </span>
+          </button>
+          {!forgottenCollapsed && (
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {forgottenBookmarks.map((bm) => (
+                <button
+                  key={bm.id}
+                  onClick={() => handleOpenBookmark(bm)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sp-card hover:bg-sp-border text-left transition-colors min-w-0"
+                  title={bm.url}
+                >
+                  <span className="text-base flex-shrink-0">
+                    {bm.iconType === 'favicon' ? (
+                      <img
+                        src={bm.iconValue}
+                        alt=""
+                        className="w-4 h-4 rounded"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      bm.iconValue
+                    )}
+                  </span>
+                  <span className="text-xs text-sp-text truncate group-hover:text-sp-accent">
+                    {bm.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
