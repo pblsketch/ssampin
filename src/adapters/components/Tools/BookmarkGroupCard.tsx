@@ -16,6 +16,11 @@ interface BookmarkGroupCardProps {
   onDragGroupStart?: (e: React.DragEvent, group: BookmarkGroup) => void;
   onDragGroupOver?: (e: React.DragEvent) => void;
   onDropGroup?: (e: React.DragEvent, group: BookmarkGroup) => void;
+  /** 아카이브/복원 토글 — 미지정 시 버튼 숨김 */
+  onArchiveGroup?: (id: string) => void;
+  onUnarchiveGroup?: (id: string) => void;
+  /** 검색/필터로 표시할 북마크가 그룹 자체와 다를 때 사용. 미지정 시 그룹 전체 사용. */
+  visibleBookmarks?: readonly Bookmark[];
 }
 
 export function BookmarkGroupCard({
@@ -31,8 +36,13 @@ export function BookmarkGroupCard({
   onDragGroupStart,
   onDragGroupOver,
   onDropGroup,
+  onArchiveGroup,
+  onUnarchiveGroup,
+  visibleBookmarks,
 }: BookmarkGroupCardProps) {
-  const groupBookmarks = getBookmarksByGroup(bookmarks, group.id);
+  const groupBookmarks = visibleBookmarks
+    ? sortBookmarksByOrder(visibleBookmarks.filter((b) => b.groupId === group.id))
+    : getBookmarksByGroup(bookmarks, group.id);
 
   const handleBookmarkDragStart = useCallback(
     (e: React.DragEvent, bookmark: Bookmark) => {
@@ -104,12 +114,33 @@ export function BookmarkGroupCard({
             <button
               onClick={() => onEditGroup(group)}
               className="p-1 rounded hover:bg-sp-card text-sp-muted hover:text-sp-accent transition-colors"
+              title="그룹 편집"
             >
               <span className="material-symbols-outlined text-icon-md">edit</span>
             </button>
+            {group.archived
+              ? onUnarchiveGroup && (
+                  <button
+                    onClick={() => onUnarchiveGroup(group.id)}
+                    className="p-1 rounded hover:bg-sp-card text-sp-muted hover:text-sp-accent transition-colors"
+                    title="아카이브 해제 (복원)"
+                  >
+                    <span className="material-symbols-outlined text-icon-md">unarchive</span>
+                  </button>
+                )
+              : onArchiveGroup && (
+                  <button
+                    onClick={() => onArchiveGroup(group.id)}
+                    className="p-1 rounded hover:bg-sp-card text-sp-muted hover:text-amber-400 transition-colors"
+                    title="아카이브 (숨기기)"
+                  >
+                    <span className="material-symbols-outlined text-icon-md">archive</span>
+                  </button>
+                )}
             <button
               onClick={() => onDeleteGroup(group.id)}
               className="p-1 rounded hover:bg-sp-card text-sp-muted hover:text-red-400 transition-colors"
+              title="그룹 삭제"
             >
               <span className="material-symbols-outlined text-icon-md">delete</span>
             </button>

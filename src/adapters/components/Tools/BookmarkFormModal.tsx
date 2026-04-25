@@ -1,18 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Bookmark, BookmarkGroup, BookmarkIconType, BookmarkType } from '@domain/entities/Bookmark';
-import { validateBookmarkUrl, validateFolderPath } from '@domain/rules/bookmarkRules';
+import { validateBookmarkUrl, validateFolderPath, recommendGroupId } from '@domain/rules/bookmarkRules';
+import type { RealtimeWallLinkPreviewOgMeta } from '@domain/entities/RealtimeWall';
+
+export interface BookmarkFormSaveData {
+  name: string;
+  url: string;
+  type: BookmarkType;
+  iconType: BookmarkIconType;
+  iconValue: string;
+  groupId: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageUrl?: string;
+}
 
 interface BookmarkFormModalProps {
   bookmark: Bookmark | null;
   groups: readonly BookmarkGroup[];
-  onSave: (data: {
-    name: string;
-    url: string;
-    type: BookmarkType;
-    iconType: BookmarkIconType;
-    iconValue: string;
-    groupId: string;
-  }) => void;
+  onSave: (data: BookmarkFormSaveData) => void;
   onClose: () => void;
 }
 
@@ -40,8 +46,23 @@ export function BookmarkFormModal({
   const [urlError, setUrlError] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [faviconLoading, setFaviconLoading] = useState(false);
+  // OG 미리보기
+  const [og, setOg] = useState<RealtimeWallLinkPreviewOgMeta | null>(
+    bookmark?.ogTitle || bookmark?.ogDescription || bookmark?.ogImageUrl
+      ? {
+          ogTitle: bookmark.ogTitle,
+          ogDescription: bookmark.ogDescription,
+          ogImageUrl: bookmark.ogImageUrl,
+        }
+      : null,
+  );
+  const [ogLoading, setOgLoading] = useState(false);
+  const lastFetchedUrlRef = useRef<string>(bookmark?.url ?? '');
+  // 사용자가 그룹을 직접 선택했는지 추적 (편집 모드 또는 그룹 자동 추천이 적용된 후)
+  const [userTouchedGroup, setUserTouchedGroup] = useState(isEdit);
 
   const canSelectFolder = !!window.electronAPI?.showOpenDialog;
+  const canFetchOg = !!window.electronAPI?.fetchLinkPreview;
 
   useEffect(() => {
     if (!url) { setUrlError(''); return; }
@@ -60,6 +81,43 @@ export function BookmarkFormModal({
       }
     }
   }, [url, bookmarkType]);
+
+  // 그룹 자동 추천 (사용자가 그룹을 직접 변경하지 않았을 때만)
+  useEffect(() => {
+    if (bookmarkType !== 'url' || userTouchedGroup) return;
+    if (!validateBookmarkUrl(url)) return;
+    const recommended = recommendGroupId(url, groups);
+    if (recommended && recommended !== groupId) {
+      setGroupId(recommended);
+    }
+  }, [url, bookmarkType, groups, userTouchedGroup, groupId]);
+
+  // URL 디바운스 후 OG 메타 자동 파싱 (1초)
+  useEffect(() => {
+    if (bookmarkType !== 'url') {
+      setOg(null);
+      return;
+    }
+    if (!validateBookmarkUrl(url)) return;
+    if (url === lastFetchedUrlRef.current && og) return;
+    if (!canFetchOg) return;
+
+    const timer = setTimeout(async () => {
+      lastFetchedUrlRef.current = url;
+      setOgLoading(true);
+      try {
+        const meta = await window.electronAPI?.fetchLinkPreview?.(url);
+        if (meta) setOg(meta);
+      } catch {
+        // 실패해도 폼 동작에는 영향 없음 — 오프라인 우선
+      } finally {
+        setOgLoading(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, bookmarkType, canFetchOg]);
 
   const handleSelectFolder = async () => {
     if (!window.electronAPI?.showOpenDialog) return;
@@ -115,6 +173,9 @@ export function BookmarkFormModal({
       iconType,
       iconValue,
       groupId,
+      ogTitle: og?.ogTitle,
+      ogDescription: og?.ogDescription,
+      ogImageUrl: og?.ogImageUrl,
     });
   };
 
@@ -280,19 +341,51 @@ export function BookmarkFormModal({
             <label className="block text-sm text-sp-muted mb-1">그룹</label>
             <select
               value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
+              onChange={(e) => { setGroupId(e.target.value); setUserTouchedGroup(true); }}
               className="w-full bg-sp-card border border-sp-border rounded-lg px-3 py-2 text-sp-text focus:border-sp-accent focus:outline-none"
             >
               {groups.length === 0 && (
                 <option value="" disabled>그룹을 먼저 추가해주세요</option>
               )}
-              {groups.map((g) => (
+              {groups.filter((g) => !g.archived).map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.emoji} {g.name}
                 </option>
               ))}
             </select>
           </div>
+
+          {/* OG 미리보기 */}
+          {bookmarkType === 'url' && (ogLoading || og) && (
+            <div className="bg-sp-bg border border-sp-border rounded-lg p-3">
+              <div className="text-xs text-sp-muted mb-2 flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">link</span>
+                미리보기 {ogLoading && '· 불러오는 중...'}
+              </div>
+              {og && (
+                <div className="flex gap-3">
+                  {og.ogImageUrl && (
+                    <img
+                      src={og.ogImageUrl}
+                      alt=""
+                      className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    {og.ogTitle && (
+                      <p className="text-sm font-medium text-sp-text truncate">{og.ogTitle}</p>
+                    )}
+                    {og.ogDescription && (
+                      <p className="text-xs text-sp-muted line-clamp-2">{og.ogDescription}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 버튼 */}
           <div className="flex justify-end gap-2 pt-2">
