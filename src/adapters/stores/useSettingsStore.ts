@@ -158,10 +158,11 @@ const DEFAULT_SETTINGS: Settings = {
   shortcuts: {
     globalEnabled: false,
     bindings: {
-      'quickAdd.todo':  { combo: 'mod+alt+t', enabled: true },
-      'quickAdd.event': { combo: 'mod+alt+e', enabled: true },
-      'quickAdd.memo':  { combo: 'mod+alt+m', enabled: true },
-      'quickAdd.note':  { combo: 'mod+alt+n', enabled: true },
+      'quickAdd.todo':     { combo: 'mod+alt+t', enabled: true },
+      'quickAdd.event':    { combo: 'mod+alt+e', enabled: true },
+      'quickAdd.memo':     { combo: 'mod+alt+m', enabled: true },
+      'quickAdd.note':     { combo: 'mod+alt+n', enabled: true },
+      'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
     },
   },
 };
@@ -169,10 +170,11 @@ const DEFAULT_SETTINGS: Settings = {
 export const DEFAULT_SHORTCUTS: ShortcutSettings = {
   globalEnabled: false,
   bindings: {
-    'quickAdd.todo':  { combo: 'mod+alt+t', enabled: true },
-    'quickAdd.event': { combo: 'mod+alt+e', enabled: true },
-    'quickAdd.memo':  { combo: 'mod+alt+m', enabled: true },
-    'quickAdd.note':  { combo: 'mod+alt+n', enabled: true },
+    'quickAdd.todo':     { combo: 'mod+alt+t', enabled: true },
+    'quickAdd.event':    { combo: 'mod+alt+e', enabled: true },
+    'quickAdd.memo':     { combo: 'mod+alt+m', enabled: true },
+    'quickAdd.note':     { combo: 'mod+alt+n', enabled: true },
+    'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
   },
 };
 

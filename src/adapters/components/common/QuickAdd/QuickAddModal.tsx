@@ -6,6 +6,7 @@ import { QuickAddTodoForm } from './QuickAddTodoForm';
 import { QuickAddEventForm } from './QuickAddEventForm';
 import { QuickAddMemoForm } from './QuickAddMemoForm';
 import { QuickAddNoteForm } from './QuickAddNoteForm';
+import { QuickAddBookmarkForm } from './QuickAddBookmarkForm';
 
 interface KindMeta {
   readonly label: string;
@@ -38,6 +39,12 @@ const KIND_META: Record<QuickAddKind, KindMeta> = {
     icon: 'description',
     barClass: 'bg-violet-400',
     iconClass: 'text-violet-400',
+  },
+  bookmark: {
+    label: '즐겨찾기',
+    icon: 'bookmark',
+    barClass: 'bg-amber-400',
+    iconClass: 'text-amber-400',
   },
 };
 
@@ -118,6 +125,7 @@ export function QuickAddModal({ standalone = false }: QuickAddModalProps = {}): 
         {kind === 'event' && <QuickAddEventForm onClose={close} />}
         {kind === 'memo' && <QuickAddMemoForm onClose={close} />}
         {kind === 'note' && <QuickAddNoteForm onClose={close} />}
+        {kind === 'bookmark' && <QuickAddBookmarkForm onClose={close} />}
       </div>
 
       {/* 푸터 키 힌트 */}
