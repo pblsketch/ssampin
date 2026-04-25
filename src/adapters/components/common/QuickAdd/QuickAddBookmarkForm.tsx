@@ -32,9 +32,18 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
     void loadAll();
 
     // 클립보드에 URL이 들어 있으면 자동으로 채워넣기 (사용자 편의)
+    // Electron(특히 위젯 모드의 standalone 창)에서는 navigator.clipboard가 권한 제약으로
+    // 거부되는 경우가 많아 메인 프로세스 IPC를 1순위로 사용하고, 브라우저 개발 환경에서는
+    // navigator.clipboard로 폴백한다.
     void (async () => {
       try {
-        const text = await navigator.clipboard.readText();
+        let text = '';
+        const ipcRead = window.electronAPI?.readClipboardText;
+        if (ipcRead) {
+          text = await ipcRead();
+        } else if (navigator.clipboard?.readText) {
+          text = await navigator.clipboard.readText();
+        }
         const trimmed = text?.trim();
         if (trimmed && validateBookmarkUrl(trimmed)) {
           setUrl(trimmed);

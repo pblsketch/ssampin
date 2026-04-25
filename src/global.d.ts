@@ -52,6 +52,8 @@ interface ElectronAPI {
   importFont: () => Promise<{ name: string; dataUrl: string; mimeType: string } | null>;
   importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
   importBookmarksFile: () => Promise<{ content: string; format: 'json' | 'html' } | null>;
+  /** 클립보드 텍스트 읽기 — 렌더러 navigator.clipboard 권한 우회 (Electron 메인 프로세스 경유) */
+  readClipboardText: () => Promise<string>;
   onFileOpened: (callback: (filePath: string) => void) => () => void;
   openExternal: (url: string) => Promise<void>;
   openPath: (folderPath: string) => Promise<string>;

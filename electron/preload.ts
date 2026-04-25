@@ -66,6 +66,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('share:import'),
   importBookmarksFile: (): Promise<{ content: string; format: 'json' | 'html' } | null> =>
     ipcRenderer.invoke('bookmarks:import'),
+  readClipboardText: (): Promise<string> =>
+    ipcRenderer.invoke('clipboard:readText'),
   onFileOpened: (callback: (filePath: string) => void): (() => void) => {
     const handler = (_event: unknown, filePath: string) => callback(filePath);
     ipcRenderer.on('share:file-opened', handler);

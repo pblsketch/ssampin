@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor, globalShortcut, clipboard } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
@@ -1500,6 +1500,18 @@ function registerIpcHandlers(): void {
         };
       }
       return { content: fs.readFileSync(filePath, 'utf-8'), fileType: 'ssampin' };
+    },
+  );
+
+  // 클립보드 텍스트 읽기 — 렌더러 navigator.clipboard 권한 제약 우회
+  ipcMain.handle(
+    'clipboard:readText',
+    async (): Promise<string> => {
+      try {
+        return clipboard.readText();
+      } catch {
+        return '';
+      }
     },
   );
 
