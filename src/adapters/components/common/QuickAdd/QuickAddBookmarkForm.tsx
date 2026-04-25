@@ -6,10 +6,31 @@ import {
   recommendGroupId,
   extractDomain,
 } from '@domain/rules/bookmarkRules';
+import type { BookmarkIconType } from '@domain/entities/Bookmark';
 import type { RealtimeWallLinkPreviewOgMeta } from '@domain/entities/RealtimeWall';
 
 interface Props {
   onClose: () => void;
+}
+
+const EMOJI_CHOICES = [
+  '🌐', '📖', '📚', '💼', '📝', '🎓', '🏫', '💡',
+  '🔬', '🎨', '🎵', '⚽', '🌍', '💻', '📊', '🔗',
+  '🤖', '🔔', '📌', '🖼️', '📺', '📱', '🏛️', '💰',
+  '✨', '🎯', '🛠️', '📋',
+];
+
+/**
+ * Google s2 favicons API — 안정적이며 도메인만 있으면 64×64 PNG 반환.
+ * 도메인이 favicon을 직접 제공하지 않는 경우에도 폴백 이미지가 옴.
+ */
+function buildFaviconUrl(url: string): string | null {
+  try {
+    const origin = new URL(url).origin;
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(origin)}&sz=64`;
+  } catch {
+    return null;
+  }
 }
 
 export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
@@ -17,12 +38,15 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
   const [groupId, setGroupId] = useState('');
+  const [iconType, setIconType] = useState<BookmarkIconType>('favicon');
+  const [iconValue, setIconValue] = useState('');
   const [userTouchedGroup, setUserTouchedGroup] = useState(false);
   const [userTouchedName, setUserTouchedName] = useState(false);
+  const [userTouchedIcon, setUserTouchedIcon] = useState(false);
+  const [showIconPicker, setShowIconPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [og, setOg] = useState<RealtimeWallLinkPreviewOgMeta | null>(null);
   const [ogLoading, setOgLoading] = useState(false);
-  // 동일 URL 재페치 방지 (자동 채움 시 + 사용자 편집 시 중복 호출 방지)
   const lastFetchedUrlRef = useRef<string>('');
 
   const groups = useBookmarkStore((s) => s.groups);
@@ -32,14 +56,10 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
   const updateOgMeta = useBookmarkStore((s) => s.updateOgMeta);
   const showToast = useToastStore((s) => s.show);
 
-  // 첫 마운트 시 데이터 로드 + 클립보드 자동 채움 + URL 입력에 포커스
+  // 첫 마운트: 데이터 로드 + 클립보드 자동 채움 + URL 입력 포커스
   useEffect(() => {
     void loadAll();
 
-    // 클립보드에 URL이 들어 있으면 자동으로 채워넣기 (사용자 편의)
-    // Electron(특히 위젯 모드의 standalone 창)에서는 navigator.clipboard가 권한 제약으로
-    // 거부되는 경우가 많아 메인 프로세스 IPC를 1순위로 사용하고, 브라우저 개발 환경에서는
-    // navigator.clipboard로 폴백한다.
     void (async () => {
       try {
         let text = '';
@@ -54,7 +74,7 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
           setUrl(trimmed);
         }
       } catch {
-        // 권한 거부/Unfocused 등은 조용히 무시
+        /* 권한/포커스 거부는 무시 */
       }
     })();
 
@@ -67,11 +87,10 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
     [groups],
   );
 
-  // 그룹 초기값 — 사용자가 직접 선택하기 전엔 자동 설정
+  // 그룹 자동 추천 (사용자가 직접 변경 전까지)
   useEffect(() => {
     if (userTouchedGroup) return;
     if (groupId && activeGroups.some((g) => g.id === groupId)) return;
-
     if (validateBookmarkUrl(url)) {
       const recommended = recommendGroupId(url, activeGroups);
       if (recommended) {
@@ -82,8 +101,18 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
     if (activeGroups.length > 0) setGroupId(activeGroups[0]!.id);
   }, [url, activeGroups, userTouchedGroup, groupId]);
 
-  // URL 변경 시 OG 메타 백그라운드 페치 (디바운스 600ms)
-  // 결과의 ogTitle은 사용자가 이름을 직접 입력하지 않은 한 자동 채움
+  // URL 유효해지면 파비콘 자동 적용 (사용자가 아이콘 변경 전까지)
+  useEffect(() => {
+    if (userTouchedIcon) return;
+    if (!validateBookmarkUrl(url)) return;
+    const favicon = buildFaviconUrl(url);
+    if (favicon) {
+      setIconType('favicon');
+      setIconValue(favicon);
+    }
+  }, [url, userTouchedIcon]);
+
+  // URL 변경 시 OG 메타 자동 페치 (디바운스 600ms) — 이름 자동 채움
   useEffect(() => {
     if (!validateBookmarkUrl(url)) {
       setOg(null);
@@ -107,7 +136,7 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
           setName(meta.ogTitle.trim());
         }
       } catch {
-        // 실패해도 폼 동작에는 영향 없음
+        /* 무시 */
       } finally {
         setOgLoading(false);
       }
@@ -116,6 +145,23 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
+
+  const handleSelectEmoji = (emoji: string): void => {
+    setIconType('emoji');
+    setIconValue(emoji);
+    setUserTouchedIcon(true);
+    setShowIconPicker(false);
+  };
+
+  const handleResetToFavicon = (): void => {
+    const favicon = buildFaviconUrl(url);
+    if (favicon) {
+      setIconType('favicon');
+      setIconValue(favicon);
+    }
+    setUserTouchedIcon(true);
+    setShowIconPicker(false);
+  };
 
   const handleSubmit = async (): Promise<void> => {
     if (saving) return;
@@ -130,13 +176,25 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
 
     setSaving(true);
     try {
-      // 이름 폴백 우선순위: 입력값 → OG 제목 → 도메인 → URL
       const trimmedName = name.trim();
       const ogTitleTrimmed = og?.ogTitle?.trim();
       const fallbackName = ogTitleTrimmed || extractDomain(url) || url;
       const finalName = trimmedName || fallbackName;
 
-      // order: 해당 그룹의 max+1
+      // 아이콘 폴백: 비어있으면 파비콘 시도, 그것도 안되면 이모지 🌐
+      let finalIconType = iconType;
+      let finalIconValue = iconValue;
+      if (!finalIconValue) {
+        const favicon = buildFaviconUrl(url);
+        if (favicon) {
+          finalIconType = 'favicon';
+          finalIconValue = favicon;
+        } else {
+          finalIconType = 'emoji';
+          finalIconValue = '🌐';
+        }
+      }
+
       const groupBookmarks = bookmarks.filter((b) => b.groupId === groupId);
       const maxOrder = groupBookmarks.length > 0
         ? Math.max(...groupBookmarks.map((b) => b.order)) + 1
@@ -146,8 +204,8 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
         name: finalName,
         url: url.trim(),
         type: 'url',
-        iconType: 'emoji',
-        iconValue: '🌐',
+        iconType: finalIconType,
+        iconValue: finalIconValue,
         groupId,
         order: maxOrder,
         ogTitle: og?.ogTitle,
@@ -159,7 +217,7 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
       showToast('즐겨찾기가 추가되었습니다.', 'success');
       onClose();
 
-      // 위에서 OG 메타가 미처 도착하지 않았더라도 백그라운드에서 한 번 더 시도해 보강
+      // OG가 미처 도착 못 한 경우 백그라운드에서 보강
       const api = window.electronAPI?.fetchLinkPreview;
       if (api && created && !og) {
         void (async () => {
@@ -205,26 +263,82 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
         className="w-full bg-sp-bg/60 border border-sp-border rounded-lg px-3 py-2.5 text-[15px] font-sp-medium text-sp-text placeholder:text-sp-muted outline-none focus:ring-1 focus:ring-sp-accent focus:border-sp-accent transition-colors"
       />
 
-      <div className="relative">
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => { setName(e.target.value); setUserTouchedName(true); }}
-          placeholder={
-            ogLoading
-              ? '사이트 이름을 가져오는 중...'
-              : userTouchedName
-                ? '사이트 이름'
-                : (og?.ogTitle ?? extractDomain(url) ?? '사이트 이름 (선택 — 비우면 도메인으로)')
-          }
-          className="w-full bg-sp-bg/60 border border-sp-border rounded-lg px-3 py-2 text-sm font-sp-medium text-sp-text placeholder:text-sp-muted outline-none focus:ring-1 focus:ring-sp-accent focus:border-sp-accent transition-colors"
-        />
-        {ogLoading && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-sp-muted">
-            ...
-          </span>
-        )}
+      {/* 이름 + 아이콘 */}
+      <div className="flex items-stretch gap-2">
+        {/* 아이콘 토글 버튼 */}
+        <button
+          type="button"
+          onClick={() => setShowIconPicker((v) => !v)}
+          aria-label="아이콘 선택"
+          className="w-10 h-auto flex items-center justify-center bg-sp-bg/60 border border-sp-border rounded-lg hover:bg-sp-card transition-colors"
+        >
+          {iconType === 'favicon' && iconValue ? (
+            <img
+              src={iconValue}
+              alt=""
+              className="w-5 h-5 rounded"
+              onError={(e) => {
+                // 파비콘 실패 시 기본 이모지로
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <span className="text-xl">{iconValue || '🌐'}</span>
+          )}
+        </button>
+
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setUserTouchedName(true); }}
+            placeholder={
+              ogLoading
+                ? '사이트 이름을 가져오는 중...'
+                : userTouchedName
+                  ? '사이트 이름'
+                  : (og?.ogTitle ?? extractDomain(url) ?? '사이트 이름 (선택 — 비우면 도메인으로)')
+            }
+            className="w-full bg-sp-bg/60 border border-sp-border rounded-lg px-3 py-2 text-sm font-sp-medium text-sp-text placeholder:text-sp-muted outline-none focus:ring-1 focus:ring-sp-accent focus:border-sp-accent transition-colors"
+          />
+          {ogLoading && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-sp-muted">
+              ...
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* 아이콘 선택 패널 */}
+      {showIconPicker && (
+        <div className="bg-sp-bg/60 border border-sp-border rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] text-sp-muted">아이콘</span>
+            <button
+              type="button"
+              onClick={handleResetToFavicon}
+              disabled={!validateBookmarkUrl(url)}
+              className="text-[11px] text-sp-accent hover:underline disabled:text-sp-muted disabled:no-underline disabled:cursor-not-allowed"
+            >
+              ↻ 파비콘으로
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {EMOJI_CHOICES.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handleSelectEmoji(emoji)}
+                className={`w-8 h-8 flex items-center justify-center rounded hover:bg-sp-border text-lg transition-colors ${
+                  iconType === 'emoji' && iconValue === emoji ? 'bg-sp-accent/20 ring-1 ring-sp-accent' : ''
+                }`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <span className="text-[12px] text-sp-muted mr-1 whitespace-nowrap">그룹</span>

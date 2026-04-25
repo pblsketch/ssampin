@@ -128,17 +128,26 @@ async function resolveAndVetHost(hostname: string): Promise<VettedAddress> {
 /**
  * vetted IP로 connect를 강제하는 undici Agent. fetch()가 내부적으로
  * 재lookup하더라도 우리가 vetted한 IP로만 연결.
+ *
+ * undici@6는 내부적으로 `lookup(host, { all: true }, cb)`로 호출하므로
+ * callback에 array 형태를 반환해야 함. opts.all이 false일 때는 single
+ * 시그니처로 호출 — 양쪽 형태 모두 지원.
  */
 function pinDispatcher(vetted: VettedAddress): Agent {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lookup = (_hostname: string, options: any, cb: any): void => {
+    if (options && options.all) {
+      cb(null, [{ address: vetted.address, family: vetted.family }]);
+    } else {
+      cb(null, vetted.address, vetted.family);
+    }
+  };
   return new Agent({
     connectTimeout: FETCH_TIMEOUT_MS,
     headersTimeout: FETCH_TIMEOUT_MS,
     bodyTimeout: FETCH_TIMEOUT_MS,
-    connect: {
-      lookup: (_hostname, _options, cb) => {
-        cb(null, vetted.address, vetted.family);
-      },
-    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    connect: { lookup } as any,
   });
 }
 
