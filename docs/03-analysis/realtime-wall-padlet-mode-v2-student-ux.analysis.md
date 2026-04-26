@@ -218,3 +218,64 @@ realtimeWallRules.ts(applyMove), electron/ipc/realtimeWall.ts(StudentSubmitMoveS
 | 0.1 | 2026-04-25 | Phase B only. Match Rate 97.5% (78/80) | bkit-gap-detector |
 | 0.2 | 2026-04-25 | Phase A + B 통합. Match Rate 97.4% (114/117) | bkit-gap-detector |
 | 0.3 | 2026-04-25 | **4 Phase 통합 — Feature Complete. Match Rate 98.7% (170/172). Phase D 27건 + Phase C 19건 추가 평가, 모두 PASS. G-MAJOR-1(부하 테스트)는 `scripts/load-test-realtime-wall-v2-1.mjs` 신규 작성으로 인프라 해소 → Major → Minor. 4 페르소나 critical 7 + high 5 = 12/12 모두 반영. Critical 0 / Major 0 / Medium 1 / Minor 3. 권장: `/pdca report` Feature Complete** | bkit-gap-detector |
+| 0.4 | 2026-04-26 | **직전 fix 2건(sessionToken localStorage 마이그레이션 + StudentSubmitForm Padlet 재설계) 평가 추가. 분모 172→184 (+12), 분자 170→180 (+10). Match Rate 98.7%→97.8% (Feature Complete ≥90% 유지). Padlet 재설계 6건은 Plan/Design v2.1 미명시 → Plan/Design v2.2 갱신 권고 (G-V0.4-3 Minor). sessionToken 영속은 Design 명시되어 있으나 위치 표기 오류 (G-V0.4-2 Minor). 추가로 이미지 한도 코드/문서 드리프트 발견 — 코드 5장/15MB/10MB vs Plan/Design 3장/5MB/5MB (G-V0.4-1 Medium). Critical 0 / Major 0 / Medium 2 / Minor 5. 권장: Plan/Design v2.2 발행 + 이미지 한도 결정** | bkit-gap-detector |
+
+---
+
+## v0.4 추가 분석 (2026-04-26) — 직전 fix 2건
+
+### 핵심 요지
+
+| Fix | 종류 | Plan/Design 명시 | 권고 |
+|-----|------|:---:|------|
+| **Fix 1**: `useRealtimeWallSyncStore.ts:227-272` sessionStorage→localStorage 마이그레이션 | 버그 fix (학생 Kanban 드래그 회복) | Design §0.2 v2-2 원칙 명시되나 위치 표기 오류 (StudentJoinScreen.tsx → 실제 store) | Design 정정 |
+| **Fix 2**: StudentSubmitForm Padlet 재구조화 (3 신규 컴포넌트 + 본체 재구성) | **디자인 변경** (Plan/Design 미명시) | 미명시 (코드만 "v2.2" 자칭) | **Plan/Design v2.2 발행 권고** |
+
+### sessionToken localStorage 마이그레이션 — 5/5 PASS
+
+| # | 평가 | 결과 |
+|---|------|:---:|
+| V4-S1 | localStorage 우선 조회 + 빈 문자열 가드 (line 247-248) | ✅ |
+| V4-S2 | sessionStorage→localStorage 1회 마이그레이션 + sessionStorage 정리 (line 251-258) | ✅ |
+| V4-S3 | localStorage 실패 시 메모리 폴백 (privacy mode, line 267-269) | ✅ |
+| V4-S4 | `crypto.randomUUID()` 우선 폴백 (line 273-277) | ✅ |
+| V4-S5 | 다른 탭/창 sessionToken 일치 → Kanban 자기 카드 식별 회복 | ✅ |
+
+### Padlet 재구조화 — 6/6 추가 구현 (Plan/Design 미명시)
+
+| # | 항목 | 코드 위치 | Plan/Design |
+|---|------|----------|:---:|
+| V4-P1 | StudentSubmitFormHeader.tsx (✕/_/⊕/게시) | line 39-87 | 미명시 |
+| V4-P2 | StudentAttachmentRow.tsx (5 통합 행, camera/draw/search 비활성) | line 51-118 | 미명시 (camera/draw/search는 Plan §2.5 OOS) |
+| V4-P3 | StudentAttachmentPreviewStrip.tsx (이미지+PDF+링크 통합) | line 21-91 | 미명시 |
+| V4-P4 | 제목/본문 분리 + `# 제목\n\n본문` 마크다운 합성 (MAX_TITLE_LENGTH=100) | line 98-100, 130-136 | 미명시 |
+| V4-P5 | 모바일 bottom sheet (`items-end + rounded-t-xl`) | line 459, 468 | Design = 풀스크린 → 변경 |
+| V4-P6 | useStudentImageMultiUpload/Pdf 훅 직접 사용 | line 157-197 | 리팩토링 |
+
+### Gap 목록 (v0.4 갱신)
+
+**MEDIUM 추가**:
+- **G-V0.4-1**: 이미지 한도 코드/문서 드리프트
+  - Plan/Design = 3장 / 합계 5MB / 단일 5MB
+  - 코드 = `REALTIME_WALL_MAX_IMAGES_PER_POST=5` / `..._TOTAL_BYTES=15MB` / `..._SINGLE_IMAGE_BYTES=10MB`
+  - 권고: Padlet 재설계와 묶어 v2.2에서 결정 (옵션 A: 코드 유지+문서 갱신 / 옵션 B: 코드 다운그레이드)
+
+**MINOR 추가**:
+- **G-V0.4-2**: Design §11.2 sessionToken 영속 위치 표기 오류
+  - Design = `StudentJoinScreen.tsx`
+  - 실제 = `useRealtimeWallSyncStore.ts:227-272 getOrCreateSessionToken()`
+  - 권고: Design §2.3 / §6.1 / §11.2 정정 + 마이그레이션 시퀀스 1줄 추가
+
+- **G-V0.4-3**: Padlet 재설계 산출물 미문서화
+  - 6건의 변경이 Plan/Design v2.1 어디에도 명시 안 됨
+  - 권고: Plan FR-B14 추가 + Design §5.9 v2.2 갱신 + Plan §7.2 결정 #10 추가
+
+### 권장 다음 단계
+
+1. **즉시**: `/pdca design realtime-wall-padlet-mode-v2-student-ux` — v2.2 발행
+2. **사용자 결정 필요**: 이미지 한도 (5장/15MB/10MB 유지 vs 3장/5MB/5MB 다운그레이드)
+3. **사용자 결정 필요**: 비활성 버튼 3종(camera/draw/search) 정책 (placeholder 노출 유지 vs v3까지 숨김)
+4. (선택) Phase A 4 hook 단위 테스트 (G-PHASE-A-1)
+5. (선택) 부하 테스트 150명 실측 1회
+
+**결론**: Match Rate 97.8% — Feature Complete 영역 유지. Critical/Major 0건, release block 없음. 단 Plan/Design v2.2 갱신은 후속 Phase 진입 전 권고.

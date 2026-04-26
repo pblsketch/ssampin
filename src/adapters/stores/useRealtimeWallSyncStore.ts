@@ -225,21 +225,47 @@ interface RealtimeWallSyncState {
 }
 
 /**
- * sessionStorage에 토큰을 보관해 새로고침 시에도 동일 학생을 식별.
- * 새 탭은 새 토큰 (sessionStorage 격리). PIPA 위반 X — 임의 UUID.
+ * localStorage에 토큰을 보관해 같은 기기/브라우저의 모든 탭/창에서 동일 학생을 식별.
+ * 카드 추가/보기/이동을 다른 탭/창에서 해도 sessionToken 일치 보장
+ * (Electron split renderer, 새 탭, 새로고침 모두 동일 토큰).
+ *
+ * sessionStorage(탭 격리) → localStorage(브라우저 단위 영속) 마이그레이션
+ * 이유: sessionStorage 격리로 인해 학생 자기 카드 식별이 깨져
+ * Kanban 드래그가 작동하지 않는 버그(2026-04-26 보고)를 해결.
+ *
+ * PIPA 위반 X — 임의 UUID, 식별 정보 없음.
+ *
+ * 마이그레이션: 기존 sessionStorage 토큰이 있으면 localStorage로 이전 후 삭제
+ * (학생이 같은 탭 유지 중이면 무회귀).
  */
 function getOrCreateSessionToken(): string {
   if (typeof window === 'undefined') {
     return generateUuidLike();
   }
   try {
-    const existing = window.sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
-    if (existing && existing.length > 0) return existing;
+    // 1) localStorage 우선 조회
+    const existingLocal = window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
+    if (existingLocal && existingLocal.length > 0) return existingLocal;
+
+    // 2) sessionStorage 마이그레이션 (기존 학생 무회귀 보호)
+    try {
+      const legacySession = window.sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
+      if (legacySession && legacySession.length > 0) {
+        window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, legacySession);
+        // sessionStorage 정리 — 다음 탭부터는 localStorage만 사용
+        window.sessionStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+        return legacySession;
+      }
+    } catch {
+      // sessionStorage 접근 불가 — 신규 토큰 발급으로 진행
+    }
+
+    // 3) 신규 발급 + localStorage 저장
     const created = generateUuidLike();
-    window.sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, created);
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, created);
     return created;
   } catch {
-    // sessionStorage 사용 불가 (privacy mode 등)
+    // localStorage 사용 불가 (privacy mode 등) — 메모리 토큰 폴백
     return generateUuidLike();
   }
 }
