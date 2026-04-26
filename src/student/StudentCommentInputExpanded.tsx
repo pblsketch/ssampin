@@ -3,12 +3,13 @@ import {
   REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH,
   REALTIME_WALL_MAX_COMMENT_IMAGES,
 } from '@domain/rules/realtimeWallRules';
-import { StudentFormatBar } from '@adapters/components/Tools/RealtimeWall/StudentFormatBar';
-import { StudentMarkdownPreviewToggle } from '@adapters/components/Tools/RealtimeWall/StudentMarkdownPreviewToggle';
 import { StudentImageMultiPicker } from '@adapters/components/Tools/RealtimeWall/StudentImageMultiPicker';
+import { useStudentImageMultiUpload } from './useStudentImageMultiUpload';
 
 /**
  * v2.x — 학생 댓글 expanded 입력 영역 (패들렛 패턴 2-state 중 2단계).
+ *
+ * 본문은 plain text textarea (마크다운 기능 제거 — 사용자 결정 2026-04-26).
  *
  * 키 매핑 (spec):
  *   - Enter           → 전송 (canSubmit 시)
@@ -20,9 +21,9 @@ import { StudentImageMultiPicker } from '@adapters/components/Tools/RealtimeWall
  *
  * 회귀 보호:
  *   - rounded-full / rounded-sp-* 미사용
- *   - 마크다운 화이트리스트 (StudentFormatBar + StudentMarkdownPreviewToggle 재사용 — variant='comment')
  *   - 이미지 1장 한도 (REALTIME_WALL_MAX_COMMENT_IMAGES 그대로)
  *   - 학생 트리(src/student/) 격리
+ *   - 파일 선택/드래그앤드롭/Ctrl+V 페이스트 3 경로 모두 유지
  */
 
 interface StudentCommentInputExpandedProps {
@@ -57,9 +58,14 @@ export function StudentCommentInputExpanded({
   fullscreen = false,
 }: StudentCommentInputExpandedProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
-  // v2.2 (UX) — 마크다운 편집/미리보기 토글 (옵션 D, comment variant)
-  const [editMode, setEditMode] = useState<'edit' | 'preview'>('edit');
+  // 이 컴포넌트가 직접 훅을 소유 — compact picker에 onFileSelectOverride로 위임
+  const { onDrop, onPaste, onFileSelect, error: uploadError } = useStudentImageMultiUpload({
+    currentImages: images,
+    onAdd: onAddImage,
+    maxImages: REALTIME_WALL_MAX_COMMENT_IMAGES,
+  });
 
   // 마운트 시 textarea autofocus.
   useEffect(() => {
@@ -68,15 +74,12 @@ export function StudentCommentInputExpanded({
 
   const showNicknameInput = nickname.trim().length === 0;
 
-  // submit 성공/취소 시 mode를 edit으로 리셋 (부모 콜백 wrapper)
   const handleSubmit = useCallback(() => {
     onSubmit();
-    setEditMode('edit');
   }, [onSubmit]);
 
   const handleCancel = useCallback(() => {
     onCancel();
-    setEditMode('edit');
   }, [onCancel]);
 
   const handleKeyDown = useCallback(
@@ -100,6 +103,23 @@ export function StudentCommentInputExpanded({
       }
     },
     [canSubmit, handleSubmit, handleCancel],
+  );
+
+  // textarea onDrop — DragEvent<HTMLTextAreaElement>를 onDrop(DragEvent<HTMLElement>)로 위임
+  const handleTextareaDrop = useCallback(
+    (e: React.DragEvent<HTMLTextAreaElement>) => {
+      setIsDragOver(false);
+      onDrop(e as unknown as React.DragEvent<HTMLElement>);
+    },
+    [onDrop],
+  );
+
+  // textarea onPaste — ClipboardEvent<HTMLTextAreaElement>를 onPaste(ClipboardEvent<HTMLElement>)로 위임
+  const handleTextareaPaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      onPaste(e as unknown as React.ClipboardEvent<HTMLElement>);
+    },
+    [onPaste],
   );
 
   const wrapperClass = [
@@ -127,67 +147,70 @@ export function StudentCommentInputExpanded({
         />
       )}
 
-      <StudentFormatBar
-        textareaRef={textareaRef}
-        onChange={(v) =>
-          onTextChange(v.slice(0, REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH))
-        }
-        mode={editMode}
-        onModeToggle={() =>
-          setEditMode((m) => (m === 'edit' ? 'preview' : 'edit'))
-        }
-        disabled={disabled}
-        variant="comment"
-      />
-
-      <StudentMarkdownPreviewToggle
+      {/* 댓글 textarea — 드래그앤드롭/페이스트 핸들러 부착 */}
+      <textarea
+        ref={textareaRef}
         value={text}
-        onChange={(v) =>
-          onTextChange(v.slice(0, REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH))
+        onChange={(e) =>
+          onTextChange(e.target.value.slice(0, REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH))
         }
-        textareaRef={textareaRef}
-        mode={editMode}
+        onKeyDown={handleKeyDown}
+        onDrop={handleTextareaDrop}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onPaste={handleTextareaPaste}
+        placeholder="댓글을 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)"
         rows={fullscreen ? 6 : 3}
         maxLength={REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH}
         disabled={disabled}
-        onKeyDown={handleKeyDown}
-        ariaLabel="댓글 내용"
-        placeholder="댓글을 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)"
-        previewMinHeightClass="min-h-[60px]"
+        className={[
+          'w-full resize-none rounded-lg border bg-sp-bg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/60 focus:outline-none focus:ring-1 focus:ring-sp-accent/15 transition-colors',
+          isDragOver
+            ? 'border-sp-accent bg-sp-accent/5'
+            : 'border-sp-border/40 focus:border-sp-accent',
+        ].join(' ')}
+        aria-label="댓글 내용"
       />
 
+      {/* 하단 툴바: [📎 버튼 + 썸네일] ··· [카운터 | 취소 | 전송] */}
       <div className="flex items-center gap-1.5 border-t border-sp-border/40 pt-1.5">
-        <div className="flex-1 min-w-0">
-          <StudentImageMultiPicker
-            images={images}
-            onAdd={onAddImage}
-            onRemove={onRemoveImage}
-            maxImages={REALTIME_WALL_MAX_COMMENT_IMAGES}
-            disabled={disabled}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={handleCancel}
+        <StudentImageMultiPicker
+          images={images}
+          onAdd={onAddImage}
+          onRemove={onRemoveImage}
+          maxImages={REALTIME_WALL_MAX_COMMENT_IMAGES}
           disabled={disabled}
-          className="rounded-lg border border-sp-border/40 bg-sp-card px-3 py-1 text-detail font-semibold text-sp-muted hover:text-sp-text hover:border-sp-border transition disabled:opacity-50"
-          aria-label="댓글 작성 취소"
-        >
-          취소
-        </button>
-        <span className="text-caption text-sp-muted/70 tabular-nums">
-          {graphemeCount}/{REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH}
-        </span>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          className={submitButtonClass}
-          aria-label="댓글 전송"
-        >
-          <span className="material-symbols-outlined text-base">send</span>
-          <span>전송</span>
-        </button>
+          compact
+          onFileSelectOverride={onFileSelect}
+          externalError={uploadError}
+        />
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="text-caption text-sp-muted/70 tabular-nums">
+            {graphemeCount}/{REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH}
+          </span>
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={disabled}
+            className="rounded-lg border border-sp-border/40 bg-sp-card px-3 py-1 text-detail font-semibold text-sp-muted hover:text-sp-text hover:border-sp-border transition disabled:opacity-50"
+            aria-label="댓글 작성 취소"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className={submitButtonClass}
+            aria-label="댓글 전송"
+          >
+            <span className="material-symbols-outlined text-base">send</span>
+            <span>전송</span>
+          </button>
+        </div>
       </div>
     </div>
   );
