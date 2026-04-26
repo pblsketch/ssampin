@@ -3,6 +3,7 @@ import type {
   RealtimeWallFreeformPosition,
   RealtimeWallKanbanPosition,
   RealtimeWallPost,
+  StudentCommentInput,
 } from '@domain/entities/RealtimeWall';
 
 /**
@@ -142,4 +143,41 @@ export interface RealtimeWallBoardCommonProps {
    * - studentFormLocked=true 시 부모가 콜백 무시
    */
   readonly onAddCardToColumn?: (columnId: string) => void;
+  /**
+   * 2026-04-26 결함 fix — 카드 더블클릭 시 부모가 상세 모달을 여는 콜백.
+   *
+   * - 학생/교사 양쪽 동일 시그니처 (Padlet 동일뷰).
+   * - RealtimeWallCard가 카드 article 위 더블클릭(인터랙티브 자식 제외)에서 호출.
+   * - 미전달 시 카드 더블클릭 무동작 (기존 호출자 무회귀).
+   * - 빈 영역 더블클릭(useStudentDoubleClick) 경로와 충돌 방지: 카드는 data-card-root="true" +
+   *   handleCardDoubleClick에서 e.stopPropagation()으로 부모 main까지 버블 차단.
+   */
+  readonly onCardDetail?: (postId: string) => void;
+  /**
+   * Step 2 — 교사 좋아요 토글 콜백 (viewerRole='teacher' 전용).
+   * Board → Card 전파: ToolRealtimeWall → Board → RealtimeWallCard.
+   * 학생 화면에서는 미전달.
+   */
+  readonly onTeacherLike?: (postId: string) => void;
+  /**
+   * Step 2 — 교사 댓글 추가 콜백 (viewerRole='teacher' 전용).
+   * nickname='선생님' 강제. Board → Card 전파.
+   * 학생 화면에서는 미전달.
+   */
+  readonly onTeacherAddComment?: (
+    postId: string,
+    input: Omit<StudentCommentInput, 'sessionToken'>,
+  ) => void;
+  /**
+   * Step 3 — 교사 전용 컬럼 헤더 "+" 버튼 콜백 (Kanban 전용, 교사 모드).
+   * 학생의 onAddCardToColumn과 별도 경로라 회귀 위험 #3 완전 격리.
+   * 미전달 시 버튼 미렌더. Freeform/Grid/Stream에서는 무시.
+   */
+  readonly onTeacherAddCardToColumn?: (columnId: string) => void;
+  /**
+   * Step 3 — 교사 Freeform 보드 빈 영역 더블클릭 콜백.
+   * 더블클릭 좌표를 캡처해 부모가 카드 추가 모달을 연다.
+   * Kanban/Grid/Stream에서는 무시.
+   */
+  readonly onTeacherFreeformAddCard?: (x: number, y: number) => void;
 }

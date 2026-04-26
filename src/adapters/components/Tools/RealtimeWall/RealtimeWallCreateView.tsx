@@ -1,4 +1,5 @@
 import type { RealtimeWallLayoutMode, WallApprovalMode } from '@domain/entities/RealtimeWall';
+import { REALTIME_WALL_MAX_COLUMNS } from '@domain/rules/realtimeWallRules';
 
 interface LayoutOption {
   readonly mode: RealtimeWallLayoutMode;
@@ -144,7 +145,7 @@ export function RealtimeWallCreateView({
             <button
               type="button"
               onClick={onAddColumn}
-              disabled={columnInputs.length >= 6}
+              disabled={columnInputs.length >= REALTIME_WALL_MAX_COLUMNS}
               className="flex items-center gap-1 rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span className="material-symbols-outlined text-sm">add</span>

@@ -50,4 +50,9 @@ export class JsonNotebookRepository implements INotebookRepository {
   async deletePageBody(pageId: string): Promise<void> {
     await this.storage.remove(getPageBodyFileName(pageId));
   }
+
+  async listPageBodyKeys(): Promise<string[]> {
+    const pagesMeta = await this.getAllPagesMeta();
+    return pagesMeta.map((page) => getPageBodyFileName(page.id));
+  }
 }

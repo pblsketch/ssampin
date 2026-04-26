@@ -2,17 +2,17 @@ import { useRef } from 'react';
 import type React from 'react';
 
 /**
- * v2.2 (Bug 2 Fix) — Padlet 스타일 첨부 진입점 행.
+ * v2.3 — Padlet 스타일 첨부 진입점 행 (실제 지원 타입만 노출).
  *
- * 5 버튼 (활성 2 + 비활성 3):
+ * 3 버튼 (모두 활성, 실제 지원 첨부와 1:1 일치):
  *   - upload (이미지/PDF) — 활성
- *   - photo_camera — 비활성 (v3 예정)
- *   - draw — 비활성 (v3 예정)
  *   - link — 활성 (toggle)
- *   - search — 비활성 (v3 예정)
+ *
+ * v2.2까지 노출되던 photo_camera/draw/search 버튼은 미구현으로 제거 (2026-04-26).
+ * 안내문 "이미지, PDF, 링크를 추가해 보세요"는 그대로 유지.
  *
  * 회귀 위험 #6 격리 — keyboard shortcut 미사용.
- * 이미지 5장 제한 도달 시 upload 버튼만 비활성, 나머지는 그대로.
+ * 이미지 5장 제한 도달 시 upload 버튼만 비활성, 링크는 그대로.
  */
 
 interface StudentAttachmentRowProps {
@@ -72,26 +72,6 @@ export function StudentAttachmentRow({
         </button>
         <button
           type="button"
-          disabled
-          aria-disabled
-          aria-label="카메라 (준비 중)"
-          title="카메라 (v3 예정)"
-          className={buttonClass(false)}
-        >
-          <span className="material-symbols-outlined text-[18px]">photo_camera</span>
-        </button>
-        <button
-          type="button"
-          disabled
-          aria-disabled
-          aria-label="그리기 (준비 중)"
-          title="그리기 (v3 예정)"
-          className={buttonClass(false)}
-        >
-          <span className="material-symbols-outlined text-[18px]">draw</span>
-        </button>
-        <button
-          type="button"
           onClick={onLinkClick}
           disabled={disabled}
           aria-label="링크 추가"
@@ -99,16 +79,6 @@ export function StudentAttachmentRow({
           className={buttonClass(true)}
         >
           <span className="material-symbols-outlined text-[18px]">link</span>
-        </button>
-        <button
-          type="button"
-          disabled
-          aria-disabled
-          aria-label="검색 (준비 중)"
-          title="검색 (v3 예정)"
-          className={buttonClass(false)}
-        >
-          <span className="material-symbols-outlined text-[18px]">search</span>
         </button>
       </div>
       <p className="text-center text-xs text-sp-muted">

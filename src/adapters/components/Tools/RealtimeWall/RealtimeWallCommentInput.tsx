@@ -18,6 +18,11 @@ export interface RealtimeWallCommentInputProps {
   readonly postId: string;
   /** join 시 닉네임을 default로 채워 UX 줄이기. */
   readonly nicknameDefault?: string;
+  /**
+   * Step 2 — 닉네임 고정 모드. true이면 input을 readonly로 잠금.
+   * 교사 댓글에서 "선생님" 고정 시 사용.
+   */
+  readonly nicknameFixed?: boolean;
   readonly onSubmit: (input: Omit<StudentCommentInput, 'sessionToken'>) => void;
   readonly disabled?: boolean;
 }
@@ -25,6 +30,7 @@ export interface RealtimeWallCommentInputProps {
 export function RealtimeWallCommentInput({
   postId,
   nicknameDefault,
+  nicknameFixed = false,
   onSubmit,
   disabled = false,
 }: RealtimeWallCommentInputProps) {
@@ -61,11 +67,16 @@ export function RealtimeWallCommentInput({
       <input
         type="text"
         value={nickname}
-        onChange={(e) => setNickname(e.target.value.slice(0, 20))}
+        onChange={(e) => { if (!nicknameFixed) setNickname(e.target.value.slice(0, 20)); }}
+        readOnly={nicknameFixed}
         placeholder="닉네임"
         disabled={disabled}
-        className="rounded-md border border-sp-border/60 bg-sp-card px-2 py-1 text-xs text-sp-text placeholder:text-sp-muted/60 focus:border-sp-accent focus:outline-none disabled:opacity-50"
+        className={[
+          'rounded-md border border-sp-border/60 bg-sp-card px-2 py-1 text-xs text-sp-text placeholder:text-sp-muted/60 focus:border-sp-accent focus:outline-none disabled:opacity-50',
+          nicknameFixed ? 'cursor-default opacity-70 select-none' : '',
+        ].join(' ')}
         aria-label="댓글 닉네임"
+        title={nicknameFixed ? '닉네임이 고정되어 있어요' : undefined}
       />
       <textarea
         value={text}

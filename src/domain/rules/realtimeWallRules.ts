@@ -30,7 +30,17 @@ export const DEFAULT_REALTIME_WALL_COLUMNS = [
 ] as const;
 
 export const REALTIME_WALL_MIN_COLUMNS = 2;
-export const REALTIME_WALL_MAX_COLUMNS = 6;
+/**
+ * 2026-04-26 사용자 피드백 (결함 #2) — 컬럼 무제한 + 가로 스크롤 정책 전환.
+ *   기존: 6 (한 화면 fit). 사용자 요청 "무제한 컬럼".
+ *   현재: 50 (사실상 무제한 — 한 수업 1~2시간에 50개 이상 만들 일 없음).
+ *   하드 캡을 완전히 없애지 않은 이유:
+ *     - 컬럼 ID(`column-N`) 발급·정렬·렌더링·파일 직렬화 안전 상한.
+ *     - 우발적 무한 추가(키보드 매크로 등)로부터 시스템 보호.
+ *   화면당 컬럼 5~6개만 fit되며 6개 초과는 RealtimeWallKanbanBoard 부모 wrapper의
+ *   overflow-x-auto + 컬럼별 min-w-[280px]로 자연 가로 스크롤.
+ */
+export const REALTIME_WALL_MAX_COLUMNS = 50;
 export const REALTIME_WALL_MAX_NICKNAME_LENGTH = 20;
 export const REALTIME_WALL_MAX_TEXT_LENGTH = 280;
 
@@ -615,7 +625,7 @@ function normalizeColumnOrder(
 }
 
 /**
- * 컬럼 추가. 상한 REALTIME_WALL_MAX_COLUMNS(=6) 초과 시 원본 반환.
+ * 컬럼 추가. 상한 REALTIME_WALL_MAX_COLUMNS(=50, 사실상 무제한) 초과 시 원본 반환.
  *
  * - 빈/공백 제목은 거부 → 원본 반환
  * - 새 컬럼은 배열 끝에 추가 + order 재계산

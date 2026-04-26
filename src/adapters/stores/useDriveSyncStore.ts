@@ -16,6 +16,18 @@ export type ImportSettingsResult =
   | { ok: true; remoteUpdatedAt?: string; remoteDeviceName?: string }
   | { ok: false; code: ImportSettingsFromCloudErrorCode; message: string };
 
+/**
+ * 신규 기기 최초 동기화 모달용 클라우드 사전 조회 결과.
+ * - undefined: 조회 중 (모달은 노출되었으나 결과 미도착)
+ * - null: 조회 실패 (네트워크/권한 등)
+ * - { hasData, ... }: 조회 성공
+ */
+export interface CloudSyncInfo {
+  hasData: boolean;
+  lastSyncedAt?: string;
+  deviceName?: string;
+}
+
 interface DriveSyncState {
   status: DriveSyncStatus;
   lastSyncedAt: string | null;
@@ -23,6 +35,10 @@ interface DriveSyncState {
   error: string | null;
   progress: SyncProgress | null;
   lastSyncResult: SyncResult | null;
+
+  // first-sync-confirmation
+  firstSyncRequired: boolean;
+  firstSyncCloudInfo: CloudSyncInfo | null | undefined;
 
   // Actions
   syncToCloud: () => Promise<void>;
@@ -32,6 +48,10 @@ interface DriveSyncState {
   deleteCloudData: () => Promise<void>;
   resetStatus: () => void;
   triggerSaveSync: () => void;
+
+  // first-sync-confirmation actions
+  checkFirstSyncRequired: () => Promise<void>;
+  chooseFirstSync: (action: 'download' | 'upload' | 'defer') => Promise<void>;
 }
 
 let _saveSyncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -43,9 +63,13 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
   error: null,
   progress: null,
   lastSyncResult: null,
+  firstSyncRequired: false,
+  firstSyncCloudInfo: undefined,
 
   syncToCloud: async () => {
     if (get().status === 'syncing') return;
+    // 신규 기기 첫 동기화 모달 열려있는 동안 무단 업로드 차단 (경쟁 조건 방지)
+    if (get().firstSyncRequired) return;
     set({ status: 'syncing', error: null, progress: null });
     try {
       const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } = await import('@adapters/di/container');
@@ -62,12 +86,16 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const getToken = () => authenticateGoogle.getValidAccessToken();
       const drivePort = getDriveSyncAdapter(getToken);
 
+      const { noteRepository } = await import('@adapters/di/container');
+      const getDynamicSyncFiles = () => noteRepository.listPageBodyKeys();
+
       const useCase = new SyncToCloud(
         storage,
         drivePort,
         driveSyncRepository,
         sync.deviceId,
         settings.teacherName || '내 기기',
+        getDynamicSyncFiles,
       );
 
       const result = await useCase.execute((p) => set({ progress: p }));
@@ -124,6 +152,8 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
 
   syncFromCloud: async () => {
     if (get().status === 'syncing') return { downloaded: [], conflicts: [] };
+    // 신규 기기 첫 동기화 모달 열려있는 동안 무단 다운로드 차단 (경쟁 조건 방지)
+    if (get().firstSyncRequired) return { downloaded: [], conflicts: [] };
     set({ status: 'syncing', error: null, progress: null });
     try {
       const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } = await import('@adapters/di/container');
@@ -140,6 +170,9 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const getToken = () => authenticateGoogle.getValidAccessToken();
       const drivePort = getDriveSyncAdapter(getToken);
 
+      const { noteRepository } = await import('@adapters/di/container');
+      const getDynamicSyncFiles = () => noteRepository.listPageBodyKeys();
+
       const useCase = new SyncFromCloud(
         storage,
         drivePort,
@@ -147,6 +180,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         sync.deviceId,
         settings.teacherName || '내 기기',
         sync.conflictPolicy,
+        getDynamicSyncFiles,
       );
 
       const result = await useCase.execute((p) => set({ progress: p }));
@@ -372,11 +406,82 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
   resetStatus: () => set({ status: 'idle', error: null, progress: null }),
 
   triggerSaveSync: () => {
+    // 신규 기기 첫 동기화 모달 열려있는 동안 자동 업로드 트리거 차단
+    if (get().firstSyncRequired) return;
     // 디바운스: 5초 내 추가 변경이 없으면 업로드
     if (_saveSyncTimer) clearTimeout(_saveSyncTimer);
     _saveSyncTimer = setTimeout(() => {
       _saveSyncTimer = null;
       void get().syncToCloud();
     }, 5000);
+  },
+
+  checkFirstSyncRequired: async () => {
+    const { useSettingsStore } = await import('./useSettingsStore');
+    const sync = useSettingsStore.getState().settings.sync;
+    if (!sync?.enabled) return;
+
+    const { driveSyncRepository } = await import('@adapters/di/container');
+    const manifest = await driveSyncRepository.getLocalManifest();
+
+    // manifest 존재 + deviceId 있으면 기존 사용자 → 모달 미노출
+    if (manifest && manifest.deviceId !== '') return;
+
+    // 신규 기기 → 모달 노출 + 클라우드 사전 조회 시작
+    set({ firstSyncRequired: true, firstSyncCloudInfo: undefined });
+
+    try {
+      const { getDriveSyncAdapter, authenticateGoogle } = await import('@adapters/di/container');
+      const getToken = () => authenticateGoogle.getValidAccessToken();
+      const drivePort = getDriveSyncAdapter(getToken);
+      const folder = await drivePort.getOrCreateSyncFolder();
+      const cloudManifest = await drivePort.getSyncManifest(folder.id);
+
+      if (!cloudManifest) {
+        set({ firstSyncCloudInfo: { hasData: false } });
+        return;
+      }
+      set({
+        firstSyncCloudInfo: {
+          hasData: Object.keys(cloudManifest.files).length > 0,
+          lastSyncedAt: cloudManifest.lastSyncedAt,
+          deviceName: cloudManifest.deviceName,
+        },
+      });
+    } catch (err) {
+      console.warn('[DriveSync] checkFirstSyncRequired: 클라우드 조회 실패', err);
+      set({ firstSyncCloudInfo: null });
+    }
+  },
+
+  chooseFirstSync: async (action) => {
+    const { useSettingsStore } = await import('./useSettingsStore');
+    const sync = useSettingsStore.getState().settings.sync;
+    if (!sync) {
+      set({ firstSyncRequired: false, firstSyncCloudInfo: undefined });
+      return;
+    }
+
+    if (action === 'download') {
+      await useSettingsStore.getState().update({
+        sync: { ...sync, enabled: true, firstSyncDeferred: false },
+      });
+      set({ firstSyncRequired: false, firstSyncCloudInfo: undefined });
+      const result = await get().syncFromCloud();
+      // 다운로드된 파일 reload는 호출자(App.tsx 또는 BackupCard) 책임
+      void result;
+    } else if (action === 'upload') {
+      await useSettingsStore.getState().update({
+        sync: { ...sync, enabled: true, firstSyncDeferred: false },
+      });
+      set({ firstSyncRequired: false, firstSyncCloudInfo: undefined });
+      await get().syncToCloud();
+    } else {
+      // defer
+      await useSettingsStore.getState().update({
+        sync: { ...sync, enabled: false, firstSyncDeferred: true },
+      });
+      set({ firstSyncRequired: false, firstSyncCloudInfo: undefined });
+    }
   },
 }));

@@ -73,6 +73,9 @@ const AUTO_SAVE_DEBOUNCE_MS = 2000;
 /** 30초마다 강제 저장 — debounce 실패 시 safety net. Design §3.3. */
 const AUTO_SAVE_INTERVAL_MS = 30_000;
 
+/** Step 2 — 교사 좋아요/댓글 추적용 고정 토큰. likedBy 배열 및 comment.sessionToken에 사용. */
+const TEACHER_SESSION_TOKEN = '__teacher__';
+
 /** crypto.randomUUID → WallBoardId branded type 캐스팅 */
 function newWallBoardId(): WallBoardId {
   const raw = typeof crypto !== 'undefined' && crypto.randomUUID
@@ -148,6 +151,13 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
 
   // Step 1 — 교사 카드 추가 모달 열림/닫힘 상태.
   const [teacherFormOpen, setTeacherFormOpen] = useState(false);
+
+  // Step 3 — 교사 Kanban 컬럼 "+" 진입 시 대상 columnId.
+  const [teacherFormColumnId, setTeacherFormColumnId] = useState<string | undefined>(undefined);
+  // Step 3 — 교사 Freeform 더블클릭 진입 시 초기 위치.
+  const [teacherFormFreeformPos, setTeacherFormFreeformPos] = useState<
+    { x: number; y: number } | undefined
+  >(undefined);
 
   // 2026-04-26 결함 fix — 카드 더블클릭 상세 모달 (교사, Padlet 동일뷰 §0.1).
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
@@ -944,6 +954,60 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   );
 
   /**
+   * Step 2 — 교사 좋아요 토글 핸들러.
+   *
+   * likedBy 배열에서 '__teacher__' 토큰의 존재 여부로 ON/OFF 판정.
+   * likes 카운트도 동기 증감.
+   * buildWallStateForStudents useEffect가 posts 변경 → broadcast 자동 처리.
+   */
+  const handleTeacherLike = useCallback(
+    (postId: string) => {
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id !== postId) return p;
+          const likedBy = p.likedBy ?? [];
+          const alreadyLiked = likedBy.includes(TEACHER_SESSION_TOKEN);
+          const nextLikedBy = alreadyLiked
+            ? likedBy.filter((t) => t !== TEACHER_SESSION_TOKEN)
+            : [...likedBy, TEACHER_SESSION_TOKEN];
+          const nextLikes = Math.max(0, (p.likes ?? 0) + (alreadyLiked ? -1 : 1));
+          return { ...p, likes: nextLikes, likedBy: nextLikedBy };
+        }),
+      );
+    },
+    [],
+  );
+
+  /**
+   * Step 2 — 교사 댓글 추가 핸들러.
+   *
+   * nickname='선생님' 강제, sessionToken='__teacher__', status='approved' 강제.
+   * 도메인 comment 객체를 직접 생성해 setPosts 패치.
+   */
+  const handleTeacherAddComment = useCallback(
+    (postId: string, input: Omit<import('@domain/entities/RealtimeWall').StudentCommentInput, 'sessionToken'>) => {
+      const commentId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `tc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const newComment: import('@domain/entities/RealtimeWall').RealtimeWallComment = {
+        id: commentId,
+        nickname: '선생님',
+        text: input.text,
+        status: 'approved',
+        submittedAt: Date.now(),
+        sessionToken: TEACHER_SESSION_TOKEN,
+      };
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id !== postId) return p;
+          return { ...p, comments: [...(p.comments ?? []), newComment] };
+        }),
+      );
+    },
+    [],
+  );
+
+  /**
    * Step 1 — 교사 카드 추가 핸들러 (옵션 A).
    *
    * renderer에서 직접 `createWallPost`(도메인 순수 함수)를 호출해
@@ -966,6 +1030,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       pdfFilename?: string;
       color?: import('@domain/entities/RealtimeWall').RealtimeWallCardColor;
       columnId?: string;
+      freeformPosition?: { x: number; y: number };
     }) => {
       const id = typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
@@ -987,13 +1052,26 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       setPosts((prev) => {
         // approvalMode에 관계없이 교사 카드는 항상 'approved'로 강제 생성.
         // createWallPost의 'auto' 분기가 즉시 approved + kanban/freeform 계산을 수행.
-        const post = createWallPost(submission, prev, columns, 'auto');
+        let post = createWallPost(submission, prev, columns, 'auto');
         // 중복 id 방지 (드물지만 빠른 연속 클릭 케이스 방어)
         if (prev.some((p) => p.id === post.id)) return prev;
+        // Step 3 — Freeform 더블클릭 진입 시 초기 위치 override.
+        if (input.freeformPosition) {
+          post = {
+            ...post,
+            freeform: {
+              ...post.freeform,
+              x: input.freeformPosition.x,
+              y: input.freeformPosition.y,
+            },
+          };
+        }
         return [post, ...prev];
       });
 
       setTeacherFormOpen(false);
+      setTeacherFormColumnId(undefined);
+      setTeacherFormFreeformPos(undefined);
     },
     [columns],
   );
@@ -1129,6 +1207,13 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
               handleAddColumnInline
             }
             onCardDetail={handleOpenCardDetail}
+            onTeacherLike={handleTeacherLike}
+            onTeacherAddComment={handleTeacherAddComment}
+            onTeacherAddCardToColumn={(columnId) => {
+              setTeacherFormColumnId(columnId);
+              setTeacherFormFreeformPos(undefined);
+              setTeacherFormOpen(true);
+            }}
           />
         );
       case 'freeform':
@@ -1147,6 +1232,13 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
             highlightedPostIds={highlightedPostIds}
             onCardDetail={handleOpenCardDetail}
+            onTeacherLike={handleTeacherLike}
+            onTeacherAddComment={handleTeacherAddComment}
+            onTeacherFreeformAddCard={(x, y) => {
+              setTeacherFormFreeformPos({ x, y });
+              setTeacherFormColumnId(undefined);
+              setTeacherFormOpen(true);
+            }}
           />
         );
       case 'grid':
@@ -1164,6 +1256,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
             highlightedPostIds={highlightedPostIds}
             onCardDetail={handleOpenCardDetail}
+            onTeacherLike={handleTeacherLike}
+            onTeacherAddComment={handleTeacherAddComment}
           />
         );
       case 'stream':
@@ -1181,6 +1275,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
             highlightedPostIds={highlightedPostIds}
             onCardDetail={handleOpenCardDetail}
+            onTeacherLike={handleTeacherLike}
+            onTeacherAddComment={handleTeacherAddComment}
           />
         );
       default: {
@@ -1462,7 +1558,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         교사 권한:
           - 핀/숨기기 (handleTogglePin/handleHidePost)
           - 모든 댓글 표시 + 댓글 삭제 (handleRemoveComment)
-          - 좋아요는 read-only (학생 좋아요 카운트만 표시)
+          - Step 2: 좋아요 토글 (handleTeacherLike) + 댓글 추가 (handleTeacherAddComment)
           - 외부 링크 열기 (openExternalLink)
       */}
       <RealtimeWallCardDetailModal
@@ -1477,6 +1573,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         onTogglePin={handleTogglePin}
         onHidePost={handleHidePost}
         onRemoveComment={handleRemoveComment}
+        onTeacherLike={handleTeacherLike}
+        onTeacherAddComment={handleTeacherAddComment}
       />
 
       {/*
@@ -1494,6 +1592,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
           open={teacherFormOpen}
           onClose={(opts) => {
             setTeacherFormOpen(false);
+            setTeacherFormColumnId(undefined);
+            setTeacherFormFreeformPos(undefined);
             // submitted=true면 이미 handleTeacherSubmit에서 처리됨 — 추가 동작 없음
             void opts;
           }}
@@ -1501,6 +1601,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
           sessionToken="teacher"
           asTeacher
           onTeacherSubmit={handleTeacherSubmit}
+          defaultColumnId={teacherFormColumnId}
+          defaultFreeformPosition={teacherFormFreeformPos}
         />
       )}
     </ToolLayout>

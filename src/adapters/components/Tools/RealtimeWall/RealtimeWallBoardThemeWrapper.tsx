@@ -21,6 +21,7 @@ import {
   type WallBoardTheme,
 } from '@domain/entities/RealtimeWallBoardTheme';
 import { resolveBoardThemeVariant } from './RealtimeWallBoardThemePresets';
+import { RealtimeWallBoardColorSchemeProvider } from './RealtimeWallBoardColorSchemeContext';
 
 interface RealtimeWallBoardThemeWrapperProps {
   /** 적용할 보드 테마. undefined면 default(light + paper) 적용. */
@@ -63,9 +64,15 @@ export function RealtimeWallBoardThemeWrapper({
     .join(' ')
     .trim();
 
+  // 2026-04-26 결함 #2 fix — 자식 카드/모달이 boardTheme.colorScheme을 정확히 인지하도록
+  // BoardColorSchemeProvider로 감쌈. 이전에는 카드가 `dark:` Tailwind variant에 의존해
+  // html.dark 전역 클래스를 추적했으나, 교사 main app(html.dark 강제) + light board 조합에서
+  // 흰 글씨가 light 보드 위 invisible 결함 발생. context 주입으로 양 모드 명시 분기.
   return (
-    <div className={mergedClassName} style={mergedStyle}>
-      {children}
-    </div>
+    <RealtimeWallBoardColorSchemeProvider value={resolved.colorScheme}>
+      <div className={mergedClassName} style={mergedStyle}>
+        {children}
+      </div>
+    </RealtimeWallBoardColorSchemeProvider>
   );
 }

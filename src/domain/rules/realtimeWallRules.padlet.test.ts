@@ -95,6 +95,44 @@ describe('toggleStudentLike', () => {
     expect(result.text).toBe('원본 본문');
     expect(result.id).toBe(post.id);
   });
+
+  // 회귀 fix (2026-04-26) — 좋아요 후 카드가 원래 컬럼으로 되돌아가는 결함.
+  // 도메인 함수는 ...post로 모든 필드를 보존해야 하며 kanban/freeform은 절대
+  // 덮어써지면 안 된다. 이 invariant가 깨지면 학생 드래그 직후 좋아요가 위치를
+  // 되돌린다 (전체 회귀 root cause는 별도 — 교사 renderer의 student-move IPC
+  // listener 누락. 본 테스트는 도메인 측 invariant만 잠금).
+  it('회귀: 다른 컬럼으로 옮긴(kanban patched) 카드에 좋아요 → kanban 위치 보존', () => {
+    const movedPost = createTestPost({
+      kanban: { columnId: 'column-B', order: 3 },
+      freeform: { x: 120, y: 240, w: 280, h: 200, zIndex: 5 },
+    });
+    const result = toggleStudentLike(movedPost, 'token-A');
+    expect(result.kanban).toEqual({ columnId: 'column-B', order: 3 });
+    expect(result.freeform).toEqual({ x: 120, y: 240, w: 280, h: 200, zIndex: 5 });
+    // unlike 후에도 동일 위치 유지
+    const reverted = toggleStudentLike(result, 'token-A');
+    expect(reverted.kanban).toEqual({ columnId: 'column-B', order: 3 });
+    expect(reverted.freeform).toEqual({ x: 120, y: 240, w: 280, h: 200, zIndex: 5 });
+  });
+
+  it('회귀: addStudentComment / removeStudentComment 호출 시에도 kanban/freeform 보존', () => {
+    const movedPost = createTestPost({
+      kanban: { columnId: 'column-B', order: 7 },
+      freeform: { x: 50, y: 80, w: 320, h: 240, zIndex: 9 },
+    });
+    const afterAdd = addStudentComment(
+      movedPost,
+      { nickname: '영희', text: '댓글 남깁니다', sessionToken: 'token-X' },
+      'comment-1',
+      1_700_000_100_000,
+    );
+    expect(afterAdd.kanban).toEqual({ columnId: 'column-B', order: 7 });
+    expect(afterAdd.freeform).toEqual({ x: 50, y: 80, w: 320, h: 240, zIndex: 9 });
+
+    const afterRemove = removeStudentComment(afterAdd, 'comment-1');
+    expect(afterRemove.kanban).toEqual({ columnId: 'column-B', order: 7 });
+    expect(afterRemove.freeform).toEqual({ x: 50, y: 80, w: 320, h: 240, zIndex: 9 });
+  });
 });
 
 // =====================================================================

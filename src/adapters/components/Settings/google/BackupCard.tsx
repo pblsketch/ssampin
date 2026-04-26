@@ -35,14 +35,41 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
   const [isImportingSettings, setIsImportingSettings] = useState(false);
 
   const sync: SyncSettings = settings.sync ?? DEFAULT_SYNC;
+  const checkFirstSyncRequired = useDriveSyncStore((s) => s.checkFirstSyncRequired);
 
   const updateSync = (patch: Partial<SyncSettings>) => {
     void update({ sync: { ...sync, ...patch } });
   };
 
+  const handleToggle = async (next: boolean) => {
+    if (next && !sync.enabled) {
+      // 토글 OFF→ON 전환: 먼저 enabled=true 저장 후 신규 기기 검사.
+      // manifest 부재 시 FirstSyncConfirmModal로 이관됨.
+      await update({ sync: { ...sync, enabled: true } });
+      await checkFirstSyncRequired();
+    } else {
+      updateSync({ enabled: next });
+    }
+  };
+
   const handleBackupNow = async () => {
+    // manifest 부재 시 모달로 이관 (무단 동기화 차단)
+    await checkFirstSyncRequired();
+    if (useDriveSyncStore.getState().firstSyncRequired) return;
     await syncFromCloud();
     await syncToCloud();
+  };
+
+  const handleResolveDeferredSync = async () => {
+    // "지금 결정하기" 배너 클릭 → 모달 재노출.
+    // chooseFirstSync('download'/'upload')에서 enabled=true와 firstSyncDeferred=false를
+    // 동시에 처리하므로, 여기서는 검사만 트리거.
+    if (!sync.enabled) {
+      // enabled=false 상태에서도 모달 노출이 필요하므로 임시로 enabled=true 처리.
+      // 사용자가 "나중에"를 다시 선택하면 chooseFirstSync('defer')가 다시 false로 되돌림.
+      await update({ sync: { ...sync, enabled: true } });
+    }
+    await checkFirstSyncRequired();
   };
 
   const handleRestore = async () => {
@@ -106,13 +133,32 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
 
   return (
     <div ref={ref}>
+      {sync.firstSyncDeferred && (
+        <div className="mb-3 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3">
+          <span className="material-symbols-outlined text-amber-400 text-icon-lg flex-shrink-0">
+            warning_amber
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-sp-text">
+              최초 동기화 방향을 아직 결정하지 않았어요.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleResolveDeferredSync()}
+            className="flex-shrink-0 text-sp-accent hover:underline text-sm font-medium"
+          >
+            지금 결정하기 →
+          </button>
+        </div>
+      )}
       <ServiceCard
         icon="cloud_sync"
         iconBg="bg-cyan-500/10 text-cyan-400"
         title="앱 데이터 백업"
         description="쌤핀 데이터를 Drive에 안전하게 보관하고 다른 PC에서 이어서 사용하세요"
         enabled={sync.enabled}
-        onToggle={(v) => updateSync({ enabled: v })}
+        onToggle={(v) => void handleToggle(v)}
         collapsedHint="💡 다른 Google 앱에는 보이지 않는 전용 폴더"
       >
         {/* 자동 실행 */}

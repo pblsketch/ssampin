@@ -41,3 +41,8 @@ export {
   exportStudentRecordsToHwpx,
   exportGroupingToHwpx,
 } from './HwpxExporter';
+
+export {
+  exportRealtimeWallToExcel,
+  exportRealtimeWallToPdf,
+} from './RealtimeWallExporter';

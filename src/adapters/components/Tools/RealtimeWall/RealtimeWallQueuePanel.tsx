@@ -28,7 +28,7 @@ export function RealtimeWallQueuePanel({
   const hidePendingSection = approvalMode === 'auto' && pendingPosts.length === 0;
 
   return (
-    <aside className="flex h-full min-h-[560px] flex-col gap-3 rounded-xl border border-sp-border bg-sp-card p-3">
+    <aside className="flex h-full flex-col gap-3 rounded-xl border border-sp-border bg-sp-card p-3">
       <div className="flex items-center justify-between gap-2 px-1">
         <h3 className="text-sm font-bold text-sp-text">대기열</h3>
         <div className="flex items-center gap-1.5">

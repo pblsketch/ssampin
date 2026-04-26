@@ -12,15 +12,18 @@ async function computeChecksum(content: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export const SYNC_FILES = [
-  'settings', 'class-schedule', 'teacher-schedule', 'students',
-  'seating', 'events', 'memos', 'todos', 'student-records',
-  'bookmarks', 'surveys', 'assignments', 'seat-constraints', 'teaching-classes', 'dday',
-  'curriculum-progress', 'attendance', 'consultations', 'timetable-overrides',
-  'manual-meals',
-] as const;
+// SYNC_FILES와 SyncFileName은 syncRegistry로 단일화됨.
+// 본 파일 내부 사용 + 기존 import 경로(`from './SyncToCloud'`) 호환을 위해 import + re-export.
+import { SYNC_FILES } from './syncRegistry';
+export { SYNC_FILES };
+export type { SyncFileName } from './syncRegistry';
 
-export type SyncFileName = typeof SYNC_FILES[number];
+/**
+ * 런타임에 결정되는 동적 파일 키 목록을 반환하는 훅 타입.
+ * 노트 페이지 본문(`note-body--{pageId}`)처럼 페이지 수에 따라 개수가 변하는
+ * 도메인을 SyncToCloud / SyncFromCloud에 주입할 때 사용.
+ */
+export type GetDynamicSyncFiles = () => Promise<string[]>;
 
 export interface SyncToCloudResult {
   readonly uploaded: string[];
@@ -43,6 +46,7 @@ export class SyncToCloud {
     private readonly syncRepo: IDriveSyncRepository,
     private readonly deviceId: string,
     private readonly deviceName: string,
+    private readonly getDynamicSyncFiles?: GetDynamicSyncFiles,
   ) {}
 
   async execute(
@@ -64,16 +68,19 @@ export class SyncToCloud {
       ...(localManifest?.files ?? {}),
     };
 
-    let index = 0;
-    for (const filename of SYNC_FILES) {
-      index++;
-      onProgress?.({ current: index, total, filename });
+    // 동적 파일 목록 사전 조회 — 진행률 total 계산에 포함
+    const dynamicFiles = this.getDynamicSyncFiles ? await this.getDynamicSyncFiles() : [];
+    const grandTotal = total + dynamicFiles.length;
+
+    // 정적/동적 파일 모두 동일 로직으로 처리하기 위한 헬퍼
+    const uploadOne = async (filename: string, current: number): Promise<void> => {
+      onProgress?.({ current, total: grandTotal, filename });
 
       const data = await this.storage.read<unknown>(filename);
       if (data === null) {
         skipped.push(filename);
         console.log(`[SyncToCloud]   ${filename}: SKIP (데이터 없음)`);
-        continue;
+        return;
       }
 
       const content = JSON.stringify(data);
@@ -83,7 +90,7 @@ export class SyncToCloud {
       // 체크섬이 같으면 스킵
       if (manifestChecksum === checksum) {
         skipped.push(filename);
-        continue;
+        return;
       }
 
       // 리모트가 우리 마지막 동기화 이후 변경되었으면 업로드 스킵 (다른 기기가 올린 최신 데이터 보호)
@@ -91,7 +98,7 @@ export class SyncToCloud {
       if (remoteChecksum && manifestChecksum && remoteChecksum !== manifestChecksum) {
         console.log(`[SyncToCloud]   ${filename}: SKIP (remote changed: local-manifest=${manifestChecksum.slice(0, 8)} remote=${remoteChecksum.slice(0, 8)}, 다음 syncFromCloud에서 다운로드)`);
         skipped.push(filename);
-        continue;
+        return;
       }
 
       console.log(`[SyncToCloud]   ${filename}: UPLOAD (checksum ${manifestChecksum?.slice(0, 8) ?? 'NONE'} → ${checksum.slice(0, 8)})`);
@@ -102,6 +109,18 @@ export class SyncToCloud {
         size: new TextEncoder().encode(content).length,
       };
       uploaded.push(filename);
+    };
+
+    let index = 0;
+    for (const filename of SYNC_FILES) {
+      index++;
+      await uploadOne(filename, index);
+    }
+
+    // 동적 파일(예: note-body--{pageId}) 업로드 — 정적 루프와 동일 로직
+    for (const filename of dynamicFiles) {
+      index++;
+      await uploadOne(filename, index);
     }
 
     // 매니페스트 업데이트

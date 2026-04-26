@@ -60,6 +60,12 @@ export function RealtimeWallFreeformBoard({
   onOwnCardMove,
   isMobile = false,
   freeformLockEnabled = false,
+  onCardDetail,
+  // Step 2
+  onTeacherLike,
+  onTeacherAddComment,
+  // Step 3 — 교사 빈 영역 더블클릭 콜백
+  onTeacherFreeformAddCard,
 }: RealtimeWallFreeformBoardProps) {
   // 보드 전체 readOnly (교사 readOnly prop) — 교사 모드 전체 차단용
   const boardReadOnly = readOnly;
@@ -107,8 +113,11 @@ export function RealtimeWallFreeformBoard({
   const studentDisplayReadOnly = boardReadOnly || isStudent;
 
   return (
-    <div className="flex h-full min-h-[560px] flex-col">
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-sp-border bg-sp-bg p-3">
+    <div className="flex h-full flex-col">
+      {/* 2026-04-26 라운드 7 결함 B fix — 외곽 wrapper의 bg-sp-bg 제거 (회색 잔존 차단).
+          RealtimeWallBoardThemeWrapper(상위)가 boardTheme 배경을 깔고 있으므로 본 wrapper는 투명.
+          border/rounded/p-3은 카드 부유감 보존을 위해 유지. */}
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-sp-border bg-transparent p-3">
         <div
           className="relative h-[900px] w-[1400px] rounded-lg border border-sp-border/60 bg-sp-surface"
           style={{
@@ -118,6 +127,18 @@ export function RealtimeWallFreeformBoard({
             ].join(', '),
             backgroundSize: '32px 32px',
           }}
+          onDoubleClick={
+            // Step 3 — 교사 빈 영역 더블클릭 → 카드 추가 (Padlet 패턴).
+            // 카드 위 더블클릭은 RealtimeWallCard에서 e.stopPropagation()으로 버블 차단.
+            viewerRole === 'teacher' && onTeacherFreeformAddCard
+              ? (e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = Math.round(e.clientX - rect.left - 120); // 카드 중앙 보정
+                  const y = Math.round(e.clientY - rect.top - 60);
+                  onTeacherFreeformAddCard(Math.max(0, x), Math.max(0, y));
+                }
+              : undefined
+          }
         >
           {approvedPosts.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
@@ -156,6 +177,9 @@ export function RealtimeWallFreeformBoard({
                 onTeacherUpdateNickname={onTeacherUpdateNickname}
                 onTeacherBulkHideStudent={onTeacherBulkHideStudent}
                 highlighted={highlightedPostIds?.has(post.id) ?? false}
+                onCardDetail={onCardDetail}
+                onTeacherLike={onTeacherLike}
+                onTeacherAddComment={onTeacherAddComment}
               />
             );
 

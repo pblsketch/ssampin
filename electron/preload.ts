@@ -326,6 +326,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => { ipcRenderer.removeListener('realtime-wall:nickname-changed', handler); };
   },
   /**
+   * v2.1 Phase C — 학생 자기 카드 위치 변경(submit-move) 도착 알림 (교사 entry).
+   *
+   * 결함 fix (2026-04-26): 이 핸들러가 빠져 있어 학생이 카드를 다른 컬럼/좌표로
+   * 옮겨도 교사 renderer의 `posts` state는 원래 위치를 그대로 유지했다.
+   * 이후 다른 부분 업데이트(좋아요·댓글·삭제 등)가 도착하면 교사가 setPosts로
+   * stale 위치를 포함한 채 wall-state를 재 broadcast → 학생 화면에서 카드가
+   * 원래 컬럼으로 되돌아가는 회귀가 발생.
+   *
+   * 본 이벤트는 서버가 위치 patch를 적용한 *최종* post 객체를 그대로 전달하므로
+   * 교사 renderer는 해당 postId 항목을 통째로 교체한다.
+   */
+  onRealtimeWallStudentMove: (callback: (data: {
+    postId: string;
+    post: unknown;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { postId: string; post: unknown }) => callback(data);
+    ipcRenderer.on('realtime-wall:student-move', handler);
+    return () => { ipcRenderer.removeListener('realtime-wall:student-move', handler); };
+  },
+  /**
    * v1.14 P3 — 교사가 학생 카드 추가 잠금 토글.
    * Main이 세션 플래그를 갱신하고 모든 학생에게 `student-form-locked` broadcast.
    */

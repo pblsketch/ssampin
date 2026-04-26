@@ -888,6 +888,7 @@ describe('bulkApproveWallPosts (v1.13 Stage C)', () => {
 import {
   addWallColumn,
   cloneWallBoard,
+  REALTIME_WALL_MAX_COLUMNS,
   removeWallColumn,
   renameWallColumn,
   reorderWallColumns,
@@ -912,15 +913,28 @@ describe('addWallColumn', () => {
     expect(result[3]!.id).toBe('column-4');
   });
 
-  it('최대 6개 제한 — 7번째 추가는 거부(원본 반환)', () => {
+  it('최대 REALTIME_WALL_MAX_COLUMNS개 제한 — 상한 도달 시 추가 거부(원본 반환)', () => {
+    // 2026-04-26 결함 fix #2 — 6 → 50(사실상 무제한). 상한 정확히 일치 시 거부 검증.
+    const max: RealtimeWallColumn[] = Array.from({ length: REALTIME_WALL_MAX_COLUMNS }, (_, i) => ({
+      id: `column-${i + 1}`,
+      title: `c${i + 1}`,
+      order: i,
+    }));
+    const result = addWallColumn(max, '한도초과');
+    expect(result).toHaveLength(REALTIME_WALL_MAX_COLUMNS);
+    expect(result.map((c) => c.title)).not.toContain('한도초과');
+  });
+
+  it('상한 미만에서는 자유롭게 추가 — 6개를 초과해도 더 추가됨 (무제한 정책)', () => {
+    // 2026-04-26 결함 fix #2 — 기존 6개 한도 제거 검증. 6개 → 7번째 추가 정상 동작.
     const six: RealtimeWallColumn[] = Array.from({ length: 6 }, (_, i) => ({
       id: `column-${i + 1}`,
       title: `c${i + 1}`,
       order: i,
     }));
     const result = addWallColumn(six, '일곱');
-    expect(result).toHaveLength(6);
-    expect(result.map((c) => c.title)).not.toContain('일곱');
+    expect(result).toHaveLength(7);
+    expect(result.map((c) => c.title)).toContain('일곱');
   });
 
   it('빈/공백 제목은 거부', () => {
