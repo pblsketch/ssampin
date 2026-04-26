@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { PastResultsView } from './TemplateManager';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -18,9 +18,7 @@ import {
   buildRealtimeWallColumns,
   bulkApproveWallPosts,
   createWallBoard,
-  // v2.1 student-ux 회귀 fix (2026-04-24): createWallPost는 서버(electron/ipc/realtimeWall.ts)가
-  // 직접 호출하므로 renderer에서는 더 이상 import 안 함. onRealtimeWallStudentSubmitted는
-  // 서버가 만든 RealtimeWallPost 전체를 그대로 setPosts에 merge.
+  createWallPost,
   DEFAULT_REALTIME_WALL_COLUMNS,
   extractYoutubeVideoId,
   generateUniqueWallShortCode,
@@ -28,8 +26,10 @@ import {
   hideRealtimeWallPost,
   moderationModeFromApprovalMode,
   normalizeRealtimeWallLink,
-  REALTIME_WALL_MAX_TEXT_LENGTH,
+  REALTIME_WALL_MAX_COLUMNS,
+  REALTIME_WALL_MAX_TEXT_LENGTH_V2,
   togglePinRealtimeWallPost,
+  type RealtimeWallStudentSubmission,
 } from '@domain/rules/realtimeWallRules';
 import { DEFAULT_REALTIME_WALL_BOARD_SETTINGS } from '@domain/entities/RealtimeWallBoardSettings';
 import {
@@ -42,15 +42,32 @@ import { RealtimeWallFreeformBoard } from './RealtimeWall/RealtimeWallFreeformBo
 import { RealtimeWallGridBoard } from './RealtimeWall/RealtimeWallGridBoard';
 import { RealtimeWallStreamBoard } from './RealtimeWall/RealtimeWallStreamBoard';
 import { RealtimeWallBoardThemeWrapper } from './RealtimeWall/RealtimeWallBoardThemeWrapper';
+import { resolveBoardThemeVariant } from './RealtimeWall/RealtimeWallBoardThemePresets';
 import { RealtimeWallCreateView } from './RealtimeWall/RealtimeWallCreateView';
-import { RealtimeWallLiveSharePanel } from './RealtimeWall/RealtimeWallLiveSharePanel';
 import { RealtimeWallQueuePanel } from './RealtimeWall/RealtimeWallQueuePanel';
-import { RealtimeWallResultView } from './RealtimeWall/RealtimeWallResultView';
 import { RealtimeWallBoardSettingsDrawer } from './RealtimeWall/RealtimeWallBoardSettingsDrawer';
-import type { BoardSettingsSection } from './RealtimeWall/RealtimeWallBoardSettingsDrawer';
+import { RealtimeWallCardDetailModal } from './RealtimeWall/RealtimeWallCardDetailModal';
+import type {
+  BoardSettingsSection,
+  ExportSectionProps,
+  ShareSectionProps,
+} from './RealtimeWall/RealtimeWallBoardSettingsDrawer';
+import {
+  exportRealtimeWallBoard,
+  sanitizeRealtimeWallFileBase,
+  type RealtimeWallExportOptions,
+} from '@usecases/realtimeWall/ExportRealtimeWallBoard';
+import {
+  exportRealtimeWallToExcel,
+  exportRealtimeWallToPdf,
+} from '@infrastructure/export';
+import { useToastStore } from '@adapters/components/common/Toast';
+import { RealtimeWallTeacherActionBar } from './RealtimeWall/RealtimeWallTeacherActionBar';
 import { WallBoardListView } from './RealtimeWall/WallBoardListView';
 import { RealtimeWallTeacherStudentTrackerPanel } from './RealtimeWall/RealtimeWallTeacherStudentTrackerPanel';
-import { formatAbsoluteTime, openExternalLink } from './RealtimeWall/realtimeWallHelpers';
+import { openExternalLink } from './RealtimeWall/realtimeWallHelpers';
+import { StudentSubmitForm } from '@student/StudentSubmitForm';
+import QRCode from 'qrcode';
 
 const AUTO_SAVE_DEBOUNCE_MS = 2000;
 /** 30초마다 강제 저장 — debounce 실패 시 safety net. Design §3.3. */
@@ -69,7 +86,9 @@ interface ToolRealtimeWallProps {
   isFullscreen: boolean;
 }
 
-type ViewMode = 'list' | 'create' | 'running' | 'results';
+// 2026-04-26 결함 #5 — "수업 마무리" 제거에 따라 'results' 진입 경로 삭제.
+// RealtimeWallResultView는 별도 PR에서 보드 목록 메뉴 등 새 진입점에 재배치 예정.
+type ViewMode = 'list' | 'create' | 'running';
 
 export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps) {
   const { track } = useAnalytics();
@@ -111,7 +130,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
    * - Drawer §5에서 즉시 갱신 + boardSettings-changed broadcast (100ms 디바운스는 Drawer 내부).
    * - 보드 wrapper(교사·학생)에 inline style/className spread.
    * - WallBoard.settings.theme로 영속 — handleStartBoard / handleOpenBoard에서 복원.
-   *   handleFinish / 자동저장에서 보드에 다시 부착해 디스크 저장.
+   *   자동저장 effect가 변경 시점에 보드에 다시 부착해 디스크 저장.
    */
   const [boardTheme, setBoardTheme] = useState<WallBoardTheme>(DEFAULT_WALL_BOARD_THEME);
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
@@ -123,6 +142,17 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   const [shortCode, setShortCode] = useState<string | null>(null);
   const [customCodeInput, setCustomCodeInput] = useState('');
   const [customCodeError, setCustomCodeError] = useState<string | null>(null);
+
+  // 2026-04-26 결함 #5 — 내보내기 진행 상태 (PDF/Excel 생성 중 spinner).
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Step 1 — 교사 카드 추가 모달 열림/닫힘 상태.
+  const [teacherFormOpen, setTeacherFormOpen] = useState(false);
+
+  // 2026-04-26 결함 fix — 카드 더블클릭 상세 모달 (교사, Padlet 동일뷰 §0.1).
+  const [detailPostId, setDetailPostId] = useState<string | null>(null);
+
+  const showToast = useToastStore((s) => s.show);
 
   const liveSessionClientRef = useRef(new LiveSessionClient());
 
@@ -306,7 +336,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       setLiveError(null);
       await window.electronAPI.startRealtimeWall({
         title: normalizedTitle,
-        maxTextLength: REALTIME_WALL_MAX_TEXT_LENGTH,
+        maxTextLength: REALTIME_WALL_MAX_TEXT_LENGTH_V2,
       });
 
       setIsLiveMode(true);
@@ -384,46 +414,73 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setShowPastResults(false);
   }, [approvalMode, columns, currentBoard, layoutMode, normalizedTitle]);
 
-  const handleFinish = useCallback(async () => {
-    if (isLiveMode) {
-      await handleStopLive();
-    }
-    // 마지막 세션 종료 시각 기록 + 현재 상태 즉시 저장.
-    if (currentBoard) {
-      const prevSettings = currentBoard.settings ?? DEFAULT_REALTIME_WALL_BOARD_SETTINGS;
-      const finalBoard: WallBoard = {
-        ...currentBoard,
-        title: normalizedTitle,
-        layoutMode,
-        columns,
-        approvalMode,
-        posts,
-        // v1.16.x Phase 2 — settings.theme 영속
-        settings: { ...prevSettings, theme: boardTheme },
-        updatedAt: Date.now(),
-        lastSessionAt: Date.now(),
-      };
-      await wallBoardRepository.save(finalBoard);
-      setCurrentBoard(finalBoard);
-    }
-    setViewMode('results');
-  }, [approvalMode, boardTheme, columns, currentBoard, handleStopLive, isLiveMode, layoutMode, normalizedTitle, posts]);
+  // 2026-04-26 결함 #5 — "수업 마무리" 제거 + "내보내기" 신설.
+  //
+  // 흐름:
+  //   1) usecase로 도메인 → 평면 export 행 변환
+  //   2) infrastructure exporter (PDF or Excel)로 ArrayBuffer 생성
+  //   3) Electron showSaveDialog → writeFile (브라우저는 Blob 다운로드 폴백)
+  //
+  // 기존 handleFinish의 라이브 종료 책임은 공유 Drawer §0 "참여 종료" 버튼
+  // (`onStopLive` → `handleStopLive`)으로 충분히 처리됨. 마지막 세션 시각 기록은
+  // 자동 저장 effect와 onStopLive에서 다음 라이브 시점에 갱신되므로 추가 처리 불필요.
+  const handleExport = useCallback(
+    async (format: 'pdf' | 'excel', options: RealtimeWallExportOptions) => {
+      if (isExporting) return;
+      setIsExporting(true);
+      try {
+        const rows = exportRealtimeWallBoard({
+          title: normalizedTitle,
+          layoutMode,
+          columns,
+          posts,
+          options,
+        });
 
-  const handleNewBoard = useCallback(() => {
-    // 결과 화면 → 목록으로. "새 담벼락 만들기"는 목록 내 버튼이 담당.
-    setViewMode('list');
-    setTitle('');
-    setLayoutMode('kanban');
-    setColumnInputs([...DEFAULT_REALTIME_WALL_COLUMNS]);
-    // v2.1 student-ux: 기본 'auto' (Padlet 정합)
-    setApprovalMode('auto');
-    setPosts([]);
-    setCurrentBoard(null);
-    setShortCode(null);
-    setShowPastResults(false);
-    // v1.16.x — theme도 default로 reset
-    setBoardTheme(DEFAULT_WALL_BOARD_THEME);
-  }, []);
+        const buffer = format === 'pdf'
+          ? await exportRealtimeWallToPdf(rows)
+          : await exportRealtimeWallToExcel(rows);
+
+        const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+        const filterName = format === 'pdf' ? 'PDF 파일' : 'Excel 파일';
+        const fileBase = sanitizeRealtimeWallFileBase(normalizedTitle);
+        const defaultFileName = `${fileBase}_담벼락.${ext}`;
+
+        if (window.electronAPI) {
+          const filePath = await window.electronAPI.showSaveDialog({
+            title: '실시간 담벼락 내보내기',
+            defaultPath: defaultFileName,
+            filters: [{ name: filterName, extensions: [ext] }],
+          });
+          if (filePath) {
+            await window.electronAPI.writeFile(filePath, buffer);
+            showToast('파일을 저장했어요', 'success', {
+              label: '파일 열기',
+              onClick: () => window.electronAPI?.openFile(filePath),
+            });
+          }
+        } else {
+          const mime = format === 'pdf'
+            ? 'application/pdf'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          const blob = new Blob([buffer], { type: mime });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = defaultFileName;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('파일을 다운로드했어요', 'success');
+        }
+      } catch (err) {
+        console.error('[ToolRealtimeWall] export failed', err);
+        showToast('내보내기에 실패했어요. 다시 시도해주세요.', 'error');
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [columns, isExporting, layoutMode, normalizedTitle, posts, showToast],
+  );
 
   // 목록 → "+ 새 담벼락" → create 진입 (신규 보드)
   const handleOpenCreate = useCallback(() => {
@@ -493,7 +550,17 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
 
   const handleAddColumn = useCallback(() => {
     setColumnInputs((prev) => (
-      prev.length >= 6 ? prev : [...prev, `컬럼 ${prev.length + 1}`]
+      prev.length >= REALTIME_WALL_MAX_COLUMNS ? prev : [...prev, `컬럼 ${prev.length + 1}`]
+    ));
+  }, []);
+
+  // 2026-04-26 결함 #4 — Padlet 동일 인라인 "+ 섹션 추가" (Kanban 보드 우측 ghost 카드).
+  // 사용자가 입력한 title 그대로 push (트림은 컴포넌트에서 수행).
+  // 상한 REALTIME_WALL_MAX_COLUMNS(=50, 사실상 무제한) 도달 시 무시 (no-op).
+  // 빈 문자열은 컴포넌트가 미호출.
+  const handleAddColumnInline = useCallback((title: string) => {
+    setColumnInputs((prev) => (
+      prev.length >= REALTIME_WALL_MAX_COLUMNS ? prev : [...prev, title]
     ));
   }, []);
 
@@ -702,6 +769,20 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       );
     });
 
+    // v2.1 Phase C — 학생 자기 카드 위치 변경 이벤트.
+    // 결함 fix (2026-04-26): 학생이 카드를 다른 컬럼/좌표로 이동할 때 교사
+    // renderer가 동기화되지 않으면, 이후 좋아요·댓글·삭제 등 부분 업데이트가
+    // 도착해 setPosts가 호출될 때 stale 위치로 wall-state가 재 broadcast되어
+    // 학생 화면에서 카드가 원래 위치로 되돌아가는 버그가 발생.
+    // 서버는 위치 patch만 적용한 최종 post 전체를 그대로 전달하므로 교체 merge.
+    const offMove = api.onRealtimeWallStudentMove?.((data) => {
+      const updatedPost = data.post as RealtimeWallPost | undefined;
+      if (!updatedPost) return;
+      setPosts((prev) =>
+        prev.map((p) => (p.id === data.postId ? updatedPost : p)),
+      );
+    });
+
     // v2.1 Phase D — 학생 자기 카드 삭제(soft delete) 이벤트
     // 회귀 위험 #8: hard delete 패턴 사용 X — status='hidden-by-author' 갱신만
     const offDelete = api.onRealtimeWallStudentDelete?.((data) => {
@@ -724,6 +805,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       offLike?.();
       offComment?.();
       offEdit?.();
+      offMove?.();
       offDelete?.();
       offNick?.();
     };
@@ -861,6 +943,61 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     [],
   );
 
+  /**
+   * Step 1 — 교사 카드 추가 핸들러 (옵션 A).
+   *
+   * renderer에서 직접 `createWallPost`(도메인 순수 함수)를 호출해
+   * `RealtimeWallPost`를 생성한다. status는 approvalMode에 관계없이 'approved' 강제.
+   *
+   * 옵션 A 선택 이유:
+   *   - Main IPC 신설 불필요 — `createWallPost` 순수 함수를 renderer에서 직접 재사용 가능.
+   *   - `buildWallStateForStudents` useEffect가 posts 변경을 자동 감지해 학생 broadcast.
+   *   - 비라이브(pre-live) 모드에서도 보드에 카드 누적 가능 (라이브 시작 전 준비 지원).
+   *   - 옵션 B(IPC 신설)는 학생 submit WebSocket 경로와 race condition 발생 가능성 있고
+   *     Main 코드 변경 없이 Step 1 범위만으로 완결 가능한 옵션 A가 우선.
+   */
+  const handleTeacherSubmit = useCallback(
+    (input: {
+      nickname: string;
+      text: string;
+      linkUrl?: string;
+      images?: string[];
+      pdfDataUrl?: string;
+      pdfFilename?: string;
+      color?: import('@domain/entities/RealtimeWall').RealtimeWallCardColor;
+      columnId?: string;
+    }) => {
+      const id = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `teacher-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+      const submission: RealtimeWallStudentSubmission = {
+        id,
+        nickname: input.nickname,
+        text: input.text,
+        submittedAt: Date.now(),
+        ...(input.linkUrl ? { linkUrl: input.linkUrl } : {}),
+        ...(input.images && input.images.length > 0 ? { images: input.images as readonly string[] } : {}),
+        ...(input.columnId ? { columnId: input.columnId } : {}),
+        ...(input.color ? { color: input.color } : {}),
+        // pdfDataUrl은 renderer에서는 file:// URL이 아니라 base64이므로 IPC 없이는 사용 불가.
+        // Step 1 스코프에서 PDF는 지원하지 않음 (Step 3+에서 처리).
+      };
+
+      setPosts((prev) => {
+        // approvalMode에 관계없이 교사 카드는 항상 'approved'로 강제 생성.
+        // createWallPost의 'auto' 분기가 즉시 approved + kanban/freeform 계산을 수행.
+        const post = createWallPost(submission, prev, columns, 'auto');
+        // 중복 id 방지 (드물지만 빠른 연속 클릭 케이스 방어)
+        if (prev.some((p) => p.id === post.id)) return prev;
+        return [post, ...prev];
+      });
+
+      setTeacherFormOpen(false);
+    },
+    [columns],
+  );
+
   useEffect(() => {
     return () => {
       if (window.electronAPI?.stopRealtimeWall) {
@@ -868,6 +1005,104 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       }
     };
   }, []);
+
+  /**
+   * 2026-04-26 결함 fix — 카드 더블클릭 상세 모달 (교사 권한 / Padlet 동일뷰 §0.1).
+   *
+   * 교사 권한:
+   *   - 핀/숨기기 버튼 (handleTogglePin / handleHidePost 재사용)
+   *   - 모든 댓글 표시 (status='hidden' 포함, 교사 한정 휴지통)
+   *   - 댓글 삭제 (handleRemoveComment)
+   *
+   * 이벤트 흐름: RealtimeWallCard.onDoubleClick → onCardDetail → setDetailPostId.
+   * detailPost는 항상 최신 posts에서 lookup (좋아요/댓글 실시간 반영).
+   */
+  const detailPost = useMemo(
+    () => (detailPostId ? posts.find((p) => p.id === detailPostId) ?? null : null),
+    [detailPostId, posts],
+  );
+  const handleOpenCardDetail = useCallback((postId: string) => {
+    setDetailPostId(postId);
+  }, []);
+  const handleCloseCardDetail = useCallback(() => {
+    setDetailPostId(null);
+  }, []);
+
+  /**
+   * 2026-04-26 컬럼별 독립 세로 스크롤 진짜 fix — 라이브 컨테이너 viewport 좌표 측정.
+   *
+   * 문제: App.tsx <main className="flex-1 overflow-y-auto"> + ToolLayout content
+   *   <div className="flex-1 min-h-0 overflow-auto"> 두 외부 스크롤러가 휠 이벤트를 먼저
+   *   흡수해 컬럼 droppable의 overflow-y-auto가 trigger되지 않음.
+   *
+   * 해법: 라이브 모드 진입 시 running 컨테이너를 position:fixed로 떼어내 두 외부 스크롤러를
+   *   완전히 우회. 좌표는 부모 <main>의 getBoundingClientRect로 측정해 사이드바 폭(64px 또는
+   *   256px) 자동 인식. ResizeObserver + window resize 양 채널로 사이드바 펼침/접힘·창
+   *   리사이즈·전체화면 진입에 실시간 추종.
+   *
+   * 비활성 조건: viewMode !== 'running' || !isLiveMode → rect=null 반환해 컨테이너는 기존
+   *   ToolLayout flex 레이아웃 그대로 동작 (회귀 0건).
+   */
+  const runningContainerRef = useRef<HTMLDivElement>(null);
+  const [liveContainerRect, setLiveContainerRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  // useLayoutEffect로 동기 측정 — first-paint flash(좌상단 잠시 좌표 0/0) 방지.
+  useLayoutEffect(() => {
+    if (viewMode !== 'running' || !isLiveMode) {
+      setLiveContainerRect(null);
+      return;
+    }
+
+    // 부모 <main> 탐색 — App.tsx의 <main className="flex-1 overflow-y-auto"> 매칭.
+    // 듀얼 모드(슬롯 컨테이너)에서도 가장 가까운 main 또는 ToolLayout content가 기준이 되도록
+    // 여러 후보를 우선순위로 검사. 본 ToolRealtimeWall은 ToolLayout 자식이므로 ToolLayout content
+    // 영역(`.flex-1.min-h-0.overflow-auto`)을 우선, 없으면 <main>.
+    const findContainer = (): HTMLElement | null => {
+      const node = runningContainerRef.current;
+      if (!node) return null;
+      // ToolLayout content 영역(가장 가까운 부모) — 듀얼 모드에서도 슬롯 영역 정확히 매칭.
+      let cursor: HTMLElement | null = node.parentElement;
+      while (cursor && cursor !== document.body) {
+        if (cursor.tagName === 'MAIN') return cursor;
+        cursor = cursor.parentElement;
+      }
+      return document.querySelector('main');
+    };
+
+    const measure = () => {
+      const container = findContainer();
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      setLiveContainerRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+
+    measure();
+
+    const container = findContainer();
+    const ro = container ? new ResizeObserver(measure) : null;
+    if (container && ro) ro.observe(container);
+    // body resize도 관찰 — 사이드바 폭 변경(transition 200ms) 종료 후 재측정.
+    const bodyRo = new ResizeObserver(measure);
+    bodyRo.observe(document.body);
+
+    window.addEventListener('resize', measure);
+
+    return () => {
+      ro?.disconnect();
+      bodyRo.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [viewMode, isLiveMode]);
 
   const boardView = (() => {
     switch (layoutMode) {
@@ -887,6 +1122,13 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTeacherUpdateNickname={handleTeacherUpdateNickname}
             onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
             highlightedPostIds={highlightedPostIds}
+            onAddColumnInline={
+              // 2026-04-26 결함 fix #2 — 컬럼 무제한(REALTIME_WALL_MAX_COLUMNS=50) 정책 반영.
+              // domain addWallColumn이 상한 도달 시 원본 반환으로 안전 처리하므로, UI 가드는 제거.
+              // 6+ 컬럼은 KanbanBoard wrapper의 overflow-x-auto + 컬럼별 min-w-[280px]로 가로 스크롤.
+              handleAddColumnInline
+            }
+            onCardDetail={handleOpenCardDetail}
           />
         );
       case 'freeform':
@@ -904,6 +1146,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTeacherUpdateNickname={handleTeacherUpdateNickname}
             onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
             highlightedPostIds={highlightedPostIds}
+            onCardDetail={handleOpenCardDetail}
           />
         );
       case 'grid':
@@ -920,6 +1163,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTeacherUpdateNickname={handleTeacherUpdateNickname}
             onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
             highlightedPostIds={highlightedPostIds}
+            onCardDetail={handleOpenCardDetail}
           />
         );
       case 'stream':
@@ -936,6 +1180,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onTeacherUpdateNickname={handleTeacherUpdateNickname}
             onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
             highlightedPostIds={highlightedPostIds}
+            onCardDetail={handleOpenCardDetail}
           />
         );
       default: {
@@ -980,51 +1225,69 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         />
       )}
 
+      {/* 2026-04-26 라운드 7 결함 B fix — 라이브 모드 viewport 전체 backdrop.
+          기존: running 컨테이너에만 boardTheme 적용 → ToolLayout chrome(헤더/Content gutter)에
+          sp-bg 회색이 잔존하여 라이브 풀-immersion 깨짐.
+          수정: viewMode='running' && isLiveMode일 때만 fixed inset-0 -z-10 backdrop를 깔아
+          chrome 뒤로 boardTheme이 비치도록 한다. -z-10이라 사이드바/헤더는 위에 그대로 보존되며,
+          App.tsx:866 글로벌 bg-sp-bg는 손대지 않으므로 다른 도구에 영향 0건.
+          buildLiveContainerStyle은 catalog hardcoded 값만 반환 (CSS injection 안전, 회귀 #10). */}
+      {!showPastResults && viewMode === 'running' && isLiveMode && (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 -z-10"
+          style={buildLiveContainerStyle(boardTheme)}
+        />
+      )}
+
       {!showPastResults && viewMode === 'running' && (
-        <div className="flex h-full min-h-0 flex-col gap-4">
-          {isLiveMode ? (
-            <RealtimeWallLiveSharePanel
-              title={normalizedTitle}
-              connectedStudents={connectedStudents}
-              displayUrl={shortUrl ?? tunnelUrl}
-              fullUrl={tunnelUrl}
-              shortUrl={shortUrl}
-              shortCode={shortCode}
-              tunnelLoading={tunnelLoading}
-              tunnelError={tunnelError}
-              customCodeInput={customCodeInput}
-              customCodeError={customCodeError}
-              showQRFullscreen={showQRFullscreen}
-              onToggleQRFullscreen={() => setShowQRFullscreen((prev) => !prev)}
-              onStop={() => {
-                void handleStopLive();
-              }}
-              onRetryTunnel={() => {
-                void connectTunnel();
-              }}
-              onCustomCodeChange={setCustomCodeInput}
-              onSetCustomCode={() => {
-                void handleSetCustomCode();
-              }}
-              onOpenSettings={() => setBoardSettingsDrawer('approval')}
-            />
-          ) : (
-            <section className="rounded-xl border border-sp-border bg-sp-card px-5 py-4">
-              <div className="flex flex-wrap items-center gap-3">
+        <div
+          ref={runningContainerRef}
+          // 2026-04-26 결함 fix — 라이브 모드에서 boardTheme을 running 컨테이너 전체에 적용.
+          // 보드만 wrapper로 감싸면 좌우/상단/gap 영역이 sp-bg 회색으로 남아 Padlet 동일뷰 깨짐.
+          // 라이브 진입 시 컨테이너 전역에 동일 theme inline style 적용 → 보드 wrapper와 솔리드는
+          // 픽셀 일치, gradient/pattern은 거의 일치 (wrapper 내부도 동일 theme이므로 visible seam ≒0).
+          // 사이드바 영역은 Sidebar가 sp-surface로 자체 가림 → 본 컨테이너 적용 범위 = 메인 컨텐츠 한정.
+          // 라운드 7: 위 fixed inset-0 -z-10 backdrop가 추가 안전망 — chrome 뒤 영역도 일치.
+          //
+          // 2026-04-26 컬럼별 독립 세로 스크롤 진짜 fix (Option A — architect 1순위):
+          // 라이브 모드일 때 컨테이너를 viewport에 고정(`fixed`)해 App.tsx <main> overflow-y-auto 와
+          // ToolLayout content overflow-auto 두 외부 스크롤러를 동시에 우회한다.
+          // 외부 스크롤러가 흡수하던 휠 이벤트가 컬럼 droppable의 overflow-y-auto에 직접 도달.
+          // 좌표는 useLiveContainerRect가 부모 <main>의 getBoundingClientRect를 측정 + ResizeObserver로
+          // 사이드바 펼침/접힘·창 리사이즈·전체화면 진입에 실시간 동기화한다.
+          // non-live(설정 미시작)에서는 기존 ToolLayout flex 레이아웃 그대로(rect=null) 동작.
+          className={
+            isLiveMode
+              ? `fixed z-0 flex min-h-0 flex-col gap-2 rounded-xl overflow-hidden ${
+                  liveContainerRect ? '' : 'inset-0'
+                }`
+              : 'relative flex h-full min-h-0 flex-col gap-2 rounded-xl'
+          }
+          style={
+            isLiveMode
+              ? { ...buildLiveContainerStyle(boardTheme), ...(liveContainerRect ?? {}) }
+              : undefined
+          }
+        >
+          {/*
+            2026-04-26 사용자 피드백 #1 — 교사 보드 풀-사이즈화 (Padlet 동일뷰).
+            기존: LiveSharePanel + 헤더 + 보드 컨테이너 누적 → 보드 절반.
+            변경: pre-live 시 슬림 banner만, live 시 우측 ActionBar + 보드 풀-사이즈.
+          */}
+          {!isLiveMode && (
+            <section className="shrink-0 rounded-lg border border-sp-border bg-sp-card px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-lg text-sp-accent">wifi</span>
-                  <div>
-                    <h2 className="text-sm font-bold text-sp-text">학생 참여 준비 완료</h2>
-                    <p className="mt-0.5 text-xs text-sp-muted">
-                      참여 시작 버튼을 누르면 외부 접속 주소가 만들어집니다.
-                    </p>
-                  </div>
+                  <span className="material-symbols-outlined text-base text-sp-accent">wifi</span>
+                  <span className="text-xs font-bold text-sp-text">학생 참여 준비 완료</span>
+                  <span className="text-xs text-sp-muted">— 시작 버튼을 누르면 접속 주소가 만들어져요</span>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setBoardSettingsDrawer('basic')}
-                    className="rounded-lg border border-sp-border px-3 py-2 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
+                    className="rounded-md border border-sp-border px-2.5 py-1 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
                   >
                     설정 수정
                   </button>
@@ -1033,103 +1296,90 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                     onClick={() => {
                       void handleStartLive();
                     }}
-                    className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-4 py-2 text-sm font-bold text-white transition hover:bg-sp-accent/85"
+                    className="flex items-center gap-1 rounded-md bg-sp-accent px-3 py-1.5 text-xs font-bold text-white transition hover:bg-sp-accent/85"
                   >
-                    <span className="material-symbols-outlined text-base">play_arrow</span>
+                    <span className="material-symbols-outlined text-sm">play_arrow</span>
                     학생 참여 시작
                   </button>
                 </div>
               </div>
-              {liveError && (
-                <p className="mt-2.5 text-xs text-red-400">{liveError}</p>
-              )}
+              {liveError && <p className="mt-1.5 text-xs text-red-400">{liveError}</p>}
             </section>
           )}
 
           <div
             className={
-              // Design §4.5: auto 모드에서 pending 섹션이 숨겨지므로 좌측 컬럼
-              // 폭을 200px로 줄여 보드 영역에 양보. manual 모드는 기존 300px 유지.
-              approvalMode === 'auto'
-                ? 'grid min-h-0 flex-1 gap-3 xl:grid-cols-[200px_minmax(0,1fr)]'
-                : 'grid min-h-0 flex-1 gap-3 xl:grid-cols-[300px_minmax(0,1fr)]'
+              // 2026-04-26 풀-사이즈 보드 + 우측 56px ActionBar.
+              // approvalMode === 'manual' 일 때만 좌측 큐 패널 노출 (auto에서는 큐 비어있음).
+              // grid columns: [큐(manual만)] [보드 1fr] [ActionBar 56px]
+              approvalMode === 'manual'
+                ? 'grid min-h-0 flex-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)_auto]'
+                : 'grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto]'
             }
           >
-            <RealtimeWallQueuePanel
-              pendingPosts={pendingPosts}
-              hiddenPosts={hiddenPosts}
-              approvalMode={approvalMode}
-              onApprove={handleApprovePost}
-              onHide={handleHidePost}
-              onRestore={handleRestorePost}
-              onOpenLink={openExternalLink}
-            />
+            {approvalMode === 'manual' && (
+              <RealtimeWallQueuePanel
+                pendingPosts={pendingPosts}
+                hiddenPosts={hiddenPosts}
+                approvalMode={approvalMode}
+                onApprove={handleApprovePost}
+                onHide={handleHidePost}
+                onRestore={handleRestorePost}
+                onOpenLink={openExternalLink}
+              />
+            )}
 
-            <section className="flex min-h-0 flex-col rounded-xl border border-sp-border bg-sp-card p-3">
-              <div className="mb-3 flex flex-wrap items-center gap-2.5 px-1">
-                <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-sm font-bold text-sp-text">{normalizedTitle}</h2>
-                  <p className="mt-0.5 text-xs text-sp-muted">
-                    <span className="text-emerald-400">{posts.filter((post) => post.status === 'approved').length}장</span> 보드에 있음
-                    {posts[0] && (
-                      <span className="ml-2">· 마지막 제출 {formatAbsoluteTime(posts[0].submittedAt)}</span>
-                    )}
-                  </p>
-                </div>
-                {layoutMode === 'kanban' && (
-                  <button
-                    type="button"
-                    onClick={() => setBoardSettingsDrawer('columns')}
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-semibold text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
-                  >
-                    <span className="material-symbols-outlined text-sm">view_column</span>
-                    컬럼 편집
-                  </button>
-                )}
-                {/* v1.16.x Phase 2 — 디자인 패널 진입점 */}
-                <button
-                  type="button"
-                  onClick={() => setBoardSettingsDrawer('design')}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-semibold text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
-                >
-                  <span className="material-symbols-outlined text-sm">palette</span>
-                  디자인
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleFinish();
-                  }}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-sp-accent/40 bg-sp-accent/10 px-3 py-1.5 text-xs font-semibold text-sp-accent transition hover:bg-sp-accent/20"
-                >
-                  <span className="material-symbols-outlined text-sm">flag</span>
-                  수업 마무리
-                </button>
-              </div>
-              <div className="min-h-0 flex-1">
-                {/* v1.16.x Phase 2 (Design §5.3) — 보드 wrapper에 theme 적용.
-                    학생 측(StudentBoardView)도 같은 wrapper를 사용해 픽셀 일치 보장. */}
+            {/* 보드 영역 — 학생과 픽셀 동일 (헤더/컨트롤 모두 제거).
+                RealtimeWallBoardThemeWrapper만 둘러싸 보드 풀-사이즈로 렌더.
+                flex-1: grid 셀 안에서 남은 세로 공간을 모두 차지 (QueuePanel·ActionBar와 동일 높이).
+
+                2026-04-27 사용자 피드백 fix — 우측 ActionBar가 가로 스크롤 후에만 보이는 결함:
+                grid 셀(`minmax(0,1fr)`)은 0까지 축소 가능하지만, 그 안의 grid item(section)
+                및 flex 자식들은 기본 `min-width: auto`(=min-content)라 kanban 내부의
+                `overflow-x-auto` 컨텐츠(컬럼 폭 합 + gap)가 셀을 콘텐츠 폭만큼 강제 확장한다.
+                결과적으로 ActionBar가 viewport 밖으로 밀려나 가로 스크롤로만 노출됐음.
+                section / 내부 div / BoardThemeWrapper 모두 `min-w-0`을 명시해 컬럼이
+                `1fr`로 축소되고 kanban 내부에서만 가로 스크롤이 발생하도록 한다. */}
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="min-h-0 min-w-0 flex-1">
                 <RealtimeWallBoardThemeWrapper
                   theme={boardTheme}
-                  className="h-full min-h-0 rounded-xl"
+                  className="h-full min-h-0 min-w-0 rounded-xl"
                 >
                   {boardView}
                 </RealtimeWallBoardThemeWrapper>
               </div>
             </section>
+
+            {/* 우측 슬림 ActionBar — 교사 전용 컨트롤 격리 (Padlet 정합) */}
+            <RealtimeWallTeacherActionBar
+              layoutMode={layoutMode}
+              isLiveMode={isLiveMode}
+              pendingCount={pendingPosts.length}
+              studentFormLocked={studentFormLocked}
+              onOpenShare={() => setBoardSettingsDrawer('share')}
+              onOpenDesign={() => setBoardSettingsDrawer('design')}
+              onOpenColumns={() => setBoardSettingsDrawer('columns')}
+              onOpenApprovalQueue={() => setBoardSettingsDrawer('approval')}
+              onToggleStudentLock={() => handleStudentFormLockedChange(!studentFormLocked)}
+              onOpenExport={() => setBoardSettingsDrawer('export')}
+              onAddTeacherCard={() => setTeacherFormOpen(true)}
+            />
           </div>
+
+          {/* QR 크게 보기 fullscreen overlay — share 섹션에서 진입 */}
+          {showQRFullscreen && (shortUrl ?? tunnelUrl) && (
+            <QRFullscreenOverlay
+              title={normalizedTitle}
+              displayUrl={shortUrl ?? tunnelUrl ?? ''}
+              onClose={() => setShowQRFullscreen(false)}
+            />
+          )}
         </div>
       )}
 
-      {!showPastResults && viewMode === 'results' && (
-        <RealtimeWallResultView
-          title={normalizedTitle}
-          layoutMode={layoutMode}
-          columns={columns}
-          posts={posts}
-          onNewBoard={handleNewBoard}
-        />
-      )}
+      {/* 2026-04-26 결함 #5 — 'results' 진입 경로 제거 (ActionBar "수업 마무리" 삭제와 함께).
+          RealtimeWallResultView는 향후 보드 목록의 "결과 보기" 메뉴로 재배치 예정. */}
 
       <RealtimeWallBoardSettingsDrawer
         openSection={boardSettingsDrawer}
@@ -1147,6 +1397,41 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         onStudentFormLockedChange={handleStudentFormLockedChange}
         theme={boardTheme}
         onThemeChange={handleThemeChange}
+        share={
+          isLiveMode
+            ? ({
+                displayUrl: shortUrl ?? tunnelUrl,
+                fullUrl: tunnelUrl,
+                shortUrl,
+                shortCode,
+                tunnelLoading,
+                tunnelError,
+                customCodeInput,
+                customCodeError,
+                connectedStudents,
+                onCustomCodeChange: setCustomCodeInput,
+                onSetCustomCode: () => {
+                  void handleSetCustomCode();
+                },
+                onRetryTunnel: () => {
+                  void connectTunnel();
+                },
+                onShowQRFullscreen: () => setShowQRFullscreen(true),
+                onStopLive: () => {
+                  void handleStopLive();
+                },
+              } satisfies ShareSectionProps)
+            : undefined
+        }
+        exportSection={
+          {
+            cardCount: posts.length,
+            isExporting,
+            onExport: (format, options) => {
+              void handleExport(format, options);
+            },
+          } satisfies ExportSectionProps
+        }
       />
 
       {/* v2.1 Phase D — 교사 작성자 추적 패널 */}
@@ -1171,6 +1456,114 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             : undefined
         }
       />
+
+      {/*
+        2026-04-26 결함 fix — 카드 상세 모달 (교사, Padlet 동일뷰).
+        교사 권한:
+          - 핀/숨기기 (handleTogglePin/handleHidePost)
+          - 모든 댓글 표시 + 댓글 삭제 (handleRemoveComment)
+          - 좋아요는 read-only (학생 좋아요 카운트만 표시)
+          - 외부 링크 열기 (openExternalLink)
+      */}
+      <RealtimeWallCardDetailModal
+        open={detailPost !== null}
+        onClose={handleCloseCardDetail}
+        post={detailPost}
+        viewerRole="teacher"
+        // 2026-04-26 결함 #2 fix — boardTheme.colorScheme을 모달에 명시 주입.
+        // 본 모달은 RealtimeWallBoardThemeWrapper 외부에 있어 context 자동 전파가 닿지 않음.
+        boardColorScheme={boardTheme.colorScheme}
+        onOpenLink={openExternalLink}
+        onTogglePin={handleTogglePin}
+        onHidePost={handleHidePost}
+        onRemoveComment={handleRemoveComment}
+      />
+
+      {/*
+        Step 1 — 교사 카드 추가 모달.
+        StudentSubmitForm을 asTeacher=true로 재사용.
+        - 닉네임 "선생님" 고정 (input disabled)
+        - PIPA/PIN 플로우 skip
+        - studentFormLocked 무시 (교사는 항상 추가 가능)
+        - onTeacherSubmit → handleTeacherSubmit → createWallPost(approvalMode='auto') → setPosts
+        - boardKey/sessionToken은 교사 전용 고정 키 (드래프트 저장하지 않음)
+        - 비라이브 모드에서도 동작 (viewMode === 'running'이면 항상 열릴 수 있음)
+      */}
+      {viewMode === 'running' && (
+        <StudentSubmitForm
+          open={teacherFormOpen}
+          onClose={(opts) => {
+            setTeacherFormOpen(false);
+            // submitted=true면 이미 handleTeacherSubmit에서 처리됨 — 추가 동작 없음
+            void opts;
+          }}
+          boardKey={`teacher-board-${currentBoard?.id ?? 'draft'}`}
+          sessionToken="teacher"
+          asTeacher
+          onTeacherSubmit={handleTeacherSubmit}
+        />
+      )}
     </ToolLayout>
+  );
+}
+
+/**
+ * 2026-04-26 신설 — 라이브 모드 running 컨테이너의 inline style 계산 헬퍼.
+ *
+ * boardTheme을 풀-immersion으로 컨테이너 전체에 깔기 위해 4종 background 필드만 추출.
+ * resolveBoardThemeVariant는 catalog hardcoded 값만 반환하므로 CSS injection 안전 (회귀 #10).
+ *
+ * 적용 범위:
+ *   - viewMode === 'running' && isLiveMode === true 시점만 컨테이너에 inline 적용.
+ *   - non-live(설정 미시작) 시 undefined → 기존 sp-bg ToolLayout 톤 유지.
+ *
+ * 회귀 위험 #11 (메모리 누수): inline style은 React가 unmount 시 자동 제거 — body에 부착한
+ * 학생 SPA와 달리 별도 cleanup 불필요.
+ */
+function buildLiveContainerStyle(theme: WallBoardTheme): CSSProperties {
+  const variant = resolveBoardThemeVariant(theme.background.presetId, theme.colorScheme);
+  const out: CSSProperties = {};
+  if (!variant.style) return out;
+  const s = variant.style;
+  if (s.background !== undefined) out.background = s.background;
+  if (s.backgroundColor !== undefined) out.backgroundColor = s.backgroundColor;
+  if (s.backgroundImage !== undefined) out.backgroundImage = s.backgroundImage;
+  if (s.backgroundSize !== undefined) out.backgroundSize = s.backgroundSize;
+  return out;
+}
+
+/**
+ * 2026-04-26 신설 — QR 크게 보기 fullscreen overlay.
+ * 기존 RealtimeWallLiveSharePanel 내부에 있던 fullscreen 영역을 분리.
+ * 화면 전체를 덮는 흰 배경 + 360px QR + URL.
+ */
+function QRFullscreenOverlay({
+  title,
+  displayUrl,
+  onClose,
+}: {
+  title: string;
+  displayUrl: string;
+  onClose: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    void QRCode.toCanvas(canvasRef.current, displayUrl, {
+      width: 360,
+      margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+  }, [displayUrl]);
+  return (
+    <div
+      className="fixed inset-0 z-sp-modal flex flex-col items-center justify-center bg-white text-center"
+      onClick={onClose}
+    >
+      <canvas ref={canvasRef} />
+      <p className="mt-6 text-2xl font-bold text-gray-900">{title}</p>
+      <p className="mt-2 font-mono text-lg text-gray-600">{displayUrl}</p>
+      <p className="mt-4 text-sm text-gray-400">화면을 클릭하면 돌아갑니다.</p>
+    </div>
   );
 }
