@@ -331,7 +331,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
         )}
 
         {!sidebarCollapsed && (
-          <p className="text-caption text-sp-muted text-center mt-2">v1.10.5</p>
+          <p className="text-caption text-sp-muted text-center mt-2">v2.0.0</p>
         )}
       </div>
     </aside>
