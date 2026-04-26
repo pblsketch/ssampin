@@ -199,7 +199,7 @@ export function ObservationExportModal({ classId, onClose }: ObservationExportMo
           </div>
 
           {/* 포함 내용 안내 */}
-          <div className="text-[11px] text-sp-muted space-y-0.5">
+          <div className="text-detail text-sp-muted space-y-0.5">
             <p>엑셀 파일에 포함되는 내용:</p>
             <p>· <strong className="text-sp-text">관찰기록</strong> 시트 — 날짜순 전체 기록</p>
             <p>· <strong className="text-sp-text">학생별 요약</strong> 시트 — 기록 수, 최근일, 태그 분포</p>

@@ -106,7 +106,7 @@ export const KanbanCard = React.memo(function KanbanCard({
       {/* 메타 정보 */}
       <div className="flex items-center gap-2 mt-2 flex-wrap">
         {category && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sp-surface text-sp-muted">
+          <span className="text-caption px-1.5 py-0.5 rounded-full bg-sp-surface text-sp-muted">
             {category.icon} {category.name}
           </span>
         )}
@@ -132,11 +132,11 @@ export const KanbanCard = React.memo(function KanbanCard({
             />
           </div>
           <div className="flex items-center justify-between mt-1">
-            <span className="text-[10px] text-sp-muted">
-              <span className="material-symbols-outlined text-[10px] align-middle mr-0.5">checklist</span>
+            <span className="text-caption text-sp-muted">
+              <span className="material-symbols-outlined text-caption align-middle mr-0.5">checklist</span>
               하위 할 일
             </span>
-            <span className="text-[10px] text-sp-muted">{completedCount} / {totalCount} 완료</span>
+            <span className="text-caption text-sp-muted">{completedCount} / {totalCount} 완료</span>
           </div>
 
           {/* 팝오버 */}

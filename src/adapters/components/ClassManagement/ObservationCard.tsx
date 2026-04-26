@@ -32,7 +32,7 @@ export function ObservationCard({ record }: ObservationCardProps) {
     <div className="bg-sp-surface border border-sp-border rounded-xl p-3 group">
       {/* 헤더: 날짜 + 태그 + 액션 */}
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] text-sp-muted font-medium">{dateDisplay}</span>
+        <span className="text-caption text-sp-muted font-medium">{dateDisplay}</span>
         <div className="flex gap-1 flex-1 min-w-0 overflow-hidden">
           {record.tags.map((tag) => (
             <span
@@ -79,13 +79,13 @@ export function ObservationCard({ record }: ObservationCardProps) {
             <button
               onClick={() => void handleSaveEdit()}
               disabled={!editContent.trim()}
-              className="px-3 py-1 text-[10px] bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 disabled:opacity-40"
+              className="px-3 py-1 text-caption bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 disabled:opacity-40"
             >
               저장
             </button>
             <button
               onClick={() => setEditing(false)}
-              className="px-3 py-1 text-[10px] text-sp-muted hover:text-sp-text"
+              className="px-3 py-1 text-caption text-sp-muted hover:text-sp-text"
             >
               취소
             </button>
@@ -100,17 +100,17 @@ export function ObservationCard({ record }: ObservationCardProps) {
       {/* 삭제 확인 */}
       {showDeleteConfirm && (
         <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-          <p className="text-[10px] text-red-400 mb-2">이 기록을 삭제하시겠습니까?</p>
+          <p className="text-caption text-red-400 mb-2">이 기록을 삭제하시겠습니까?</p>
           <div className="flex gap-1">
             <button
               onClick={() => void handleDelete()}
-              className="px-3 py-1 text-[10px] bg-red-500 text-white rounded-lg hover:bg-red-600"
+              className="px-3 py-1 text-caption bg-red-500 text-white rounded-lg hover:bg-red-600"
             >
               삭제
             </button>
             <button
               onClick={() => setShowDeleteConfirm(false)}
-              className="px-3 py-1 text-[10px] text-sp-muted hover:text-sp-text"
+              className="px-3 py-1 text-caption text-sp-muted hover:text-sp-text"
             >
               취소
             </button>

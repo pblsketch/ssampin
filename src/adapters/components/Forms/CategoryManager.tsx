@@ -116,8 +116,8 @@ export function CategoryManager({ onClose }: CategoryManagerProps) {
                     </span>
                     <span className="text-sm text-sp-text truncate">{c.name}</span>
                     {c.isBuiltin && (
-                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-sp-bg text-[10px] text-sp-muted border border-sp-border">
-                        <span className="material-symbols-outlined text-[11px]">lock</span>
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-sp-bg text-caption text-sp-muted border border-sp-border">
+                        <span className="material-symbols-outlined text-detail">lock</span>
                         기본
                       </span>
                     )}

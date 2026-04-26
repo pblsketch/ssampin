@@ -5,6 +5,11 @@ import type {
   RealtimeWallPost,
 } from '@domain/entities/RealtimeWall';
 import type { RealtimeWallBoardSettings } from '@domain/entities/RealtimeWallBoardSettings';
+import {
+  DEFAULT_WALL_BOARD_THEME,
+  type WallBoardTheme,
+} from '@domain/entities/RealtimeWallBoardTheme';
+import { parseWallBoardThemeOrDefault } from './validation/WallBoardThemeSchema';
 
 /**
  * 학생용 보드 스냅샷.
@@ -14,6 +19,10 @@ import type { RealtimeWallBoardSettings } from '@domain/entities/RealtimeWallBoa
  *
  * v2.1 신규 (Design v2.1 §4.3):
  * - settings: boardSettings 포함 (학생도 moderation 모드 인지)
+ *
+ * v1.16.x (Phase 1, Design §4.1):
+ * - settings는 항상 정의 — `buildWallStateForStudents`가 default 자동 주입.
+ *   학생 SPA가 `settings.theme` 분기 시 undefined 분기 불필요 (회귀 #8 mitigation).
  *
  * Design §4.3 WallBoardSnapshot 정의.
  */
@@ -26,10 +35,10 @@ export interface WallBoardSnapshotForStudent {
   readonly studentFormLocked: boolean;
   /**
    * v2.1 신규 (Design v2.1 §4.3 Phase A) — 보드 설정 (moderation 모드 등).
-   * Phase B에서 학생 화면에 전달 시작 (Phase A 토글 UI 도입 전 준비).
-   * 미존재 시 student 측에서 default `{ version: 1, moderation: 'off' }`로 처리.
+   * v1.16.x 부터 항상 정의 — `buildWallStateForStudents`가 default 주입 보장.
+   * `settings.theme`도 항상 정의 (DEFAULT_WALL_BOARD_THEME fallback).
    */
-  readonly settings?: RealtimeWallBoardSettings;
+  readonly settings: RealtimeWallBoardSettings;
 }
 
 /**
@@ -111,17 +120,55 @@ export interface BuildWallStateForStudentsArgs {
  *
  * 회귀 위험 #1: `posts.filter(p => p.status === 'approved')` 패턴 보존 (Design v2.1 §10.6).
  *
- * 순수 함수 — 외부 의존 없음. 테스트 가능.
+ * v1.16.x (Phase 1, Design §4.1):
+ * - settings.theme: undefined 또는 잘못된 페이로드면 `DEFAULT_WALL_BOARD_THEME` 주입.
+ *   Zod 검증(`parseWallBoardThemeOrDefault`) 통과한 값만 broadcast — CSS injection 차단(#10).
+ * - settings 자체가 undefined면 `{ version: 1, moderation: 'off', theme: DEFAULT }` 주입.
+ *
+ * 순수 함수 — 외부 의존 없음 (Zod 스키마 import는 같은 usecases 레이어). 테스트 가능.
  */
 export function buildWallStateForStudents(
   args: BuildWallStateForStudentsArgs,
 ): WallBoardSnapshotForStudent {
+  const sanitizedSettings = sanitizeBoardSettingsForStudents(args.settings);
   return {
     title: args.title,
     layoutMode: args.layoutMode,
     columns: args.columns,
     posts: args.posts.filter((post) => post.status === 'approved'),
     studentFormLocked: args.studentFormLocked ?? false,
-    ...(args.settings !== undefined ? { settings: args.settings } : {}),
+    settings: sanitizedSettings,
+  };
+}
+
+/**
+ * 학생 broadcast용 settings 정규화.
+ *
+ * 동작:
+ *   - settings 자체가 undefined → `{ version: 1, moderation: 'off', theme: DEFAULT_WALL_BOARD_THEME }` 주입.
+ *   - settings.theme이 undefined → DEFAULT 주입.
+ *   - settings.theme이 정의 → Zod 검증 통과한 값만 보존, 실패 시 DEFAULT fallback.
+ *
+ * 회귀 위험:
+ *   - #8 (학생 SPA 첫 페인트): theme이 항상 정의되도록 보장 — `useStudentBoardTheme`가 undefined 분기 타지 않도록.
+ *   - #10 (CSS injection): Zod 화이트리스트 단일 게이트.
+ */
+export function sanitizeBoardSettingsForStudents(
+  settings: RealtimeWallBoardSettings | undefined,
+): RealtimeWallBoardSettings {
+  if (!settings) {
+    return {
+      version: 1,
+      moderation: 'off',
+      theme: DEFAULT_WALL_BOARD_THEME,
+    };
+  }
+  const theme: WallBoardTheme =
+    settings.theme === undefined
+      ? DEFAULT_WALL_BOARD_THEME
+      : parseWallBoardThemeOrDefault(settings.theme);
+  return {
+    ...settings,
+    theme,
   };
 }

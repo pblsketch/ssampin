@@ -60,7 +60,7 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
       >
         <span className="truncate">{todo.text}</span>
         {hasSubTasks && (
-          <span className="text-[10px] text-sp-muted ml-1.5 shrink-0">
+          <span className="text-caption text-sp-muted ml-1.5 shrink-0">
             {completedCount}/{subTasks.length}
           </span>
         )}
@@ -72,7 +72,7 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
           <div className="text-xs font-medium text-sp-text mb-1.5">하위 할 일</div>
           <div className="border-t border-sp-border/50 mb-1.5" />
           {subTasks.map(sub => (
-            <div key={sub.id} className="flex items-start gap-1 text-[11px] mb-0.5">
+            <div key={sub.id} className="flex items-start gap-1 text-detail mb-0.5">
               <span className={sub.completed ? 'text-green-400' : 'text-sp-muted'}>
                 {sub.completed ? '☑' : '☐'}
               </span>
@@ -81,7 +81,7 @@ export function TimelineBar({ todo, days, category, zoomLevel = 'day', onEdit }:
               </span>
             </div>
           ))}
-          <div className="text-[10px] text-sp-muted mt-1.5 pt-1.5 border-t border-sp-border/30">
+          <div className="text-caption text-sp-muted mt-1.5 pt-1.5 border-t border-sp-border/30">
             진행률 {completedCount}/{subTasks.length} 완료
           </div>
         </div>

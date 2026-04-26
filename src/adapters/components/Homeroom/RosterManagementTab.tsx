@@ -815,7 +815,7 @@ export function RosterManagementTab() {
                             key={colIdx}
                             className={`px-3 py-2 text-left border-b border-sp-border font-normal ${isLowConf ? 'border border-amber-500/50' : ''}`}
                           >
-                            <div className="text-sp-muted text-[10px] mb-1 truncate max-w-[120px]">{mapping.headerText}</div>
+                            <div className="text-sp-muted text-caption mb-1 truncate max-w-[120px]">{mapping.headerText}</div>
                             <select
                               value={mapping.type}
                               onChange={(e) => handleColumnTypeChange(colIdx, e.target.value as ColumnType)}

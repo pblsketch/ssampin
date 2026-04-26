@@ -3,6 +3,7 @@ import { useRealtimeWallSyncStore } from '@adapters/stores/useRealtimeWallSyncSt
 import { StudentJoinScreen } from './StudentJoinScreen';
 import { StudentBoardView } from './StudentBoardView';
 import { useStudentReconnect } from './useStudentReconnect';
+import { useStudentBoardTheme } from './useStudentBoardTheme';
 
 /**
  * 학생 실시간 담벼락 최상위 컨테이너.
@@ -26,6 +27,11 @@ export function StudentRealtimeWallApp() {
   const board = useRealtimeWallSyncStore((s) => s.board);
   const connect = useRealtimeWallSyncStore((s) => s.connect);
   const disconnect = useRealtimeWallSyncStore((s) => s.disconnect);
+
+  // v1.16.x Phase 2 (Design §5.5) — 보드 theme를 <html> 클래스 + accent CSS variable로 동기화.
+  // boardSettings-changed broadcast 수신 시 자동 trigger (board.settings.theme 변화).
+  // 미수신 시 default(light + paper) 적용 — 빈 화면 0 (회귀 #8 mitigation).
+  useStudentBoardTheme(board?.settings?.theme);
 
   const [reconnectToast, setReconnectToast] = useState<string | null>(null);
   const wasOpenRef = useRef<boolean>(false);

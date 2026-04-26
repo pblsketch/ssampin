@@ -192,7 +192,7 @@ export function LegacyAddClassModal({ onClose }: LegacyAddClassModalProps) {
                   type="button"
                   onClick={() => pickSource('teacher')}
                   disabled={!hasTeacher}
-                  className={`flex-1 py-1.5 text-[11px] font-medium rounded-md transition-colors ${
+                  className={`flex-1 py-1.5 text-detail font-medium rounded-md transition-colors ${
                     source === 'teacher'
                       ? 'bg-sp-accent text-white'
                       : hasTeacher
@@ -206,7 +206,7 @@ export function LegacyAddClassModal({ onClose }: LegacyAddClassModalProps) {
                   type="button"
                   onClick={() => pickSource('class')}
                   disabled={!hasClass}
-                  className={`flex-1 py-1.5 text-[11px] font-medium rounded-md transition-colors ${
+                  className={`flex-1 py-1.5 text-detail font-medium rounded-md transition-colors ${
                     source === 'class'
                       ? 'bg-sp-accent text-white'
                       : hasClass
@@ -240,7 +240,7 @@ export function LegacyAddClassModal({ onClose }: LegacyAddClassModalProps) {
             ) : (
               <>
                 {hiddenCount > 0 && (
-                  <p className="text-[11px] text-sp-muted/70 mb-2 px-1">
+                  <p className="text-detail text-sp-muted/70 mb-2 px-1">
                     이미 등록된 수업 {hiddenCount}개는 숨겨졌습니다
                   </p>
                 )}
@@ -268,7 +268,7 @@ export function LegacyAddClassModal({ onClose }: LegacyAddClassModalProps) {
                             {item.subject}
                           </span>
                         </div>
-                        <p className="text-[10px] text-sp-muted mt-0.5 truncate">
+                        <p className="text-caption text-sp-muted mt-0.5 truncate">
                           {item.periods.join(', ')}
                         </p>
                       </div>

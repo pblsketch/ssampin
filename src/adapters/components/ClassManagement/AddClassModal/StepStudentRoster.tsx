@@ -90,7 +90,7 @@ export function StepStudentRoster({
     <div>
       <p className="text-sm text-sp-muted mb-4">
         <span className="text-sp-text font-medium">{className}</span>의 학생 명렬을 입력하세요.
-        <span className="text-[11px] block mt-1">
+        <span className="text-detail block mt-1">
           입력한 명렬은 선택한 {subjectCount}개 과목에 모두 공유됩니다.
         </span>
       </p>
@@ -130,7 +130,7 @@ export function StepStudentRoster({
               key={idx}
               className="flex items-center gap-2 bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 focus-within:border-sp-accent"
             >
-              <span className="text-[11px] text-sp-muted w-6 text-right">
+              <span className="text-detail text-sp-muted w-6 text-right">
                 {idx + 1}
               </span>
               <input
@@ -154,7 +154,7 @@ export function StepStudentRoster({
             rows={10}
             className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/60 focus:outline-none focus:border-sp-accent font-mono"
           />
-          <p className="text-[11px] text-sp-muted mt-1">
+          <p className="text-detail text-sp-muted mt-1">
             인식된 학생: <span className="text-sp-accent font-medium">{pastedStudents.length}명</span>
           </p>
         </div>
@@ -172,7 +172,7 @@ export function StepStudentRoster({
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-4 text-[11px] text-sp-muted">
+      <div className="flex items-center justify-between mt-4 text-detail text-sp-muted">
         <span>
           {mode !== 'later' && studentCount > 0 && (
             <>인식됨: <span className="text-sp-text font-medium">{studentCount}명</span></>

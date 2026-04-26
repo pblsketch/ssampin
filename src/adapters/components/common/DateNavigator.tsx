@@ -65,7 +65,7 @@ export function DateNavigator({ date, onDateChange, className = '' }: DateNaviga
           title="오늘로 이동"
           className="
             mr-1 px-1.5 py-0.5 rounded
-            text-[10px] font-semibold leading-none
+            text-caption font-semibold leading-none
             text-sp-accent border border-sp-accent/40
             hover:bg-sp-accent/15 hover:border-sp-accent/70
             transition-colors duration-150

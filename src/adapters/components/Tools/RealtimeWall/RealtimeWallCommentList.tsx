@@ -44,7 +44,7 @@ export function RealtimeWallCommentList({
 
   if (visible.length === 0) {
     return (
-      <p className="py-3 text-center text-[11px] text-sp-muted/70">
+      <p className="py-3 text-center text-detail text-sp-muted/70">
         아직 댓글이 없어요.
       </p>
     );
@@ -66,11 +66,11 @@ export function RealtimeWallCommentList({
                 <span className="truncate text-xs font-semibold text-sp-text">
                   {comment.nickname}
                 </span>
-                <span className="text-[10px] text-sp-muted/70">
+                <span className="text-caption text-sp-muted/70">
                   {formatRelativeTime(comment.submittedAt)}
                 </span>
                 {isHidden && (
-                  <span className="text-[10px] text-amber-400/80">
+                  <span className="text-caption text-amber-400/80">
                     (숨김)
                   </span>
                 )}
@@ -91,7 +91,7 @@ export function RealtimeWallCommentList({
                 title="댓글 삭제"
                 aria-label={`${comment.nickname}의 댓글 삭제`}
               >
-                <span className="material-symbols-outlined text-[14px]">delete</span>
+                <span className="material-symbols-outlined text-sm">delete</span>
               </button>
             )}
           </li>

@@ -178,7 +178,7 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
                 }`}
               >
                 <span>{config.icon}</span>
-                <span className="text-[10px] leading-tight mt-0.5">{config.label}</span>
+                <span className="text-caption leading-tight mt-0.5">{config.label}</span>
               </button>
             );
           })}

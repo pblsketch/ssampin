@@ -113,7 +113,7 @@ export function IndividualTab({ data, index, onIndexChange }: IndividualTabProps
         })}
       </div>
 
-      <p className="text-center text-[10px] text-sp-muted">
+      <p className="text-center text-caption text-sp-muted">
         ← / → 화살표 키로 이동할 수 있어요
       </p>
     </div>

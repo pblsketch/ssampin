@@ -249,7 +249,7 @@ export function DashboardEvents() {
           <div className="flex items-center gap-1 relative">
             <button
               onClick={handleToggleMode}
-              className="text-[10px] text-sp-muted hover:text-sp-accent transition-colors px-2 py-0.5 rounded bg-sp-surface/50"
+              className="text-caption text-sp-muted hover:text-sp-accent transition-colors px-2 py-0.5 rounded bg-sp-surface/50"
               title={displayMode === 'upcoming' ? '오늘 일정만 보기' : '다가오는 일정 보기'}
             >
               {displayMode === 'upcoming' ? '오늘만' : `${rangeDays}일`}
@@ -260,7 +260,7 @@ export function DashboardEvents() {
                 className="text-sp-muted hover:text-sp-accent transition-colors p-0.5 rounded"
                 title="표시 기간 설정"
               >
-                <span className="material-symbols-outlined text-[14px]">tune</span>
+                <span className="material-symbols-outlined text-sm">tune</span>
               </button>
             )}
             {showRangePicker && (

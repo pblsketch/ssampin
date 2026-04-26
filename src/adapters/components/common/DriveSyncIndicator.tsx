@@ -55,7 +55,7 @@ export function DriveSyncIndicator() {
             <span className="material-symbols-outlined text-icon-sm">refresh</span>
           </button>
           {isAuthBlocked && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200 leading-relaxed">
+            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-detail text-amber-200 leading-relaxed">
               학교 계정(@*.go.kr 등)은 외부 앱 차단 정책일 수 있어요. <span className="font-medium">설정 → Google 통합</span>에서 연결을 해제하고 <span className="font-medium">개인 Gmail</span>로 다시 연결해주세요.
             </div>
           )}

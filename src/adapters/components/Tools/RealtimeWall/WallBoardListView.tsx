@@ -247,11 +247,11 @@ function BoardCard({
         />
         <div className="flex flex-col gap-1 p-3">
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-sp-surface px-2 py-0.5 text-[10px] text-sp-muted">
+            <span className="rounded-full bg-sp-surface px-2 py-0.5 text-caption text-sp-muted">
               {REALTIME_WALL_LAYOUT_LABELS[meta.layoutMode]}
             </span>
             {meta.approvalMode === 'auto' && (
-              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-caption text-emerald-300">
                 자동 승인
               </span>
             )}
@@ -259,7 +259,7 @@ function BoardCard({
           <h3 className="truncate text-sm font-bold text-sp-text">
             {meta.title}
           </h3>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-sp-muted">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-detail text-sp-muted">
             <span>카드 {meta.approvedCount}</span>
             <span>·</span>
             <span>{formatLastSession(meta.lastSessionAt, meta.updatedAt)}</span>
@@ -287,7 +287,7 @@ function BoardCard({
           aria-label="더보기"
           className="rounded-full bg-sp-bg/80 p-1 text-sp-muted opacity-0 backdrop-blur-sm transition hover:text-sp-text group-hover:opacity-100 focus:opacity-100 disabled:cursor-wait"
         >
-          <span className="material-symbols-outlined text-[16px]">more_horiz</span>
+          <span className="material-symbols-outlined text-base">more_horiz</span>
         </button>
         {menuOpen && (
           <div
@@ -304,7 +304,7 @@ function BoardCard({
               }}
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-sp-text transition hover:bg-sp-surface"
             >
-              <span className="material-symbols-outlined text-[14px] text-sp-muted">content_copy</span>
+              <span className="material-symbols-outlined text-sm text-sp-muted">content_copy</span>
               복제
             </button>
           </div>

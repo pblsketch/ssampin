@@ -477,7 +477,7 @@ export function AttendanceMatrixCore({
                           .map((s) => (
                             <span
                               key={s}
-                              className={`text-[10px] font-medium ${STAT_COLORS[s]}`}
+                              className={`text-caption font-medium ${STAT_COLORS[s]}`}
                             >
                               {STATUS_CONFIG[s].label}{studentStats[s]}
                             </span>
@@ -504,10 +504,10 @@ export function AttendanceMatrixCore({
                   <td key={p} className="px-0.5 py-2 text-center">
                     <div className="flex flex-col items-center gap-0.5">
                       {nonPresent.length === 0 ? (
-                        <span className="text-[10px] text-sp-muted/40">-</span>
+                        <span className="text-caption text-sp-muted/40">-</span>
                       ) : (
                         nonPresent.map((s) => (
-                          <span key={s} className={`text-[10px] font-medium ${STAT_COLORS[s]}`}>
+                          <span key={s} className={`text-caption font-medium ${STAT_COLORS[s]}`}>
                             {STATUS_CONFIG[s].label}{ps![s]}
                           </span>
                         ))

@@ -769,7 +769,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                                 className="w-6 h-6 rounded text-sp-muted/40 hover:text-red-400 flex items-center justify-center shrink-0"
                                 title="삭제"
                               >
-                                <span className="material-symbols-outlined text-[14px]">close</span>
+                                <span className="material-symbols-outlined text-sm">close</span>
                               </button>
                             </div>
                           ))}
@@ -1066,7 +1066,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                           }`}
                           title={isLocked ? '잠금 해제' : '이 모둠 고정'}
                         >
-                          <span className="material-symbols-outlined text-[16px]">
+                          <span className="material-symbols-outlined text-base">
                             {isLocked ? 'lock' : 'lock_open'}
                           </span>
                         </button>

@@ -548,7 +548,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
                         style={{ width: `${Math.min(100, avgRecords > 0 ? (totalRecords / (avgRecords * 2)) * 100 : 0)}%` }}
                       />
                     </div>
-                    <span className="text-[10px] text-sp-muted tabular-nums w-4">{totalRecords}</span>
+                    <span className="text-caption text-sp-muted tabular-nums w-4">{totalRecords}</span>
                   </div>
                 </td>
               </tr>

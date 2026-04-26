@@ -32,7 +32,7 @@ export function CloseActionDialog() {
             <span className="material-symbols-outlined text-sp-accent text-xl">widgets</span>
             <div>
               <span className="text-sm font-medium text-sp-text">위젯 모드로 전환</span>
-              <p className="text-[10px] text-sp-muted">작은 위젯 창으로 전환합니다</p>
+              <p className="text-caption text-sp-muted">작은 위젯 창으로 전환합니다</p>
             </div>
           </button>
 
@@ -43,7 +43,7 @@ export function CloseActionDialog() {
             <span className="material-symbols-outlined text-sp-accent text-xl">minimize</span>
             <div>
               <span className="text-sm font-medium text-sp-text">트레이로 최소화</span>
-              <p className="text-[10px] text-sp-muted">시스템 트레이로 숨깁니다</p>
+              <p className="text-caption text-sp-muted">시스템 트레이로 숨깁니다</p>
             </div>
           </button>
         </div>

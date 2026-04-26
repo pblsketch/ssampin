@@ -297,7 +297,7 @@ function ListViewRow({ todo, categories, onToggle, onToggleSubTask, onStatusChan
                 key={s.key}
                 type="button"
                 onClick={() => onStatusChange(todo.id, s.key)}
-                className={`text-[10px] px-1.5 py-0.5 rounded-full transition-colors ${
+                className={`text-caption px-1.5 py-0.5 rounded-full transition-colors ${
                   status === s.key
                     ? 'bg-sp-accent/20 text-sp-accent font-medium'
                     : 'text-sp-muted hover:text-sp-text hover:bg-sp-surface'

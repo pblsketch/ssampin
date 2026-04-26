@@ -44,7 +44,7 @@ function formatKey(key: string): string {
 export function Kbd({ children, combo, className = '', title }: KbdProps) {
   const baseClass =
     'inline-flex items-center rounded border border-sp-border bg-sp-card ' +
-    'px-1.5 py-0.5 font-mono text-[11px] font-sp-medium leading-none text-sp-muted ' +
+    'px-1.5 py-0.5 font-mono text-detail font-sp-medium leading-none text-sp-muted ' +
     'select-none';
 
   if (combo) {
@@ -53,7 +53,7 @@ export function Kbd({ children, combo, className = '', title }: KbdProps) {
       <span className={`inline-flex items-center gap-0.5 ${className}`} title={title ?? combo}>
         {keys.map((key, idx) => (
           <span key={`${key}-${idx}`} className="inline-flex items-center gap-0.5">
-            {idx > 0 && <span className="text-[10px] text-sp-muted/50">+</span>}
+            {idx > 0 && <span className="text-caption text-sp-muted/50">+</span>}
             <kbd className={baseClass}>{formatKey(key)}</kbd>
           </span>
         ))}

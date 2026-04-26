@@ -35,7 +35,7 @@ export function StudentLikeButton({ count, hasLiked, onClick }: StudentLikeButto
       onClick={readOnly ? undefined : onClick}
       title={readOnly ? `학생 좋아요 ${count}` : '학생 좋아요'}
       aria-pressed={hasLiked}
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition ${
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-detail font-semibold transition ${
         hasLiked
           ? 'border-red-400 bg-red-400 text-white'
           : 'border-red-400/40 bg-transparent text-red-300 hover:border-red-400 hover:text-red-200'

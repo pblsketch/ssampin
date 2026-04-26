@@ -21,6 +21,10 @@ import type {
   WallApprovalMode,
 } from '../../src/domain/entities/RealtimeWall';
 import type { RealtimeWallBoardSettings } from '../../src/domain/entities/RealtimeWallBoardSettings';
+import {
+  DEFAULT_WALL_BOARD_THEME,
+  WALL_BOARD_BACKGROUND_PRESET_IDS,
+} from '../../src/domain/entities/RealtimeWallBoardTheme';
 
 /**
  * v2.1 student-ux 회귀 fix (2026-04-24): 디버그 로깅 게이트.
@@ -285,6 +289,29 @@ const ClientMessageSchema = z
     (m) => m.type !== 'submit-move' || m.freeform !== undefined || m.kanban !== undefined,
     { message: 'either freeform or kanban must be provided' },
   );
+
+// ============================================================
+// v1.16.x (Phase 1, Design §3.5) — WallBoardTheme Zod 검증
+// 학생 메시지에는 theme 변경 권한 X — 본 스키마는 교사 broadcast(boardSettings-changed)
+// 페이로드 정규화에만 사용. electron 번들이 src/usecases import 못하므로 duplicate.
+// ============================================================
+const WallBoardThemeSchemaIpc = z.object({
+  colorScheme: z.enum(['light', 'dark']),
+  background: z.object({
+    type: z.enum(['solid', 'gradient', 'pattern']),
+    presetId: z.enum(
+      WALL_BOARD_BACKGROUND_PRESET_IDS as unknown as readonly [string, ...string[]],
+    ),
+  }),
+  // accent — hex 6자리만 (CSS injection 차단, 회귀 위험 #10)
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+});
+
+const RealtimeWallBoardSettingsSchemaIpc = z.object({
+  version: z.literal(1),
+  moderation: z.enum(['off', 'manual']),
+  theme: WallBoardThemeSchemaIpc.optional(),
+});
 
 type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -1091,7 +1118,12 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                           columns: [],
                           posts: [],
                           studentFormLocked: session.studentFormLocked,
-                          settings: { version: 1, moderation: 'off' },
+                          // v1.16.x — theme 항상 정의 (회귀 #8 mitigation: 학생 첫 페인트 default)
+                          settings: {
+                            version: 1,
+                            moderation: 'off',
+                            theme: DEFAULT_WALL_BOARD_THEME,
+                          },
                         },
                       };
                       ws.send(JSON.stringify({ ...fallbackWallState, sentAt: Date.now() }));
@@ -1259,6 +1291,7 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                   }
                 } else if (newPost.status === 'approved') {
                   // 교사 broadcast가 1회도 없었던 edge case — 최소 빈 보드를 만들고 새 카드만 포함.
+                  // v1.16.x — theme도 default 주입 (회귀 #8: 학생 첫 페인트 default 보장).
                   session.lastWallState = {
                     type: 'wall-state',
                     board: {
@@ -1267,7 +1300,11 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                       columns: existingColumns,
                       posts: [newPost],
                       studentFormLocked: session.studentFormLocked,
-                      settings: { version: 1, moderation },
+                      settings: {
+                        version: 1,
+                        moderation,
+                        theme: DEFAULT_WALL_BOARD_THEME,
+                      },
                     },
                   };
                 }
@@ -1895,6 +1932,43 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
     (_event, msg: BroadcastableServerMessage): void => {
       if (!session) return;
       if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
+
+      // v1.16.x (Phase 1, Design §3.5) — boardSettings-changed 페이로드 Zod 검증.
+      // 교사 renderer 변조 가정 — settings.theme의 presetId / accent 화이트리스트 통과만 broadcast.
+      // 검증 실패 시 broadcast 차단 (학생 화면 깨짐 0).
+      if (msg.type === 'boardSettings-changed') {
+        const result = RealtimeWallBoardSettingsSchemaIpc.safeParse(
+          (msg as { settings?: unknown }).settings,
+        );
+        if (!result.success) {
+          rwallLog('broadcast boardSettings-changed REJECTED: zod failed', {
+            error: result.error.errors[0]?.message,
+          });
+          return;
+        }
+        // 정규화된 settings로 교체 — 학생 SPA가 신뢰할 수 있는 값만 수신.
+        const sanitizedMsg: BroadcastableServerMessage = {
+          type: 'boardSettings-changed',
+          settings: result.data as RealtimeWallBoardSettings,
+        };
+        rwallLog('broadcast boardSettings-changed from teacher', {
+          hasTheme: result.data.theme !== undefined,
+          presetId: result.data.theme?.background.presetId,
+          colorScheme: result.data.theme?.colorScheme,
+        });
+        // lastWallState의 settings도 갱신해 신규 join 학생에게 즉시 동기화.
+        if (session.lastWallState && session.lastWallState.type === 'wall-state') {
+          const board = session.lastWallState.board as Record<string, unknown> | null;
+          if (board) {
+            session.lastWallState = {
+              type: 'wall-state',
+              board: { ...board, settings: result.data },
+            };
+          }
+        }
+        broadcastToStudents(sanitizedMsg);
+        return;
+      }
 
       // wall-state 메시지는 캐시로 보관 — 신규 join 시 자동 송신.
       if (msg.type === 'wall-state') {

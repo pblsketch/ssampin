@@ -39,21 +39,21 @@ export function RealtimeWallCardPlaceholder({
       aria-label="작성자가 삭제한 카드"
     >
       <div className="mb-2 flex items-start gap-2">
-        <span className="material-symbols-outlined text-[18px] text-sp-muted/60">
+        <span className="material-symbols-outlined text-lg text-sp-muted/60">
           delete_outline
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-sp-muted/90">
             {post.nickname}
           </p>
-          <p className="text-[11px] text-sp-muted/60">{submittedTime}</p>
+          <p className="text-detail text-sp-muted/60">{submittedTime}</p>
         </div>
         {showRestore && (
           <button
             type="button"
             onClick={onRestore}
             title="카드 복원"
-            className="rounded-md border border-sp-border/60 bg-sp-card px-2 py-0.5 text-[11px] font-semibold text-sp-text transition hover:border-sky-400/60 hover:text-sky-300"
+            className="rounded-md border border-sp-border/60 bg-sp-card px-2 py-0.5 text-detail font-semibold text-sp-text transition hover:border-sky-400/60 hover:text-sky-300"
           >
             복원
           </button>
@@ -65,16 +65,16 @@ export function RealtimeWallCardPlaceholder({
       </p>
 
       {(likes > 0 || commentCount > 0) && (
-        <div className="mt-3 flex items-center gap-3 text-[11px] text-sp-muted/60">
+        <div className="mt-3 flex items-center gap-3 text-detail text-sp-muted/60">
           {likes > 0 && (
             <span className="inline-flex items-center gap-1">
-              <span className="material-symbols-outlined text-[12px]">favorite</span>
+              <span className="material-symbols-outlined text-xs">favorite</span>
               <span className="tabular-nums">{likes}</span>
             </span>
           )}
           {commentCount > 0 && (
             <span className="inline-flex items-center gap-1">
-              <span className="material-symbols-outlined text-[12px]">chat_bubble</span>
+              <span className="material-symbols-outlined text-xs">chat_bubble</span>
               <span className="tabular-nums">{commentCount}</span>
             </span>
           )}

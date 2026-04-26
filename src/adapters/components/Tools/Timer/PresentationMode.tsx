@@ -543,14 +543,14 @@ export function PresentationMode() {
                       onClick={assignOrderByNumber}
                       className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40 text-xs font-medium transition-all"
                     >
-                      <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
+                      <span className="material-symbols-outlined text-sm">arrow_upward</span>
                       번호순
                     </button>
                     <button
                       onClick={assignOrderByNumberDesc}
                       className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40 text-xs font-medium transition-all"
                     >
-                      <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
+                      <span className="material-symbols-outlined text-sm">arrow_downward</span>
                       번호역순
                     </button>
                   </>
@@ -563,7 +563,7 @@ export function PresentationMode() {
                       : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[14px]">shuffle</span>
+                  <span className="material-symbols-outlined text-sm">shuffle</span>
                   무작위
                 </button>
                 <button
@@ -574,7 +574,7 @@ export function PresentationMode() {
                       : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[14px]">edit</span>
+                  <span className="material-symbols-outlined text-sm">edit</span>
                   직접 입력
                 </button>
               </div>

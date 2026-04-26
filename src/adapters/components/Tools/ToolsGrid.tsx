@@ -169,7 +169,7 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
               <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
                 {tool.name}
                 {tool.badge && (
-                  <span className="text-[10px] font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
+                  <span className="text-caption font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
                     {tool.badge}
                   </span>
                 )}
@@ -286,7 +286,7 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
         <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
           <div>
             <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px]">tune</span>
+              <span className="material-symbols-outlined text-xl">tune</span>
               쌤도구 정리하기
             </h3>
             <p className="text-xs text-sp-muted mt-0.5">

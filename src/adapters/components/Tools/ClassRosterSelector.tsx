@@ -222,7 +222,7 @@ export function ClassRosterSelector({
                   {teachingClasses.length > 0 && (
                     <>
                       {rosters.length > 0 && (
-                        <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-sp-muted/70 uppercase tracking-wider">
+                        <div className="px-3 pt-2 pb-1 text-caption font-bold text-sp-muted/70 uppercase tracking-wider">
                           📚 수업반
                         </div>
                       )}
@@ -259,7 +259,7 @@ export function ClassRosterSelector({
                   {rosters.length > 0 && (
                     <>
                       {teachingClasses.length > 0 && (
-                        <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-sp-muted/70 uppercase tracking-wider">
+                        <div className="px-3 pt-2 pb-1 text-caption font-bold text-sp-muted/70 uppercase tracking-wider">
                           📝 사용자 명단
                         </div>
                       )}

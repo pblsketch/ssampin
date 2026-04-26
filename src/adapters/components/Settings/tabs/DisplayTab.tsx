@@ -144,8 +144,8 @@ export function DisplayTab({ draft, patch }: Props) {
             {([
               { value: 'small', label: '작게', iconSize: 'text-icon-sm' },
               { value: 'medium', label: '보통', iconSize: 'text-icon' },
-              { value: 'large', label: '크게', iconSize: 'text-[18px]' },
-              { value: 'xlarge', label: '매우 크게', iconSize: 'text-[20px]' },
+              { value: 'large', label: '크게', iconSize: 'text-lg' },
+              { value: 'xlarge', label: '매우 크게', iconSize: 'text-xl' },
             ] as const).map((opt) => (
               <button
                 key={opt.value}

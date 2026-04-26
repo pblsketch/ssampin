@@ -253,7 +253,7 @@ export function ObservationTab({ classId }: ObservationTabProps) {
                   <div className="mb-2 flex items-center gap-2">
                     <span className="text-xs font-semibold text-sp-accent">{date}</span>
                     <div className="h-px flex-1 bg-sp-border" />
-                    <span className="text-[10px] text-sp-muted">{dateRecords.length}건</span>
+                    <span className="text-caption text-sp-muted">{dateRecords.length}건</span>
                   </div>
                   <div className="flex flex-col gap-2">
                     {dateRecords.map((record) => {

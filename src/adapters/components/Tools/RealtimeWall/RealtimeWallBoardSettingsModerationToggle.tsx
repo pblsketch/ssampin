@@ -80,9 +80,9 @@ function ModerationButton({ label, desc, icon, active, disabled, onClick }: Mode
         disabled && 'cursor-not-allowed opacity-50',
       ].filter(Boolean).join(' ')}
     >
-      <span className="material-symbols-outlined text-[18px]">{icon}</span>
+      <span className="material-symbols-outlined text-lg">{icon}</span>
       <span className="text-xs font-bold">{label}</span>
-      <span className="text-[10px] leading-tight opacity-70">{desc}</span>
+      <span className="text-caption leading-tight opacity-70">{desc}</span>
     </button>
   );
 }

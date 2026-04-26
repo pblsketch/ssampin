@@ -559,7 +559,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                     className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30"
                   >
                     {num}
-                    <div className="text-[10px] truncate">결번</div>
+                    <div className="text-caption truncate">결번</div>
                   </div>
                 );
               }
@@ -573,7 +573,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                     : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
                     }`}
                 >
-                  <div className="text-[10px] opacity-60 tabular-nums">{num}</div>
+                  <div className="text-caption opacity-60 tabular-nums">{num}</div>
                   <div className="truncate">{student.name}</div>
                 </button>
               );
@@ -721,7 +721,7 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                             );
                           })}
                         </div>
-                        <p className="mt-2 text-[10px] text-sp-muted leading-relaxed">
+                        <p className="mt-2 text-caption text-sp-muted leading-relaxed">
                           단축키: A 결석 · L 지각 · E 조퇴 · X 결과 · 1~7 교시 · 0 전체 · Q 질병 · ↵ 저장
                         </p>
                       </div>

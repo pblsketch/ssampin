@@ -148,7 +148,7 @@ function RealtimeWallDetail({ data }: { data: RealtimeWallResultData }) {
               className="rounded bg-sp-surface px-2 py-1 text-sm text-sp-text"
             >
               <div className="flex items-center gap-1.5">
-                {post.pinned && <span className="text-[11px] text-amber-300">📌</span>}
+                {post.pinned && <span className="text-detail text-amber-300">📌</span>}
                 <span className="text-xs font-bold text-sp-muted">{post.nickname}</span>
               </div>
               <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words text-xs">
@@ -159,7 +159,7 @@ function RealtimeWallDetail({ data }: { data: RealtimeWallResultData }) {
         </ul>
       )}
       {approved.length > 20 && (
-        <p className="text-[11px] text-sp-muted">…외 {approved.length - 20}개</p>
+        <p className="text-detail text-sp-muted">…외 {approved.length - 20}개</p>
       )}
     </div>
   );

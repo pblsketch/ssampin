@@ -27,6 +27,13 @@ import type { RealtimeWallBoardCommonProps } from './types';
 interface RealtimeWallKanbanBoardProps extends RealtimeWallBoardCommonProps {
   readonly columns: readonly RealtimeWallColumn[];
   readonly onChangePosts?: (posts: RealtimeWallPost[]) => void;
+  /**
+   * v1.16.x Phase 3 (Design §5.6) — 학생 카드 추가 잠금 상태.
+   * 풀-와이드 "+ 카드 추가" 버튼이 disabled + lock 아이콘으로 전환된다.
+   * 교사 측에서는 어차피 버튼이 미렌더(viewerRole 분기)이므로 영향 없음.
+   * 미전달 시 false 취급.
+   */
+  readonly studentFormLocked?: boolean;
 }
 
 function sortColumnPosts(posts: readonly RealtimeWallPost[], columnId: string): RealtimeWallPost[] {
@@ -206,7 +213,7 @@ function SortableRealtimeWallCardItem({
       {...attributes}
       {...listeners}
     >
-      <span className="material-symbols-outlined text-[16px]">drag_indicator</span>
+      <span className="material-symbols-outlined text-base">drag_indicator</span>
     </button>
   );
 
@@ -298,8 +305,19 @@ interface KanbanColumnViewExtraProps {
   /**
    * v2.1 student-ux — 컬럼 헤더 "+" 버튼 클릭 콜백 (학생 모드 전용 / Padlet 패턴).
    * 부모가 colId 기억해 모달을 연다. 교사 모드(viewerRole='teacher')에서는 undefined.
+   *
+   * v1.16.x Phase 3 (Design §5.6) — 버튼 위치/외형 재배치:
+   *   - 기존 컬럼 헤더 우측 끝 24×24 sky-300 원형 → 컬럼 헤더 직후 풀-와이드 점선 outlined 버튼.
+   *   - 빈 컬럼은 더 큰 빈 상태 CTA로 노출 (h-32, "이 컬럼에 첫 카드를 추가해보세요").
+   *   - 학생 모드 전용 — 회귀 위험 #3 정신 (`viewerRole === 'student' && Boolean(onAddCardToColumn)`) 보존.
    */
   readonly onAddCardToColumn?: (columnId: string) => void;
+  /**
+   * v2.1 student-ux — 학생 카드 추가 잠금 (FAB 회로와 동일 신호). true면 풀-와이드 버튼이 disabled.
+   * 학생 SPA에서 boardSnapshot.studentFormLocked로 전달.
+   * 미전달(undefined)은 false 취급 — 교사 측은 어차피 버튼 미렌더라 영향 없음.
+   */
+  readonly studentFormLocked?: boolean;
 }
 
 function KanbanColumnView({
@@ -325,6 +343,7 @@ function KanbanColumnView({
   onTeacherBulkHideStudent,
   highlightedPostIds,
   onAddCardToColumn,
+  studentFormLocked = false,
 }: {
   column: RealtimeWallColumn;
   columnIndex: number;
@@ -347,9 +366,11 @@ function KanbanColumnView({
   const tint = COLUMN_TINTS[columnIndex % COLUMN_TINTS.length];
   const dotColor = COLUMN_DOT_COLORS[columnIndex % COLUMN_DOT_COLORS.length];
 
-  // v2.1 student-ux — 학생 모드에서만 컬럼 헤더 "+" 버튼 노출 (Padlet 패턴).
+  // v1.16.x Phase 3 (Design §5.6) — 학생 모드에서만 컬럼 카드 추가 버튼 노출 (Padlet 패턴).
   // 회귀 위험 #3 보호: viewerRole='teacher'에서는 onAddCardToColumn이 undefined여서 버튼 부재.
+  // 위치는 컬럼 헤더 직후 + 카드 리스트 위로 이동 (Trello / Linear / Padlet 정합).
   const showColumnAddButton = viewerRole === 'student' && Boolean(onAddCardToColumn);
+  const isEmptyColumn = posts.length === 0;
 
   return (
     <section className={`flex min-w-[260px] flex-1 flex-col rounded-xl border border-sp-border bg-sp-surface`}>
@@ -359,18 +380,57 @@ function KanbanColumnView({
         <span className="shrink-0 rounded-full bg-sp-card/70 px-2 py-0.5 text-xs tabular-nums text-sp-muted">
           {posts.length}
         </span>
-        {showColumnAddButton && (
+      </header>
+
+      {/* v1.16.x Phase 3 — 풀-와이드 카드 추가 버튼 (학생 모드 한정).
+          - 카드 1+장: min-h-[44px] 점선 outlined 버튼 (헤더 직후 + 카드 리스트 직전).
+          - 빈 컬럼: 더 큰 h-32 빈 상태 CTA (가이드 문구 포함).
+          - studentFormLocked: disabled + lock 아이콘.
+          회귀 위험 #9 보호: 기존 헤더 24×24 버튼 마크업은 위에서 완전 제거됨. */}
+      {showColumnAddButton && (
+        <div className="px-3 pt-3">
           <button
             type="button"
             onClick={() => onAddCardToColumn?.(column.id)}
-            aria-label={`${column.title} 컬럼에 카드 추가`}
-            title={`${column.title}에 카드 추가`}
-            className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full border border-sp-border bg-sp-card text-sky-300 transition hover:border-sky-400/60 hover:bg-sp-card/80 hover:text-sky-200"
+            disabled={studentFormLocked}
+            aria-label={
+              studentFormLocked
+                ? `${column.title} 컬럼은 잠겨 있어요`
+                : `${column.title} 컬럼에 카드 추가`
+            }
+            title={
+              studentFormLocked
+                ? '선생님이 카드 추가를 잠시 멈췄어요'
+                : `${column.title}에 카드 추가`
+            }
+            className={[
+              'flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed transition',
+              isEmptyColumn ? 'h-32' : 'min-h-[44px]',
+              studentFormLocked
+                ? 'cursor-not-allowed border-sp-border/40 bg-sp-card/20 text-sp-muted'
+                : 'border-sp-border/60 bg-sp-card/40 text-sky-300/80 hover:border-sky-400/60 hover:bg-sky-500/5 hover:text-sky-200',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50',
+            ].join(' ')}
           >
-            <span className="material-symbols-outlined text-[16px]">add</span>
+            {studentFormLocked ? (
+              <>
+                <span className="material-symbols-outlined text-lg">lock</span>
+                <span className="text-sm">잠겨있어요</span>
+              </>
+            ) : isEmptyColumn ? (
+              <div className="flex flex-col items-center gap-1.5">
+                <span className="material-symbols-outlined text-[24px]">add</span>
+                <span className="text-sm font-semibold">이 컬럼에 첫 카드를 추가해보세요</span>
+              </div>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-lg">add</span>
+                <span className="text-sm">카드 추가</span>
+              </>
+            )}
           </button>
-        )}
-      </header>
+        </div>
+      )}
 
       <div
         ref={setNodeRef}
@@ -441,7 +501,8 @@ function KanbanColumnView({
           </SortableContext>
         )}
 
-        {posts.length === 0 && (
+        {/* v1.16.x Phase 3 — 학생 모드에서는 풀-와이드 CTA가 빈 컬럼 안내를 대체하므로 중복 방지. */}
+        {posts.length === 0 && !showColumnAddButton && (
           <div className="flex h-full min-h-[160px] items-center justify-center rounded-lg border border-dashed border-sp-border/40 px-4 text-center text-xs text-sp-muted/70">
             {readOnly ? '카드 없음' : '여기로 드래그해 정리하세요'}
           </div>
@@ -478,6 +539,8 @@ export function RealtimeWallKanbanBoard({
   isMobile = false,
   // v2.1 student-ux — Padlet 컬럼별 + 버튼
   onAddCardToColumn,
+  // v1.16.x Phase 3 — 학생 카드 추가 잠금 상태 (풀-와이드 버튼 disabled 표시)
+  studentFormLocked = false,
 }: RealtimeWallKanbanBoardProps) {
   const isStudent = viewerRole === 'student';
 
@@ -622,6 +685,7 @@ export function RealtimeWallKanbanBoard({
                 onTeacherBulkHideStudent={onTeacherBulkHideStudent}
                 highlightedPostIds={highlightedPostIds}
                 onAddCardToColumn={onAddCardToColumn}
+                studentFormLocked={studentFormLocked}
               />
             ))}
           </div>

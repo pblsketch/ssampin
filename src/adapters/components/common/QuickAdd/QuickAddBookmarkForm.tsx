@@ -302,7 +302,7 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
             className="w-full bg-sp-bg/60 border border-sp-border rounded-lg px-3 py-2 text-sm font-sp-medium text-sp-text placeholder:text-sp-muted outline-none focus:ring-1 focus:ring-sp-accent focus:border-sp-accent transition-colors"
           />
           {ogLoading && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-sp-muted">
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-detail text-sp-muted">
               ...
             </span>
           )}
@@ -313,12 +313,12 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
       {showIconPicker && (
         <div className="bg-sp-bg/60 border border-sp-border rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[12px] text-sp-muted">아이콘</span>
+            <span className="text-xs text-sp-muted">아이콘</span>
             <button
               type="button"
               onClick={handleResetToFavicon}
               disabled={!validateBookmarkUrl(url)}
-              className="text-[11px] text-sp-accent hover:underline disabled:text-sp-muted disabled:no-underline disabled:cursor-not-allowed"
+              className="text-detail text-sp-accent hover:underline disabled:text-sp-muted disabled:no-underline disabled:cursor-not-allowed"
             >
               ↻ 파비콘으로
             </button>
@@ -341,7 +341,7 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
       )}
 
       <div className="flex items-center gap-2">
-        <span className="text-[12px] text-sp-muted mr-1 whitespace-nowrap">그룹</span>
+        <span className="text-xs text-sp-muted mr-1 whitespace-nowrap">그룹</span>
         <select
           value={groupId}
           onChange={(e) => { setGroupId(e.target.value); setUserTouchedGroup(true); }}
@@ -363,7 +363,7 @@ export function QuickAddBookmarkForm({ onClose }: Props): JSX.Element {
         <button
           type="button"
           onClick={() => { onClose(); requestAnimationFrame(() => { window.dispatchEvent(new CustomEvent<string>('ssampin:navigate', { detail: 'bookmarks' })); }); }}
-          className="text-[12px] text-sp-muted hover:text-sp-accent transition-colors"
+          className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
         >
           → 상세 편집
         </button>

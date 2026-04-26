@@ -59,7 +59,7 @@ export function ObservationPanel({ classId, studentId, onClose }: ObservationPan
         <div className="flex items-center justify-between px-4 py-3 border-b border-sp-border">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-full bg-sp-accent/20 flex items-center justify-center shrink-0">
-              <span className="text-[11px] font-bold text-sp-accent">
+              <span className="text-detail font-bold text-sp-accent">
                 {student?.number ?? '?'}
               </span>
             </div>
@@ -67,7 +67,7 @@ export function ObservationPanel({ classId, studentId, onClose }: ObservationPan
               <h2 className="text-sm font-bold text-sp-text truncate">
                 {student?.name ?? '알 수 없음'}
               </h2>
-              <p className="text-[10px] text-sp-muted">
+              <p className="text-caption text-sp-muted">
                 관찰 기록 {records.length}건
               </p>
             </div>

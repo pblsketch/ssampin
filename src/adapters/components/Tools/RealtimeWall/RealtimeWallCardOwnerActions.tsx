@@ -28,7 +28,7 @@ export function RealtimeWallCardOwnerActions({
           title="수정"
           className="rounded-md p-1 text-sky-300/70 transition hover:bg-sky-400/10 hover:text-sky-300"
         >
-          <span className="material-symbols-outlined text-[16px]">edit</span>
+          <span className="material-symbols-outlined text-base">edit</span>
         </button>
       )}
       {onDelete && (
@@ -39,7 +39,7 @@ export function RealtimeWallCardOwnerActions({
           title="삭제"
           className="rounded-md p-1 text-sky-300/70 transition hover:bg-rose-500/10 hover:text-rose-400"
         >
-          <span className="material-symbols-outlined text-[16px]">delete</span>
+          <span className="material-symbols-outlined text-base">delete</span>
         </button>
       )}
     </div>

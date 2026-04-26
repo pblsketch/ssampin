@@ -45,7 +45,7 @@ export function KeyCaptureInput({ combo, onChange, disabled }: Props): JSX.Eleme
   return (
     <div className="flex items-center gap-2">
       {capturing ? (
-        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-sp-accent/10 ring-1 ring-sp-accent/40 text-[12px] text-sp-accent animate-pulse font-sp-medium">
+        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-sp-accent/10 ring-1 ring-sp-accent/40 text-xs text-sp-accent animate-pulse font-sp-medium">
           키를 누르세요…
         </span>
       ) : (
@@ -55,7 +55,7 @@ export function KeyCaptureInput({ combo, onChange, disabled }: Props): JSX.Eleme
         type="button"
         onClick={() => setCapturing((c) => !c)}
         disabled={disabled}
-        className="px-2.5 py-1 rounded-md text-[12px] text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors disabled:opacity-50"
+        className="px-2.5 py-1 rounded-md text-xs text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors disabled:opacity-50"
       >
         {capturing ? '취소' : '변경'}
       </button>

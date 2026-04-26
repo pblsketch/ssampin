@@ -118,7 +118,7 @@ export function BoardBackgroundPicker({
             ))}
           </div>
           {showMapHint && (
-            <div className="mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-500">
+            <div className="mt-2 pt-2 border-t border-gray-100 text-detail text-gray-500">
               💡 어두운 칠판색에서 가장 선명해요
             </div>
           )}
@@ -152,7 +152,7 @@ function BackgroundOption({ mode, active, onSelect, onMouseEnter, onMouseLeave }
       <div className="w-full h-12 rounded bg-[#2d5a27] border border-gray-300 flex items-center justify-center overflow-hidden">
         <BackgroundThumb mode={mode} />
       </div>
-      <span className="text-[11px] font-medium">{GRID_LABELS[mode]}</span>
+      <span className="text-detail font-medium">{GRID_LABELS[mode]}</span>
       <span className="text-[9px] text-gray-500">{GRID_DESCRIPTIONS[mode]}</span>
     </button>
   );
@@ -172,7 +172,7 @@ function BackgroundThumb({ mode }: { mode: GridMode }) {
   }
   // Inline SVG 미니 프리뷰 (canvas 경로)
   if (mode === 'none') {
-    return <span className="text-[10px] text-white/40">없음</span>;
+    return <span className="text-caption text-white/40">없음</span>;
   }
   const stroke = 'rgba(255,255,255,0.6)';
   if (mode === 'grid') {

@@ -344,7 +344,7 @@ export function PeriodTab({ draft, patch }: Props) {
                   }`}
                 >
                   {checked && (
-                    <span className="material-symbols-outlined text-white text-[14px]">check</span>
+                    <span className="material-symbols-outlined text-white text-sm">check</span>
                   )}
                 </button>
                 <span className={`text-sm font-medium ${checked ? 'text-sp-text' : 'text-sp-muted'}`}>

@@ -98,7 +98,7 @@ export function WidgetTab({ draft, patch }: Props) {
               />
               <div>
                 <span className="text-xs font-medium text-sp-text">{opt.label}</span>
-                <p className="text-[10px] text-sp-muted">{opt.desc}</p>
+                <p className="text-caption text-sp-muted">{opt.desc}</p>
               </div>
             </label>
           ))}
@@ -171,7 +171,7 @@ export function WidgetTab({ draft, patch }: Props) {
                     {[...metrics.processes]
                       .sort((a, b) => b.memoryBytes - a.memoryBytes)
                       .map((p) => (
-                        <li key={p.pid} className="flex items-center justify-between text-[11px] text-sp-muted">
+                        <li key={p.pid} className="flex items-center justify-between text-detail text-sp-muted">
                           <span className="truncate">
                             {p.type}
                             {p.name ? ` · ${p.name}` : ''}
@@ -181,7 +181,7 @@ export function WidgetTab({ draft, patch }: Props) {
                         </li>
                       ))}
                   </ul>
-                  <p className="text-[10px] text-sp-muted/70 pt-1">3초마다 갱신됩니다.</p>
+                  <p className="text-caption text-sp-muted/70 pt-1">3초마다 갱신됩니다.</p>
                 </>
               )}
             </div>

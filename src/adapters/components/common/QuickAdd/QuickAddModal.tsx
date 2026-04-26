@@ -129,7 +129,7 @@ export function QuickAddModal({ standalone = false }: QuickAddModalProps = {}): 
       </div>
 
       {/* 푸터 키 힌트 */}
-      <div className="border-t border-sp-border/60 bg-sp-bg/30 px-4 py-2 flex items-center justify-between text-[11px] text-sp-muted font-sp-medium">
+      <div className="border-t border-sp-border/60 bg-sp-bg/30 px-4 py-2 flex items-center justify-between text-detail text-sp-muted font-sp-medium">
         <span className="flex items-center gap-1">
           <Kbd>Esc</Kbd>
           <span className="ml-1">닫기</span>

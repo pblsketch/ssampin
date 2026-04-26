@@ -34,7 +34,7 @@ export function ClassRecordStudentGrid({
       <div className="flex flex-col items-center justify-center py-12 text-sp-muted">
         <span className="material-symbols-outlined text-3xl mb-2 opacity-30">grid_view</span>
         <p className="text-xs">좌석배치를 먼저 설정하세요</p>
-        <p className="text-[10px] mt-1">좌석배치 탭에서 배치를 만든 뒤 사용할 수 있습니다</p>
+        <p className="text-caption mt-1">좌석배치 탭에서 배치를 만든 뒤 사용할 수 있습니다</p>
       </div>
     );
   }
@@ -52,7 +52,7 @@ export function ClassRecordStudentGrid({
   return (
     <div className="flex flex-col items-center gap-1 p-2">
       {/* 교탁 */}
-      <div className="w-32 py-1 mb-2 rounded bg-sp-surface text-center text-[10px] text-sp-muted font-medium">
+      <div className="w-32 py-1 mb-2 rounded bg-sp-surface text-center text-caption text-sp-muted font-medium">
         교 탁
       </div>
 
@@ -82,7 +82,7 @@ export function ClassRecordStudentGrid({
                   ${isSelected ? 'ring-2 ring-sp-accent ring-offset-1 ring-offset-sp-bg' : ''}
                   ${borderColor} bg-sp-surface hover:bg-sp-card`}
               >
-                <span className="block text-[10px] font-bold text-sp-text">
+                <span className="block text-caption font-bold text-sp-text">
                   {student?.number ?? '?'}
                 </span>
                 <span className="block text-[9px] text-sp-muted truncate px-0.5">

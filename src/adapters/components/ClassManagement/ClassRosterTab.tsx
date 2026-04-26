@@ -717,7 +717,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                   ) : isInactiveStatus(student.status) ? (
                     <span className="flex items-center gap-1.5 whitespace-nowrap">
                       <span className="text-sm text-sp-muted/50 line-through">{student.name}</span>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${STUDENT_STATUS_COLORS[student.status!]}`}>
+                      <span className={`text-caption font-medium px-1.5 py-0.5 rounded ${STUDENT_STATUS_COLORS[student.status!]}`}>
                         {STUDENT_STATUS_LABELS[student.status!]}
                       </span>
                     </span>

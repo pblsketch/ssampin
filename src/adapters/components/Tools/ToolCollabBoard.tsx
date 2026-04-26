@@ -56,7 +56,7 @@ export function ToolCollabBoard({ onBack, isFullscreen }: ToolCollabBoardProps):
           <div className="bg-sp-card/60 border border-amber-400/30 rounded-xl p-3.5 flex items-start gap-2.5">
             <span className="material-symbols-outlined text-amber-400 text-icon-sm mt-0.5">science</span>
             <div className="text-[13px] text-sp-text leading-relaxed">
-              <span className="inline-block text-[10px] font-extrabold tracking-wider px-2 py-[3px] mr-2 rounded bg-amber-400 text-amber-950 align-middle">
+              <span className="inline-block text-caption font-extrabold tracking-wider px-2 py-[3px] mr-2 rounded bg-amber-400 text-amber-950 align-middle">
                 BETA
               </span>
               아직 개선 중인 기능이라 드문 상황에서 연결이 끊기거나 기록이 저장되지 않을 수 있어요.

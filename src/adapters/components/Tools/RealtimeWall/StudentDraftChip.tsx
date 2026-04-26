@@ -41,12 +41,12 @@ export function StudentDraftChip({ draft, onResume }: StudentDraftChipProps) {
       aria-label={`작성 중인 카드 다시 열기: ${preview}${attachmentLabel ? ', ' + attachmentLabel : ''}`}
       className="fixed bottom-5 left-5 z-30 flex max-w-[260px] items-center gap-2 rounded-xl border border-sp-accent/40 bg-sp-card px-3 py-2 text-left text-sm text-sp-text shadow-lg transition hover:bg-sp-card/80 sm:bottom-8 sm:left-8"
     >
-      <span className="material-symbols-outlined text-[18px] text-sp-accent">edit_note</span>
+      <span className="material-symbols-outlined text-lg text-sp-accent">edit_note</span>
       <span className="flex min-w-0 flex-col">
-        <span className="text-[11px] font-semibold text-sp-muted">작성 중인 카드</span>
+        <span className="text-detail font-semibold text-sp-muted">작성 중인 카드</span>
         <span className="truncate text-xs text-sp-text">{preview}</span>
         {attachmentLabel && (
-          <span className="truncate text-[10px] text-sp-muted/80">{attachmentLabel}</span>
+          <span className="truncate text-caption text-sp-muted/80">{attachmentLabel}</span>
         )}
       </span>
     </button>

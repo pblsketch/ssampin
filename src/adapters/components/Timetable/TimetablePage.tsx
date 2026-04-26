@@ -568,7 +568,7 @@ export function TimetablePage() {
             <span>변동 시간표</span>
             {futureOverrideCount > 0 && (
               <span
-                className="ml-1 min-w-[18px] h-[18px] px-1.5 inline-flex items-center justify-center text-[10px] font-bold rounded-full bg-sp-accent text-white"
+                className="ml-1 min-w-[18px] h-[18px] px-1.5 inline-flex items-center justify-center text-caption font-bold rounded-full bg-sp-accent text-white"
                 title={`미래 변동 ${futureOverrideCount}건`}
               >
                 {futureOverrideCount}
@@ -1116,7 +1116,7 @@ function SubjectCell({ subject, teacher, isToday, isCurrent, isLastCol, subjectC
       <span className={`${style.text} font-bold text-sm`}>{displaySubject}</span>
       {displayTeacher && <span className="text-sp-muted text-xs">{displayTeacher}</span>}
       {isOverridden && override.reason && (
-        <span className="text-amber-300 text-[11px] font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{override.reason}</span>
+        <span className="text-amber-300 text-detail font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{override.reason}</span>
       )}
     </div>
   );
@@ -1244,7 +1244,7 @@ function TeacherCell({ period, isToday, isCurrent, isLastCol, subjectColors, cla
       <span className={`${style.text} font-bold text-sm`}>{displayPeriod.subject}</span>
       <span className="text-sp-muted text-xs">{displayPeriod.classroom}</span>
       {isOverridden && override.reason && (
-        <span className="text-amber-300 text-[11px] font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{override.reason}</span>
+        <span className="text-amber-300 text-detail font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{override.reason}</span>
       )}
     </div>
   );

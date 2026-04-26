@@ -216,7 +216,7 @@ export function ToolTrafficLightDiscussion({ onBack, isFullscreen }: ToolTraffic
                       {signalStudents.map((s) => (
                         <div key={s.id} className="flex flex-col items-center group">
                           <div
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold group-hover:scale-125 transition-transform"
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-white text-caption font-bold group-hover:scale-125 transition-transform"
                             style={{ backgroundColor: s.avatarColor || '#6366f1' }}
                             title={s.name}
                           >
@@ -317,12 +317,12 @@ export function ToolTrafficLightDiscussion({ onBack, isFullscreen }: ToolTraffic
                     {signalStudents.map((s) => (
                       <div key={s.id} className="flex flex-col items-center">
                         <div
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-white text-caption font-bold"
                           style={{ backgroundColor: s.avatarColor || '#6366f1' }}
                         >
                           {s.emoji || '?'}
                         </div>
-                        <span className="text-[10px] text-sp-muted">{s.name}</span>
+                        <span className="text-caption text-sp-muted">{s.name}</span>
                       </div>
                     ))}
                   </div>
@@ -341,7 +341,7 @@ export function ToolTrafficLightDiscussion({ onBack, isFullscreen }: ToolTraffic
                   return (
                     <div key={s.id} className="flex items-center gap-2 text-sm">
                       <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-caption font-bold shrink-0"
                         style={{ backgroundColor: s.avatarColor || '#6366f1' }}
                       >
                         {s.emoji || '?'}

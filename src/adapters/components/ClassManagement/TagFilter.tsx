@@ -26,11 +26,11 @@ export function TagFilter({ tags, activeFilters, onToggle, onClear }: TagFilterP
   return (
     <div className="py-1.5">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[10px] text-sp-muted font-medium">필터</span>
+        <span className="text-caption text-sp-muted font-medium">필터</span>
         {activeFilters.length > 0 && (
           <button
             onClick={onClear}
-            className="text-[10px] text-sp-accent hover:underline"
+            className="text-caption text-sp-accent hover:underline"
           >
             초기화
           </button>
@@ -50,7 +50,7 @@ export function TagFilter({ tags, activeFilters, onToggle, onClear }: TagFilterP
           <button
             key={tag}
             onClick={() => onToggle(tag)}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
               activeFilters.includes(tag)
                 ? 'bg-sp-accent text-white'
                 : 'bg-sp-surface text-sp-muted hover:text-sp-text'
@@ -73,12 +73,12 @@ export function TagFilter({ tags, activeFilters, onToggle, onClear }: TagFilterP
                 if (e.key === 'Enter') void handleAddTag();
               }}
               placeholder="새 태그 이름"
-              className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-[10px] text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
+              className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-caption text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
             />
             <button
               onClick={() => void handleAddTag()}
               disabled={!newTag.trim()}
-              className="px-2 py-1 text-[10px] bg-sp-accent text-white rounded-lg disabled:opacity-40"
+              className="px-2 py-1 text-caption bg-sp-accent text-white rounded-lg disabled:opacity-40"
             >
               추가
             </button>
@@ -88,7 +88,7 @@ export function TagFilter({ tags, activeFilters, onToggle, onClear }: TagFilterP
               {customTags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-sp-border text-sp-muted"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-caption bg-sp-border text-sp-muted"
                 >
                   {tag}
                   <button

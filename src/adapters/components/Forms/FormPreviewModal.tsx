@@ -118,7 +118,7 @@ export function FormPreviewModal() {
                 <>
                   <span>·</span>
                   <span className="inline-flex items-center gap-0.5">
-                    <span className="material-symbols-outlined text-[12px]">lock</span>
+                    <span className="material-symbols-outlined text-xs">lock</span>
                     기본
                   </span>
                 </>

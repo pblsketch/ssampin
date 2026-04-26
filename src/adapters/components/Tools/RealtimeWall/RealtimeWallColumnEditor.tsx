@@ -194,7 +194,7 @@ export function RealtimeWallColumnEditor({
       <div className="flex flex-col p-5 max-h-[calc(100vh-96px)]">
         {/* 헤더 */}
         <div className="mb-4 flex items-center gap-2.5">
-          <span className="material-symbols-outlined text-[20px] text-sp-accent">view_column</span>
+          <span className="material-symbols-outlined text-xl text-sp-accent">view_column</span>
           <h3 className="text-base font-bold text-sp-text">컬럼 편집</h3>
           <span className="text-xs text-sp-muted">
             ({draftColumns.length} / {REALTIME_WALL_MAX_COLUMNS})
@@ -224,7 +224,7 @@ export function RealtimeWallColumnEditor({
                           className="rounded p-0.5 text-sp-muted transition hover:text-sp-text disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="위로"
                         >
-                          <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
+                          <span className="material-symbols-outlined text-sm">arrow_upward</span>
                         </button>
                         <button
                           type="button"
@@ -233,12 +233,12 @@ export function RealtimeWallColumnEditor({
                           className="rounded p-0.5 text-sp-muted transition hover:text-sp-text disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="아래로"
                         >
-                          <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
+                          <span className="material-symbols-outlined text-sm">arrow_downward</span>
                         </button>
                       </div>
 
                       {/* 번호 */}
-                      <span className="w-5 text-center text-[11px] text-sp-muted">{index + 1}</span>
+                      <span className="w-5 text-center text-detail text-sp-muted">{index + 1}</span>
 
                       {/* 제목 / 인라인 rename */}
                       {isRenaming ? (
@@ -263,14 +263,14 @@ export function RealtimeWallColumnEditor({
                           <button
                             type="button"
                             onClick={handleCommitRename}
-                            className="rounded bg-sp-accent px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-sp-accent/85"
+                            className="rounded bg-sp-accent px-2 py-1 text-detail font-semibold text-white transition hover:bg-sp-accent/85"
                           >
                             확인
                           </button>
                           <button
                             type="button"
                             onClick={handleCancelRename}
-                            className="rounded border border-sp-border px-2 py-1 text-[11px] text-sp-muted transition hover:text-sp-text"
+                            className="rounded border border-sp-border px-2 py-1 text-detail text-sp-muted transition hover:text-sp-text"
                           >
                             취소
                           </button>
@@ -281,7 +281,7 @@ export function RealtimeWallColumnEditor({
                             {column.title}
                           </span>
                           {cardCount > 0 && (
-                            <span className="shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-[10px] text-sp-muted">
+                            <span className="shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-caption text-sp-muted">
                               {cardCount}장
                             </span>
                           )}
@@ -291,7 +291,7 @@ export function RealtimeWallColumnEditor({
                             className="rounded p-1 text-sp-muted transition hover:bg-sp-bg hover:text-sp-text"
                             aria-label="이름 변경"
                           >
-                            <span className="material-symbols-outlined text-[14px]">edit</span>
+                            <span className="material-symbols-outlined text-sm">edit</span>
                           </button>
                           <button
                             type="button"
@@ -300,7 +300,7 @@ export function RealtimeWallColumnEditor({
                             className="rounded p-1 text-sp-muted transition hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
                             aria-label="삭제"
                           >
-                            <span className="material-symbols-outlined text-[14px]">delete</span>
+                            <span className="material-symbols-outlined text-sm">delete</span>
                           </button>
                         </div>
                       )}
@@ -340,7 +340,7 @@ export function RealtimeWallColumnEditor({
                   {error}
                 </p>
               )}
-              <p className="mt-2 text-[11px] text-sp-muted">
+              <p className="mt-2 text-detail text-sp-muted">
                 위/아래 화살표로 컬럼 순서를 바꿀 수 있어요.
                 컬럼은 최소 {REALTIME_WALL_MIN_COLUMNS}개, 최대 {REALTIME_WALL_MAX_COLUMNS}개까지 가능합니다.
               </p>
@@ -404,7 +404,7 @@ function RemoveConfirmPanel({
   return (
     <div>
       <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-        <span className="material-symbols-outlined mt-0.5 text-[18px] text-red-300">warning</span>
+        <span className="material-symbols-outlined mt-0.5 text-lg text-red-300">warning</span>
         <div className="min-w-0">
           <p className="text-sm font-bold text-sp-text">
             &lsquo;{columnTitle}&rsquo; 컬럼을 삭제할까요?
@@ -443,7 +443,7 @@ function RemoveConfirmPanel({
                   onConfirm({ kind: 'move-to', targetColumnId: moveTargetId })
                 }
                 disabled={!moveTargetId}
-                className="rounded bg-sp-accent px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-sp-accent/85 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded bg-sp-accent px-3 py-1.5 text-detail font-bold text-white transition hover:bg-sp-accent/85 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 이동
               </button>

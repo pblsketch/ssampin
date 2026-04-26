@@ -18,7 +18,7 @@
  *   freeform으로 전환하거나 freeform에서 전환 시 승인 카드 ≥ 1 이면
  *   "카드 위치가 재배치됩니다. 계속하시겠어요?" 확인 대화.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   RealtimeWallColumn,
   RealtimeWallPost,
@@ -26,6 +26,10 @@ import type {
   WallApprovalMode,
 } from '@domain/entities/RealtimeWall';
 import type { RealtimeWallModerationMode } from '@domain/entities/RealtimeWallBoardSettings';
+import {
+  DEFAULT_WALL_BOARD_THEME,
+  type WallBoardTheme,
+} from '@domain/entities/RealtimeWallBoardTheme';
 import {
   addWallColumn,
   approvalModeFromModerationMode,
@@ -39,6 +43,7 @@ import {
   type RemoveColumnStrategy,
 } from '@domain/rules/realtimeWallRules';
 import { RealtimeWallBoardSettingsModerationToggle } from './RealtimeWallBoardSettingsModerationToggle';
+import { RealtimeWallBoardDesignPanel } from './RealtimeWallBoardDesignPanel';
 import { Drawer } from '@adapters/components/common/Drawer';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
@@ -47,7 +52,12 @@ import { IconButton } from '@adapters/components/common/IconButton';
 // Props
 // ---------------------------------------------------------------------------
 
-export type BoardSettingsSection = 'basic' | 'columns' | 'approval' | 'student-permissions';
+export type BoardSettingsSection =
+  | 'basic'
+  | 'columns'
+  | 'approval'
+  | 'student-permissions'
+  | 'design';
 
 export interface RealtimeWallBoardSettingsDrawerProps {
   /** null이면 드로어 닫힘 */
@@ -82,6 +92,16 @@ export interface RealtimeWallBoardSettingsDrawerProps {
 
   // §4 — v1.14 P3: 학생 카드 추가 잠금 토글
   readonly onStudentFormLockedChange: (locked: boolean) => void;
+
+  // §5 — v1.16.x 디자인 커스터마이징 (Design §5.2)
+  /** 현재 보드 디자인 테마 (보드 settings.theme). undefined면 default 적용. */
+  readonly theme?: WallBoardTheme;
+  /**
+   * 테마 변경 콜백 — Drawer 내부에서 100ms 디바운스 후 호출.
+   * 부모는 이 콜백을 받아 (1) 보드 settings 갱신 + (2) boardSettings-changed broadcast.
+   * Plan §A-2 mitigation — 라이브 세션 중 broadcast 폭주 방지.
+   */
+  readonly onThemeChange: (next: WallBoardTheme) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +147,8 @@ export function RealtimeWallBoardSettingsDrawer({
   onApplyColumnEdit,
   onApplyApprovalMode,
   onStudentFormLockedChange,
+  theme,
+  onThemeChange,
 }: RealtimeWallBoardSettingsDrawerProps) {
   const isOpen = openSection !== null;
 
@@ -134,13 +156,67 @@ export function RealtimeWallBoardSettingsDrawer({
   const [draftApprovalMode, setDraftApprovalMode] = useState<WallApprovalMode>(approvalMode);
   // 확인 대화 단계
   const [confirmStage, setConfirmStage] = useState<DrawerConfirmStage>({ kind: 'idle' });
+  // §5 디자인 reset 확인 다이얼로그
+  const [resetThemeOpen, setResetThemeOpen] = useState(false);
 
   // 섹션 refs — scrollIntoView 대상
   const basicRef = useRef<HTMLDivElement>(null);
   const columnsRef = useRef<HTMLDivElement>(null);
   const approvalRef = useRef<HTMLDivElement>(null);
   const studentPermissionsRef = useRef<HTMLDivElement>(null);
+  const designRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // §5 — Drawer 내부 100ms 디바운스 + 즉시 낙관적 UI 갱신을 위한 local draft.
+  // 클릭 즉시 미리보기 갱신 → 100ms 후 부모 onThemeChange 호출(=broadcast).
+  // Plan §A-2 / Design §결정 7 — broadcast 폭주 mitigation.
+  const effectiveTheme = theme ?? DEFAULT_WALL_BOARD_THEME;
+  const [draftTheme, setDraftTheme] = useState<WallBoardTheme>(effectiveTheme);
+  const debounceTimerRef = useRef<number | null>(null);
+
+  // 외부 theme 변경(다른 클라이언트로부터 broadcast 등) 동기화
+  useEffect(() => {
+    setDraftTheme(effectiveTheme);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveTheme.colorScheme, effectiveTheme.background.presetId, effectiveTheme.accent]);
+
+  // unmount 시 pending 디바운스 cleanup
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current !== null) {
+        window.clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleThemeChangeDebounced = useCallback(
+    (next: WallBoardTheme) => {
+      setDraftTheme(next); // 낙관적 갱신 — 미리보기 즉시 반영
+      if (debounceTimerRef.current !== null) {
+        window.clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = window.setTimeout(() => {
+        debounceTimerRef.current = null;
+        onThemeChange(next);
+      }, 100);
+    },
+    [onThemeChange],
+  );
+
+  const handleThemeReset = useCallback(() => {
+    setResetThemeOpen(true);
+  }, []);
+
+  const handleConfirmThemeReset = useCallback(() => {
+    setDraftTheme(DEFAULT_WALL_BOARD_THEME);
+    if (debounceTimerRef.current !== null) {
+      window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    onThemeChange(DEFAULT_WALL_BOARD_THEME);
+    setResetThemeOpen(false);
+  }, [onThemeChange]);
 
   const resolveTargetRef = (section: BoardSettingsSection | null) => {
     switch (section) {
@@ -150,6 +226,8 @@ export function RealtimeWallBoardSettingsDrawer({
         return approvalRef;
       case 'student-permissions':
         return studentPermissionsRef;
+      case 'design':
+        return designRef;
       default:
         return basicRef;
     }
@@ -258,7 +336,7 @@ export function RealtimeWallBoardSettingsDrawer({
       <Drawer isOpen={isOpen} onClose={onClose} title="보드 설정" srOnlyTitle side="right" size="md">
         {/* 헤더 */}
         <div className="flex shrink-0 items-center gap-2.5 border-b border-sp-border px-5 py-4">
-          <span className="material-symbols-outlined text-[20px] text-sp-accent">tune</span>
+          <span className="material-symbols-outlined text-xl text-sp-accent">tune</span>
           <h3 className="text-base font-bold text-sp-text">보드 설정</h3>
           <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={onClose} className="ml-auto" />
         </div>
@@ -306,7 +384,7 @@ export function RealtimeWallBoardSettingsDrawer({
                         : 'border-sp-border bg-sp-surface text-sp-muted hover:border-sp-accent/40 hover:text-sp-text',
                     ].join(' ')}
                   >
-                    <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                    <span className="material-symbols-outlined text-lg">{icon}</span>
                     <span className="text-xs font-bold">{label}</span>
                     <span className="text-caption leading-tight opacity-70">{desc}</span>
                   </button>
@@ -385,15 +463,67 @@ export function RealtimeWallBoardSettingsDrawer({
           {/* ================================================================
               §4 학생 권한 (v1.14 P3)
               ================================================================ */}
-          <div ref={studentPermissionsRef} className="mb-2 mt-6">
+          <div ref={studentPermissionsRef} className="mb-6 mt-6">
             <SectionHeader icon="lock_person" label="학생 권한" />
             <StudentFormLockToggle
               locked={studentFormLocked}
               onChange={onStudentFormLockedChange}
             />
           </div>
+
+          {/* ================================================================
+              §5 디자인 (v1.16.x — 보드 디자인 커스터마이징)
+              ================================================================ */}
+          <div ref={designRef} className="mb-2 mt-6">
+            <SectionHeader icon="palette" label="디자인" />
+            <RealtimeWallBoardDesignPanel
+              value={draftTheme}
+              onChange={handleThemeChangeDebounced}
+              onReset={handleThemeReset}
+            />
+          </div>
         </div>
       </Drawer>
+
+      {/* §5 디자인 — 기본값 복원 확인 다이얼로그 */}
+      <Modal
+        isOpen={resetThemeOpen}
+        onClose={() => setResetThemeOpen(false)}
+        title="디자인 기본값으로 복원"
+        srOnlyTitle
+        size="sm"
+        closeOnBackdrop={false}
+      >
+        <div className="p-5">
+          <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-sp-accent/30 bg-sp-accent/10 p-3">
+            <span className="material-symbols-outlined mt-0.5 text-lg text-sp-accent">
+              palette
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-sp-text">디자인을 기본값으로 되돌릴까요?</p>
+              <p className="mt-1 text-xs text-sp-muted">
+                색상 스킴과 배경이 기본값(밝은 모드 + 기본 종이)으로 돌아갑니다. 다른 설정(승인 정책 등)은 그대로 유지돼요.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setResetThemeOpen(false)}
+              className="rounded-lg border border-sp-border px-4 py-2 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmThemeReset}
+              className="rounded-lg bg-sp-accent px-4 py-2 text-xs font-bold text-white transition hover:bg-sp-accent/85"
+            >
+              복원
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* freeform 전환 경고 오버레이 */}
       <Modal
@@ -406,7 +536,7 @@ export function RealtimeWallBoardSettingsDrawer({
       >
         <div className="p-5">
           <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-            <span className="material-symbols-outlined mt-0.5 text-[18px] text-amber-400">
+            <span className="material-symbols-outlined mt-0.5 text-lg text-amber-400">
               warning
             </span>
             <div className="min-w-0">
@@ -446,7 +576,7 @@ export function RealtimeWallBoardSettingsDrawer({
 function SectionHeader({ icon, label }: { icon: string; label: string }) {
   return (
     <div className="mb-3 flex items-center gap-2 border-b border-sp-border pb-2">
-      <span className="material-symbols-outlined text-[16px] text-sp-accent">{icon}</span>
+      <span className="material-symbols-outlined text-base text-sp-accent">{icon}</span>
       <h3 className="text-sm font-bold text-sp-text">{label}</h3>
     </div>
   );
@@ -500,7 +630,7 @@ function BulkApproveConfirm({
   return (
     <div>
       <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-sp-accent/30 bg-sp-accent/10 p-3">
-        <span className="material-symbols-outlined mt-0.5 text-[18px] text-sp-accent">info</span>
+        <span className="material-symbols-outlined mt-0.5 text-lg text-sp-accent">info</span>
         <div className="min-w-0">
           <p className="text-sm font-bold text-sp-text">
             대기 중 카드 {pendingCount}장을 자동 승인하시겠어요?
@@ -672,7 +802,7 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
                   aria-label="위로"
                   className="rounded p-0.5 text-sp-muted transition hover:text-sp-text disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
+                  <span className="material-symbols-outlined text-sm">arrow_upward</span>
                 </button>
                 <button
                   type="button"
@@ -681,7 +811,7 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
                   aria-label="아래로"
                   className="rounded p-0.5 text-sp-muted transition hover:text-sp-text disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
+                  <span className="material-symbols-outlined text-sm">arrow_downward</span>
                 </button>
               </div>
 
@@ -730,7 +860,7 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
                     aria-label="이름 변경"
                     className="rounded p-1 text-sp-muted transition hover:bg-sp-bg hover:text-sp-text"
                   >
-                    <span className="material-symbols-outlined text-[14px]">edit</span>
+                    <span className="material-symbols-outlined text-sm">edit</span>
                   </button>
                   <button
                     type="button"
@@ -739,7 +869,7 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
                     aria-label="삭제"
                     className="rounded p-1 text-sp-muted transition hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
                   >
-                    <span className="material-symbols-outlined text-[14px]">delete</span>
+                    <span className="material-symbols-outlined text-sm">delete</span>
                   </button>
                 </div>
               )}
@@ -825,7 +955,7 @@ function ColumnRemoveConfirmPanel({
   return (
     <div>
       <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-        <span className="material-symbols-outlined mt-0.5 text-[18px] text-red-300">warning</span>
+        <span className="material-symbols-outlined mt-0.5 text-lg text-red-300">warning</span>
         <div className="min-w-0">
           <p className="text-sm font-bold text-sp-text">
             &lsquo;{columnTitle}&rsquo; 컬럼을 삭제할까요?

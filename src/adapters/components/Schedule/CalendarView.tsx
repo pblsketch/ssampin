@@ -147,7 +147,7 @@ function MultiDayBar({
 
   return (
     <div
-      className={`h-4 ${colors.bar} text-white text-[10px] leading-4 px-1 truncate cursor-pointer hover:brightness-110 transition-all duration-sp-quick ease-sp-out ${roundedLeft} ${roundedRight}`}
+      className={`h-4 ${colors.bar} text-white text-caption leading-4 px-1 truncate cursor-pointer hover:brightness-110 transition-all duration-sp-quick ease-sp-out ${roundedLeft} ${roundedRight}`}
       style={{
         gridColumn: `${bar.startCol + 1} / span ${bar.span}`,
         gridRow: bar.row + 1,
@@ -173,7 +173,7 @@ function SingleEventChip({
   return (
     <button
       type="button"
-      className={`w-full text-left text-[10px] leading-none px-1 py-0.5 rounded-md text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
+      className={`w-full text-left text-caption leading-none px-1 py-0.5 rounded-md text-white truncate cursor-pointer transition-all duration-sp-quick ease-sp-out hover:brightness-110 ${barClass}`}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       title={title}
     >
@@ -367,7 +367,7 @@ export function CalendarView({
                             );
                           })}
                           {chipOverflow > 0 && (
-                            <span className="text-[10px] text-sp-muted hover:text-sp-accent font-sp-medium text-center leading-none transition-colors duration-sp-quick">
+                            <span className="text-caption text-sp-muted hover:text-sp-accent font-sp-medium text-center leading-none transition-colors duration-sp-quick">
                               +{chipOverflow}
                             </span>
                           )}
@@ -403,7 +403,7 @@ export function CalendarView({
                       {count > 0 ? (
                         <button
                           type="button"
-                          className="text-[10px] text-sp-muted hover:text-sp-accent font-sp-medium leading-3 transition-colors duration-sp-quick"
+                          className="text-caption text-sp-muted hover:text-sp-accent font-sp-medium leading-3 transition-colors duration-sp-quick"
                           onClick={() => onSelectDate(weekDays[colIdx]!.date)}
                         >
                           +{count}

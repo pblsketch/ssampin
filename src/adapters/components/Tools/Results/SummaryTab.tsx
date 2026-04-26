@@ -67,7 +67,7 @@ function QuestionBlock({
             {question.question}
           </h3>
           {question.required && (
-            <span className="rounded bg-sp-surface px-1.5 py-0.5 text-[10px] text-sp-muted">
+            <span className="rounded bg-sp-surface px-1.5 py-0.5 text-caption text-sp-muted">
               필수
             </span>
           )}
@@ -150,19 +150,19 @@ function ScaleSummary({
           const heightPct = (count / maxCount) * 100;
           return (
             <div key={v} className="flex flex-1 flex-col items-center gap-1">
-              <span className="text-[10px] text-sp-muted tabular-nums">{count}</span>
+              <span className="text-caption text-sp-muted tabular-nums">{count}</span>
               <div
                 className="w-full rounded-t bg-sp-accent"
                 style={{ height: `${Math.max(heightPct, 2)}%`, minHeight: '4px' }}
                 title={`${v}: ${count}명`}
               />
-              <span className="text-[10px] text-sp-muted">{v}</span>
+              <span className="text-caption text-sp-muted">{v}</span>
             </div>
           );
         })}
       </div>
       {(question.scaleMinLabel || question.scaleMaxLabel) && (
-        <div className="flex justify-between text-[10px] text-sp-muted">
+        <div className="flex justify-between text-caption text-sp-muted">
           <span>{question.scaleMinLabel || `${question.scaleMin}`}</span>
           <span>{question.scaleMaxLabel || `${question.scaleMax}`}</span>
         </div>

@@ -209,7 +209,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
             <button
               key={c.id}
               onClick={() => setCategoryFilter(c.id)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+              className={`px-2.5 py-1 rounded-lg text-detail font-medium transition-colors ${
                 categoryFilter === c.id ? 'bg-sp-accent text-white' : 'bg-sp-surface text-sp-muted hover:text-sp-text'
               }`}
             >
@@ -224,7 +224,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
               <button
                 key={tag}
                 onClick={() => setTagFilter((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
+                className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
                   tagFilter.includes(tag)
                     ? 'bg-sp-accent text-white'
                     : 'bg-sp-surface text-sp-muted hover:text-sp-text'
@@ -244,7 +244,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
           className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent w-40"
         />
 
-        <span className="text-[10px] text-sp-muted">{filtered.length}건</span>
+        <span className="text-caption text-sp-muted">{filtered.length}건</span>
       </div>
 
       {/* 기간 필터 */}
@@ -259,7 +259,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
           <button
             key={f.id}
             onClick={() => setPeriodFilter(f.id)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+            className={`px-2.5 py-1 rounded-lg text-detail font-medium transition-colors ${
               periodFilter === f.id ? 'bg-sp-accent text-white' : 'bg-sp-surface text-sp-muted hover:text-sp-text'
             }`}
           >
@@ -319,8 +319,8 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                           <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATUS_BADGE[r.status]}`}>
                             {STATUS_LABEL[r.status]}
                           </span>
-                          {r.period && <span className="text-[10px] text-sp-muted">{r.period}교시</span>}
-                          {r.reason && <span className="text-[10px] text-sp-muted">({r.reason})</span>}
+                          {r.period && <span className="text-caption text-sp-muted">{r.period}교시</span>}
+                          {r.reason && <span className="text-caption text-sp-muted">({r.reason})</span>}
                         </>
                       )}
                       {r.type === 'observation' && r.tags && (

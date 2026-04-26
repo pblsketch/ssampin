@@ -478,7 +478,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                       : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
                   }`}
                 >
-                  <span className="text-[10px] opacity-60 mr-1">{idx + 1}</span>
+                  <span className="text-caption opacity-60 mr-1">{idx + 1}</span>
                   {student.name}
                 </button>
               );
@@ -531,7 +531,7 @@ function InputMode({ students, records, categories, selectedDate }: InputModePro
                           : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
                       }`}
                     >
-                      <div className="text-[10px] opacity-70">{idx + 1}</div>
+                      <div className="text-caption opacity-70">{idx + 1}</div>
                       <div>{student.name}</div>
                     </button>
                   );

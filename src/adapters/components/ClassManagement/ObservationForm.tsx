@@ -74,7 +74,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           className="bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none focus:border-sp-accent"
         />
         <div className="flex-1" />
-        <span className="text-[10px] text-sp-muted">
+        <span className="text-caption text-sp-muted">
           {content.length}/500
         </span>
       </div>
@@ -85,7 +85,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           <button
             key={tag}
             onClick={() => toggleTag(tag)}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
               selectedTags.includes(tag)
                 ? 'bg-sp-accent text-white'
                 : 'bg-sp-surface text-sp-muted hover:text-sp-text'
