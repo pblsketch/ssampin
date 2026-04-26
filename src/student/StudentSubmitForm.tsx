@@ -1,45 +1,55 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRealtimeWallSyncStore } from '@adapters/stores/useRealtimeWallSyncStore';
 import type { RealtimeWallCardColor, RealtimeWallPost } from '@domain/entities/RealtimeWall';
 import {
   REALTIME_WALL_MAX_IMAGES_PER_POST,
+  REALTIME_WALL_MAX_NICKNAME_LENGTH,
   REALTIME_WALL_MAX_TEXT_LENGTH_V2,
 } from '@domain/rules/realtimeWallRules';
 import { StudentMarkdownToolbar } from '@adapters/components/Tools/RealtimeWall/StudentMarkdownToolbar';
-import { StudentImageMultiPicker } from '@adapters/components/Tools/RealtimeWall/StudentImageMultiPicker';
-import { StudentPdfPicker } from '@adapters/components/Tools/RealtimeWall/StudentPdfPicker';
 import { StudentColorPicker } from '@adapters/components/Tools/RealtimeWall/StudentColorPicker';
 import { StudentPipaConsentModal } from '@adapters/components/Tools/RealtimeWall/StudentPipaConsentModal';
 import { useGraphemeCounter } from './useGraphemeCounter';
 import { useStudentDraft } from './useStudentDraft';
+import { useStudentImageMultiUpload } from './useStudentImageMultiUpload';
+import { useStudentPdfUpload } from './useStudentPdfUpload';
+import { StudentSubmitFormHeader } from './StudentSubmitFormHeader';
+import { StudentAttachmentRow } from './StudentAttachmentRow';
+import { StudentAttachmentPreviewStrip } from './StudentAttachmentPreviewStrip';
 
 /**
- * 학생 카드 추가 모달 — v2.1 (Phase B + Phase A) 정교화.
+ * 학생 카드 추가 모달 — v2.2 (Bug 2 Fix) Padlet 스타일 재설계.
  *
- * v1.14 (단순 폼) → v2.1 추가 기능:
- *   - StudentMarkdownToolbar: Bold/Italic/List/Quote 4 버튼 (별표 직접 입력 X — 회귀 위험 #6)
- *   - StudentImageMultiPicker: 최대 3장 + 합계 5MB drop/paste/picker
- *   - StudentPdfPicker: PDF 1개 + base64 송신 (서버가 file:// URL 발급)
+ * v2.1 → v2.2 변경:
+ *   - 헤더: 닫기/최소화(좌) + 더보기/게시(우) — 액션 인지 향상
+ *   - 제목 / 본문 분리 (`# 제목\n\n본문` 마크다운 합성)
+ *   - 통합 첨부 행 (5 버튼 — upload/camera/draw/link/search)
+ *   - 첨부 미리보기 스트립 (이미지+PDF+링크 통합)
+ *   - 색상/닉네임은 하단 메타바로 이동
+ *   - 직접 useStudentImageMultiUpload / useStudentPdfUpload 훅 사용
+ *
+ * v2.1 (Phase B + Phase A) 기능 유지:
+ *   - StudentMarkdownToolbar: Bold/Italic/List/Quote (회귀 위험 #6 보존 — IME 안전)
+ *   - 이미지 5장 + 합계 15MB
+ *   - PDF 1개 (10MB + magic byte)
  *   - StudentColorPicker: 8색
- *   - useGraphemeCounter: Intl.Segmenter IME-aware 카운터
+ *   - useGraphemeCounter: Intl.Segmenter IME-aware
  *   - StudentPipaConsentModal: 첫 이미지 첨부 시 1회 PIPA 동의
+ *   - 최소화 → DraftChip + 자동저장
+ *   - useStudentDraft: textarea/링크/색상/제목 변경 시 debounced 1초 자동저장
  *
- * Phase A 추가 (v2.1):
- *   - 최소화 버튼 → 보드 좌하단 칩으로 (StudentDraftChip)
- *   - useStudentDraft: textarea/링크/색상 변경 시 debounced 1초 자동저장 (보드+세션 단위 키)
- *   - resumeFromDraft prop: 칩 클릭 → 모달 재개 시 prefill
- *   - 제출 성공 시 부모 onClose({ submitted: true }) 호출 → 부모가 clearDraft
+ * 회귀 위험 14건 보존 — 자세한 항목은 PR 본문 참조.
  *
- * 회귀 위험 #4 (prevSubmittingRef false→true→false 시퀀스) 보존 — 절대 수정 X.
- *
- * Design v2.1 §5.9 / §11.1 / §11.2.
+ * Design Bug 2 Fix.
  */
 
 const NICKNAME_STORAGE_KEY = 'ssampin-realtime-wall-nickname';
 const PIPA_CONSENT_KEY = 'ssampin-pipa-consent-shown';
-const MAX_NICKNAME_LENGTH = 20;
+const MAX_NICKNAME_LENGTH = REALTIME_WALL_MAX_NICKNAME_LENGTH;
 const MAX_TEXT_LENGTH = REALTIME_WALL_MAX_TEXT_LENGTH_V2;
 const MAX_LINK_LENGTH = 500;
+const MAX_TITLE_LENGTH = 100;
+const TITLE_BODY_REGEX = /^#\s+(.+?)\n\n([\s\S]*)$/;
 
 interface StudentSubmitFormProps {
   readonly open: boolean;
@@ -58,22 +68,12 @@ interface StudentSubmitFormProps {
   readonly resumeFromDraft?: boolean;
   /**
    * v2.1 Phase D — 모드 ('create' 기본 / 'edit' 수정).
-   * 'edit' 모드:
-   *   - editingPost prefill (text/linkUrl/images/pdfUrl/color)
-   *   - 닉네임은 disabled (수정 불가 — 작성자 정합성)
-   *   - 제출 시 submitOwnCardEdit 호출 (submitCard 대신)
-   *   - 드래프트 자동저장 X (수정은 즉시 적용)
    */
   readonly mode?: 'create' | 'edit';
   /** v2.1 Phase D — mode='edit' 시 prefill 카드 */
   readonly editingPost?: RealtimeWallPost;
   /**
    * v2.1 student-ux — Padlet 컬럼별 + 버튼으로 진입 시 사용할 columnId.
-   *
-   * - 미지정(undefined): FAB 진입 또는 비-Kanban 레이아웃 — 서버/교사 측에서 첫 컬럼 default
-   * - 지정: submitCard 페이로드에 columnId 포함 → 서버가 submission에 첨부 → 교사 onRealtimeWallStudentSubmitted
-   *   처리 시 createWallPost가 해당 columnId에 카드 생성
-   * - mode='edit'에서는 무시 (수정은 위치 변경 X)
    */
   readonly defaultColumnId?: string;
 }
@@ -96,16 +96,22 @@ export function StudentSubmitForm({
   const isEditMode = mode === 'edit' && editingPost !== undefined;
 
   const [nickname, setNickname] = useState('');
-  const [text, setText] = useState('');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // v2.1 (Phase B) 신규 state
+  // v2.1 (Phase B) state
   const [images, setImages] = useState<string[]>([]);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | undefined>(undefined);
   const [pdfFilename, setPdfFilename] = useState<string | undefined>(undefined);
   const [color, setColor] = useState<RealtimeWallCardColor | undefined>(undefined);
   const [pipaConsentOpen, setPipaConsentOpen] = useState(false);
+
+  // v2.2 (Bug 2 Fix) state
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [linkInputOpen, setLinkInputOpen] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   // Phase A — 드래프트 훅
   const { draft, saveDraft, flushSaveDraft, reloadDraft } = useStudentDraft({
@@ -115,21 +121,117 @@ export function StudentSubmitForm({
   });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const graphemeCount = useGraphemeCounter(text);
+  const graphemeCount = useGraphemeCounter(body);
 
   // 회귀 위험 #4 — submitted 응답 수신 감지: 직전까지 true였다가 false로 바뀌면 성공
   const prevSubmittingRef = useRef<boolean>(false);
+
+  // v2.2 — 송신 직전 합성: 제목 있으면 `# 제목\n\n본문`, 없으면 본문만
+  const compositeText = useMemo(() => {
+    const trimmedTitle = title.trim();
+    const trimmedBody = body.trim();
+    return trimmedTitle.length > 0
+      ? `# ${trimmedTitle}\n\n${trimmedBody}`
+      : trimmedBody;
+  }, [title, body]);
+
+  // v2.2 — 이미지 다중 업로드 훅 (직접 사용)
+  const handleImageAdd = useCallback(
+    (dataUrl: string) => {
+      // 첫 이미지 첨부 시 PIPA 동의 모달 1회
+      if (images.length === 0) {
+        try {
+          const shown = window.localStorage.getItem(PIPA_CONSENT_KEY);
+          if (shown !== '1') setPipaConsentOpen(true);
+        } catch {
+          setPipaConsentOpen(true);
+        }
+      }
+      setImages((prev) =>
+        [...prev, dataUrl].slice(0, REALTIME_WALL_MAX_IMAGES_PER_POST),
+      );
+    },
+    [images.length],
+  );
+
+  const imageUpload = useStudentImageMultiUpload({
+    currentImages: images,
+    onAdd: handleImageAdd,
+  });
+
+  // v2.2 — PDF 업로드 훅 (직접 사용)
+  const pdfUpload = useStudentPdfUpload();
+
+  // v2.2 — 통합 파일 첨부 핸들러 (이미지/PDF 분기)
+  const handleAttachmentUpload = useCallback(
+    async (files: FileList) => {
+      setAttachmentError(null);
+      const filesArr = Array.from(files);
+      const imageFiles = filesArr.filter((f) => f.type.startsWith('image/'));
+      const pdfFile = filesArr.find(
+        (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
+      );
+
+      if (imageFiles.length > 0) {
+        // useStudentImageMultiUpload의 onFileSelect 패턴을 흉내냄 (FileList → handleFiles)
+        // 훅의 onDrop은 DragEvent를 요구하므로 파생 onFileSelect 호출이 가장 안전
+        const synthetic = {
+          target: {
+            files: dataTransferFromFiles(imageFiles).files,
+            value: '',
+          },
+        } as unknown as React.ChangeEvent<HTMLInputElement>;
+        imageUpload.onFileSelect(synthetic);
+      }
+      if (pdfFile) {
+        try {
+          const result = await pdfUpload.read(pdfFile);
+          setPdfDataUrl(result.pdfDataUrl);
+          setPdfFilename(result.pdfFilename);
+        } catch (e) {
+          if (e instanceof Error) setAttachmentError(e.message);
+        }
+      }
+    },
+    [imageUpload, pdfUpload],
+  );
+
+  const handleRemoveImage = useCallback((idx: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const handleRemovePdf = useCallback(() => {
+    setPdfDataUrl(undefined);
+    setPdfFilename(undefined);
+  }, []);
+
+  const handleRemoveLink = useCallback(() => {
+    setLinkUrl('');
+    setLinkInputOpen(false);
+  }, []);
 
   // 모달 열릴 때마다 nickname을 sessionStorage default로 초기화 + 드래프트 prefill
   useEffect(() => {
     if (!open) return;
     setLocalError(null);
+    setAttachmentError(null);
+    setMoreMenuOpen(false);
 
     // v2.1 Phase D — mode='edit' 분기: 드래프트 무시, editingPost로 prefill
     if (isEditMode && editingPost) {
       setNickname(editingPost.nickname);
-      setText(editingPost.text);
-      setLinkUrl(editingPost.linkUrl ?? '');
+      // 정규식으로 # 제목\n\n본문 분리
+      const m = TITLE_BODY_REGEX.exec(editingPost.text);
+      if (m) {
+        setTitle(m[1] ?? '');
+        setBody(m[2] ?? '');
+      } else {
+        setTitle('');
+        setBody(editingPost.text);
+      }
+      const editLink = editingPost.linkUrl ?? '';
+      setLinkUrl(editLink);
+      setLinkInputOpen(editLink.length > 0);
       setColor(editingPost.color);
       setImages(editingPost.images ? [...editingPost.images] : []);
       // PDF는 file:// URL 그대로 (base64 X — 서버는 file://도 허용)
@@ -144,8 +246,17 @@ export function StudentSubmitForm({
 
     if (shouldPrefill && loaded) {
       setNickname(loaded.nickname || readDefaultNickname());
-      setText(loaded.text);
+      // 드래프트 text도 # 제목\n\n본문 분리 (있으면)
+      const m = TITLE_BODY_REGEX.exec(loaded.text);
+      if (m) {
+        setTitle(m[1] ?? '');
+        setBody(m[2] ?? '');
+      } else {
+        setTitle('');
+        setBody(loaded.text);
+      }
       setLinkUrl(loaded.linkUrl);
+      setLinkInputOpen(loaded.linkUrl.length > 0);
       setColor(loaded.color);
       // 이미지/PDF는 base64 미보존 — 빈 상태로 유지 (UI 안내용 플래그만 살아있음)
       setImages([]);
@@ -153,8 +264,10 @@ export function StudentSubmitForm({
       setPdfFilename(undefined);
     } else {
       // 신규 진입 — 빈 상태 + 닉네임만 sessionStorage default
-      setText('');
+      setTitle('');
+      setBody('');
       setLinkUrl('');
+      setLinkInputOpen(false);
       setImages([]);
       setPdfDataUrl(undefined);
       setPdfFilename(undefined);
@@ -168,13 +281,23 @@ export function StudentSubmitForm({
     if (!open || isEditMode) return;
     saveDraft({
       nickname,
-      text,
+      text: compositeText,
       linkUrl,
       color,
       hasImagesPending: images.length > 0,
       hasPdfPending: !!pdfDataUrl,
     });
-  }, [open, isEditMode, nickname, text, linkUrl, color, images.length, pdfDataUrl, saveDraft]);
+  }, [
+    open,
+    isEditMode,
+    nickname,
+    compositeText,
+    linkUrl,
+    color,
+    images.length,
+    pdfDataUrl,
+    saveDraft,
+  ]);
 
   // 회귀 위험 #4 — 제출 성공 감지 (isSubmitting true → false 전환 + lastError 없음)
   useEffect(() => {
@@ -183,13 +306,16 @@ export function StudentSubmitForm({
     prevSubmittingRef.current = isSubmitting;
     if (wasSubmitting && !isSubmitting && !lastError) {
       // 성공 — 모달 닫고 입력 clear (부모가 clearDraft)
-      setText('');
+      setTitle('');
+      setBody('');
       setLinkUrl('');
+      setLinkInputOpen(false);
       setImages([]);
       setPdfDataUrl(undefined);
       setPdfFilename(undefined);
       setColor(undefined);
       setLocalError(null);
+      setAttachmentError(null);
       onClose({ submitted: true });
     }
   }, [isSubmitting, lastError, open, onClose]);
@@ -213,16 +339,6 @@ export function StudentSubmitForm({
 
   if (!open) return null;
 
-  const handlePipaConsentNeeded = () => {
-    try {
-      const shown = window.localStorage.getItem(PIPA_CONSENT_KEY);
-      if (shown === '1') return; // 이미 동의 — 모달 표시 안 함
-    } catch {
-      // localStorage 접근 실패 — 안전하게 표시
-    }
-    setPipaConsentOpen(true);
-  };
-
   const handlePipaConfirm = () => {
     try {
       window.localStorage.setItem(PIPA_CONSENT_KEY, '1');
@@ -235,10 +351,9 @@ export function StudentSubmitForm({
   // Phase A — 모달 최소화 (드래프트는 보존)
   const handleMinimize = () => {
     if (isSubmitting) return;
-    // 즉시 flush 저장 (debounce 우회)
     flushSaveDraft({
       nickname,
-      text,
+      text: compositeText,
       linkUrl,
       color,
       hasImagesPending: images.length > 0,
@@ -247,10 +362,9 @@ export function StudentSubmitForm({
     onClose({ minimized: true });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     const trimmedNickname = nickname.trim();
-    const trimmedText = text.trim();
+    const trimmedBody = body.trim();
     const trimmedLink = linkUrl.trim();
 
     if (trimmedNickname.length === 0) {
@@ -261,11 +375,11 @@ export function StudentSubmitForm({
       setLocalError(`닉네임은 ${MAX_NICKNAME_LENGTH}자 이하로 입력해 주세요`);
       return;
     }
-    if (trimmedText.length === 0 && images.length === 0 && !pdfDataUrl) {
+    if (trimmedBody.length === 0 && images.length === 0 && !pdfDataUrl) {
       setLocalError('내용 또는 이미지/PDF를 입력해 주세요');
       return;
     }
-    // grapheme count 기준 (IME-aware)
+    // grapheme count 기준 (IME-aware) — 본문에만 적용 (제목은 별도 maxLength)
     if (graphemeCount > MAX_TEXT_LENGTH) {
       setLocalError(`내용은 ${MAX_TEXT_LENGTH}자 이하로 입력해 주세요`);
       return;
@@ -299,39 +413,45 @@ export function StudentSubmitForm({
       // sessionStorage 실패해도 제출은 진행
     }
 
+    // v2.2 — 송신 합성 (제목+본문)
+    const trimmedComposite = compositeText.trim();
+
     if (isEditMode && editingPost) {
-      // v2.1 Phase D — 자기 카드 수정 (submitOwnCardEdit 호출)
-      // images 빈 배열 → 첨부 제거 의도 / pdfDataUrl undefined→null로 명시
-      // 회귀 위험 #4 보호: prevSubmittingRef는 일반 제출과 동일 흐름 사용 위해 isSubmitting 토글이 필요하나,
-      // edit 흐름은 markSubmitted로 명시 close. UX: 즉시 close + 부모는 별도 처리.
       submitOwnCardEdit(editingPost.id, {
-        text: trimmedText,
+        text: trimmedComposite,
         linkUrl: trimmedLink.length > 0 ? trimmedLink : null,
         images,
         pdfDataUrl: pdfDataUrl ?? null,
         pdfFilename: pdfFilename ?? null,
         color,
       });
-      // edit는 ack 응답 없음 → 즉시 close (서버 broadcast post-updated가 도착하면 카드 갱신)
       onClose({ submitted: true });
       return;
     }
 
     submitCard({
       nickname: trimmedNickname,
-      text: trimmedText,
+      text: trimmedComposite,
       ...(trimmedLink.length > 0 ? { linkUrl: trimmedLink } : {}),
       ...(images.length > 0 ? { images } : {}),
       ...(pdfDataUrl ? { pdfDataUrl } : {}),
       ...(pdfFilename ? { pdfFilename } : {}),
       ...(color ? { color } : {}),
-      // v2.1 student-ux — Kanban 컬럼별 + 버튼 진입 시 columnId 전달 (Padlet 패턴)
       ...(defaultColumnId ? { columnId: defaultColumnId } : {}),
     });
   };
 
-  const displayError = localError ?? lastError ?? null;
+  const displayError =
+    localError ?? attachmentError ?? imageUpload.error ?? pdfUpload.error ?? lastError ?? null;
   const draftNotice = resumeFromDraft && draft && (draft.hasImagesPending || draft.hasPdfPending);
+  const trimmedNickname = nickname.trim();
+  const trimmedBody = body.trim();
+  const hasContent = trimmedBody.length > 0 || images.length > 0 || !!pdfDataUrl;
+  const canSubmit =
+    trimmedNickname.length > 0 &&
+    hasContent &&
+    graphemeCount <= MAX_TEXT_LENGTH &&
+    (isEditMode || !studentFormLocked);
 
   return (
     <>
@@ -339,177 +459,137 @@ export function StudentSubmitForm({
         className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-0 sm:items-center sm:px-4"
         role="dialog"
         aria-modal="true"
-        aria-label="카드 추가"
+        aria-label={isEditMode ? '카드 수정' : '카드 추가'}
         onClick={(e) => {
           if (e.target === e.currentTarget && !isSubmitting) onClose();
         }}
       >
-        <form
-          onSubmit={handleSubmit}
-          className="flex w-full max-w-lg flex-col gap-3 rounded-t-xl border border-sp-border bg-sp-card p-5 shadow-2xl sm:rounded-xl max-h-[90vh] overflow-y-auto"
+        <div
+          className="relative flex w-full max-w-2xl flex-col rounded-t-xl border border-sp-border bg-sp-card shadow-2xl sm:rounded-xl max-h-[90vh]"
+          onClick={(e) => e.stopPropagation()}
         >
-          <header className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[20px] text-sp-accent">
-              sticky_note_2
-            </span>
-            <h2 className="text-base font-bold text-sp-text">
-              {isEditMode ? '카드 수정' : resumeFromDraft && draft ? '작성 이어가기' : '카드 추가'}
-            </h2>
-            {/* Phase A — 최소화 버튼 (제출 중에는 비활성) */}
-            <button
-              type="button"
-              onClick={handleMinimize}
-              disabled={isSubmitting}
-              aria-label="최소화"
-              title="최소화 (드래프트 보존)"
-              className="ml-auto rounded-md p-1 text-sp-muted transition hover:bg-sp-surface hover:text-sp-text disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined text-[18px]">minimize</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onClose()}
-              disabled={isSubmitting}
-              aria-label="닫기"
-              className="rounded-md p-1 text-sp-muted transition hover:bg-sp-surface hover:text-sp-text disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined text-[18px]">close</span>
-            </button>
-          </header>
+          <StudentSubmitFormHeader
+            canSubmit={canSubmit}
+            isSubmitting={isSubmitting}
+            isEditMode={isEditMode}
+            onClose={() => onClose()}
+            onMinimize={handleMinimize}
+            onSubmit={handleSubmit}
+            onMoreClick={() => setMoreMenuOpen((v) => !v)}
+            moreMenuOpen={moreMenuOpen}
+          />
 
-          {draftNotice && (
-            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-              이전에 첨부했던 이미지/PDF는 저장되지 않아 다시 올려야 해요.
-            </p>
-          )}
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+            {draftNotice && (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                이전에 첨부했던 이미지/PDF는 저장되지 않아 다시 올려야 해요.
+              </p>
+            )}
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-sp-muted">닉네임</span>
+            {/* 제목 */}
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="제목"
+              maxLength={MAX_TITLE_LENGTH}
+              disabled={isSubmitting}
+              autoFocus
+              className="w-full border-b border-sp-border bg-transparent px-1 py-2 text-lg font-bold text-sp-text placeholder:text-sp-muted/60 focus:border-sp-accent focus:outline-none disabled:opacity-60"
+            />
+
+            <StudentAttachmentRow
+              onUpload={handleAttachmentUpload}
+              onLinkClick={() => setLinkInputOpen((v) => !v)}
+              disabled={isSubmitting}
+              hasReachedImageMax={images.length >= REALTIME_WALL_MAX_IMAGES_PER_POST}
+            />
+
+            {linkInputOpen && (
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://..."
+                maxLength={MAX_LINK_LENGTH}
+                disabled={isSubmitting}
+                className="w-full rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-60"
+              />
+            )}
+
+            <StudentAttachmentPreviewStrip
+              images={images}
+              pdfFilename={pdfFilename}
+              linkUrl={linkUrl.trim().length > 0 ? linkUrl : undefined}
+              onRemoveImage={handleRemoveImage}
+              onRemovePdf={handleRemovePdf}
+              onRemoveLink={handleRemoveLink}
+              disabled={isSubmitting}
+            />
+
+            {/* 마크다운 툴바 */}
+            <StudentMarkdownToolbar
+              textareaRef={textareaRef}
+              onChange={setBody}
+              disabled={isSubmitting}
+            />
+
+            {/* 본문 */}
+            <textarea
+              ref={textareaRef}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="환상적인 내용을 적어보세요..."
+              rows={8}
+              maxLength={MAX_TEXT_LENGTH}
+              disabled={isSubmitting}
+              className="min-h-[200px] w-full resize-none bg-transparent px-1 py-2 text-sm leading-relaxed text-sp-text placeholder:text-sp-muted/70 focus:outline-none disabled:opacity-60"
+            />
+            <div className="flex justify-end text-xs text-sp-muted">
+              {graphemeCount}/{MAX_TEXT_LENGTH}
+            </div>
+
+            {displayError && (
+              <p className="text-xs text-rose-400" role="alert">
+                {displayError}
+              </p>
+            )}
+          </div>
+
+          {/* 하단 메타바 — 닉네임 + 색상 */}
+          <footer className="flex flex-wrap items-center gap-3 border-t border-sp-border bg-sp-card px-4 py-3">
             <input
               type="text"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               maxLength={MAX_NICKNAME_LENGTH}
-              placeholder="예) 민수"
+              placeholder="닉네임"
               disabled={isSubmitting || isEditMode}
-              title={isEditMode ? '닉네임은 수정할 수 없어요' : undefined}
-              className="rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-60"
+              title={isEditMode ? '닉네임은 수정할 수 없어요' : '닉네임을 입력해 주세요'}
+              className="max-w-[160px] rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-60"
             />
-          </label>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-sp-muted">
-              내용
-              <span className="ml-2 text-[10px] font-normal text-sp-muted/70">
-                {graphemeCount}/{MAX_TEXT_LENGTH}
-              </span>
-            </span>
-            <StudentMarkdownToolbar
-              textareaRef={textareaRef}
-              onChange={setText}
-              disabled={isSubmitting}
-            />
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              maxLength={MAX_TEXT_LENGTH}
-              placeholder="담벼락에 올릴 내용을 적어 주세요"
-              rows={5}
-              autoFocus
-              disabled={isSubmitting}
-              className="resize-none rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-60"
-            />
-          </div>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-sp-muted">
-              링크 <span className="font-normal text-sp-muted/70">(선택)</span>
-            </span>
-            <input
-              type="url"
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              maxLength={MAX_LINK_LENGTH}
-              placeholder="https://"
-              disabled={isSubmitting}
-              className="rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-60"
-            />
-          </label>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-sp-muted">
-              이미지 <span className="font-normal text-sp-muted/70">(선택, 최대 {REALTIME_WALL_MAX_IMAGES_PER_POST}장)</span>
-            </span>
-            <StudentImageMultiPicker
-              images={images}
-              onAdd={(dataUrl) =>
-                setImages((prev) => [...prev, dataUrl].slice(0, REALTIME_WALL_MAX_IMAGES_PER_POST))
-              }
-              onRemove={(idx) => setImages((prev) => prev.filter((_, i) => i !== idx))}
-              disabled={isSubmitting}
-              onPipaConsentNeeded={handlePipaConsentNeeded}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-sp-muted">
-              PDF <span className="font-normal text-sp-muted/70">(선택)</span>
-            </span>
-            <StudentPdfPicker
-              pdfDataUrl={pdfDataUrl}
-              pdfFilename={pdfFilename}
-              onPick={(info) => {
-                setPdfDataUrl(info.pdfDataUrl);
-                setPdfFilename(info.pdfFilename);
-              }}
-              onRemove={() => {
-                setPdfDataUrl(undefined);
-                setPdfFilename(undefined);
-              }}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-sp-muted">색상</span>
             <StudentColorPicker
               value={color}
               onChange={setColor}
               disabled={isSubmitting}
             />
-          </div>
+            {!isEditMode && (
+              <p className="ml-auto text-xs text-sp-muted">
+                선생님이 승인하면 보드에 나타나요
+              </p>
+            )}
+          </footer>
 
-          {displayError && (
-            <p className="text-xs text-rose-400" role="alert">
-              {displayError}
-            </p>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => onClose()}
-              disabled={isSubmitting}
-              className="rounded-lg border border-sp-border px-4 py-2 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent disabled:opacity-50"
+          {/* 더보기 메뉴 (조건부 — 현재는 placeholder, v3에서 확장) */}
+          {moreMenuOpen && (
+            <div
+              className="absolute right-3 top-12 z-10 min-w-[180px] rounded-lg border border-sp-border bg-sp-card p-2 text-xs text-sp-muted shadow-lg"
+              role="menu"
             >
-              취소
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || (!isEditMode && studentFormLocked)}
-              className="rounded-lg bg-sp-accent px-4 py-2 text-xs font-bold text-white transition hover:bg-sp-accent/85 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isEditMode ? '수정 완료' : isSubmitting ? '올리는 중...' : '올리기'}
-            </button>
-          </div>
-
-          {!isEditMode && (
-            <p className="text-center text-[11px] text-sp-muted">
-              선생님이 승인하면 보드에 나타나요
-            </p>
+              <p className="px-2 py-1.5">추가 도구는 곧 만나요</p>
+            </div>
           )}
-        </form>
+        </div>
       </div>
 
       <StudentPipaConsentModal
@@ -527,4 +607,20 @@ function readDefaultNickname(): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * useStudentImageMultiUpload.onFileSelect는 React.ChangeEvent<HTMLInputElement>를
+ * 요구하나 우리는 임의 File[]을 가지고 있다. DataTransfer를 통해 FileList를 합성한다.
+ * (jsdom 환경 고려: DataTransfer가 없으면 빈 객체로 fallback)
+ */
+function dataTransferFromFiles(files: File[]): DataTransfer {
+  if (typeof DataTransfer !== 'undefined') {
+    const dt = new DataTransfer();
+    files.forEach((f) => dt.items.add(f));
+    return dt;
+  }
+  // jsdom 등 — DataTransfer 미지원 시 임시 객체
+  const fakeFiles = files as unknown as FileList;
+  return { files: fakeFiles, items: [] as unknown as DataTransferItemList } as unknown as DataTransfer;
 }
