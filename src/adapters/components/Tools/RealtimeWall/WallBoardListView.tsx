@@ -13,6 +13,10 @@
  * Stage D 추가:
  *   - BoardCard ⋯ 메뉴에 "복제" 액션 — cloneWallBoard + repo.save
  *     (posts 빈 배열, 새 id + " (복제)" 접미, lastSessionAt 리셋)
+ *   - BoardCard ⋯ 메뉴에 "보관/보관 해제" 액션 — archived 플래그 토글 후 save
+ *     (목록 활성/보관함 섹션 사이 이동, 데이터/shortCode 보존)
+ *   - BoardCard ⋯ 메뉴에 "삭제" 액션 — confirm 모달 → repo.delete
+ *     (파일 시스템 + index entry 모두 제거, 되돌릴 수 없음)
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type {
@@ -25,6 +29,7 @@ import {
   cloneWallBoard,
   generateUniqueWallShortCode,
 } from '@domain/rules/realtimeWallRules';
+import { Modal } from '@adapters/components/common/Modal';
 
 import { WallBoardThumbnail } from './WallBoardThumbnail';
 import { REALTIME_WALL_LAYOUT_LABELS } from './realtimeWallHelpers';
@@ -53,6 +58,13 @@ export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
   const [cloningId, setCloningId] = useState<WallBoardId | null>(null);
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [cloneSuccess, setCloneSuccess] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<WallBoardMeta | null>(null);
+  const [deletingId, setDeletingId] = useState<WallBoardId | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<WallBoardId | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveSuccess, setArchiveSuccess] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -110,6 +122,66 @@ export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
     [refresh, repo],
   );
 
+  // 보드 보관/보관 해제. archived 플래그를 토글해 save. shortCode·posts 등
+  // 모든 데이터는 그대로 유지되어 추후 복원이 가능. updatedAt은 갱신해
+  // 목록 정렬에 즉시 반영되게 한다.
+  const handleArchiveToggle = useCallback(
+    async (target: WallBoardMeta, nextArchived: boolean) => {
+      setArchivingId(target.id);
+      setArchiveError(null);
+      setArchiveSuccess(null);
+      try {
+        const source: WallBoard | null = await repo.load(target.id);
+        if (!source) {
+          setArchiveError('담벼락을 불러오지 못했어요.');
+          return;
+        }
+        const next: WallBoard = {
+          ...source,
+          archived: nextArchived,
+          updatedAt: Date.now(),
+        };
+        await repo.save(next);
+        await refresh();
+        setArchiveSuccess(
+          nextArchived
+            ? `'${target.title}'을(를) 보관함으로 옮겼어요.`
+            : `'${target.title}'을(를) 보관함에서 꺼냈어요.`,
+        );
+      } catch {
+        setArchiveError(
+          nextArchived
+            ? '담벼락을 보관하지 못했어요. 다시 시도해주세요.'
+            : '담벼락을 보관 해제하지 못했어요. 다시 시도해주세요.',
+        );
+      } finally {
+        setArchivingId(null);
+      }
+    },
+    [refresh, repo],
+  );
+
+  // 보드 삭제. 모달에서 "삭제" 확정 시 호출. repo.delete는 파일 시스템과
+  // index entry 모두에서 제거하므로, 성공 후 refresh 한 번이면 목록도 정상 동기화됨.
+  const handleDelete = useCallback(
+    async (target: WallBoardMeta) => {
+      setDeletingId(target.id);
+      setDeleteError(null);
+      setDeleteSuccess(null);
+      try {
+        await repo.delete(target.id);
+        await refresh();
+        setDeleteSuccess(`'${target.title}'을(를) 삭제했어요.`);
+        setDeleteTarget(null);
+      } catch {
+        setDeleteError('담벼락을 삭제하지 못했어요. 다시 시도해주세요.');
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [refresh, repo],
+  );
+
   // 토스트 자동 소거 (3초)
   useEffect(() => {
     if (!cloneSuccess) return;
@@ -122,6 +194,30 @@ export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
     const timer = window.setTimeout(() => setCloneError(null), 4000);
     return () => window.clearTimeout(timer);
   }, [cloneError]);
+
+  useEffect(() => {
+    if (!deleteSuccess) return;
+    const timer = window.setTimeout(() => setDeleteSuccess(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [deleteSuccess]);
+
+  useEffect(() => {
+    if (!deleteError) return;
+    const timer = window.setTimeout(() => setDeleteError(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [deleteError]);
+
+  useEffect(() => {
+    if (!archiveSuccess) return;
+    const timer = window.setTimeout(() => setArchiveSuccess(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [archiveSuccess]);
+
+  useEffect(() => {
+    if (!archiveError) return;
+    const timer = window.setTimeout(() => setArchiveError(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [archiveError]);
 
   const activeBoards = metas.filter((m) => !m.archived);
   const archivedBoards = metas.filter((m) => m.archived);
@@ -155,6 +251,38 @@ export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
           {cloneError}
         </div>
       )}
+      {deleteSuccess && (
+        <div
+          role="status"
+          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"
+        >
+          {deleteSuccess}
+        </div>
+      )}
+      {deleteError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300"
+        >
+          {deleteError}
+        </div>
+      )}
+      {archiveSuccess && (
+        <div
+          role="status"
+          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"
+        >
+          {archiveSuccess}
+        </div>
+      )}
+      {archiveError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300"
+        >
+          {archiveError}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-sp-muted">불러오는 중…</p>
@@ -170,7 +298,13 @@ export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
               onClone={() => {
                 void handleClone(meta);
               }}
+              onArchiveToggle={() => {
+                void handleArchiveToggle(meta, true);
+              }}
+              onDelete={() => setDeleteTarget(meta)}
               isCloning={cloningId === meta.id}
+              isArchiving={archivingId === meta.id}
+              isDeleting={deletingId === meta.id}
             />
           ))}
         </div>
@@ -190,12 +324,31 @@ export const WallBoardListView: React.FC<WallBoardListViewProps> = ({
                 onClone={() => {
                   void handleClone(meta);
                 }}
+                onArchiveToggle={() => {
+                  void handleArchiveToggle(meta, false);
+                }}
+                onDelete={() => setDeleteTarget(meta)}
                 isCloning={cloningId === meta.id}
+                isArchiving={archivingId === meta.id}
+                isDeleting={deletingId === meta.id}
               />
             ))}
           </div>
         </details>
       )}
+
+      <DeleteWallBoardConfirmModal
+        target={deleteTarget}
+        isDeleting={deletingId !== null}
+        onCancel={() => {
+          if (deletingId !== null) return;
+          setDeleteTarget(null);
+        }}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          void handleDelete(deleteTarget);
+        }}
+      />
     </div>
   );
 };
@@ -208,15 +361,25 @@ function BoardCard({
   meta,
   onOpen,
   onClone,
+  onArchiveToggle,
+  onDelete,
   isCloning,
+  isArchiving,
+  isDeleting,
 }: {
   meta: WallBoardMeta;
   onOpen: () => void;
   onClone: () => void;
+  onArchiveToggle: () => void;
+  onDelete: () => void;
   isCloning: boolean;
+  isArchiving: boolean;
+  isDeleting: boolean;
 }): React.ReactElement {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const busy = isCloning || isArchiving || isDeleting;
+  const isArchived = meta.archived === true;
 
   // 외부 클릭 시 메뉴 닫기
   useEffect(() => {
@@ -235,7 +398,7 @@ function BoardCard({
       <button
         type="button"
         onClick={onOpen}
-        disabled={isCloning}
+        disabled={busy}
         className="flex w-full flex-col text-left disabled:cursor-wait disabled:opacity-70"
       >
         <WallBoardThumbnail
@@ -283,7 +446,7 @@ function BoardCard({
             e.stopPropagation();
             setMenuOpen((v) => !v);
           }}
-          disabled={isCloning}
+          disabled={busy}
           aria-label="더보기"
           className="rounded-full bg-sp-bg/80 p-1 text-sp-muted opacity-0 backdrop-blur-sm transition hover:text-sp-text group-hover:opacity-100 focus:opacity-100 disabled:cursor-wait"
         >
@@ -307,16 +470,127 @@ function BoardCard({
               <span className="material-symbols-outlined text-sm text-sp-muted">content_copy</span>
               복제
             </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
+                onArchiveToggle();
+              }}
+              className="flex w-full items-center gap-2 border-t border-sp-border px-3 py-2 text-left text-xs text-sp-text transition hover:bg-sp-surface"
+            >
+              <span className="material-symbols-outlined text-sm text-sp-muted">
+                {isArchived ? 'unarchive' : 'archive'}
+              </span>
+              {isArchived ? '보관 해제' : '보관함으로 이동'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
+                onDelete();
+              }}
+              className="flex w-full items-center gap-2 border-t border-sp-border px-3 py-2 text-left text-xs text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
+            >
+              <span className="material-symbols-outlined text-sm">delete</span>
+              삭제
+            </button>
           </div>
         )}
       </div>
 
-      {isCloning && (
+      {(isCloning || isArchiving || isDeleting) && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-sp-bg/60 backdrop-blur-[1px]">
-          <span className="text-xs text-sp-muted">복제 중…</span>
+          <span className="text-xs text-sp-muted">
+            {isDeleting
+              ? '삭제 중…'
+              : isArchiving
+                ? (isArchived ? '보관 해제 중…' : '보관 중…')
+                : '복제 중…'}
+          </span>
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DeleteWallBoardConfirmModal — 삭제 확정 모달
+// ---------------------------------------------------------------------------
+//
+// 되돌릴 수 없는 파괴적 액션이므로 별도 confirm을 둔다. 미리보기로 보드 제목과
+// 카드 수, shortCode를 함께 노출해 잘못 누르는 사고를 줄인다. `isDeleting`인
+// 동안에는 backdrop·ESC·취소 버튼이 모두 잠긴다 (ListView 측에서 onCancel을
+// no-op으로 처리).
+function DeleteWallBoardConfirmModal({
+  target,
+  isDeleting,
+  onCancel,
+  onConfirm,
+}: {
+  target: WallBoardMeta | null;
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): React.ReactElement | null {
+  if (!target) return null;
+  return (
+    <Modal
+      isOpen
+      onClose={onCancel}
+      title={`'${target.title}' 담벼락을 삭제하시겠습니까?`}
+      srOnlyTitle
+      size="sm"
+      closeOnBackdrop={!isDeleting}
+      closeOnEsc={!isDeleting}
+    >
+      <div className="p-6">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-red-500/10">
+            <span className="material-symbols-outlined text-icon-lg text-red-400">delete</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold text-sp-text">
+              &lsquo;{target.title}&rsquo; 담벼락을 삭제하시겠습니까?
+            </h3>
+            <p className="mt-1 text-sm text-sp-muted">
+              카드 {target.approvedCount}개와 모든 게시물이 함께 삭제되며,
+              한번 삭제하면 되돌릴 수 없어요.
+            </p>
+            {target.shortCode && (
+              <p className="mt-2 text-xs text-sp-muted">
+                참여 코드:{' '}
+                <span className="font-mono text-amber-300">
+                  {target.shortCode}
+                </span>
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="rounded-lg border border-sp-border px-4 py-2 text-sm text-sp-text transition hover:bg-sp-text/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-wait disabled:opacity-60"
+          >
+            {isDeleting ? '삭제 중…' : '삭제'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
