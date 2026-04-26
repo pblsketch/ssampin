@@ -120,10 +120,10 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
   return (
     <>
       {/* 배경 오버레이 */}
-      <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-sp-modal bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
       {/* 패널 (우측 슬라이드) */}
-      <div className="fixed inset-y-0 right-0 z-[60] w-full max-w-sm flex flex-col bg-sp-card border-l border-sp-border shadow-2xl animate-slide-in-right">
+      <div className="fixed inset-y-0 right-0 z-sp-modal w-full max-w-sm flex flex-col bg-sp-card border-l border-sp-border shadow-2xl animate-slide-in-right">
         {/* 헤더 */}
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-sp-border">
           <div className="flex items-center gap-2.5">

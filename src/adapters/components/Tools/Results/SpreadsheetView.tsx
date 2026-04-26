@@ -179,7 +179,7 @@ export function SpreadsheetView({ source, onClose, inlineFooter }: SpreadsheetVi
     // viewport가 아닌 그 조상의 containing block 기준으로 고정되어 잘림. 예: ToolLayout 아래에서 호출 시.
     return createPortal(
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+        className="fixed inset-0 z-sp-palette flex items-center justify-center bg-black/60 p-4"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose?.();
         }}

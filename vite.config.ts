@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
         '@widgets': path.resolve(__dirname, 'src/widgets'),
         '@shared': path.resolve(__dirname, 'src/shared'),
         '@mobile': path.resolve(__dirname, 'src/mobile'),
+        '@student': path.resolve(__dirname, 'src/student'),
       },
     },
     base: './',

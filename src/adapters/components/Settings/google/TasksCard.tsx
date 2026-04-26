@@ -2,6 +2,7 @@ import { ServiceCard } from '../shared/ServiceCard';
 import { TasksScopeRequestModal } from '../modals/TasksScopeRequestModal';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
 import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
+import { Modal } from '@adapters/components/common/Modal';
 
 interface TasksCardProps {
   onJumpToBackup: () => void;
@@ -134,52 +135,47 @@ export function TasksCard({ onJumpToBackup }: TasksCardProps) {
       )}
 
       {/* Task List 선택 모달 */}
-      {showTaskListPicker && (
-        <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
-          onClick={() => setShowTaskListPicker(false)}
-          aria-hidden="true"
-        >
-          <div
-            className="w-full max-w-sm rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl mx-4"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-lg bg-green-500/10">
-                <span className="material-symbols-outlined text-green-400">checklist</span>
-              </div>
-              <h3 className="text-lg font-bold text-sp-text">동기화할 목록 선택</h3>
+      <Modal
+        isOpen={showTaskListPicker}
+        onClose={() => setShowTaskListPicker(false)}
+        title="동기화할 목록 선택"
+        srOnlyTitle
+        size="sm"
+      >
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-green-500/10">
+              <span className="material-symbols-outlined text-green-400">checklist</span>
             </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {taskLists.length === 0 ? (
-                <p className="text-sm text-sp-muted text-center py-4">목록을 불러오는 중...</p>
-              ) : (
-                taskLists.map((list) => (
-                  <button
-                    key={list.id}
-                    type="button"
-                    onClick={() => void selectTaskList(list.id, list.title)}
-                    className="w-full text-left px-4 py-3 rounded-lg border border-sp-border hover:border-sp-accent/50 hover:bg-sp-accent/5 text-sm text-sp-text transition-colors"
-                  >
-                    {list.title}
-                  </button>
-                ))
-              )}
-            </div>
-            <div className="flex justify-end mt-4">
-              <button
-                type="button"
-                onClick={() => setShowTaskListPicker(false)}
-                className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
-              >
-                취소
-              </button>
-            </div>
+            <h3 className="text-lg font-bold text-sp-text">동기화할 목록 선택</h3>
+          </div>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {taskLists.length === 0 ? (
+              <p className="text-sm text-sp-muted text-center py-4">목록을 불러오는 중...</p>
+            ) : (
+              taskLists.map((list) => (
+                <button
+                  key={list.id}
+                  type="button"
+                  onClick={() => void selectTaskList(list.id, list.title)}
+                  className="w-full text-left px-4 py-3 rounded-lg border border-sp-border hover:border-sp-accent/50 hover:bg-sp-accent/5 text-sm text-sp-text transition-colors"
+                >
+                  {list.title}
+                </button>
+              ))
+            )}
+          </div>
+          <div className="flex justify-end mt-4">
+            <button
+              type="button"
+              onClick={() => setShowTaskListPicker(false)}
+              className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
+            >
+              취소
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </>
   );
 }

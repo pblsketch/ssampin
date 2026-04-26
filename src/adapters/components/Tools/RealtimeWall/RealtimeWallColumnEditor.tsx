@@ -26,6 +26,8 @@ import {
   reorderWallColumns,
   type RemoveColumnStrategy,
 } from '@domain/rules/realtimeWallRules';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 export interface RealtimeWallColumnEditorProps {
   readonly open: boolean;
@@ -188,32 +190,16 @@ export function RealtimeWallColumnEditor({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="컬럼 편집"
-      onClick={handleCloseBackdrop}
-    >
-      <div
-        className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl border border-sp-border bg-sp-card p-5 shadow-xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <Modal isOpen onClose={handleCloseBackdrop} title="컬럼 편집" srOnlyTitle size="lg">
+      <div className="flex flex-col p-5 max-h-[calc(100vh-96px)]">
         {/* 헤더 */}
         <div className="mb-4 flex items-center gap-2.5">
           <span className="material-symbols-outlined text-[20px] text-sp-accent">view_column</span>
-          <h2 className="text-base font-bold text-sp-text">컬럼 편집</h2>
+          <h3 className="text-base font-bold text-sp-text">컬럼 편집</h3>
           <span className="text-xs text-sp-muted">
             ({draftColumns.length} / {REALTIME_WALL_MAX_COLUMNS})
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto rounded-md p-1 text-sp-muted transition hover:bg-sp-surface hover:text-sp-text"
-            aria-label="닫기"
-          >
-            <span className="material-symbols-outlined text-[18px]">close</span>
-          </button>
+          <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={onClose} className="ml-auto" />
         </div>
 
         {/* 본문 */}
@@ -389,7 +375,7 @@ export function RealtimeWallColumnEditor({
           />
         )}
       </div>
-    </div>
+    </Modal>
   );
 }
 

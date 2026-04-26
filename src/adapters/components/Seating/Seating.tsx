@@ -859,7 +859,7 @@ export function Seating(props?: { embedded?: boolean }) {
                       className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       title="열 줄이기"
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
+                      <span className="material-symbols-outlined text-icon-xs">remove</span>
                     </button>
                     <span className="w-4 text-center">{seating.cols}</span>
                     <button
@@ -868,7 +868,7 @@ export function Seating(props?: { embedded?: boolean }) {
                       className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       title="열 늘리기"
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
+                      <span className="material-symbols-outlined text-icon-xs">add</span>
                     </button>
                     <span className="ml-0.5">열</span>
                     <span className="mx-1 text-sp-border">×</span>
@@ -878,7 +878,7 @@ export function Seating(props?: { embedded?: boolean }) {
                       className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       title="행 줄이기"
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>remove</span>
+                      <span className="material-symbols-outlined text-icon-xs">remove</span>
                     </button>
                     <span className="w-4 text-center">{seating.rows}</span>
                     <button
@@ -887,7 +887,7 @@ export function Seating(props?: { embedded?: boolean }) {
                       className="w-5 h-5 flex items-center justify-center rounded border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       title="행 늘리기"
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
+                      <span className="material-symbols-outlined text-icon-xs">add</span>
                     </button>
                     <span className="ml-0.5">행</span>
                   </div>

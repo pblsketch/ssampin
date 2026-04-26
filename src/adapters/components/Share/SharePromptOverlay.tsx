@@ -27,7 +27,7 @@ export function SharePromptOverlay() {
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 z-sp-modal bg-black/40 backdrop-blur-sm"
         onClick={() => {
           dismissPrompt(false);
           track('share_prompt_action', { action: 'later' });
@@ -35,7 +35,7 @@ export function SharePromptOverlay() {
       />
 
       {/* Card */}
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+      <div className="fixed inset-0 z-sp-modal flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-sm pointer-events-auto animate-scale-in">
           <div className="px-6 py-8 flex flex-col items-center text-center">
             <span className="text-4xl mb-4">💌</span>

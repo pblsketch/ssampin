@@ -146,3 +146,30 @@ export function isTokenExpired(expiresAt: number, bufferMs: number = 5 * 60 * 10
   return Date.now() >= expiresAt - bufferMs;
 }
 
+/**
+ * Google API 401 에러 메시지를 학교 계정 정책 차단 안내로 분류한다.
+ *
+ * 학교(@*.go.kr 등) Workspace 계정은 관리자 정책으로 third-party 앱이 차단되면
+ * 토큰 자체는 발급되지만 모든 Google API 호출이 401(authError/UNAUTHENTICATED)을 돌려준다.
+ * 사용자가 raw JSON을 보고 당황하지 않도록 명확한 안내문으로 치환한다.
+ */
+export function isGoogleAuthBlockedError(message: string): boolean {
+  if (!message) return false;
+  // Google API 401 응답에 공통적으로 포함되는 키워드
+  const lower = message.toLowerCase();
+  const has401 = message.includes('401') || lower.includes('unauthenticated');
+  const isAuthError =
+    lower.includes('autherror') ||
+    lower.includes('invalid credentials') ||
+    lower.includes('invalid authentication credentials');
+  return has401 && isAuthError;
+}
+
+/**
+ * 학교(Workspace) 계정 차단/만료 통합 안내문.
+ * Calendar/Drive/Tasks API 모두 같은 안내를 사용한다.
+ */
+export const GOOGLE_AUTH_BLOCKED_MESSAGE =
+  'Google 인증에 실패했습니다. 학교 Google 계정(@*.go.kr 등)은 관리자 정책으로 외부 앱 접근이 차단될 수 있어요. 설정 → Google 통합에서 연결을 해제한 뒤 개인 Gmail 계정으로 다시 연결해주세요.';
+
+

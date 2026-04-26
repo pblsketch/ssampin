@@ -135,7 +135,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       role="dialog"
       aria-modal="true"
       aria-label="커맨드 팔레트"
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-start justify-center pt-[20vh] animate-fade-in"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-sp-palette flex items-start justify-center pt-[20vh] animate-fade-in"
       onClick={close}
     >
       {/* Card — flex centering으로 animate-scale-in transform과 위치 계산 충돌 방지 */}

@@ -40,7 +40,7 @@ function ChangeBadge({ type }: { type: ChangeType }) {
 
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-detail font-medium ${config.badge} shrink-0`}>
-      <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{config.icon}</span>
+      <span className="material-symbols-outlined text-icon-sm">{config.icon}</span>
       {config.label}
     </span>
   );

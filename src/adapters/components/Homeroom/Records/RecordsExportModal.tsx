@@ -5,6 +5,8 @@ import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { filterByStudent, filterByDateRange } from '@domain/rules/studentRecordRules';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 /* eslint-disable no-restricted-imports */
 import { exportStudentRecordsToExcel, exportRecordsForSchoolReport } from '@infrastructure/export/ExcelExporter';
 import { exportStudentRecordsToHwpx } from '@infrastructure/export/HwpxExporter';
@@ -182,22 +184,15 @@ export function RecordsExportModal({ records, students, categories, onClose }: R
   ]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" aria-hidden="true">
-      <div
-        className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-records-export"
-      >
+    <Modal isOpen onClose={onClose} title="담임 메모 내보내기" srOnlyTitle size="lg">
+      <div className="overflow-y-auto">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-sp-accent">download</span>
-            <h3 id="modal-title-records-export" className="text-sp-text font-semibold">담임 메모 내보내기</h3>
+            <h3 className="text-sp-text font-semibold">담임 메모 내보내기</h3>
           </div>
-          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         <div className="px-6 py-4 space-y-5">
@@ -354,6 +349,6 @@ export function RecordsExportModal({ records, students, categories, onClose }: R
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

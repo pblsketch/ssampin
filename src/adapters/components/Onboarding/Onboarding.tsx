@@ -305,7 +305,7 @@ export function Onboarding() {
     if (!isFirstRun) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+        <div className="fixed inset-0 z-sp-palette bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
             <div className="bg-sp-card w-full max-w-2xl rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden flex flex-col min-h-[500px]">
                 {/* Indicators */}
                 <div className="flex justify-center gap-2 pt-8 pb-4">

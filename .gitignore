@@ -45,3 +45,21 @@ promo-styles-output/
 
 # 개인 작업 캡쳐
 위노트 캡쳐/
+
+# 빌드 산출물 (학생 entry SPA)
+dist-student/
+
+# AI 도구 캐시
+.codex/
+.playwright-mcp/
+docs/.pdca-snapshots/
+
+# 메인 프로세스 임시 빌드 (잘못 생성된 파일)
+main.js
+
+# 임시 분석/스크린샷
+docs/examples/
+docs/notion-guide/
+landing/supabase/
+scripts/__pycache__/
+meal-header-*.png

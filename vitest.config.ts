@@ -12,11 +12,12 @@ export default defineConfig({
       '@widgets': path.resolve(__dirname, 'src/widgets'),
       '@shared': path.resolve(__dirname, 'src/shared'),
       '@mobile': path.resolve(__dirname, 'src/mobile'),
+      '@student': path.resolve(__dirname, 'src/student'),
     },
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'electron/**/*.{test,spec}.ts'],
     exclude: ['node_modules', 'dist', 'dist-electron', 'release', 'spikes/**'],
     globals: false,
   },

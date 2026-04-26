@@ -3,6 +3,8 @@ import type { SchoolEvent, CategoryItem, AlertTiming, AlertTimingPreset, Recurre
 import { isCustomAlert, alertTimingToLabel } from '@domain/entities/SchoolEvent';
 import { getGradeBadgeText } from '@domain/entities/NeisSchedule';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface EventFormModalProps {
   categories: readonly CategoryItem[];
@@ -180,34 +182,16 @@ export function EventFormModal({
     onSubmit(event);
   }
 
-  return (
-    <>
-      {/* 오버레이 */}
-      <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+  const titleText = isEdit ? '일정 수정' : '일정 추가';
 
-      {/* 모달 */}
-      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-        <div
-          className="w-full max-w-[520px] bg-sp-card rounded-2xl border border-sp-border shadow-sp-lg overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title-event-form"
-        >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
-            <h2 id="modal-title-event-form" className="text-lg font-bold text-sp-text">
-              {isEdit ? '일정 수정' : '일정 추가'}
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="닫기"
-              className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-          </div>
+  return (
+    <Modal isOpen onClose={onClose} title={titleText} srOnlyTitle size="md">
+      <div className="overflow-hidden">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
+          <h3 className="text-lg font-bold text-sp-text">{titleText}</h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
+        </div>
 
           {/* 폼 */}
           <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -463,7 +447,7 @@ export function EventFormModal({
                         onClick={() => removeAlert(timing)}
                         className="hover:text-sp-text transition-colors ml-0.5"
                       >
-                        <span className="material-symbols-outlined text-sm leading-none" style={{ fontSize: '14px' }}>close</span>
+                        <span className="material-symbols-outlined text-icon-sm leading-none">close</span>
                       </button>
                     </span>
                   ))}
@@ -506,7 +490,7 @@ export function EventFormModal({
                         className="hover:text-sp-text transition-colors ml-0.5"
                         title="복원"
                       >
-                        <span className="material-symbols-outlined text-sm leading-none" style={{ fontSize: '14px' }}>close</span>
+                        <span className="material-symbols-outlined text-icon-sm leading-none">close</span>
                       </button>
                     </span>
                   ))}
@@ -546,8 +530,7 @@ export function EventFormModal({
               </button>
             </div>
           </form>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

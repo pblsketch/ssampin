@@ -10,6 +10,7 @@ import type {
   SyncResult,
 } from '@domain/ports/IGoogleCalendarPort';
 import type { GoogleCalendarInfo } from '@domain/entities/GoogleCalendarInfo';
+import { GOOGLE_AUTH_BLOCKED_MESSAGE } from '@domain/rules/calendarSyncRules';
 
 const BASE_URL = 'https://www.googleapis.com/calendar/v3';
 
@@ -73,9 +74,12 @@ export class GoogleCalendarApiClient implements IGoogleCalendarPort {
       }
 
       const err = await res.text();
-      const error = new Error(
-        `Google Calendar API error: ${res.status} ${err}`,
-      ) as ApiError;
+      // 재시도 후에도 401이거나 첫 401에서 갱신 실패: 학교 Workspace 정책 차단 가능성 안내
+      const message =
+        res.status === 401
+          ? GOOGLE_AUTH_BLOCKED_MESSAGE
+          : `Google Calendar API error: ${res.status} ${err}`;
+      const error = new Error(message) as ApiError;
       error.code = res.status;
       throw error;
     }

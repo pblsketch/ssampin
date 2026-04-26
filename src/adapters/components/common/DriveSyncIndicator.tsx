@@ -1,5 +1,6 @@
 import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
 
 export function DriveSyncIndicator() {
   const { settings } = useSettingsStore();
@@ -16,6 +17,8 @@ export function DriveSyncIndicator() {
     await syncFromCloud();
     await syncToCloud();
   };
+
+  const isAuthBlocked = error ? isGoogleAuthBlockedError(error) : false;
 
   return (
     <div className="mb-2">
@@ -38,15 +41,25 @@ export function DriveSyncIndicator() {
       )}
 
       {status === 'error' && (
-        <button
-          type="button"
-          onClick={handleRetry}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
-        >
-          <span className="material-symbols-outlined text-icon">error</span>
-          <span className="flex-1 text-left truncate">{error ?? '동기화 실패'}</span>
-          <span className="material-symbols-outlined text-icon-sm">refresh</span>
-        </button>
+        <div className="space-y-1.5">
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
+            title={error ?? undefined}
+          >
+            <span className="material-symbols-outlined text-icon">error</span>
+            <span className="flex-1 text-left truncate">
+              {isAuthBlocked ? '구글 인증 차단 (학교 계정 정책)' : (error ?? '동기화 실패')}
+            </span>
+            <span className="material-symbols-outlined text-icon-sm">refresh</span>
+          </button>
+          {isAuthBlocked && (
+            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200 leading-relaxed">
+              학교 계정(@*.go.kr 등)은 외부 앱 차단 정책일 수 있어요. <span className="font-medium">설정 → Google 통합</span>에서 연결을 해제하고 <span className="font-medium">개인 Gmail</span>로 다시 연결해주세요.
+            </div>
+          )}
+        </div>
       )}
 
       {status === 'conflict' && (

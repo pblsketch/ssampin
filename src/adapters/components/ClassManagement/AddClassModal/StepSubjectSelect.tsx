@@ -339,7 +339,7 @@ export function StepSubjectSelect({
             type="button"
             onClick={() => pickSource('class')}
             disabled={!hasClassSource}
-            className={`flex-1 py-1.5 text-[11px] font-medium rounded-md transition-colors ${
+            className={`flex-1 py-1.5 text-detail font-medium rounded-md transition-colors ${
               source === 'class'
                 ? 'bg-sp-accent text-white'
                 : hasClassSource
@@ -353,7 +353,7 @@ export function StepSubjectSelect({
             type="button"
             onClick={() => pickSource('teacher')}
             disabled={!hasTeacherSource}
-            className={`flex-1 py-1.5 text-[11px] font-medium rounded-md transition-colors ${
+            className={`flex-1 py-1.5 text-detail font-medium rounded-md transition-colors ${
               source === 'teacher'
                 ? 'bg-sp-accent text-white'
                 : hasTeacherSource
@@ -409,7 +409,7 @@ export function StepSubjectSelect({
                     }`}
                   >
                     {s}
-                    {exists && <span className="ml-1 text-[10px]">·등록됨</span>}
+                    {exists && <span className="ml-1 text-caption">·등록됨</span>}
                   </button>
                 );
               })}
@@ -453,7 +453,7 @@ export function StepSubjectSelect({
 
           {/* 선택 카운트 + 선택된 직접 추가 리스트 */}
           {selectedCount > 0 && (
-            <p className="text-[11px] text-sp-muted mt-3 text-center">
+            <p className="text-detail text-sp-muted mt-3 text-center">
               {selectedCount}개 선택됨
             </p>
           )}
@@ -461,7 +461,7 @@ export function StepSubjectSelect({
       ) : (
         <>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] text-sp-muted">
+            <span className="text-detail text-sp-muted">
               {selectedCount}개 선택됨 · 총 {selectableCount}개 과목
             </span>
             <div className="flex gap-2 items-center">
@@ -470,7 +470,7 @@ export function StepSubjectSelect({
                   <button
                     type="button"
                     onClick={() => setHideSpecialists((v) => !v)}
-                    className={`text-[11px] ${
+                    className={`text-detail ${
                       hideSpecialists ? 'text-sp-accent hover:underline' : 'text-sp-muted hover:text-sp-text'
                     }`}
                   >
@@ -482,7 +482,7 @@ export function StepSubjectSelect({
               <button
                 type="button"
                 onClick={selectAll}
-                className="text-[11px] text-sp-accent hover:underline"
+                className="text-detail text-sp-accent hover:underline"
               >
                 전체 선택
               </button>
@@ -490,7 +490,7 @@ export function StepSubjectSelect({
               <button
                 type="button"
                 onClick={clearAll}
-                className="text-[11px] text-sp-muted hover:text-sp-text"
+                className="text-detail text-sp-muted hover:text-sp-text"
               >
                 전체 해제
               </button>
@@ -532,22 +532,22 @@ export function StepSubjectSelect({
                       {item.subject}
                     </span>
                     {item.isCustom ? (
-                      <span className="text-[10px] text-sp-accent bg-sp-accent/10 px-1.5 py-0.5 rounded">
+                      <span className="text-caption text-sp-accent bg-sp-accent/10 px-1.5 py-0.5 rounded">
                         직접 추가
                       </span>
                     ) : (
-                      <span className="text-[11px] text-sp-muted">
+                      <span className="text-detail text-sp-muted">
                         주 {item.weeklyPeriods}시간
                       </span>
                     )}
                     {specialistLabel && (
-                      <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
+                      <span className="text-caption text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
                         {specialistLabel}
                       </span>
                     )}
                   </div>
                   {isDisabled && (
-                    <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
+                    <span className="text-caption text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
                       이미 등록됨
                     </span>
                   )}

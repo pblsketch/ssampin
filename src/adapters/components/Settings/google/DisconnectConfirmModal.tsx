@@ -1,3 +1,5 @@
+import { Modal } from '@adapters/components/common/Modal';
+
 interface DisconnectConfirmModalProps {
   email: string | null;
   onConfirm: () => void;
@@ -38,23 +40,20 @@ export function DisconnectConfirmModal({
   onCancel,
 }: DisconnectConfirmModalProps) {
   return (
-    <div
-      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
-      onClick={onCancel}
-      aria-hidden="true"
+    <Modal
+      isOpen
+      onClose={onCancel}
+      title="Google 계정 연결 해제"
+      srOnlyTitle
+      size="md"
+      closeOnBackdrop={false}
     >
-      <div
-        className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 max-w-md w-full mx-4"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-disconnect"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 rounded-lg bg-red-500/10">
             <span className="material-symbols-outlined text-red-400">link_off</span>
           </div>
-          <h3 id="modal-title-disconnect" className="text-lg font-bold text-sp-text">
+          <h3 className="text-lg font-bold text-sp-text">
             Google 계정 연결 해제
           </h3>
         </div>
@@ -108,6 +107,6 @@ export function DisconnectConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

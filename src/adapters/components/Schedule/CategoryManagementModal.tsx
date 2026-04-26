@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { CATEGORY_COLOR_PRESETS } from '@domain/entities/SchoolEvent';
 import type { CategoryItem } from '@domain/entities/SchoolEvent';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 const DEFAULT_CAT_IDS = new Set(['school', 'class', 'department', 'treeSchool', 'etc']);
 
@@ -129,7 +131,7 @@ function ColorPicker({
       {open && createPortal(
         <div
           ref={popupRef}
-          className="fixed z-[100] bg-sp-card border border-sp-border rounded-xl shadow-2xl p-3"
+          className="fixed z-sp-tooltip bg-sp-card border border-sp-border rounded-xl shadow-2xl p-3"
           style={{ top: pos.top, left: pos.left, minWidth: 200 }}
         >
           <div className="grid grid-cols-3 gap-2">
@@ -364,35 +366,21 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="w-full max-w-[520px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title-category-management"
-        >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-pink-500/10 text-pink-400">
-                <span className="material-symbols-outlined">category</span>
-              </div>
-              <div>
-                <h2 id="modal-title-category-management" className="text-lg font-bold text-sp-text">일정 카테고리 관리</h2>
-                <p className="text-xs text-sp-muted mt-0.5">이름, 색상을 수정하고 드래그하여 순서를 변경하세요</p>
-              </div>
+    <Modal isOpen onClose={onClose} title="일정 카테고리 관리" srOnlyTitle size="md">
+      <div className="flex flex-col">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-pink-500/10 text-pink-400">
+              <span className="material-symbols-outlined">category</span>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
+            <div>
+              <h3 className="text-lg font-bold text-sp-text">일정 카테고리 관리</h3>
+              <p className="text-xs text-sp-muted mt-0.5">이름, 색상을 수정하고 드래그하여 순서를 변경하세요</p>
+            </div>
           </div>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
+        </div>
 
           {/* 카테고리 목록 */}
           <div className="p-6 overflow-y-auto space-y-4">
@@ -485,8 +473,7 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
           </div>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

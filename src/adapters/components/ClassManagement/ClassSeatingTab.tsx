@@ -1201,14 +1201,14 @@ function SeatCard({
             ${attendanceStatus === 'classAbsence' ? 'bg-purple-500' : ''}
           `}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+          <span className="material-symbols-outlined text-icon-sm">
             {STATUS_CONFIG[attendanceStatus].icon}
           </span>
         </span>
       )}
       {isAttendanceMode && attendanceStatus === 'present' && !isEmpty && (
         <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs bg-green-500">
-          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>check</span>
+          <span className="material-symbols-outlined text-icon-sm">check</span>
         </span>
       )}
       {student ? (

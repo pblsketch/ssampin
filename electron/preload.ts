@@ -234,24 +234,157 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 동일한 OG 파싱 IPC를 도메인 중립적인 이름으로 재노출 (북마크 등에서 사용)
   fetchLinkPreview: (url: string) =>
     ipcRenderer.invoke('realtime-wall:fetch-link-preview', url),
-  onRealtimeWallStudentSubmitted: (callback: (data: {
-    post: {
+  /**
+   * v1.14 P1 — 교사 → 학생 broadcast 트리거.
+   * renderer에서 posts/title/layoutMode/columns 변화 시 호출. Main이 연결된 모든
+   * 학생 WebSocket 클라이언트에 payload를 송신하고, wall-state 메시지는 캐시.
+   *
+   * v1.14 P2에서 like-toggled / comment-added / comment-removed 메시지 3종 추가.
+   */
+  broadcastRealtimeWall: (msg: {
+    type:
+      | 'wall-state'
+      | 'post-added'
+      | 'post-updated'
+      | 'post-removed'
+      | 'closed'
+      | 'error'
+      | 'like-toggled'
+      | 'comment-added'
+      | 'comment-removed'
+      | 'student-form-locked'
+      // v2.1 신규 (Phase B 도메인 선언, Phase A/D 활용)
+      | 'boardSettings-changed'
+      | 'nickname-changed';
+    board?: unknown;
+    post?: unknown;
+    postId?: string;
+    patch?: unknown;
+    message?: string;
+    likes?: number;
+    likedBy?: readonly string[];
+    comment?: unknown;
+    commentId?: string;
+    locked?: boolean;
+    // v2.1 신규
+    settings?: unknown;
+    postIds?: readonly string[];
+    newNickname?: string;
+  }): Promise<void> =>
+    ipcRenderer.invoke('realtime-wall:broadcast', msg),
+  /**
+   * v2.1 신규 (Phase B) — 학생 PDF 업로드.
+   * Renderer → Main → magic byte 검증 → 임시 디렉토리 저장 → file:// URL 반환.
+   * Plan §7.2 결정 #7 / Design v2.1 §7.1.
+   */
+  uploadRealtimeWallPdf: (
+    bytes: Uint8Array,
+    filename: string,
+  ): Promise<{ fileUrl: string; filename: string }> =>
+    ipcRenderer.invoke('realtime-wall:upload-pdf', { bytes, filename }),
+  /**
+   * v1.14 P2 — 교사가 학생 댓글 삭제 (status='hidden' 전환).
+   * Main이 도메인 규칙 적용 후 모든 학생에게 broadcast.
+   */
+  removeRealtimeWallComment: (args: { postId: string; commentId: string }): Promise<void> =>
+    ipcRenderer.invoke('realtime-wall:remove-comment', args),
+  /**
+   * v2.1 Phase D — 교사가 학생 placeholder 카드 복원 (status='hidden-by-author' → 'approved').
+   * Main이 broadcast post-updated patch: { status: 'approved' }.
+   */
+  restoreRealtimeWallCard: (args: { postId: string }): Promise<void> =>
+    ipcRenderer.invoke('realtime-wall:restore-card', args),
+  /**
+   * v2.1 Phase D — 학생 자기 카드 수정 알림 (교사 entry).
+   */
+  onRealtimeWallStudentEdit: (callback: (data: {
+    postId: string;
+    post: unknown;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { postId: string; post: unknown }) => callback(data);
+    ipcRenderer.on('realtime-wall:student-edit', handler);
+    return () => { ipcRenderer.removeListener('realtime-wall:student-edit', handler); };
+  },
+  /**
+   * v2.1 Phase D — 학생 자기 카드 삭제(soft delete) 알림 (교사 entry).
+   */
+  onRealtimeWallStudentDelete: (callback: (data: { postId: string }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { postId: string }) => callback(data);
+    ipcRenderer.on('realtime-wall:student-delete', handler);
+    return () => { ipcRenderer.removeListener('realtime-wall:student-delete', handler); };
+  },
+  /**
+   * v2.1 Phase D — 닉네임 변경 broadcast 알림 (교사 entry).
+   */
+  onRealtimeWallNicknameChanged: (callback: (data: {
+    postIds: readonly string[];
+    newNickname: string;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: { postIds: readonly string[]; newNickname: string }) =>
+      callback(data);
+    ipcRenderer.on('realtime-wall:nickname-changed', handler);
+    return () => { ipcRenderer.removeListener('realtime-wall:nickname-changed', handler); };
+  },
+  /**
+   * v1.14 P3 — 교사가 학생 카드 추가 잠금 토글.
+   * Main이 세션 플래그를 갱신하고 모든 학생에게 `student-form-locked` broadcast.
+   */
+  setRealtimeWallStudentFormLocked: (locked: boolean): Promise<void> =>
+    ipcRenderer.invoke('realtime-wall:student-form-locked', locked),
+  /**
+   * v1.14 P2 — 학생 좋아요 도착 알림.
+   * 교사 renderer는 posts 상태를 해당 postId에 대해 likes/likedBy 갱신.
+   */
+  onRealtimeWallStudentLike: (callback: (data: {
+    postId: string;
+    likes: number;
+    likedBy: readonly string[];
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      postId: string;
+      likes: number;
+      likedBy: readonly string[];
+    }) => callback(data);
+    ipcRenderer.on('realtime-wall:student-like', handler);
+    return () => { ipcRenderer.removeListener('realtime-wall:student-like', handler); };
+  },
+  /**
+   * v1.14 P2 — 학생 댓글 도착 알림.
+   */
+  onRealtimeWallStudentComment: (callback: (data: {
+    postId: string;
+    comment: {
       id: string;
       nickname: string;
       text: string;
-      linkUrl?: string;
       submittedAt: number;
+      sessionToken: string;
+      status: 'approved' | 'hidden';
     };
-    totalSubmissions: number;
   }) => void): (() => void) => {
     const handler = (_event: unknown, data: {
-      post: {
+      postId: string;
+      comment: {
         id: string;
         nickname: string;
         text: string;
-        linkUrl?: string;
         submittedAt: number;
+        sessionToken: string;
+        status: 'approved' | 'hidden';
       };
+    }) => callback(data);
+    ipcRenderer.on('realtime-wall:student-comment', handler);
+    return () => { ipcRenderer.removeListener('realtime-wall:student-comment', handler); };
+  },
+  // v2.1 student-ux 회귀 fix (2026-04-24): post payload에 v2.1 필드 + status/kanban/freeform
+  // 등 RealtimeWallPost 전체 필드를 포함. 서버가 도메인 createWallPost로 카드를 직접 생성한
+  // 결과를 그대로 전달하므로 renderer는 재계산 X — 그대로 setPosts에 merge.
+  onRealtimeWallStudentSubmitted: (callback: (data: {
+    post: unknown;
+    totalSubmissions: number;
+  }) => void): (() => void) => {
+    const handler = (_event: unknown, data: {
+      post: unknown;
       totalSubmissions: number;
     }) => callback(data);
     ipcRenderer.on('realtime-wall:student-submitted', handler);

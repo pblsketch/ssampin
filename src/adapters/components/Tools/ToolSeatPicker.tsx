@@ -1003,7 +1003,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                 <button
                   onClick={handleStart}
                   disabled={!canStart}
-                  className="w-full py-4 rounded-xl bg-gradient-to-r from-sp-accent to-blue-400 text-white text-lg font-bold shadow-lg hover:from-blue-400 hover:to-sp-accent transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transform"
+                  className="w-full py-4 rounded-xl bg-sp-accent text-sp-accent-fg text-lg font-bold shadow-sp-md hover:bg-sp-accent/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transform"
                 >
                   🎲 자리 뽑기 시작!
                 </button>
@@ -1037,7 +1037,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
             </div>
             <div className="h-2 bg-sp-surface rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-sp-accent to-blue-400 rounded-full transition-all duration-500"
+                className="h-full bg-sp-accent rounded-full transition-all duration-500"
                 style={{ width: `${totalStudents > 0 ? (assignedCount / totalStudents) * 100 : 0}%` }}
               />
             </div>
@@ -1227,7 +1227,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                 {waitingForNext && (
                   <button
                     onClick={handleNext}
-                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-sp-accent to-blue-400 text-white font-bold text-sm hover:from-blue-400 hover:to-sp-accent transition-all active:scale-[0.98]"
+                    className="flex-1 py-3 rounded-xl bg-sp-accent text-sp-accent-fg font-bold text-sm hover:bg-sp-accent/90 transition-all active:scale-[0.98]"
                   >
                     ⏭️ 다음 학생
                   </button>
@@ -1449,7 +1449,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
         <div className="flex flex-wrap items-center gap-3 w-full max-w-2xl">
           <button
             onClick={() => setShowSaveModal(true)}
-            className="flex-1 min-w-[180px] py-3 rounded-xl bg-gradient-to-r from-sp-accent to-blue-400 text-white font-bold text-sm hover:from-blue-400 hover:to-sp-accent transition-all active:scale-[0.98]"
+            className="flex-1 min-w-[180px] py-3 rounded-xl bg-sp-accent text-sp-accent-fg font-bold text-sm hover:bg-sp-accent/90 transition-all active:scale-[0.98]"
           >
             {seatDataSource === 'homeroom' ? '💾 학급 자리 배치에 저장' : `💾 ${selectedTc?.name ?? '수업반'} 자리 배치에 저장`}
           </button>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BookmarkGroup } from '@domain/entities/Bookmark';
+import { Modal } from '@adapters/components/common/Modal';
 
 interface BookmarkGroupModalProps {
   group: BookmarkGroup | null;
@@ -28,17 +29,12 @@ export function BookmarkGroupModal({
     onSave({ name: name.trim(), emoji });
   };
 
+  const titleText = isEdit ? '그룹 편집' : '그룹 추가';
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" aria-hidden="true">
-      <div
-        className="bg-sp-surface border border-sp-border rounded-2xl w-full max-w-sm p-6 shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-bookmark-group"
-      >
-        <h2 id="modal-title-bookmark-group" className="text-lg font-bold text-sp-text mb-5">
-          {isEdit ? '그룹 편집' : '그룹 추가'}
-        </h2>
+    <Modal isOpen onClose={onClose} title={titleText} srOnlyTitle size="sm">
+      <div className="p-6">
+        <h3 className="text-lg font-bold text-sp-text mb-5">{titleText}</h3>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* 그룹명 */}
@@ -87,13 +83,13 @@ export function BookmarkGroupModal({
             <button
               type="submit"
               disabled={!name.trim()}
-              className="px-4 py-2 text-sm rounded-lg bg-sp-accent hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm rounded-lg bg-sp-accent hover:bg-sp-accent/90 text-sp-accent-fg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isEdit ? '저장' : '추가'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }

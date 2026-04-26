@@ -264,10 +264,12 @@ function ProgressMode({ students, records, categories }: ModeProps) {
       {unreportedCount > 0 && (
         <div className="space-y-2">
           <button
+            type="button"
             onClick={() => setShowNeisDetail(!showNeisDetail)}
+            aria-expanded={showNeisDetail}
             className="w-full flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs text-left"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>warning</span>
+            <span className="material-symbols-outlined text-icon-sm">warning</span>
             나이스 미반영 출결 기록 {unreportedCount}건
             <span className={`material-symbols-outlined text-sm ml-auto transition-transform ${showNeisDetail ? 'rotate-180' : ''}`}>expand_more</span>
           </button>
@@ -295,10 +297,12 @@ function ProgressMode({ students, records, categories }: ModeProps) {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setShowDocDetail(!showDocDetail)}
+              aria-expanded={showDocDetail}
               className="flex-1 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs text-left"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>description</span>
+              <span className="material-symbols-outlined text-icon-sm">description</span>
               서류 미제출 출결 기록 {docUnsubmittedCount}건
               <span className={`material-symbols-outlined text-sm ml-auto transition-transform ${showDocDetail ? 'rotate-180' : ''}`}>expand_more</span>
             </button>
@@ -311,7 +315,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
               }}
               className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-xs hover:bg-green-500/20 transition-colors whitespace-nowrap"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>done_all</span>
+              <span className="material-symbols-outlined text-icon-sm">done_all</span>
               전체 제출 완료
             </button>
           </div>
@@ -337,7 +341,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
       {/* Feature 4: Follow-up tracker panel */}
       {(followUpData.overdue.length > 0 || followUpData.upcoming.length > 0) && (
         <div className="rounded-xl bg-sp-card p-4">
-          <button onClick={() => setShowFollowUpTracker(!showFollowUpTracker)} className="w-full flex items-center justify-between">
+          <button type="button" onClick={() => setShowFollowUpTracker(!showFollowUpTracker)} aria-expanded={showFollowUpTracker} className="w-full flex items-center justify-between">
             <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
               <span className="material-symbols-outlined text-base">assignment_late</span>
               후속조치 현황

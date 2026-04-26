@@ -1,14 +1,23 @@
 import type {
+  RealtimeWallCardColor,
   RealtimeWallColumn,
+  RealtimeWallComment,
   RealtimeWallFreeformPosition,
   RealtimeWallLayoutMode,
   RealtimeWallLinkPreview,
   RealtimeWallPost,
+  StudentCommentInput,
   WallApprovalMode,
   WallBoard,
   WallBoardId,
   WallPreviewPost,
 } from '@domain/entities/RealtimeWall';
+import {
+  DEFAULT_REALTIME_WALL_BOARD_SETTINGS,
+  REALTIME_WALL_BOARD_SETTINGS_VERSION,
+  type RealtimeWallBoardSettings,
+  type RealtimeWallModerationMode,
+} from '@domain/entities/RealtimeWallBoardSettings';
 
 export const DEFAULT_REALTIME_WALL_COLUMNS = [
   '생각',
@@ -162,6 +171,15 @@ export const REALTIME_WALL_MAX_HEARTS = 999;
 /**
  * 학생 제출 raw 입력.
  * `linkUrl`은 정규화되지 않은 원본. 규칙 함수가 normalize + classify를 수행.
+ *
+ * v2.1 student-ux 신규:
+ *   - columnId? — Kanban 컬럼별 + 버튼으로 진입 시 학생이 선택한 columnId (Padlet 패턴).
+ *     미지정 시 첫 컬럼 default. 검증된 columnId여야 함 (없으면 fallback).
+ *
+ * v2.1 student-ux 회귀 fix (2026-04-24): images/pdfUrl/pdfFilename/color/ownerSessionToken/
+ * studentPinHash 신규 — 이전에는 createWallPost가 이 필드를 통과시키지 않아 학생이 첨부한
+ * 이미지/PDF/색상/소유 식별자가 모두 유실되었음 (renderer 측 onRealtimeWallStudentSubmitted
+ * 핸들러가 input에서 제외). 도메인 entity는 모두 optional 필드로 이미 지원.
  */
 export interface RealtimeWallStudentSubmission {
   readonly id: string;
@@ -169,6 +187,18 @@ export interface RealtimeWallStudentSubmission {
   readonly text: string;
   readonly linkUrl?: string;
   readonly submittedAt: number;
+  readonly columnId?: string;
+  /** v2.1 — 카드당 최대 5장 base64 data URL */
+  readonly images?: readonly string[];
+  /** v2.1 — PDF (서버가 file:// URL로 변환 후 전달) */
+  readonly pdfUrl?: string;
+  readonly pdfFilename?: string;
+  /** v2.1 — 카드 색상 8색 */
+  readonly color?: RealtimeWallCardColor;
+  /** v2.1 — 작성한 학생의 sessionToken (Phase D/C 활용 — 본인 카드 매칭) */
+  readonly ownerSessionToken?: string;
+  /** v2.1 — 학생 PIN의 SHA-256 hash (Phase D 활용) */
+  readonly studentPinHash?: string;
 }
 
 /**
@@ -192,7 +222,14 @@ export function createPendingRealtimeWallPost(
 ): RealtimeWallPost {
   const normalizedLink = input.linkUrl ? normalizeRealtimeWallLink(input.linkUrl) : undefined;
   const initialPreview = normalizedLink ? classifyRealtimeWallLink(normalizedLink) : undefined;
-  const initialColumnId = columns[0]?.id ?? 'column-1';
+  // v2.1 student-ux — Padlet 컬럼별 + 버튼: input.columnId가 columns에 존재하면 우선 사용, 아니면 첫 컬럼 fallback.
+  const requestedColumnId = input.columnId;
+  const requestedColumnExists = requestedColumnId
+    ? columns.some((c) => c.id === requestedColumnId)
+    : false;
+  const initialColumnId = requestedColumnExists
+    ? (requestedColumnId as string)
+    : (columns[0]?.id ?? 'column-1');
   const order = existingPosts.filter(
     (post) => post.status === 'approved' && post.kanban.columnId === initialColumnId,
   ).length;
@@ -209,6 +246,14 @@ export function createPendingRealtimeWallPost(
     submittedAt: input.submittedAt,
     kanban: { columnId: initialColumnId, order },
     freeform,
+    // v2.1 — student-ux 회귀 fix (2026-04-24): images/pdf/color/owner/pinHash 통과.
+    // 이전에는 모두 누락되어 학생 첨부물이 카드 표시 단계에서 사라졌음 (Bug B 본질).
+    ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
+    ...(input.pdfUrl ? { pdfUrl: input.pdfUrl } : {}),
+    ...(input.pdfFilename ? { pdfFilename: input.pdfFilename } : {}),
+    ...(input.color ? { color: input.color } : {}),
+    ...(input.ownerSessionToken ? { ownerSessionToken: input.ownerSessionToken } : {}),
+    ...(input.studentPinHash ? { studentPinHash: input.studentPinHash } : {}),
   };
 }
 
@@ -478,7 +523,8 @@ export interface CreateWallBoardInput {
  * 새 WallBoard 팩토리.
  *
  * - posts는 항상 빈 배열로 시작
- * - `approvalMode` 기본값 'manual' (초·중등 안전 기본, Design §4.4 기본)
+ * - `approvalMode` 기본값 'auto' (v2.1 student-ux — Padlet 기본 정합 / Plan §7.2 결정 #4
+ *    "moderation OFF 프리셋 v2 포함" / DEFAULT_REALTIME_WALL_BOARD_SETTINGS.moderation='off' ↔ approvalMode='auto')
  * - `createdAt === updatedAt === now` (재열기 비교용)
  * - `shortCode` 없으면 undefined 유지 (Repository가 충돌 검사 후 발급)
  *
@@ -493,7 +539,7 @@ export function createWallBoard(input: CreateWallBoardInput): WallBoard {
     ...(input.description !== undefined ? { description: input.description } : {}),
     layoutMode: input.layoutMode,
     columns: input.columns.map((c) => ({ ...c })), // defensive copy
-    approvalMode: input.approvalMode ?? 'manual',
+    approvalMode: input.approvalMode ?? 'auto',
     posts: [],
     createdAt: now,
     updatedAt: now,
@@ -775,4 +821,1089 @@ export function cloneWallBoard(
     ...(options?.shortCode ? { shortCode: options.shortCode } : {}),
   };
   return cloned;
+}
+
+// ============================================================
+// v1.14 Phase P2 — 패들렛 모드 (학생 좋아요·댓글)
+// Design §3 도메인 규칙 5종
+// ============================================================
+
+/** 한 카드에 누적 가능한 최대 좋아요 수 (UI 표시 "+1000" 경계). */
+export const REALTIME_WALL_MAX_LIKED_BY = 1000;
+/** 카드당 댓글 최대 개수 (hidden 포함 배열 크기). */
+export const REALTIME_WALL_MAX_COMMENTS_PER_POST = 50;
+/** 댓글 본문 최대 길이. */
+export const REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH = 200;
+/** 댓글 닉네임 최대 길이 — 카드 닉네임과 동일 정책. */
+export const REALTIME_WALL_COMMENT_MAX_NICKNAME_LENGTH = 20;
+
+/**
+ * 학생 좋아요 토글 — Design §3.1.
+ *
+ * 동작:
+ *   - `likedBy`에 sessionToken 있으면 제거 + likes -1 (unlike)
+ *   - 없으면 추가 + likes +1 (like)
+ *   - `likedBy` 크기가 {@link REALTIME_WALL_MAX_LIKED_BY}에 도달 시
+ *     가장 오래된(배열 앞쪽) 항목을 drop한 뒤 새 토큰을 append
+ *   - likes는 max(0, ...) — 음수 방지
+ *
+ * 순수 함수 — 입력 불변, 새 객체 반환. postId가 일치해야 호출된다
+ * (caller는 단일 post를 넘긴다 — 전체 배열 순회는 caller 측에서).
+ *
+ * @param post 대상 카드
+ * @param sessionToken 학생 브라우저 토큰
+ * @returns 변경된 post (likes/likedBy 필드만 갱신). 기타 필드는 그대로.
+ */
+export function toggleStudentLike(
+  post: RealtimeWallPost,
+  sessionToken: string,
+): RealtimeWallPost {
+  const currentLikedBy = post.likedBy ?? [];
+  const currentLikes = post.likes ?? 0;
+  const alreadyLiked = currentLikedBy.includes(sessionToken);
+
+  if (alreadyLiked) {
+    // Unlike
+    const nextLikedBy = currentLikedBy.filter((t) => t !== sessionToken);
+    const nextLikes = Math.max(0, currentLikes - 1);
+    return { ...post, likes: nextLikes, likedBy: nextLikedBy };
+  }
+
+  // Like — 1000 cap에 도달하면 가장 오래된 항목부터 drop하며 새 토큰 append
+  let nextLikedBy: readonly string[];
+  if (currentLikedBy.length >= REALTIME_WALL_MAX_LIKED_BY) {
+    const overflow = currentLikedBy.length - REALTIME_WALL_MAX_LIKED_BY + 1;
+    nextLikedBy = [...currentLikedBy.slice(overflow), sessionToken];
+  } else {
+    nextLikedBy = [...currentLikedBy, sessionToken];
+  }
+  // likes는 nextLikedBy.length로 재계산 — 일관성 유지 (drop된 만큼 감소 반영).
+  const nextLikes = nextLikedBy.length;
+  return { ...post, likes: nextLikes, likedBy: nextLikedBy };
+}
+
+/**
+ * 학생 댓글 추가 — Design §3.2.
+ *
+ * 동작:
+ *   - input.nickname/text는 trim + 길이 상한 truncate
+ *   - comments 크기가 {@link REALTIME_WALL_MAX_COMMENTS_PER_POST}에 도달 시
+ *     **추가 거부 — 원본 post 그대로 반환** (caller는 에러 처리)
+ *   - trim 후 빈 문자열 input (nickname/text 중 하나라도)는 원본 반환
+ *   - id/submittedAt/status는 caller가 주입한 값을 보장 (id 테스트 결정성)
+ *
+ * 순수 함수 — 호출자는 id(UUID)와 now(Date.now())를 외부에서 주입한다.
+ *
+ * @param post 대상 카드
+ * @param input { nickname, text, sessionToken }
+ * @param id 댓글 UUID (서버 측 generateUUID)
+ * @param now Date.now() (테스트 결정성)
+ * @returns 변경된 post (comments에 신규 댓글 append)
+ */
+export function addStudentComment(
+  post: RealtimeWallPost,
+  input: StudentCommentInput,
+  id: string,
+  now: number,
+): RealtimeWallPost {
+  const trimmedNickname = input.nickname
+    .trim()
+    .slice(0, REALTIME_WALL_COMMENT_MAX_NICKNAME_LENGTH);
+  const trimmedText = input.text.trim().slice(0, REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH);
+  if (trimmedNickname.length === 0) return post;
+  if (trimmedText.length === 0) return post;
+
+  const currentComments = post.comments ?? [];
+  if (currentComments.length >= REALTIME_WALL_MAX_COMMENTS_PER_POST) {
+    return post;
+  }
+
+  const newComment: RealtimeWallComment = {
+    id,
+    nickname: trimmedNickname,
+    text: trimmedText,
+    submittedAt: now,
+    sessionToken: input.sessionToken,
+    status: 'approved',
+  };
+  return { ...post, comments: [...currentComments, newComment] };
+}
+
+/**
+ * 교사의 댓글 삭제 — Design §3.3.
+ *
+ * 실제 배열에서 제거하지 않고 해당 댓글의 status를 'hidden'으로 전환
+ * (인덱스 보존 + 복구 여지). commentId 미존재 시 원본 그대로 반환.
+ * 이미 'hidden' 상태인 댓글도 idempotent (두 번 호출해도 동일).
+ */
+export function removeStudentComment(
+  post: RealtimeWallPost,
+  commentId: string,
+): RealtimeWallPost {
+  const currentComments = post.comments ?? [];
+  const idx = currentComments.findIndex((c) => c.id === commentId);
+  if (idx === -1) return post;
+  const nextComments = currentComments.map((c) =>
+    c.id === commentId ? { ...c, status: 'hidden' as const } : c,
+  );
+  return { ...post, comments: nextComments };
+}
+
+/**
+ * v1.13 → v1.14 Post 마이그레이션 — Design §3.4.
+ *
+ * likes/likedBy/comments가 undefined면 각각 0/[]/[]을 주입해 이후 규칙 호출이
+ * nullish 분기를 신경쓰지 않도록 한다. 기존 필드는 건드리지 않는다.
+ *
+ * v1.13 저장 파일 로드 직후 일괄 적용 — JsonWallBoardRepository.load() +
+ * electron/ipc/realtimeWallBoard.ts readBoardSync().
+ */
+export function normalizePostForPadletMode(
+  post: RealtimeWallPost,
+): RealtimeWallPost {
+  return {
+    ...post,
+    likes: post.likes ?? 0,
+    likedBy: post.likedBy ?? [],
+    comments: post.comments ?? [],
+  };
+}
+
+/**
+ * v1.13 → v1.14 Board 마이그레이션 — Design §3.4.
+ *
+ * board.posts 각 post에 normalizePostForPadletMode 적용.
+ * WallBoard 외에도 posts 필드를 가진 어떤 객체든 동일 처리 (generic).
+ */
+export function normalizeBoardForPadletMode<
+  T extends { readonly posts: readonly RealtimeWallPost[] },
+>(board: T): T {
+  return {
+    ...board,
+    posts: board.posts.map(normalizePostForPadletMode),
+  };
+}
+
+// ============================================================
+// v1.15.x Phase B — 패들렛 모드 v2.1 (학생 UX 정교화)
+// Design v2.1 §2 / §3 / §3.5 / §3.6 / §3.7
+// ============================================================
+
+/**
+ * v2.1 — 카드 색상 8색 union (RealtimeWallCardColor와 동일).
+ * 도메인/서버 검증 시 enum 강제용.
+ */
+export const REALTIME_WALL_CARD_COLORS = [
+  'yellow',
+  'pink',
+  'blue',
+  'green',
+  'purple',
+  'orange',
+  'gray',
+  'white',
+] as const satisfies readonly RealtimeWallCardColor[];
+
+/**
+ * v2.1 — 카드당 최대 이미지 장수 (Plan FR-B2).
+ *
+ * v2.1 student-ux 회귀 fix (2026-04-24): 3 → 5장. 사용자 요청 — 활동 사진 5장 모음 등
+ * 학생 1인이 한 카드에 다중 이미지 첨부 케이스 증가.
+ */
+export const REALTIME_WALL_MAX_IMAGES_PER_POST = 5;
+
+/**
+ * v2.1 — 카드 합계 이미지 raw bytes 한도 (Plan FR-B2).
+ *
+ * v2.1 student-ux 회귀 fix (2026-04-24): 5MB → 15MB. 5장 × 평균 3MB 환산. base64 인코딩 후
+ * ~20MB → WebSocket maxPayload 20MB로 매칭 (electron/ipc/realtimeWall.ts).
+ */
+export const REALTIME_WALL_MAX_IMAGES_TOTAL_BYTES = 15 * 1024 * 1024;
+
+/**
+ * v2.1 — 단일 이미지 raw bytes 한도.
+ *
+ * v2.1 student-ux 회귀 fix (2026-04-24): 5MB → 10MB. 사용자 요청.
+ */
+export const REALTIME_WALL_MAX_SINGLE_IMAGE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * v2.1 — PDF 한도 (Plan FR-B4). 10MB.
+ */
+export const REALTIME_WALL_MAX_PDF_BYTES = 10 * 1024 * 1024;
+
+/**
+ * v2.1 — 댓글 이미지 최대 장수 (Plan FR-B12).
+ */
+export const REALTIME_WALL_MAX_COMMENT_IMAGES = 1;
+
+/**
+ * v2.1 — 카드 본문 최대 길이 (v1.14의 280자 → 1000자, Plan FR-B5).
+ * 마크다운 raw text 기준.
+ *
+ * 단 기존 `REALTIME_WALL_MAX_TEXT_LENGTH=280`은 호환을 위해 유지.
+ * v2.1 신규 코드는 `REALTIME_WALL_MAX_TEXT_LENGTH_V2`를 사용.
+ */
+export const REALTIME_WALL_MAX_TEXT_LENGTH_V2 = 1000;
+
+/**
+ * v2.1 — data URL approximate raw bytes 계산.
+ * base64 길이 ≈ raw bytes * 4/3 + padding.
+ * @param dataUrl `data:image/png;base64,XXXX...`
+ * @returns 추정 raw bytes (정확값 아님 — 사전 차단용)
+ */
+function approximateRawBytesFromDataUrl(dataUrl: string): number {
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx === -1) return 0;
+  const base64Len = dataUrl.length - commaIdx - 1;
+  const padding =
+    dataUrl.endsWith('==')
+      ? 2
+      : dataUrl.endsWith('=')
+        ? 1
+        : 0;
+  return Math.floor((base64Len * 3) / 4) - padding;
+}
+
+/**
+ * v2.1 — 단일 이미지 data URL 검증 결과 — Design §3.5.
+ */
+export type ImageValidationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | 'too-large'
+        | 'invalid-format'
+        | 'svg-not-allowed'
+        | 'magic-byte-mismatch'
+        | 'invalid-data-url';
+    };
+
+/**
+ * v2.1 — 단일 이미지 data URL 검증 (Design §3.5).
+ *
+ * 검증 순서:
+ *   1. data URL prefix 검증 (`data:image/...;base64,`)
+ *   2. SVG 명시 차단 (XSS — script 태그 가능성)
+ *   3. mime type 화이트리스트: png/jpeg/gif/webp만
+ *   4. base64 → bytes 변환 시 size 5MB 한도
+ *   5. magic byte 검증 (PNG/JPEG/GIF/WebP 매칭)
+ *
+ * Node.js + 브라우저 모두 동작 (atob/Buffer 분기).
+ */
+export function validateImageDataUrl(dataUrl: string): ImageValidationResult {
+  if (typeof dataUrl !== 'string' || dataUrl.length === 0) {
+    return { ok: false, reason: 'invalid-data-url' };
+  }
+  // 1. prefix
+  const dataUrlMatch = /^data:(image\/[a-z+\-.]+);base64,/i.exec(dataUrl);
+  if (!dataUrlMatch || !dataUrlMatch[1]) {
+    return { ok: false, reason: 'invalid-data-url' };
+  }
+  const mime = dataUrlMatch[1].toLowerCase();
+
+  // 2. SVG 차단
+  if (mime === 'image/svg+xml' || mime === 'image/svg') {
+    return { ok: false, reason: 'svg-not-allowed' };
+  }
+
+  // 3. mime 화이트리스트
+  const ALLOWED_MIMES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+  if (!ALLOWED_MIMES.includes(mime)) {
+    return { ok: false, reason: 'invalid-format' };
+  }
+
+  // 4. size
+  const rawBytes = approximateRawBytesFromDataUrl(dataUrl);
+  if (rawBytes > REALTIME_WALL_MAX_SINGLE_IMAGE_BYTES) {
+    return { ok: false, reason: 'too-large' };
+  }
+
+  // 5. magic byte (앞 12바이트만 디코드)
+  const headBytes = decodeBase64Head(dataUrl);
+  if (headBytes === null) {
+    return { ok: false, reason: 'invalid-data-url' };
+  }
+  if (!matchesImageMagicByte(mime, headBytes)) {
+    return { ok: false, reason: 'magic-byte-mismatch' };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * data URL의 base64 데이터 앞 12바이트만 Uint8Array로 디코드.
+ * Node.js + 브라우저 모두 동작.
+ */
+function decodeBase64Head(dataUrl: string): Uint8Array | null {
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx === -1) return null;
+  const head = dataUrl.slice(commaIdx + 1, commaIdx + 1 + 16); // 16 base64 chars ≈ 12 bytes
+  try {
+    if (typeof atob !== 'undefined') {
+      const binary = atob(head);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+    // Node fallback
+    if (typeof Buffer !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return new Uint8Array(Buffer.from(head, 'base64'));
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function matchesImageMagicByte(mime: string, head: Uint8Array): boolean {
+  if (head.length < 4) return false;
+  // PNG: 89 50 4E 47
+  if (mime === 'image/png') {
+    return head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+  }
+  // JPEG: FF D8 FF
+  if (mime === 'image/jpeg' || mime === 'image/jpg') {
+    return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+  }
+  // GIF: 47 49 46 38 (GIF8)
+  if (mime === 'image/gif') {
+    return head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x38;
+  }
+  // WebP: RIFF .... WEBP (52 49 46 46 ?? ?? ?? ?? 57 45 42 50)
+  if (mime === 'image/webp') {
+    if (head.length < 12) return false;
+    const isRiff = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46;
+    const isWebp = head[8] === 0x57 && head[9] === 0x45 && head[10] === 0x42 && head[11] === 0x50;
+    return isRiff && isWebp;
+  }
+  return false;
+}
+
+/**
+ * v2.1 — 이미지 다중 배열 검증 결과.
+ */
+export type ImagesArrayValidationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | 'too-many-images'
+        | 'total-too-large'
+        | 'too-large'
+        | 'invalid-format'
+        | 'svg-not-allowed'
+        | 'magic-byte-mismatch'
+        | 'invalid-data-url';
+      index?: number;
+    };
+
+/**
+ * v2.1 — 이미지 다중 배열 검증 (Design §3.5).
+ *
+ * - 최대 3장 (Plan FR-B2)
+ * - 카드 합계 5MB
+ * - 각 이미지 validateImageDataUrl 통과
+ * - 빈 배열은 ok (이미지 미첨부 = 정상)
+ */
+export function validateImages(
+  images: readonly string[],
+  options: { maxImages?: number; maxTotalBytes?: number } = {},
+): ImagesArrayValidationResult {
+  const maxImages = options.maxImages ?? REALTIME_WALL_MAX_IMAGES_PER_POST;
+  const maxTotalBytes = options.maxTotalBytes ?? REALTIME_WALL_MAX_IMAGES_TOTAL_BYTES;
+
+  if (images.length > maxImages) {
+    return { ok: false, reason: 'too-many-images' };
+  }
+
+  let totalBytes = 0;
+  for (let i = 0; i < images.length; i++) {
+    const dataUrl = images[i];
+    if (typeof dataUrl !== 'string') {
+      return { ok: false, reason: 'invalid-data-url', index: i };
+    }
+    const single = validateImageDataUrl(dataUrl);
+    if (!single.ok) {
+      return { ok: false, reason: single.reason, index: i };
+    }
+    totalBytes += approximateRawBytesFromDataUrl(dataUrl);
+  }
+  if (totalBytes > maxTotalBytes) {
+    return { ok: false, reason: 'total-too-large' };
+  }
+  return { ok: true };
+}
+
+/**
+ * v2.1 — PDF 검증 결과 (Design §3.6).
+ */
+export type PdfValidationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: 'too-large' | 'invalid-format' | 'magic-byte-mismatch' | 'invalid-url';
+    };
+
+/**
+ * v2.1 — PDF 첨부 검증 (Design §3.6).
+ *
+ * - magic byte `%PDF-` (25 50 44 46 2D) 검증
+ * - max 10MB (Plan FR-B4)
+ * - svg/script/exe magic byte 거부
+ * - file:// URL 형식 검증 (외부 URL 거부)
+ *
+ * @param pdfBytes 파일 raw bytes (Main 프로세스에서 검증)
+ * @param pdfUrl   서버가 발급한 file:// URL (검증)
+ */
+export function validatePdf(
+  pdfBytes: Uint8Array,
+  pdfUrl: string,
+): PdfValidationResult {
+  // URL 형식 (file:// 만 허용)
+  if (typeof pdfUrl !== 'string' || !pdfUrl.startsWith('file://')) {
+    return { ok: false, reason: 'invalid-url' };
+  }
+  // size
+  if (pdfBytes.length > REALTIME_WALL_MAX_PDF_BYTES) {
+    return { ok: false, reason: 'too-large' };
+  }
+  if (pdfBytes.length < 5) {
+    return { ok: false, reason: 'magic-byte-mismatch' };
+  }
+  // magic byte: %PDF-
+  if (
+    pdfBytes[0] !== 0x25 ||
+    pdfBytes[1] !== 0x50 ||
+    pdfBytes[2] !== 0x44 ||
+    pdfBytes[3] !== 0x46 ||
+    pdfBytes[4] !== 0x2d
+  ) {
+    return { ok: false, reason: 'magic-byte-mismatch' };
+  }
+  return { ok: true };
+}
+
+/**
+ * v2.1 — 보드 설정 검증 결과 (Design §3.7).
+ */
+export type BoardSettingsValidationResult =
+  | { ok: true }
+  | { ok: false; reason: 'invalid-moderation' | 'unknown-version' | 'invalid-shape' };
+
+/**
+ * v2.1 — 보드 설정 검증 (Design §3.7).
+ *
+ * - moderation: 'off' | 'manual'만 허용
+ * - version: 1만 허용
+ *
+ * Phase B에서는 도메인 규칙 선언만. Phase A에서 IPC 핸들러 + UI 패널이 활용.
+ */
+export function validateBoardSettings(
+  settings: unknown,
+): BoardSettingsValidationResult {
+  if (!settings || typeof settings !== 'object') {
+    return { ok: false, reason: 'invalid-shape' };
+  }
+  const obj = settings as Record<string, unknown>;
+  if (obj['version'] !== REALTIME_WALL_BOARD_SETTINGS_VERSION) {
+    return { ok: false, reason: 'unknown-version' };
+  }
+  if (obj['moderation'] !== 'off' && obj['moderation'] !== 'manual') {
+    return { ok: false, reason: 'invalid-moderation' };
+  }
+  return { ok: true };
+}
+
+/**
+ * v2.1 — 카드 색상 검증 (Design §2.1 RealtimeWallCardColor union).
+ */
+export function isValidRealtimeWallCardColor(
+  value: unknown,
+): value is RealtimeWallCardColor {
+  return (
+    typeof value === 'string' &&
+    (REALTIME_WALL_CARD_COLORS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * v2.1 — Phase B 마이그레이션 normalizer (Design §2.5).
+ *
+ * v1.14.x → v1.15.x 무손실 호환:
+ * - color: 'white' default 주입
+ * - images / pdfUrl / pdfFilename / ownerSessionToken / studentPinHash:
+ *   undefined 유지 (default 주입 X — 학생 권한 차단/익명 모드 보장)
+ * - edited: false default
+ *
+ * v1 normalizer (`normalizePostForPadletMode`) 호출 후 v2.1 필드 추가 — idempotent.
+ */
+export function normalizePostForPadletModeV2(
+  post: RealtimeWallPost,
+): RealtimeWallPost {
+  const v1Normalized = normalizePostForPadletMode(post);
+  return {
+    ...v1Normalized,
+    color: v1Normalized.color ?? 'white',
+    edited: v1Normalized.edited ?? false,
+    // images / pdfUrl / pdfFilename / ownerSessionToken / studentPinHash:
+    // undefined 유지 (default 주입 X — 의도된 동작)
+  };
+}
+
+/**
+ * v2.1 — Phase B 보드 마이그레이션 normalizer (Design §2.5).
+ *
+ * - posts: normalizePostForPadletModeV2 적용
+ * - settings: DEFAULT_REALTIME_WALL_BOARD_SETTINGS (`{ version: 1, moderation: 'off' }`) 주입
+ *
+ * idempotent — 두 번 호출해도 동일 결과.
+ */
+export function normalizeBoardForPadletModeV2<
+  T extends { readonly posts: readonly RealtimeWallPost[]; readonly settings?: RealtimeWallBoardSettings },
+>(board: T): T {
+  const settings: RealtimeWallBoardSettings = board.settings ?? DEFAULT_REALTIME_WALL_BOARD_SETTINGS;
+  return {
+    ...board,
+    posts: board.posts.map(normalizePostForPadletModeV2),
+    settings,
+  };
+}
+
+/**
+ * v2.1 — `WallApprovalMode` ↔ `RealtimeWallModerationMode` 통합 매핑 (Design §2.5).
+ *
+ * 기존 v1.14.x의 approvalMode와 v2.1 신규 boardSettings.moderation을 통합:
+ * - moderation='off'    ↔ approvalMode='auto'
+ * - moderation='manual' ↔ approvalMode='manual'
+ *
+ * Phase A에서 boardSettings 도입 시 양방향 마이그레이션 헬퍼.
+ */
+export function moderationModeFromApprovalMode(
+  approvalMode: WallApprovalMode,
+): RealtimeWallModerationMode {
+  switch (approvalMode) {
+    case 'auto':
+      return 'off';
+    case 'manual':
+    case 'filter':
+      return 'manual';
+    default: {
+      const _exhaustive: never = approvalMode;
+      void _exhaustive;
+      return 'manual';
+    }
+  }
+}
+
+export function approvalModeFromModerationMode(
+  moderation: RealtimeWallModerationMode,
+): WallApprovalMode {
+  return moderation === 'off' ? 'auto' : 'manual';
+}
+
+// ============================================================
+// v1.15.x Phase D — 학생 자기 카드 수정/삭제 + 교사 모더레이션 도구
+// Design v2.1 §3.1 (isOwnCard 양방향) / §3.3 / §3.4 (soft delete + applyRestore)
+// ============================================================
+
+/**
+ * v2.1 Phase D — 자기 카드 식별 컨텍스트.
+ * sessionToken + pinHash 양방향 OR 매칭 (Design v2.1 §0.2 원칙 v2-1).
+ */
+export interface OwnerMatchContext {
+  readonly currentSessionToken: string | undefined;
+  readonly currentPinHash: string | undefined;
+}
+
+/**
+ * v2.1 Phase D — 자기 카드 식별 (Design v2.1 §3.1).
+ *
+ * sessionToken OR studentPinHash 양방향 OR 매칭:
+ * - 둘 중 하나라도 일치하면 true (Plan 원칙 v2-1)
+ * - PIN 미설정 학생 → currentPinHash undefined → sessionToken 단일 매칭 폴백
+ * - PIN 설정 학생 → 같은 PC 다른 탭/세션에서도 PIN으로 식별 가능
+ * - 빈 문자열은 false 처리 (false-positive 방지)
+ *
+ * UI/usecase 모두 이 함수만 사용 (직접 비교 금지 — 회귀 위험 #9 mitigation 강화).
+ */
+export function isOwnCard(
+  post: Pick<RealtimeWallPost, 'ownerSessionToken' | 'studentPinHash'>,
+  ctx: OwnerMatchContext,
+): boolean {
+  // 첫째 항: sessionToken 매칭
+  if (
+    ctx.currentSessionToken &&
+    ctx.currentSessionToken.length > 0 &&
+    post.ownerSessionToken &&
+    post.ownerSessionToken.length > 0 &&
+    post.ownerSessionToken === ctx.currentSessionToken
+  ) {
+    return true;
+  }
+  // 둘째 항: PIN hash 매칭
+  if (
+    ctx.currentPinHash &&
+    ctx.currentPinHash.length > 0 &&
+    post.studentPinHash &&
+    post.studentPinHash.length > 0 &&
+    post.studentPinHash === ctx.currentPinHash
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * v2.1 Phase D/C — 학생 위치 변경 요청 (Design v2.1 §3.2).
+ * Phase D에서는 선언만 — Phase C에서 활용 (위치 변경 검증).
+ */
+export interface MoveRequest {
+  readonly postId: string;
+  readonly sessionToken: string;
+  readonly pinHash?: string;
+  readonly freeform?: RealtimeWallFreeformPosition;
+  readonly kanban?: { columnId: string; order: number };
+}
+
+export type MoveValidationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | 'not-found'
+        | 'not-owner'
+        | 'invalid-position'
+        | 'invalid-column'
+        | 'mobile-readonly';
+    };
+
+/**
+ * v2.1 Phase C — 학생 위치 변경 검증 (Design v2.1 §3.2).
+ *
+ * - 자기 카드 검증 (isOwnCard 양방향)
+ * - freeform: 0 ≤ x/y ≤ 10000, 100 ≤ w/h ≤ 2000
+ * - kanban: columnId 존재 + order ≥ 0
+ *
+ * Phase D에서는 선언만 — 실제 호출은 Phase C에서 (submit-move 핸들러).
+ */
+export function validateMove(
+  posts: readonly RealtimeWallPost[],
+  columns: readonly RealtimeWallColumn[],
+  req: MoveRequest,
+): MoveValidationResult {
+  const target = posts.find((p) => p.id === req.postId);
+  if (!target) return { ok: false, reason: 'not-found' };
+  if (
+    !isOwnCard(target, {
+      currentSessionToken: req.sessionToken,
+      currentPinHash: req.pinHash,
+    })
+  ) {
+    return { ok: false, reason: 'not-owner' };
+  }
+  if (!req.freeform && !req.kanban) {
+    return { ok: false, reason: 'invalid-position' };
+  }
+  if (req.freeform) {
+    const { x, y, w, h } = req.freeform;
+    if (
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      !Number.isFinite(w) ||
+      !Number.isFinite(h) ||
+      x < 0 ||
+      x > 10000 ||
+      y < 0 ||
+      y > 10000 ||
+      w < 100 ||
+      w > 2000 ||
+      h < 100 ||
+      h > 2000
+    ) {
+      return { ok: false, reason: 'invalid-position' };
+    }
+  }
+  if (req.kanban) {
+    if (!columns.some((c) => c.id === req.kanban!.columnId)) {
+      return { ok: false, reason: 'invalid-column' };
+    }
+    if (!Number.isInteger(req.kanban.order) || req.kanban.order < 0) {
+      return { ok: false, reason: 'invalid-position' };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * v2.1 Phase C — 학생 위치 변경 적용 (Design v2.1 §3.4).
+ *
+ * 호출 전 validateMove 통과 보장 (호출자 책임).
+ *
+ * - freeform 부분: 기존 freeform 위에 patch (zIndex 등 미지정 필드는 보존)
+ * - kanban 부분: 컬럼 이동 + order 갱신
+ * - 회귀 위험 #8 보호: posts.filter X — 모두 map으로 patch만
+ *
+ * 반환: 변경된 posts 배열 (불변).
+ */
+export function applyMove(
+  posts: readonly RealtimeWallPost[],
+  req: MoveRequest,
+): RealtimeWallPost[] {
+  return posts.map((p) => {
+    if (p.id !== req.postId) return p;
+    let next: RealtimeWallPost = p;
+    if (req.freeform) {
+      next = {
+        ...next,
+        freeform: {
+          ...next.freeform,
+          ...req.freeform,
+        },
+      };
+    }
+    if (req.kanban) {
+      next = {
+        ...next,
+        kanban: {
+          ...next.kanban,
+          columnId: req.kanban.columnId,
+          order: req.kanban.order,
+        },
+      };
+    }
+    return next;
+  });
+}
+
+/**
+ * v2.1 Phase D — 학생 카드 수정 요청 (Design v2.1 §3.3).
+ */
+export interface EditRequest {
+  readonly postId: string;
+  readonly sessionToken: string;
+  readonly pinHash?: string;
+  readonly text?: string;
+  readonly linkUrl?: string | null;
+  readonly images?: readonly string[];
+  readonly pdfUrl?: string | null;
+  readonly pdfFilename?: string | null;
+  readonly color?: RealtimeWallCardColor;
+}
+
+export type EditValidationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | 'not-found'
+        | 'not-owner'
+        | 'invalid-text'
+        | 'invalid-link'
+        | 'invalid-images'
+        | 'invalid-pdf'
+        | 'invalid-color'
+        | 'placeholder-locked';
+    };
+
+/**
+ * v2.1 Phase D — 학생 카드 수정 검증 (Design v2.1 §3.3).
+ *
+ * - 자기 카드 검증 (isOwnCard 양방향)
+ * - text 길이 제한
+ * - linkUrl 형식 (null = 링크 제거)
+ * - images 다중 검증
+ * - pdfUrl file:// 형식
+ * - color enum
+ * - status='hidden-by-author'는 수정 불가 (placeholder-locked)
+ */
+export function validateEdit(
+  posts: readonly RealtimeWallPost[],
+  req: EditRequest,
+  maxTextLength: number = REALTIME_WALL_MAX_TEXT_LENGTH_V2,
+): EditValidationResult {
+  const target = posts.find((p) => p.id === req.postId);
+  if (!target) return { ok: false, reason: 'not-found' };
+  if (
+    !isOwnCard(target, {
+      currentSessionToken: req.sessionToken,
+      currentPinHash: req.pinHash,
+    })
+  ) {
+    return { ok: false, reason: 'not-owner' };
+  }
+  if (target.status === 'hidden-by-author') {
+    return { ok: false, reason: 'placeholder-locked' };
+  }
+
+  if (req.text !== undefined) {
+    const trimmed = req.text.trim();
+    if (trimmed.length === 0 || trimmed.length > maxTextLength) {
+      return { ok: false, reason: 'invalid-text' };
+    }
+  }
+  if (req.linkUrl !== undefined && req.linkUrl !== null) {
+    const trimmed = req.linkUrl.trim();
+    if (trimmed.length > 0) {
+      const normalized = normalizeRealtimeWallLink(trimmed);
+      if (!normalized) {
+        return { ok: false, reason: 'invalid-link' };
+      }
+    }
+  }
+  if (req.images !== undefined && req.images.length > 0) {
+    const result = validateImages(req.images);
+    if (!result.ok) {
+      return { ok: false, reason: 'invalid-images' };
+    }
+  }
+  if (req.pdfUrl !== undefined && req.pdfUrl !== null) {
+    const trimmed = req.pdfUrl.trim();
+    if (trimmed.length > 0 && !trimmed.startsWith('file://')) {
+      return { ok: false, reason: 'invalid-pdf' };
+    }
+  }
+  if (req.color !== undefined && !isValidRealtimeWallCardColor(req.color)) {
+    return { ok: false, reason: 'invalid-color' };
+  }
+  return { ok: true };
+}
+
+export type DeleteValidationResult =
+  | { ok: true }
+  | { ok: false; reason: 'not-found' | 'not-owner' | 'already-deleted' };
+
+/**
+ * v2.1 Phase D — 학생 카드 삭제 검증 (Design v2.1 §3.3).
+ *
+ * - 자기 카드 검증 (isOwnCard 양방향)
+ * - status='hidden-by-author'는 이미 삭제됨 (already-deleted)
+ */
+export function validateDelete(
+  posts: readonly RealtimeWallPost[],
+  req: { postId: string; sessionToken: string; pinHash?: string },
+): DeleteValidationResult {
+  const target = posts.find((p) => p.id === req.postId);
+  if (!target) return { ok: false, reason: 'not-found' };
+  if (
+    !isOwnCard(target, {
+      currentSessionToken: req.sessionToken,
+      currentPinHash: req.pinHash,
+    })
+  ) {
+    return { ok: false, reason: 'not-owner' };
+  }
+  if (target.status === 'hidden-by-author') {
+    return { ok: false, reason: 'already-deleted' };
+  }
+  return { ok: true };
+}
+
+/**
+ * v2.1 Phase D — 학생 카드 수정 적용 (Design v2.1 §3.4).
+ *
+ * text/linkUrl/images/pdfUrl/color 갱신 + edited=true.
+ * 호출 전 validateEdit 통과 보장 (호출자 책임).
+ *
+ * - linkUrl=null → 링크 제거 (delete property)
+ * - pdfUrl=null  → PDF 제거 (delete property)
+ * - images 빈 배열 → 첨부 제거
+ */
+export function applyEdit(
+  posts: readonly RealtimeWallPost[],
+  req: EditRequest,
+): RealtimeWallPost[] {
+  return posts.map((p) => {
+    if (p.id !== req.postId) return p;
+    const next: RealtimeWallPost = { ...p, edited: true };
+    if (req.text !== undefined) {
+      const trimmed = req.text.trim();
+      Object.assign(next, { text: trimmed });
+    }
+    if (req.linkUrl !== undefined) {
+      if (req.linkUrl === null || req.linkUrl.trim().length === 0) {
+        // 링크 제거 — 새 객체 분해로 linkUrl/linkPreview 제거
+        const { linkUrl: _l, linkPreview: _p, ...rest } = next as RealtimeWallPost & {
+          linkUrl?: string;
+          linkPreview?: RealtimeWallLinkPreview;
+        };
+        return { ...rest, edited: true } as RealtimeWallPost;
+      } else {
+        const normalized = normalizeRealtimeWallLink(req.linkUrl) ?? req.linkUrl.trim();
+        const preview = classifyRealtimeWallLink(normalized);
+        Object.assign(next, {
+          linkUrl: normalized,
+          ...(preview ? { linkPreview: preview } : {}),
+        });
+      }
+    }
+    if (req.images !== undefined) {
+      if (req.images.length === 0) {
+        const { images: _i, ...rest } = next as RealtimeWallPost & {
+          images?: readonly string[];
+        };
+        Object.assign(next, rest);
+        delete (next as { images?: readonly string[] }).images;
+      } else {
+        Object.assign(next, { images: req.images });
+      }
+    }
+    if (req.pdfUrl !== undefined) {
+      if (req.pdfUrl === null || req.pdfUrl.trim().length === 0) {
+        delete (next as { pdfUrl?: string }).pdfUrl;
+        delete (next as { pdfFilename?: string }).pdfFilename;
+      } else {
+        Object.assign(next, {
+          pdfUrl: req.pdfUrl,
+          ...(req.pdfFilename && req.pdfFilename.trim().length > 0
+            ? { pdfFilename: req.pdfFilename.trim() }
+            : {}),
+        });
+      }
+    }
+    if (req.color !== undefined) {
+      Object.assign(next, { color: req.color });
+    }
+    return next;
+  });
+}
+
+/**
+ * v2.1 Phase D — 학생 카드 삭제 적용 (Design v2.1 §3.4 — soft delete).
+ *
+ * 회귀 위험 #8 — hard delete 패턴 사용 절대 금지:
+ *   - 배열 필터로 제거하는 패턴 사용 금지
+ *   - posts 배열에서 절대 제거 X
+ *   - status='hidden-by-author'로 갱신만
+ *   - 좋아요/댓글/text/images/pdfUrl/linkUrl/color 모두 보존 (교사 복원 가능)
+ *
+ * 표시 로직:
+ *   - 학생/교사 모두 RealtimeWallCardPlaceholder로 분기
+ *   - 교사만 "복원" 메뉴 활성 (applyRestore 호출)
+ */
+export function applyDelete(
+  posts: readonly RealtimeWallPost[],
+  postId: string,
+): RealtimeWallPost[] {
+  return posts.map((p) =>
+    p.id === postId ? { ...p, status: 'hidden-by-author' as const } : p,
+  );
+}
+
+/**
+ * v2.1 Phase D — 교사 복원 (Design v2.1 §3.4).
+ *
+ * status='hidden-by-author' → 'approved' 복귀.
+ * 다른 status는 변경 없음 (idempotent).
+ */
+export function applyRestore(
+  posts: readonly RealtimeWallPost[],
+  postId: string,
+): RealtimeWallPost[] {
+  return posts.map((p) =>
+    p.id === postId && p.status === 'hidden-by-author'
+      ? { ...p, status: 'approved' as const }
+      : p,
+  );
+}
+
+/**
+ * v2.1 Phase D — 작성자 일치 카드 ID 일괄 수집 (Design v2.1 §5.13 / §11.1).
+ *
+ * 같은 sessionToken 또는 같은 PIN hash 카드 모두 매칭 (양방향 OR).
+ * 교사 작성자 추적 (D6) + 일괄 숨김/닉네임 변경 (D7) 공통 헬퍼.
+ */
+export function findPostIdsByOwner(
+  posts: readonly RealtimeWallPost[],
+  criteria: { sessionToken?: string; pinHash?: string },
+): string[] {
+  const out: string[] = [];
+  for (const p of posts) {
+    if (
+      criteria.sessionToken &&
+      p.ownerSessionToken &&
+      p.ownerSessionToken === criteria.sessionToken
+    ) {
+      out.push(p.id);
+      continue;
+    }
+    if (
+      criteria.pinHash &&
+      p.studentPinHash &&
+      p.studentPinHash === criteria.pinHash
+    ) {
+      out.push(p.id);
+    }
+  }
+  return out;
+}
+
+/**
+ * v2.1 Phase D — 같은 작성자 카드 일괄 status='hidden' 전환 (Design v2.1 §6.1 D7).
+ *
+ * 교사 닉네임 차단/일괄 숨김 권한 (D7) 적용 헬퍼.
+ * 회귀 위험 #8 보호: posts.filter X — 모두 status 갱신만.
+ */
+export function applyBulkHideByOwner(
+  posts: readonly RealtimeWallPost[],
+  criteria: { sessionToken?: string; pinHash?: string },
+): RealtimeWallPost[] {
+  const targetIds = new Set(findPostIdsByOwner(posts, criteria));
+  if (targetIds.size === 0) return [...posts];
+  return posts.map((p) =>
+    targetIds.has(p.id) ? { ...p, status: 'hidden' as const } : p,
+  );
+}
+
+/**
+ * v2.1 Phase D — 같은 작성자 카드 일괄 닉네임 변경 (Design v2.1 §6.1 D7).
+ *
+ * 변경된 postId 목록과 next posts 배열을 함께 반환 (broadcast 시 postIds 활용).
+ */
+export function applyNicknameUpdate(
+  posts: readonly RealtimeWallPost[],
+  criteria: { postId?: string; sessionToken?: string; pinHash?: string },
+  newNickname: string,
+): { posts: RealtimeWallPost[]; postIds: string[] } {
+  const targetIds = new Set<string>();
+  if (criteria.postId) targetIds.add(criteria.postId);
+  if (criteria.sessionToken || criteria.pinHash) {
+    for (const id of findPostIdsByOwner(posts, criteria)) {
+      targetIds.add(id);
+    }
+  }
+  if (targetIds.size === 0) return { posts: [...posts], postIds: [] };
+  const trimmed = newNickname.trim().slice(0, REALTIME_WALL_MAX_NICKNAME_LENGTH);
+  if (trimmed.length === 0) return { posts: [...posts], postIds: [] };
+  const nextPosts = posts.map((p) =>
+    targetIds.has(p.id) ? { ...p, nickname: trimmed } : p,
+  );
+  return { posts: nextPosts, postIds: Array.from(targetIds) };
+}
+
+/**
+ * v2.1 Phase D — 서버 측 보조 도우미 (Design v2.1 §3.8).
+ *
+ * 학생 카드 생성 시 서버가 ws 세션의 sessionToken과 (선택)pinHash를 강제 주입.
+ * 학생이 직접 보낸 ownerSessionToken / studentPinHash는 무시 (위조 방지).
+ *
+ * - PIN hash도 메시지에 포함되어 있으면 함께 주입 (학생 자율 결정 — PIN 미설정 시 undefined)
+ * - 클라이언트는 절대 직접 ownerSessionToken/studentPinHash를 도메인 객체에 부여하지 않음
+ */
+export function ensureOwnerCredentials(
+  post: Omit<RealtimeWallPost, 'ownerSessionToken' | 'studentPinHash'>,
+  serverContext: {
+    serverSessionToken: string;
+    pinHashFromMessage?: string;
+  },
+): RealtimeWallPost {
+  return {
+    ...post,
+    ownerSessionToken: serverContext.serverSessionToken,
+    ...(serverContext.pinHashFromMessage
+      ? { studentPinHash: serverContext.pinHashFromMessage }
+      : {}),
+  };
 }

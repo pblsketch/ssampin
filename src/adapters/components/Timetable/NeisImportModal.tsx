@@ -6,6 +6,8 @@ import { neisPort } from '@adapters/di/container';
 import { NEIS_API_KEY } from '@domain/entities/Meal';
 import type { SchoolSearchResult } from '@domain/entities/Meal';
 import type { NeisClassInfo } from '@domain/entities/NeisTimetable';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 import {
   NeisApiError,
   getNeisErrorMessage,
@@ -233,16 +235,6 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
     clearSearch();
   }, [clearSearch]);
 
-  /* ── ESC 키로 닫기 ── */
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
   /* ── 리셋 ── */
   useEffect(() => {
     if (isOpen) {
@@ -259,32 +251,19 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const stepLabels = ['학교 선택', '학년/반 선택', '기간 선택'];
   const currentStepNum = step === 'school' ? 1 : step === 'classSelect' ? 2 : 3;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title-neis-import"
-    >
-      <div className="bg-sp-card border border-sp-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200">
+    <Modal isOpen={isOpen} onClose={onClose} title="나이스 시간표 불러오기" srOnlyTitle size="lg">
+      <div className="flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
-          <h2 id="modal-title-neis-import" className="text-lg font-bold text-sp-text flex items-center gap-2">
+          <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-sp-accent">download</span>
             나이스 시간표 불러오기
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg hover:bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
-            aria-label="닫기"
-          >
-            <span className="material-symbols-outlined text-xl">close</span>
-          </button>
+          </h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* 스텝 인디케이터 */}
@@ -695,6 +674,6 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
           </div>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

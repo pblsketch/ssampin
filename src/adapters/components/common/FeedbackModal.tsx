@@ -1,4 +1,5 @@
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { Modal } from '@adapters/components/common/Modal';
 
 const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
 
@@ -25,42 +26,27 @@ export function FeedbackModal({ onClose }: FeedbackModalProps) {
   }
 
   return (
-    <>
-      {/* 오버레이 */}
-      <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* 모달 */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div
-          className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-lg pointer-events-auto flex flex-col"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title-feedback"
-        >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-sp-accent/10">
-                <span className="material-symbols-outlined text-sp-accent">rate_review</span>
-              </div>
-              <div>
-                <h2 id="modal-title-feedback" className="text-lg font-bold text-sp-text">의견을 보내주세요</h2>
-                <p className="text-xs text-sp-muted mt-0.5">선생님의 피드백이 쌤핀을 더 좋게 만듭니다</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="닫기"
-              className="text-sp-muted hover:text-sp-text transition-colors rounded-lg p-1 hover:bg-sp-text/5"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
+    <Modal isOpen onClose={onClose} title="의견을 보내주세요" srOnlyTitle size="lg">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-sp-accent/10">
+            <span className="material-symbols-outlined text-sp-accent">rate_review</span>
           </div>
+          <div>
+            <h3 className="text-lg font-bold text-sp-text">의견을 보내주세요</h3>
+            <p className="text-xs text-sp-muted mt-0.5">선생님의 피드백이 쌤핀을 더 좋게 만듭니다</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="닫기"
+          className="text-sp-muted hover:text-sp-text transition-colors rounded-lg p-1 hover:bg-sp-text/5"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+      </div>
 
           {/* 카드 그리드 */}
           <div className="px-6 py-5 grid grid-cols-2 gap-4">
@@ -129,14 +115,12 @@ export function FeedbackModal({ onClose }: FeedbackModalProps) {
             </button>
           </div>
 
-          {/* 하단 안내 */}
-          <div className="px-6 pb-5">
-            <p className="text-detail text-sp-muted text-center bg-sp-surface/50 rounded-lg py-2 px-3 border border-sp-border/30">
-              사용법이 궁금하면 <span className="text-sp-accent font-medium">AI에게</span>, 자세한 의견은 <span className="text-sp-accent font-medium">설문지</span>로 보내주시면 큰 도움이 됩니다!
-            </p>
-          </div>
-        </div>
+      {/* 하단 안내 */}
+      <div className="px-6 pb-5">
+        <p className="text-detail text-sp-muted text-center bg-sp-surface/50 rounded-lg py-2 px-3 border border-sp-border/30">
+          사용법이 궁금하면 <span className="text-sp-accent font-medium">AI에게</span>, 자세한 의견은 <span className="text-sp-accent font-medium">설문지</span>로 보내주시면 큰 도움이 됩니다!
+        </p>
       </div>
-    </>
+    </Modal>
   );
 }

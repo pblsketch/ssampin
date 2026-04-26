@@ -12,6 +12,7 @@ import { registerLiveMultiSurveyHandlers } from './ipc/liveMultiSurvey';
 import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
 import { registerRealtimeWallHandlers } from './ipc/realtimeWall';
 import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPreview';
+import { registerRealtimeWallPdfHandlers } from './ipc/realtimeWallPdf';
 import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import {
   registerRealtimeWallBoardHandlers,
@@ -1826,6 +1827,7 @@ if (!gotTheLock) {
     registerLiveDiscussionHandlers(mainWindow!);
     registerRealtimeWallHandlers(mainWindow!);
     registerRealtimeWallLinkPreviewHandler();
+    registerRealtimeWallPdfHandlers();
     registerBoardHandlers(mainWindow!);
     registerRealtimeWallBoardHandlers();
     // 글로벌 퀵애드 단축키 IPC

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import type { CalendarMapping } from '@domain/entities/CalendarMapping';
 import type { GoogleCalendarInfo } from '@domain/entities/GoogleCalendarInfo';
+import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
+import { Modal } from '@adapters/components/common/Modal';
 
 interface CalendarMappingModalProps {
   isOpen: boolean;
@@ -52,8 +54,6 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
       });
   }, [isOpen, fetchGoogleCalendars, mappings, isInitialSetup]);
 
-  if (!isOpen) return null;
-
   const toggleCalendar = (calId: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -96,17 +96,20 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
   const getCalendarColor = (cal: GoogleCalendarInfo) =>
     cal.backgroundColor ?? '#3b82f6';
 
+  const titleText = isInitialSetup ? '동기화할 캘린더 선택' : '캘린더 선택';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" aria-hidden="true">
-      <div
-        className="max-h-[80vh] w-full max-w-[480px] overflow-y-auto rounded-2xl bg-sp-card p-6 shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-calendar-mapping"
-      >
-        <h2 id="modal-title-calendar-mapping" className="mb-1 text-lg font-bold text-sp-text">
-          {isInitialSetup ? '동기화할 캘린더 선택' : '캘린더 선택'}
-        </h2>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={titleText}
+      srOnlyTitle
+      size="md"
+      closeOnBackdrop={!isInitialSetup}
+      closeOnEsc={!isInitialSetup}
+    >
+      <div className="overflow-y-auto p-6">
+        <h3 className="mb-1 text-lg font-bold text-sp-text">{titleText}</h3>
         <p className="mb-5 text-sm text-sp-muted">
           {isInitialSetup
             ? '가져올 구글 캘린더를 선택하세요. 선택한 캘린더의 일정이 쌤핀에 동기화됩니다.'
@@ -127,6 +130,22 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
             <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-400">
               {calendarError}
             </div>
+            {isGoogleAuthBlockedError(calendarError) && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-200 leading-relaxed">
+                <p className="font-semibold text-amber-100 mb-1.5 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-icon-sm">school</span>
+                  학교 Google 계정인가요?
+                </p>
+                <p className="mb-2">
+                  학교에서 발급한 계정(@*.go.kr, @*.sen.go.kr 등)은 관리자 정책으로 외부 앱이 차단될 수 있어요. 이 경우 토큰은 발급되지만 캘린더·드라이브 호출이 모두 401로 거부됩니다.
+                </p>
+                <p className="font-medium text-amber-100 mb-1">해결 방법</p>
+                <ol className="list-decimal list-inside space-y-0.5 text-amber-200/90">
+                  <li>설정 → Google 통합에서 <span className="font-medium">연결 해제</span></li>
+                  <li>개인 Gmail 계정으로 <span className="font-medium">다시 연결</span></li>
+                </ol>
+              </div>
+            )}
             <button
               onClick={() => {
                 setCalendarError(null);
@@ -231,6 +250,6 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -205,7 +205,7 @@ export function MultiSurveyLiveBoardView({
       {/* 전체보기 모달 */}
       {expandedText && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-8"
+          className="fixed inset-0 z-sp-palette flex items-center justify-center bg-black/70 p-8"
           onClick={() => setExpandedText(null)}
         >
           <div className="max-w-3xl rounded-xl bg-white p-8 shadow-2xl">

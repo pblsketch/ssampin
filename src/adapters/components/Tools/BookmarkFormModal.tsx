@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Bookmark, BookmarkGroup, BookmarkIconType, BookmarkType } from '@domain/entities/Bookmark';
 import { validateBookmarkUrl, validateFolderPath, recommendGroupId } from '@domain/rules/bookmarkRules';
 import type { RealtimeWallLinkPreviewOgMeta } from '@domain/entities/RealtimeWall';
+import { Modal } from '@adapters/components/common/Modal';
 
 export interface BookmarkFormSaveData {
   name: string;
@@ -184,17 +185,12 @@ export function BookmarkFormModal({
     : validateBookmarkUrl(url);
   const canSubmit = name.trim() && url.trim() && isUrlValid && groupId;
 
+  const titleText = isEdit ? '즐겨찾기 편집' : '즐겨찾기 추가';
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" aria-hidden="true">
-      <div
-        className="bg-sp-surface border border-sp-border rounded-2xl w-full max-w-md p-6 shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-bookmark-form"
-      >
-        <h2 id="modal-title-bookmark-form" className="text-lg font-bold text-sp-text mb-5">
-          {isEdit ? '즐겨찾기 편집' : '즐겨찾기 추가'}
-        </h2>
+    <Modal isOpen onClose={onClose} title={titleText} srOnlyTitle size="md">
+      <div className="p-6">
+        <h3 className="text-lg font-bold text-sp-text mb-5">{titleText}</h3>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* 타입 선택 탭 (Electron에서만 표시) */}
@@ -406,6 +402,6 @@ export function BookmarkFormModal({
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }

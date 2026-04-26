@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 /* ──────────────────────── Types ──────────────────────── */
 
@@ -73,20 +75,12 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} aria-hidden="true">
-      <div
-        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-homeroom-export"
-      >
+    <Modal isOpen onClose={onClose} title={title} srOnlyTitle size="lg">
+      <div className="flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-5 border-b border-sp-border">
-          <h3 id="modal-title-homeroom-export" className="text-lg font-bold text-sp-text">{title}</h3>
-          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <h3 className="text-lg font-bold text-sp-text">{title}</h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* 탭 */}
@@ -94,7 +88,7 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
           <button
             onClick={() => setActiveTab('clipboard')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'clipboard' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+              activeTab === 'clipboard' ? 'bg-sp-accent text-sp-accent-fg' : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             📋 클립보드
@@ -102,7 +96,7 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
           <button
             onClick={() => setActiveTab('csv')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'csv' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+              activeTab === 'csv' ? 'bg-sp-accent text-sp-accent-fg' : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             📄 CSV 다운로드
@@ -156,7 +150,7 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
           {activeTab === 'clipboard' ? (
             <button
               onClick={handleCopy}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors flex items-center gap-1"
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-sp-accent-fg hover:bg-sp-accent/90 transition-colors flex items-center gap-1"
             >
               <span className="material-symbols-outlined text-base">content_copy</span>
               복사하기
@@ -164,7 +158,7 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
           ) : (
             <button
               onClick={handleDownload}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/90 transition-colors flex items-center gap-1"
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-sp-accent-fg hover:bg-sp-accent/90 transition-colors flex items-center gap-1"
             >
               <span className="material-symbols-outlined text-base">download</span>
               다운로드
@@ -172,6 +166,6 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

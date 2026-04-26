@@ -261,7 +261,7 @@ export function RosterManagementTab() {
               disabled={students.length <= 1}
               className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>remove</span>
+              <span className="material-symbols-outlined text-icon-sm">remove</span>
             </button>
             <span className="w-8 text-center font-mono font-bold">{students.length}</span>
             <button
@@ -269,7 +269,7 @@ export function RosterManagementTab() {
               disabled={students.length >= 50}
               className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>add</span>
+              <span className="material-symbols-outlined text-icon-sm">add</span>
             </button>
             <span className="ml-1 text-sp-muted">명</span>
           </div>
@@ -546,7 +546,7 @@ export function RosterManagementTab() {
                           className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
                           title="보호자2 삭제"
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+                          <span className="material-symbols-outlined text-icon-sm">close</span>
                         </button>
                       </div>
                     ) : (
@@ -892,19 +892,19 @@ export function RosterManagementTab() {
                   <span className="text-sp-muted">총 {validationResult.totalRows}명</span>
                   {validationResult.errorRows > 0 && (
                     <span className="text-red-400 flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>error</span>
+                      <span className="material-symbols-outlined text-icon-sm">error</span>
                       {validationResult.errorRows}명 오류
                     </span>
                   )}
                   {validationResult.warningRows > 0 && (
                     <span className="text-amber-400 flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>warning</span>
+                      <span className="material-symbols-outlined text-icon-sm">warning</span>
                       {validationResult.warningRows}명 주의
                     </span>
                   )}
                   {validationResult.errorRows === 0 && validationResult.warningRows === 0 && (
                     <span className="text-green-400 flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>check_circle</span>
+                      <span className="material-symbols-outlined text-icon-sm">check_circle</span>
                       모두 정상
                     </span>
                   )}
@@ -916,7 +916,7 @@ export function RosterManagementTab() {
                   onClick={() => setBulkStep(1)}
                   className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors flex items-center gap-1"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_back</span>
+                  <span className="material-symbols-outlined text-icon">arrow_back</span>
                   이전
                 </button>
                 <div className="flex gap-3">
@@ -931,7 +931,7 @@ export function RosterManagementTab() {
                     className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-1"
                   >
                     다음
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+                    <span className="material-symbols-outlined text-icon">arrow_forward</span>
                   </button>
                 </div>
               </div>
@@ -993,7 +993,7 @@ export function RosterManagementTab() {
                   onClick={() => setBulkStep(2)}
                   className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors flex items-center gap-1"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_back</span>
+                  <span className="material-symbols-outlined text-icon">arrow_back</span>
                   이전
                 </button>
                 <div className="flex gap-3">

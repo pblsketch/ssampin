@@ -723,6 +723,11 @@ body {
   }
 }
 
+/* ─── Material Symbols 아이콘 사이즈 ───
+   Tailwind `text-icon-{xs|sm|md|lg|xl}` utility를 사용 (tailwind.config.js fontSize 정의).
+   2026-04-25 Phase E에서 별도 CSS 클래스를 잠시 추가했으나 Tailwind utility와 이름 충돌
+   가능성으로 제거. 인라인 style={{ fontSize }} 마이그레이션은 className="text-icon-md" 형태로. */
+
 /* ─── 쌤핀 노트 (BlockNote) 여백 정리 ─── */
 .ssampin-note-editor {
   display: flex;

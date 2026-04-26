@@ -163,7 +163,7 @@ export function QuickAddModal({ standalone = false }: QuickAddModalProps = {}): 
       role="dialog"
       aria-modal="true"
       aria-label={`빠른 추가 ${meta.label}`}
-      className="fixed inset-0 bg-black/55 backdrop-blur-sm z-[110] flex items-start justify-center pt-[28vh] animate-fade-in motion-reduce:animate-none"
+      className="fixed inset-0 bg-black/55 backdrop-blur-sm z-sp-palette flex items-start justify-center pt-[28vh] animate-fade-in motion-reduce:animate-none"
       onClick={close}
     >
       {card}

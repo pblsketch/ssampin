@@ -378,7 +378,7 @@ function EraserControl({
             >
               <span className="material-symbols-outlined text-icon-md">ink_eraser</span>
               <span>개체</span>
-              <span className="text-[10px] text-gray-500">클릭하여 통째로 삭제</span>
+              <span className="text-caption text-gray-500">클릭하여 통째로 삭제</span>
             </button>
             <button
               onClick={() => onModeChange('pixelEraser')}
@@ -390,7 +390,7 @@ function EraserControl({
             >
               <span className="material-symbols-outlined text-icon-md">backspace</span>
               <span>부분</span>
-              <span className="text-[10px] text-gray-500">드래그로 일부만 지우기</span>
+              <span className="text-caption text-gray-500">드래그로 일부만 지우기</span>
             </button>
           </div>
 
@@ -409,12 +409,12 @@ function EraserControl({
                 onChange={(e) => onEraserSizeChange(clampEraserSize(Number(e.target.value)))}
                 className="w-full accent-amber-500"
               />
-              <div className="flex items-center justify-between mt-1 text-[10px] text-gray-400 tabular-nums">
+              <div className="flex items-center justify-between mt-1 text-caption text-gray-400 tabular-nums">
                 <span>{ERASER_SIZE_MIN}</span>
                 <span>{ERASER_SIZE_MAX}</span>
               </div>
               <div className="mt-2">
-                <div className="text-[10px] text-gray-500 mb-1">빠른 선택</div>
+                <div className="text-caption text-gray-500 mb-1">빠른 선택</div>
                 <div className="flex items-center gap-1">
                   {ERASER_SIZE_PRESETS.map((preset) => (
                     <button
@@ -545,12 +545,12 @@ function PenSizeControl({
             onChange={(e) => onPenSizeChange(clampPenSize(Number(e.target.value)))}
             className="w-full accent-amber-500"
           />
-          <div className="flex items-center justify-between mt-1 text-[10px] text-gray-400 tabular-nums">
+          <div className="flex items-center justify-between mt-1 text-caption text-gray-400 tabular-nums">
             <span>{PEN_SIZE_MIN}</span>
             <span>{PEN_SIZE_MAX}</span>
           </div>
           <div className="mt-3 pt-2 border-t border-gray-100">
-            <div className="text-[10px] text-gray-500 mb-1.5">빠른 선택</div>
+            <div className="text-caption text-gray-500 mb-1.5">빠른 선택</div>
             <div className="flex items-center gap-1">
               {PEN_SIZE_PRESETS.map((preset) => (
                 <button
@@ -668,7 +668,7 @@ function ShapeControl({
         >
           {SHAPE_CATEGORIES.map((cat) => (
             <div key={cat.label}>
-              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{cat.label}</div>
+              <div className="text-caption font-semibold text-gray-500 uppercase tracking-wider mb-1">{cat.label}</div>
               <div className="grid grid-cols-4 gap-1.5">
                 {cat.kinds.map((kind) => (
                   <button
@@ -677,7 +677,7 @@ function ShapeControl({
                       onShapeKindChange(kind);
                       onModeChange('shape');
                     }}
-                    className={`rounded-lg py-1.5 px-1 text-[10px] font-medium flex flex-col items-center gap-0.5 transition-colors ${
+                    className={`rounded-lg py-1.5 px-1 text-caption font-medium flex flex-col items-center gap-0.5 transition-colors ${
                       shapeKind === kind
                         ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400'
                         : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
@@ -690,7 +690,7 @@ function ShapeControl({
               </div>
             </div>
           ))}
-          <div className="pt-2 border-t border-gray-100 text-[10px] text-gray-500 leading-relaxed space-y-0.5">
+          <div className="pt-2 border-t border-gray-100 text-caption text-gray-500 leading-relaxed space-y-0.5">
             <div>드래그하여 그리기 · 색상·굵기는 펜 설정과 공유</div>
             <div><kbd className="px-1 bg-gray-100 rounded border text-[9px]">Shift</kbd> 정비율·15° 직선 · <kbd className="px-1 bg-gray-100 rounded border text-[9px]">Alt</kbd> 중심 기준</div>
           </div>

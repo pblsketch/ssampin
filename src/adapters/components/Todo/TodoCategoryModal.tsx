@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import type { TodoCategory } from '@domain/entities/Todo';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface TodoCategoryModalProps {
   onClose: () => void;
@@ -77,36 +79,15 @@ export function TodoCategoryModal({ onClose }: TodoCategoryModalProps) {
   }, [editCategories, newName, newColor, newIcon, saveCategories, onClose]);
 
   return (
-    <>
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div
-          className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md pointer-events-auto flex flex-col max-h-[80vh]"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title-todo-category"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
-            <h3 id="modal-title-todo-category" className="text-sp-text font-bold text-lg flex items-center gap-2">
-              <span>📁</span> 카테고리 관리
-            </h3>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="닫기"
-              className="p-1.5 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
-            >
-              <span className="material-symbols-outlined text-icon-lg">close</span>
-            </button>
-          </div>
+    <Modal isOpen onClose={onClose} title="카테고리 관리" srOnlyTitle size="md">
+      <div className="flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
+          <h3 className="text-sp-text font-bold text-lg flex items-center gap-2">
+            <span>📁</span> 카테고리 관리
+          </h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
+        </div>
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
@@ -228,13 +209,12 @@ export function TodoCategoryModal({ onClose }: TodoCategoryModalProps) {
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2 rounded-xl text-sm font-bold bg-sp-accent hover:bg-blue-600 text-white transition-colors shadow-lg shadow-sp-accent/20"
+              className="px-5 py-2 rounded-xl text-sm font-bold bg-sp-accent hover:bg-sp-accent/90 text-sp-accent-fg transition-colors shadow-sp-md"
             >
               저장
             </button>
           </div>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

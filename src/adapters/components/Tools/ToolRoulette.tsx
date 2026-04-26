@@ -517,7 +517,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
             <button
               onClick={spin}
               disabled={isSpinning || items.length < 2}
-              className="px-10 py-4 rounded-2xl bg-gradient-to-r from-sp-accent to-blue-400 text-white text-xl font-bold shadow-lg hover:from-blue-400 hover:to-sp-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transform"
+              className="px-10 py-4 rounded-2xl bg-sp-accent text-sp-accent-fg text-xl font-bold shadow-sp-md hover:bg-sp-accent/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transform"
             >
               {isSpinning ? '돌아가는 중...' : '🎯 돌리기!'}
             </button>

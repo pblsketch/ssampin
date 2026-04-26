@@ -364,7 +364,7 @@ export function MemoCard({ memo, isTop, onBringToFront, onDelete, onOpenDetail, 
             onContentChange={setContent}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
-            className="flex-1 w-full leading-relaxed text-slate-700 outline-none"
+            className="flex-1 w-full leading-relaxed text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:ring-offset-1 rounded-sm"
             autoFocus
             fontSize={memo.fontSize}
             onImagePaste={(blob, name) => void handleAttachImage(blob, name)}

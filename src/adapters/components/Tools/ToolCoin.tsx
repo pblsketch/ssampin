@@ -188,7 +188,7 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
           className={`px-10 py-4 rounded-2xl text-xl font-bold transition-all shadow-lg active:scale-95 ${
             isFlipping
               ? 'bg-sp-card text-sp-muted border border-sp-border cursor-not-allowed'
-              : 'bg-gradient-to-r from-sp-accent to-blue-400 text-white hover:from-blue-400 hover:to-sp-accent shadow-blue-500/30'
+              : 'bg-sp-accent text-sp-accent-fg hover:bg-sp-accent/90 shadow-sp-md'
           }`}
         >
           {isFlipping ? '던지는 중...' : '🪙 던지기!'}

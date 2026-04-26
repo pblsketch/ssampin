@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { TimetableOverride, TimetableOverrideKind, TimetableOverrideScope } from '@domain/entities/Timetable';
+import { Modal } from '@adapters/components/common/Modal';
 
 const REASON_PRESETS = ['수업 교환', '자습', '시험', '행사', '보충수업', '출장', '기타'] as const;
 
@@ -211,22 +212,14 @@ export function TempChangeModal(props: TempChangeModalProps) {
     return false;
   })();
 
+  const titleText = isEdit ? '임시 시간표 수정' : '변동 시간표 추가';
+
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
-      onClick={props.onClose}
-      aria-hidden="true"
-    >
-      <div
-        className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-temp-change"
-      >
-        <h3 id="modal-title-temp-change" className="text-base font-bold text-sp-text mb-3 flex items-center gap-2">
+    <Modal isOpen onClose={props.onClose} title={titleText} srOnlyTitle size="md">
+      <div className="p-6 overflow-y-auto">
+        <h3 className="text-base font-bold text-sp-text mb-3 flex items-center gap-2">
           <span className="material-symbols-outlined text-amber-400 text-lg">push_pin</span>
-          {isEdit ? '임시 시간표 수정' : '변동 시간표 추가'}
+          {titleText}
         </h3>
 
         {/* 적용 범위 (항상 노출) */}
@@ -250,7 +243,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
               <div className={`text-xs font-bold ${scope === opt.key ? 'text-sp-accent' : 'text-sp-text'}`}>
                 {opt.label}
               </div>
-              <div className="text-[10px] text-sp-muted mt-0.5">{opt.desc}</div>
+              <div className="text-caption text-sp-muted mt-0.5">{opt.desc}</div>
             </button>
           ))}
         </div>
@@ -286,7 +279,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
                     >
                       {opt.label}
                     </div>
-                    <div className="text-[10px] text-sp-muted mt-0.5 leading-tight">{opt.desc}</div>
+                    <div className="text-caption text-sp-muted mt-0.5 leading-tight">{opt.desc}</div>
                   </div>
                 </button>
               ))}
@@ -303,7 +296,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
           {slotEditable ? (
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
-                <label className="block text-[10px] text-sp-muted mb-0.5">날짜</label>
+                <label className="block text-caption text-sp-muted mb-0.5">날짜</label>
                 <input
                   type="date"
                   value={dateA}
@@ -312,7 +305,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-sp-muted mb-0.5">교시</label>
+                <label className="block text-caption text-sp-muted mb-0.5">교시</label>
                 <select
                   value={periodA}
                   onChange={(e) => setPeriodA(Number(e.target.value))}
@@ -336,7 +329,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
           </div>
           {isSwap && (
             <>
-              <label className="block text-[10px] text-sp-muted mb-0.5">A 교시에 들어올 과목</label>
+              <label className="block text-caption text-sp-muted mb-0.5">A 교시에 들어올 과목</label>
               <input
                 type="text"
                 value={swapSubjectA}
@@ -354,7 +347,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
             <div className="text-xs font-bold text-sp-muted mb-2">② B 교시</div>
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
-                <label className="block text-[10px] text-sp-muted mb-0.5">날짜</label>
+                <label className="block text-caption text-sp-muted mb-0.5">날짜</label>
                 <input
                   type="date"
                   value={dateB}
@@ -363,7 +356,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-sp-muted mb-0.5">교시</label>
+                <label className="block text-caption text-sp-muted mb-0.5">교시</label>
                 <select
                   value={periodB}
                   onChange={(e) => setPeriodB(Number(e.target.value))}
@@ -379,7 +372,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
               원래 과목:{' '}
               <span className="font-semibold">{baseSubjectB || '(빈 교시)'}</span>
             </div>
-            <label className="block text-[10px] text-sp-muted mb-0.5">B 교시에 들어올 과목</label>
+            <label className="block text-caption text-sp-muted mb-0.5">B 교시에 들어올 과목</label>
             <input
               type="text"
               value={swapSubjectB}
@@ -389,7 +382,7 @@ export function TempChangeModal(props: TempChangeModalProps) {
             />
 
             {/* 미리보기 */}
-            <div className="mt-2 px-2 py-1.5 bg-sp-accent/10 rounded text-[11px] text-sp-accent">
+            <div className="mt-2 px-2 py-1.5 bg-sp-accent/10 rounded text-detail text-sp-accent">
               🔄 A: {baseSubjectA || '(빈)'} → <strong>{swapSubjectA || '(비어있음)'}</strong>
               {' · '}
               B: {baseSubjectB || '(빈)'} → <strong>{swapSubjectB || '(비어있음)'}</strong>
@@ -481,6 +474,6 @@ export function TempChangeModal(props: TempChangeModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

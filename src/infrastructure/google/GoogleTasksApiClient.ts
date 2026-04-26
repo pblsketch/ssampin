@@ -8,6 +8,7 @@ import type {
   GoogleTask,
   GoogleTaskList,
 } from '@domain/ports/IGoogleTasksPort';
+import { GOOGLE_AUTH_BLOCKED_MESSAGE } from '@domain/rules/calendarSyncRules';
 
 const BASE_URL = 'https://www.googleapis.com/tasks/v1';
 
@@ -57,9 +58,11 @@ export class GoogleTasksApiClient implements IGoogleTasksPort {
       }
 
       const err = await res.text();
-      const error = new Error(
-        `Google Tasks API error: ${res.status} ${err}`,
-      ) as ApiError;
+      const message =
+        res.status === 401
+          ? GOOGLE_AUTH_BLOCKED_MESSAGE
+          : `Google Tasks API error: ${res.status} ${err}`;
+      const error = new Error(message) as ApiError;
       error.code = res.status;
       throw error;
     }

@@ -15,6 +15,7 @@ files:
       - "package.json"
       - "dist/**/*"
       - "dist-electron/**/*"
+      - "dist-student/**/*"
       - "node_modules/**/*"
 win:
   target:

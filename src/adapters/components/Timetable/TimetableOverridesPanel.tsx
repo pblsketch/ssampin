@@ -4,6 +4,8 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { toLocalDateString } from '@shared/utils/localDate';
 import { getDayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { TimetableOverride, TimetableOverrideKind, TimetableOverrideScope } from '@domain/entities/Timetable';
+import { Drawer } from '@adapters/components/common/Drawer';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 type FilterMode = 'week' | 'month' | 'all' | 'past';
 
@@ -127,34 +129,16 @@ export function TimetableOverridesPanel({ open, onClose, onAddNew, onEdit }: Tim
     }
   };
 
-  if (!open) return null;
-
   return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-black/40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <aside
-        className="fixed top-0 right-0 bottom-0 z-50 w-[460px] max-w-[92vw] bg-sp-card border-l border-sp-border shadow-2xl flex flex-col"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="overrides-panel-title"
-      >
+    <Drawer isOpen={open} onClose={onClose} title="변동 시간표" srOnlyTitle side="right" size="lg">
+      <div className="flex flex-col h-full">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
-          <h2 id="overrides-panel-title" className="text-base font-bold text-sp-text flex items-center gap-2">
+          <h3 className="text-base font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-amber-400 text-lg">swap_horiz</span>
             변동 시간표
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
-            aria-label="닫기"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          </h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* 툴바 */}
@@ -180,7 +164,7 @@ export function TimetableOverridesPanel({ open, onClose, onAddNew, onEdit }: Tim
         </div>
 
         {/* 범례 */}
-        <div className="px-5 py-2 border-b border-sp-border bg-sp-bg/30 text-[10px] text-sp-muted flex items-center gap-3 flex-wrap">
+        <div className="px-5 py-2 border-b border-sp-border bg-sp-bg/30 text-caption text-sp-muted flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1">
             <span className="material-symbols-outlined text-xs text-blue-400">swap_horiz</span>교체
           </span>
@@ -229,13 +213,13 @@ export function TimetableOverridesPanel({ open, onClose, onAddNew, onEdit }: Tim
                           {formatDateLabel(o.date)} · {o.period}교시
                         </span>
                         <span
-                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded border ${meta.color}`}
+                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-caption font-bold rounded border ${meta.color}`}
                         >
-                          <span className="material-symbols-outlined text-[11px]">{meta.icon}</span>
+                          <span className="material-symbols-outlined text-detail">{meta.icon}</span>
                           {meta.label}
                         </span>
                         <span
-                          className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold rounded border ${scopeMeta.color}`}
+                          className={`inline-flex items-center px-1.5 py-0.5 text-caption font-bold rounded border ${scopeMeta.color}`}
                           title={`적용 범위: ${scopeMeta.label}`}
                         >
                           {scopeMeta.label}
@@ -244,14 +228,14 @@ export function TimetableOverridesPanel({ open, onClose, onAddNew, onEdit }: Tim
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => onEdit(o)}
-                          className="px-2 py-1 text-[11px] text-sp-muted hover:text-sp-text hover:bg-sp-surface rounded transition-colors"
+                          className="px-2 py-1 text-detail text-sp-muted hover:text-sp-text hover:bg-sp-surface rounded transition-colors"
                           aria-label="수정"
                         >
                           수정
                         </button>
                         <button
                           onClick={() => void handleDelete(o)}
-                          className="px-2 py-1 text-[11px] text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                          className="px-2 py-1 text-detail text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                           aria-label="삭제"
                         >
                           삭제
@@ -261,7 +245,7 @@ export function TimetableOverridesPanel({ open, onClose, onAddNew, onEdit }: Tim
 
                     {/* 교사 관점 */}
                     <div className={`flex items-baseline gap-2 mb-1 text-xs ${appliesTeacher ? '' : 'opacity-40'}`}>
-                      <span className={`inline-block w-10 shrink-0 text-[10px] font-bold ${appliesTeacher ? 'text-sky-400' : 'text-sp-muted/50'}`}>
+                      <span className={`inline-block w-10 shrink-0 text-caption font-bold ${appliesTeacher ? 'text-sky-400' : 'text-sp-muted/50'}`}>
                         교사
                       </span>
                       {appliesTeacher ? (
@@ -283,7 +267,7 @@ export function TimetableOverridesPanel({ open, onClose, onAddNew, onEdit }: Tim
 
                     {/* 학급 관점 */}
                     <div className={`flex items-baseline gap-2 text-xs ${appliesClass ? '' : 'opacity-40'}`}>
-                      <span className={`inline-block w-10 shrink-0 text-[10px] font-bold ${appliesClass ? 'text-fuchsia-400' : 'text-sp-muted/50'}`}>
+                      <span className={`inline-block w-10 shrink-0 text-caption font-bold ${appliesClass ? 'text-fuchsia-400' : 'text-sp-muted/50'}`}>
                         학급
                       </span>
                       {appliesClass ? (
@@ -302,14 +286,14 @@ export function TimetableOverridesPanel({ open, onClose, onAddNew, onEdit }: Tim
 
                     {/* 보강 교사 */}
                     {kind === 'substitute' && o.substituteTeacher && (
-                      <div className="mt-1 text-[11px] text-green-400">
+                      <div className="mt-1 text-detail text-green-400">
                         보강 교사: {o.substituteTeacher}
                       </div>
                     )}
 
                     {/* swap 페어 링크 */}
                     {pair && (
-                      <div className="mt-1.5 px-2 py-1 bg-blue-500/5 border border-blue-500/20 rounded text-[11px] text-blue-300 flex items-center gap-1">
+                      <div className="mt-1.5 px-2 py-1 bg-blue-500/5 border border-blue-500/20 rounded text-detail text-blue-300 flex items-center gap-1">
                         <span className="material-symbols-outlined text-xs">link</span>
                         짝: {formatDateLabel(pair.date)} {pair.period}교시와 교체
                       </div>
@@ -327,7 +311,7 @@ export function TimetableOverridesPanel({ open, onClose, onAddNew, onEdit }: Tim
             </ul>
           )}
         </div>
-      </aside>
-    </>
+      </div>
+    </Drawer>
   );
 }
