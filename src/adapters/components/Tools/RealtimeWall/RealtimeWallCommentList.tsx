@@ -44,9 +44,16 @@ export function RealtimeWallCommentList({
 
   if (visible.length === 0) {
     return (
-      <p className="py-3 text-center text-detail text-sp-muted/70">
-        아직 댓글이 없어요.
-      </p>
+      <div className="flex flex-col items-center gap-1 py-4 text-center">
+        <span
+          className="material-symbols-outlined text-2xl text-sp-muted/40"
+          aria-hidden="true"
+        >
+          forum
+        </span>
+        <p className="text-detail text-sp-muted">아직 댓글이 없어요.</p>
+        <p className="text-caption text-sp-muted/70">첫 댓글을 남겨보세요!</p>
+      </div>
     );
   }
 
