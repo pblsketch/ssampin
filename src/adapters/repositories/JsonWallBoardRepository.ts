@@ -20,7 +20,7 @@ import type {
   WallBoardId,
   WallBoardMeta,
 } from '@domain/entities/RealtimeWall';
-import { toWallBoardMeta } from '@domain/rules/realtimeWallRules';
+import { normalizePostForPadletMode, toWallBoardMeta } from '@domain/rules/realtimeWallRules';
 
 const INDEX_FILE = 'wall-boards-index';
 /**
@@ -47,6 +47,12 @@ interface WallBoardIndex {
  *
  * 기존 로컬 테스트 데이터에서 `likes` 필드로 저장된 경우를 `teacherHearts`로
  * 변환. v1.13.1에서 제거 예정 (Design §2.5 step 1).
+ *
+ * v1.14 (padlet mode)에서 `likes`/`likedBy`/`comments`가 학생 좋아요·댓글 필드로
+ * 도입되었으므로, v1.14 형태를 구 v1.13.0 포맷으로 오인해 `likes`를 `teacherHearts`로
+ * 이관하는 사고를 막기 위해 판정 조건을 강화한다:
+ *   - `likedBy` 또는 `comments` 필드가 존재하면 v1.14 데이터 → 레거시 remap skip
+ *   - `teacherHearts`가 이미 정의되어 있으면 skip (v1.13.1 이후 데이터)
  */
 export function migratePostFields(post: unknown): RealtimeWallPost {
   if (typeof post !== 'object' || post === null) {
@@ -54,7 +60,12 @@ export function migratePostFields(post: unknown): RealtimeWallPost {
     return post as RealtimeWallPost;
   }
   const raw = post as RealtimeWallPost & { likes?: number };
-  if (raw.likes !== undefined && raw.teacherHearts === undefined) {
+  const isV14Data = raw.likedBy !== undefined || raw.comments !== undefined;
+  if (
+    raw.likes !== undefined &&
+    raw.teacherHearts === undefined &&
+    !isV14Data
+  ) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { likes, ...rest } = raw;
     return { ...rest, teacherHearts: likes };
@@ -63,9 +74,11 @@ export function migratePostFields(post: unknown): RealtimeWallPost {
 }
 
 function migrateBoard(board: WallBoard): WallBoard {
+  // 1) v1.13.0 호환: likes → teacherHearts 필드 이관
+  // 2) v1.14 padlet mode: likes/likedBy/comments 기본값 주입 (Design §8)
   return {
     ...board,
-    posts: board.posts.map((p) => migratePostFields(p)),
+    posts: board.posts.map((p) => normalizePostForPadletMode(migratePostFields(p))),
   };
 }
 

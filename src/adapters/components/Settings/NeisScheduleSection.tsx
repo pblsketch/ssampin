@@ -234,8 +234,8 @@ export function NeisScheduleSection() {
       {/* 삭제 확인 다이얼로그 */}
       {showDeleteConfirm && (
         <>
-          <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-sp-toast bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="fixed inset-0 z-sp-toast flex items-center justify-center p-4">
             <div className="w-full max-w-sm bg-sp-card rounded-xl border border-sp-border shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
               <h4 className="text-base font-bold text-sp-text mb-2">학사일정 동기화 해제</h4>
               <p className="text-sm text-sp-muted mb-5">

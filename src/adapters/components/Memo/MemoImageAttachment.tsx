@@ -46,7 +46,7 @@ export function MemoImageAttachment({ image, onOpenViewer, onRemove, maxHeight }
           aria-label="이미지 제거"
           title="이미지 제거"
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+          <span className="material-symbols-outlined text-icon">close</span>
         </button>
       )}
     </div>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { WallApprovalMode } from '@domain/entities/RealtimeWall';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 /**
  * 라이브 중 승인 정책 전환용 설정 드로어.
@@ -46,8 +48,6 @@ export function RealtimeWallApprovalSettingsDrawer({
     }
   }, [open, approvalMode]);
 
-  if (!open) return null;
-
   const handleSave = () => {
     // manual → auto 이면서 pending이 있으면 확인 대화로 단계 진입
     if (approvalMode === 'manual' && draftMode === 'auto' && pendingCount > 0) {
@@ -77,29 +77,13 @@ export function RealtimeWallApprovalSettingsDrawer({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="승인 정책 설정"
-      onClick={handleCancel}
-    >
-      <div
-        className="w-full max-w-md rounded-xl border border-sp-border bg-sp-card p-5 shadow-xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <Modal isOpen={open} onClose={handleCancel} title="담벼락 설정" srOnlyTitle size="md">
+      <div className="p-5">
         {/* 헤더 */}
         <div className="mb-4 flex items-center gap-2.5">
           <span className="material-symbols-outlined text-[20px] text-sp-accent">tune</span>
-          <h2 className="text-base font-bold text-sp-text">담벼락 설정</h2>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="ml-auto rounded-md p-1 text-sp-muted transition hover:bg-sp-surface hover:text-sp-text"
-            aria-label="닫기"
-          >
-            <span className="material-symbols-outlined text-[18px]">close</span>
-          </button>
+          <h3 className="text-base font-bold text-sp-text">담벼락 설정</h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={handleCancel} className="ml-auto" />
         </div>
 
         {confirmStage.kind === 'idle' ? (
@@ -213,6 +197,6 @@ export function RealtimeWallApprovalSettingsDrawer({
           </div>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

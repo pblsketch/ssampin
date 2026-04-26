@@ -191,7 +191,7 @@ describe('JsonWallBoardRepository', () => {
             status: 'approved',
             pinned: false,
             submittedAt: 1,
-            likes: 7, // legacy field
+            likes: 7, // legacy field (구 v1.13.0 — teacherHearts 의미)
             kanban: { columnId: 'column-1', order: 0 },
             freeform: { x: 0, y: 0, w: 260, h: 180, zIndex: 0 },
           },
@@ -201,8 +201,14 @@ describe('JsonWallBoardRepository', () => {
 
       const loaded = await repo.load('b1' as WallBoardId);
       expect(loaded).not.toBeNull();
+      // 1) legacy likes(7) → teacherHearts(7)로 이관
       expect(loaded!.posts[0]!.teacherHearts).toBe(7);
-      expect((loaded!.posts[0] as { likes?: number }).likes).toBeUndefined();
+      // 2) v1.14 padlet mode normalization: likes는 학생 좋아요 필드로 재정의되어
+      //    빈 보드의 새 카드는 0으로 default 주입됨 (legacy likes 7은 teacherHearts에 살아있음).
+      expect((loaded!.posts[0] as { likes?: number }).likes).toBe(0);
+      // 3) v1.14 신규 필드 likedBy / comments 도 default 주입 확인
+      expect((loaded!.posts[0] as { likedBy?: readonly string[] }).likedBy).toEqual([]);
+      expect((loaded!.posts[0] as { comments?: readonly unknown[] }).comments).toEqual([]);
     });
 
     it('teacherHearts가 이미 있으면 likes는 무시', async () => {

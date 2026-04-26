@@ -145,7 +145,7 @@ export function RealtimeWallLiveSharePanel({
           {/* primary 주소 — 크게 강조 */}
           {displayUrl && (
             <div className="rounded-lg border border-sp-accent/30 bg-sp-accent/5 px-3 py-2.5">
-              <p className="mb-1 text-[11px] font-medium text-sp-accent/70">학생에게 공유할 주소</p>
+              <p className="mb-1 text-detail font-medium text-sp-accent/70">학생에게 공유할 주소</p>
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 truncate font-mono text-sm font-bold text-sp-accent">
                   {displayUrl}
@@ -164,7 +164,7 @@ export function RealtimeWallLiveSharePanel({
           {/* 전체 주소 — 보조 */}
           {fullUrl && fullUrl !== shortUrl && (
             <div className="rounded-lg border border-sp-border bg-sp-surface px-3 py-2">
-              <p className="mb-0.5 text-[10px] text-sp-muted/70">원본 주소</p>
+              <p className="mb-0.5 text-caption text-sp-muted/70">원본 주소</p>
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 truncate font-mono text-xs text-sp-muted">
                   {fullUrl}
@@ -172,7 +172,7 @@ export function RealtimeWallLiveSharePanel({
                 <button
                   type="button"
                   onClick={() => copyText(fullUrl)}
-                  className="shrink-0 rounded-md border border-sp-border px-2 py-1 text-[10px] text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
+                  className="shrink-0 rounded-md border border-sp-border px-2 py-1 text-caption text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
                 >
                   복사
                 </button>
@@ -184,9 +184,9 @@ export function RealtimeWallLiveSharePanel({
           {shortUrl && (
             <div className="rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5">
               <div className="mb-2 flex items-center gap-2">
-                <p className="text-[11px] text-sp-muted">짧은 코드 변경</p>
+                <p className="text-detail text-sp-muted">짧은 코드 변경</p>
                 {shortCode && (
-                  <span className="rounded-full border border-sp-accent/20 bg-sp-accent/10 px-2 py-0.5 text-[10px] font-bold text-sp-accent">
+                  <span className="rounded-full border border-sp-accent/20 bg-sp-accent/10 px-2 py-0.5 text-caption font-bold text-sp-accent">
                     현재: {shortCode}
                   </span>
                 )}
@@ -213,7 +213,7 @@ export function RealtimeWallLiveSharePanel({
                 </button>
               </div>
               {customCodeError && (
-                <p className="mt-1.5 text-[11px] text-red-400">{customCodeError}</p>
+                <p className="mt-1.5 text-detail text-red-400">{customCodeError}</p>
               )}
             </div>
           )}
@@ -224,7 +224,7 @@ export function RealtimeWallLiveSharePanel({
               <button
                 type="button"
                 onClick={onRetryTunnel}
-                className="mt-1.5 rounded-md border border-red-400/40 px-2.5 py-1 text-[11px] font-medium text-red-200 transition hover:bg-red-500/10"
+                className="mt-1.5 rounded-md border border-red-400/40 px-2.5 py-1 text-detail font-medium text-red-200 transition hover:bg-red-500/10"
               >
                 다시 시도
               </button>

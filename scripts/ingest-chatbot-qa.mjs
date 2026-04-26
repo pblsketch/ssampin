@@ -241,6 +241,18 @@ const QA_DOCUMENTS = [
     content: `Q: 개인 컴퓨터에서는 되는데 학교 컴퓨터에서만 안 돼요\nA: 학교 컴퓨터에는 보안 프로그램이 설치되어 있어서 구글 연결 과정의 일부가 차단될 수 있어요. "학교 컴퓨터에서 구글 연결이 안 돼요" 답변을 참고해 주세요. 시간표, 메모, 좌석 배치 등 핵심 기능은 구글 연동 없이도 모두 사용 가능해요! 😊`,
     metadata: { source: 'system-qa', category: 'troubleshooting', title: 'Q: 학교 컴퓨터에서만 구글 연결 안 됨' },
   },
+  {
+    content: `Q: 구글 연결은 됐는데 캘린더/드라이브 동기화에서 401 오류가 떠요 (Invalid Credentials / UNAUTHENTICATED / authError)\nA: 학교에서 발급한 Google 계정(@*.go.kr, @*.sen.go.kr 등)은 학교 관리자가 외부 앱 접근을 차단하는 정책을 적용하는 경우가 많아요. 이 경우 로그인은 통과하지만 캘린더·드라이브 호출이 모두 401(UNAUTHENTICATED) 오류로 거부돼요.\n\n해결 방법:\n1) 설정(⚙️) → Google 연동 → 연결 해제 버튼 클릭\n2) https://myaccount.google.com/permissions 에서 "쌤핀" 항목이 있으면 제거(선택)\n3) 쌤핀에서 다시 "Google 계정 연결" → 이번엔 개인 Gmail 계정(@gmail.com)으로 로그인\n4) 동기화가 정상 동작하는지 확인\n\n💡 학교 계정으로 꼭 동기화해야 한다면 학교 IT/관리자에게 "쌤핀(ssampin.com)을 trusted app으로 허용해 달라"고 요청해야 해요. 다만 대부분의 경우 개인 Gmail로 연결하시는 게 훨씬 간편하고 안전합니다.`,
+    metadata: { source: 'system-qa', category: 'troubleshooting', title: 'Q: 구글 동기화 401 오류 (학교 계정 차단)' },
+  },
+  {
+    content: `Q: 학교 계정으로 구글 동기화하면 안 되나요?\nA: 가능은 하지만 권장하지 않아요. 학교에서 발급한 Google Workspace 계정(@*.go.kr 등)은 다음 이유로 추천드리지 않습니다:\n\n1) 학교 관리자 정책으로 외부 앱 접근이 차단되는 경우가 많아 401 오류가 자주 발생해요.\n2) 전근·퇴직·계정 삭제 시 동기화된 데이터(캘린더·드라이브 백업)가 함께 사라질 수 있어요.\n3) 학교 IT 부서가 모든 활동을 모니터링할 수 있어 개인 일정·메모가 노출될 위험이 있어요.\n\n쌤핀은 개인 Gmail 계정(@gmail.com)으로 연결하시는 걸 권장해요. 학교에서 만든 데이터라도 본인의 개인 계정에 백업하면 더 안전하고, 학교를 옮기거나 퇴직해도 데이터를 그대로 가져갈 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'troubleshooting', title: 'Q: 학교 계정 vs 개인 Gmail 권장' },
+  },
+  {
+    content: `Q: Drive Sync API error: 401 / Google Calendar API error: 401 사이드바에 빨간 에러가 떠요\nA: 토큰은 발급됐지만 Google이 API 호출을 거부하는 상태예요. 가장 흔한 원인 3가지:\n\n1) 학교 계정 정책 차단 (가장 흔함): 학교 Google 계정(@*.go.kr 등)은 관리자가 외부 앱을 막아둔 경우가 많아요. → 개인 Gmail로 재연결하세요.\n2) 권한 해제 또는 비밀번호 변경: myaccount.google.com 에서 앱 권한을 해제했거나, 비밀번호를 바꾸면 토큰이 무효화돼요. → 설정에서 연결 해제 후 다시 연결.\n3) 6개월 미사용: 6개월 이상 동기화를 사용하지 않으면 Google이 자동으로 권한을 만료시켜요. → 다시 연결하면 됩니다.\n\n해결 순서: 설정 → Google 연동 → 연결 해제 → 개인 Gmail로 다시 연결.`,
+    metadata: { source: 'system-qa', category: 'troubleshooting', title: 'Q: Drive/Calendar API 401 에러 원인' },
+  },
 
   // ── v1.9.4 신규 ──────────────────────────────────────────────────────────
   {

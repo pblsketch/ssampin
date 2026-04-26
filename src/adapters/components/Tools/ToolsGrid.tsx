@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from 'react';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { PageHeader } from '@adapters/components/common/PageHeader';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface ToolsGridProps {
   onNavigate: (page: PageId) => void;
@@ -278,32 +280,20 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
   const visibleCount = order.filter((id) => !hidden.has(id)).length;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="w-full max-w-2xl max-h-[90vh] bg-sp-bg rounded-2xl border border-sp-border shadow-2xl flex flex-col">
+    <Modal isOpen onClose={onClose} title="쌤도구 정리하기" srOnlyTitle size="xl">
+      <div className="flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
           <div>
-            <h2 className="text-lg font-bold text-sp-text flex items-center gap-2">
+            <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
               <span className="material-symbols-outlined text-[20px]">tune</span>
               쌤도구 정리하기
-            </h2>
+            </h3>
             <p className="text-xs text-sp-muted mt-0.5">
               드래그로 순서를 바꾸고, 토글로 표시 여부를 정합니다 · 표시 {visibleCount} / {order.length}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-sp-muted hover:text-sp-text transition-colors"
-            aria-label="닫기"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* 액션 */}
@@ -405,6 +395,6 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

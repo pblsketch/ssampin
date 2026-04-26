@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import { getCategoryColors } from '@adapters/presenters/categoryPresenter';
+import { Modal } from '@adapters/components/common/Modal';
 
 interface Props {
   categories: readonly CategoryItem[];
@@ -45,16 +46,17 @@ export function BulkDeleteByCategoryModal({ categories, events, onDelete, onClos
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose} aria-hidden="true">
-      <div
-        className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-md shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-bulk-delete-category"
-      >
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="카테고리별 일정 삭제"
+      srOnlyTitle
+      size="md"
+      closeOnBackdrop={false}
+    >
+      <div>
         <div className="px-6 py-5 border-b border-sp-border">
-          <h3 id="modal-title-bulk-delete-category" className="text-lg font-bold text-sp-text">카테고리별 일정 삭제</h3>
+          <h3 className="text-lg font-bold text-sp-text">카테고리별 일정 삭제</h3>
           <p className="text-sm text-sp-muted mt-1">
             선택한 카테고리의 모든 일정을 삭제합니다.
           </p>
@@ -127,6 +129,7 @@ export function BulkDeleteByCategoryModal({ categories, events, onDelete, onClos
                   <button
                     type="button"
                     onClick={() => setIsConfirming(false)}
+                    autoFocus
                     className="flex-1 py-2.5 rounded-xl bg-sp-surface text-sp-muted hover:text-sp-text border border-sp-border text-sm font-medium transition-colors"
                   >
                     취소
@@ -135,7 +138,7 @@ export function BulkDeleteByCategoryModal({ categories, events, onDelete, onClos
                     type="button"
                     onClick={handleDelete}
                     disabled={isDeleting}
-                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors disabled:opacity-50"
+                    className="flex-1 py-2.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 text-sm font-bold transition-colors disabled:opacity-50"
                   >
                     {isDeleting ? '삭제 중...' : '삭제 확인'}
                   </button>
@@ -156,6 +159,6 @@ export function BulkDeleteByCategoryModal({ categories, events, onDelete, onClos
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -9,6 +9,7 @@
 import type { DriveSyncManifest } from '@domain/entities/DriveSyncState';
 import type { DriveFolderInfo } from '@domain/ports/IGoogleDrivePort';
 import type { IDriveSyncPort, DriveSyncFileListItem } from '@domain/ports/IDriveSyncPort';
+import { GOOGLE_AUTH_BLOCKED_MESSAGE } from '@domain/rules/calendarSyncRules';
 
 const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3';
@@ -56,6 +57,10 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
         throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
       }
+      // 재시도 후에도 401: 학교 Workspace 정책 차단 가능성 안내
+      if (res.status === 401) {
+        throw new Error(GOOGLE_AUTH_BLOCKED_MESSAGE);
+      }
       throw new Error(`Drive Sync API error: ${res.status} ${err}`);
     }
     if (res.status === 204) return undefined as T;
@@ -75,6 +80,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       const err = await res.text();
       if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
         throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
+      }
+      if (res.status === 401) {
+        throw new Error(GOOGLE_AUTH_BLOCKED_MESSAGE);
       }
       throw new Error(`Drive Sync 다운로드 오류: ${res.status} ${err}`);
     }
@@ -123,6 +131,9 @@ export class DriveSyncAdapter implements IDriveSyncPort {
       const err = await res.text();
       if (res.status === 403 && (err.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || err.includes('insufficientPermissions'))) {
         throw new Error('SCOPE_INSUFFICIENT: Google Drive 접근 권한이 부족합니다. 다시 로그인해주세요.');
+      }
+      if (res.status === 401) {
+        throw new Error(GOOGLE_AUTH_BLOCKED_MESSAGE);
       }
       throw new Error(`Drive Sync 업로드 오류: ${res.status} ${err}`);
     }

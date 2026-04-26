@@ -93,7 +93,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
               title={opt.id}
             >
               {opt.id !== 'none' ? (
-                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{opt.id}</span>
+                <span className="material-symbols-outlined text-icon">{opt.id}</span>
               ) : (
                 <span className="text-caption">✕</span>
               )}
@@ -115,7 +115,7 @@ function MessageStyleEditor({ style, onUpdate, onClose }: {
               : 'bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100'
           }`}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+          <span className="material-symbols-outlined text-icon">
             {isThemeSync ? 'link' : 'link_off'}
           </span>
           위젯 테마 연동

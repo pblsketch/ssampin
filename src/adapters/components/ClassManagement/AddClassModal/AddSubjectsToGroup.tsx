@@ -296,7 +296,7 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
           <h2 className="text-base font-bold text-sp-text">기존 학급에 과목 추가</h2>
           <button
             onClick={onSwitchToNew}
-            className="text-[11px] text-sp-muted hover:text-sp-accent hover:underline"
+            className="text-detail text-sp-muted hover:text-sp-accent hover:underline"
           >
             ← 새 학급 만들기
           </button>
@@ -318,11 +318,11 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-sp-text">{g.name}</span>
-                    <span className="text-[11px] text-sp-muted">
+                    <span className="text-detail text-sp-muted">
                       학생 {g.studentCount}명 · 과목 {g.classCount}개
                     </span>
                   </div>
-                  <p className="text-[11px] text-sp-muted mt-1 truncate">
+                  <p className="text-detail text-sp-muted mt-1 truncate">
                     {g.subjects.join(', ')}
                   </p>
                 </button>
@@ -344,7 +344,7 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
               <button
                 type="button"
                 onClick={() => setSelectedGroupId(null)}
-                className="text-[11px] text-sp-muted hover:text-sp-accent hover:underline mb-2 flex items-center gap-1"
+                className="text-detail text-sp-muted hover:text-sp-accent hover:underline mb-2 flex items-center gap-1"
               >
                 ← 다른 학급 선택
               </button>
@@ -366,7 +366,7 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
                 <p className="text-sm text-sp-muted mb-2">
                   시간표에서 추출 가능한 과목이 없습니다
                 </p>
-                <p className="text-[11px] text-sp-muted/70">
+                <p className="text-detail text-sp-muted/70">
                   아래에서 직접 입력해주세요
                 </p>
               </div>
@@ -406,22 +406,22 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
                           {item.subject}
                         </span>
                         {item.isCustom ? (
-                          <span className="text-[10px] text-sp-accent bg-sp-accent/10 px-1.5 py-0.5 rounded">
+                          <span className="text-caption text-sp-accent bg-sp-accent/10 px-1.5 py-0.5 rounded">
                             직접 추가
                           </span>
                         ) : (
-                          <span className="text-[11px] text-sp-muted">
+                          <span className="text-detail text-sp-muted">
                             주 {item.weeklyPeriods}시간
                           </span>
                         )}
                         {specialistLabel && (
-                          <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
+                          <span className="text-caption text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
                             {specialistLabel}
                           </span>
                         )}
                       </div>
                       {isDisabled && (
-                        <span className="text-[10px] text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
+                        <span className="text-caption text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
                           등록됨
                         </span>
                       )}

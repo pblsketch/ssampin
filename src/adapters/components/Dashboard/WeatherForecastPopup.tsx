@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
 import type { ForecastDay } from '@infrastructure/weather';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface WeatherForecastPopupProps {
   forecast: ForecastDay[];
@@ -18,53 +19,25 @@ function rainColor(chance: number): string {
 }
 
 export function WeatherForecastPopup({ forecast, onClose }: WeatherForecastPopupProps) {
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
   const todayISO = new Date().toISOString().slice(0, 10);
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div
-          className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-2xl pointer-events-auto flex flex-col"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="weather-forecast-title"
-        >
-          <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-sp-accent/10">
-                <span className="material-symbols-outlined text-sp-accent">calendar_month</span>
-              </div>
-              <div>
-                <h2 id="weather-forecast-title" className="text-lg font-bold text-sp-text">
-                  주간 날씨 예보
-                </h2>
-                <p className="text-xs text-sp-muted mt-0.5">
-                  오늘부터 {forecast.length}일간의 날씨를 한눈에 보세요
-                </p>
-              </div>
+    <Modal isOpen onClose={onClose} title="주간 날씨 예보" srOnlyTitle size="xl">
+      <div className="flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-sp-accent/10">
+              <span className="material-symbols-outlined text-sp-accent">calendar_month</span>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="닫기"
-              className="text-sp-muted hover:text-sp-text transition-colors rounded-lg p-1 hover:bg-sp-text/5"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
+            <div>
+              <h3 className="text-lg font-bold text-sp-text">주간 날씨 예보</h3>
+              <p className="text-xs text-sp-muted mt-0.5">
+                오늘부터 {forecast.length}일간의 날씨를 한눈에 보세요
+              </p>
+            </div>
           </div>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
+        </div>
 
           <div className="px-6 py-5">
             {forecast.length === 0 ? (
@@ -123,8 +96,7 @@ export function WeatherForecastPopup({ forecast, onClose }: WeatherForecastPopup
               </span>
             </div>
           </div>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

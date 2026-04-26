@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
 import type { ExportFormat, ExportItem } from './Export';
 import { PdfCanvasPreview } from './PdfCanvasPreview';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface ExportPreviewModalProps {
     items: Set<ExportItem>;
@@ -20,15 +21,6 @@ export function ExportPreviewModal({
     isExporting,
     pdfPreviewBytes,
 }: ExportPreviewModalProps) {
-    // ESC 키로 닫기
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && !isExporting) onCancel();
-        };
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [onCancel, isExporting]);
-
     const itemsList = Array.from(items).map(item => {
         switch (item) {
             case 'classSchedule': return '학급 시간표';
@@ -48,28 +40,31 @@ export function ExportPreviewModal({
                 : '선택 항목의 데이터가 hwpx 양식에 채워집니다.';
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" aria-hidden="true">
-            <div
-                className="bg-sp-surface border border-sp-border rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="modal-title-export-preview"
-            >
+        <Modal
+            isOpen
+            onClose={isExporting ? () => undefined : onCancel}
+            title="내보내기 미리보기"
+            srOnlyTitle
+            size="xl"
+            closeOnBackdrop={false}
+            closeOnEsc={!isExporting}
+        >
+            <div className="flex flex-col">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border bg-sp-card">
-                    <h3 id="modal-title-export-preview" className="text-lg font-bold text-sp-text flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
                         <span className="material-symbols-outlined text-sp-accent">preview</span>
                         내보내기 미리보기
                     </h3>
-                    <button
+                    <IconButton
+                        icon="close"
+                        label="닫기"
+                        variant="ghost"
+                        size="md"
                         onClick={onCancel}
                         disabled={isExporting}
-                        aria-label="닫기"
-                        className="text-sp-muted hover:text-sp-text transition-colors disabled:opacity-50"
-                    >
-                        <span className="material-symbols-outlined">close</span>
-                    </button>
+                    />
                 </div>
 
                 {/* Content */}
@@ -113,7 +108,7 @@ export function ExportPreviewModal({
                     <button
                         onClick={onConfirm}
                         disabled={isExporting}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-sp-accent hover:bg-sp-accent/90 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-sp-accent hover:bg-sp-accent/90 text-sp-accent-fg font-bold shadow-sp-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isExporting ? (
                             <>
@@ -130,6 +125,6 @@ export function ExportPreviewModal({
                 </div>
 
             </div>
-        </div>
+        </Modal>
     );
 }

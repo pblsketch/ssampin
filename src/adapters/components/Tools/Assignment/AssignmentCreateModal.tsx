@@ -5,6 +5,8 @@ import type { FileTypeRestriction } from '@domain/valueObjects/FileTypeRestricti
 import type { SubmitType } from '@domain/entities/Assignment';
 import type { StudentListOption } from '@adapters/hooks/useStudentLists';
 import { DriveFolderInput } from './DriveFolderInput';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import { shortLinkClient } from '@adapters/di/container';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
@@ -127,25 +129,18 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
   }
 
   return (
-    <>
-      {/* Overlay */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div role="dialog" aria-modal="true" aria-labelledby="modal-title-assignment-create" className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-xl pointer-events-auto flex flex-col max-h-[90vh]">
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-sp-accent/10">
-                <span className="material-symbols-outlined text-sp-accent">add_task</span>
-              </div>
-              <h2 id="modal-title-assignment-create" className="text-lg font-bold text-sp-text">새 과제 만들기</h2>
+    <Modal isOpen onClose={onClose} title="새 과제 만들기" srOnlyTitle size="xl">
+      <div className="flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-sp-accent/10">
+              <span className="material-symbols-outlined text-sp-accent">add_task</span>
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-sp-border/30 transition-colors">
-              <span className="material-symbols-outlined text-sp-muted">close</span>
-            </button>
+            <h3 className="text-lg font-bold text-sp-text">새 과제 만들기</h3>
           </div>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
+        </div>
 
           {/* Body (scrollable) */}
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
@@ -431,8 +426,7 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
               )}
             </button>
           </div>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

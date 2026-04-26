@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- v2.1 student-ux 회귀 fix (2026-04-24, Bug 2):
+       img-src에 blob: 추가. 학생이 이미지 첨부 모달에서
+       URL.createObjectURL(file)로 만든 blob: URL 미리보기가
+       기존 CSP("img-src 'self' data: https:")에 차단되어 미리보기가
+       표시되지 않았음. blob:은 학생 본인 메모리 내 객체만 가리키므로
+       동일 출처와 동등한 신뢰 수준이며 XSS 표면을 늘리지 않음. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data: https: blob:; frame-src https://www.youtube-nocookie.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- v2.1 (Phase A-A7) — bundle preload + dns-prefetch (Plan NFR / Design v2.1 §10.6.1)
+       첫 join → 화면 1초 한도 달성. 학생 entry 모듈을 미리 로드해 모달 열림 즉시 응답. -->
+  <link rel="modulepreload" href="/src/student/main.tsx" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <title>쌤핀 실시간 담벼락</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/student/main.tsx"></script>
+</body>
+</html>

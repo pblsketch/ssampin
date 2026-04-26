@@ -130,17 +130,84 @@ interface ElectronAPI {
   fetchLinkPreview: (
     url: string,
   ) => Promise<import('./domain/entities/RealtimeWall').RealtimeWallLinkPreviewOgMeta | null>;
+  /**
+   * v1.14 P1 — 교사 → 학생 broadcast.
+   * Design §7.2 신규 IPC 채널. BroadcastableServerMessage 구조는
+   * `src/usecases/realtimeWall/BroadcastWallState.ts`의 discriminated union 참조.
+   *
+   * P2에서 like-toggled / comment-added / comment-removed 메시지 3종 추가.
+   */
+  broadcastRealtimeWall?: (
+    msg: import('./usecases/realtimeWall/BroadcastWallState').BroadcastableServerMessage,
+  ) => Promise<void>;
+  /**
+   * v1.14 P2 — 교사가 학생 댓글 삭제 (status='hidden' 전환).
+   */
+  removeRealtimeWallComment?: (args: { postId: string; commentId: string }) => Promise<void>;
+  /**
+   * v1.14 P3 — 교사가 학생 카드 추가 잠금 토글.
+   * Main 세션 플래그를 갱신하고 모든 연결된 학생에게 `student-form-locked` broadcast.
+   */
+  setRealtimeWallStudentFormLocked?: (locked: boolean) => Promise<void>;
+  /**
+   * v2.1 신규 (Phase B) — 학생 PDF 업로드 (Plan §7.2 결정 #7 / Design v2.1 §7.1).
+   * Renderer → Main → magic byte 검증 → 임시 디렉토리 저장 → file:// URL 반환.
+   */
+  uploadRealtimeWallPdf?: (
+    bytes: Uint8Array,
+    filename: string,
+  ) => Promise<{ fileUrl: string; filename: string }>;
+  /**
+   * v2.1 student-ux 회귀 fix (2026-04-24): 서버가 createWallPost로 만든 RealtimeWallPost
+   * 전체를 그대로 전달. renderer는 setPosts에 merge만 (id 중복 시 skip).
+   * 이전 v2.1 phase B는 RealtimeWallSubmission(부분 필드) 전달이었으나, renderer가
+   * createWallPost 호출 시 images/pdf/color 등을 누락한 채 input 작성하여 첨부 유실 발생.
+   */
   onRealtimeWallStudentSubmitted: (callback: (data: {
-    post: {
-      id: string;
-      nickname: string;
-      text: string;
-      linkUrl?: string;
-      submittedAt: number;
+    post: import('./domain/entities/RealtimeWall').RealtimeWallPost & {
+      // v2.1 student-ux — Padlet 컬럼별 + 버튼 진입 시 columnId (post 자체에는 없지만 호환)
+      columnId?: string;
     };
     totalSubmissions: number;
   }) => void) => () => void;
   onRealtimeWallConnectionCount: (callback: (data: { count: number }) => void) => () => void;
+  /**
+   * v1.14 P2 — 학생 좋아요 도착 알림 (서버 → 교사 renderer).
+   */
+  onRealtimeWallStudentLike?: (callback: (data: {
+    postId: string;
+    likes: number;
+    likedBy: readonly string[];
+  }) => void) => () => void;
+  /**
+   * v1.14 P2 — 학생 댓글 도착 알림 (서버 → 교사 renderer).
+   */
+  onRealtimeWallStudentComment?: (callback: (data: {
+    postId: string;
+    comment: import('./domain/entities/RealtimeWall').RealtimeWallComment;
+  }) => void) => () => void;
+  /**
+   * v2.1 Phase D — 교사가 학생 placeholder 카드 복원.
+   */
+  restoreRealtimeWallCard?: (args: { postId: string }) => Promise<void>;
+  /**
+   * v2.1 Phase D — 학생 자기 카드 수정 도착 알림 (서버 → 교사 renderer).
+   */
+  onRealtimeWallStudentEdit?: (callback: (data: {
+    postId: string;
+    post: import('./domain/entities/RealtimeWall').RealtimeWallPost;
+  }) => void) => () => void;
+  /**
+   * v2.1 Phase D — 학생 자기 카드 삭제(soft delete) 도착 알림.
+   */
+  onRealtimeWallStudentDelete?: (callback: (data: { postId: string }) => void) => () => void;
+  /**
+   * v2.1 Phase D — 닉네임 변경 broadcast 도착 알림.
+   */
+  onRealtimeWallNicknameChanged?: (callback: (data: {
+    postIds: readonly string[];
+    newNickname: string;
+  }) => void) => () => void;
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
     questions: Array<{

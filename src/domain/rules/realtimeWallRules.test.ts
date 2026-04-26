@@ -606,7 +606,7 @@ describe('createWallBoard', () => {
     { id: 'column-2', title: '질문', order: 1 },
   ];
 
-  it('기본값 approvalMode=manual, posts=[], createdAt=updatedAt', () => {
+  it('기본값 approvalMode=auto (v2.1 student-ux Padlet 기본 정합), posts=[], createdAt=updatedAt', () => {
     const now = 1000;
     const board = createWallBoard({
       id: 'board-1' as WallBoardId,
@@ -617,7 +617,7 @@ describe('createWallBoard', () => {
     });
     expect(board.id).toBe('board-1');
     expect(board.title).toBe('토론 1');
-    expect(board.approvalMode).toBe('manual');
+    expect(board.approvalMode).toBe('auto');
     expect(board.posts).toEqual([]);
     expect(board.createdAt).toBe(now);
     expect(board.updatedAt).toBe(now);

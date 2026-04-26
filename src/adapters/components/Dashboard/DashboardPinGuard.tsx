@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { ProtectedFeatureKey } from '@domain/entities/PinSettings';
 import { usePinStore } from '@adapters/stores/usePinStore';
 import { PinOverlay } from '@adapters/components/common/PinOverlay';
+import { Card } from '@adapters/components/common/Card';
 
 interface DashboardPinGuardProps {
   feature: ProtectedFeatureKey;
@@ -48,8 +49,9 @@ export function DashboardPinGuard({ feature, children }: DashboardPinGuardProps)
   return (
     <>
       {/* 잠금 카드 */}
-      <div
-        className="rounded-xl bg-sp-card p-4 cursor-pointer group hover:ring-1 hover:ring-sp-accent/30 transition-all"
+      <Card
+        interactive
+        className="p-4 group"
         onClick={() => setShowPinOverlay(true)}
       >
         <div className="flex items-center justify-center flex-col gap-3 py-8">
@@ -62,7 +64,7 @@ export function DashboardPinGuard({ feature, children }: DashboardPinGuardProps)
             잠금됨 · 클릭하여 열기
           </p>
         </div>
-      </div>
+      </Card>
 
       {/* PIN 입력 오버레이 */}
       {showPinOverlay && (

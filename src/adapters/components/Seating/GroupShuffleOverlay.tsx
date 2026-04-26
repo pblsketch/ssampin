@@ -118,7 +118,7 @@ export function GroupShuffleOverlay({
 
   return (
     <div
-      className={`fixed inset-0 z-[60] flex flex-col items-center justify-center transition-opacity duration-500 ${
+      className={`fixed inset-0 z-sp-toast flex flex-col items-center justify-center transition-opacity duration-500 ${
         phase === 'fadeout' ? 'opacity-0' : 'opacity-100'
       }`}
     >

@@ -25,9 +25,12 @@ import type {
   RealtimeWallLayoutMode,
   WallApprovalMode,
 } from '@domain/entities/RealtimeWall';
+import type { RealtimeWallModerationMode } from '@domain/entities/RealtimeWallBoardSettings';
 import {
   addWallColumn,
+  approvalModeFromModerationMode,
   createDefaultFreeformPosition,
+  moderationModeFromApprovalMode,
   REALTIME_WALL_MAX_COLUMNS,
   REALTIME_WALL_MIN_COLUMNS,
   removeWallColumn,
@@ -35,12 +38,16 @@ import {
   reorderWallColumns,
   type RemoveColumnStrategy,
 } from '@domain/rules/realtimeWallRules';
+import { RealtimeWallBoardSettingsModerationToggle } from './RealtimeWallBoardSettingsModerationToggle';
+import { Drawer } from '@adapters/components/common/Drawer';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
-export type BoardSettingsSection = 'basic' | 'columns' | 'approval';
+export type BoardSettingsSection = 'basic' | 'columns' | 'approval' | 'student-permissions';
 
 export interface RealtimeWallBoardSettingsDrawerProps {
   /** null이면 드로어 닫힘 */
@@ -52,6 +59,11 @@ export interface RealtimeWallBoardSettingsDrawerProps {
   readonly columns: readonly RealtimeWallColumn[];
   readonly posts: readonly RealtimeWallPost[];
   readonly approvalMode: WallApprovalMode;
+  /**
+   * v1.14 P3 — 학생 카드 추가 잠금 상태.
+   * §12 Q7 확정(BoardSettingsDrawer) — §4 학생 권한 섹션에서 토글.
+   */
+  readonly studentFormLocked: boolean;
 
   readonly onClose: () => void;
 
@@ -67,6 +79,9 @@ export interface RealtimeWallBoardSettingsDrawerProps {
 
   // §3 — 승인 정책 적용
   readonly onApplyApprovalMode: (nextMode: WallApprovalMode, shouldBulkApprove: boolean) => void;
+
+  // §4 — v1.14 P3: 학생 카드 추가 잠금 토글
+  readonly onStudentFormLockedChange: (locked: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,11 +120,13 @@ export function RealtimeWallBoardSettingsDrawer({
   columns,
   posts,
   approvalMode,
+  studentFormLocked,
   onClose,
   onTitleChange,
   onLayoutModeChange,
   onApplyColumnEdit,
   onApplyApprovalMode,
+  onStudentFormLockedChange,
 }: RealtimeWallBoardSettingsDrawerProps) {
   const isOpen = openSection !== null;
 
@@ -122,7 +139,21 @@ export function RealtimeWallBoardSettingsDrawer({
   const basicRef = useRef<HTMLDivElement>(null);
   const columnsRef = useRef<HTMLDivElement>(null);
   const approvalRef = useRef<HTMLDivElement>(null);
+  const studentPermissionsRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const resolveTargetRef = (section: BoardSettingsSection | null) => {
+    switch (section) {
+      case 'columns':
+        return columnsRef;
+      case 'approval':
+        return approvalRef;
+      case 'student-permissions':
+        return studentPermissionsRef;
+      default:
+        return basicRef;
+    }
+  };
 
   // 드로어가 열릴 때 초기화 + 해당 섹션으로 스크롤
   useEffect(() => {
@@ -132,11 +163,7 @@ export function RealtimeWallBoardSettingsDrawer({
 
     // 다음 렌더 사이클에서 ref가 마운트된 후 스크롤
     const timer = window.setTimeout(() => {
-      const targetRef =
-        openSection === 'columns' ? columnsRef :
-        openSection === 'approval' ? approvalRef :
-        basicRef;
-      targetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      resolveTargetRef(openSection).current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
     return () => window.clearTimeout(timer);
   // openSection이 같은 섹션으로 다시 열릴 때도 스크롤해야 하므로 isOpen도 포함
@@ -147,11 +174,7 @@ export function RealtimeWallBoardSettingsDrawer({
   useEffect(() => {
     if (!isOpen) return;
     const timer = window.setTimeout(() => {
-      const targetRef =
-        openSection === 'columns' ? columnsRef :
-        openSection === 'approval' ? approvalRef :
-        basicRef;
-      targetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      resolveTargetRef(openSection).current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
     return () => window.clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,32 +255,12 @@ export function RealtimeWallBoardSettingsDrawer({
 
   return (
     <>
-      {/* 백드롭 */}
-      <div
-        className="fixed inset-0 z-40 bg-black/50"
-        aria-hidden="true"
-        onClick={onClose}
-      />
-
-      {/* 드로어 */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="보드 설정"
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col rounded-l-xl border-l border-sp-border bg-sp-card shadow-2xl"
-      >
+      <Drawer isOpen={isOpen} onClose={onClose} title="보드 설정" srOnlyTitle side="right" size="md">
         {/* 헤더 */}
         <div className="flex shrink-0 items-center gap-2.5 border-b border-sp-border px-5 py-4">
           <span className="material-symbols-outlined text-[20px] text-sp-accent">tune</span>
-          <h2 className="text-base font-bold text-sp-text">보드 설정</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="닫기"
-            className="ml-auto rounded-md p-1 text-sp-muted transition hover:bg-sp-surface hover:text-sp-text"
-          >
-            <span className="material-symbols-outlined text-[18px]">close</span>
-          </button>
+          <h3 className="text-base font-bold text-sp-text">보드 설정</h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={onClose} className="ml-auto" />
         </div>
 
         {/* 본문 스크롤 영역 */}
@@ -284,7 +287,7 @@ export function RealtimeWallBoardSettingsDrawer({
                 placeholder="실시간 담벼락"
                 className="w-full rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
               />
-              <p className="mt-1 text-right text-[10px] text-sp-muted">{title.length}/50</p>
+              <p className="mt-1 text-right text-caption text-sp-muted">{title.length}/50</p>
             </div>
 
             {/* 레이아웃 */}
@@ -305,7 +308,7 @@ export function RealtimeWallBoardSettingsDrawer({
                   >
                     <span className="material-symbols-outlined text-[18px]">{icon}</span>
                     <span className="text-xs font-bold">{label}</span>
-                    <span className="text-[10px] leading-tight opacity-70">{desc}</span>
+                    <span className="text-caption leading-tight opacity-70">{desc}</span>
                   </button>
                 ))}
               </div>
@@ -341,30 +344,23 @@ export function RealtimeWallBoardSettingsDrawer({
               />
             ) : (
               <>
-                <div className="space-y-2">
-                  <ApprovalRadio
-                    value="manual"
-                    checked={draftApprovalMode === 'manual'}
-                    label="승인 필요"
-                    desc="교사가 대기열에서 검토한 뒤 보드에 올립니다."
-                    onChange={() => setDraftApprovalMode('manual')}
-                  />
-                  <ApprovalRadio
-                    value="auto"
-                    checked={draftApprovalMode === 'auto'}
-                    label="자동 승인"
-                    desc="학생 제출이 즉시 보드에 노출됩니다."
-                    onChange={() => setDraftApprovalMode('auto')}
-                  />
-                  {/* filter — 준비 중 */}
-                  <label className="flex cursor-not-allowed items-start gap-3 rounded-lg border border-sp-border/60 bg-sp-surface/40 p-3 opacity-60">
-                    <input type="radio" disabled className="mt-1" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-sp-muted">키워드 필터</p>
-                      <p className="mt-0.5 text-xs text-sp-muted/60">준비 중</p>
-                    </div>
-                  </label>
-                </div>
+                {/* v2.1 (Phase A-A5) — moderation 프리셋 토글
+                    Padlet 정합 'off' / 'manual' 양자택일. approvalMode와 통합 매핑. */}
+                <RealtimeWallBoardSettingsModerationToggle
+                  value={moderationModeFromApprovalMode(draftApprovalMode)}
+                  onChange={(nextMode: RealtimeWallModerationMode) => {
+                    setDraftApprovalMode(approvalModeFromModerationMode(nextMode));
+                  }}
+                />
+
+                {/* 키워드 필터 — 준비 중 (현 정책 유지) */}
+                <label className="mt-2 flex cursor-not-allowed items-start gap-3 rounded-lg border border-sp-border/60 bg-sp-surface/40 p-3 opacity-60">
+                  <input type="radio" disabled className="mt-1" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-sp-muted">키워드 필터</p>
+                    <p className="mt-0.5 text-xs text-sp-muted/60">준비 중</p>
+                  </div>
+                </label>
 
                 {pendingCount > 0 && approvalMode === 'manual' && draftApprovalMode === 'auto' && (
                   <p className="mt-2 text-xs text-amber-400">
@@ -385,29 +381,41 @@ export function RealtimeWallBoardSettingsDrawer({
               </>
             )}
           </div>
+
+          {/* ================================================================
+              §4 학생 권한 (v1.14 P3)
+              ================================================================ */}
+          <div ref={studentPermissionsRef} className="mb-2 mt-6">
+            <SectionHeader icon="lock_person" label="학생 권한" />
+            <StudentFormLockToggle
+              locked={studentFormLocked}
+              onChange={onStudentFormLockedChange}
+            />
+          </div>
         </div>
-      </div>
+      </Drawer>
 
       {/* freeform 전환 경고 오버레이 */}
-      {confirmStage.kind === 'freeform-warn' && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="레이아웃 변경 확인"
-        >
-          <div className="w-full max-w-sm rounded-xl border border-sp-border bg-sp-card p-5 shadow-xl">
-            <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-              <span className="material-symbols-outlined mt-0.5 text-[18px] text-amber-400">
-                warning
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-sp-text">카드 위치가 재배치됩니다</p>
-                <p className="mt-1 text-xs text-sp-muted">
-                  자유 배치 레이아웃으로 전환하면 승인된 카드 {approvedCount}장의
-                  위치가 기본 격자 배치로 재설정됩니다. 계속하시겠어요?
-                </p>
-              </div>
+      <Modal
+        isOpen={confirmStage.kind === 'freeform-warn'}
+        onClose={handleCancelFreeformSwitch}
+        title="레이아웃 변경 확인"
+        srOnlyTitle
+        size="sm"
+        closeOnBackdrop={false}
+      >
+        <div className="p-5">
+          <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+            <span className="material-symbols-outlined mt-0.5 text-[18px] text-amber-400">
+              warning
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-sp-text">카드 위치가 재배치됩니다</p>
+              <p className="mt-1 text-xs text-sp-muted">
+                자유 배치 레이아웃으로 전환하면 승인된 카드 {approvedCount}장의
+                위치가 기본 격자 배치로 재설정됩니다. 계속하시겠어요?
+              </p>
+            </div>
             </div>
             <div className="flex items-center justify-end gap-2">
               <button
@@ -420,14 +428,13 @@ export function RealtimeWallBoardSettingsDrawer({
               <button
                 type="button"
                 onClick={handleConfirmFreeformSwitch}
-                className="rounded-lg bg-sp-accent px-4 py-2 text-xs font-bold text-white transition hover:bg-sp-accent/85"
+                className="rounded-lg bg-sp-accent px-4 py-2 text-xs font-bold text-sp-accent-fg transition hover:bg-sp-accent/85"
               >
                 계속
               </button>
             </div>
-          </div>
         </div>
-      )}
+      </Modal>
     </>
   );
 }
@@ -446,31 +453,28 @@ function SectionHeader({ icon, label }: { icon: string; label: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// ApprovalRadio — 승인 모드 라디오 항목
+// StudentFormLockToggle — v1.14 P3: 학생 카드 추가 잠금 체크박스
 // ---------------------------------------------------------------------------
 
-interface ApprovalRadioProps {
-  value: string;
-  checked: boolean;
-  label: string;
-  desc: string;
-  onChange: () => void;
+interface StudentFormLockToggleProps {
+  readonly locked: boolean;
+  readonly onChange: (locked: boolean) => void;
 }
 
-function ApprovalRadio({ value, checked, label, desc, onChange }: ApprovalRadioProps) {
+function StudentFormLockToggle({ locked, onChange }: StudentFormLockToggleProps) {
   return (
     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-sp-border bg-sp-surface p-3 transition hover:border-sp-accent/40">
       <input
-        type="radio"
-        name="approval-mode"
-        value={value}
-        checked={checked}
-        onChange={onChange}
-        className="mt-1"
+        type="checkbox"
+        checked={locked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 h-4 w-4 accent-sp-accent"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-sp-text">{label}</p>
-        <p className="mt-0.5 text-xs text-sp-muted">{desc}</p>
+        <p className="text-sm font-bold text-sp-text">학생 카드 추가 잠금</p>
+        <p className="mt-0.5 text-xs text-sp-muted">
+          잠그면 학생은 새 카드를 올릴 수 없어요. 이미 올라온 카드는 그대로 유지됩니다.
+        </p>
       </div>
     </label>
   );
@@ -681,7 +685,7 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
                 </button>
               </div>
 
-              <span className="w-5 text-center text-[11px] text-sp-muted">{index + 1}</span>
+              <span className="w-5 text-center text-detail text-sp-muted">{index + 1}</span>
 
               {isRenaming ? (
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -700,14 +704,14 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
                   <button
                     type="button"
                     onClick={handleCommitRename}
-                    className="rounded bg-sp-accent px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-sp-accent/85"
+                    className="rounded bg-sp-accent px-2 py-1 text-detail font-semibold text-white transition hover:bg-sp-accent/85"
                   >
                     확인
                   </button>
                   <button
                     type="button"
                     onClick={handleCancelRename}
-                    className="rounded border border-sp-border px-2 py-1 text-[11px] text-sp-muted transition hover:text-sp-text"
+                    className="rounded border border-sp-border px-2 py-1 text-detail text-sp-muted transition hover:text-sp-text"
                   >
                     취소
                   </button>
@@ -716,7 +720,7 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-sm text-sp-text">{col.title}</span>
                   {cardCount > 0 && (
-                    <span className="shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-[10px] text-sp-muted">
+                    <span className="shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-caption text-sp-muted">
                       {cardCount}장
                     </span>
                   )}
@@ -768,7 +772,7 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
       {error && (
         <p className="mt-2 text-xs text-red-400" role="alert">{error}</p>
       )}
-      <p className="mt-2 text-[11px] text-sp-muted">
+      <p className="mt-2 text-detail text-sp-muted">
         위/아래 화살표로 컬럼 순서를 바꿀 수 있어요.
         컬럼은 최소 {REALTIME_WALL_MIN_COLUMNS}개, 최대 {REALTIME_WALL_MAX_COLUMNS}개까지 가능합니다.
       </p>
@@ -855,7 +859,7 @@ function ColumnRemoveConfirmPanel({
                 type="button"
                 onClick={() => onConfirm({ kind: 'move-to', targetColumnId: moveTargetId })}
                 disabled={!moveTargetId}
-                className="rounded bg-sp-accent px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-sp-accent/85 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded bg-sp-accent px-3 py-1.5 text-detail font-bold text-white transition hover:bg-sp-accent/85 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 이동
               </button>

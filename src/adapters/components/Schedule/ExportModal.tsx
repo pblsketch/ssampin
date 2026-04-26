@@ -4,6 +4,8 @@ import type { CategoryItem, SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { DateRangeType } from '@domain/entities/EventsShareFile';
 import { filterEventsByCategories, filterEventsByDateRange } from '@domain/rules/shareRules';
 import { getCategoryColors } from '@adapters/presenters/categoryPresenter';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface ExportModalProps {
   categories: readonly CategoryItem[];
@@ -170,34 +172,13 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
   }
 
   return (
-    <>
-      {/* 오버레이 */}
-      <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* 모달 */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="bg-sp-card rounded-2xl border border-sp-border shadow-2xl w-full max-w-[520px]"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title-schedule-export"
-        >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
-            <h2 id="modal-title-schedule-export" className="text-lg font-bold text-sp-text">일정 내보내기</h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-          </div>
+    <Modal isOpen onClose={onClose} title="일정 내보내기" srOnlyTitle size="md">
+      <div>
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
+          <h3 className="text-lg font-bold text-sp-text">일정 내보내기</h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
+        </div>
 
           {/* 바디 */}
           <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
@@ -372,8 +353,7 @@ export function ExportModal({ categories, events, onClose }: ExportModalProps) {
               {isExporting ? '내보내는 중...' : '내보내기'}
             </button>
           </div>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

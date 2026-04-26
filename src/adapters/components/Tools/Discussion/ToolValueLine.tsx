@@ -218,14 +218,14 @@ export function ToolValueLine({ onBack, isFullscreen }: ToolValueLineProps) {
             {/* Labels */}
             <div className="absolute left-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1">
               <span className="text-xs text-red-400 font-bold">반대</span>
-              <span className="text-[10px] text-sp-muted">0%</span>
+              <span className="text-caption text-sp-muted">0%</span>
             </div>
             <div className="absolute left-1/2 -translate-x-1/2 bottom-2">
-              <span className="text-[10px] text-sp-muted">50%</span>
+              <span className="text-caption text-sp-muted">50%</span>
             </div>
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1">
               <span className="text-xs text-blue-400 font-bold">찬성</span>
-              <span className="text-[10px] text-sp-muted">100%</span>
+              <span className="text-caption text-sp-muted">100%</span>
             </div>
 
             {/* Student icons */}
@@ -245,7 +245,7 @@ export function ToolValueLine({ onBack, isFullscreen }: ToolValueLineProps) {
                 >
                   {s.emoji || '?'}
                 </div>
-                <span className="text-[10px] text-sp-text bg-sp-card/90 px-1.5 py-0.5 rounded-md mt-0.5 border border-sp-border/50 shadow-sm whitespace-nowrap">
+                <span className="text-caption text-sp-text bg-sp-card/90 px-1.5 py-0.5 rounded-md mt-0.5 border border-sp-border/50 shadow-sm whitespace-nowrap">
                   {s.name}
                 </span>
               </div>
@@ -289,7 +289,7 @@ export function ToolValueLine({ onBack, isFullscreen }: ToolValueLineProps) {
                 >
                   {s.emoji || '?'}
                 </div>
-                <span className="text-[10px] text-sp-text bg-sp-card/90 px-1.5 py-0.5 rounded-md mt-0.5 border border-sp-border/50">
+                <span className="text-caption text-sp-text bg-sp-card/90 px-1.5 py-0.5 rounded-md mt-0.5 border border-sp-border/50">
                   {s.name}
                 </span>
               </div>
@@ -302,7 +302,7 @@ export function ToolValueLine({ onBack, isFullscreen }: ToolValueLineProps) {
                 style={{ left: `${avgPosition * 100}%`, transform: 'translateX(-50%)' }}
               >
                 <div className="flex flex-col items-center">
-                  <span className="text-[10px] text-sp-accent font-bold bg-sp-accent/10 px-2 py-0.5 rounded-full border border-sp-accent/30">
+                  <span className="text-caption text-sp-accent font-bold bg-sp-accent/10 px-2 py-0.5 rounded-full border border-sp-accent/30">
                     평균 {Math.round(avgPosition * 100)}%
                   </span>
                 </div>
@@ -322,7 +322,7 @@ export function ToolValueLine({ onBack, isFullscreen }: ToolValueLineProps) {
                     className="h-full bg-red-500/40 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                     style={{ width: students.length > 0 ? `${(opposeCnt / students.length) * 100}%` : '0%' }}
                   >
-                    {opposeCnt > 0 && <span className="text-[10px] text-red-300 font-bold">{opposeCnt}명</span>}
+                    {opposeCnt > 0 && <span className="text-caption text-red-300 font-bold">{opposeCnt}명</span>}
                   </div>
                 </div>
                 <span className="text-xs text-sp-muted w-8">{opposeCnt}명</span>
@@ -335,7 +335,7 @@ export function ToolValueLine({ onBack, isFullscreen }: ToolValueLineProps) {
                     className="h-full bg-sp-border/60 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                     style={{ width: students.length > 0 ? `${(neutralCnt / students.length) * 100}%` : '0%' }}
                   >
-                    {neutralCnt > 0 && <span className="text-[10px] text-sp-muted font-bold">{neutralCnt}명</span>}
+                    {neutralCnt > 0 && <span className="text-caption text-sp-muted font-bold">{neutralCnt}명</span>}
                   </div>
                 </div>
                 <span className="text-xs text-sp-muted w-8">{neutralCnt}명</span>
@@ -348,7 +348,7 @@ export function ToolValueLine({ onBack, isFullscreen }: ToolValueLineProps) {
                     className="h-full bg-blue-500/40 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                     style={{ width: students.length > 0 ? `${(agreeCnt / students.length) * 100}%` : '0%' }}
                   >
-                    {agreeCnt > 0 && <span className="text-[10px] text-blue-300 font-bold">{agreeCnt}명</span>}
+                    {agreeCnt > 0 && <span className="text-caption text-blue-300 font-bold">{agreeCnt}명</span>}
                   </div>
                 </div>
                 <span className="text-xs text-sp-muted w-8">{agreeCnt}명</span>

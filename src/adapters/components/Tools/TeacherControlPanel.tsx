@@ -16,6 +16,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
 import type { MultiSurveyQuestion } from '@domain/entities/MultiSurvey';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 // ─────────────────────────────────────────────────────────
 // 타입 정의
@@ -169,20 +171,9 @@ function StudentInviteModal({
     });
   }, []);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="학생 초대"
-    >
-      <div
-        className="bg-sp-surface border border-sp-border rounded-2xl p-6 max-w-md w-full shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal isOpen={open} onClose={onClose} title="학생 초대하기" srOnlyTitle size="md">
+      <div className="p-6">
         {/* 헤더 */}
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -191,14 +182,7 @@ function StudentInviteModal({
               QR을 스캔하거나 아래 주소로 접속하세요
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="닫기"
-            className="text-sp-muted hover:text-sp-text text-2xl leading-none transition-colors"
-          >
-            ×
-          </button>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* QR 코드 */}
@@ -298,7 +282,7 @@ function StudentInviteModal({
           닫기
         </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 

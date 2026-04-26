@@ -296,7 +296,7 @@ export function MemoDetailPopup({
                     onDetachImage={handleDetachImage}
                   />
                 }
-                className="w-full leading-relaxed text-slate-700 outline-none"
+                className="w-full leading-relaxed text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:ring-offset-1 rounded-sm"
                 style={{ minHeight: '120px' }}
                 autoFocus
               />

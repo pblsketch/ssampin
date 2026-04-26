@@ -847,7 +847,7 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
                 onClick={() => setExcelPreview(null)}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+                <span className="material-symbols-outlined text-icon-lg">close</span>
               </button>
             </div>
             <p className="text-xs text-red-400 mb-4">주의: 적용 시 기존 명단이 모두 교체됩니다.</p>

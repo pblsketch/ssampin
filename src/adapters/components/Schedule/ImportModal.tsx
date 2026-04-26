@@ -10,6 +10,8 @@ import type {
 } from '@domain/entities/EventsShareFile';
 import { autoMapCategories, detectDuplicates } from '@domain/rules/shareRules';
 import { getCategoryColors } from '@adapters/presenters/categoryPresenter';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface ImportModalProps {
   shareFile: EventsShareFile;
@@ -577,38 +579,33 @@ export function ImportModal({
           ? '중복 확인'
           : '가져오기 완료';
 
-  return (
-    <>
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={step !== 'done' && !isImporting ? onClose : undefined}
-        aria-hidden="true"
-      />
+  const canCloseNow = step !== 'done' && !isImporting;
 
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="w-full max-w-[640px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title-import"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border">
-            <h2 id="modal-title-import" className="text-lg font-bold text-sp-text">{stepTitle}</h2>
-            {step !== 'done' && (
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isImporting}
-                className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            )}
-          </div>
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={stepTitle}
+      srOnlyTitle
+      size="lg"
+      closeOnBackdrop={canCloseNow}
+      closeOnEsc={canCloseNow}
+    >
+      <div className="overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border">
+          <h3 className="text-lg font-bold text-sp-text">{stepTitle}</h3>
+          {step !== 'done' && (
+            <IconButton
+              icon="close"
+              label="닫기"
+              variant="ghost"
+              size="md"
+              onClick={onClose}
+              disabled={isImporting}
+            />
+          )}
+        </div>
 
           {/* Body */}
           <div className="p-6">
@@ -645,8 +642,7 @@ export function ImportModal({
               <StepDone result={importResult} onClose={onClose} />
             )}
           </div>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

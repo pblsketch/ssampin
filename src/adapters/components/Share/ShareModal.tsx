@@ -5,6 +5,7 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useShareStore } from '@adapters/stores/useShareStore';
 import { kakaoShare } from '@infrastructure/share/KakaoShareAdapter';
+import { Modal } from '@adapters/components/common/Modal';
 
 const SHARE_TEXT = `쌤핀 — 선생님을 위한 무료 대시보드 앱이에요.\n시간표, 자리배치, 출결, 수업 도구를 하나로 쓸 수 있어요.\n무료, 광고 없음! 👉 ${SITE_URL}`;
 
@@ -68,33 +69,21 @@ export function ShareModal() {
     incrementSharedCount();
   }, [track, incrementSharedCount]);
 
-  if (!isModalOpen) return null;
-
   return (
-    <>
-      {/* Overlay */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={closeModal} aria-hidden="true" />
-
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div
-          className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md pointer-events-auto animate-scale-in"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title-share"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-500/10">
-                <span className="material-symbols-outlined text-amber-400">mail</span>
-              </div>
-              <h2 id="modal-title-share" className="text-lg font-bold text-sp-text">동료 선생님께 추천</h2>
+    <Modal isOpen={isModalOpen} onClose={closeModal} title="동료 선생님께 추천" srOnlyTitle size="md">
+      <div>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-500/10">
+              <span className="material-symbols-outlined text-amber-400">mail</span>
             </div>
-            <button onClick={closeModal} aria-label="닫기" className="p-2 rounded-lg hover:bg-sp-border/30 transition-colors">
-              <span className="material-symbols-outlined text-sp-muted">close</span>
-            </button>
+            <h3 className="text-lg font-bold text-sp-text">동료 선생님께 추천</h3>
           </div>
+          <button onClick={closeModal} aria-label="닫기" className="p-2 rounded-lg hover:bg-sp-border/30 transition-colors">
+            <span className="material-symbols-outlined text-sp-muted">close</span>
+          </button>
+        </div>
 
           {/* Body */}
           <div className="px-6 py-6 flex flex-col items-center">
@@ -120,7 +109,7 @@ export function ShareModal() {
               {/* 링크 복사 */}
               <button
                 onClick={() => void handleCopy()}
-                className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-sp-accent text-white hover:bg-sp-accent/80 transition-all w-full text-left font-medium text-sm"
+                className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-sp-accent text-sp-accent-fg hover:bg-sp-accent/90 transition-all w-full text-left font-medium text-sm"
               >
                 <span className="material-symbols-outlined text-icon-lg">content_copy</span>
                 링크 복사
@@ -143,8 +132,7 @@ export function ShareModal() {
               </div>
             </div>
           </div>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

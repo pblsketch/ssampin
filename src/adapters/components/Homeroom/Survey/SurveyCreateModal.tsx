@@ -6,6 +6,8 @@ import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import { SITE_DISPLAY } from '@config/siteUrl';
 import type { SurveyMode, QuestionType } from '@domain/entities/Survey';
 import { generateStudentPins } from '@domain/rules/surveyRules';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 import { hashPin } from '@infrastructure/crypto/pinHash';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
@@ -227,20 +229,12 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
   }, [canSubmit, title, description, mode, questions, dueDate, color, classId, customLinkCode, pinProtection, createSurvey, showToast, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true">
-      <div
-        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-survey-create"
-      >
+    <Modal isOpen onClose={onClose} title="새 설문/체크리스트" srOnlyTitle size="lg">
+      <div className="flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-5 border-b border-sp-border shrink-0">
-          <h3 id="modal-title-survey-create" className="text-lg font-bold text-sp-text">새 설문/체크리스트</h3>
-          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <h3 className="text-lg font-bold text-sp-text">새 설문/체크리스트</h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* 본문 (스크롤) */}
@@ -525,6 +519,6 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -8,6 +8,8 @@ import { consultationSupabaseClient, shortLinkClient } from '@adapters/di/contai
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import type { ConsultationType, ConsultationMethod } from '@domain/entities/Consultation';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 /* ──────────────── 타입 ──────────────── */
@@ -641,25 +643,13 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   }, [canSubmit, title, type, methods, slotMinutes, dates, message, createSchedule, showToast, onClose, excludeClassTime, excludedTimes, blockedSlotKeys]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
-      aria-hidden="true"
-    >
-      <div
-        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-consultation-create"
-      >
+    <Modal isOpen onClose={onClose} title="새 상담 일정" srOnlyTitle size="lg">
+      <div className="flex flex-col">
         {/* 헤더 + 스텝 인디케이터 */}
         <div className="p-5 border-b border-sp-border shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h3 id="modal-title-consultation-create" className="text-lg font-bold text-sp-text">새 상담 일정</h3>
-            <button onClick={onClose} aria-label="닫기" className="text-sp-muted hover:text-sp-text transition-colors">
-              <span className="material-symbols-outlined">close</span>
-            </button>
+            <h3 className="text-lg font-bold text-sp-text">새 상담 일정</h3>
+            <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
           </div>
           <div className="flex items-center gap-1">
             {([
@@ -1110,7 +1100,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                                 <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
                                   isExcluded ? 'bg-red-500 border-red-500' : 'border-sp-border'
                                 }`}>
-                                  {isExcluded && <span className="material-symbols-outlined text-white" style={{ fontSize: '10px' }}>close</span>}
+                                  {isExcluded && <span className="material-symbols-outlined text-icon-xs text-white">close</span>}
                                 </span>
                                 <span className="flex-1 text-left">{preset.label}</span>
                                 {isClass && (
@@ -1143,7 +1133,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                                   onClick={() => setCustomExclusions((prev) => prev.filter((_, i) => i !== idx))}
                                   className="ml-auto text-sp-muted hover:text-red-400"
                                 >
-                                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+                                  <span className="material-symbols-outlined text-icon-sm">close</span>
                                 </button>
                               </div>
                             ))}
@@ -1154,7 +1144,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                           onClick={() => setCustomExclusions((prev) => [...prev, { startTime: '12:00', endTime: '13:00', label: '' }])}
                           className="flex items-center justify-center gap-1 py-1.5 rounded-md border border-dashed border-sp-border text-caption text-sp-muted hover:text-sp-accent hover:border-sp-accent/50 transition-all"
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>add</span>
+                          <span className="material-symbols-outlined text-icon-xs">add</span>
                           제외 시간 추가
                         </button>
 
@@ -1190,7 +1180,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
                               </div>
                               {hasShortGap && (
                                 <p className="text-caption text-amber-400 mt-1.5 flex items-center gap-1">
-                                  <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>warning</span>
+                                  <span className="material-symbols-outlined text-icon-xs">warning</span>
                                   일부 시간대가 {slotMinutes}분보다 짧아 슬롯이 생성되지 않습니다
                                 </p>
                               )}
@@ -1436,6 +1426,6 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

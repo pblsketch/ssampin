@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface Props {
   onClose: () => void;
@@ -53,26 +55,15 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" aria-hidden="true">
-      <div
-        className="w-full max-w-[560px] max-h-[80vh] flex flex-col rounded-2xl bg-sp-card border border-sp-border shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-record-category-management"
-      >
+    <Modal isOpen onClose={onClose} title="카테고리 관리" srOnlyTitle size="md">
+      <div className="flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
-          <h2 id="modal-title-record-category-management" className="text-base font-bold text-sp-text flex items-center gap-2">
+          <h3 className="text-base font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-base">tune</span>
             카테고리 관리
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="닫기"
-            className="text-sp-muted hover:text-sp-text transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          </h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* 본문 */}
@@ -219,7 +210,7 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 
   function setIsExpanded(id: string, expanded: boolean) {

@@ -19,6 +19,7 @@ import { TodoTab } from './tabs/TodoTab';
 import { ToolsTab } from './tabs/ToolsTab';
 import { ShortcutsTab } from './tabs/ShortcutsTab';
 import { PageHeader } from '@adapters/components/common/PageHeader';
+import { Modal } from '@adapters/components/common/Modal';
 interface Props {
   activeTab: SettingsTabId;
   onTabChange: (tab: SettingsTabId) => void;
@@ -93,37 +94,38 @@ export function SettingsLayout({
       </div>
 
       {/* Reset Confirmation Dialog */}
-      {showReset && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" aria-hidden="true">
-          <div
-            className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 max-w-sm w-full mx-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title-settings-reset"
-          >
-            <h3 id="modal-title-settings-reset" className="text-lg font-bold text-sp-text mb-2">설정 초기화</h3>
-            <p className="text-sm text-sp-muted mb-6">
-              변경사항을 저장하지 않고 마지막 저장 상태로 되돌리시겠습니까?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setShowReset(false)}
-                className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={onReset}
-                className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 text-sm font-medium transition-colors"
-              >
-                초기화
-              </button>
-            </div>
+      <Modal
+        isOpen={showReset}
+        onClose={() => setShowReset(false)}
+        title="설정 초기화"
+        srOnlyTitle
+        size="sm"
+        closeOnBackdrop={false}
+      >
+        <div className="p-6">
+          <h3 className="text-lg font-bold text-sp-text mb-2">설정 초기화</h3>
+          <p className="text-sm text-sp-muted mb-6">
+            변경사항을 저장하지 않고 마지막 저장 상태로 되돌리시겠습니까?
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              type="button"
+              onClick={() => setShowReset(false)}
+              autoFocus
+              className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={onReset}
+              className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 text-sm font-medium transition-colors"
+            >
+              초기화
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

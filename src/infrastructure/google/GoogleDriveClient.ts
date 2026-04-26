@@ -4,6 +4,7 @@
  * 과제수합 도구에서 교사 드라이브에 파일을 저장/관리.
  * drive.file scope: 앱이 생성한 파일/폴더만 접근 가능.
  */
+import { GOOGLE_AUTH_BLOCKED_MESSAGE } from '@domain/rules/calendarSyncRules';
 
 const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3';
@@ -85,9 +86,11 @@ export class GoogleDriveClient {
       if (res.status === 403 && (err.includes('accessNotConfigured') || err.includes('Drive API has not been used') || err.includes('it is disabled'))) {
         throw new Error('Google Drive API가 활성화되지 않았습니다. Google Cloud Console에서 Drive API를 사용 설정해주세요.');
       }
-      const error = new Error(
-        `Google Drive API error: ${res.status} ${err}`,
-      ) as DriveApiError;
+      const message =
+        res.status === 401
+          ? GOOGLE_AUTH_BLOCKED_MESSAGE
+          : `Google Drive API error: ${res.status} ${err}`;
+      const error = new Error(message) as DriveApiError;
       error.code = res.status;
       throw error;
     }
@@ -141,9 +144,11 @@ export class GoogleDriveClient {
       if (res.status === 403 && (err.includes('accessNotConfigured') || err.includes('Drive API has not been used') || err.includes('it is disabled'))) {
         throw new Error('Google Drive API가 활성화되지 않았습니다. Google Cloud Console에서 Drive API를 사용 설정해주세요.');
       }
-      const error = new Error(
-        `Google Drive upload error: ${res.status} ${err}`,
-      ) as DriveApiError;
+      const message =
+        res.status === 401
+          ? GOOGLE_AUTH_BLOCKED_MESSAGE
+          : `Google Drive upload error: ${res.status} ${err}`;
+      const error = new Error(message) as DriveApiError;
       error.code = res.status;
       throw error;
     }

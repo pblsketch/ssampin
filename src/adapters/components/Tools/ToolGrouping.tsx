@@ -762,7 +762,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                                   onClick={() => setRoleConfigs((prev) => prev.map((r, j) => j === i ? { ...r, count: r.count + 1 } : r))}
                                   className="w-6 h-6 rounded bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text text-xs flex items-center justify-center"
                                 >+</button>
-                                <span className="text-[10px] text-sp-muted w-4">명</span>
+                                <span className="text-caption text-sp-muted w-4">명</span>
                               </div>
                               <button
                                 onClick={() => setRoleConfigs((prev) => prev.filter((_, j) => j !== i))}
@@ -804,12 +804,12 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex flex-wrap gap-1">
                             {roleConfigs.map((r, i) => (
-                              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-400/30">
+                              <span key={i} className="text-caption px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-400/30">
                                 {r.name}{r.count > 1 ? ` ×${r.count}` : ''}
                               </span>
                             ))}
                           </div>
-                          <span className="text-[10px] text-sp-muted shrink-0 ml-2">
+                          <span className="text-caption text-sp-muted shrink-0 ml-2">
                             총 {totalRoleSlots}명분
                           </span>
                         </div>
@@ -817,14 +817,14 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                           const perGroup = Math.ceil(totalMembers / Math.max(1, effectiveGroupCount));
                           if (totalRoleSlots > 0 && totalRoleSlots < perGroup) {
                             return (
-                              <p className="text-[10px] text-amber-400 mt-1">
+                              <p className="text-caption text-amber-400 mt-1">
                                 역할 슬롯({totalRoleSlots}) &lt; 모둠 인원({perGroup}): 일부 멤버는 역할 없이 배정됩니다
                               </p>
                             );
                           }
                           if (totalRoleSlots > perGroup) {
                             return (
-                              <p className="text-[10px] text-amber-400 mt-1">
+                              <p className="text-caption text-amber-400 mt-1">
                                 역할 슬롯({totalRoleSlots}) &gt; 모둠 인원({perGroup}): 한 명이 여러 역할을 맡습니다
                               </p>
                             );
@@ -863,7 +863,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                               );
                             })}
                           </div>
-                          <p className="mt-2 text-[10px] text-sp-muted/60 text-center">
+                          <p className="mt-2 text-caption text-sp-muted/60 text-center">
                             미지정 학생은 성별 균형 배분에서 제외됩니다. 이 정보는 저장되지 않습니다.
                           </p>
                         </div>
@@ -899,7 +899,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                               );
                             })}
                           </div>
-                          <p className="mt-2 text-[10px] text-sp-muted/60 text-center">
+                          <p className="mt-2 text-caption text-sp-muted/60 text-center">
                             미지정 학생은 수준 균형 배분에서 제외됩니다. 이 정보는 저장되지 않습니다.
                           </p>
                         </div>
@@ -953,7 +953,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                             ))}
                           </div>
                         )}
-                        <p className="text-[10px] text-sp-muted/60">
+                        <p className="text-caption text-sp-muted/60">
                           * 조건은 이 화면에서만 유효하며 저장되지 않습니다 (프라이버시 보호)
                         </p>
                       </div>
@@ -1056,7 +1056,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                         {group.label}
                       </h3>
                       <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-sp-muted">{group.members.length}명</span>
+                        <span className="text-caption text-sp-muted">{group.members.length}명</span>
                         <button
                           onClick={() => toggleLock(idx)}
                           className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
@@ -1084,18 +1084,18 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                             }`}
                           >
                             {member.number != null && (
-                              <span className="text-[10px] text-sp-muted min-w-[1.5rem] text-right">
+                              <span className="text-caption text-sp-muted min-w-[1.5rem] text-right">
                                 {member.number}
                               </span>
                             )}
                             <span className={`text-sm font-medium ${isLeader ? 'text-amber-300' : 'text-sp-text'}`}>
                               {member.name}
                             </span>
-                            {isLeader && <span className="text-amber-400 text-[10px] shrink-0">★</span>}
+                            {isLeader && <span className="text-amber-400 text-caption shrink-0">★</span>}
                             <span className="flex items-center gap-1 ml-auto shrink-0">
                               {member.role && (
                                 <span
-                                  className={`text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-400/30 ${
+                                  className={`text-caption px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-400/30 ${
                                     roleAssignMode === 'manual' ? 'cursor-pointer hover:bg-violet-500/25' : ''
                                   }`}
                                   onClick={roleAssignMode === 'manual' ? (e) => { e.stopPropagation(); handleCycleRole(idx, mIdx); } : undefined}
@@ -1106,7 +1106,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                               )}
                               {!member.role && roleAssignMode === 'manual' && roleConfigs.length > 0 && (
                                 <button
-                                  className="text-[10px] px-1.5 py-0.5 rounded bg-sp-surface text-sp-muted/50 border border-sp-border/50 hover:text-sp-muted hover:border-sp-border"
+                                  className="text-caption px-1.5 py-0.5 rounded bg-sp-surface text-sp-muted/50 border border-sp-border/50 hover:text-sp-muted hover:border-sp-border"
                                   onClick={(e) => { e.stopPropagation(); handleCycleRole(idx, mIdx); }}
                                   title="역할 배정"
                                 >
@@ -1114,7 +1114,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                                 </button>
                               )}
                               {member.gender && (
-                                <span className={`text-[10px] ${member.gender === 'M' ? 'text-blue-400' : 'text-pink-400'}`}>
+                                <span className={`text-caption ${member.gender === 'M' ? 'text-blue-400' : 'text-pink-400'}`}>
                                   {genderLabel(member.gender)}
                                 </span>
                               )}

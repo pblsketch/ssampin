@@ -5,6 +5,7 @@ import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { SyncSettings } from '@domain/entities/Settings';
+import { Modal } from '@adapters/components/common/Modal';
 
 const INTERVAL_OPTIONS = [0, 5, 10, 15, 30] as const;
 const DEFAULT_SYNC: SyncSettings = {
@@ -326,41 +327,38 @@ export const BackupCard = forwardRef<HTMLDivElement>(function BackupCard(_props,
       </ServiceCard>
 
       {/* 클라우드 삭제 확인 모달 */}
-      {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
-          onClick={() => setShowDeleteConfirm(false)}
-          aria-hidden="true"
-        >
-          <div
-            className="bg-sp-card rounded-xl ring-1 ring-sp-border p-6 max-w-sm w-full mx-4"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-sp-text mb-2">클라우드 데이터 삭제</h3>
-            <p className="text-sm text-sp-muted mb-6">
-              Google Drive의 '쌤핀 동기화' 폴더의 모든 데이터가 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDeleteCloud()}
-                className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 text-sm font-medium transition-colors"
-              >
-                삭제
-              </button>
-            </div>
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="클라우드 데이터 삭제"
+        srOnlyTitle
+        size="sm"
+        closeOnBackdrop={false}
+      >
+        <div className="p-6">
+          <h3 className="text-lg font-bold text-sp-text mb-2">클라우드 데이터 삭제</h3>
+          <p className="text-sm text-sp-muted mb-6">
+            Google Drive의 '쌤핀 동기화' 폴더의 모든 데이터가 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              autoFocus
+              className="px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text text-sm transition-colors"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteCloud()}
+              className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 text-sm font-medium transition-colors"
+            >
+              삭제
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 });

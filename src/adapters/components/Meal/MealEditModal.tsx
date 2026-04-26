@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { ManualMealInfo, MealDish } from '@domain/entities/Meal';
+import { Modal } from '@adapters/components/common/Modal';
 
 interface MealEditModalProps {
   date: string;
@@ -59,23 +60,12 @@ export function MealEditModal({ date, existingMeals, onSave, onClose }: MealEdit
     onSave([...existingMeals.filter((m) => m.mealType !== mealType), newMeal]);
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  };
+  const titleText = `급식 메뉴 입력 — ${formatDateDisplay(date)}`;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={handleBackdropClick}
-      aria-hidden="true"
-    >
-      <div
-        className="bg-sp-bg rounded-2xl border border-sp-border p-6 w-full max-w-md shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-meal-edit"
-      >
-        <h3 id="modal-title-meal-edit" className="text-lg font-bold text-sp-text mb-4 flex items-center gap-2">
+    <Modal isOpen onClose={onClose} title={titleText} srOnlyTitle size="md">
+      <div className="p-6">
+        <h3 className="text-lg font-bold text-sp-text mb-4 flex items-center gap-2">
           <span className="material-symbols-outlined text-sp-accent">edit_note</span>
           급식 메뉴 입력 — {formatDateDisplay(date)}
         </h3>
@@ -89,7 +79,7 @@ export function MealEditModal({ date, existingMeals, onSave, onClose }: MealEdit
               onClick={() => setMealType(type)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 mealType === type
-                  ? 'bg-sp-accent text-white'
+                  ? 'bg-sp-accent text-sp-accent-fg'
                   : 'bg-sp-surface text-sp-muted hover:text-sp-text'
               }`}
             >
@@ -127,12 +117,12 @@ export function MealEditModal({ date, existingMeals, onSave, onClose }: MealEdit
           <button
             type="button"
             onClick={handleSave}
-            className="px-4 py-2 text-sm bg-sp-accent text-white rounded-lg hover:bg-sp-accent/80 transition-colors"
+            className="px-4 py-2 text-sm bg-sp-accent text-sp-accent-fg rounded-lg hover:bg-sp-accent/90 transition-colors"
           >
             저장
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

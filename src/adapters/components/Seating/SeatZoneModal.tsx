@@ -4,6 +4,8 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
 import type { ZoneId, ZoneConstraint, FixedSeatConstraint } from '@domain/entities/SeatConstraints';
 import { ZONE_LABELS } from '@domain/entities/SeatConstraints';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 interface SeatZoneModalProps {
   open: boolean;
@@ -112,28 +114,16 @@ export function SeatZoneModal({ open, onClose }: SeatZoneModalProps) {
     [students],
   );
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" aria-hidden="true">
-      <div
-        className="bg-sp-card border border-sp-border rounded-xl w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] flex flex-col"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-seat-zone"
-      >
+    <Modal isOpen={open} onClose={onClose} title="배치 조건" srOnlyTitle size="lg">
+      <div className="flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 border-b border-sp-border">
-          <h2 id="modal-title-seat-zone" className="text-lg font-bold text-sp-text flex items-center gap-2">
+          <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined text-sp-accent">tune</span>
             배치 조건
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-sp-surface text-sp-muted hover:text-sp-text transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          </h3>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         {/* 탭 */}
@@ -389,6 +379,6 @@ export function SeatZoneModal({ open, onClose }: SeatZoneModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

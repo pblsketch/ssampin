@@ -153,7 +153,7 @@ function SortableClassItem({
         </div>
         {isSelected ? (
           <span className="flex items-center gap-1 shrink-0">
-            <span className="material-symbols-outlined text-sp-accent" style={{ fontSize: '14px' }}>check_circle</span>
+            <span className="material-symbols-outlined text-icon-sm text-sp-accent">check_circle</span>
             <span className="text-caption text-sp-accent font-medium bg-sp-accent/10 px-1.5 py-0.5 rounded-full">
               {cls.students.length}명
             </span>

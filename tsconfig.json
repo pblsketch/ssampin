@@ -26,7 +26,8 @@
       "@infrastructure/*": ["src/infrastructure/*"],
       "@widgets/*": ["src/widgets/*"],
       "@mobile/*": ["src/mobile/*"],
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["src/shared/*"],
+      "@student/*": ["src/student/*"]
     }
   },
   "include": ["src"],

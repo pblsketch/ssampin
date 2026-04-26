@@ -15,6 +15,8 @@ import { SurveyDetail } from '@adapters/components/Homeroom/Survey/SurveyDetail'
 import { SurveyStudentDetail } from '@adapters/components/Homeroom/Survey/SurveyStudentDetail';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { surveySupabaseClient, shortLinkClient } from '@adapters/di/container';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 /* ──────────────── 색상 매핑 ──────────────── */
 
@@ -92,16 +94,11 @@ function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
   }, [survey.title, showToast]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal isOpen onClose={onClose} title="설문 공유" srOnlyTitle size="sm">
+      <div className="flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-sp-border">
           <h3 className="text-sm font-bold text-sp-text">설문 공유</h3>
-          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={onClose} />
         </div>
         <div className="p-5 flex flex-col items-center gap-4">
           <p className="text-xs text-sp-muted text-center">{survey.title}</p>
@@ -136,7 +133,7 @@ function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -176,25 +173,14 @@ function SurveyCopyModal({ survey, currentClassId, onClose }: SurveyCopyModalPro
   );
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
-      aria-hidden="true"
-    >
-      <div
-        className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 max-h-[70vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
+    <Modal isOpen onClose={onClose} title="다른 반에 복사" srOnlyTitle size="sm">
+      <div className="flex flex-col max-h-[70vh]">
         <div className="flex items-center justify-between p-4 border-b border-sp-border shrink-0">
           <div>
             <h3 className="text-sm font-bold text-sp-text">다른 반에 복사</h3>
             <p className="text-xs text-sp-muted mt-0.5 truncate">{survey.title}</p>
           </div>
-          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={onClose} />
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -242,7 +228,7 @@ function SurveyCopyModal({ survey, currentClassId, onClose }: SurveyCopyModalPro
           </p>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

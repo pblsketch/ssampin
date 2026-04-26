@@ -1,23 +1,24 @@
 /**
- * 실시간 담벼락 학생 참여 HTML.
+ * 실시간 담벼락 학생 참여 — legacy vanilla HTML (fallback).
  *
- * [정책 — 교사 큐레이션 모델 보존]
- * 학생 뷰는 **자기 글 제출만** 허용한다. 다음은 학생 HTML에 절대 노출 금지:
- *   - 다른 학생 카드/제출물 목록
- *   - OG 미리보기 썸네일 / YouTube iframe
- *   - 좋아요·댓글 카운터 (교사 로컬 likes는 단계 6부터 RealtimeWallPost.likes에
- *     존재하나 학생 HTML 노출 금지. 집계 공개는 PDCA 명시 동의 시만 예외.)
- *   - 교사 대기열/승인 상태
+ * v1.14 P1부터는 `dist-student/` React SPA가 기본 학생 뷰이며,
+ * 이 함수가 반환하는 HTML은 dist-student 번들이 누락된 dev/예외 환경에서만
+ * http 서버가 fallback으로 내려준다 (electron/ipc/realtimeWall.ts 참조).
  *
- * [이유]
- *   1. 교사 큐레이션(pending → approve/hide)이 이 도구의 핵심 UX 가치.
- *      사전 노출은 승인 모델을 무력화함.
- *   2. 승인 전 부적절 콘텐츠가 학생에게 노출되는 것을 원천 차단.
- *   3. 학생 HTML은 WebSocket 수동 파싱이라, 쌍방향 데이터를 늘리면 보안
- *      표면(XSS·CSRF·rate limit 우회)이 커진다.
+ * [패들렛 모드 정책 — Design §0.1 동일 뷰 원칙]
+ * v1.14부터 학생도 다른 학생 카드를 볼 수 있다. 이는 학생 SPA가 처리하며,
+ * 본 legacy HTML은 그 SPA가 로드되지 않는 환경에서만 쓰인다. 따라서 이 HTML의
+ * 역할은 "닉네임+본문 1카드 제출" 최소 기능 유지로 축소된다. 이 HTML에 새
+ * 기능을 추가할 필요는 없다 — 모든 신규 UX는 `src/student/` React entry에 구현.
  *
- * 이 정책은 단계 6 이후에도 유지한다. 학생에게 집계값을 보여주는 옵션은
- * 반드시 PDCA 계획 문서에서 기획자가 명시 동의한 경우에만 예외.
+ * [부적절 콘텐츠 차단 원칙 유지]
+ * 교사 승인 전(pending) 카드는 학생에게 노출되지 않는다. 이는 dist-student
+ * SPA와 legacy HTML 모두 동일하게 지키며, 학생용 `WallBoardSnapshot` 빌더
+ * (`src/usecases/realtimeWall/BroadcastWallState.ts`)가 status === 'approved'
+ * 카드만 통과시켜 구조적으로 보장한다.
+ *
+ * 본 파일은 v1.14 이후에도 legacy fallback으로 유지되며, 기능 확장은 React
+ * SPA 쪽에서만 이루어진다.
  */
 function escapeHtml(text: string): string {
   return text

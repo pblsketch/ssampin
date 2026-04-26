@@ -5,6 +5,8 @@ import { studentKey } from '@domain/entities/TeachingClass';
 import { exportObservationsToExcel } from '@infrastructure/export';
 import type { ObservationExportRecord } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { Modal } from '@adapters/components/common/Modal';
+import { IconButton } from '@adapters/components/common/IconButton';
 
 type PeriodPreset = 'all' | 'semester' | 'month' | 'custom';
 
@@ -131,20 +133,14 @@ export function ObservationExportModal({ classId, onClose }: ObservationExportMo
   }, [classRecords, cls, className, period, filteredCount, showToast, onClose]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
-      <div
-        className="bg-sp-card border border-sp-border rounded-2xl w-full max-w-md mx-4"
-        role="dialog"
-        aria-modal="true"
-      >
+    <Modal isOpen onClose={onClose} title="관찰 기록 내보내기" srOnlyTitle size="md">
+      <div>
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-sp-accent">download</span>
             <h3 className="text-sp-text font-semibold">관찰 기록 내보내기</h3>
           </div>
-          <button onClick={onClose} className="text-sp-muted hover:text-sp-text transition-colors">
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
         <div className="px-6 py-4 space-y-5">
@@ -228,6 +224,6 @@ export function ObservationExportModal({ classId, onClose }: ObservationExportMo
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

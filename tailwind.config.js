@@ -81,11 +81,22 @@ export default {
         'sp-out-cubic': 'var(--sp-ease-out-cubic)',
         'sp-in-out':    'var(--sp-ease-in-out)',
       },
+      zIndex: {
+        /* 시맨틱 z-index 레이어 (2026-04-25 신설).
+         * 신규 코드는 z-{layer} 사용. 기존 z-50/z-[60]/z-[110] 등은 점진 마이그레이션. */
+        'sp-dropdown': '40',
+        'sp-modal':    '50',
+        'sp-toast':    '60',
+        'sp-palette':  '70',
+        'sp-tooltip':  '80',
+      },
       animation: {
         'slide-in-right': 'slideInRight 0.3s ease-out',
         'fade-in': 'fadeIn 0.2s ease-out',
         'scale-in': 'scaleIn 0.2s ease-out',
         'slide-up': 'slideUp 0.3s ease-out',
+        // v2.1 (Phase A-A1) — FAB 잠금 시 호버 진동 애니메이션
+        'fab-jiggle': 'fabJiggle 0.5s ease-in-out',
       },
       keyframes: {
         slideInRight: {
@@ -103,6 +114,14 @@ export default {
         slideUp: {
           '0%': { transform: 'translateY(100%)' },
           '100%': { transform: 'translateY(0)' },
+        },
+        // v2.1 (Phase A-A1) — FAB 잠금 시 호버 진동
+        fabJiggle: {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '20%': { transform: 'rotate(-12deg)' },
+          '40%': { transform: 'rotate(10deg)' },
+          '60%': { transform: 'rotate(-8deg)' },
+          '80%': { transform: 'rotate(6deg)' },
         },
       },
     },

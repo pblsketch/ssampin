@@ -77,7 +77,10 @@ function readBoardSync(id: WallBoardId): WallBoard | null {
   if (!fs.existsSync(p)) return null;
   try {
     const raw = fs.readFileSync(p, 'utf-8');
-    return JSON.parse(raw) as WallBoard;
+    const board = JSON.parse(raw) as WallBoard;
+    // v1.14 padlet mode: v1.13 데이터 호환을 위해 likes/likedBy/comments 기본값 주입.
+    // Design §8 마이그레이션. 이미 v1.14 필드가 있는 보드는 noop.
+    return normalizeBoardForPadletMode(board);
   } catch {
     return null;
   }
@@ -101,6 +104,7 @@ function writeBoardSync(board: WallBoard): void {
 import {
   toWallBoardMeta,
   buildWallPreviewPosts as _buildWallPreviewPosts,
+  normalizeBoardForPadletMode,
 } from '../../src/domain/rules/realtimeWallRules';
 
 // unused import 방지 (buildWallPreviewPosts는 toWallBoardMeta 내부에서 쓰임)

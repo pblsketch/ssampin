@@ -3,6 +3,7 @@ import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
 import { parseBrowserBookmarksHtml } from '@domain/rules/bookmarkRules';
 import type { BookmarkExportPayload, BookmarkGroup, Bookmark } from '@domain/entities/Bookmark';
 import type { ImportConflictPolicy, ImportResult } from '@usecases/bookmark/ManageBookmarks';
+import { Modal } from '@adapters/components/common/Modal';
 
 interface BookmarkImportExportModalProps {
   onClose: () => void;
@@ -126,16 +127,11 @@ export function BookmarkImportExportModal({ onClose, onResultMessage }: Bookmark
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" aria-hidden="true">
-      <div
-        className="bg-sp-surface border border-sp-border rounded-2xl w-full max-w-lg p-6 shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title-bookmark-impexp"
-      >
-        <h2 id="modal-title-bookmark-impexp" className="text-lg font-bold text-sp-text mb-5">
+    <Modal isOpen onClose={onClose} title="가져오기 / 내보내기" srOnlyTitle size="lg">
+      <div className="p-6">
+        <h3 className="text-lg font-bold text-sp-text mb-5">
           가져오기 / 내보내기
-        </h2>
+        </h3>
 
         {/* 모드 탭 */}
         <div className="flex gap-1 bg-sp-bg rounded-lg p-1 mb-5">
@@ -320,6 +316,6 @@ export function BookmarkImportExportModal({ onClose, onResultMessage }: Bookmark
           </div>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

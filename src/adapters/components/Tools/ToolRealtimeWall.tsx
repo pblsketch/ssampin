@@ -18,16 +18,21 @@ import {
   buildRealtimeWallColumns,
   bulkApproveWallPosts,
   createWallBoard,
-  createWallPost,
+  // v2.1 student-ux 회귀 fix (2026-04-24): createWallPost는 서버(electron/ipc/realtimeWall.ts)가
+  // 직접 호출하므로 renderer에서는 더 이상 import 안 함. onRealtimeWallStudentSubmitted는
+  // 서버가 만든 RealtimeWallPost 전체를 그대로 setPosts에 merge.
   DEFAULT_REALTIME_WALL_COLUMNS,
   extractYoutubeVideoId,
   generateUniqueWallShortCode,
   heartRealtimeWallPost,
   hideRealtimeWallPost,
+  moderationModeFromApprovalMode,
   normalizeRealtimeWallLink,
   REALTIME_WALL_MAX_TEXT_LENGTH,
   togglePinRealtimeWallPost,
 } from '@domain/rules/realtimeWallRules';
+import { DEFAULT_REALTIME_WALL_BOARD_SETTINGS } from '@domain/entities/RealtimeWallBoardSettings';
+import { buildWallStateForStudents } from '@usecases/realtimeWall/BroadcastWallState';
 import { RealtimeWallKanbanBoard } from './RealtimeWall/RealtimeWallKanbanBoard';
 import { RealtimeWallFreeformBoard } from './RealtimeWall/RealtimeWallFreeformBoard';
 import { RealtimeWallGridBoard } from './RealtimeWall/RealtimeWallGridBoard';
@@ -39,6 +44,7 @@ import { RealtimeWallResultView } from './RealtimeWall/RealtimeWallResultView';
 import { RealtimeWallBoardSettingsDrawer } from './RealtimeWall/RealtimeWallBoardSettingsDrawer';
 import type { BoardSettingsSection } from './RealtimeWall/RealtimeWallBoardSettingsDrawer';
 import { WallBoardListView } from './RealtimeWall/WallBoardListView';
+import { RealtimeWallTeacherStudentTrackerPanel } from './RealtimeWall/RealtimeWallTeacherStudentTrackerPanel';
 import { formatAbsoluteTime, openExternalLink } from './RealtimeWall/realtimeWallHelpers';
 
 const AUTO_SAVE_DEBOUNCE_MS = 2000;
@@ -78,12 +84,22 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
   // CreateView에서 선택 → handleStartBoard에서 createWallBoard에 주입.
   // handleOpenBoard에서는 board.approvalMode를 복원.
   // 라이브 중 통합 드로어에서 전환 가능(handleChangeApprovalMode).
-  const [approvalMode, setApprovalMode] = useState<WallApprovalMode>('manual');
+  // v2.1 student-ux: 기본값 'auto' (Plan §7.2 결정 #4 — moderation OFF 프리셋 정합).
+  // 학생이 카드 추가 시 즉시 보드에 표시되어 Padlet 동일 UX. 교사가 필요하면 드로어에서 'manual' 전환.
+  const [approvalMode, setApprovalMode] = useState<WallApprovalMode>('auto');
   // v1.13: 통합 설정 드로어. null = 닫힘, 'basic'/'columns'/'approval' = 해당 섹션 열림.
   const [boardSettingsDrawer, setBoardSettingsDrawer] = useState<BoardSettingsSection | null>(null);
 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [connectedStudents, setConnectedStudents] = useState(0);
+  /**
+   * v1.14 P3 — 학생 카드 추가 잠금 상태.
+   *
+   * BoardSettingsDrawer §4에서 토글. 변경 시 IPC로 Main에 전달 → 모든 학생에게
+   * student-form-locked broadcast + wall-state snapshot 다음 업데이트 시 반영.
+   * 라이브 세션 종료 시 reset.
+   */
+  const [studentFormLocked, setStudentFormLocked] = useState(false);
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
@@ -296,6 +312,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setShortCode(null);
     setCustomCodeInput('');
     setCustomCodeError(null);
+    setStudentFormLocked(false);
   }, []);
 
   const handleSetCustomCode = useCallback(async () => {
@@ -375,7 +392,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setTitle('');
     setLayoutMode('kanban');
     setColumnInputs([...DEFAULT_REALTIME_WALL_COLUMNS]);
-    setApprovalMode('manual');
+    // v2.1 student-ux: 기본 'auto' (Padlet 정합)
+    setApprovalMode('auto');
     setPosts([]);
     setCurrentBoard(null);
     setShortCode(null);
@@ -388,7 +406,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setTitle('');
     setLayoutMode('kanban');
     setColumnInputs([...DEFAULT_REALTIME_WALL_COLUMNS]);
-    setApprovalMode('manual');
+    // v2.1 student-ux: 기본 'auto' (Padlet 정합)
+    setApprovalMode('auto');
     setPosts([]);
     setShortCode(null);
     setViewMode('create');
@@ -457,11 +476,21 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
 
   // v1.13 Stage C: 라이브 설정 드로어에서 모드 적용.
   // shouldBulkApprove=true면 현재 pending 카드를 일괄 approved로 승격.
+  // v2.1 (Phase A-A5): boardSettings-changed broadcast 함께 송신 → 학생 화면 즉시 갱신.
   const handleApplyApprovalMode = useCallback(
     (nextMode: WallApprovalMode, shouldBulkApprove: boolean) => {
       setApprovalMode(nextMode);
       if (shouldBulkApprove) {
         setPosts((prev) => bulkApproveWallPosts(prev, columns));
+      }
+      // v2.1 Phase A-A5: moderation 변경 broadcast (Plan FR-A7)
+      if (window.electronAPI?.broadcastRealtimeWall) {
+        const moderation = moderationModeFromApprovalMode(nextMode);
+        const settings = { ...DEFAULT_REALTIME_WALL_BOARD_SETTINGS, moderation };
+        void window.electronAPI.broadcastRealtimeWall({
+          type: 'boardSettings-changed',
+          settings,
+        });
       }
     },
     [columns],
@@ -485,30 +514,31 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     if (!isLiveMode || !window.electronAPI) return;
 
     const unsubscribeSubmitted = window.electronAPI.onRealtimeWallStudentSubmitted((data) => {
+      // v2.1 student-ux 회귀 fix (2026-04-24) — 옵션 A:
+      // 서버가 도메인 createWallPost를 직접 호출해 RealtimeWallPost 전체를 보냄.
+      // renderer는 더 이상 createWallPost를 부르지 않음 — 서버 결과를 그대로 merge.
+      // 효과:
+      //   - 이미지/PDF/색상/owner/pinHash 모두 보존 (Bug B fix)
+      //   - 교사가 화면을 떠나도 서버가 lastWallState를 갱신하므로 학생 broadcast 유지 (Bug A fix)
+      //   - 교사가 마운트된 경우만 이 useEffect가 setPosts → 보드 시각 갱신
+      const incoming = data.post as RealtimeWallPost;
+      if (typeof console !== 'undefined') {
+        console.log('[ToolRealtimeWall] student-submitted received:', {
+          id: incoming.id,
+          status: incoming.status,
+          hasImages: Boolean(incoming.images?.length),
+          hasPdf: Boolean(incoming.pdfUrl),
+        });
+      }
       setPosts((prev) => {
-        // v1.13 Stage C: createPendingRealtimeWallPost → createWallPost로 교체.
-        // approvalMode에 따라 즉시 approved(auto) 또는 pending(manual/filter).
-        const nextPost = createWallPost(
-          {
-            id: data.post.id,
-            nickname: data.post.nickname,
-            text: data.post.text,
-            ...(data.post.linkUrl ? { linkUrl: data.post.linkUrl } : {}),
-            submittedAt: data.post.submittedAt,
-          },
-          prev,
-          columns,
-          approvalMode,
-        );
-        return [nextPost, ...prev];
+        // 중복 방지 — 서버 broadcast가 race로 두 번 도달하는 케이스
+        if (prev.some((p) => p.id === incoming.id)) return prev;
+        return [incoming, ...prev];
       });
 
-      // webpage 링크는 Main에서 OG fetch 후 비동기 upsert.
-      // createPendingRealtimeWallPost 내부와 동일한 normalize + classify를 한 번 더
-      // 수행해 '웹페이지 여부' 분기만 얻음. (post.linkPreview 직접 읽는 건 setPosts
-      // 콜백 밖이라 신뢰 불가.)
-      const normalizedLink = data.post.linkUrl
-        ? normalizeRealtimeWallLink(data.post.linkUrl)
+      // webpage 링크 OG fetch — 서버에서는 link normalize만, OG는 renderer 측에서.
+      const normalizedLink = incoming.linkUrl
+        ? normalizeRealtimeWallLink(incoming.linkUrl)
         : undefined;
       if (
         normalizedLink &&
@@ -527,7 +557,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             };
             setPosts((curr) =>
               curr.map((post) =>
-                post.id === data.post.id ? { ...post, linkPreview: nextPreview } : post,
+                post.id === incoming.id ? { ...post, linkPreview: nextPreview } : post,
               ),
             );
           })
@@ -543,7 +573,229 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       unsubscribeSubmitted();
       unsubscribeCount();
     };
-  }, [approvalMode, columns, isLiveMode]);
+    // v2.1 student-ux 회귀 fix (2026-04-24): approvalMode/columns 제거.
+    // 서버가 createWallPost를 호출하므로 renderer에서는 더 이상 참조할 필요 없음.
+  }, [isLiveMode]);
+
+  // v1.14 P1 — 패들렛 모드: 라이브 세션 중 보드 상태 변화 시 학생들에게 broadcast.
+  // 세부 차분 push는 P2/P3에서 최적화. 현재는 wall-state 전체 푸시로 충분 (Design §11 P1).
+  // v1.14 P3 — studentFormLocked도 snapshot에 포함해 신규 join 학생이 즉시 올바른
+  // FAB 상태를 받도록 한다.
+  useEffect(() => {
+    if (!isLiveMode) return;
+    if (!window.electronAPI?.broadcastRealtimeWall) return;
+
+    const snapshot = buildWallStateForStudents({
+      title: normalizedTitle,
+      layoutMode,
+      columns,
+      posts,
+      studentFormLocked,
+    });
+    void window.electronAPI.broadcastRealtimeWall({ type: 'wall-state', board: snapshot });
+  }, [isLiveMode, normalizedTitle, layoutMode, columns, posts, studentFormLocked]);
+
+  // v1.14 P3 — 학생 카드 추가 잠금 토글 핸들러.
+  // Main에 IPC로 전달 → 세션 플래그 갱신 + student-form-locked broadcast.
+  const handleStudentFormLockedChange = useCallback((locked: boolean) => {
+    setStudentFormLocked(locked);
+    if (window.electronAPI?.setRealtimeWallStudentFormLocked) {
+      void window.electronAPI.setRealtimeWallStudentFormLocked(locked);
+    }
+  }, []);
+
+  // v1.14 P2 — 학생 좋아요/댓글 도착 이벤트 수신 → posts 상태 갱신
+  useEffect(() => {
+    if (!isLiveMode) return;
+    const api = window.electronAPI;
+    if (!api) return;
+
+    const offLike = api.onRealtimeWallStudentLike?.((data) => {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === data.postId
+            ? { ...p, likes: data.likes, likedBy: data.likedBy }
+            : p,
+        ),
+      );
+    });
+    const offComment = api.onRealtimeWallStudentComment?.((data) => {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === data.postId
+            ? { ...p, comments: [...(p.comments ?? []), data.comment] }
+            : p,
+        ),
+      );
+    });
+
+    // v2.1 Phase D — 학생 자기 카드 수정 이벤트
+    const offEdit = api.onRealtimeWallStudentEdit?.((data) => {
+      const updatedPost = data.post as RealtimeWallPost | undefined;
+      if (!updatedPost) return;
+      setPosts((prev) =>
+        prev.map((p) => (p.id === data.postId ? updatedPost : p)),
+      );
+    });
+
+    // v2.1 Phase D — 학생 자기 카드 삭제(soft delete) 이벤트
+    // 회귀 위험 #8: hard delete 패턴 사용 X — status='hidden-by-author' 갱신만
+    const offDelete = api.onRealtimeWallStudentDelete?.((data) => {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === data.postId ? { ...p, status: 'hidden-by-author' as const } : p,
+        ),
+      );
+    });
+
+    // v2.1 Phase D — 닉네임 변경 broadcast (서버 응답 — 자기 화면도 동기화)
+    const offNick = api.onRealtimeWallNicknameChanged?.((data) => {
+      const ids = new Set(data.postIds);
+      setPosts((prev) =>
+        prev.map((p) => (ids.has(p.id) ? { ...p, nickname: data.newNickname } : p)),
+      );
+    });
+
+    return () => {
+      offLike?.();
+      offComment?.();
+      offEdit?.();
+      offDelete?.();
+      offNick?.();
+    };
+  }, [isLiveMode]);
+
+  // v2.1 Phase D — 교사 작성자 추적 상태 (트래커 패널)
+  const [trackedAuthor, setTrackedAuthor] = useState<{
+    sessionToken?: string;
+    pinHash?: string;
+    label?: string;
+  } | null>(null);
+
+  const handleTeacherTrackAuthor = useCallback(
+    (postId: string) => {
+      const target = posts.find((p) => p.id === postId);
+      if (!target) return;
+      setTrackedAuthor({
+        ...(target.ownerSessionToken ? { sessionToken: target.ownerSessionToken } : {}),
+        ...(target.studentPinHash ? { pinHash: target.studentPinHash } : {}),
+        label: target.nickname,
+      });
+    },
+    [posts],
+  );
+
+  const handleTeacherUpdateNickname = useCallback(
+    (postId: string) => {
+      const target = posts.find((p) => p.id === postId);
+      if (!target) return;
+      // 한국어 prompt — 추후 모달로 교체 가능
+      const next = window.prompt(
+        `${target.nickname}의 닉네임을 어떻게 바꿀까요? (1~20자)`,
+        target.nickname,
+      );
+      if (next === null) return;
+      const trimmed = next.trim().slice(0, 20);
+      if (trimmed.length === 0) return;
+      // 같은 작성자의 모든 카드 일괄 변경 (선택) — 단일 카드는 postId 단독
+      const sameAuthorIds = posts
+        .filter(
+          (p) =>
+            (target.ownerSessionToken && p.ownerSessionToken === target.ownerSessionToken) ||
+            (target.studentPinHash && p.studentPinHash === target.studentPinHash),
+        )
+        .map((p) => p.id);
+      const idsToUpdate = new Set<string>(sameAuthorIds.length > 0 ? sameAuthorIds : [postId]);
+      setPosts((prev) =>
+        prev.map((p) => (idsToUpdate.has(p.id) ? { ...p, nickname: trimmed } : p)),
+      );
+      // 서버 broadcast — store action via WebSocket (renderer 측)
+      // 교사 측은 별도 IPC 경로 없음 → 직접 broadcast useEffect 의존 (post 변경이 wall-state에 반영됨)
+    },
+    [posts],
+  );
+
+  const handleTeacherBulkHideStudent = useCallback(
+    (postId: string) => {
+      const target = posts.find((p) => p.id === postId);
+      if (!target) return;
+      const sameAuthorIds = posts
+        .filter(
+          (p) =>
+            (target.ownerSessionToken && p.ownerSessionToken === target.ownerSessionToken) ||
+            (target.studentPinHash && p.studentPinHash === target.studentPinHash),
+        )
+        .map((p) => p.id);
+      if (sameAuthorIds.length === 0) sameAuthorIds.push(postId);
+      const ok = window.confirm(
+        `${target.nickname}의 카드 ${sameAuthorIds.length}장을 모두 숨길까요?`,
+      );
+      if (!ok) return;
+      const ids = new Set(sameAuthorIds);
+      setPosts((prev) =>
+        prev.map((p) => (ids.has(p.id) ? { ...p, status: 'hidden' as const } : p)),
+      );
+    },
+    [posts],
+  );
+
+  // v2.1 Phase D — 교사 placeholder 카드 복원 핸들러
+  const handleRestoreCard = useCallback((postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId && p.status === 'hidden-by-author'
+          ? { ...p, status: 'approved' as const }
+          : p,
+      ),
+    );
+    // Main 측 broadcast 트리거
+    if (window.electronAPI?.restoreRealtimeWallCard) {
+      void window.electronAPI.restoreRealtimeWallCard({ postId });
+    }
+  }, []);
+
+  // v2.1 Phase D — 강조할 카드 ID 집합 (트래커 패널 활성 시)
+  const highlightedPostIds = useMemo<ReadonlySet<string>>(() => {
+    if (!trackedAuthor) return new Set();
+    const set = new Set<string>();
+    for (const p of posts) {
+      if (
+        trackedAuthor.sessionToken &&
+        p.ownerSessionToken === trackedAuthor.sessionToken
+      ) {
+        set.add(p.id);
+        continue;
+      }
+      if (
+        trackedAuthor.pinHash &&
+        p.studentPinHash === trackedAuthor.pinHash
+      ) {
+        set.add(p.id);
+      }
+    }
+    return set;
+  }, [trackedAuthor, posts]);
+
+  // v1.14 P2 — 교사 댓글 삭제 핸들러 (보드 내 카드의 휴지통 클릭)
+  const handleRemoveComment = useCallback(
+    (postId: string, commentId: string) => {
+      // 로컬 posts 즉시 갱신 (status='hidden')
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id !== postId) return p;
+          const nextComments = (p.comments ?? []).map((c) =>
+            c.id === commentId ? { ...c, status: 'hidden' as const } : c,
+          );
+          return { ...p, comments: nextComments };
+        }),
+      );
+      // Main에 삭제 + broadcast 요청
+      if (window.electronAPI?.removeRealtimeWallComment) {
+        void window.electronAPI.removeRealtimeWallComment({ postId, commentId });
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     return () => {
@@ -565,6 +817,12 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
             onHeart={handleHeartPost}
+            onRemoveComment={handleRemoveComment}
+            onRestoreCard={handleRestoreCard}
+            onTeacherTrackAuthor={handleTeacherTrackAuthor}
+            onTeacherUpdateNickname={handleTeacherUpdateNickname}
+            onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
+            highlightedPostIds={highlightedPostIds}
           />
         );
       case 'freeform':
@@ -576,6 +834,12 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
             onHeart={handleHeartPost}
+            onRemoveComment={handleRemoveComment}
+            onRestoreCard={handleRestoreCard}
+            onTeacherTrackAuthor={handleTeacherTrackAuthor}
+            onTeacherUpdateNickname={handleTeacherUpdateNickname}
+            onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
+            highlightedPostIds={highlightedPostIds}
           />
         );
       case 'grid':
@@ -586,6 +850,12 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
             onHeart={handleHeartPost}
+            onRemoveComment={handleRemoveComment}
+            onRestoreCard={handleRestoreCard}
+            onTeacherTrackAuthor={handleTeacherTrackAuthor}
+            onTeacherUpdateNickname={handleTeacherUpdateNickname}
+            onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
+            highlightedPostIds={highlightedPostIds}
           />
         );
       case 'stream':
@@ -596,6 +866,12 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             onHidePost={handleHidePost}
             onOpenLink={openExternalLink}
             onHeart={handleHeartPost}
+            onRemoveComment={handleRemoveComment}
+            onRestoreCard={handleRestoreCard}
+            onTeacherTrackAuthor={handleTeacherTrackAuthor}
+            onTeacherUpdateNickname={handleTeacherUpdateNickname}
+            onTeacherBulkHideStudent={handleTeacherBulkHideStudent}
+            highlightedPostIds={highlightedPostIds}
           />
         );
       default: {
@@ -780,11 +1056,36 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         columns={columns}
         posts={posts}
         approvalMode={approvalMode}
+        studentFormLocked={studentFormLocked}
         onClose={() => setBoardSettingsDrawer(null)}
         onTitleChange={setTitle}
         onLayoutModeChange={setLayoutMode}
         onApplyColumnEdit={handleApplyColumnEdit}
         onApplyApprovalMode={handleApplyApprovalMode}
+        onStudentFormLockedChange={handleStudentFormLockedChange}
+      />
+
+      {/* v2.1 Phase D — 교사 작성자 추적 패널 */}
+      <RealtimeWallTeacherStudentTrackerPanel
+        open={trackedAuthor !== null}
+        matchCount={highlightedPostIds.size}
+        authorLabel={trackedAuthor?.label}
+        onClose={() => setTrackedAuthor(null)}
+        onBulkHide={
+          trackedAuthor && highlightedPostIds.size > 0
+            ? () => {
+                const ok = window.confirm(
+                  `${trackedAuthor.label ?? '이 작성자'}의 카드 ${highlightedPostIds.size}장을 모두 숨길까요?`,
+                );
+                if (!ok) return;
+                const ids = highlightedPostIds;
+                setPosts((prev) =>
+                  prev.map((p) => (ids.has(p.id) ? { ...p, status: 'hidden' as const } : p)),
+                );
+                setTrackedAuthor(null);
+              }
+            : undefined
+        }
       />
     </ToolLayout>
   );

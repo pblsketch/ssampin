@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CATEGORY_COLOR_PRESETS } from '@domain/entities/SchoolEvent';
 import { getCategoryColors } from '@adapters/presenters/categoryPresenter';
+import { Modal } from '@adapters/components/common/Modal';
 
 interface CategoryFormModalProps {
   onSubmit: (name: string, color: string) => void;
@@ -18,30 +19,20 @@ export function CategoryFormModal({ onSubmit, onClose }: CategoryFormModalProps)
   }
 
   return (
-    <>
-      {/* 오버레이 */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-
-      {/* 모달 */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="w-full max-w-[400px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title-category-form"
-        >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
-            <h2 id="modal-title-category-form" className="text-lg font-bold text-sp-text">카테고리 추가</h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-          </div>
+    <Modal isOpen onClose={onClose} title="카테고리 추가" srOnlyTitle size="sm">
+      <div>
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border">
+          <h3 className="text-lg font-bold text-sp-text">카테고리 추가</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="p-1 hover:bg-sp-surface rounded-lg transition-colors text-sp-muted hover:text-sp-text"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
 
           {/* 폼 */}
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -96,14 +87,13 @@ export function CategoryFormModal({ onSubmit, onClose }: CategoryFormModalProps)
               </button>
               <button
                 type="submit"
-                className="flex-1 rounded-xl bg-sp-accent hover:bg-blue-600 text-white px-4 py-2.5 text-sm font-semibold shadow-sm transition-all"
+                className="flex-1 rounded-xl bg-sp-accent hover:bg-sp-accent/90 text-sp-accent-fg px-4 py-2.5 text-sm font-semibold shadow-sm transition-all"
               >
                 추가
               </button>
             </div>
           </form>
-        </div>
       </div>
-    </>
+    </Modal>
   );
 }

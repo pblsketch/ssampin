@@ -132,7 +132,7 @@ function StudentTimelineView({
                                   }`}
                                   title={record.reportedToNeis ? '나이스 반영 완료 (클릭하여 취소)' : '나이스 미반영 (클릭하여 반영 처리)'}
                                 >
-                                  <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
+                                  <span className="material-symbols-outlined text-icon-xs">
                                     {record.reportedToNeis ? 'check_circle' : 'pending'}
                                   </span>
                                   {record.reportedToNeis ? '나이스' : '미반영'}
@@ -146,7 +146,7 @@ function StudentTimelineView({
                                   }`}
                                   title={record.documentSubmitted ? '서류 제출 완료 (클릭하여 취소)' : '서류 미제출 (클릭하여 제출 처리)'}
                                 >
-                                  <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
+                                  <span className="material-symbols-outlined text-icon-xs">
                                     {record.documentSubmitted ? 'description' : 'draft'}
                                   </span>
                                   {record.documentSubmitted ? '서류' : '미제출'}

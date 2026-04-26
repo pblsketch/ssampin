@@ -326,12 +326,12 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                       <span className="w-8 shrink-0 text-xs text-sp-muted text-center">{s.number}</span>
                       <span className="flex-1 text-sm">{s.name}</span>
                       {attendanceInitialized && (
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_BADGE[att]}`}>
+                        <span className={`px-1.5 py-0.5 rounded text-caption font-medium ${STATUS_BADGE[att]}`}>
                           {STATUS_LABEL[att]}
                         </span>
                       )}
                       {count > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-sp-accent/15 text-sp-accent">
+                        <span className="px-1.5 py-0.5 rounded-full text-caption font-medium bg-sp-accent/15 text-sp-accent">
                           {count}건
                         </span>
                       )}
@@ -361,7 +361,7 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
             <div className="flex items-center justify-between px-4 py-3 border-b border-sp-border">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-sp-accent/20 flex items-center justify-center">
-                  <span className="text-[11px] font-bold text-sp-accent">{selectedStudent.number}</span>
+                  <span className="text-detail font-bold text-sp-accent">{selectedStudent.number}</span>
                 </div>
                 <span className="text-sm font-bold text-sp-text">{selectedStudent.name}</span>
               </div>
@@ -385,7 +385,7 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                     <button
                       key={opt.key}
                       onClick={() => setStudentAttendanceStatus(selectedStudentKey, opt.key)}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors border ${
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-detail font-medium transition-colors border ${
                         selectedAttendance?.status === opt.key
                           ? opt.color
                           : 'border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-muted'
@@ -401,12 +401,12 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
 
                 {selectedAttendance && selectedAttendance.status !== 'present' && (
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-[10px] text-sp-muted font-medium">사유</span>
+                    <span className="text-caption text-sp-muted font-medium">사유</span>
                     {ATTENDANCE_REASONS.map((r) => (
                       <button
                         key={r}
                         onClick={() => setStudentReason(selectedStudentKey, selectedAttendance.reason === r ? undefined : r)}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-medium transition-colors border ${
+                        className={`px-2 py-0.5 rounded-lg text-caption font-medium transition-colors border ${
                           selectedAttendance.reason === r
                             ? 'bg-sp-accent/15 text-sp-accent border-sp-accent/30'
                             : 'border-sp-border text-sp-muted hover:text-sp-text'
@@ -424,7 +424,7 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
                     placeholder="상세 사유..."
                     value={selectedAttendance.memo ?? ''}
                     onChange={(e) => setStudentMemo(selectedStudentKey, e.target.value)}
-                    className="w-full bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-[10px] text-sp-text placeholder:text-sp-muted/50 focus:outline-none focus:border-sp-accent mb-2"
+                    className="w-full bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-caption text-sp-text placeholder:text-sp-muted/50 focus:outline-none focus:border-sp-accent mb-2"
                   />
                 )}
 
