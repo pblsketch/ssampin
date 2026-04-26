@@ -1,6 +1,11 @@
 import { useCallback } from 'react';
 
 /**
+ * @deprecated v1.10.6+ (v2.2 UX) — `StudentFormatBar` + `StudentMarkdownPreviewToggle`로 교체.
+ *   - 라벨이 한글화(굵게/기울임)되고 우측에 미리보기 토글이 추가된 새 조합으로 마이그레이션 완료.
+ *   - 다음 마이너 릴리즈에서 본 파일 삭제 예정.
+ *   - 신규 호출처 추가 금지. 기존 호출처는 모두 student/ 트리에서 제거됨.
+ *
  * v2.1 신규 — 학생 마크다운 툴바 (Plan FR-B7 / Design v2.1 §5.10).
  *
  * 별표 직접 입력 회피 (페1 critical-6 — 한글 IME 자모분리 충돌).

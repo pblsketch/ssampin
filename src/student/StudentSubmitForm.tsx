@@ -6,7 +6,8 @@ import {
   REALTIME_WALL_MAX_NICKNAME_LENGTH,
   REALTIME_WALL_MAX_TEXT_LENGTH_V2,
 } from '@domain/rules/realtimeWallRules';
-import { StudentMarkdownToolbar } from '@adapters/components/Tools/RealtimeWall/StudentMarkdownToolbar';
+import { StudentFormatBar } from '@adapters/components/Tools/RealtimeWall/StudentFormatBar';
+import { StudentMarkdownPreviewToggle } from '@adapters/components/Tools/RealtimeWall/StudentMarkdownPreviewToggle';
 import { StudentColorPicker } from '@adapters/components/Tools/RealtimeWall/StudentColorPicker';
 import { StudentPipaConsentModal } from '@adapters/components/Tools/RealtimeWall/StudentPipaConsentModal';
 import { useGraphemeCounter } from './useGraphemeCounter';
@@ -29,7 +30,7 @@ import { StudentAttachmentPreviewStrip } from './StudentAttachmentPreviewStrip';
  *   - 직접 useStudentImageMultiUpload / useStudentPdfUpload 훅 사용
  *
  * v2.1 (Phase B + Phase A) 기능 유지:
- *   - StudentMarkdownToolbar: Bold/Italic/List/Quote (회귀 위험 #6 보존 — IME 안전)
+ *   - StudentFormatBar (한글 라벨: 굵게/기울임/• 목록/❝ 인용 + 미리보기 토글) — IME 안전 보존
  *   - 이미지 5장 + 합계 15MB
  *   - PDF 1개 (10MB + magic byte)
  *   - StudentColorPicker: 8색
@@ -112,6 +113,9 @@ export function StudentSubmitForm({
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [linkInputOpen, setLinkInputOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  // v2.2 (UX) — 마크다운 편집/미리보기 토글 (옵션 D)
+  const [editMode, setEditMode] = useState<'edit' | 'preview'>('edit');
 
   // Phase A — 드래프트 훅
   const { draft, saveDraft, flushSaveDraft, reloadDraft } = useStudentDraft({
@@ -216,6 +220,7 @@ export function StudentSubmitForm({
     setLocalError(null);
     setAttachmentError(null);
     setMoreMenuOpen(false);
+    setEditMode('edit');
 
     // v2.1 Phase D — mode='edit' 분기: 드래프트 무시, editingPost로 prefill
     if (isEditMode && editingPost) {
@@ -316,6 +321,7 @@ export function StudentSubmitForm({
       setColor(undefined);
       setLocalError(null);
       setAttachmentError(null);
+      setEditMode('edit');
       onClose({ submitted: true });
     }
   }, [isSubmitting, lastError, open, onClose]);
@@ -527,23 +533,30 @@ export function StudentSubmitForm({
               disabled={isSubmitting}
             />
 
-            {/* 마크다운 툴바 */}
-            <StudentMarkdownToolbar
+            {/* 마크다운 서식 바 (편집/미리보기 토글 포함) */}
+            <StudentFormatBar
               textareaRef={textareaRef}
               onChange={setBody}
+              mode={editMode}
+              onModeToggle={() =>
+                setEditMode((m) => (m === 'edit' ? 'preview' : 'edit'))
+              }
               disabled={isSubmitting}
+              variant="card"
             />
 
-            {/* 본문 */}
-            <textarea
-              ref={textareaRef}
+            {/* 본문 — edit/preview 토글 */}
+            <StudentMarkdownPreviewToggle
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="환상적인 내용을 적어보세요..."
+              onChange={setBody}
+              textareaRef={textareaRef}
+              mode={editMode}
               rows={8}
               maxLength={MAX_TEXT_LENGTH}
               disabled={isSubmitting}
-              className="min-h-[200px] w-full resize-none bg-transparent px-1 py-2 text-sm leading-relaxed text-sp-text placeholder:text-sp-muted/70 focus:outline-none disabled:opacity-60"
+              placeholder="환상적인 내용을 적어보세요..."
+              ariaLabel="본문"
+              previewMinHeightClass="min-h-[200px]"
             />
             <div className="flex justify-end text-xs text-sp-muted">
               {graphemeCount}/{MAX_TEXT_LENGTH}
