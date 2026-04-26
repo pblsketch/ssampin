@@ -622,6 +622,70 @@ const QA_DOCUMENTS = [
     content: `Q: Mac에서 쌤핀을 재설치하면 제 데이터(학생 기록·메모·시간표)가 사라지나요?\nA: 아니요, 재설치해도 데이터는 안전해요. 쌤핀 데이터는 두 곳에 저장됩니다:\n1. **로컬 (macOS userData)** — 재설치 시 그대로 유지됩니다. 앱 삭제 후 재설치해도 같은 userData 경로를 쓰기 때문에 자동으로 다시 읽어와요.\n2. **Google Drive 동기화** (켜두신 경우) — 만약의 상황을 대비해 재설치 전 설정 > Google 연동에서 "지금 백업" 한 번 눌러두시면 더 안심이에요. 재설치 후 로그인하면 자동 복원됩니다.\n\n그래도 중요한 학생 기록이 있다면 설정 > 시스템 > "데이터 내보내기"로 백업 파일을 한 번 만들어 두시면 좋아요.`,
     metadata: { source: 'system-qa', category: 'sync', title: 'Q: Mac 재설치 시 데이터 유지' },
   },
+
+  // ── v2.0.0 신규: 실시간 담벼락 정식 출시 (BETA) ──────────────────────────
+  {
+    content: `Q: 실시간 담벼락은 어떻게 시작하나요?\nA: 쌤도구 > 실시간 담벼락(BETA)에서 [새 담벼락 만들기]를 눌러 4단계 위자드(제목·레이아웃·컬럼·승인 정책)로 만들 수 있어요. 만든 담벼락은 자동으로 영구 저장되고, 목록에서 썸네일·마지막 사용 시각으로 확인할 수 있습니다. 라이브 종료 후에도 카드·댓글·하트가 그대로 남아 다음 차시에 그대로 이어 쓸 수 있어요. ⋯ 메뉴로 이름 변경·복제·보관함 이동·삭제가 가능합니다.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 실시간 담벼락 시작하기 (v2.0.0 BETA)' },
+  },
+  {
+    content: `Q: 담벼락 레이아웃은 몇 가지인가요?\nA: 4가지 레이아웃을 지원해요. **칸반**(컬럼별 카드 정렬, 학생이 드래그로 이동 가능)·**격자형**(균등 그리드 배치)·**스트림**(타임라인 스크롤)·**자유형**(드래그로 자유 배치, 패들렛 스타일). 라이브 중에도 우측 상단 [설정] 드로어에서 레이아웃을 바꿀 수 있어요. 칸반은 컬럼을 라이브 중에도 추가/이름 변경/삭제할 수 있어 수업 흐름에 따라 조정됩니다.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 담벼락 4 레이아웃' },
+  },
+  {
+    content: `Q: 선생님도 담벼락에 카드를 쓸 수 있나요?\nA: 네, v2.0.0부터 선생님도 학생과 동일한 형식으로 카드를 작성할 수 있어요. 모범 답안 시범, 토론 질문 게시, 학생 사례 강조 등에 활용하세요. 선생님 카드는 시각적으로 구분되어 학생들이 바로 알아볼 수 있고, 다른 카드처럼 하트(좋아요)와 댓글도 받을 수 있습니다. 댓글은 카드 하단에서 패들렛처럼 바로 입력해요.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 담벼락 교사 카드 작성' },
+  },
+  {
+    content: `Q: 학생이 담벼락에 URL을 올리면 어떻게 보이나요?\nA: v2.0.0부터 자동으로 사이트 제목·설명·썸네일이 카드에 표시됩니다(OG 미리보기). YouTube 링크는 영상이 카드 안에서 바로 재생되고, OG 이미지가 없는 사이트도 파비콘으로 폴백되어 깔끔하게 표시돼요. 한국 주요 포털·뉴스·블로그 호환성도 보강됐습니다.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 담벼락 링크 OG 미리보기 + YouTube' },
+  },
+  {
+    content: `Q: 담벼락에 부적절한 글이 올라올까 걱정돼요. 미리 검토할 수 있나요?\nA: v2.0.0의 승인 정책으로 해결할 수 있어요. 담벼락 만들기 4단계에서 **자동 승인**(즉시 게시)·**관리자 승인**(선생님 승인 후 노출)·**수동 승인**(학생 본인이 게시 버튼) 중 골라요. '관리자 승인'을 켜면 학생이 작성한 카드는 대기열에 쌓이고, 선생님이 [승인 대기] 패널에서 일괄 승인할 수 있어요. 라이브 중에도 설정 드로어에서 정책을 바꿀 수 있습니다.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 담벼락 승인 정책' },
+  },
+  {
+    content: `Q: 담벼락을 다음 시간에 똑같은 형식으로 또 쓰고 싶어요.\nA: 담벼락 ⋯ 메뉴 > [복제하기]로 빈 담벼락을 만들 수 있어요. 카드는 비우고 컬럼·승인 정책·레이아웃·제목 템플릿만 복사해 다음 차시에 바로 재사용 가능합니다. 같은 형식의 활동을 여러 반·여러 차시 진행할 때 유용해요.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 담벼락 보드 복제' },
+  },
+
+  // ── v2.0.0 신규: 즐겨찾기 강화 + Quick Add + CommandPalette ──────────────
+  {
+    content: `Q: 즐겨찾기에 사이트를 추가하면 더 잘 보이게 할 수 있나요?\nA: v2.0.0부터 즐겨찾기가 단순 링크 모음에서 풍부한 사이트 라이브러리로 확장됐어요. 추가하면 자동으로 사이트의 제목·설명·썸네일(OG)이 카드 형태로 표시되고, 검색으로 빠르게 찾을 수 있어요. 자주 안 쓰는 사이트는 아카이브로 정리하고, JSON 내보내기/가져오기로 다른 컴퓨터로 이전·백업할 수 있습니다. '잊고 있던 사이트' 섹션은 오랫동안 안 들어간 사이트를 다시 발견하게 도와줘요.`,
+    metadata: { source: 'system-qa', category: 'bookmark', title: 'Q: 즐겨찾기 OG 미리보기·검색·아카이브 (v2.0.0)' },
+  },
+  {
+    content: `Q: 위젯 모드에서도 즐겨찾기를 빠르게 추가할 수 있나요?\nA: v2.0.0부터 위젯 모드에서도 빠른 추가 단축키가 동작해요. 클립보드에 URL이 복사돼 있으면 즐겨찾기 추가 모달이 자동으로 그 URL로 채워지고, OG 제목까지 미리 가져와 사이트 이름이 자동으로 들어갑니다. 사이드바를 열지 않고 위젯에서 바로 즐겨찾기를 늘릴 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'bookmark', title: 'Q: 위젯 모드 즐겨찾기 빠른 추가 (v2.0.0)' },
+  },
+  {
+    content: `Q: 메모·할일·일정·즐겨찾기·노트를 사이드바 이동 없이 빠르게 추가하고 싶어요.\nA: v2.0.0부터 글로벌 빠른 추가(Quick Add) 단축키가 도입됐어요. 어디서든 단축키를 누르면 모달이 떠서 메모·할일·일정·즐겨찾기·노트 등을 즉시 추가할 수 있어요. 클립보드에 URL이 있으면 즐겨찾기로 자동 매핑되고, 위젯 모드에서도 동일하게 동작합니다.`,
+    metadata: { source: 'system-qa', category: 'shortcut', title: 'Q: 글로벌 빠른 추가(Quick Add) (v2.0.0)' },
+  },
+  {
+    content: `Q: 키보드만으로 페이지를 빠르게 이동하고 싶어요.\nA: v2.0.0부터 Ctrl+K(Mac은 Cmd+K)로 명령 팔레트(CommandPalette)를 열 수 있어요. 페이지 이동·기능 실행·검색을 키보드만으로 처리할 수 있어 마우스 없이도 자유롭게 쌤핀을 다룰 수 있습니다.`,
+    metadata: { source: 'system-qa', category: 'shortcut', title: 'Q: Ctrl+K 명령 팔레트 (v2.0.0)' },
+  },
+
+  // ── v2.0.0 신규: 칠판 도형 그리기 ──────────────────────────────────────
+  {
+    content: `Q: 칠판에서 직선이나 사각형 같은 도형도 그릴 수 있나요?\nA: v2.0.0부터 칠판 도형 그리기 도구가 추가됐어요. 직선·화살표·사각형·원·삼각형·다이아몬드 등 14종을 자유롭게 그릴 수 있고, **Shift**(정비례)·**Alt**(중심 기준)·**Ctrl**(스냅) 모디파이어로 PPT처럼 정교한 도형을 작성할 수 있습니다. 분필 색상·굵기는 펜과 별도로 기억돼요. 화이트보드처럼 도형 위에 펜으로 메모도 가능합니다.`,
+    metadata: { source: 'system-qa', category: 'tools', title: 'Q: 칠판 도형 그리기 14종 (v2.0.0)' },
+  },
+
+  // ── v2.0.0 변경: 일정·페이지 헤더·노트 동기화 ─────────────────────────
+  {
+    content: `Q: 일정 페이지 디자인이 바뀐 것 같아요.\nA: 네, v2.0.0에서 일정 페이지가 Cal.com·Linear 스타일로 다시 디자인됐어요. 이벤트 칩에 컬러 도트, 뷰 토글은 pill 형태, 사이드 EventList에는 컬러바를 추가해 정보 밀도와 시각적 위계를 높였습니다. 기존 데이터·검색·NEIS/Google Calendar 동기화·D-Day 기능은 그대로예요.`,
+    metadata: { source: 'system-qa', category: 'schedule', title: 'Q: 일정 페이지 새 디자인 (v2.0.0)' },
+  },
+  {
+    content: `Q: 쌤핀 노트도 다른 컴퓨터에서 동기화되나요?\nA: 네, v2.0.0부터 쌤핀 노트가 Google Drive 동기화 대상에 정식으로 포함됐어요. PC1에서 만든 노트북·섹션·페이지·내용이 PC2에도 자동 동기화되고, 모바일 앱(m.ssampin.com)에서도 같은 노트를 읽을 수 있습니다. 첫 동기화 시 충돌이 우려되면 [클라우드 데이터로 시작·로컬 우선·새로 시작] 3선택 모달이 떠서 데이터 덮어쓰기 사고를 방지해요.`,
+    metadata: { source: 'system-qa', category: 'sync', title: 'Q: 쌤핀 노트 클라우드 동기화 (v2.0.0)' },
+  },
+  {
+    content: `Q: 새 컴퓨터에서 쌤핀을 처음 켰는데 클라우드에 백업이 있어요. 어떻게 해야 안전한가요?\nA: v2.0.0부터 신규 기기에서 Drive 백업이 발견되면 [클라우드 데이터로 시작 / 로컬 우선 / 새로 시작] 3선택 모달이 떠요. **클라우드 데이터로 시작**(권장): 다른 컴퓨터의 작업을 그대로 이어가요. **로컬 우선**: 새 컴퓨터에서 따로 작업한 데이터가 이미 있을 때, 그걸 보존하고 클라우드에 덮어 써요. **새로 시작**: 둘 다 두고 빈 상태에서 시작. 이전에는 자동으로 로컬을 덮어 써 데이터를 날리는 사고가 드물게 있었는데, 이제 구조적으로 차단됐어요.`,
+    metadata: { source: 'system-qa', category: 'sync', title: 'Q: 신규 기기 첫 동기화 모달 (v2.0.0)' },
+  },
 ];
 
 // ── 기능 요약 문서 ────────────────────────────────────────────────────────────
@@ -738,6 +802,36 @@ const FEATURE_DOCUMENTS = [
   {
     content: `⏰ 출석부 현재 교시 자동 선택 (v1.10.5 신규): AttendanceTab과 ClassSeatingTab(출석 모드) 공통 적용. 하드코딩된 교시 버튼(1~8) 제거, settings.maxPeriods 기반 동적 렌더링. settings.periodTimes + getCurrentPeriod()으로 현재 시각의 교시를 자동 선택 (오늘 날짜일 때만, 수업 시간 외면 기본값 유지). 사용자가 직접 교시를 바꾸면 수동 override 플래그로 자동 재선택을 차단. 학급 전환 시 교시 상태 리셋하여 새 학급에서도 자동 선택 재적용.`,
     metadata: { source: 'feature-summary', category: 'attendance', title: '출석부 현재 교시 자동 선택 기능 요약 (v1.10.5)' },
+  },
+
+  // ── v2.0.0 신규 기능 요약 ───────────────────────────────────────────
+  {
+    content: `🧱 실시간 담벼락 정식 출시 (v2.0.0 BETA): 쌤도구 > 실시간 담벼락. 영속 보드(JsonWallBoardRepository + IPC 5채널, Main 직접 파일 접근으로 60% 빠른 로드) + 보관함 + 복제 + 삭제. 4 레이아웃(칸반·격자형·스트림·자유형) 지원, 라이브 중에도 우측 [설정] 드로어에서 제목·레이아웃·컬럼·승인 정책 통합 편집. 칸반 컬럼은 라이브 중 추가/이름 변경/삭제 가능. 4단계 위자드(제목·레이아웃·컬럼·승인 정책)로 생성. 승인 정책 3종(자동/관리자/수동) — 관리자 모드는 [승인 대기] 패널에서 일괄 승인. 교사 카드 작성 + 하트(teacherHearts) + 댓글(패들렛 스타일 인라인 입력). 학생 카드도 카드 클릭 모달에서 댓글·하트 가능. 링크 OG 미리보기 + YouTube 임베드(open-graph-scraper, undici lookup callback array form 지원, 한국 주요 사이트 호환). 30초 자동 저장 + before-quit 보장 + shortCode 충돌 회피. 마크다운 제거 — 카드/댓글 모두 plain text 통일.`,
+    metadata: { source: 'feature-summary', category: 'tools', title: '실시간 담벼락 기능 요약 (v2.0.0)' },
+  },
+  {
+    content: `🔖 즐겨찾기 강화 (v2.0.0): 단순 링크 모음에서 풍부한 사이트 라이브러리로 확장. open-graph-scraper 기반 OG 제목·설명·썸네일 자동 가져오기, 검색·필터, 아카이브, JSON import/export, '잊고 있던 사이트' 섹션(즐겨찾기 페이지에도 노출). 빠른 추가 모달에서 OG 제목 자동 채움. 위젯 모드 단축키 + 클립보드 URL 자동 채움 동작. getQuickAddKindFromUrl 화이트리스트에 'bookmark' 포함되어 글로벌 Quick Add와 통합.`,
+    metadata: { source: 'feature-summary', category: 'bookmark', title: '즐겨찾기 강화 기능 요약 (v2.0.0)' },
+  },
+  {
+    content: `⚡ 글로벌 빠른 추가(Quick Add) + Ctrl+K 명령 팔레트 (v2.0.0): 어디서든 단축키 한 번으로 메모·할일·일정·즐겨찾기·노트 추가. 클립보드에 URL이 있으면 즐겨찾기 모달이 자동 채워지고 OG 제목까지 매칭. 위젯 모드에서도 동일 동작. 별도로 Ctrl+K(Cmd+K) CommandPalette로 페이지 이동·기능 실행·검색을 키보드만으로 처리. centering transform 충돌 해소로 중첩 모달과 z-index 문제 정비됨.`,
+    metadata: { source: 'feature-summary', category: 'shortcut', title: '글로벌 Quick Add + CommandPalette 기능 요약 (v2.0.0)' },
+  },
+  {
+    content: `🎨 칠판 도형 그리기 14종 (v2.0.0): 칠판 툴바에 도형 도구 추가. 직선·화살표·양방향 화살표·사각형·둥근 사각형·원·타원·삼각형·다이아몬드 등 14종 지원. PPT 스타일 모디파이어 — Shift(정비례)·Alt(중심 기준)·Ctrl(스냅). 분필 색상·굵기는 펜과 별도로 기억. Fabric.js 기반으로 도형 위에 펜 메모 가능, 부분 지우개로도 지울 수 있음.`,
+    metadata: { source: 'feature-summary', category: 'tools', title: '칠판 도형 그리기 기능 요약 (v2.0.0)' },
+  },
+  {
+    content: `📅 일정 Cal.com 스타일 리팩터 (v2.0.0): 일정 페이지가 Cal.com·Linear 스타일로 재디자인. 이벤트 칩에 컬러 도트, 뷰 토글 pill 형태, 사이드 EventList 컬러바, 헤더는 PageHeader로 통일. 기존 데이터·검색·NEIS/Google Calendar 동기화·D-Day 기능은 그대로 유지.`,
+    metadata: { source: 'feature-summary', category: 'schedule', title: '일정 디자인 리팩터 기능 요약 (v2.0.0)' },
+  },
+  {
+    content: `📑 PageHeader 전 페이지 통일 + 디자인 시스템 v3.2 (v2.0.0): 시간표·좌석배치·일정·메모·노트·할일·쌤도구·내보내기·즐겨찾기·급식 헤더가 PageHeader 컴포넌트로 통일됨(높이·간격·아이콘 크기·select/버튼 사이즈). Modal·Drawer·Card·IconButton·Button·Kbd 6종 공통 컴포넌트 정착, focus-trap-react로 ESC·Tab 트랩·overlay 클릭 접근성 강화, z-index를 sp-{modal/toast/palette/dropdown/tooltip} 시맨틱 토큰으로 분리. 인라인 fontSize·gradient·임의 z-index 모두 토큰화. Impeccable Audit 60 → 90/100 도달.`,
+    metadata: { source: 'feature-summary', category: 'design-system', title: '디자인 시스템 v3.2 기능 요약 (v2.0.0)' },
+  },
+  {
+    content: `☁️ Google Drive 동기화 인프라 통합 (v2.0.0): 분산되어 있던 16개 도메인 동기화 매핑이 syncRegistry 단일 소스로 통합. 새 도메인 추가 시 한 곳만 수정하면 4곳 회귀가 구조적으로 차단됨(메타테스트 6개로 안전망). 노트도 클라우드 동기화 대상에 정식 포함 — note-* 파일이 다른 컴퓨터·모바일에 자동 전파. 신규 기기에서 Drive 백업이 발견되면 [클라우드 데이터로 시작·로컬 우선·새로 시작] 3선택 모달이 떠서 데이터 덮어쓰기 사고 차단. SyncFromCloud에 storage.read !== null 안전망 추가로 노트 첫 활성화 시 silent 덮어쓰기 위험 해소.`,
+    metadata: { source: 'feature-summary', category: 'sync', title: 'Google Drive 동기화 인프라 통합 기능 요약 (v2.0.0)' },
   },
 ];
 
