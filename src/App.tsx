@@ -71,13 +71,21 @@ import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useBookmarkStore } from '@adapters/stores/useBookmarkStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useSurveyStore } from '@adapters/stores/useSurveyStore';
+import { useSeatConstraintsStore } from '@adapters/stores/useSeatConstraintsStore';
+import { useDDayStore } from '@adapters/stores/useDDayStore';
+import { useConsultationStore } from '@adapters/stores/useConsultationStore';
+import { useMealStore } from '@adapters/stores/useMealStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useTasksAutoSync } from '@adapters/hooks/useTasksAutoSync';
 import { useNeisAutoSync } from '@adapters/hooks/useNeisAutoSync';
 import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { DriveSyncConflictModal } from '@adapters/components/common/DriveSyncConflictModal';
+import { FirstSyncConfirmModal } from '@adapters/components/common/FirstSyncConfirmModal';
 import { reloadStores } from '@adapters/hooks/useDriveSync';
+import { SYNC_REGISTRY } from '@usecases/sync/syncRegistry';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
@@ -649,18 +657,13 @@ function MainApp() {
       const calState = useCalendarSyncStore.getState();
       if (!calState.isConnected) return;
 
-      // 첫 동기화 시 확인 다이얼로그
-      if (!syncSettings.lastSyncedAt) {
-        const ok = window.confirm(
-          '클라우드 동기화를 시작합니다.\n' +
-          '클라우드에 기존 데이터가 있으면 다운로드되고,\n' +
-          '로컬 데이터는 클라우드에 업로드됩니다.\n\n' +
-          '지금 동기화를 시작하시겠습니까?',
-        );
-        if (!ok) return;
-      }
+      // 신규 기기 첫 동기화 감지: manifest 부재 시 FirstSyncConfirmModal로 위임.
+      // checkFirstSyncRequired는 manifest.deviceId === ''이면 firstSyncRequired=true 설정.
+      // 이 경우 자동으로 모달이 노출되며, syncFromCloud/syncToCloud는 가드로 차단됨.
+      const { checkFirstSyncRequired, syncFromCloud, syncToCloud } = useDriveSyncStore.getState();
+      await checkFirstSyncRequired();
+      if (useDriveSyncStore.getState().firstSyncRequired) return;
 
-      const { syncFromCloud, syncToCloud } = useDriveSyncStore.getState();
       const result = await syncFromCloud();
 
       // 다운로드된 파일이 있으면 스토어 리로드
@@ -700,6 +703,9 @@ function MainApp() {
   }, [settings.sync?.autoSyncIntervalMin, settings.sync?.enabled]);
 
   // autoSyncOnSave: 스토어 변경 시 자동 업로드
+  // SYNC_REGISTRY를 단일 소스로 활용해 누락을 구조적으로 차단한다.
+  // 새 도메인 추가 시 syncRegistry.ts의 SYNC_REGISTRY와 아래 STORE_SUBSCRIBE_MAP에
+  // 한 줄씩 추가하면 된다. SyncSubscribers.test.ts가 두 곳의 정합성을 자동 검증한다.
   useEffect(() => {
     const syncSettings = useSettingsStore.getState().settings.sync;
     if (!syncSettings?.enabled || !syncSettings.autoSyncOnSave) return;
@@ -709,17 +715,40 @@ function MainApp() {
 
     const { triggerSaveSync } = useDriveSyncStore.getState();
 
-    // 주요 스토어들의 변경을 구독
-    const unsubscribers = [
-      useScheduleStore.subscribe(() => triggerSaveSync()),
-      useSeatingStore.subscribe(() => triggerSaveSync()),
-      useEventsStore.subscribe(() => triggerSaveSync()),
-      useMemoStore.subscribe(() => triggerSaveSync()),
-      useNoteStore.subscribe(() => triggerSaveSync()),
-      useTodoStore.subscribe(() => triggerSaveSync()),
-      useStudentRecordsStore.subscribe(() => triggerSaveSync()),
-      useTeachingClassStore.subscribe(() => triggerSaveSync()),
-    ];
+    // STORE_SUBSCRIBE_MAP: registry의 fileName을 실제 store.subscribe 함수로 매핑.
+    // syncRegistry.ts는 usecases 레이어라 store를 직접 import 못 하므로,
+    // adapters 레이어인 본 파일에서 어댑터 역할을 한다.
+    // subscribeExcluded:true 도메인(settings, teacher-schedule, timetable-overrides,
+    // curriculum-progress, attendance)은 본 맵에서 제외 — 동일 store 중복 구독 방지.
+    const STORE_SUBSCRIBE_MAP: Record<string, (cb: () => void) => () => void> = {
+      'class-schedule':   (cb) => useScheduleStore.subscribe(cb),
+      'students':         (cb) => useStudentStore.subscribe(cb),
+      'seating':          (cb) => useSeatingStore.subscribe(cb),
+      'events':           (cb) => useEventsStore.subscribe(cb),
+      'memos':            (cb) => useMemoStore.subscribe(cb),
+      'todos':            (cb) => useTodoStore.subscribe(cb),
+      'student-records':  (cb) => useStudentRecordsStore.subscribe(cb),
+      'bookmarks':        (cb) => useBookmarkStore.subscribe(cb),
+      'surveys':          (cb) => useSurveyStore.subscribe(cb),
+      'assignments':      (cb) => useAssignmentStore.subscribe(cb),
+      'seat-constraints': (cb) => useSeatConstraintsStore.subscribe(cb),
+      'teaching-classes': (cb) => useTeachingClassStore.subscribe(cb),
+      'dday':             (cb) => useDDayStore.subscribe(cb),
+      'consultations':    (cb) => useConsultationStore.subscribe(cb),
+      'manual-meals':     (cb) => useMealStore.subscribe(cb),
+      // note-cloud-sync PDCA: 노트북 메타가 useNoteStore의 대표 키.
+      // note-sections / note-pages-meta / note-body는 동일 store이므로
+      // syncRegistry에서 subscribeExcluded:true로 처리되어 본 맵에서 제외됨.
+      'note-notebooks':   (cb) => useNoteStore.subscribe(cb),
+    };
+
+    const unsubscribers: Array<() => void> = [];
+    for (const d of SYNC_REGISTRY) {
+      if (d.subscribeExcluded || d.isDynamic) continue;
+      const subscribe = STORE_SUBSCRIBE_MAP[d.fileName];
+      if (!subscribe) continue;
+      unsubscribers.push(subscribe(() => triggerSaveSync()));
+    }
 
     return () => {
       unsubscribers.forEach((unsub) => unsub());
@@ -863,6 +892,7 @@ function MainApp() {
           onClose={() => useDriveSyncStore.getState().resetStatus()}
         />
       )}
+      <FirstSyncConfirmModalContainer />
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
       <ShareModal />
       <SharePromptOverlay />
@@ -873,5 +903,40 @@ function MainApp() {
       <QuickAddModal />
       </div>
     </div>
+  );
+}
+
+/**
+ * FirstSyncConfirmModal 컨테이너 — useDriveSyncStore 상태 구독.
+ * 별도 컴포넌트로 분리해 selector 기반 구독으로 불필요한 리렌더를 방지한다.
+ */
+function FirstSyncConfirmModalContainer() {
+  const firstSyncRequired = useDriveSyncStore((s) => s.firstSyncRequired);
+  const cloudInfo = useDriveSyncStore((s) => s.firstSyncCloudInfo);
+  const chooseFirstSync = useDriveSyncStore((s) => s.chooseFirstSync);
+
+  return (
+    <FirstSyncConfirmModal
+      open={firstSyncRequired}
+      cloudInfo={cloudInfo}
+      onChooseDownload={async () => {
+        await chooseFirstSync('download');
+        // 다운로드 결과 reload 처리 (chooseFirstSync는 결과를 반환하지 않으므로 store에서 조회)
+        const lastResult = useDriveSyncStore.getState().lastSyncResult;
+        if (lastResult?.direction === 'download' && lastResult.downloaded?.length) {
+          await reloadStores(lastResult.downloaded);
+        }
+      }}
+      onChooseUpload={async () => {
+        await chooseFirstSync('upload');
+      }}
+      onDefer={async () => {
+        await chooseFirstSync('defer');
+        useToastStore.getState().show(
+          '동기화를 나중에 설정해요. 설정 > 구글 드라이브에서 결정할 수 있어요.',
+          'info',
+        );
+      }}
+    />
   );
 }

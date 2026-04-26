@@ -35,6 +35,7 @@ export function RealtimeWallCardPlaceholder({
 
   return (
     <article
+      data-card-root="true"
       className="relative flex h-full flex-col rounded-xl border border-dashed border-sp-border/60 bg-sp-bg/40 p-3.5 text-sp-muted/80"
       aria-label="작성자가 삭제한 카드"
     >

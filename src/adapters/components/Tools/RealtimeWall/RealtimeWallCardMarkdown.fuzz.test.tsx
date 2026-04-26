@@ -2,9 +2,11 @@
  * v2.1 — RealtimeWallCardMarkdown XSS fuzz 테스트.
  *
  * Design v2.1 §5.5 / §9.3 / §10.7:
- *   - react-markdown allowedElements 7종 화이트리스트 강제
+ *   - react-markdown allowedElements 화이트리스트 강제
+ *     (h1, p, strong, em, ul, ol, li, blockquote — 2026-04-26 h1 추가, 카드 제목 fix)
  *   - dangerouslySetInnerHTML 0 hit (회귀 위험 #7)
  *   - marquee/iframe/script/svg/object/embed/javascript: 차단
+ *   - h2~h6 여전히 차단 (학생 입력 경로 없음 + XSS 표면 최소화)
  *
  * 100+ XSS payload 입력 → DOM에 위험 요소 0개.
  *
@@ -42,9 +44,9 @@ const XSS_PAYLOADS = [
   '[text](javascript:alert(1))',
   // markdown image with data URL
   '![](data:image/svg+xml,<svg/onload=alert(1)>)',
-  // h1/h2/h3는 차단되지 않으면 위험은 아니지만 화이트리스트 외
-  '# heading',
+  // h2/h3는 화이트리스트 외 (h1만 학생 제목 합성용으로 허용 — 2026-04-26)
   '## heading2',
+  '### heading3',
   // table — 화이트리스트 외
   '| a | b |\n|---|---|\n| 1 | 2 |',
   // code block — 화이트리스트 외
@@ -126,5 +128,29 @@ describe('RealtimeWallCardMarkdown — XSS fuzz', () => {
   it('빈 텍스트 → null 반환 (DOM 없음)', () => {
     const html = renderToString(<RealtimeWallCardMarkdown text="" />);
     expect(html).toBe('');
+  });
+
+  // 2026-04-26 — 카드 제목 viewerRole 비대칭 결함 fix.
+  // StudentSubmitForm이 합성하는 `# 제목\n\n본문`이 양쪽(학생/교사) 동일하게
+  // <h1 font-bold> + <p>로 렌더되는지 잠금.
+  it('# 제목 markdown → h1 굵은 톤 렌더 (학생/교사 동일)', () => {
+    const html = renderToString(
+      <RealtimeWallCardMarkdown text={'# 제목입니다\n\n본문 내용'} />,
+    );
+    expect(html).toMatch(/<h1[\s>]/);
+    expect(html).toMatch(/font-bold/);
+    expect(html).toMatch(/제목입니다/);
+    expect(html).toMatch(/<p[\s>]/);
+    expect(html).toMatch(/본문 내용/);
+  });
+
+  it('h2~h6은 여전히 차단 (plain text unwrap)', () => {
+    const html = renderToString(
+      <RealtimeWallCardMarkdown text={'## 부제목\n\n### 소제목'} />,
+    );
+    expect(html).not.toMatch(/<h2[\s>]/);
+    expect(html).not.toMatch(/<h3[\s>]/);
+    expect(html).toMatch(/부제목/);
+    expect(html).toMatch(/소제목/);
   });
 });

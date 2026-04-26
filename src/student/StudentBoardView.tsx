@@ -26,6 +26,7 @@ import { useStudentPin } from './useStudentPin';
 import { useIsMobile } from './useIsMobile';
 import { useStudentFreeformLockState } from './useStudentFreeformLockState';
 import { RealtimeWallBoardThemeWrapper } from '@adapters/components/Tools/RealtimeWall/RealtimeWallBoardThemeWrapper';
+import { RealtimeWallCardDetailModal } from '@adapters/components/Tools/RealtimeWall/RealtimeWallCardDetailModal';
 
 const STUDENT_NICKNAME_STORAGE_KEY = 'ssampin-realtime-wall-nickname';
 
@@ -100,6 +101,19 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [pinSetupOpen, setPinSetupOpen] = useState(false);
   const [nicknameToast, setNicknameToast] = useState<string | null>(null);
+
+  // 2026-04-26 결함 fix — 카드 더블클릭 상세 모달 상태 (Padlet 동일뷰 §0.1)
+  const [detailPostId, setDetailPostId] = useState<string | null>(null);
+  const detailPost = useMemo(
+    () => (detailPostId ? posts.find((p) => p.id === detailPostId) ?? null : null),
+    [detailPostId, posts],
+  );
+  const handleOpenCardDetail = useCallback((postId: string) => {
+    setDetailPostId(postId);
+  }, []);
+  const handleCloseCardDetail = useCallback(() => {
+    setDetailPostId(null);
+  }, []);
 
   const handleOwnCardEdit = useCallback(
     (postId: string) => {
@@ -223,7 +237,9 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-sp-bg text-sp-text">
+    // 2026-04-26 결함 fix — bg-sp-bg → bg-transparent. body에 boardTheme이 적용되어
+    // 풀스크린으로 깔리므로 외곽 컨테이너는 투명하게 두고 헤더/PIN/FAB 영역까지 일관 immersion.
+    <div className="flex min-h-screen flex-col bg-transparent text-sp-text">
       <StudentBoardHeader title={title} postCount={posts.length} />
 
       <main
@@ -265,6 +281,7 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
             freeformLockEnabled={freeformLock.enabled}
             onAddCardToColumn={handleAddCardToColumn}
             studentFormLocked={studentFormLocked}
+            onCardDetail={handleOpenCardDetail}
           />
         </RealtimeWallBoardThemeWrapper>
       </main>
@@ -323,6 +340,37 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
         newNickname={nicknameToast}
         visible={nicknameToast !== null}
         onDismiss={() => setNicknameToast(null)}
+      />
+
+      {/*
+        2026-04-26 결함 fix — 카드 상세 모달 (Padlet 동일뷰).
+        학생 권한:
+          - 자기 카드면 수정/삭제 메뉴 활성
+          - 다른 카드면 좋아요/댓글만
+          - PIN/sessionToken 기반 isOwnCard 판정은 모달 내부에서 처리
+      */}
+      {/*
+        2026-04-26 결함 4 fix — 색상/필드 변경 즉시 반영:
+        edit/delete 진입 시 상세 모달을 닫지 않는다. detailPost는 useMemo로 posts에서 reactive
+        lookup하므로 (line 107~110), 학생이 edit 모달에서 색상을 바꾸고 저장하면 store가 posts를
+        갱신 → detailPost가 자동 재계산 → 상세 모달 배경/dot/테두리가 즉시 새 색상으로 리렌더된다.
+        edit 모달은 같은 z-sp-modal이지만 mount 순서로 위에 표시되며, 닫히면 focus가 상세로 복귀.
+      */}
+      <RealtimeWallCardDetailModal
+        open={detailPost !== null}
+        onClose={handleCloseCardDetail}
+        post={detailPost}
+        viewerRole="student"
+        // 2026-04-26 결함 #2 fix — boardTheme.colorScheme을 모달에 명시 주입.
+        // 본 모달은 RealtimeWallBoardThemeWrapper 외부에 있어 context 자동 전파가 닿지 않음.
+        // 학생 SPA는 useStudentBoardTheme이 html.dark도 동기화하지만, 모달도 명시 주입으로 일관 보장.
+        boardColorScheme={boardTheme?.colorScheme ?? 'light'}
+        currentSessionToken={currentSessionToken}
+        currentPinHash={currentPinHash}
+        onStudentLike={toggleLike}
+        commentInputSlot={detailPost ? renderCommentInput(detailPost.id) : undefined}
+        onOwnCardEdit={handleOwnCardEdit}
+        onOwnCardDelete={handleOwnCardDelete}
       />
     </div>
   );
@@ -392,7 +440,10 @@ interface StudentBoardHeaderProps {
 
 function StudentBoardHeader({ title, postCount }: StudentBoardHeaderProps) {
   return (
-    <header className="sticky top-0 z-10 border-b border-sp-border bg-sp-bg/95 px-4 py-3 backdrop-blur sm:px-6">
+    // 2026-04-26 결함 fix — bg-sp-bg/95 → bg-sp-card/80 + backdrop-blur.
+    // body의 boardTheme이 헤더 뒤로 살짝 비치며 가독성은 카드 톤 + blur로 유지.
+    // light 보드 위에서도 sp-card(다크) 대비 text-sp-text가 또렷하게 보임.
+    <header className="sticky top-0 z-10 border-b border-sp-border bg-sp-card/80 px-4 py-3 backdrop-blur sm:px-6">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-bold text-sp-text sm:text-lg">{title}</h1>
@@ -478,6 +529,10 @@ interface BoardRouterProps {
    * 칸반 컬럼별 풀-와이드 "+ 카드 추가" 버튼이 disabled + lock 아이콘으로 전환.
    */
   readonly studentFormLocked: boolean;
+  /**
+   * 2026-04-26 결함 fix — 카드 더블클릭 → 학생 상세 모달 열기 (Padlet 동일뷰 §0.1).
+   */
+  readonly onCardDetail: (postId: string) => void;
 }
 
 function BoardRouter({
@@ -495,6 +550,7 @@ function BoardRouter({
   freeformLockEnabled,
   onAddCardToColumn,
   studentFormLocked,
+  onCardDetail,
 }: BoardRouterProps) {
   const handleOpenLink = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -514,6 +570,8 @@ function BoardRouter({
     onOwnCardMove,
     isMobile,
     freeformLockEnabled,
+    // 2026-04-26 결함 fix — 카드 더블클릭 → 상세 모달
+    onCardDetail,
   };
 
   switch (layoutMode) {

@@ -46,6 +46,10 @@ class InMemoryNotebookRepository implements INotebookRepository {
   async deletePageBody(pageId: string): Promise<void> {
     this.pageBodies.delete(pageId);
   }
+
+  async listPageBodyKeys(): Promise<string[]> {
+    return this.pagesMeta.map((page) => `note-body--${page.id}`);
+  }
 }
 
 const emptyBody: NotePageBody = {

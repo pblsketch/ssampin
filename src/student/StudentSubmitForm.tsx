@@ -76,6 +76,41 @@ interface StudentSubmitFormProps {
    * v2.1 student-ux — Padlet 컬럼별 + 버튼으로 진입 시 사용할 columnId.
    */
   readonly defaultColumnId?: string;
+  /**
+   * Step 1 — 교사 카드 추가 모드.
+   *
+   * true일 때:
+   *   - nickname을 "선생님"으로 강제 (input disabled, 입력 불가)
+   *   - PIN/PIPA consent 플로우 skip
+   *   - studentFormLocked 잠금 무시 (교사는 항상 추가 가능)
+   *   - 제출 시 WebSocket submitCard 대신 onTeacherSubmit 콜백 호출
+   *
+   * 제약:
+   *   - mode='edit' + asTeacher=true 조합은 미정의 — console.warn + 비활성화.
+   *   - 기존 학생 호출자 asTeacher 미지정 시 100% 동일 거동 보장.
+   */
+  readonly asTeacher?: boolean;
+  /**
+   * asTeacher=true 시 제출 콜백.
+   * WebSocket 경로 대신 교사 측 handler로 직접 처리.
+   */
+  readonly onTeacherSubmit?: (input: {
+    nickname: string;
+    text: string;
+    linkUrl?: string;
+    images?: string[];
+    pdfDataUrl?: string;
+    pdfFilename?: string;
+    color?: RealtimeWallCardColor;
+    columnId?: string;
+    freeformPosition?: { x: number; y: number };
+  }) => void;
+  /**
+   * Step 3 — 교사 Freeform 더블클릭으로 진입 시 초기 위치.
+   * onTeacherSubmit 콜백의 freeformPosition으로 전달.
+   * Freeform 이외 레이아웃에서는 무시.
+   */
+  readonly defaultFreeformPosition?: { x: number; y: number };
 }
 
 export function StudentSubmitForm({
@@ -87,7 +122,19 @@ export function StudentSubmitForm({
   mode = 'create',
   editingPost,
   defaultColumnId,
+  asTeacher = false,
+  onTeacherSubmit,
+  defaultFreeformPosition,
 }: StudentSubmitFormProps) {
+  // 회귀 위험 guard: mode='edit' + asTeacher=true 조합은 미정의 상태
+  if (asTeacher && mode === 'edit') {
+    if (typeof console !== 'undefined') {
+      console.warn(
+        '[StudentSubmitForm] asTeacher=true + mode="edit" 조합은 미정의입니다. asTeacher를 무시하고 edit 모드로 동작합니다.',
+      );
+    }
+  }
+  const effectiveAsTeacher = asTeacher && mode !== 'edit';
   const submitCard = useRealtimeWallSyncStore((s) => s.submitCard);
   const submitOwnCardEdit = useRealtimeWallSyncStore((s) => s.submitOwnCardEdit);
   const isSubmitting = useRealtimeWallSyncStore((s) => s.isSubmitting);
@@ -217,6 +264,20 @@ export function StudentSubmitForm({
     setAttachmentError(null);
     setMoreMenuOpen(false);
 
+    // Step 1 — 교사 모드: 닉네임 "선생님" 강제 고정, 입력 초기화
+    if (effectiveAsTeacher) {
+      setNickname('선생님');
+      setTitle('');
+      setBody('');
+      setLinkUrl('');
+      setLinkInputOpen(false);
+      setImages([]);
+      setPdfDataUrl(undefined);
+      setPdfFilename(undefined);
+      setColor(undefined);
+      return;
+    }
+
     // v2.1 Phase D — mode='edit' 분기: 드래프트 무시, editingPost로 prefill
     if (isEditMode && editingPost) {
       setNickname(editingPost.nickname);
@@ -276,9 +337,9 @@ export function StudentSubmitForm({
     }
   }, [open, resumeFromDraft, reloadDraft, isEditMode, editingPost]);
 
-  // Phase A — 입력 변경 시 debounced 자동저장 (1초) — edit 모드에서는 X
+  // Phase A — 입력 변경 시 debounced 자동저장 (1초) — edit 모드 및 교사 모드에서는 X
   useEffect(() => {
-    if (!open || isEditMode) return;
+    if (!open || isEditMode || effectiveAsTeacher) return;
     saveDraft({
       nickname,
       text: compositeText,
@@ -401,16 +462,19 @@ export function StudentSubmitForm({
       }
     }
 
-    if (studentFormLocked) {
+    // Step 1 — 교사 모드는 studentFormLocked 잠금 적용 안 함
+    if (!effectiveAsTeacher && studentFormLocked) {
       setLocalError('선생님이 카드 추가를 잠깐 멈췄어요');
       return;
     }
 
     setLocalError(null);
-    try {
-      window.sessionStorage.setItem(NICKNAME_STORAGE_KEY, trimmedNickname);
-    } catch {
-      // sessionStorage 실패해도 제출은 진행
+    if (!effectiveAsTeacher) {
+      try {
+        window.sessionStorage.setItem(NICKNAME_STORAGE_KEY, trimmedNickname);
+      } catch {
+        // sessionStorage 실패해도 제출은 진행
+      }
     }
 
     // v2.2 — 송신 합성 (제목+본문)
@@ -425,6 +489,25 @@ export function StudentSubmitForm({
         pdfFilename: pdfFilename ?? null,
         color,
       });
+      onClose({ submitted: true });
+      return;
+    }
+
+    // Step 1 — 교사 카드 추가: onTeacherSubmit 콜백 경로
+    if (effectiveAsTeacher) {
+      if (onTeacherSubmit) {
+        onTeacherSubmit({
+          nickname: trimmedNickname,
+          text: trimmedComposite,
+          ...(trimmedLink.length > 0 ? { linkUrl: trimmedLink } : {}),
+          ...(images.length > 0 ? { images } : {}),
+          ...(pdfDataUrl ? { pdfDataUrl } : {}),
+          ...(pdfFilename ? { pdfFilename } : {}),
+          ...(color ? { color } : {}),
+          ...(defaultColumnId ? { columnId: defaultColumnId } : {}),
+          ...(defaultFreeformPosition ? { freeformPosition: defaultFreeformPosition } : {}),
+        });
+      }
       onClose({ submitted: true });
       return;
     }
@@ -451,7 +534,17 @@ export function StudentSubmitForm({
     trimmedNickname.length > 0 &&
     hasContent &&
     graphemeCount <= MAX_TEXT_LENGTH &&
-    (isEditMode || !studentFormLocked);
+    // Step 1 — 교사 모드는 studentFormLocked 무시, edit 모드도 무시 (기존 동작 보존)
+    (effectiveAsTeacher || isEditMode || !studentFormLocked);
+  /**
+   * 닉네임은 학생이 최초 접속 시 StudentJoinScreen에서 입력해 sessionStorage에 저장돼 있다.
+   * 저장된 값이 있으면 작성 폼에는 input을 노출하지 않고 고정된 라벨만 보여 매번 수정되는 것을 막는다.
+   * 저장된 값이 없는 비정상 진입(예: sessionStorage 차단)일 때만 fallback input을 노출한다.
+   * (수정 모드에서도 기존대로 disabled — title로 안내)
+   *
+   * Step 1 — 교사 모드는 항상 고정 라벨 표시 (닉네임 "선생님" 잠금).
+   */
+  const hasFixedNickname = effectiveAsTeacher || (!isEditMode && trimmedNickname.length > 0);
 
   return (
     <>
@@ -552,22 +645,43 @@ export function StudentSubmitForm({
 
           {/* 하단 메타바 — 닉네임 + 색상 */}
           <footer className="flex flex-wrap items-center gap-3 border-t border-sp-border bg-sp-card px-4 py-3">
-            <input
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              maxLength={MAX_NICKNAME_LENGTH}
-              placeholder="닉네임"
-              disabled={isSubmitting || isEditMode}
-              title={isEditMode ? '닉네임은 수정할 수 없어요' : '닉네임을 입력해 주세요'}
-              className="max-w-[160px] rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-60"
-            />
+            {hasFixedNickname || isEditMode ? (
+              <span
+                className="inline-flex max-w-[200px] items-center gap-1.5 truncate rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-sm text-sp-text"
+                title={
+                  effectiveAsTeacher
+                    ? '교사 카드는 닉네임이 "선생님"으로 고정돼요'
+                    : isEditMode
+                      ? '닉네임은 수정할 수 없어요'
+                      : '닉네임은 처음 입장할 때 정한 그대로 사용돼요'
+                }
+                aria-label={`내 닉네임 ${trimmedNickname}`}
+              >
+                <span className="material-symbols-outlined text-[16px] text-sp-muted">
+                  {effectiveAsTeacher ? 'lock' : 'account_circle'}
+                </span>
+                <span className="truncate font-semibold">{trimmedNickname}</span>
+              </span>
+            ) : (
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                maxLength={MAX_NICKNAME_LENGTH}
+                placeholder="닉네임"
+                disabled={isSubmitting}
+                title="닉네임을 입력해 주세요"
+                aria-label="닉네임"
+                className="max-w-[160px] rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-60"
+              />
+            )}
             <StudentColorPicker
               value={color}
               onChange={setColor}
               disabled={isSubmitting}
             />
-            {!isEditMode && (
+            {/* Step 1 — 교사 모드 및 edit 모드에서는 승인 안내 메시지 숨김 */}
+            {!isEditMode && !effectiveAsTeacher && (
               <p className="ml-auto text-xs text-sp-muted">
                 선생님이 승인하면 보드에 나타나요
               </p>

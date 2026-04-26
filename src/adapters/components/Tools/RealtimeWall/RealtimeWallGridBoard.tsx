@@ -26,6 +26,9 @@ export function RealtimeWallGridBoard({
   onTeacherUpdateNickname,
   onTeacherBulkHideStudent,
   highlightedPostIds,
+  onCardDetail,
+  onTeacherLike,
+  onTeacherAddComment,
 }: RealtimeWallGridBoardProps) {
   // 학생 뷰는 무조건 read-only — 액션 칩 DOM 제거.
   const effectiveReadOnly = readOnly || viewerRole === 'student';
@@ -40,8 +43,10 @@ export function RealtimeWallGridBoard({
   );
 
   return (
-    <div className="flex h-full min-h-[560px] flex-col">
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-sp-border bg-sp-bg p-4">
+    <div className="flex h-full flex-col">
+      {/* 2026-04-26 라운드 7 결함 B fix — bg-sp-bg 제거 (회색 잔존 차단).
+          상위 RealtimeWallBoardThemeWrapper가 boardTheme 배경을 적용 → 본 컨테이너는 투명. */}
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-sp-border bg-transparent p-4">
         {visiblePosts.length === 0 ? (
           <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 text-center">
             <span className="material-symbols-outlined text-[32px] text-sp-muted/30">grid_view</span>
@@ -83,6 +88,9 @@ export function RealtimeWallGridBoard({
                   onTeacherUpdateNickname={onTeacherUpdateNickname}
                   onTeacherBulkHideStudent={onTeacherBulkHideStudent}
                   highlighted={highlightedPostIds?.has(post.id) ?? false}
+                  onCardDetail={onCardDetail}
+                  onTeacherLike={onTeacherLike}
+                  onTeacherAddComment={onTeacherAddComment}
                 />
               </div>
             ))}

@@ -20,6 +20,12 @@ const FILE_LABELS: Record<string, string> = {
   'curriculum-progress': '수업 진도',
   attendance: '출석',
   consultations: '상담 예약',
+  // 노트 (note-cloud-sync PDCA)
+  'note-notebooks': '노트북 목록',
+  'note-sections': '노트 섹션',
+  'note-pages-meta': '노트 페이지 목록',
+  // 동적 키(note-body--{pageId})는 본 매핑에 포함되지 않으며, line 70의 fallback으로
+  // pageId가 그대로 표시된다. 페이지 제목 표시는 후속 UX 개선 항목.
 };
 
 interface Props {

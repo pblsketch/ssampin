@@ -208,6 +208,19 @@ interface ElectronAPI {
     postIds: readonly string[];
     newNickname: string;
   }) => void) => () => void;
+  /**
+   * v2.1 Phase C — 학생 자기 카드 위치 변경(submit-move) 도착 알림.
+   *
+   * 결함 fix (2026-04-26): 이 채널이 preload에 빠져 있어 학생 드래그 후
+   * 부분 업데이트(좋아요·댓글·삭제 등)가 도착하면 교사 renderer의 stale
+   * `posts` state가 wall-state로 다시 broadcast되어 카드가 원래 위치로
+   * 되돌아가는 회귀가 발생. 본 핸들러로 교사 state를 학생 이동 즉시
+   * 동기화한다.
+   */
+  onRealtimeWallStudentMove?: (callback: (data: {
+    postId: string;
+    post: import('./domain/entities/RealtimeWall').RealtimeWallPost;
+  }) => void) => () => void;
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
     questions: Array<{

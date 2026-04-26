@@ -12,6 +12,10 @@ import { useStudentImageMultiUpload } from '@student/useStudentImageMultiUpload'
  * - drop / paste / 파일 picker 3 진입점
  * - 미리보기 + 개별 X 삭제
  * - canvas 리사이즈는 useStudentImageMultiUpload 훅에서
+ *
+ * compact 모드 (댓글 폼용):
+ * - 드롭존 박스·안내 텍스트 제거, 아이콘 버튼만 인라인 표시
+ * - compact=true 일 때 onFileSelect를 외부에서 주입 (부모가 훅 소유)
  */
 
 interface StudentImageMultiPickerProps {
@@ -23,6 +27,20 @@ interface StudentImageMultiPickerProps {
   readonly disabled?: boolean;
   /** v2.1 PIPA — 첫 이미지 첨부 시 1회 호출. localStorage 플래그 미존재 시 부모가 모달 표시. */
   readonly onPipaConsentNeeded?: () => void;
+  /**
+   * compact 모드 — 댓글 폼용.
+   * 드롭존 박스·안내 텍스트 제거, 작은 아이콘 버튼만 인라인 표시.
+   * compact=true 일 때 onFileSelectOverride를 반드시 전달해야 함.
+   * (부모가 useStudentImageMultiUpload 훅을 소유하고 핸들러를 위임)
+   */
+  readonly compact?: boolean;
+  /**
+   * compact 모드 전용: 부모(훅)의 onFileSelect를 주입.
+   * 이를 통해 picker는 훅을 중복 생성하지 않고 파일 선택만 위임.
+   */
+  readonly onFileSelectOverride?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  /** compact 모드 전용: 에러 메시지 (부모 훅에서 관리) */
+  readonly externalError?: string | null;
 }
 
 export function StudentImageMultiPicker({
@@ -33,6 +51,9 @@ export function StudentImageMultiPicker({
   maxTotalBytes = REALTIME_WALL_MAX_IMAGES_TOTAL_BYTES,
   disabled = false,
   onPipaConsentNeeded,
+  compact = false,
+  onFileSelectOverride,
+  externalError,
 }: StudentImageMultiPickerProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -43,7 +64,8 @@ export function StudentImageMultiPicker({
     onAdd(dataUrl);
   };
 
-  const { onDrop, onPaste, onFileSelect, error } = useStudentImageMultiUpload({
+  // compact 모드에서는 훅을 내부에서 쓰지 않음 — 부모가 훅 소유
+  const internalUpload = useStudentImageMultiUpload({
     currentImages: images,
     onAdd: handleAdd,
     maxImages,
@@ -53,6 +75,77 @@ export function StudentImageMultiPicker({
   const remaining = maxImages - images.length;
   const totalMB = (maxTotalBytes / 1024 / 1024).toFixed(0);
 
+  // compact 모드에서 사용할 파일 선택 핸들러 (외부 주입 우선)
+  const fileSelectHandler = compact && onFileSelectOverride
+    ? onFileSelectOverride
+    : internalUpload.onFileSelect;
+
+  // 표시할 에러 (compact: 외부, 기본: 내부)
+  const displayError = compact ? (externalError ?? null) : (internalUpload.error ?? null);
+
+  // ── compact 모드 ──────────────────────────────────────────────
+  if (compact) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {/* 첨부 썸네일 인라인 */}
+        {images.map((dataUrl, idx) => (
+          <div key={idx} className="relative shrink-0">
+            <img
+              src={dataUrl}
+              alt={`첨부 이미지 ${idx + 1}`}
+              className="h-12 w-12 rounded-lg object-cover"
+            />
+            <button
+              type="button"
+              onClick={() => onRemove(idx)}
+              disabled={disabled}
+              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white hover:bg-rose-500 disabled:opacity-50"
+              aria-label={`이미지 ${idx + 1} 제거`}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+
+        {/* 파일 선택 아이콘 버튼 */}
+        {remaining > 0 && (
+          <label
+            className={[
+              'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-sp-border/50 bg-sp-bg/60 text-sp-muted transition',
+              disabled ? 'cursor-not-allowed opacity-50' : 'hover:border-sp-accent/60 hover:text-sp-accent',
+            ].join(' ')}
+            aria-label="이미지 첨부"
+            title="이미지 첨부 (드래그·붙여넣기도 가능)"
+          >
+            <span className="material-symbols-outlined text-base">attach_file</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              multiple
+              onChange={fileSelectHandler}
+              disabled={disabled}
+              className="hidden"
+            />
+          </label>
+        )}
+
+        {/* 첨부 장수 뱃지 */}
+        {images.length > 0 && (
+          <span className="text-caption tabular-nums text-sp-muted/70">
+            {images.length}/{maxImages}
+          </span>
+        )}
+
+        {displayError && (
+          <span className="text-caption text-rose-400" role="alert">
+            {displayError}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // ── 기본(전체) 모드 ───────────────────────────────────────────
   return (
     <div>
       {images.length > 0 && (
@@ -82,14 +175,14 @@ export function StudentImageMultiPicker({
         <div
           onDrop={(e) => {
             setIsDragOver(false);
-            onDrop(e);
+            internalUpload.onDrop(e);
           }}
           onDragOver={(e) => {
             e.preventDefault();
             setIsDragOver(true);
           }}
           onDragLeave={() => setIsDragOver(false)}
-          onPaste={onPaste}
+          onPaste={internalUpload.onPaste}
           tabIndex={0}
           className={[
             'rounded-lg border-2 border-dashed p-3 text-center transition-colors',
@@ -107,7 +200,7 @@ export function StudentImageMultiPicker({
               type="file"
               accept="image/png,image/jpeg,image/gif,image/webp"
               multiple
-              onChange={onFileSelect}
+              onChange={internalUpload.onFileSelect}
               disabled={disabled}
               className="hidden"
             />
@@ -118,9 +211,9 @@ export function StudentImageMultiPicker({
         </div>
       )}
 
-      {error && (
+      {displayError && (
         <p className="text-xs text-rose-400 mt-2" role="alert">
-          {error}
+          {displayError}
         </p>
       )}
     </div>

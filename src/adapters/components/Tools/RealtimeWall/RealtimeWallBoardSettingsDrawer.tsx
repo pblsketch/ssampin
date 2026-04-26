@@ -19,6 +19,7 @@
  *   "카드 위치가 재배치됩니다. 계속하시겠어요?" 확인 대화.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import type {
   RealtimeWallColumn,
   RealtimeWallPost,
@@ -47,6 +48,10 @@ import { RealtimeWallBoardDesignPanel } from './RealtimeWallBoardDesignPanel';
 import { Drawer } from '@adapters/components/common/Drawer';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import {
+  DEFAULT_REALTIME_WALL_EXPORT_OPTIONS,
+  type RealtimeWallExportOptions,
+} from '@usecases/realtimeWall/ExportRealtimeWallBoard';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -57,7 +62,13 @@ export type BoardSettingsSection =
   | 'columns'
   | 'approval'
   | 'student-permissions'
-  | 'design';
+  | 'design'
+  // 2026-04-26 사용자 피드백 #1 — 교사 보드 풀-사이즈화 후 QR/URL/짧은 코드를
+  // 인라인 LiveSharePanel 대신 이 드로어 §0 섹션으로 격리.
+  | 'share'
+  // 2026-04-26 사용자 피드백 #5 — "수업 마무리" 제거 + "내보내기" 신설.
+  // ActionBar의 file_download 아이콘이 이 섹션을 연다. PDF / Excel 양자택일.
+  | 'export';
 
 export interface RealtimeWallBoardSettingsDrawerProps {
   /** null이면 드로어 닫힘 */
@@ -102,6 +113,53 @@ export interface RealtimeWallBoardSettingsDrawerProps {
    * Plan §A-2 mitigation — 라이브 세션 중 broadcast 폭주 방지.
    */
   readonly onThemeChange: (next: WallBoardTheme) => void;
+
+  // §0 — 2026-04-26 신설: 공유 섹션 (QR + URL + 짧은 코드).
+  // 모두 optional — 라이브 미연결 시 share 섹션은 안내만 노출.
+  readonly share?: ShareSectionProps;
+
+  // §6 — 2026-04-26 신설: 내보내기 섹션 (PDF/엑셀).
+  // 라이브 여부와 무관 — 보드에 카드가 1장이라도 있으면 활성.
+  readonly exportSection?: ExportSectionProps;
+}
+
+/**
+ * 2026-04-26 신설 — 드로어 §6 내보내기 섹션 데이터.
+ *
+ * 부모(`ToolRealtimeWall`)는 `onExport`를 통해:
+ *   1) usecase로 board+posts+columns → ExportRows 변환
+ *   2) infrastructure exporter로 buffer 생성
+ *   3) Save Dialog → writeFile (Electron) 또는 Blob download (브라우저)
+ * 흐름 전체를 처리.
+ */
+export interface ExportSectionProps {
+  /** 보드에 있는 카드 총 수 — 0이면 안내 메시지 노출 후 버튼 비활성. */
+  readonly cardCount: number;
+  /** 내보내기 진행 중 — 버튼 spinner / disable. */
+  readonly isExporting: boolean;
+  /** 사용자 클릭 시 형식과 옵션을 부모에 전달. */
+  readonly onExport: (format: 'pdf' | 'excel', options: RealtimeWallExportOptions) => void;
+}
+
+/**
+ * 2026-04-26 신설 — 드로어 §0 공유 섹션 데이터.
+ * ToolRealtimeWall.handleStartLive 흐름에서 만들어진 tunnelUrl/shortUrl/shortCode를 그대로 전달.
+ */
+export interface ShareSectionProps {
+  readonly displayUrl: string | null;
+  readonly fullUrl: string | null;
+  readonly shortUrl: string | null;
+  readonly shortCode: string | null;
+  readonly tunnelLoading: boolean;
+  readonly tunnelError: string | null;
+  readonly customCodeInput: string;
+  readonly customCodeError: string | null;
+  readonly connectedStudents: number;
+  readonly onCustomCodeChange: (value: string) => void;
+  readonly onSetCustomCode: () => void;
+  readonly onRetryTunnel: () => void;
+  readonly onShowQRFullscreen: () => void;
+  readonly onStopLive: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +207,8 @@ export function RealtimeWallBoardSettingsDrawer({
   onStudentFormLockedChange,
   theme,
   onThemeChange,
+  share,
+  exportSection,
 }: RealtimeWallBoardSettingsDrawerProps) {
   const isOpen = openSection !== null;
 
@@ -165,6 +225,8 @@ export function RealtimeWallBoardSettingsDrawer({
   const approvalRef = useRef<HTMLDivElement>(null);
   const studentPermissionsRef = useRef<HTMLDivElement>(null);
   const designRef = useRef<HTMLDivElement>(null);
+  const shareRef = useRef<HTMLDivElement>(null); // 2026-04-26 신설
+  const exportRef = useRef<HTMLDivElement>(null); // 2026-04-26 신설 — 결함 #5
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // §5 — Drawer 내부 100ms 디바운스 + 즉시 낙관적 UI 갱신을 위한 local draft.
@@ -228,6 +290,10 @@ export function RealtimeWallBoardSettingsDrawer({
         return studentPermissionsRef;
       case 'design':
         return designRef;
+      case 'share':
+        return shareRef;
+      case 'export':
+        return exportRef;
       default:
         return basicRef;
     }
@@ -346,6 +412,17 @@ export function RealtimeWallBoardSettingsDrawer({
           ref={scrollContainerRef}
           className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
         >
+          {/* ================================================================
+              §0 공유 (2026-04-26 신설) — QR / URL / 짧은 코드 / 라이브 종료
+              교사 보드 풀-사이즈화에 따라 인라인 LiveSharePanel을 이쪽으로 격리.
+              ================================================================ */}
+          {share && (
+            <div ref={shareRef} className="mb-6">
+              <SectionHeader icon="share" label="공유 — 학생 접속" />
+              <ShareSectionBody {...share} />
+            </div>
+          )}
+
           {/* ================================================================
               §1 기본 설정
               ================================================================ */}
@@ -482,6 +559,17 @@ export function RealtimeWallBoardSettingsDrawer({
               onReset={handleThemeReset}
             />
           </div>
+
+          {/* ================================================================
+              §6 내보내기 (2026-04-26 신설 — 결함 #5)
+              "수업 마무리"를 대체. PDF / 엑셀 양자택일 + 옵션(카드/댓글/타임스탬프/작성자).
+              ================================================================ */}
+          {exportSection && (
+            <div ref={exportRef} className="mb-2 mt-6">
+              <SectionHeader icon="file_download" label="내보내기" />
+              <ExportSectionBody {...exportSection} />
+            </div>
+          )}
         </div>
       </Drawer>
 
@@ -886,7 +974,7 @@ export function ColumnEditorBody({ columns, posts, onApply }: ColumnEditorBodyPr
           onChange={(e) => setNewTitleInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
           maxLength={20}
-          placeholder={canAddMore ? '새 컬럼 이름' : '최대 6개까지 가능해요'}
+          placeholder={canAddMore ? '새 컬럼 이름' : `최대 ${REALTIME_WALL_MAX_COLUMNS}개까지 가능해요`}
           disabled={!canAddMore}
           className="min-w-0 flex-1 rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         />
@@ -1038,5 +1126,302 @@ function ColumnRemoveConfirmPanel({
         </button>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ShareSectionBody (2026-04-26 신설) — Drawer §0 공유 섹션
+//
+// 책임:
+//   - QR 캔버스 (qrcode 라이브러리 동일)
+//   - 메인 학생 접속 URL + 복사 버튼
+//   - 짧은 코드 변경 input
+//   - 원본 주소 (보조)
+//   - 라이브 종료 / QR 크게 보기 / 다시 시도
+//
+// 디자인:
+//   - 기존 RealtimeWallLiveSharePanel과 같은 정보를 더 좁은 Drawer 너비(360~420px)에
+//     세로 배치. QR 오른쪽 → 위쪽으로, 주소 정보는 그 아래로.
+// ---------------------------------------------------------------------------
+
+function copyToClipboard(text: string): void {
+  void navigator.clipboard.writeText(text);
+}
+
+function ShareSectionBody({
+  displayUrl,
+  fullUrl,
+  shortUrl,
+  shortCode,
+  tunnelLoading,
+  tunnelError,
+  customCodeInput,
+  customCodeError,
+  connectedStudents,
+  onCustomCodeChange,
+  onSetCustomCode,
+  onRetryTunnel,
+  onShowQRFullscreen,
+  onStopLive,
+}: ShareSectionProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || !displayUrl) return;
+    void QRCode.toCanvas(canvasRef.current, displayUrl, {
+      width: 180,
+      margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+  }, [displayUrl]);
+
+  return (
+    <div className="space-y-3">
+      {/* 접속 현황 + 액션 칩 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1.5 text-xs text-sp-muted">
+          <span className="flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]" />
+          학생 {connectedStudents}명 접속
+        </span>
+        <button
+          type="button"
+          onClick={onShowQRFullscreen}
+          disabled={!displayUrl}
+          className="ml-auto flex items-center gap-1 rounded-md border border-sp-border bg-sp-surface px-2 py-1 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <span className="material-symbols-outlined text-sm">qr_code</span>
+          QR 크게 보기
+        </button>
+        <button
+          type="button"
+          onClick={onStopLive}
+          className="flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400 transition hover:bg-red-500/15"
+        >
+          <span className="material-symbols-outlined text-sm">stop_circle</span>
+          참여 종료
+        </button>
+      </div>
+
+      {/* QR 캔버스 — 중앙 배치 */}
+      <div className="flex items-center justify-center rounded-lg border border-sp-border bg-white p-3">
+        {displayUrl ? (
+          <canvas ref={canvasRef} />
+        ) : tunnelLoading ? (
+          <div className="px-4 py-8 text-xs text-gray-500">QR 준비 중...</div>
+        ) : (
+          <div className="px-4 py-8 text-xs text-gray-500">주소 생성 실패</div>
+        )}
+      </div>
+
+      {tunnelLoading && (
+        <div className="flex items-center gap-2 rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-xs text-sp-muted">
+          <span className="material-symbols-outlined animate-spin text-sm text-blue-400">progress_activity</span>
+          외부 접속 주소를 만드는 중입니다.
+        </div>
+      )}
+
+      {/* 메인 학생 접속 URL */}
+      {displayUrl && (
+        <div className="rounded-lg border border-sp-accent/30 bg-sp-accent/5 px-3 py-2">
+          <p className="mb-1 text-detail font-medium text-sp-accent/70">학생에게 공유할 주소</p>
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 truncate font-mono text-sm font-bold text-sp-accent">
+              {displayUrl}
+            </p>
+            <button
+              type="button"
+              onClick={() => copyToClipboard(displayUrl)}
+              className="shrink-0 rounded-md border border-sp-accent/30 bg-sp-accent/10 px-2 py-1 text-xs font-medium text-sp-accent transition hover:bg-sp-accent/20"
+            >
+              복사
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 원본 주소 (보조) */}
+      {fullUrl && fullUrl !== shortUrl && (
+        <div className="rounded-lg border border-sp-border bg-sp-surface px-3 py-2">
+          <p className="mb-0.5 text-caption text-sp-muted/70">원본 주소</p>
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 truncate font-mono text-xs text-sp-muted">{fullUrl}</p>
+            <button
+              type="button"
+              onClick={() => copyToClipboard(fullUrl)}
+              className="shrink-0 rounded-md border border-sp-border px-2 py-1 text-caption text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
+            >
+              복사
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 짧은 코드 변경 */}
+      {shortUrl && (
+        <div className="rounded-lg border border-sp-border bg-sp-surface px-3 py-2">
+          <div className="mb-2 flex items-center gap-2">
+            <p className="text-detail text-sp-muted">짧은 코드 변경</p>
+            {shortCode && (
+              <span className="rounded-full border border-sp-accent/20 bg-sp-accent/10 px-2 py-0.5 text-caption font-bold text-sp-accent">
+                현재: {shortCode}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={customCodeInput}
+              onChange={(event) => onCustomCodeChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') onSetCustomCode();
+              }}
+              placeholder="예: 2반-토론"
+              maxLength={30}
+              className="min-w-0 flex-1 rounded-lg border border-sp-border bg-sp-bg px-3 py-1.5 text-xs text-sp-text outline-none transition focus:border-sp-accent"
+            />
+            <button
+              type="button"
+              onClick={onSetCustomCode}
+              disabled={!customCodeInput.trim()}
+              className="shrink-0 rounded-lg border border-sp-accent/40 bg-sp-accent/10 px-3 py-1.5 text-xs font-medium text-sp-accent transition hover:bg-sp-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              변경
+            </button>
+          </div>
+          {customCodeError && (
+            <p className="mt-1.5 text-detail text-red-400">{customCodeError}</p>
+          )}
+        </div>
+      )}
+
+      {tunnelError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          <p>{tunnelError}</p>
+          <button
+            type="button"
+            onClick={onRetryTunnel}
+            className="mt-1.5 rounded-md border border-red-400/40 px-2.5 py-1 text-detail font-medium text-red-200 transition hover:bg-red-500/10"
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ExportSectionBody (2026-04-26 신설 — 결함 #5) — Drawer §6 내보내기 섹션
+//
+// 책임:
+//   - 옵션(카드/댓글/타임스탬프/작성자) 토글 4개
+//   - PDF / 엑셀 버튼 2개
+//   - 카드 0장이면 안내 + 버튼 비활성
+//
+// 디자인:
+//   - rounded-lg 기본 (rounded-sp-* 금지)
+//   - 한국어 라벨, sp-* 토큰 사용
+// ---------------------------------------------------------------------------
+
+function ExportSectionBody({ cardCount, isExporting, onExport }: ExportSectionProps) {
+  const [options, setOptions] = useState<RealtimeWallExportOptions>(
+    DEFAULT_REALTIME_WALL_EXPORT_OPTIONS,
+  );
+
+  const toggle = (key: keyof RealtimeWallExportOptions) => {
+    setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const disabled = isExporting || cardCount === 0;
+
+  const handleClick = (format: 'pdf' | 'excel') => {
+    if (disabled) return;
+    onExport(format, options);
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-sp-muted">
+        {cardCount === 0
+          ? '내보낼 카드가 없어요. 먼저 카드를 받거나 추가해 주세요.'
+          : `현재 보드의 카드 ${cardCount}장을 파일로 내보냅니다.`}
+      </p>
+
+      {/* 옵션 토글 */}
+      <fieldset className="space-y-1.5 rounded-lg border border-sp-border bg-sp-surface p-3">
+        <legend className="px-1 text-xs font-semibold text-sp-muted">포함 항목</legend>
+        <ExportOptionToggle
+          label="카드 본문 + 링크"
+          checked={options.includeContent}
+          onToggle={() => toggle('includeContent')}
+        />
+        <ExportOptionToggle
+          label="댓글"
+          checked={options.includeComments}
+          onToggle={() => toggle('includeComments')}
+        />
+        <ExportOptionToggle
+          label="작성자(닉네임)"
+          checked={options.includeAuthor}
+          onToggle={() => toggle('includeAuthor')}
+        />
+        <ExportOptionToggle
+          label="제출 시각"
+          checked={options.includeTimestamp}
+          onToggle={() => toggle('includeTimestamp')}
+        />
+      </fieldset>
+
+      {/* 버튼 2개 */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => handleClick('pdf')}
+          disabled={disabled}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5 text-xs font-bold text-sp-text transition hover:border-sp-accent hover:bg-sp-accent/10 hover:text-sp-accent disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="PDF로 내보내기"
+        >
+          <span className="material-symbols-outlined text-base">picture_as_pdf</span>
+          PDF로 내보내기
+        </button>
+        <button
+          type="button"
+          onClick={() => handleClick('excel')}
+          disabled={disabled}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-xs font-bold text-emerald-300 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="엑셀(.xlsx)로 내보내기"
+        >
+          <span className="material-symbols-outlined text-base">table_view</span>
+          엑셀(.xlsx)로 내보내기
+        </button>
+      </div>
+
+      {isExporting && (
+        <p className="flex items-center gap-1.5 text-xs text-sp-muted">
+          <span className="material-symbols-outlined animate-spin text-sm text-sp-accent">progress_activity</span>
+          파일을 만드는 중이에요...
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface ExportOptionToggleProps {
+  readonly label: string;
+  readonly checked: boolean;
+  readonly onToggle: () => void;
+}
+
+function ExportOptionToggle({ label, checked, onToggle }: ExportOptionToggleProps) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 transition hover:bg-sp-bg/50">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onToggle}
+        className="h-4 w-4 accent-sp-accent"
+      />
+      <span className="text-sm text-sp-text">{label}</span>
+    </label>
   );
 }

@@ -322,7 +322,7 @@ export function RealtimeWallColumnEditor({
                     }
                   }}
                   maxLength={20}
-                  placeholder={canAddMore ? '새 컬럼 이름' : '최대 6개까지 가능해요'}
+                  placeholder={canAddMore ? '새 컬럼 이름' : `최대 ${REALTIME_WALL_MAX_COLUMNS}개까지 가능해요`}
                   disabled={!canAddMore}
                   className="min-w-0 flex-1 rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 />

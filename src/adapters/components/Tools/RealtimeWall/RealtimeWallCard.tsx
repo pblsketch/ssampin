@@ -15,10 +15,13 @@ import { RealtimeWallCardOwnerActions } from './RealtimeWallCardOwnerActions';
 import { RealtimeWallCardPlaceholder } from './RealtimeWallCardPlaceholder';
 import { RealtimeWallTeacherContextMenu } from './RealtimeWallTeacherContextMenu';
 import {
-  REALTIME_WALL_CARD_COLOR_CLASSES,
   REALTIME_WALL_CARD_COLOR_DOT,
-  REALTIME_WALL_CARD_TEXT_PRIMARY,
+  getCardColorClass,
+  getCardTextMetaClass,
+  getCardTextPrimaryClass,
 } from './RealtimeWallCardColors';
+import { useRealtimeWallBoardColorScheme } from './RealtimeWallBoardColorSchemeContext';
+import { parseTitleBody } from './realtimeWallTitleBody';
 
 export interface RealtimeWallCardProps {
   readonly post: RealtimeWallPost;
@@ -55,6 +58,19 @@ export interface RealtimeWallCardProps {
    * v1.14 P2 — 교사 댓글 삭제 콜백 (viewerRole='teacher' 전용).
    */
   readonly onRemoveComment?: (postId: string, commentId: string) => void;
+  /**
+   * Step 2 — 교사 좋아요 토글 콜백 (viewerRole='teacher' 전용).
+   * renderer 직접 처리 — `__teacher__` 세션 토큰 기반.
+   */
+  readonly onTeacherLike?: (postId: string) => void;
+  /**
+   * Step 2 — 교사 댓글 추가 콜백 (viewerRole='teacher' 전용).
+   * renderer 직접 처리 — nickname='선생님' 강제.
+   */
+  readonly onTeacherAddComment?: (
+    postId: string,
+    input: Omit<StudentCommentInput, 'sessionToken'>,
+  ) => void;
   /**
    * v2.1 Phase B — 학생 댓글 입력 슬롯.
    * 미전달 시 기존 RealtimeWallCommentInput으로 폴백 (교사 측 무회귀).
@@ -213,6 +229,8 @@ export function RealtimeWallCard({
   onStudentLike,
   onAddComment,
   onRemoveComment,
+  onTeacherLike,
+  onTeacherAddComment,
   commentInputSlot,
   onOwnCardEdit,
   onOwnCardDelete,
@@ -254,6 +272,11 @@ export function RealtimeWallCard({
   const hasLiked = Boolean(
     currentSessionToken && (post.likedBy ?? []).includes(currentSessionToken),
   );
+  // Step 2 — 교사 좋아요 상태: __teacher__ 토큰으로 likedBy 포함 여부 판정
+  const TEACHER_SESSION_TOKEN = '__teacher__';
+  const hasTeacherLiked = Boolean(
+    (post.likedBy ?? []).includes(TEACHER_SESSION_TOKEN),
+  );
 
   // v1.14 P2 댓글 토글 상태 — 기본 접힘
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -266,6 +289,15 @@ export function RealtimeWallCard({
     onStudentLike(post.id);
     setTimeout(() => setLikePending(false), 300);
   }, [onStudentLike, likePending, post.id]);
+
+  // Step 2 — 교사 좋아요 debounce (학생과 동일 패턴, race condition 방지)
+  const [teacherLikePending, setTeacherLikePending] = useState(false);
+  const handleTeacherLikeClick = useCallback(() => {
+    if (!onTeacherLike || teacherLikePending) return;
+    setTeacherLikePending(true);
+    onTeacherLike(post.id);
+    setTimeout(() => setTeacherLikePending(false), 300);
+  }, [onTeacherLike, teacherLikePending, post.id]);
   const visibleComments = viewerRole === 'teacher'
     ? (post.comments ?? [])
     : (post.comments ?? []).filter((c) => c.status === 'approved');
@@ -335,13 +367,26 @@ export function RealtimeWallCard({
     onCardDetail(post.id);
   };
 
+  // 2026-04-26 결함 #2 fix — boardColorScheme context (provider: RealtimeWallBoardThemeWrapper).
+  // html.dark 의존을 제거하고 명시적 분기로 카드 텍스트/배경 클래스를 선택해 교사 main app
+  // (html.dark 강제) + light board 조합에서도 글쓴이/제목/본문이 제대로 보이도록 보장.
+  const boardColorScheme = useRealtimeWallBoardColorScheme();
+  const textPrimaryClass = getCardTextPrimaryClass(boardColorScheme);
+  const textMetaClass = getCardTextMetaClass(boardColorScheme);
+
   // v2.1 (Phase B) — 카드 색상 배경 8색 (Plan §7.2 결정 #6 / Design v2.1 §5.4 / §5.11)
   const cardColor = post.color ?? 'white';
   const colorBgClass = useMemo(
-    () => REALTIME_WALL_CARD_COLOR_CLASSES[cardColor],
-    [cardColor],
+    () => getCardColorClass(cardColor, boardColorScheme),
+    [cardColor, boardColorScheme],
   );
   const colorDotClass = cardColor !== 'white' ? REALTIME_WALL_CARD_COLOR_DOT[cardColor] : null;
+
+  // 2026-04-26 결함 #3 fix — `# 제목\n\n본문` 형식 분리 렌더 (학생/교사 양쪽 동일, 회귀 #11 보존).
+  // StudentSubmitForm이 합성한 raw markdown `#`이 plain text로 노출되는 결함 차단.
+  const parsed = useMemo(() => parseTitleBody(post.text ?? ''), [post.text]);
+  const titleText = parsed?.title ?? null;
+  const bodyText = parsed?.body ?? post.text ?? '';
 
   // v2.1 Phase D — 강조 ring (자기 카드 sky / 교사 추적 매칭 sky-bright)
   const ringClass = isOwn && viewerRole === 'student'
@@ -361,6 +406,9 @@ export function RealtimeWallCard({
     <article
       ref={articleRef}
       data-card-root="true"
+      // 2026-04-26 라운드 7 결함 A 검증 안전망 — DevTools에서 boardColorScheme 조회 가능.
+      // Light board면 light 카드 배경 + slate-900 텍스트, dark면 그 반대 — 직접 확인용.
+      data-color-scheme={boardColorScheme}
       onContextMenu={showTeacherContextMenu ? handleContextMenu : undefined}
       onDoubleClick={onCardDetail ? handleCardDoubleClick : undefined}
       className={`relative group flex h-full flex-col rounded-xl border p-3.5 shadow-md ring-1 ring-black/5 transition-shadow hover:shadow-lg dark:ring-0 ${
@@ -392,7 +440,7 @@ export function RealtimeWallCard({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className={`truncate text-sm font-semibold ${REALTIME_WALL_CARD_TEXT_PRIMARY}`}>{post.nickname}</span>
+            <span className={`truncate text-sm font-semibold ${textPrimaryClass}`}>{post.nickname}</span>
             {isPinned && (
               <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-caption font-bold text-amber-300">
                 <span className="material-symbols-outlined text-detail">push_pin</span>
@@ -400,7 +448,7 @@ export function RealtimeWallCard({
               </span>
             )}
           </div>
-          <p className="mt-0.5 text-detail text-sp-muted">
+          <p className={`mt-0.5 text-detail ${textMetaClass}`}>
             {new Date(post.submittedAt).toLocaleTimeString('ko-KR', {
               hour: '2-digit',
               minute: '2-digit',
@@ -419,15 +467,24 @@ export function RealtimeWallCard({
         )}
       </div>
 
-      {/* 본문 — plain text 렌더 (마크다운 기능 제거, 2026-04-26).
-          whitespace-pre-wrap로 줄바꿈/공백 보존. TEXT_PRIMARY = 4.5:1 대비 보장. */}
-      {post.text && post.text.length > 0 && (
+      {/* 본문 — `# 제목\n\n본문` 형식 분리 렌더 (2026-04-26 결함 #3 fix).
+          - 매칭 시: 제목은 굵고 큰 글씨, 본문은 본문 톤 (Padlet 동일뷰).
+          - 미매칭 시: 전체를 본문으로 plain text 렌더 (기존 호환).
+          - whitespace-pre-wrap로 줄바꿈/공백 보존. textPrimaryClass = 4.5:1 대비 보장.
+          - 학생/교사 양쪽 동일 분기 — 회귀 #11 viewerRole 비대칭 0건.
+          - React 텍스트 노드 렌더로 자동 escape (회귀 #7 dangerouslySetInnerHTML 0건). */}
+      {titleText && titleText.length > 0 && (
         <p
-          className={`break-words whitespace-pre-wrap leading-relaxed ${REALTIME_WALL_CARD_TEXT_PRIMARY} ${
-            compact ? 'line-clamp-5 text-sm' : 'text-sm'
-          }`}
+          className={`break-words mb-1 font-bold leading-snug text-base ${textPrimaryClass}`}
         >
-          {post.text}
+          {titleText}
+        </p>
+      )}
+      {bodyText && bodyText.length > 0 && (
+        <p
+          className={`break-words whitespace-pre-wrap leading-relaxed text-sm ${textPrimaryClass}`}
+        >
+          {bodyText}
         </p>
       )}
 
@@ -476,11 +533,13 @@ export function RealtimeWallCard({
           {/* v2-student-ux 옵션 B: 교사·학생 모두 동일 버튼. 학생만 클릭 가능. */}
           <StudentLikeButton
             count={studentLikes}
-            hasLiked={hasLiked}
+            hasLiked={viewerRole === 'teacher' ? hasTeacherLiked : hasLiked}
             onClick={
               viewerRole === 'student' && onStudentLike && !likePending
                 ? handleStudentLike
-                : undefined
+                : viewerRole === 'teacher' && onTeacherLike && !teacherLikePending
+                  ? handleTeacherLikeClick
+                  : undefined
             }
           />
           {showComments && (
@@ -521,6 +580,17 @@ export function RealtimeWallCard({
               />
             </div>
           )))}
+          {/* Step 2 — 교사 댓글 입력 (닉네임 "선생님" 고정) */}
+          {viewerRole === 'teacher' && onTeacherAddComment && (
+            <div className="mt-2">
+              <RealtimeWallCommentInput
+                postId={post.id}
+                nicknameDefault="선생님"
+                nicknameFixed
+                onSubmit={(input) => onTeacherAddComment(post.id, { ...input, nickname: '선생님' })}
+              />
+            </div>
+          )}
         </div>
       )}
     </article>

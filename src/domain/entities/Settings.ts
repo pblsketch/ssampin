@@ -195,6 +195,13 @@ export interface SyncSettings {
   readonly conflictPolicy: 'latest' | 'ask';
   readonly lastSyncedAt: string | null;
   readonly deviceId: string;
+  /**
+   * 신규 기기 첫 동기화 시 사용자가 "나중에 결정"을 선택했는지.
+   * true → BackupCard에 알림 배너 표시, autoSync는 false 상태로 둠.
+   * 사용자가 download/upload 결정을 명시적으로 내리면 false로 초기화.
+   * optional 필드 → 기존 사용자 마이그레이션 불필요.
+   */
+  readonly firstSyncDeferred?: boolean;
 }
 
 /** 글로벌 퀵애드 단축키 ID */
