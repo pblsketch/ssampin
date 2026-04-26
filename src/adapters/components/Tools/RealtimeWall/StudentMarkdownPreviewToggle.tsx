@@ -2,6 +2,11 @@ import type { KeyboardEvent, RefObject } from 'react';
 import { RealtimeWallCardMarkdown } from './RealtimeWallCardMarkdown';
 
 /**
+ * @deprecated v1.10.6+ (2026-04-26) — 학생 카드/댓글 입력에서 마크다운 기능이 완전 제거됨.
+ *   - 본 컴포넌트는 더 이상 production 코드(src/student/*)에서 사용되지 않음.
+ *   - 다음 마이너 릴리즈에서 본 파일 삭제 예정.
+ *   - 신규 호출처 추가 금지.
+ *
  * v2.2 (UX) — 학생 마크다운 본문/댓글 입력 토글 (옵션 D — 수동 미리보기).
  *
  * mode='edit'  → textarea (raw 마크다운 편집)

@@ -6,8 +6,6 @@ import {
   REALTIME_WALL_MAX_NICKNAME_LENGTH,
   REALTIME_WALL_MAX_TEXT_LENGTH_V2,
 } from '@domain/rules/realtimeWallRules';
-import { StudentFormatBar } from '@adapters/components/Tools/RealtimeWall/StudentFormatBar';
-import { StudentMarkdownPreviewToggle } from '@adapters/components/Tools/RealtimeWall/StudentMarkdownPreviewToggle';
 import { StudentColorPicker } from '@adapters/components/Tools/RealtimeWall/StudentColorPicker';
 import { StudentPipaConsentModal } from '@adapters/components/Tools/RealtimeWall/StudentPipaConsentModal';
 import { useGraphemeCounter } from './useGraphemeCounter';
@@ -23,14 +21,15 @@ import { StudentAttachmentPreviewStrip } from './StudentAttachmentPreviewStrip';
  *
  * v2.1 → v2.2 변경:
  *   - 헤더: 닫기/최소화(좌) + 더보기/게시(우) — 액션 인지 향상
- *   - 제목 / 본문 분리 (`# 제목\n\n본문` 마크다운 합성)
+ *   - 제목 / 본문 분리 (제출 시 `# 제목\n\n본문` 형식으로 합성 — 카드 헤더 표시 호환)
  *   - 통합 첨부 행 (5 버튼 — upload/camera/draw/link/search)
  *   - 첨부 미리보기 스트립 (이미지+PDF+링크 통합)
  *   - 색상/닉네임은 하단 메타바로 이동
  *   - 직접 useStudentImageMultiUpload / useStudentPdfUpload 훅 사용
  *
+ * 본문 입력은 plain text (마크다운 기능 제거 — 사용자 결정 2026-04-26).
+ *
  * v2.1 (Phase B + Phase A) 기능 유지:
- *   - StudentFormatBar (한글 라벨: 굵게/기울임/• 목록/❝ 인용 + 미리보기 토글) — IME 안전 보존
  *   - 이미지 5장 + 합계 15MB
  *   - PDF 1개 (10MB + magic byte)
  *   - StudentColorPicker: 8색
@@ -113,9 +112,6 @@ export function StudentSubmitForm({
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [linkInputOpen, setLinkInputOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-
-  // v2.2 (UX) — 마크다운 편집/미리보기 토글 (옵션 D)
-  const [editMode, setEditMode] = useState<'edit' | 'preview'>('edit');
 
   // Phase A — 드래프트 훅
   const { draft, saveDraft, flushSaveDraft, reloadDraft } = useStudentDraft({
@@ -220,7 +216,6 @@ export function StudentSubmitForm({
     setLocalError(null);
     setAttachmentError(null);
     setMoreMenuOpen(false);
-    setEditMode('edit');
 
     // v2.1 Phase D — mode='edit' 분기: 드래프트 무시, editingPost로 prefill
     if (isEditMode && editingPost) {
@@ -321,7 +316,6 @@ export function StudentSubmitForm({
       setColor(undefined);
       setLocalError(null);
       setAttachmentError(null);
-      setEditMode('edit');
       onClose({ submitted: true });
     }
   }, [isSubmitting, lastError, open, onClose]);
@@ -533,30 +527,17 @@ export function StudentSubmitForm({
               disabled={isSubmitting}
             />
 
-            {/* 마크다운 서식 바 (편집/미리보기 토글 포함) */}
-            <StudentFormatBar
-              textareaRef={textareaRef}
-              onChange={setBody}
-              mode={editMode}
-              onModeToggle={() =>
-                setEditMode((m) => (m === 'edit' ? 'preview' : 'edit'))
-              }
-              disabled={isSubmitting}
-              variant="card"
-            />
-
-            {/* 본문 — edit/preview 토글 */}
-            <StudentMarkdownPreviewToggle
+            {/* 본문 — plain text textarea (마크다운 기능 제거, 2026-04-26) */}
+            <textarea
+              ref={textareaRef}
               value={body}
-              onChange={setBody}
-              textareaRef={textareaRef}
-              mode={editMode}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="환상적인 내용을 적어보세요..."
               rows={8}
               maxLength={MAX_TEXT_LENGTH}
               disabled={isSubmitting}
-              placeholder="환상적인 내용을 적어보세요..."
-              ariaLabel="본문"
-              previewMinHeightClass="min-h-[200px]"
+              className="w-full min-h-[200px] resize-none rounded-lg border border-sp-border/40 bg-sp-bg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted/60 focus:border-sp-accent focus:outline-none focus:ring-1 focus:ring-sp-accent/15"
+              aria-label="본문"
             />
             <div className="flex justify-end text-xs text-sp-muted">
               {graphemeCount}/{MAX_TEXT_LENGTH}

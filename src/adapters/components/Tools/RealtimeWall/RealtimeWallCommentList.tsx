@@ -13,7 +13,6 @@ import type {
   RealtimeWallComment,
 } from '@domain/entities/RealtimeWall';
 import type { RealtimeWallViewerRole } from './types';
-import { RealtimeWallCardMarkdown } from './RealtimeWallCardMarkdown';
 import { RealtimeWallCardImageGallery } from './RealtimeWallCardImageGallery';
 
 export interface RealtimeWallCommentListProps {
@@ -82,9 +81,9 @@ export function RealtimeWallCommentList({
                   </span>
                 )}
               </div>
-              <div className="mt-0.5 break-words text-xs leading-relaxed text-sp-text">
-                <RealtimeWallCardMarkdown text={comment.text} />
-              </div>
+              <p className="mt-0.5 break-words whitespace-pre-wrap text-xs leading-relaxed text-sp-text">
+                {comment.text}
+              </p>
               {/* v2.1 — 댓글 이미지 1장 표시 */}
               {comment.images && comment.images.length > 0 && (
                 <RealtimeWallCardImageGallery images={comment.images} />

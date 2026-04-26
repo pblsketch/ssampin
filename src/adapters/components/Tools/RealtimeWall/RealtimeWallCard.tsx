@@ -9,7 +9,6 @@ import type { RealtimeWallViewerRole } from './types';
 import { StudentLikeButton } from './StudentLikeButton';
 import { RealtimeWallCommentList } from './RealtimeWallCommentList';
 import { RealtimeWallCommentInput } from './RealtimeWallCommentInput';
-import { RealtimeWallCardMarkdown } from './RealtimeWallCardMarkdown';
 import { RealtimeWallCardImageGallery } from './RealtimeWallCardImageGallery';
 import { RealtimeWallCardPdfBadge } from './RealtimeWallCardPdfBadge';
 import { RealtimeWallCardOwnerActions } from './RealtimeWallCardOwnerActions';
@@ -18,6 +17,7 @@ import { RealtimeWallTeacherContextMenu } from './RealtimeWallTeacherContextMenu
 import {
   REALTIME_WALL_CARD_COLOR_CLASSES,
   REALTIME_WALL_CARD_COLOR_DOT,
+  REALTIME_WALL_CARD_TEXT_PRIMARY,
 } from './RealtimeWallCardColors';
 
 export interface RealtimeWallCardProps {
@@ -93,6 +93,19 @@ export interface RealtimeWallCardProps {
    * 회귀 가드: scripts/regression-grep-check.mjs #3a/#3b 모두 영향 없음 (teacher 분기 코드 보존).
    */
   readonly studentDragHandle?: React.ReactNode;
+  /**
+   * 2026-04-26 결함 fix — 카드 더블클릭 시 상세 보기 모달 열기 콜백.
+   *
+   * 회귀 위험 보호:
+   *   - 빈 영역 더블클릭(useStudentDoubleClick)으로 학생 새 카드 모달이 열리던 결함 차단.
+   *     이전: 카드 위 더블클릭 → 이벤트 버블 → main[data-empty-area] → 새 카드 모달 (잘못)
+   *     이제: 카드는 data-card-root="true" + e.stopPropagation() → 상세 모달만 발화
+   *   - 학생/교사 양쪽 동일 동작 (Padlet 동일뷰).
+   *   - hidden-by-author placeholder 카드는 본 컴포넌트 내부에서 일찍 return하므로
+   *     onCardDetail 호출 경로에 도달하지 않음 (placeholder는 별도 처리).
+   *   - 미전달 시 더블클릭 무동작 (기존 호출자 무회귀).
+   */
+  readonly onCardDetail?: (postId: string) => void;
 }
 
 /**
@@ -209,6 +222,7 @@ export function RealtimeWallCard({
   onTeacherBulkHideStudent,
   highlighted = false,
   studentDragHandle,
+  onCardDetail,
 }: RealtimeWallCardProps) {
   // v2.1 Phase D — soft delete placeholder 분기 (회귀 위험 #8 보호 표시 로직)
   // status='hidden-by-author' 카드는 본문 대신 placeholder 표시.
@@ -299,6 +313,28 @@ export function RealtimeWallCard({
     setContextMenuRect(rect);
   };
 
+  /**
+   * 2026-04-26 결함 fix — 카드 더블클릭 → 상세 모달 열기.
+   *
+   * 정책:
+   *   - 인터랙티브 자식(버튼/링크/입력) 위 더블클릭은 무시 (해당 요소가 이미 onClick 처리)
+   *   - drag-handle 위에서도 무시 (드래그 동작 보존)
+   *   - e.stopPropagation()으로 부모 main[data-empty-area]까지 버블 차단 (Scenario A 보호)
+   *     → 학생 빈 영역 더블클릭(useStudentDoubleClick)으로 새 카드 모달이 잘못 뜨는 결함 차단
+   *   - data-card-root="true"가 article에 있어 useStudentDoubleClick의 isEmptyAreaTarget이 false 반환 →
+   *     현재 시점에서 stopPropagation은 이중 안전망 (handler 등록 순서 무관 회귀 방지)
+   *   - onCardDetail 미전달 시 무동작 (기존 호출자 무회귀)
+   */
+  const handleCardDoubleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (!onCardDetail) return;
+    const target = e.target as Element | null;
+    if (target?.closest('button, a, input, textarea, select, [role="button"]')) {
+      return;
+    }
+    e.stopPropagation();
+    onCardDetail(post.id);
+  };
+
   // v2.1 (Phase B) — 카드 색상 배경 8색 (Plan §7.2 결정 #6 / Design v2.1 §5.4 / §5.11)
   const cardColor = post.color ?? 'white';
   const colorBgClass = useMemo(
@@ -316,12 +352,20 @@ export function RealtimeWallCard({
 
   return (
     <>
+    {/*
+      2026-04-26 사용자 피드백 #2 — 카드 가시성 강화:
+      - shadow-sm → shadow-md(기본) / hover:shadow-lg (Padlet 정합 부유감)
+      - light 모드: ring-1 ring-black/5로 미세 outline (흰 카드도 흰 배경 위에서 또렷)
+      - dark 모드: 기존 ring 0 + border 유지
+    */}
     <article
       ref={articleRef}
+      data-card-root="true"
       onContextMenu={showTeacherContextMenu ? handleContextMenu : undefined}
-      className={`relative group flex h-full flex-col rounded-xl border p-3.5 shadow-sm transition-shadow ${
+      onDoubleClick={onCardDetail ? handleCardDoubleClick : undefined}
+      className={`relative group flex h-full flex-col rounded-xl border p-3.5 shadow-md ring-1 ring-black/5 transition-shadow hover:shadow-lg dark:ring-0 ${
         isPinned
-          ? 'border-amber-400/50 shadow-amber-400/10 shadow-md'
+          ? 'border-amber-400/60 shadow-amber-400/10'
           : 'border-sp-border hover:border-sp-border/80'
       } ${colorBgClass} ${ringClass}`}
     >
@@ -348,7 +392,7 @@ export function RealtimeWallCard({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-semibold text-sp-text">{post.nickname}</span>
+            <span className={`truncate text-sm font-semibold ${REALTIME_WALL_CARD_TEXT_PRIMARY}`}>{post.nickname}</span>
             {isPinned && (
               <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-caption font-bold text-amber-300">
                 <span className="material-symbols-outlined text-detail">push_pin</span>
@@ -375,15 +419,16 @@ export function RealtimeWallCard({
         )}
       </div>
 
-      {/* v2.1 — 마크다운 렌더 (allowedElements 7종 화이트리스트, dangerouslySetInnerHTML 0 hit) */}
+      {/* 본문 — plain text 렌더 (마크다운 기능 제거, 2026-04-26).
+          whitespace-pre-wrap로 줄바꿈/공백 보존. TEXT_PRIMARY = 4.5:1 대비 보장. */}
       {post.text && post.text.length > 0 && (
-        <div
-          className={`break-words leading-relaxed ${
+        <p
+          className={`break-words whitespace-pre-wrap leading-relaxed ${REALTIME_WALL_CARD_TEXT_PRIMARY} ${
             compact ? 'line-clamp-5 text-sm' : 'text-sm'
           }`}
         >
-          <RealtimeWallCardMarkdown text={post.text} />
-        </div>
+          {post.text}
+        </p>
       )}
 
       {/* v2.1 — 이미지 다중 표시 (max 3장 carousel) */}
@@ -457,7 +502,7 @@ export function RealtimeWallCard({
 
       {/* v1.14 P2 댓글 영역 (collapsible) */}
       {showComments && commentsOpen && (
-        <div className="mt-2 rounded-lg border border-sp-border/40 bg-sp-bg/40 p-2">
+        <div className="mt-2 rounded-lg border border-sp-border/40 bg-sp-bg/30 p-2">
           <RealtimeWallCommentList
             comments={post.comments ?? []}
             viewerRole={viewerRole}
