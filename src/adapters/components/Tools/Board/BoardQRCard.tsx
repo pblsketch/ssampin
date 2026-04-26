@@ -72,7 +72,7 @@ export function BoardQRCard({
             {copyStatus === 'copied' ? '복사됨!' : copyStatus === 'failed' ? '복사 실패' : 'URL 복사'}
           </button>
 
-          <div className="text-[11px] text-sp-muted">
+          <div className="text-detail text-sp-muted">
             학생이 QR을 스캔하거나 URL을 직접 입력해 접속할 수 있어요.
           </div>
         </div>

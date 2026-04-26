@@ -23,7 +23,7 @@ export function RealtimeWallCardActions({
           className="rounded-md p-1 text-sp-muted/60 transition hover:bg-amber-400/10 hover:text-amber-300"
           title="고정 토글"
         >
-          <span className="material-symbols-outlined text-[16px]">push_pin</span>
+          <span className="material-symbols-outlined text-base">push_pin</span>
         </button>
       )}
       {onHide && (
@@ -33,7 +33,7 @@ export function RealtimeWallCardActions({
           className="rounded-md p-1 text-sp-muted/60 transition hover:bg-red-500/10 hover:text-red-400"
           title="숨기기"
         >
-          <span className="material-symbols-outlined text-[16px]">visibility_off</span>
+          <span className="material-symbols-outlined text-base">visibility_off</span>
         </button>
       )}
     </div>

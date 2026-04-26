@@ -78,14 +78,14 @@ export function RealtimeWallCommentInput({
         aria-label="댓글 내용"
       />
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-sp-muted/70 tabular-nums">
+        <span className="text-caption text-sp-muted/70 tabular-nums">
           {trimmedText.length}/{REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH}
         </span>
         <button
           type="button"
           onClick={handleSubmit}
           disabled={!canSubmit}
-          className="rounded-md bg-sp-accent px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-sp-accent/85 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-sp-accent px-2.5 py-1 text-detail font-semibold text-white transition hover:bg-sp-accent/85 disabled:cursor-not-allowed disabled:opacity-50"
         >
           댓글 달기
         </button>

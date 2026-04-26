@@ -41,7 +41,7 @@ export function ToolsTab() {
         {/* Tool list */}
         <aside className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-sp-border bg-sp-surface/30">
           <div className="px-3 py-3">
-            <p className="text-[10px] font-semibold text-sp-muted/70 uppercase tracking-widest px-2 mb-2">
+            <p className="text-caption font-semibold text-sp-muted/70 uppercase tracking-widest px-2 mb-2">
               도구 설정
             </p>
             <div role="tablist" className="space-y-0.5">
@@ -66,12 +66,12 @@ export function ToolsTab() {
                       <p className={`text-sm font-medium truncate ${active ? 'text-sp-accent' : ''}`}>
                         {t.label}
                       </p>
-                      <p className="text-[10px] text-sp-muted/80 truncate leading-tight">
+                      <p className="text-caption text-sp-muted/80 truncate leading-tight">
                         {t.description}
                       </p>
                     </div>
                     {count > 0 && (
-                      <span className="shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-semibold">
+                      <span className="shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-purple-500/20 text-purple-300 text-caption font-semibold">
                         {count}
                       </span>
                     )}

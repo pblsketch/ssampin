@@ -144,7 +144,7 @@ export function BoardListPanel({ selectedBoardId, onSelect }: BoardListPanelProp
                 ) : (
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-sp-text truncate">{b.name}</div>
-                    <div className="text-[10px] text-sp-muted">
+                    <div className="text-caption text-sp-muted">
                       {b.participantHistory.length > 0
                         ? `참여 ${b.participantHistory.length}명 · ${formatRelativeTime(b.updatedAt)}`
                         : formatRelativeTime(b.updatedAt)}

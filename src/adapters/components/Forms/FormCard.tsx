@@ -153,7 +153,7 @@ export function FormCard({ form }: FormCardProps) {
               {style.icon}
             </span>
             {form.textPreview && (
-              <p className="text-[10px] text-sp-text/70 leading-tight line-clamp-2 px-2">
+              <p className="text-caption text-sp-text/70 leading-tight line-clamp-2 px-2">
                 {form.textPreview}
               </p>
             )}
@@ -161,8 +161,8 @@ export function FormCard({ form }: FormCardProps) {
         )}
 
         {form.isBuiltin && (
-          <div className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sp-bg/80 text-sp-muted text-[10px] border border-sp-border">
-            <span className="material-symbols-outlined text-[12px]">lock</span>
+          <div className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sp-bg/80 text-sp-muted text-caption border border-sp-border">
+            <span className="material-symbols-outlined text-xs">lock</span>
             기본
           </div>
         )}
@@ -174,12 +174,12 @@ export function FormCard({ form }: FormCardProps) {
         </h3>
         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
           {category && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-sp-bg text-sp-muted border border-sp-border">
-              <span className="material-symbols-outlined text-[11px]">{category.icon}</span>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-caption bg-sp-bg text-sp-muted border border-sp-border">
+              <span className="material-symbols-outlined text-detail">{category.icon}</span>
               {category.name}
             </span>
           )}
-          <span className={`px-1.5 py-0.5 rounded text-[10px] ${style.badge}`}>
+          <span className={`px-1.5 py-0.5 rounded text-caption ${style.badge}`}>
             {style.label}
           </span>
         </div>

@@ -70,7 +70,7 @@ export function QuickAddMemoForm({ onClose }: Props): JSX.Element {
       />
 
       <div className="flex items-center gap-2">
-        <span className="text-[12px] text-sp-muted mr-1">색상</span>
+        <span className="text-xs text-sp-muted mr-1">색상</span>
         {MEMO_COLORS.map((c) => (
           <button
             key={c}
@@ -89,7 +89,7 @@ export function QuickAddMemoForm({ onClose }: Props): JSX.Element {
         <button
           type="button"
           onClick={() => { onClose(); requestAnimationFrame(() => { window.dispatchEvent(new CustomEvent<string>('ssampin:navigate', { detail: 'memo' })); }); }}
-          className="text-[12px] text-sp-muted hover:text-sp-accent transition-colors"
+          className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
         >
           → 상세 편집
         </button>

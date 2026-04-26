@@ -97,7 +97,7 @@ export function QuickAddEventForm({ onClose }: Props): JSX.Element {
         <button
           type="button"
           onClick={() => { onClose(); requestAnimationFrame(() => { window.dispatchEvent(new CustomEvent<string>('ssampin:navigate', { detail: 'schedule' })); }); }}
-          className="text-[12px] text-sp-muted hover:text-sp-accent transition-colors"
+          className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
         >
           → 상세 편집
         </button>

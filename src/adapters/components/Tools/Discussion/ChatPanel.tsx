@@ -55,7 +55,7 @@ function getStanceBadge(
     return (
       <span className="inline-flex items-center gap-0.5 ml-1">
         <span className={`w-2 h-2 rounded-full ${info.dot}`} />
-        <span className="text-[10px] text-sp-muted">{info.label}</span>
+        <span className="text-caption text-sp-muted">{info.label}</span>
       </span>
     );
   }
@@ -75,7 +75,7 @@ function getStanceBadge(
     colorClass = 'text-sp-muted';
   }
   return (
-    <span className={`text-[10px] ml-1 ${colorClass}`}>{label}</span>
+    <span className={`text-caption ml-1 ${colorClass}`}>{label}</span>
   );
 }
 
@@ -94,7 +94,7 @@ export function ChatPanel({ chats, students, toolType }: ChatPanelProps) {
           <h3 className="text-xs font-bold text-sp-text tracking-wide">
             채팅
           </h3>
-          <span className="ml-auto text-[10px] bg-sp-accent/15 text-sp-accent px-1.5 py-0.5 rounded-full font-medium">
+          <span className="ml-auto text-caption bg-sp-accent/15 text-sp-accent px-1.5 py-0.5 rounded-full font-medium">
             {chats.length}
           </span>
         </div>
@@ -115,14 +115,14 @@ export function ChatPanel({ chats, students, toolType }: ChatPanelProps) {
             >
               <div className="flex items-center gap-1.5 mb-1">
                 <div
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-white text-caption font-bold shrink-0"
                   style={{ backgroundColor: chat.avatarColor || '#6366f1' }}
                 >
                   {chat.emoji || '?'}
                 </div>
                 <span className="font-bold text-sp-text text-xs">{chat.name}</span>
                 {getStanceBadge(chat.name, students, toolType)}
-                <span className="ml-auto text-[10px] text-sp-muted font-mono">
+                <span className="ml-auto text-caption text-sp-muted font-mono">
                   {formatTime(chat.time)}
                 </span>
               </div>

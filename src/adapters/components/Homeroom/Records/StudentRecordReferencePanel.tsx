@@ -103,7 +103,7 @@ export function StudentRecordReferencePanel({
               <div key={date} className="mb-5">
                 <div className="flex items-center gap-3 mb-2 -ml-6">
                   <div className="w-[22px] h-[22px] rounded-full bg-sp-surface border-2 border-sp-border flex items-center justify-center z-10">
-                    <span className="text-[10px] text-sp-muted">{'\uD83D\uDCC5'}</span>
+                    <span className="text-caption text-sp-muted">{'\uD83D\uDCC5'}</span>
                   </div>
                   <span className="text-xs font-semibold text-sp-muted">
                     {formatDateKR(date)}
@@ -119,7 +119,9 @@ export function StudentRecordReferencePanel({
                       <div className="rounded-lg bg-sp-surface/50">
                         {/* Clickable header */}
                         <button
+                          type="button"
                           onClick={() => toggleExpand(record.id)}
+                          aria-expanded={expandedIds.has(record.id)}
                           className="w-full flex items-center gap-2 p-2.5 text-left"
                         >
                           <span className={getRecordTagClass(record.category, categories)}>
@@ -130,7 +132,7 @@ export function StudentRecordReferencePanel({
                               {getMethodIcon(record.method)}
                             </span>
                           )}
-                          <span className="text-[11px] text-sp-muted ml-auto">
+                          <span className="text-detail text-sp-muted ml-auto">
                             {formatTimeKR(record.createdAt)}
                           </span>
                           <span className={`material-symbols-outlined text-sm text-sp-muted transition-transform ${expandedIds.has(record.id) ? 'rotate-180' : ''}`}>

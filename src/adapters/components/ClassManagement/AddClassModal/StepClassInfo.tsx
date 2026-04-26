@@ -52,7 +52,7 @@ export function StepClassInfo({
       </div>
 
       {settingsClassName && settingsClassName.trim() && (
-        <p className="text-[11px] text-sp-muted mb-4 flex items-center gap-1">
+        <p className="text-detail text-sp-muted mb-4 flex items-center gap-1">
           <span className="material-symbols-outlined text-xs">edit</span>
           설정에서 가져옴
         </p>
@@ -61,7 +61,7 @@ export function StepClassInfo({
       {/* 기존 그룹에 과목 추가 진입점 */}
       {onSwitchToAddGroup && (
         <div className="mt-4 p-3 rounded-lg bg-sp-accent/5 border border-sp-accent/20">
-          <p className="text-[11px] text-sp-muted mb-1.5">
+          <p className="text-detail text-sp-muted mb-1.5">
             이미 만들어둔 학급이 있으신가요?
           </p>
           <button

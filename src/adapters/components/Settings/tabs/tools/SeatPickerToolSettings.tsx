@@ -194,7 +194,7 @@ export function SeatPickerToolSettings() {
             <div className="space-y-3">
               {/* 교탁 bar */}
               <div className="bg-sp-surface border border-sp-border rounded-md py-1 px-4 text-center">
-                <span className="text-sp-muted text-[10px] font-semibold tracking-widest">교탁</span>
+                <span className="text-sp-muted text-caption font-semibold tracking-widest">교탁</span>
               </div>
 
               {/* Grid */}
@@ -234,7 +234,7 @@ export function SeatPickerToolSettings() {
                           {assignedStudent ? (
                             <>
                               <span className="text-[9px] leading-none opacity-70">🤫</span>
-                              <span className="truncate w-full text-[10px] font-semibold leading-tight px-0.5 mt-0.5">
+                              <span className="truncate w-full text-caption font-semibold leading-tight px-0.5 mt-0.5">
                                 {assignedStudent.name}
                               </span>
                             </>
@@ -273,7 +273,7 @@ export function SeatPickerToolSettings() {
               </div>
 
               {/* Hint */}
-              <p className="text-[11px] text-sp-muted/70 text-center pt-1">
+              <p className="text-detail text-sp-muted/70 text-center pt-1">
                 빈 좌석을 눌러 학생을 배정 · 배정된 좌석을 누르면 해제
               </p>
             </div>

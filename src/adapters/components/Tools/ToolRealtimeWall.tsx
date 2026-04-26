@@ -32,11 +32,16 @@ import {
   togglePinRealtimeWallPost,
 } from '@domain/rules/realtimeWallRules';
 import { DEFAULT_REALTIME_WALL_BOARD_SETTINGS } from '@domain/entities/RealtimeWallBoardSettings';
+import {
+  DEFAULT_WALL_BOARD_THEME,
+  type WallBoardTheme,
+} from '@domain/entities/RealtimeWallBoardTheme';
 import { buildWallStateForStudents } from '@usecases/realtimeWall/BroadcastWallState';
 import { RealtimeWallKanbanBoard } from './RealtimeWall/RealtimeWallKanbanBoard';
 import { RealtimeWallFreeformBoard } from './RealtimeWall/RealtimeWallFreeformBoard';
 import { RealtimeWallGridBoard } from './RealtimeWall/RealtimeWallGridBoard';
 import { RealtimeWallStreamBoard } from './RealtimeWall/RealtimeWallStreamBoard';
+import { RealtimeWallBoardThemeWrapper } from './RealtimeWall/RealtimeWallBoardThemeWrapper';
 import { RealtimeWallCreateView } from './RealtimeWall/RealtimeWallCreateView';
 import { RealtimeWallLiveSharePanel } from './RealtimeWall/RealtimeWallLiveSharePanel';
 import { RealtimeWallQueuePanel } from './RealtimeWall/RealtimeWallQueuePanel';
@@ -100,6 +105,15 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
    * 라이브 세션 종료 시 reset.
    */
   const [studentFormLocked, setStudentFormLocked] = useState(false);
+  /**
+   * v1.16.x Phase 2 (Design §3.2 / §5.3) — 보드 디자인 테마.
+   *
+   * - Drawer §5에서 즉시 갱신 + boardSettings-changed broadcast (100ms 디바운스는 Drawer 내부).
+   * - 보드 wrapper(교사·학생)에 inline style/className spread.
+   * - WallBoard.settings.theme로 영속 — handleStartBoard / handleOpenBoard에서 복원.
+   *   handleFinish / 자동저장에서 보드에 다시 부착해 디스크 저장.
+   */
+  const [boardTheme, setBoardTheme] = useState<WallBoardTheme>(DEFAULT_WALL_BOARD_THEME);
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
@@ -145,6 +159,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     columns,
     approvalMode,
     posts,
+    boardTheme,
   });
   latestStateRef.current = {
     currentBoard,
@@ -153,6 +168,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     columns,
     approvalMode,
     posts,
+    boardTheme,
   };
 
   // v1.13 Stage A: 자동 저장. running 모드에서 posts/title/layoutMode/columns/
@@ -168,6 +184,9 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     const buildSnapshot = (): WallBoard | null => {
       const s = latestStateRef.current;
       if (!s.currentBoard) return null;
+      // v1.16.x Phase 2 — settings.theme 영속 (Design §3.2). 다른 settings 필드는 보존.
+      const prevSettings = s.currentBoard.settings ?? DEFAULT_REALTIME_WALL_BOARD_SETTINGS;
+      const nextSettings = { ...prevSettings, theme: s.boardTheme };
       return {
         ...s.currentBoard,
         title: s.title,
@@ -175,6 +194,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         columns: s.columns,
         approvalMode: s.approvalMode,
         posts: s.posts,
+        settings: nextSettings,
         updatedAt: Date.now(),
       };
     };
@@ -207,7 +227,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     // currentBoard를 dep에 넣으면 save → setCurrentBoard → 재-schedule 무한
     // 루프가 되므로 의도적으로 제외 (latestStateRef로 최신값 참조).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posts, normalizedTitle, layoutMode, columns, approvalMode, viewMode]);
+  }, [posts, normalizedTitle, layoutMode, columns, approvalMode, viewMode, boardTheme]);
 
   const connectTunnel = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -370,6 +390,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     }
     // 마지막 세션 종료 시각 기록 + 현재 상태 즉시 저장.
     if (currentBoard) {
+      const prevSettings = currentBoard.settings ?? DEFAULT_REALTIME_WALL_BOARD_SETTINGS;
       const finalBoard: WallBoard = {
         ...currentBoard,
         title: normalizedTitle,
@@ -377,6 +398,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         columns,
         approvalMode,
         posts,
+        // v1.16.x Phase 2 — settings.theme 영속
+        settings: { ...prevSettings, theme: boardTheme },
         updatedAt: Date.now(),
         lastSessionAt: Date.now(),
       };
@@ -384,7 +407,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
       setCurrentBoard(finalBoard);
     }
     setViewMode('results');
-  }, [approvalMode, columns, currentBoard, handleStopLive, isLiveMode, layoutMode, normalizedTitle, posts]);
+  }, [approvalMode, boardTheme, columns, currentBoard, handleStopLive, isLiveMode, layoutMode, normalizedTitle, posts]);
 
   const handleNewBoard = useCallback(() => {
     // 결과 화면 → 목록으로. "새 담벼락 만들기"는 목록 내 버튼이 담당.
@@ -398,6 +421,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setCurrentBoard(null);
     setShortCode(null);
     setShowPastResults(false);
+    // v1.16.x — theme도 default로 reset
+    setBoardTheme(DEFAULT_WALL_BOARD_THEME);
   }, []);
 
   // 목록 → "+ 새 담벼락" → create 진입 (신규 보드)
@@ -411,6 +436,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setPosts([]);
     setShortCode(null);
     setViewMode('create');
+    // v1.16.x — theme default
+    setBoardTheme(DEFAULT_WALL_BOARD_THEME);
   }, []);
 
   // 목록 → 보드 선택 → 복원 후 running 진입
@@ -427,6 +454,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setApprovalMode(board.approvalMode);
     setPosts([...board.posts]);
     setShortCode(board.shortCode ?? null);
+    // v1.16.x Phase 2 — 보드 settings.theme 복원 (미설정 시 default)
+    setBoardTheme(board.settings?.theme ?? DEFAULT_WALL_BOARD_THEME);
     setViewMode('running');
   }, []);
 
@@ -484,16 +513,43 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         setPosts((prev) => bulkApproveWallPosts(prev, columns));
       }
       // v2.1 Phase A-A5: moderation 변경 broadcast (Plan FR-A7)
+      // v1.16.x: settings.theme도 함께 broadcast — 학생 화면이 항상 일관된 settings 보유
       if (window.electronAPI?.broadcastRealtimeWall) {
         const moderation = moderationModeFromApprovalMode(nextMode);
-        const settings = { ...DEFAULT_REALTIME_WALL_BOARD_SETTINGS, moderation };
+        const settings = {
+          ...DEFAULT_REALTIME_WALL_BOARD_SETTINGS,
+          moderation,
+          theme: boardTheme,
+        };
         void window.electronAPI.broadcastRealtimeWall({
           type: 'boardSettings-changed',
           settings,
         });
       }
     },
-    [columns],
+    [boardTheme, columns],
+  );
+
+  // v1.16.x Phase 2 (Design §결정 5) — 보드 디자인 테마 변경.
+  // Drawer §5에서 100ms 디바운스 후 호출 → 로컬 state 즉시 갱신 + boardSettings-changed broadcast.
+  // 자동 저장 effect가 settings.theme를 디스크에 영속.
+  const handleThemeChange = useCallback(
+    (nextTheme: WallBoardTheme) => {
+      setBoardTheme(nextTheme);
+      if (isLiveMode && window.electronAPI?.broadcastRealtimeWall) {
+        const moderation = moderationModeFromApprovalMode(approvalMode);
+        const settings = {
+          ...DEFAULT_REALTIME_WALL_BOARD_SETTINGS,
+          moderation,
+          theme: nextTheme,
+        };
+        void window.electronAPI.broadcastRealtimeWall({
+          type: 'boardSettings-changed',
+          settings,
+        });
+      }
+    },
+    [approvalMode, isLiveMode],
   );
 
   // v1.13 Stage B: 컬럼 편집 드로어에서 columns/posts 일괄 반영.
@@ -585,15 +641,23 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     if (!isLiveMode) return;
     if (!window.electronAPI?.broadcastRealtimeWall) return;
 
+    // v1.16.x Phase 2 — settings.theme를 wall-state snapshot에 포함 (Design §4.1).
+    // sanitizeBoardSettingsForStudents가 default fallback 보장.
+    const moderation = moderationModeFromApprovalMode(approvalMode);
     const snapshot = buildWallStateForStudents({
       title: normalizedTitle,
       layoutMode,
       columns,
       posts,
       studentFormLocked,
+      settings: {
+        ...DEFAULT_REALTIME_WALL_BOARD_SETTINGS,
+        moderation,
+        theme: boardTheme,
+      },
     });
     void window.electronAPI.broadcastRealtimeWall({ type: 'wall-state', board: snapshot });
-  }, [isLiveMode, normalizedTitle, layoutMode, columns, posts, studentFormLocked]);
+  }, [isLiveMode, normalizedTitle, layoutMode, columns, posts, studentFormLocked, approvalMode, boardTheme]);
 
   // v1.14 P3 — 학생 카드 추가 잠금 토글 핸들러.
   // Main에 IPC로 전달 → 세션 플래그 갱신 + student-form-locked broadcast.
@@ -948,7 +1012,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             <section className="rounded-xl border border-sp-border bg-sp-card px-5 py-4">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[18px] text-sp-accent">wifi</span>
+                  <span className="material-symbols-outlined text-lg text-sp-accent">wifi</span>
                   <div>
                     <h2 className="text-sm font-bold text-sp-text">학생 참여 준비 완료</h2>
                     <p className="mt-0.5 text-xs text-sp-muted">
@@ -971,7 +1035,7 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                     }}
                     className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-4 py-2 text-sm font-bold text-white transition hover:bg-sp-accent/85"
                   >
-                    <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                    <span className="material-symbols-outlined text-base">play_arrow</span>
                     학생 참여 시작
                   </button>
                 </div>
@@ -1018,10 +1082,19 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                     onClick={() => setBoardSettingsDrawer('columns')}
                     className="flex shrink-0 items-center gap-1.5 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-semibold text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
                   >
-                    <span className="material-symbols-outlined text-[14px]">view_column</span>
+                    <span className="material-symbols-outlined text-sm">view_column</span>
                     컬럼 편집
                   </button>
                 )}
+                {/* v1.16.x Phase 2 — 디자인 패널 진입점 */}
+                <button
+                  type="button"
+                  onClick={() => setBoardSettingsDrawer('design')}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-sp-border px-3 py-1.5 text-xs font-semibold text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
+                >
+                  <span className="material-symbols-outlined text-sm">palette</span>
+                  디자인
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1029,11 +1102,20 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
                   }}
                   className="flex shrink-0 items-center gap-1.5 rounded-lg border border-sp-accent/40 bg-sp-accent/10 px-3 py-1.5 text-xs font-semibold text-sp-accent transition hover:bg-sp-accent/20"
                 >
-                  <span className="material-symbols-outlined text-[14px]">flag</span>
+                  <span className="material-symbols-outlined text-sm">flag</span>
                   수업 마무리
                 </button>
               </div>
-              <div className="min-h-0 flex-1">{boardView}</div>
+              <div className="min-h-0 flex-1">
+                {/* v1.16.x Phase 2 (Design §5.3) — 보드 wrapper에 theme 적용.
+                    학생 측(StudentBoardView)도 같은 wrapper를 사용해 픽셀 일치 보장. */}
+                <RealtimeWallBoardThemeWrapper
+                  theme={boardTheme}
+                  className="h-full min-h-0 rounded-xl"
+                >
+                  {boardView}
+                </RealtimeWallBoardThemeWrapper>
+              </div>
             </section>
           </div>
         </div>
@@ -1063,6 +1145,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         onApplyColumnEdit={handleApplyColumnEdit}
         onApplyApprovalMode={handleApplyApprovalMode}
         onStudentFormLockedChange={handleStudentFormLockedChange}
+        theme={boardTheme}
+        onThemeChange={handleThemeChange}
       />
 
       {/* v2.1 Phase D — 교사 작성자 추적 패널 */}

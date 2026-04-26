@@ -31,7 +31,7 @@ export function RealtimeWallTeacherStudentTrackerPanel({
       className="fixed right-4 top-20 z-[55] flex w-72 flex-col gap-2 rounded-xl border border-sky-400/40 bg-sp-card p-3 shadow-xl"
     >
       <header className="flex items-start gap-2">
-        <span className="material-symbols-outlined text-[18px] text-sky-400">
+        <span className="material-symbols-outlined text-lg text-sky-400">
           person_search
         </span>
         <div className="min-w-0 flex-1">
@@ -49,11 +49,11 @@ export function RealtimeWallTeacherStudentTrackerPanel({
           aria-label="닫기"
           className="rounded-md p-0.5 text-sp-muted transition hover:bg-sp-surface hover:text-sp-text"
         >
-          <span className="material-symbols-outlined text-[16px]">close</span>
+          <span className="material-symbols-outlined text-base">close</span>
         </button>
       </header>
 
-      <p className="text-[11px] text-sp-muted">
+      <p className="text-detail text-sp-muted">
         보드에서 같은 작성자의 카드가 sky 테두리로 강조됩니다.
       </p>
 
@@ -63,7 +63,7 @@ export function RealtimeWallTeacherStudentTrackerPanel({
           onClick={onBulkHide}
           className="mt-1 flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
         >
-          <span className="material-symbols-outlined text-[14px]">visibility_off</span>
+          <span className="material-symbols-outlined text-sm">visibility_off</span>
           이 학생 카드 모두 숨김 ({matchCount}장)
         </button>
       )}

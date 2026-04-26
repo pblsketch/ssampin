@@ -74,7 +74,7 @@ export function TasksCard({ onJumpToBackup }: TasksCardProps) {
           <span className="material-symbols-outlined text-icon-sm mt-0.5">schedule</span>
           <div className="flex-1">
             <p>⏱ 백업 카드의 자동 실행 설정을 함께 사용합니다</p>
-            <p className="text-[11px] text-sp-muted/80 mt-0.5">
+            <p className="text-detail text-sp-muted/80 mt-0.5">
               (시작 시·창 포커스·주기 동기화에 함께 동작)
             </p>
           </div>

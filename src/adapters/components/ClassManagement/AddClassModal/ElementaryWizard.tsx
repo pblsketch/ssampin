@@ -78,7 +78,7 @@ export function ElementaryWizard({
                 }`}
               />
             ))}
-            <span className="ml-2 text-[11px] text-sp-muted">
+            <span className="ml-2 text-detail text-sp-muted">
               {step} / 3
             </span>
           </div>

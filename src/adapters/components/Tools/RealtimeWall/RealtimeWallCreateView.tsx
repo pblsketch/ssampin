@@ -79,7 +79,7 @@ export function RealtimeWallCreateView({
             onClick={onShowPastResults}
             className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
           >
-            <span className="material-symbols-outlined text-[14px]">history</span>
+            <span className="material-symbols-outlined text-sm">history</span>
             지난 결과
           </button>
         </div>
@@ -100,11 +100,11 @@ export function RealtimeWallCreateView({
               >
                 {selected && (
                   <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent">
-                    <span className="material-symbols-outlined text-[11px] text-white">check</span>
+                    <span className="material-symbols-outlined text-detail text-white">check</span>
                   </span>
                 )}
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[20px] text-sp-accent">{option.icon}</span>
+                  <span className="material-symbols-outlined text-xl text-sp-accent">{option.icon}</span>
                   <p className="font-bold text-sp-text">{option.label}</p>
                 </div>
                 <p className="text-sm leading-relaxed text-sp-muted">
@@ -147,7 +147,7 @@ export function RealtimeWallCreateView({
               disabled={columnInputs.length >= 6}
               className="flex items-center gap-1 rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <span className="material-symbols-outlined text-[14px]">add</span>
+              <span className="material-symbols-outlined text-sm">add</span>
               컬럼 추가
             </button>
           </div>
@@ -172,7 +172,7 @@ export function RealtimeWallCreateView({
                   className="rounded-lg p-2 text-sp-muted/60 transition hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
                   title="삭제"
                 >
-                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  <span className="material-symbols-outlined text-base">delete</span>
                 </button>
               </div>
             ))}
@@ -202,13 +202,13 @@ export function RealtimeWallCreateView({
           >
             {approvalMode === 'manual' && (
               <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent">
-                <span className="material-symbols-outlined text-[11px] text-white">check</span>
+                <span className="material-symbols-outlined text-detail text-white">check</span>
               </span>
             )}
             <div className="mb-1.5 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-sp-accent">fact_check</span>
+              <span className="material-symbols-outlined text-xl text-sp-accent">fact_check</span>
               <p className="font-bold text-sp-text">승인 필요</p>
-              <span className="rounded-full bg-sp-accent/20 px-2 py-0.5 text-[10px] font-bold text-sp-accent">
+              <span className="rounded-full bg-sp-accent/20 px-2 py-0.5 text-caption font-bold text-sp-accent">
                 기본
               </span>
             </div>
@@ -229,11 +229,11 @@ export function RealtimeWallCreateView({
           >
             {approvalMode === 'auto' && (
               <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sp-accent">
-                <span className="material-symbols-outlined text-[11px] text-white">check</span>
+                <span className="material-symbols-outlined text-detail text-white">check</span>
               </span>
             )}
             <div className="mb-1.5 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-sp-accent">bolt</span>
+              <span className="material-symbols-outlined text-xl text-sp-accent">bolt</span>
               <p className="font-bold text-sp-text">자동 승인</p>
             </div>
             <p className="text-sm leading-relaxed text-sp-muted">
@@ -250,7 +250,7 @@ export function RealtimeWallCreateView({
             aria-disabled="true"
             className="flex w-full cursor-not-allowed items-center gap-2 rounded-lg border border-sp-border/60 bg-sp-surface/40 p-3 text-left opacity-60"
           >
-            <span className="material-symbols-outlined text-[18px] text-sp-muted/60">filter_alt</span>
+            <span className="material-symbols-outlined text-lg text-sp-muted/60">filter_alt</span>
             <div>
               <p className="text-sm font-semibold text-sp-muted">키워드 필터</p>
               <p className="text-xs text-sp-muted/60">준비 중 — 다음 업데이트에서 제공될 예정입니다.</p>

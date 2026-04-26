@@ -98,7 +98,7 @@ export function RealtimeWallLiveSharePanel({
             disabled={!displayUrl}
             className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <span className="material-symbols-outlined text-[14px]">qr_code</span>
+            <span className="material-symbols-outlined text-sm">qr_code</span>
             QR 크게 보기
           </button>
           <button
@@ -108,14 +108,14 @@ export function RealtimeWallLiveSharePanel({
             aria-label="담벼락 설정 열기"
             className="flex items-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-2.5 py-1.5 text-xs text-sp-muted transition hover:border-sp-accent hover:text-sp-accent"
           >
-            <span className="material-symbols-outlined text-[14px]">settings</span>
+            <span className="material-symbols-outlined text-sm">settings</span>
           </button>
           <button
             type="button"
             onClick={onStop}
             className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/15"
           >
-            <span className="material-symbols-outlined text-[14px]">stop_circle</span>
+            <span className="material-symbols-outlined text-sm">stop_circle</span>
             참여 종료
           </button>
         </div>
@@ -137,7 +137,7 @@ export function RealtimeWallLiveSharePanel({
         <div className="space-y-2.5">
           {tunnelLoading && (
             <div className="flex items-center gap-2 rounded-lg border border-sp-border bg-sp-surface px-3 py-2.5 text-xs text-sp-muted">
-              <span className="material-symbols-outlined animate-spin text-[14px] text-blue-400">progress_activity</span>
+              <span className="material-symbols-outlined animate-spin text-sm text-blue-400">progress_activity</span>
               외부 접속 주소를 만드는 중입니다. 잠시만 기다려주세요.
             </div>
           )}

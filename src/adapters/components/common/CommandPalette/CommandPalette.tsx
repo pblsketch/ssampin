@@ -39,7 +39,7 @@ function CommandList({ groups, activeIndex, allFiltered, onSelect, onHover }: Co
     <>
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="px-4 pt-3 pb-1 text-[11px] font-sp-semibold uppercase tracking-wider text-sp-muted select-none">
+          <div className="px-4 pt-3 pb-1 text-detail font-sp-semibold uppercase tracking-wider text-sp-muted select-none">
             {group.label}
           </div>
           {group.commands.map((cmd) => {
@@ -173,7 +173,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
         </div>
 
         {/* 하단 힌트 바 */}
-        <div className="border-t border-sp-border px-4 py-2 flex items-center justify-between text-[11px] text-sp-muted font-sp-medium">
+        <div className="border-t border-sp-border px-4 py-2 flex items-center justify-between text-detail text-sp-muted font-sp-medium">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <Kbd>↑</Kbd>

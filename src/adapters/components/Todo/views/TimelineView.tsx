@@ -244,7 +244,7 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
                       isToday ? 'bg-sp-accent/10' : isWeekend ? 'bg-sp-surface/50' : ''
                     }`}
                   >
-                    <div className={`text-[10px] ${isToday ? 'text-sp-accent font-bold' : 'text-sp-muted'}`}>
+                    <div className={`text-caption ${isToday ? 'text-sp-accent font-bold' : 'text-sp-muted'}`}>
                       {DAY_NAMES[date.getDay()]}
                     </div>
                     <div className={`text-xs ${isToday ? 'text-sp-accent font-bold' : isMonday ? 'text-sp-text' : 'text-sp-muted'}`}>

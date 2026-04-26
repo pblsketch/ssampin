@@ -104,7 +104,7 @@ export function MultiSurveyLiveBoardView({
         <div className="shrink-0 bg-sp-card/60 border-b border-amber-400/30 px-5 py-2.5 flex items-start gap-2.5">
           <span className="material-symbols-outlined text-amber-400 text-icon-sm mt-0.5">science</span>
           <div className="text-[13px] text-sp-text leading-relaxed">
-            <span className="inline-block text-[10px] font-extrabold tracking-wider px-2 py-[3px] mr-2 rounded bg-amber-400 text-amber-950 align-middle">
+            <span className="inline-block text-caption font-extrabold tracking-wider px-2 py-[3px] mr-2 rounded bg-amber-400 text-amber-950 align-middle">
               BETA
             </span>
             "발제 피드백 응답 모아보기"는 아직 개선 중이에요. Phase 3(고급 필터·정렬 등)는 다음 업데이트에 포함 예정이며, 불편한 점은{' '}

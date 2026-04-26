@@ -328,7 +328,7 @@ export function UnifiedExportModal({ classId, defaultTab = 'attendance', onClose
           </div>
 
           {/* 포함 내용 안내 */}
-          <div className="text-[11px] text-sp-muted space-y-0.5">
+          <div className="text-detail text-sp-muted space-y-0.5">
             <p>엑셀 파일에 포함되는 내용:</p>
             {exportType === 'attendance' ? (
               <>

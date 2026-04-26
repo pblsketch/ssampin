@@ -98,7 +98,7 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
 
   return (
     <div className={`ml-2 pl-3 border-l-2 ${classes.border} space-y-1.5`}>
-      <p className="text-[11px] text-sp-muted">적용 교시</p>
+      <p className="text-detail text-sp-muted">적용 교시</p>
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
@@ -150,7 +150,7 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
         </button>
       </div>
       {selectedLabels.length > 0 && !allRegularSelected && (
-        <p className={`text-[11px] ${classes.hint}`}>
+        <p className={`text-detail ${classes.hint}`}>
           {selectedLabels.join('·')} 선택됨
         </p>
       )}

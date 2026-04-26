@@ -546,7 +546,7 @@ export function Todo() {
                             <span className="material-symbols-outlined text-xs text-sp-muted/50 shrink-0" title="Google Tasks 연동됨">cloud_done</span>
                           )}
                           {todo.dueDate && (
-                            <span className="shrink-0 text-sp-muted text-[10px]">
+                            <span className="shrink-0 text-sp-muted text-caption">
                               {todo.dueDate.slice(5).replace('-', '/')}
                             </span>
                           )}
@@ -1238,7 +1238,7 @@ function ArchiveView({ todos, categories, onRestore, onDelete, onDeleteAll, onBa
                         {/* Subtask count */}
                         {subTaskCount > 0 && (
                           <span className="text-xs text-sp-muted/50 flex items-center gap-0.5 flex-shrink-0">
-                            <span className="material-symbols-outlined text-[14px]">subdirectory_arrow_right</span>
+                            <span className="material-symbols-outlined text-sm">subdirectory_arrow_right</span>
                             하위 {subTaskCount}건
                           </span>
                         )}

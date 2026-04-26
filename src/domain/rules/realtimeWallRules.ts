@@ -18,6 +18,10 @@ import {
   type RealtimeWallBoardSettings,
   type RealtimeWallModerationMode,
 } from '@domain/entities/RealtimeWallBoardSettings';
+import {
+  normalizeWallBoardTheme,
+  type WallBoardTheme,
+} from '@domain/entities/RealtimeWallBoardTheme';
 
 export const DEFAULT_REALTIME_WALL_COLUMNS = [
   '생각',
@@ -1359,18 +1363,31 @@ export function normalizePostForPadletModeV2(
  * - posts: normalizePostForPadletModeV2 적용
  * - settings: DEFAULT_REALTIME_WALL_BOARD_SETTINGS (`{ version: 1, moderation: 'off' }`) 주입
  *
+ * v1.16.x (Phase 1, Design §3.3):
+ * - settings.theme: 미존재 시 undefined 유지 (DEFAULT 주입은 BroadcastWallState/UI 시점에서 일원화).
+ *   존재 시 `normalizeWallBoardTheme`로 화이트리스트 검증 통과한 값으로 sanitize.
+ *   잘못된 페이로드(잘못된 presetId / accent 형식 등)는 default fallback (회귀 #10 mitigation).
+ *
  * idempotent — 두 번 호출해도 동일 결과.
  */
 export function normalizeBoardForPadletModeV2<
   T extends { readonly posts: readonly RealtimeWallPost[]; readonly settings?: RealtimeWallBoardSettings },
 >(board: T): T {
-  const settings: RealtimeWallBoardSettings = board.settings ?? DEFAULT_REALTIME_WALL_BOARD_SETTINGS;
+  const baseSettings: RealtimeWallBoardSettings =
+    board.settings ?? DEFAULT_REALTIME_WALL_BOARD_SETTINGS;
+  const settings: RealtimeWallBoardSettings =
+    baseSettings.theme === undefined
+      ? baseSettings
+      : { ...baseSettings, theme: normalizeWallBoardTheme(baseSettings.theme) };
   return {
     ...board,
     posts: board.posts.map(normalizePostForPadletModeV2),
     settings,
   };
 }
+
+// Re-export for downstream test convenience (avoid forcing test files to import from entities).
+export type { WallBoardTheme };
 
 /**
  * v2.1 — `WallApprovalMode` ↔ `RealtimeWallModerationMode` 통합 매핑 (Design §2.5).

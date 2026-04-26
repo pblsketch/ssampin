@@ -179,7 +179,7 @@ export function DatePopover({
           {/* 요일 헤더 */}
           <div className="grid grid-cols-7 gap-0.5 mb-1">
             {dayNames.map(d => (
-              <div key={d} className="text-center text-[10px] font-medium text-gray-400 py-1">
+              <div key={d} className="text-center text-caption font-medium text-gray-400 py-1">
                 {d}
               </div>
             ))}
@@ -260,7 +260,7 @@ export function DatePopover({
 
             {/* 선택된 날짜 표시 */}
             {date && !noDueDate && (
-              <div className="text-[10px] text-gray-400 text-center pt-1">
+              <div className="text-caption text-gray-400 text-center pt-1">
                 {date}{hasEndDate && endDate ? ` → ${endDate}` : hasEndDate ? ' → (종료일 클릭)' : ''}
               </div>
             )}

@@ -112,7 +112,7 @@ export function StudentImageMultiPicker({
               className="hidden"
             />
           </label>
-          <p className="text-[10px] text-sp-muted mt-2">
+          <p className="text-caption text-sp-muted mt-2">
             최대 {maxImages}장 / 합계 {totalMB}MB · PNG/JPG/GIF/WebP
           </p>
         </div>

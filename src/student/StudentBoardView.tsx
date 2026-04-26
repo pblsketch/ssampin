@@ -25,6 +25,7 @@ import { useStudentDoubleClick } from './useStudentDoubleClick';
 import { useStudentPin } from './useStudentPin';
 import { useIsMobile } from './useIsMobile';
 import { useStudentFreeformLockState } from './useStudentFreeformLockState';
+import { RealtimeWallBoardThemeWrapper } from '@adapters/components/Tools/RealtimeWall/RealtimeWallBoardThemeWrapper';
 
 const STUDENT_NICKNAME_STORAGE_KEY = 'ssampin-realtime-wall-nickname';
 
@@ -59,7 +60,10 @@ interface StudentBoardViewProps {
 }
 
 export function StudentBoardView({ board }: StudentBoardViewProps) {
-  const { title, layoutMode, columns, posts, studentFormLocked } = board;
+  const { title, layoutMode, columns, posts, studentFormLocked, settings } = board;
+  // v1.16.x Phase 2 (Design §5.3) — 보드 wrapper에 적용할 theme.
+  // settings.theme이 broadcast로 도착하지 않았다면 default 적용 (sanitizeBoardSettingsForStudents가 보장).
+  const boardTheme = settings?.theme;
   const [submitOpen, setSubmitOpen] = useState(false);
   const [resumeRequested, setResumeRequested] = useState(false);
   // v2.1 student-ux — Padlet 컬럼별 + 버튼: 클릭 시 columnId를 기억해 모달 제출에 전달
@@ -242,21 +246,27 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
           </div>
         )}
 
-        <BoardRouter
-          layoutMode={layoutMode}
-          columns={columns}
-          posts={posts}
-          renderCommentInput={renderCommentInput}
-          currentSessionToken={currentSessionToken}
-          currentPinHash={currentPinHash}
-          onStudentLike={toggleLike}
-          onOwnCardEdit={handleOwnCardEdit}
-          onOwnCardDelete={handleOwnCardDelete}
-          onOwnCardMove={handleOwnCardMove}
-          isMobile={isMobile}
-          freeformLockEnabled={freeformLock.enabled}
-          onAddCardToColumn={handleAddCardToColumn}
-        />
+        <RealtimeWallBoardThemeWrapper
+          theme={boardTheme}
+          className="rounded-xl"
+        >
+          <BoardRouter
+            layoutMode={layoutMode}
+            columns={columns}
+            posts={posts}
+            renderCommentInput={renderCommentInput}
+            currentSessionToken={currentSessionToken}
+            currentPinHash={currentPinHash}
+            onStudentLike={toggleLike}
+            onOwnCardEdit={handleOwnCardEdit}
+            onOwnCardDelete={handleOwnCardDelete}
+            onOwnCardMove={handleOwnCardMove}
+            isMobile={isMobile}
+            freeformLockEnabled={freeformLock.enabled}
+            onAddCardToColumn={handleAddCardToColumn}
+            studentFormLocked={studentFormLocked}
+          />
+        </RealtimeWallBoardThemeWrapper>
       </main>
 
       {/* P3 — 학생 카드 추가 FAB */}
@@ -463,6 +473,11 @@ interface BoardRouterProps {
   readonly freeformLockEnabled: boolean;
   // v2.1 student-ux — Padlet 컬럼별 + 버튼
   readonly onAddCardToColumn: (columnId: string) => void;
+  /**
+   * v1.16.x Phase 3 — 학생 카드 추가 잠금 상태.
+   * 칸반 컬럼별 풀-와이드 "+ 카드 추가" 버튼이 disabled + lock 아이콘으로 전환.
+   */
+  readonly studentFormLocked: boolean;
 }
 
 function BoardRouter({
@@ -479,6 +494,7 @@ function BoardRouter({
   isMobile,
   freeformLockEnabled,
   onAddCardToColumn,
+  studentFormLocked,
 }: BoardRouterProps) {
   const handleOpenLink = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -508,6 +524,7 @@ function BoardRouter({
           columns={columns}
           posts={posts}
           onAddCardToColumn={onAddCardToColumn}
+          studentFormLocked={studentFormLocked}
         />
       );
     case 'freeform':

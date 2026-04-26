@@ -91,7 +91,7 @@ export function RealtimeWallTeacherContextMenu({
           }}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-sp-text transition hover:bg-sp-surface"
         >
-          <span className="material-symbols-outlined text-[16px] text-sky-400">
+          <span className="material-symbols-outlined text-base text-sky-400">
             person_search
           </span>
           이 작성자의 다른 카드 보기
@@ -107,7 +107,7 @@ export function RealtimeWallTeacherContextMenu({
           }}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-sp-text transition hover:bg-sp-surface"
         >
-          <span className="material-symbols-outlined text-[16px] text-amber-400">
+          <span className="material-symbols-outlined text-base text-amber-400">
             badge
           </span>
           닉네임 변경
@@ -123,7 +123,7 @@ export function RealtimeWallTeacherContextMenu({
           }}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-400 transition hover:bg-rose-500/10"
         >
-          <span className="material-symbols-outlined text-[16px]">visibility_off</span>
+          <span className="material-symbols-outlined text-base">visibility_off</span>
           이 학생 카드 모두 숨김
         </button>
       )}

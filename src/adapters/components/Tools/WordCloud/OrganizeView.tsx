@@ -343,7 +343,7 @@ export function OrganizeView({
                           onClick={() => removeFromGroup(g.id, w)}
                           className="ml-0.5 text-sp-muted hover:text-red-400 transition-colors"
                         >
-                          <span className="material-symbols-outlined text-[14px]">close</span>
+                          <span className="material-symbols-outlined text-sm">close</span>
                         </button>
                       </span>
                     ))}

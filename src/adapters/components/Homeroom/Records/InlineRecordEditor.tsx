@@ -224,7 +224,7 @@ export function InlineRecordEditor({
           />
           <span className="flex items-center gap-1">
             나이스 반영 완료
-            <span className="text-[10px] text-sp-muted/60">(나중에 변경 가능)</span>
+            <span className="text-caption text-sp-muted/60">(나중에 변경 가능)</span>
           </span>
         </label>
       )}
@@ -238,7 +238,7 @@ export function InlineRecordEditor({
           />
           <span className="flex items-center gap-1">
             출결 서류 제출 확인
-            <span className="text-[10px] text-sp-muted/60">(나중에 변경 가능)</span>
+            <span className="text-caption text-sp-muted/60">(나중에 변경 가능)</span>
           </span>
         </label>
       )}

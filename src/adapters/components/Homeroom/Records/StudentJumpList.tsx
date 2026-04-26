@@ -77,7 +77,7 @@ export function StudentJumpList({ students, records, selectedStudentId, onSelect
                     : 'text-sp-muted/50 hover:bg-sp-surface hover:text-sp-muted'
               }`}
             >
-              <span className="w-5 text-right tabular-nums text-[11px] shrink-0">{idx + 1}</span>
+              <span className="w-5 text-right tabular-nums text-detail shrink-0">{idx + 1}</span>
               <span className="truncate flex-1 text-left">{student.name}</span>
               <div className="flex items-center gap-1 shrink-0">
                 {hasWarning && (
@@ -89,7 +89,7 @@ export function StudentJumpList({ students, records, selectedStudentId, onSelect
                   } />
                 )}
                 {count > 0 && (
-                  <span className={`text-[10px] tabular-nums ${isSelected ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                  <span className={`text-caption tabular-nums ${isSelected ? 'text-sp-accent' : 'text-sp-muted'}`}>
                     {count}
                   </span>
                 )}

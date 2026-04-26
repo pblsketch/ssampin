@@ -81,7 +81,7 @@ export function RealtimeWallApprovalSettingsDrawer({
       <div className="p-5">
         {/* 헤더 */}
         <div className="mb-4 flex items-center gap-2.5">
-          <span className="material-symbols-outlined text-[20px] text-sp-accent">tune</span>
+          <span className="material-symbols-outlined text-xl text-sp-accent">tune</span>
           <h3 className="text-base font-bold text-sp-text">담벼락 설정</h3>
           <IconButton icon="close" label="닫기" variant="ghost" size="sm" onClick={handleCancel} className="ml-auto" />
         </div>
@@ -159,7 +159,7 @@ export function RealtimeWallApprovalSettingsDrawer({
           // confirm-bulk 단계
           <div>
             <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-sp-accent/30 bg-sp-accent/10 p-3">
-              <span className="material-symbols-outlined mt-0.5 text-[18px] text-sp-accent">info</span>
+              <span className="material-symbols-outlined mt-0.5 text-lg text-sp-accent">info</span>
               <div className="min-w-0">
                 <p className="text-sm font-bold text-sp-text">
                   대기 중 카드 {confirmStage.pendingCount}장을 자동 승인하시겠어요?

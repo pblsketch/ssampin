@@ -176,7 +176,7 @@ export function DiscussionLive({
               ) : tunnelError ? (
                 <div className="flex flex-col gap-0.5">
                   <p className="text-red-400 text-xs">{tunnelError}</p>
-                  <p className="text-sp-muted text-[10px]">
+                  <p className="text-sp-muted text-caption">
                     Wi-Fi 직접 접속: http://{serverInfo?.localIPs[0] ?? '...'}:{serverInfo?.port ?? ''}
                   </p>
                 </div>
@@ -185,7 +185,7 @@ export function DiscussionLive({
               {shortUrl && (
                 <div className="flex items-center gap-2 border-t border-sp-border/50 pt-1.5">
                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span className="text-[10px] text-sp-muted shrink-0">짧은 주소</span>
+                    <span className="text-caption text-sp-muted shrink-0">짧은 주소</span>
                     <p className="text-sp-accent font-bold text-xs font-mono truncate">{shortUrl}</p>
                     <button
                       onClick={() => handleCopy(shortUrl, 'short')}
@@ -205,12 +205,12 @@ export function DiscussionLive({
                       onKeyDown={(e) => { if (e.key === 'Enter') onSetCustomCode(); }}
                       placeholder={shortCode ?? '코드'}
                       maxLength={30}
-                      className="w-24 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-[10px] text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
+                      className="w-24 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-caption text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
                     />
                     <button
                       onClick={onSetCustomCode}
                       disabled={!customCodeInput.trim()}
-                      className="px-2 py-1 rounded-lg bg-sp-accent/20 border border-sp-accent/30 text-sp-accent text-[10px] font-medium hover:bg-sp-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="px-2 py-1 rounded-lg bg-sp-accent/20 border border-sp-accent/30 text-sp-accent text-caption font-medium hover:bg-sp-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       변경
                     </button>
@@ -218,7 +218,7 @@ export function DiscussionLive({
                 </div>
               )}
               {customCodeError && (
-                <p className="text-red-400 text-[10px]">{customCodeError}</p>
+                <p className="text-red-400 text-caption">{customCodeError}</p>
               )}
             </div>
           </div>

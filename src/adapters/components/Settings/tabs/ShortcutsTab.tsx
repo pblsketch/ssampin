@@ -83,7 +83,7 @@ export function ShortcutsTab(): JSX.Element {
         <div className="flex items-start justify-between pb-4 border-b border-sp-border/40">
           <div className="flex-1 pr-4">
             <div className="text-sm font-sp-semibold text-sp-text">글로벌 단축키</div>
-            <p className="text-[12px] text-sp-muted mt-0.5">
+            <p className="text-xs text-sp-muted mt-0.5">
               켜면 쌤핀이 최소화돼 있어도 단축키가 동작합니다. 다른 앱과 충돌할 수 있습니다.
             </p>
           </div>
@@ -132,7 +132,7 @@ export function ShortcutsTab(): JSX.Element {
                 {/* 우측: 키 캡처 + 상태 배지 */}
                 <div className="ml-auto flex items-center gap-2">
                   {isDuplicate && (
-                    <span className="text-[11px] font-sp-medium px-2 py-0.5 rounded-full bg-red-500/15 text-red-300">
+                    <span className="text-detail font-sp-medium px-2 py-0.5 rounded-full bg-red-500/15 text-red-300">
                       중복
                     </span>
                   )}
@@ -150,7 +150,7 @@ export function ShortcutsTab(): JSX.Element {
         {/* 리셋 */}
         <div className="flex justify-end pt-4 border-t border-sp-border/40">
           {confirmReset ? (
-            <div className="flex items-center gap-2 text-[12px] text-sp-muted">
+            <div className="flex items-center gap-2 text-xs text-sp-muted">
               기본값으로 되돌릴까요?
               <button
                 type="button"
@@ -171,7 +171,7 @@ export function ShortcutsTab(): JSX.Element {
             <button
               type="button"
               onClick={() => setConfirmReset(true)}
-              className="text-[12px] text-sp-muted hover:text-sp-text transition-colors"
+              className="text-xs text-sp-muted hover:text-sp-text transition-colors"
             >
               기본값으로 되돌리기
             </button>

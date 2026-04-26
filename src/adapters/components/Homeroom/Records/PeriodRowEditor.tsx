@@ -88,7 +88,7 @@ export function PeriodRowEditor({
   return (
     <div className={compact ? 'space-y-1' : 'space-y-1.5'}>
       {entries.length === 0 && (
-        <p role="alert" className="text-[11px] text-red-400">
+        <p role="alert" className="text-detail text-red-400">
           최소 1개 교시가 필요합니다
         </p>
       )}
@@ -170,7 +170,7 @@ export function PeriodRowEditor({
       })}
 
       {duplicatePeriod !== undefined && (
-        <p role="alert" className="text-[11px] text-red-400 ml-1">
+        <p role="alert" className="text-detail text-red-400 ml-1">
           {formatPeriodLabel(duplicatePeriod)}가 중복됩니다
         </p>
       )}

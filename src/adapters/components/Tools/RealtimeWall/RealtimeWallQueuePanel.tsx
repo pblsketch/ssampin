@@ -33,12 +33,12 @@ export function RealtimeWallQueuePanel({
         <h3 className="text-sm font-bold text-sp-text">대기열</h3>
         <div className="flex items-center gap-1.5">
           {pendingPosts.length > 0 && (
-            <span className="rounded-full bg-sp-accent/15 px-2 py-0.5 text-[11px] font-bold text-sp-accent">
+            <span className="rounded-full bg-sp-accent/15 px-2 py-0.5 text-detail font-bold text-sp-accent">
               {pendingPosts.length}건 대기
             </span>
           )}
           {hiddenPosts.length > 0 && (
-            <span className="rounded-full bg-sp-surface px-2 py-0.5 text-[11px] text-sp-muted">
+            <span className="rounded-full bg-sp-surface px-2 py-0.5 text-detail text-sp-muted">
               숨김 {hiddenPosts.length}
             </span>
           )}
@@ -50,7 +50,7 @@ export function RealtimeWallQueuePanel({
         {!hidePendingSection && (
         <section>
           <div className="mb-2 flex items-center gap-1.5 px-1">
-            <span className="material-symbols-outlined text-[14px] text-sp-accent">inbox</span>
+            <span className="material-symbols-outlined text-sm text-sp-accent">inbox</span>
             <p className="text-xs font-semibold text-sp-text">승인 대기</p>
           </div>
           <div className="space-y-2.5">
@@ -95,7 +95,7 @@ export function RealtimeWallQueuePanel({
         {hiddenPosts.length > 0 && (
           <section>
             <div className="mb-2 flex items-center gap-1.5 px-1">
-              <span className="material-symbols-outlined text-[14px] text-sp-muted/60">visibility_off</span>
+              <span className="material-symbols-outlined text-sm text-sp-muted/60">visibility_off</span>
               <p className="text-xs font-semibold text-sp-muted">숨김 카드</p>
             </div>
             <div className="space-y-2">

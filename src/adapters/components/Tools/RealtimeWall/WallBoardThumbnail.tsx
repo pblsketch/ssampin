@@ -36,7 +36,7 @@ export const WallBoardThumbnail: React.FC<WallBoardThumbnailProps> = React.memo(
     if (isEmpty) {
       return (
         <div
-          className="flex h-[120px] w-full items-center justify-center rounded-t-xl border-b border-sp-border bg-sp-surface/50 text-[10px] text-sp-muted"
+          className="flex h-[120px] w-full items-center justify-center rounded-t-xl border-b border-sp-border bg-sp-surface/50 text-caption text-sp-muted"
           aria-hidden="true"
         >
           아직 카드가 없어요
@@ -177,7 +177,7 @@ function StreamThumbnail({
           key={p.id}
           className="flex min-w-0 flex-col rounded bg-sp-card/80 p-0.5"
         >
-          <div className="truncate text-[10px] font-semibold text-sp-text">
+          <div className="truncate text-caption font-semibold text-sp-text">
             {p.nickname}
           </div>
           <div className="line-clamp-1 text-[9px] text-sp-muted">{p.text}</div>

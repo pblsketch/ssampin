@@ -254,6 +254,93 @@ text-[Npx] codemod는 **새 토큰 신설 없이도 기존 Tailwind utility로 8
 
 ---
 
+## N 라운드 — text-[Npx] 추가 hot files codemod (2026-04-25)
+
+10 hot files 추가 sweep:
+
+| 파일 | 처리 |
+|------|------|
+| `Note/NotePage.tsx` | 11/14/16/18px (19건) |
+| `Tools/RealtimeWall/RealtimeWallColumnEditor.tsx` | 10/11/14/18px (11건) |
+| `Tools/RealtimeWall/RealtimeWallCreateView.tsx` | 10/11/14/16/18px (8건) |
+| `Tools/RealtimeWall/RealtimeWallCard.tsx` | 10/11px (6건) |
+| `Tools/RealtimeWall/WallBoardListView.tsx` | 10/11/14/16px (5건) |
+| `ClassManagement/TagFilter.tsx` | 10px (6건) |
+| `ClassManagement/ObservationCard.tsx` | 10px (6건) |
+| `ClassManagement/ClassRecordSearchView.tsx` | 10/11px (6건) |
+| `Tools/Discussion/DiscussionLive.tsx` | 10px (5건) |
+| `Tools/Discussion/ChatPanel.tsx` | 10px (5건) |
+
+**누적 text-[Npx]**: 449 → 355 (M) → **278 (N)** = -171, **-38%**
+
+검증: tsc 그린 / vite build 22.23s / 10 file changes / 0 회귀.
+
+---
+
+## 누적 점수 (M+N 반영, audit v3.1)
+
+| 영역 | 가중 | v1 | v2 | v3 (L) | **v3.1 (N)** |
+|------|:---:|:---:|:---:|:---:|:---:|
+| Theme Compatibility | 25% | 30 | 70 | 85 | 85 |
+| Accessibility | 25% | 25 | 75 | 95 | **96** (aria-expanded +3) |
+| Component Library | 20% | 60 | 70 | 95 | 95 |
+| Typography | 15% | 50 | 60 | 65 | **75** (text-[Npx] -38%) |
+| CSS Cascade | 10% | 50 | 55 | 55 | 55 |
+| Motion | 5% | 40 | 80 | 95 | 95 |
+| **총점** | 100% | **60** | **73** | **86** | **88** |
+
+**v3.1 88/100** (+2 from L 라운드). text-[Npx] 누적 -38%·aria-expanded 도입 확대로 Typography/Accessibility 가중 증가.
+
+---
+
+## O 라운드 — text-[Npx] 추가 11 hot files + aria-expanded 1건 (2026-04-25)
+
+### 변경 (12 files)
+
+text-[Npx] 11 hot files 추가 sweep:
+
+| 파일 | 처리 사이즈 |
+|------|-----------|
+| `Tools/RealtimeWall/RealtimeWallBoardSettingsDrawer.tsx` | 14/16/18/20px (10건) |
+| `Tools/ToolRealtimeWall.tsx` | 14/16/18px (5건) |
+| `Forms/FormCard.tsx` | 10/11/12px (6건) |
+| `Tools/Timer/PresentationMode.tsx` | 14px (4건) |
+| `Tools/Results/SummaryTab.tsx` | 10px (4건) |
+| `Tools/RealtimeWall/RealtimeWallTeacherStudentTrackerPanel.tsx` | 11/14/16/18px (4건) |
+| `Tools/RealtimeWall/RealtimeWallQueuePanel.tsx` | 11/14px (4건) |
+| `Tools/RealtimeWall/RealtimeWallCommentList.tsx` | 10/11/14px (4건) |
+| `Tools/RealtimeWall/RealtimeWallCardPlaceholder.tsx` | 11/12/18px (6건) |
+| `Tools/Discussion/ToolTrafficLightDiscussion.tsx` | 10px (4건) |
+| `Todo/components/KanbanCard.tsx` | 10px (4건) |
+
+aria-expanded 보강 1건:
+- `Homeroom/Records/StudentRecordReferencePanel.tsx` — 학생 기록 expand 버튼에 `aria-expanded={expandedIds.has(record.id)}` + `type="button"` 추가
+
+### 누적 진척
+
+| 라운드 | text-[Npx] | -Δ |
+|--------|-----------|-----|
+| Audit v3 (L) | 449 | — |
+| M (10 files) | 355 | -94 |
+| N (10 files) | 278 | -77 |
+| **O (11 files)** | **227** | **-51** |
+
+**누적 449 → 227 (-222, -49%)**. 50% 마일스톤 거의 도달.
+
+| 라운드 | aria-expanded |
+|--------|---------------|
+| v3 | 3 |
+| M (+3) | 6 |
+| **O (+1)** | **7** |
+
+### 검증
+
+- `npx tsc --noEmit` → 에러 0
+- `npx vite build` → 24.49s 성공
+- 12 file changes / 0 회귀
+
+---
+
 ## Version History
 
 | Version | Date | Changes | Author |

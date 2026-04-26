@@ -50,10 +50,10 @@ function AutosaveBadge({
 
   return (
     <div className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${tone}`}>
-      <span className="material-symbols-outlined text-[14px]">{icon}</span>
+      <span className="material-symbols-outlined text-sm">{icon}</span>
       <span>{label}</span>
       {updatedAt && (
-        <span className="text-[11px] text-sp-muted">
+        <span className="text-detail text-sp-muted">
           {new Date(updatedAt).toLocaleTimeString('ko-KR', {
             hour: '2-digit',
             minute: '2-digit',
@@ -103,7 +103,7 @@ function CollapsiblePanel({
               title={`${title} 펼치기`}
               aria-label={`${title} 펼치기`}
             >
-              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+              <span className="material-symbols-outlined text-lg">chevron_right</span>
             </button>
             <button
               type="button"
@@ -112,13 +112,13 @@ function CollapsiblePanel({
               title={title}
               aria-label={title}
             >
-              <span className="material-symbols-outlined text-[18px] text-sp-muted hover:text-sp-text transition-colors">{icon}</span>
+              <span className="material-symbols-outlined text-lg text-sp-muted hover:text-sp-text transition-colors">{icon}</span>
             </button>
           </>
         ) : (
           <>
             <div className="flex min-w-0 items-center gap-2">
-              <span className="material-symbols-outlined text-[16px] text-sp-muted">{icon}</span>
+              <span className="material-symbols-outlined text-base text-sp-muted">{icon}</span>
               <span className="truncate text-xs font-semibold text-sp-text">{title}</span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -130,7 +130,7 @@ function CollapsiblePanel({
                   title={actionLabel}
                   aria-label={actionLabel}
                 >
-                  <span className="material-symbols-outlined text-[16px]">add</span>
+                  <span className="material-symbols-outlined text-base">add</span>
                 </button>
               )}
               <button
@@ -140,7 +140,7 @@ function CollapsiblePanel({
                 title={`${title} 접기`}
                 aria-label={`${title} 접기`}
               >
-                <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                <span className="material-symbols-outlined text-base">chevron_left</span>
               </button>
             </div>
           </>
@@ -503,7 +503,7 @@ export function NotePage() {
                       title="이름 바꾸기"
                       aria-label="이름 바꾸기"
                     >
-                      <span className="material-symbols-outlined text-[14px]">edit</span>
+                      <span className="material-symbols-outlined text-sm">edit</span>
                     </button>
                     <button
                       type="button"
@@ -512,7 +512,7 @@ export function NotePage() {
                       title="삭제"
                       aria-label="삭제"
                     >
-                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                      <span className="material-symbols-outlined text-sm">delete</span>
                     </button>
                   </div>
                 </div>
@@ -568,7 +568,7 @@ export function NotePage() {
                       title={section.collapsed ? '펼치기' : '접기'}
                       aria-label={section.collapsed ? '펼치기' : '접기'}
                     >
-                      <span className="material-symbols-outlined text-[14px]">
+                      <span className="material-symbols-outlined text-sm">
                         {section.collapsed ? 'unfold_more' : 'unfold_less'}
                       </span>
                     </button>
@@ -579,7 +579,7 @@ export function NotePage() {
                       title="이름 바꾸기"
                       aria-label="이름 바꾸기"
                     >
-                      <span className="material-symbols-outlined text-[14px]">edit</span>
+                      <span className="material-symbols-outlined text-sm">edit</span>
                     </button>
                     <button
                       type="button"
@@ -588,7 +588,7 @@ export function NotePage() {
                       title="삭제"
                       aria-label="삭제"
                     >
-                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                      <span className="material-symbols-outlined text-sm">delete</span>
                     </button>
                   </div>
                 </div>
@@ -647,7 +647,7 @@ export function NotePage() {
                       title={page.pinned ? '고정 해제' : '고정'}
                       aria-label={page.pinned ? '고정 해제' : '고정'}
                     >
-                      <span className="material-symbols-outlined text-[14px]">keep</span>
+                      <span className="material-symbols-outlined text-sm">keep</span>
                     </button>
                     <button
                       type="button"
@@ -656,7 +656,7 @@ export function NotePage() {
                       title="이름 바꾸기"
                       aria-label="이름 바꾸기"
                     >
-                      <span className="material-symbols-outlined text-[14px]">edit</span>
+                      <span className="material-symbols-outlined text-sm">edit</span>
                     </button>
                     <button
                       type="button"
@@ -665,7 +665,7 @@ export function NotePage() {
                       title="삭제"
                       aria-label="삭제"
                     >
-                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                      <span className="material-symbols-outlined text-sm">delete</span>
                     </button>
                   </div>
                 </div>
@@ -717,19 +717,19 @@ export function NotePage() {
 
               {!hintDismissed && (
                 <div className="mb-3 flex items-start gap-3 rounded-lg border border-sp-accent/20 bg-sp-accent/5 px-3 py-2.5 text-xs text-sp-muted">
-                  <span className="material-symbols-outlined mt-0.5 text-[16px] text-sp-accent">
+                  <span className="material-symbols-outlined mt-0.5 text-base text-sp-accent">
                     lightbulb
                   </span>
                   <div className="flex-1 leading-relaxed">
                     <p className="font-medium text-sp-text">
-                      <kbd className="mx-0.5 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-[11px] text-sp-text">/</kbd>
+                      <kbd className="mx-0.5 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">/</kbd>
                       를 누르면 제목·목록·체크박스·인용·표·구분선 등을 빠르게 넣을 수 있어요.
                     </p>
                     <p className="mt-1 text-sp-muted">
                       텍스트를 드래그하면 굵게·기울임·링크 도구가 나타납니다. 저장은 자동으로 되고
-                      <kbd className="mx-1 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-[11px] text-sp-text">Ctrl</kbd>
+                      <kbd className="mx-1 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">Ctrl</kbd>
                       +
-                      <kbd className="mx-1 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-[11px] text-sp-text">S</kbd>
+                      <kbd className="mx-1 rounded border border-sp-border bg-sp-surface px-1.5 py-0.5 font-mono text-detail text-sp-text">S</kbd>
                       로 즉시 저장할 수도 있어요.
                     </p>
                   </div>

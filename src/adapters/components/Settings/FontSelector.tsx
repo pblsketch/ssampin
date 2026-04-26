@@ -224,7 +224,7 @@ export function FontSelector({ value, onChange, customFont, onCustomFontChange }
               >
                 {customFont.name}
               </div>
-              <div className="text-[10px] text-sp-muted mt-0.5">{customFont.fileName}</div>
+              <div className="text-caption text-sp-muted mt-0.5">{customFont.fileName}</div>
             </button>
             <button
               type="button"

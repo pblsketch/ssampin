@@ -177,9 +177,9 @@ function WebPagePreview({
           <p className="line-clamp-2 text-xs font-semibold text-sp-text">{preview.ogTitle}</p>
         )}
         {preview.ogDescription && (
-          <p className="mt-0.5 line-clamp-2 text-[11px] text-sp-muted">{preview.ogDescription}</p>
+          <p className="mt-0.5 line-clamp-2 text-detail text-sp-muted">{preview.ogDescription}</p>
         )}
-        <p className="mt-1 truncate text-[10px] text-sp-muted/70">
+        <p className="mt-1 truncate text-caption text-sp-muted/70">
           {getLinkLabel(linkUrl)}
         </p>
       </div>
@@ -350,13 +350,13 @@ export function RealtimeWallCard({
           <div className="flex items-center gap-1.5">
             <span className="truncate text-sm font-semibold text-sp-text">{post.nickname}</span>
             {isPinned && (
-              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
-                <span className="material-symbols-outlined text-[11px]">push_pin</span>
+              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-caption font-bold text-amber-300">
+                <span className="material-symbols-outlined text-detail">push_pin</span>
                 고정
               </span>
             )}
           </div>
-          <p className="mt-0.5 text-[11px] text-sp-muted">
+          <p className="mt-0.5 text-detail text-sp-muted">
             {new Date(post.submittedAt).toLocaleTimeString('ko-KR', {
               hour: '2-digit',
               minute: '2-digit',
@@ -442,7 +442,7 @@ export function RealtimeWallCard({
             <button
               type="button"
               onClick={() => setCommentsOpen((prev) => !prev)}
-              className="ml-auto inline-flex items-center gap-1 rounded-full border border-sp-border bg-sp-surface px-2 py-0.5 text-[11px] font-semibold text-sp-muted transition hover:border-sp-accent/40 hover:text-sp-accent"
+              className="ml-auto inline-flex items-center gap-1 rounded-full border border-sp-border bg-sp-surface px-2 py-0.5 text-detail font-semibold text-sp-muted transition hover:border-sp-accent/40 hover:text-sp-accent"
               aria-expanded={commentsOpen}
               title={commentsOpen ? '댓글 접기' : '댓글 펼치기'}
             >

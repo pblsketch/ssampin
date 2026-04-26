@@ -199,14 +199,14 @@ export function MemoPage() {
                       onClick={() => void unarchiveMemo(memo.id)}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-xs font-medium text-sp-text transition-all hover:bg-sp-card active:scale-95"
                     >
-                      <span className="material-symbols-outlined text-[16px]">unarchive</span>
+                      <span className="material-symbols-outlined text-base">unarchive</span>
                       복원
                     </button>
                     <button
                       onClick={() => void deleteMemo(memo.id)}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/20 active:scale-95"
                     >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                      <span className="material-symbols-outlined text-base">delete</span>
                       영구 삭제
                     </button>
                   </div>

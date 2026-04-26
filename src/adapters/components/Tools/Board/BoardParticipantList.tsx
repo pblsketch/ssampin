@@ -55,7 +55,7 @@ export function BoardParticipantList({
       )}
 
       {nearLimit && count < maxParticipants && (
-        <div className="mt-3 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-2">
+        <div className="mt-3 text-detail text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-2">
           ⚠️ 접속 인원이 한도에 근접했습니다 ({count}/{maxParticipants}).
         </div>
       )}
