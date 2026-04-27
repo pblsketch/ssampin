@@ -46,7 +46,7 @@ export function TasksCard({ onJumpToBackup }: TasksCardProps) {
         enabled={tasksEnabled}
         onToggle={handleToggle}
         disabled={!isConnected}
-        collapsedHint="💡 처음 켜면 Tasks 권한을 한 번 더 동의해야 해요"
+        collapsedHint="💡 처음 켜면 Tasks 권한 동의 필요 · '확인되지 않은 앱' 경고는 정상이에요(검증 대기 중)"
       >
         {/* 동기화 목록 */}
         <div>
