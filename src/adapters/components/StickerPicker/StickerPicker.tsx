@@ -12,7 +12,7 @@ import { searchStickers, groupByPack, getRecent } from '@domain/rules/stickerRul
 import { useStickerStore } from '@adapters/stores/useStickerStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { IconButton } from '@adapters/components/common/IconButton';
-import { StickerSearchBar } from './StickerSearchBar';
+import { Kbd } from '@adapters/components/common/Kbd';
 import { StickerThumbnail } from './StickerThumbnail';
 import './stickerElectronTypes';
 
@@ -344,7 +344,7 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
     <div
       onMouseDown={handleBackdropMouseDown}
       className={[
-        'fixed inset-0 z-sp-palette flex items-start justify-center pt-[18vh] px-4',
+        'fixed inset-0 z-sp-palette flex items-start justify-center pt-[20vh] px-4',
         'bg-black/55 backdrop-blur-sm motion-reduce:backdrop-blur-none',
         'animate-fade-in motion-reduce:animate-none',
         isClosing ? 'pointer-events-none opacity-0 transition-opacity duration-sp-base' : '',
@@ -357,28 +357,46 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
         aria-label="이모티콘 피커"
         onKeyDown={handleKeyDown}
         className={[
-          'w-[400px] max-w-full max-h-[480px] flex flex-col',
-          'bg-sp-card border border-sp-border rounded-2xl shadow-sp-lg ring-1 ring-white/5',
+          'w-[min(440px,calc(100vw-32px))] max-h-[480px] flex flex-col',
+          'bg-sp-card border border-sp-border rounded-xl shadow-sp-lg ring-1 ring-white/5',
           'overflow-hidden',
           'animate-scale-in motion-reduce:animate-none',
         ].join(' ')}
       >
-        {/* 헤더 */}
-        <div className="h-14 shrink-0 px-3 flex items-center gap-2 border-b border-sp-border">
-          <StickerSearchBar
+        {/* 헤더 — CommandPalette 패턴: 검색 input 자체가 헤더 */}
+        <div className="relative flex items-center border-b border-sp-border shrink-0">
+          <span
+            aria-hidden="true"
+            className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-sp-muted pointer-events-none select-none"
+          >
+            sentiment_very_satisfied
+          </span>
+          <input
             ref={searchInputRef}
+            type="search"
+            role="searchbox"
+            autoComplete="off"
+            spellCheck={false}
             value={rawQuery}
             onChange={(e) => setRawQuery(e.target.value)}
-            resultCount={totalStickers}
-            hasQuery={isSearching}
+            placeholder="이름이나 태그로 찾기"
+            aria-label="이모티콘 검색"
+            className="h-[52px] w-full bg-transparent pl-12 pr-12 text-[15px] text-sp-text placeholder:text-sp-muted outline-none"
           />
-          <IconButton
-            icon="close"
-            label="피커 닫기"
-            variant="ghost"
-            size="md"
-            onClick={onClose}
-          />
+          {isSearching && (
+            <p role="status" aria-live="polite" className="sr-only">
+              {`검색 결과 ${totalStickers}개`}
+            </p>
+          )}
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <IconButton
+              icon="close"
+              label="피커 닫기"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+            />
+          </div>
         </div>
 
         {/* 콘텐츠 */}
@@ -412,13 +430,24 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
           ))}
         </div>
 
-        {/* 푸터 (단축키 힌트) */}
+        {/* 푸터 (단축키 힌트) — CommandPalette 패턴 + 공용 Kbd */}
         {loaded && totalStickers > 0 && (
-          <div className="shrink-0 px-4 py-2 border-t border-sp-border bg-sp-bg/40 flex items-center gap-3 text-detail text-sp-muted">
-            <ShortcutHint label="이동" keys={['↑', '↓', '←', '→']} />
-            <ShortcutHint label="선택" keys={['Enter']} />
-            <ShortcutHint label="검색" keys={['/']} />
-            <ShortcutHint label="닫기" keys={['Esc']} />
+          <div className="shrink-0 border-t border-sp-border px-4 py-2 flex items-center gap-3 text-detail text-sp-muted bg-sp-bg/30 font-sp-medium">
+            <span className="flex items-center gap-1">
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd>
+              <Kbd>←</Kbd>
+              <Kbd>→</Kbd>
+              <span className="ml-1">이동</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>↵</Kbd>
+              <span className="ml-1">선택</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>Esc</Kbd>
+              <span className="ml-1">닫기</span>
+            </span>
           </div>
         )}
       </div>
@@ -446,13 +475,11 @@ function PickerSection({
   onPick,
 }: PickerSectionProps): JSX.Element {
   return (
-    <section className="relative">
+    <section>
       <header
         className={[
-          'sticky top-0 z-10 px-4 py-2',
-          'bg-sp-card/95 backdrop-blur-sm motion-reduce:backdrop-blur-none',
-          'flex items-center gap-2 border-b border-sp-border/50',
-          'text-detail font-sp-semibold uppercase tracking-wider text-sp-muted',
+          'px-4 pt-3 pb-1 flex items-center gap-2',
+          'text-detail font-sp-semibold uppercase tracking-wider text-sp-muted select-none',
         ].join(' ')}
       >
         <span
@@ -461,7 +488,7 @@ function PickerSection({
         >
           {section.icon}
         </span>
-        <span className="text-xs">{section.title}</span>
+        <span>{section.title}</span>
         <span className="ml-auto text-detail font-normal normal-case tracking-normal">
           {section.stickers.length}개
         </span>
@@ -531,37 +558,8 @@ function PickerEmptyState({ onClose }: { onClose: () => void }): JSX.Element {
 
 function PickerNoResults({ query }: { query: string }): JSX.Element {
   return (
-    <div className="px-6 py-10 flex flex-col items-center text-center gap-3">
-      <span
-        aria-hidden="true"
-        className="material-symbols-outlined text-icon-xl text-sp-muted"
-      >
-        search_off
-      </span>
-      <div>
-        <p className="text-sm font-sp-semibold text-sp-text">검색 결과가 없어요</p>
-        <p className="text-detail text-sp-muted mt-1">
-          <span className="text-sp-text">{`"${query}"`}</span>와 일치하는<br />
-          이모티콘이나 태그가 없어요
-        </p>
-      </div>
-      <p className="text-detail text-sp-muted">다른 키워드를 입력해보세요</p>
+    <div className="px-4 py-8 text-center text-sm text-sp-muted">
+      <span className="text-sp-text">{`"${query}"`}</span>와 일치하는 이모티콘이 없어요
     </div>
-  );
-}
-
-function ShortcutHint({ label, keys }: { label: string; keys: string[] }): JSX.Element {
-  return (
-    <span className="inline-flex items-center gap-1">
-      {keys.map((k) => (
-        <kbd
-          key={k}
-          className="px-1.5 py-0.5 rounded bg-sp-text/10 text-sp-text font-mono text-caption ring-1 ring-sp-border"
-        >
-          {k}
-        </kbd>
-      ))}
-      <span className="text-sp-muted">{label}</span>
-    </span>
   );
 }
