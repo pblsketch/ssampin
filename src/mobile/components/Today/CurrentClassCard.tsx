@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { CurrentPeriodInfo } from '@mobile/hooks/useCurrentPeriod';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
+import { MobileProgressLogModal } from './MobileProgressLogModal';
 
 function formatMinutes(min: number): string {
   if (min < 60) return `${min}분`;
@@ -92,6 +94,7 @@ function DayScheduleOverview({ daySchedule, currentPeriod, nextPeriod, isBreak }
 export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
   const { currentPeriod, nextPeriod, progress, remainingMinutes, isBreak, isBeforeSchool, isAfterSchool, dayOfWeek } = periodInfo;
   const daySchedule = teacherSchedule[dayOfWeek] ?? null;
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
 
   if (isBeforeSchool) {
     const firstClassInfo = daySchedule ? daySchedule[0] ?? null : null;
@@ -169,33 +172,55 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
     : null;
 
   return (
-    <div className="glass-card-accent p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-sp-accent">school</span>
-          <span className="pill-badge bg-sp-accent text-sp-accent-fg">{currentPeriod}교시</span>
+    <>
+      <div className="glass-card-accent p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-sp-accent">school</span>
+            <span className="pill-badge bg-sp-accent text-sp-accent-fg">{currentPeriod}교시</span>
+          </div>
+          <span className="text-sp-muted text-sm">{formatMinutes(remainingMinutes)} 남음</span>
         </div>
-        <span className="text-sp-muted text-sm">{formatMinutes(remainingMinutes)} 남음</span>
+        {classInfo && (
+          <p className="text-sp-text font-bold text-lg mb-2">
+            {classInfo.subject} · {classInfo.classroom}
+          </p>
+        )}
+        <div className="h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-sp-accent rounded-full transition-all duration-1000"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        {/* 진도 기록 버튼 — 수업 중 분기에서만 노출 */}
+        {classInfo && currentPeriod && (
+          <button
+            type="button"
+            onClick={() => setProgressModalOpen(true)}
+            className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-sp-accent/15 text-sp-accent rounded-xl hover:bg-sp-accent/25 active:bg-sp-accent/30 transition-colors text-sm font-medium"
+          >
+            <span className="material-symbols-outlined text-base">trending_up</span>
+            오늘 진도 기록
+          </button>
+        )}
+        {daySchedule && (
+          <DayScheduleOverview
+            daySchedule={daySchedule}
+            currentPeriod={currentPeriod}
+            nextPeriod={nextPeriod}
+            isBreak={false}
+          />
+        )}
       </div>
-      {classInfo && (
-        <p className="text-sp-text font-bold text-lg mb-2">
-          {classInfo.subject} · {classInfo.classroom}
-        </p>
-      )}
-      <div className="h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-sp-accent rounded-full transition-all duration-1000"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-      {daySchedule && (
-        <DayScheduleOverview
-          daySchedule={daySchedule}
-          currentPeriod={currentPeriod}
-          nextPeriod={nextPeriod}
-          isBreak={false}
+      {classInfo && currentPeriod && (
+        <MobileProgressLogModal
+          isOpen={progressModalOpen}
+          onClose={() => setProgressModalOpen(false)}
+          defaultPeriod={currentPeriod}
+          subject={classInfo.subject}
+          classroom={classInfo.classroom}
         />
       )}
-    </div>
+    </>
   );
 }
