@@ -113,6 +113,17 @@ export interface StickerElectronAPI {
    */
   requestAccessibilityPermission?: () => Promise<StickerAccessibilityResult>;
   /**
+   * 자동 Ctrl+V/Cmd+V 시뮬레이션 실패(autoPasted=false) 시 메인 윈도우에서
+   * 사용자에게 "수동 붙여넣기 안내" 토스트를 띄우기 위한 이벤트 구독.
+   * 피커 윈도우는 paste 직후 hide되므로 피커 측 토스트가 보이지 않아
+   * 메인 윈도우(MainApp)에서 본 리스너를 등록해야 한다.
+   */
+  onFallbackPasteNeeded?: (
+    cb: (data: { reason: string }) => void,
+  ) => () => void;
+  /** sticker:paste 진단 로그 forwarding — DevTools Console에서 흐름 추적용. */
+  onDiagLog?: (cb: (payload: { message: string; data: unknown }) => void) => () => void;
+  /**
    * 현재 OS 플랫폼 — 렌더러가 macOS 전용 UI(접근성 안내 등)를 조건부 렌더링.
    */
   getPlatform?: () => Promise<StickerPlatformResult>;

@@ -54,6 +54,25 @@ function getDataDir(): string {
   return dir;
 }
 
+/**
+ * Sticker paste 진단 로그 — main 콘솔(stdout) + mainWindow DevTools 콘솔 양쪽에 출력.
+ * 사용자가 cmd로 실행하지 않아도 DevTools에서 흐름을 볼 수 있도록 IPC로 forwarding한다.
+ */
+function stickerLog(message: string, data?: unknown): void {
+  if (data !== undefined) {
+    console.log(message, data);
+  } else {
+    console.log(message);
+  }
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('sticker:diag-log', { message, data: data === undefined ? null : data });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 // ─── 글로벌 퀵애드 단축키 ───
 type ShortcutSyncConfig = {
   globalEnabled: boolean;
@@ -349,17 +368,14 @@ function destroyStickerPickerWindow(): void {
 
 function triggerShortcut(commandId: string): void {
   // ─── sticker-picker:toggle (PRD §3.1.3) ───
-  // 토글 동작: 피커가 visible이면 hide, 아니면 메인창 우선 → 폴백 팝업.
+  // 토글 동작: 피커가 visible이면 hide, 아니면 항상 별도 팝업으로 띄운다.
+  // ★ 메인창 visible 여부와 무관 — 다른 quickAdd 단축키와 달리 sticker picker는
+  //   별도 frameless BrowserWindow이므로 mainWindow에 IPC를 보내봤자 처리 핸들러가 없다.
+  //   COMMAND_TO_KIND 매핑이 없는 commandId라 useGlobalShortcuts onShortcutTriggered가 무시함.
   if (commandId === 'sticker-picker:toggle') {
     if (stickerPickerWindow && !stickerPickerWindow.isDestroyed() && stickerPickerWindow.isVisible()) {
       stickerPickerWindow.hide();
       stickerPickerWindow.setOpacity(0);
-      return;
-    }
-    if (isMainWindowVisible()) {
-      if (mainWindow!.isMinimized()) mainWindow!.restore();
-      mainWindow!.focus();
-      mainWindow!.webContents.send('shortcut:triggered', commandId);
       return;
     }
     createOrFocusStickerPickerWindow();
@@ -2119,22 +2135,42 @@ function registerIpcHandlers(): void {
   }
 
   /**
-   * Windows 자동 붙여넣기 — @nut-tree/nut-js가 있으면 Ctrl+V 시뮬레이션,
-   * 없으면 graceful fallback (autoPasted: false 반환). nut-js 미설치 환경에서도
-   * 빌드/런타임이 깨지지 않도록 require try/catch.
+   * Windows 자동 붙여넣기 — @nut-tree-fork/nut-js로 Ctrl+V 시뮬레이션.
+   * 원본 `@nut-tree/nut-js`는 2024년 npm에서 제거되어 현재 유지보수되는
+   * 포크(`@nut-tree-fork/nut-js`)를 사용한다. require/dispatch 실패 시
+   * autoPasted=false로 graceful fallback (클립보드는 이미 채워져 있어
+   * 사용자가 수동 Ctrl+V로 붙여넣을 수 있다).
    */
   async function pasteOnWindows(
     restoreMode: boolean,
     prevImage: Electron.NativeImage | null,
     prevText: string,
+    stickerImage: Electron.NativeImage,
   ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> {
     let autoPasted = false;
     let pasteReason: string | undefined;
     try {
-      // 짧은 딜레이로 포커스 전환 대기 (PRD §3.2: ~50~80ms)
-      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      // 포커스 전환 대기 — 80ms → 150ms로 늘려 OS가 이전 앱(카톡/스레드)에
+      // 포커스를 자연스럽게 되돌릴 시간을 충분히 확보. 짧으면 nut-js Ctrl+V가
+      // 아직 hide 처리중인 피커 윈도우 위에 떨어져 스크린샷 캡처처럼 보일 수 있다.
+      await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+      // ─── 진단: Ctrl+V 직전 클립보드 상태 재검증 ───
+      // writeImage 이후 어떤 이유로든 클립보드가 비워졌다면 이 시점에서 포착된다.
+      const beforePasteFormats = clipboard.availableFormats();
+      const beforePasteImageSize = clipboard.readImage().getSize();
+      stickerLog('[sticker:paste] clipboard right before Ctrl+V:', {
+        formats: beforePasteFormats,
+        size: beforePasteImageSize,
+      });
+      if (clipboard.readImage().isEmpty()) {
+        stickerLog('[sticker:paste] CLIPBOARD WAS CLEARED before Ctrl+V dispatch — aborting');
+        console.error('[sticker:paste] CLIPBOARD WAS CLEARED before Ctrl+V dispatch — aborting');
+        return { ok: false, autoPasted: false, reason: 'clipboard-cleared-before-paste' };
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const nut = require('@nut-tree/nut-js') as {
+      const nut = require('@nut-tree-fork/nut-js') as {
         keyboard: {
           pressKey: (...keys: number[]) => Promise<void>;
           releaseKey: (...keys: number[]) => Promise<void>;
@@ -2146,26 +2182,57 @@ function registerIpcHandlers(): void {
       if (modKey === undefined || vKey === undefined) {
         throw new Error('nut-js Key 매핑 없음');
       }
+      stickerLog('[sticker:paste] dispatching Ctrl+V via nut-js');
       await nut.keyboard.pressKey(modKey, vKey);
       await nut.keyboard.releaseKey(vKey, modKey);
       autoPasted = true;
+      stickerLog('[sticker:paste] nut-js dispatch complete, autoPasted=true');
     } catch (err) {
       autoPasted = false;
       pasteReason = err instanceof Error ? err.message : String(err);
-      console.log('[sticker:paste] Windows 자동 붙여넣기 미지원 — 수동 Ctrl+V 폴백', pasteReason);
+      // 진단을 위해 stack까지 포함한 error 로그 — 사용자 환경에서 native binding 로드
+      // 실패(libnut 미언팩 등) 원인을 추적하기 쉽도록 한다.
+      stickerLog('[sticker:paste] nut-js require/dispatch failed:', err instanceof Error ? err.message : String(err));
+      console.error(
+        '[sticker:paste] nut-js require/dispatch failed:',
+        err instanceof Error ? err.stack ?? err.message : err,
+      );
     }
 
     // 클립보드 복원 — 1500ms로 충분한 시간 확보 (PRD §3.2.1)
+    // 단, 이전 클립보드가 스티커와 동일/유사하면 복원 스킵 (스티커 자체가 이미 복원될 만한
+    // 동일 이미지였거나, 스냅샷이 비정상적으로 비어있는 경우 polluted 상태로 덮어쓰기 방지).
     if (restoreMode) {
+      const stickerSig = (() => {
+        try {
+          return stickerImage.toPNG().toString('base64').slice(0, 200);
+        } catch {
+          return '';
+        }
+      })();
+      stickerLog('[sticker:paste] scheduled clipboard restore at +1500ms');
       setTimeout(() => {
         try {
           if (prevImage && !prevImage.isEmpty()) {
+            const prevSig = (() => {
+              try {
+                return prevImage.toPNG().toString('base64').slice(0, 200);
+              } catch {
+                return '';
+              }
+            })();
+            if (prevSig.length > 0 && prevSig === stickerSig) {
+              stickerLog('[sticker:paste] skipping restore — prev image identical to sticker (polluted snapshot)');
+              return;
+            }
             clipboard.writeImage(prevImage);
+            stickerLog('[sticker:paste] restored prev clipboard image');
           } else if (prevText.length > 0) {
             clipboard.writeText(prevText);
+            stickerLog('[sticker:paste] restored prev clipboard text');
           }
         } catch (restoreErr) {
-          console.log('[sticker:paste] 클립보드 복원 실패', restoreErr);
+          stickerLog('[sticker:paste] 클립보드 복원 실패', restoreErr instanceof Error ? restoreErr.message : String(restoreErr));
         }
       }, 1500);
     }
@@ -2189,6 +2256,7 @@ function registerIpcHandlers(): void {
     restoreMode: boolean,
     prevImage: Electron.NativeImage | null,
     prevText: string,
+    stickerImage: Electron.NativeImage,
   ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> {
     // 1) 접근성 권한 체크 (best-effort)
     if (!hasMacOSAccessibilityPermission()) {
@@ -2196,37 +2264,74 @@ function registerIpcHandlers(): void {
       return { ok: true, autoPasted: false, reason: 'accessibility-denied' };
     }
 
-    // 2) 피커 윈도우가 포커스를 완전히 놓도록 짧게 대기
-    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    // 2) 피커 윈도우가 포커스를 완전히 놓도록 짧게 대기 — 80ms → 150ms
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+    // ─── 진단: Cmd+V 직전 클립보드 상태 재검증 ───
+    const beforePasteFormats = clipboard.availableFormats();
+    const beforePasteImageSize = clipboard.readImage().getSize();
+    stickerLog('[sticker:paste] clipboard right before Cmd+V:', {
+      formats: beforePasteFormats,
+      size: beforePasteImageSize,
+    });
+    if (clipboard.readImage().isEmpty()) {
+      stickerLog('[sticker:paste] CLIPBOARD WAS CLEARED before Cmd+V dispatch — aborting');
+      console.error('[sticker:paste] CLIPBOARD WAS CLEARED before Cmd+V dispatch — aborting');
+      return { ok: false, autoPasted: false, reason: 'clipboard-cleared-before-paste' };
+    }
 
     // 3) Cmd+V keystroke 송신
     let autoPasted = false;
     let pasteReason: string | undefined;
     try {
+      stickerLog('[sticker:paste] dispatching Cmd+V via osascript');
       await runAppleScript(
         'tell application "System Events" to keystroke "v" using command down',
       );
       autoPasted = true;
+      stickerLog('[sticker:paste] osascript dispatch complete, autoPasted=true');
     } catch (err) {
       autoPasted = false;
       pasteReason = 'osascript-failed';
+      stickerLog('[sticker:paste] macOS osascript 실패', err instanceof Error ? err.message : String(err));
       console.error(
         '[sticker:paste] macOS osascript 실패',
         err instanceof Error ? err.message : err,
       );
     }
 
-    // 4) 클립보드 복원 (옵션) — Windows와 동일하게 1500ms
+    // 4) 클립보드 복원 (옵션) — Windows와 동일하게 1500ms + polluted snapshot 가드
     if (restoreMode) {
+      const stickerSig = (() => {
+        try {
+          return stickerImage.toPNG().toString('base64').slice(0, 200);
+        } catch {
+          return '';
+        }
+      })();
+      stickerLog('[sticker:paste] scheduled clipboard restore at +1500ms (macOS)');
       setTimeout(() => {
         try {
           if (prevImage && !prevImage.isEmpty()) {
+            const prevSig = (() => {
+              try {
+                return prevImage.toPNG().toString('base64').slice(0, 200);
+              } catch {
+                return '';
+              }
+            })();
+            if (prevSig.length > 0 && prevSig === stickerSig) {
+              stickerLog('[sticker:paste] skipping restore (macOS) — prev image identical to sticker');
+              return;
+            }
             clipboard.writeImage(prevImage);
+            stickerLog('[sticker:paste] restored prev clipboard image (macOS)');
           } else if (prevText.length > 0) {
             clipboard.writeText(prevText);
+            stickerLog('[sticker:paste] restored prev clipboard text (macOS)');
           }
         } catch (restoreErr) {
-          console.log('[sticker:paste] 클립보드 복원 실패 (macOS)', restoreErr);
+          stickerLog('[sticker:paste] 클립보드 복원 실패 (macOS)', restoreErr instanceof Error ? restoreErr.message : String(restoreErr));
         }
       }, 1500);
     }
@@ -2243,9 +2348,13 @@ function registerIpcHandlers(): void {
 
   // sticker:paste — 클립보드에 PNG 복사 + 피커 hide + (가능 시) 자동 Ctrl+V (PRD §3.2)
   // 플랫폼별 분기:
-  //  - win32: pasteOnWindows (@nut-tree/nut-js 미설치 시 graceful fallback)
+  //  - win32: pasteOnWindows (@nut-tree-fork/nut-js 사용 — 실패 시 graceful fallback)
   //  - darwin: pasteOnMacOS (AppleScript via osascript, 접근성 권한 필요)
   //  - 그 외(linux 등): 클립보드만 채우고 autoPasted=false 반환
+  //
+  // autoPasted=false인 경우 메인 윈도우에 `sticker:fallback-paste-needed` 이벤트를
+  // 송신하여 사용자에게 "수동 Ctrl+V 안내" 토스트를 표시한다. 피커 윈도우는
+  // 이 시점에 이미 hide되었으므로 피커 측 토스트는 사용자에게 보이지 않는다.
   ipcMain.handle(
     'sticker:paste',
     async (
@@ -2254,6 +2363,7 @@ function registerIpcHandlers(): void {
     ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> => {
       const id = validateStickerId(args.stickerId);
       const restoreMode = args.restorePreviousClipboard === true;
+      stickerLog('[sticker:paste] start', { id, restoreMode });
 
       // 1) 이전 클립보드 스냅샷 (복원 모드)
       let prevImage: Electron.NativeImage | null = null;
@@ -2262,6 +2372,10 @@ function registerIpcHandlers(): void {
         try {
           prevImage = clipboard.readImage();
           prevText = clipboard.readText();
+          stickerLog('[sticker:paste] prev clipboard formats:', {
+            formats: clipboard.availableFormats(),
+            prevImageSize: prevImage.getSize(),
+          });
         } catch {
           // 스냅샷 실패는 치명적이지 않음 — 그대로 진행
         }
@@ -2271,12 +2385,18 @@ function registerIpcHandlers(): void {
       const filePath = path.join(getStickerImageDir(), `${id}.png`);
       const image = nativeImage.createFromPath(filePath);
       if (image.isEmpty()) {
+        stickerLog('[sticker:paste] sticker image not found at', filePath);
+        console.error('[sticker:paste] sticker image not found at', filePath);
         return { ok: false, autoPasted: false, reason: '이모티콘 이미지를 찾을 수 없습니다' };
       }
 
       // 3) 클립보드에 이미지 쓰기
       try {
         clipboard.writeImage(image);
+        stickerLog('[sticker:paste] wrote sticker image, size:', {
+          size: image.getSize(),
+          formats: clipboard.availableFormats(),
+        });
       } catch (err) {
         return {
           ok: false,
@@ -2285,21 +2405,65 @@ function registerIpcHandlers(): void {
         };
       }
 
-      // 4) 피커 숨기기 — 이전 앱이 포커스를 되찾도록
+      // 4) 피커 숨기기 — 이전 앱이 포커스를 되찾도록.
+      //    ★ 순서가 중요: alwaysOnTop을 먼저 해제해야 OS가 자연스럽게 이전 앱
+      //    (카톡/스레드)에게 포커스를 돌려준다. alwaysOnTop이 살아있는 채로
+      //    hide만 하면 일부 환경에서 포커스 복원 타이밍이 어긋나 nut-js Ctrl+V가
+      //    엉뚱한 윈도우에 떨어져 "피커 스크린샷이 붙여넣어진 것처럼" 보이는
+      //    증상이 발생할 수 있다.
       if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) {
+        try {
+          stickerPickerWindow.setAlwaysOnTop(false);
+        } catch (topErr) {
+          stickerLog('[sticker:paste] setAlwaysOnTop(false) 실패', topErr instanceof Error ? topErr.message : String(topErr));
+        }
         stickerPickerWindow.hide();
         stickerPickerWindow.setOpacity(0);
+        stickerLog('[sticker:paste] picker hidden (alwaysOnTop released)');
       }
 
       // 5) 플랫폼별 자동 붙여넣기 디스패치
+      let result: { ok: boolean; autoPasted: boolean; reason?: string };
       if (process.platform === 'win32') {
-        return await pasteOnWindows(restoreMode, prevImage, prevText);
+        result = await pasteOnWindows(restoreMode, prevImage, prevText, image);
+      } else if (process.platform === 'darwin') {
+        result = await pasteOnMacOS(restoreMode, prevImage, prevText, image);
+      } else {
+        // Linux / 기타 — 클립보드만 채우고 사용자에게 수동 붙여넣기 안내
+        result = { ok: true, autoPasted: false, reason: 'unsupported-platform' };
       }
-      if (process.platform === 'darwin') {
-        return await pasteOnMacOS(restoreMode, prevImage, prevText);
+
+      // 5-a) alwaysOnTop 재무장 — 다음 show()에서 다시 최상단에 떠야 하므로 복구.
+      //    윈도우가 hide된 상태에서 setAlwaysOnTop(true)를 호출해도 안전하다.
+      if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) {
+        try {
+          stickerPickerWindow.setAlwaysOnTop(true, 'screen-saver');
+        } catch (topErr) {
+          stickerLog('[sticker:paste] setAlwaysOnTop(true) 재무장 실패', topErr instanceof Error ? topErr.message : String(topErr));
+        }
       }
-      // Linux / 기타 — 클립보드만 채우고 사용자에게 수동 붙여넣기 안내
-      return { ok: true, autoPasted: false, reason: 'unsupported-platform' };
+
+      // 6) 자동 붙여넣기 실패 시 메인 윈도우에 폴백 안내 이벤트 송신.
+      //    피커 윈도우는 이미 hide되어 있어 피커 측 토스트가 보이지 않으므로,
+      //    메인 윈도우에서 "이모티콘이 클립보드에 복사됐어요. Ctrl+V로 붙여넣어 주세요." 토스트를 띄운다.
+      if (
+        result.ok &&
+        !result.autoPasted &&
+        mainWindow &&
+        !mainWindow.isDestroyed()
+      ) {
+        try {
+          mainWindow.webContents.send('sticker:fallback-paste-needed', {
+            reason: result.reason ?? '',
+          });
+        } catch (sendErr) {
+          stickerLog('[sticker:paste] fallback IPC 송신 실패', sendErr instanceof Error ? sendErr.message : String(sendErr));
+          console.error('[sticker:paste] fallback IPC 송신 실패', sendErr);
+        }
+      }
+
+      stickerLog('[sticker:paste] result:', result);
+      return result;
     },
   );
 

@@ -82,6 +82,17 @@ interface StickerElectronAPI {
   openManager?: () => Promise<void>;
   /** macOS 전용 — 접근성 권한 요청 (PRD §4.1.1 Phase 2). */
   requestAccessibilityPermission?: () => Promise<StickerAccessibilityResult>;
+  /**
+   * 자동 Ctrl+V/Cmd+V 실패(autoPasted=false) 시 메인 윈도우에서 토스트로
+   * "수동 붙여넣기 안내"를 표시하기 위한 이벤트 구독.
+   * 피커 윈도우는 paste 직후 hide되어 피커 측 토스트가 보이지 않으므로
+   * MainApp에서 본 리스너를 등록해 사용자에게 안내한다.
+   */
+  onFallbackPasteNeeded?: (
+    cb: (data: { reason: string }) => void,
+  ) => () => void;
+  /** sticker:paste 진단 로그 forwarding — DevTools Console에서 흐름 추적용. */
+  onDiagLog?: (cb: (payload: { message: string; data: unknown }) => void) => () => void;
   /** 현재 OS 플랫폼 — 렌더러가 macOS 전용 UI를 조건부 렌더링. */
   getPlatform?: () => Promise<StickerPlatformResult>;
   // ─── Phase 2B 시트 분할 (PRD §3.4.3) ───
