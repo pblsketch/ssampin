@@ -7,6 +7,100 @@ type AggregatedText = { answers: string[] };
 /** 집계 결과 discriminated union */
 type AggregatedResult = AggregatedSingleMulti | AggregatedScale | AggregatedText;
 
+/** 내 이모티콘 (Sticker picker — PRD §4.1) — Electron API 시그니처.
+ *  본 정의는 src/adapters/components/StickerPicker/stickerElectronTypes.ts와 일치해야 한다. */
+interface StickerSelectImageResult {
+  readonly canceled: boolean;
+  readonly filePaths: readonly string[];
+}
+interface StickerImportImageResult {
+  readonly contentHash: string;
+}
+/** paste 실패 사유 — discriminated string. 추가 사유는 string 폴백으로 호환. */
+type StickerPasteReason =
+  | 'accessibility-denied'
+  | 'osascript-failed'
+  | 'unsupported-platform'
+  | (string & {});
+interface StickerPasteResult {
+  readonly ok: boolean;
+  readonly autoPasted: boolean;
+  readonly reason?: StickerPasteReason;
+}
+interface StickerAccessibilityResult {
+  readonly granted: boolean;
+  readonly requested: boolean;
+  readonly reason?: string;
+}
+interface StickerPlatformResult {
+  readonly platform: 'win32' | 'darwin' | 'linux';
+}
+/** Phase 2B 시트 분할 셀 미리보기 — main → renderer 전달용 */
+interface StickerSheetCellPreview {
+  readonly index: number;
+  readonly row: number;
+  readonly col: number;
+  readonly contentHash: string;
+  readonly isEmpty: boolean;
+  readonly dataUrl: string;
+}
+interface StickerSplitSheetResult {
+  readonly sessionId: string;
+  readonly gridSize: 2 | 3 | 4;
+  readonly sheetWidth: number;
+  readonly sheetHeight: number;
+  readonly cells: ReadonlyArray<StickerSheetCellPreview>;
+}
+interface StickerCommitSheetCellsResult {
+  readonly committed: ReadonlyArray<{
+    readonly index: number;
+    readonly stickerId: string;
+    readonly contentHash: string;
+  }>;
+}
+interface StickerElectronAPI {
+  selectImage: () => Promise<StickerSelectImageResult>;
+  importImage: (
+    stickerId: string,
+    sourcePath: string,
+  ) => Promise<StickerImportImageResult>;
+  getImageDataUrl: (stickerId: string) => Promise<string | null>;
+  deleteImage: (stickerId: string) => Promise<void>;
+  paste: (
+    stickerId: string,
+    restorePreviousClipboard: boolean,
+  ) => Promise<StickerPasteResult>;
+  closePicker: () => Promise<void>;
+  /** 글로벌 단축키 등록 실패 fallback — 메인 윈도우 keydown에서 호출 */
+  triggerToggle?: () => Promise<void>;
+  onShortcutConflict: (cb: (combo: string) => void) => () => void;
+  /** 데이터 변경 broadcast 트리거 (관리 화면 → 피커 윈도우) */
+  notifyDataChanged?: () => Promise<void>;
+  /** 데이터 변경 알림 구독 (피커 윈도우 측) */
+  onDataChanged?: (cb: () => void) => () => void;
+  /** 피커 빈 상태 → 쌤도구 페이지 열기 */
+  openManager?: () => Promise<void>;
+  /** macOS 전용 — 접근성 권한 요청 (PRD §4.1.1 Phase 2). */
+  requestAccessibilityPermission?: () => Promise<StickerAccessibilityResult>;
+  /** 현재 OS 플랫폼 — 렌더러가 macOS 전용 UI를 조건부 렌더링. */
+  getPlatform?: () => Promise<StickerPlatformResult>;
+  // ─── Phase 2B 시트 분할 (PRD §3.4.3) ───
+  /** 시트 dimension 검증 — renderer가 grid size 선택 전 호출 */
+  validateSheet?: (sourcePath: string) => Promise<{ width: number; height: number }>;
+  /** 시트를 N×N으로 분할 → 미리보기 dataUrl + sessionId 반환 */
+  splitSheet?: (
+    sourcePath: string,
+    gridSize: 2 | 3 | 4,
+  ) => Promise<StickerSplitSheetResult>;
+  /** 사용자가 선택한 셀들을 stickers/{id}.png로 저장 */
+  commitSheetCells?: (
+    sessionId: string,
+    cells: ReadonlyArray<{ index: number; stickerId: string }>,
+  ) => Promise<StickerCommitSheetCellsResult>;
+  /** 분할 세션 취소 (모달 닫기 시) */
+  cancelSheetSession?: (sessionId: string) => Promise<{ ok: boolean }>;
+}
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   writeData: (filename: string, data: string) => Promise<void>;
@@ -371,6 +465,11 @@ interface ElectronAPI {
     stageDirty: (args: { board: unknown }) => Promise<{ ok: true }>;
     clearDirty: (args: { id: string }) => Promise<{ ok: true }>;
   };
+
+  // === 내 이모티콘 (Sticker picker — PRD §4.1) ===
+  // 시그니처는 본 파일 상단 StickerElectronAPI에 직접 정의되어 있다.
+  // declaration merging 대신 단일 소스로 관리한다.
+  sticker?: StickerElectronAPI;
 }
 
 /** 협업 보드 메타데이터 (Board 엔티티의 renderer-facing 뷰) */

@@ -10,6 +10,9 @@ const COMMAND_TO_KIND: Record<string, QuickAddKind> = {
   'quickAdd.memo': 'memo',
   'quickAdd.note': 'note',
   'quickAdd.bookmark': 'bookmark',
+  // 'sticker-picker:toggle'은 QuickAdd가 아닌 별도 윈도우 토글이므로 여기 매핑하지 않음.
+  // settings.shortcuts.bindings 에는 포함되어 syncShortcuts IPC로 메인에 전달되며,
+  // 메인 프로세스의 triggerShortcut()이 stickerPickerWindow 토글을 직접 처리한다.
 };
 
 /**
@@ -34,15 +37,30 @@ export function useGlobalShortcuts(): void {
 
   // Renderer keydown
   useEffect(() => {
+    const lastStickerFiredAt = { at: 0 };
+
     const handler = (e: KeyboardEvent): void => {
       const bindings = useSettingsStore.getState().settings.shortcuts?.bindings;
       if (!bindings) return;
 
       for (const [commandId, binding] of Object.entries(bindings)) {
         if (!binding.enabled) continue;
+        if (!matchesCombo(e, binding.combo)) continue;
+
+        // sticker-picker:toggle 은 별도 윈도우 토글 — main process IPC로 위임.
+        // globalShortcut 등록이 실패한 환경(다른 앱이 단축키 선점)에서도
+        // 메인 윈도우 포커스 상태에서는 정상 동작하도록 보장.
+        if (commandId === 'sticker-picker:toggle') {
+          const now = Date.now();
+          if (now - lastStickerFiredAt.at < 250) return; // globalShortcut과 이중 트리거 방지
+          lastStickerFiredAt.at = now;
+          e.preventDefault();
+          void window.electronAPI?.sticker?.triggerToggle?.();
+          return;
+        }
+
         const kind = COMMAND_TO_KIND[commandId];
         if (!kind) continue;
-        if (!matchesCombo(e, binding.combo)) continue;
 
         // input/textarea 가드: shift+alt를 동시에 누르지 않은 단순 modifier 조합만 가드
         // (Ctrl+Alt 조합은 타이핑 방해 안 하므로 가드 없음)

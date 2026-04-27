@@ -11,11 +11,12 @@ interface CommandRow {
 }
 
 const COMMANDS: readonly CommandRow[] = [
-  { id: 'quickAdd.todo',     label: '할일 추가',         icon: 'check_circle',  iconColor: 'text-sp-accent' },
-  { id: 'quickAdd.event',    label: '일정 추가',         icon: 'event',         iconColor: 'text-sp-highlight' },
-  { id: 'quickAdd.memo',     label: '메모 추가',         icon: 'sticky_note_2', iconColor: 'text-emerald-400' },
-  { id: 'quickAdd.note',     label: '노트 새 페이지',     icon: 'description',   iconColor: 'text-violet-400' },
-  { id: 'quickAdd.bookmark', label: '즐겨찾기 추가',     icon: 'bookmark',      iconColor: 'text-amber-400' },
+  { id: 'quickAdd.todo',         label: '할일 추가',              icon: 'check_circle',   iconColor: 'text-sp-accent' },
+  { id: 'quickAdd.event',        label: '일정 추가',              icon: 'event',          iconColor: 'text-sp-highlight' },
+  { id: 'quickAdd.memo',         label: '메모 추가',              icon: 'sticky_note_2',  iconColor: 'text-emerald-400' },
+  { id: 'quickAdd.note',         label: '노트 새 페이지',          icon: 'description',    iconColor: 'text-violet-400' },
+  { id: 'quickAdd.bookmark',     label: '즐겨찾기 추가',          icon: 'bookmark',       iconColor: 'text-amber-400' },
+  { id: 'sticker-picker:toggle', label: '내 이모티콘 피커 열기/닫기', icon: 'mood',           iconColor: 'text-pink-400' },
 ];
 
 export function ShortcutsTab(): JSX.Element {

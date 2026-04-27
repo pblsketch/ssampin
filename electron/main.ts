@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor, globalShortcut, clipboard } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { autoUpdater } from 'electron-updater';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerPKCEFallbackHandlers } from './ipc/oauthPKCEFallback';
@@ -24,6 +25,7 @@ declare const __dirname: string;
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let quickAddWindow: BrowserWindow | null = null;
+let stickerPickerWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
 let widgetActiveBeforeSleep = false;  // suspend/lock 시점의 스냅샷
 let isSystemSuspending = false;       // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
@@ -206,7 +208,164 @@ function destroyQuickAddWindow(): void {
   quickAddWindow = null;
 }
 
+// ─── Sticker picker (내 이모티콘) — quickAdd 패턴 복제 ───
+//   PRD §3.1.1 윈도우 사양: 400×480, 화면 상단 22%, frameless, alwaysOnTop, hide-on-close.
+//   prewarm으로 첫 단축키 latency 제거.
+
+function fadeInStickerPickerWindow(): void {
+  if (!stickerPickerWindow || stickerPickerWindow.isDestroyed()) return;
+  const startTime = Date.now();
+  const duration = 160;
+  stickerPickerWindow.setOpacity(0);
+  const interval = setInterval(() => {
+    if (!stickerPickerWindow || stickerPickerWindow.isDestroyed()) {
+      clearInterval(interval);
+      return;
+    }
+    const elapsed = Date.now() - startTime;
+    const t = Math.min(1, elapsed / duration);
+    // ease-out cubic: 1 - (1-t)^3
+    const opacity = 1 - Math.pow(1 - t, 3);
+    stickerPickerWindow.setOpacity(opacity);
+    if (t >= 1) clearInterval(interval);
+  }, 16);
+}
+
+function getActiveStickerDisplay(): Electron.Display {
+  // 멀티 모니터: 커서가 있는 디스플레이 우선, 실패 시 primary
+  try {
+    return screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  } catch {
+    return screen.getPrimaryDisplay();
+  }
+}
+
+function showStickerPickerWindowAt(): void {
+  if (!stickerPickerWindow || stickerPickerWindow.isDestroyed()) return;
+  const display = getActiveStickerDisplay();
+  const { width: areaWidth, height: areaHeight } = display.workAreaSize;
+  const [winWidth, winHeight] = stickerPickerWindow.getSize();
+  stickerPickerWindow.setPosition(
+    Math.round(display.workArea.x + (areaWidth - winWidth) / 2),
+    Math.round(display.workArea.y + areaHeight * 0.22),
+  );
+  stickerPickerWindow.show();
+  stickerPickerWindow.focus();
+  // 사용 안 함 경고 회피 (winHeight는 인터페이스 명확성을 위해 분해)
+  void winHeight;
+}
+
+function buildStickerPickerWindow(prewarm: boolean): void {
+  const display = getActiveStickerDisplay();
+  const { width: areaWidth, height: areaHeight } = display.workAreaSize;
+  const winWidth = 400;
+  const winHeight = 480;
+
+  stickerPickerWindow = new BrowserWindow({
+    width: winWidth,
+    height: winHeight,
+    x: Math.round(display.workArea.x + (areaWidth - winWidth) / 2),
+    y: Math.round(display.workArea.y + areaHeight * 0.22),
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    hasShadow: false,
+    opacity: 0,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  stickerPickerWindow.setAlwaysOnTop(true, 'screen-saver');
+  stickerPickerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  const queryBase: Record<string, string> = { mode: 'stickerPicker' };
+  if (prewarm) queryBase.prewarm = '1';
+
+  if (process.env['VITE_DEV_SERVER_URL']) {
+    const qs = new URLSearchParams(queryBase).toString();
+    void stickerPickerWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?${qs}`);
+  } else {
+    void stickerPickerWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
+      query: queryBase,
+    });
+  }
+
+  if (!prewarm) {
+    stickerPickerWindow.once('ready-to-show', () => {
+      if (!stickerPickerWindow || stickerPickerWindow.isDestroyed()) return;
+      showStickerPickerWindowAt();
+      fadeInStickerPickerWindow();
+    });
+  }
+
+  // close 시 destroy 대신 hide — 재사용으로 빠른 재오픈 (quickAdd 패턴)
+  stickerPickerWindow.on('close', (e) => {
+    if (isQuitting) return;
+    if (!stickerPickerWindow || stickerPickerWindow.isDestroyed()) return;
+    e.preventDefault();
+    stickerPickerWindow.hide();
+    stickerPickerWindow.setOpacity(0);
+  });
+
+  stickerPickerWindow.on('closed', () => {
+    stickerPickerWindow = null;
+  });
+}
+
+function prewarmStickerPickerWindow(): void {
+  if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) return;
+  buildStickerPickerWindow(true);
+}
+
+function createOrFocusStickerPickerWindow(): void {
+  // 이미 살아있으면 즉시 show (prewarm 또는 hidden 상태)
+  if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) {
+    const wasHidden = !stickerPickerWindow.isVisible();
+    if (stickerPickerWindow.isMinimized()) stickerPickerWindow.restore();
+    showStickerPickerWindowAt();
+    if (wasHidden) fadeInStickerPickerWindow();
+    stickerPickerWindow.webContents.send('shortcut:triggered', 'sticker-picker:toggle');
+    return;
+  }
+  buildStickerPickerWindow(false);
+}
+
+function destroyStickerPickerWindow(): void {
+  if (!stickerPickerWindow || stickerPickerWindow.isDestroyed()) return;
+  stickerPickerWindow.destroy();
+  stickerPickerWindow = null;
+}
+
 function triggerShortcut(commandId: string): void {
+  // ─── sticker-picker:toggle (PRD §3.1.3) ───
+  // 토글 동작: 피커가 visible이면 hide, 아니면 메인창 우선 → 폴백 팝업.
+  if (commandId === 'sticker-picker:toggle') {
+    if (stickerPickerWindow && !stickerPickerWindow.isDestroyed() && stickerPickerWindow.isVisible()) {
+      stickerPickerWindow.hide();
+      stickerPickerWindow.setOpacity(0);
+      return;
+    }
+    if (isMainWindowVisible()) {
+      if (mainWindow!.isMinimized()) mainWindow!.restore();
+      mainWindow!.focus();
+      mainWindow!.webContents.send('shortcut:triggered', commandId);
+      return;
+    }
+    createOrFocusStickerPickerWindow();
+    return;
+  }
+
   if (isMainWindowVisible()) {
     // 메인 창이 떠있으면 (최소화 포함) 메인 창에 인앱 모달
     if (mainWindow!.isMinimized()) mainWindow!.restore();
@@ -223,12 +382,15 @@ function applyGlobalShortcuts(config: ShortcutSyncConfig): { registered: string[
   const registered: string[] = [];
   const failed: string[] = [];
   if (!config.globalEnabled) {
+    console.log('[shortcuts] globalEnabled=false, skipping all registrations');
     return { registered, failed };
   }
+  console.log(`[shortcuts] applying ${config.bindings.length} bindings`);
   for (const b of config.bindings) {
     if (!b.enabled) continue;
     const accel = comboToAccelerator(b.combo);
     if (!accel) {
+      console.log(`[shortcuts] ${b.id} → "${b.combo}" REGISTRATION FAILED (invalid accelerator)`);
       failed.push(b.id);
       continue;
     }
@@ -236,11 +398,23 @@ function applyGlobalShortcuts(config: ShortcutSyncConfig): { registered: string[
       const ok = globalShortcut.register(accel, () => {
         triggerShortcut(b.id);
       });
-      if (ok) registered.push(b.id);
-      else failed.push(b.id);
+      if (ok) {
+        console.log(`[shortcuts] ${b.id} → ${accel} (registered)`);
+        registered.push(b.id);
+      } else {
+        console.log(`[shortcuts] ${b.id} → ${accel} REGISTRATION FAILED (likely OS-level conflict)`);
+        failed.push(b.id);
+        // PRD §3.1.4 — sticker 단축키 등록 실패 시 메인 창에 토스트용 이벤트
+        if (b.id === 'sticker-picker:toggle' && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('sticker:shortcut-conflict', { combo: b.combo });
+        }
+      }
     } catch (err) {
-      console.error('[shortcuts] register 실패', b.id, accel, err);
+      console.error(`[shortcuts] ${b.id} → ${accel} REGISTRATION FAILED (exception)`, err);
       failed.push(b.id);
+      if (b.id === 'sticker-picker:toggle' && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('sticker:shortcut-conflict', { combo: b.combo });
+      }
     }
   }
   return { registered, failed };
@@ -1767,6 +1941,694 @@ function registerIpcHandlers(): void {
     if (process.platform === 'darwin') return;
     autoUpdater.quitAndInstall();
   });
+
+  // ─── Sticker picker (내 이모티콘 / PRD §4.1) ───
+  // 스티커 PNG 저장 디렉토리 — userData/data/stickers/
+  function getStickerImageDir(): string {
+    const dir = path.join(getDataDir(), 'stickers');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+  }
+
+  // stickerId 검증 — 경로 인젝션 방지 (영숫자·하이픈·언더스코어만)
+  function validateStickerId(stickerId: unknown): string {
+    if (typeof stickerId !== 'string' || stickerId.length === 0 || stickerId.length > 64) {
+      throw new Error('sticker: stickerId가 유효하지 않습니다');
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(stickerId)) {
+      throw new Error('sticker: stickerId에 허용되지 않는 문자 포함');
+    }
+    return stickerId;
+  }
+
+  // sticker:select-image — PNG/WebP/JPEG/GIF/BMP 파일 다중 선택 (PRD §3.3.1)
+  // 다중 선택 지원: 한 번에 여러 이미지를 골라 일괄 등록 가능
+  ipcMain.handle(
+    'sticker:select-image',
+    async (): Promise<{ canceled: boolean; filePaths: string[] }> => {
+      const win = mainWindow ?? BrowserWindow.getFocusedWindow();
+      if (!win) return { canceled: true, filePaths: [] };
+      const result = await dialog.showOpenDialog(win, {
+        title: '이모티콘 이미지 선택 (여러 개 가능)',
+        filters: [
+          { name: '이미지 파일', extensions: ['png', 'webp', 'jpg', 'jpeg', 'gif', 'bmp'] },
+        ],
+        properties: ['openFile', 'multiSelections'],
+      });
+      return { canceled: result.canceled, filePaths: result.filePaths };
+    },
+  );
+
+  // sourcePath 안전 검증 — path traversal/null-byte 차단 + 절대 경로 강제
+  // 외부에서 들어오는 경로 인자(파일 시스템에 접근하는 모든 sticker 핸들러)에서 공통 사용
+  function validateAbsoluteSourcePath(sourcePath: unknown): string {
+    if (
+      typeof sourcePath !== 'string' ||
+      sourcePath.length === 0 ||
+      sourcePath.includes('\0')
+    ) {
+      throw new Error('sticker: 잘못된 파일 경로입니다');
+    }
+    if (!path.isAbsolute(sourcePath)) {
+      throw new Error('sticker: 절대 경로만 허용됩니다');
+    }
+    // path.resolve 결과가 입력과 다르면 ../ 등 정규화 대상이 포함된 것으로 간주
+    return path.resolve(sourcePath);
+  }
+
+  // sticker:import-image — 입력 이미지를 360×360 PNG로 정규화 + 저장 + contentHash 반환
+  // (PRD §4.3 이미지 변환 파이프라인. nativeImage 단독 사용, sharp 미사용)
+  ipcMain.handle(
+    'sticker:import-image',
+    async (
+      _event,
+      args: { stickerId: string; sourcePath: string },
+    ): Promise<{ contentHash: string }> => {
+      const stickerId = validateStickerId(args.stickerId);
+      const resolvedSourcePath = validateAbsoluteSourcePath(args.sourcePath);
+
+      // nativeImage 디코딩
+      const original = nativeImage.createFromPath(resolvedSourcePath);
+      if (original.isEmpty()) {
+        throw new Error('sticker: 이미지를 디코딩할 수 없습니다 (지원하지 않는 포맷이거나 손상)');
+      }
+
+      // 정사각형 크롭 (짧은 변 기준 중앙 크롭)
+      const size = original.getSize();
+      const minSide = Math.min(size.width, size.height);
+      let squared = original;
+      if (size.width !== size.height) {
+        const cropX = Math.floor((size.width - minSide) / 2);
+        const cropY = Math.floor((size.height - minSide) / 2);
+        squared = original.crop({ x: cropX, y: cropY, width: minSide, height: minSide });
+      }
+
+      // 360×360 리사이즈
+      const resized = squared.resize({ width: 360, height: 360, quality: 'best' });
+      const pngBuffer = resized.toPNG();
+
+      if (pngBuffer.length === 0) {
+        throw new Error('sticker: PNG 인코딩 실패');
+      }
+
+      // 저장
+      const targetDir = getStickerImageDir();
+      const targetPath = path.join(targetDir, `${stickerId}.png`);
+      await fs.promises.writeFile(targetPath, pngBuffer);
+
+      // contentHash (SHA-256, 16자) — 중복 감지용 (PRD §3.3.2)
+      const fullHash = crypto.createHash('sha256').update(pngBuffer).digest('hex');
+      const contentHash = fullHash.slice(0, 16);
+
+      return { contentHash };
+    },
+  );
+
+  // sticker:get-image-data-url — 저장된 PNG를 data URL로 반환
+  ipcMain.handle(
+    'sticker:get-image-data-url',
+    async (_event, stickerId: string): Promise<string | null> => {
+      const id = validateStickerId(stickerId);
+      const filePath = path.join(getStickerImageDir(), `${id}.png`);
+      try {
+        const buf = await fs.promises.readFile(filePath);
+        return `data:image/png;base64,${buf.toString('base64')}`;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw err;
+      }
+    },
+  );
+
+  // sticker:delete-image — PNG 파일 삭제 (ENOENT 무시)
+  ipcMain.handle(
+    'sticker:delete-image',
+    async (_event, stickerId: string): Promise<void> => {
+      const id = validateStickerId(stickerId);
+      const filePath = path.join(getStickerImageDir(), `${id}.png`);
+      try {
+        await fs.promises.unlink(filePath);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
+        throw err;
+      }
+    },
+  );
+
+  // ─── 자동 붙여넣기 헬퍼 (Windows / macOS) ───
+  // PRD §4.1.1 macOS Phase 2 — AppleScript via osascript로 Cmd+V 송신.
+  // System Events 사용에는 접근성 권한이 필요 — systemPreferences로 사전 체크.
+
+  /** macOS 접근성 권한 보유 여부 (best-effort, false = prompt 안 함) */
+  function hasMacOSAccessibilityPermission(): boolean {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { systemPreferences } = require('electron') as {
+        systemPreferences: {
+          isTrustedAccessibilityClient?: (prompt: boolean) => boolean;
+        };
+      };
+      if (typeof systemPreferences.isTrustedAccessibilityClient === 'function') {
+        return systemPreferences.isTrustedAccessibilityClient(false);
+      }
+      // 알 수 없으면 일단 시도 (최악의 경우 osascript-failed 반환)
+      return true;
+    } catch {
+      return true;
+    }
+  }
+
+  /** osascript로 AppleScript 1줄 실행 — System Events 권한 필요 */
+  function runAppleScript(script: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { exec } = require('child_process') as {
+        exec: (
+          cmd: string,
+          cb: (error: Error | null) => void,
+        ) => void;
+      };
+      // JSON.stringify로 quote escape — 공백/특수문자 안전
+      exec(`osascript -e ${JSON.stringify(script)}`, (error: Error | null) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+  }
+
+  /**
+   * Windows 자동 붙여넣기 — @nut-tree/nut-js가 있으면 Ctrl+V 시뮬레이션,
+   * 없으면 graceful fallback (autoPasted: false 반환). nut-js 미설치 환경에서도
+   * 빌드/런타임이 깨지지 않도록 require try/catch.
+   */
+  async function pasteOnWindows(
+    restoreMode: boolean,
+    prevImage: Electron.NativeImage | null,
+    prevText: string,
+  ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> {
+    let autoPasted = false;
+    let pasteReason: string | undefined;
+    try {
+      // 짧은 딜레이로 포커스 전환 대기 (PRD §3.2: ~50~80ms)
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const nut = require('@nut-tree/nut-js') as {
+        keyboard: {
+          pressKey: (...keys: number[]) => Promise<void>;
+          releaseKey: (...keys: number[]) => Promise<void>;
+        };
+        Key: Record<string, number>;
+      };
+      const modKey = nut.Key['LeftControl'];
+      const vKey = nut.Key['V'];
+      if (modKey === undefined || vKey === undefined) {
+        throw new Error('nut-js Key 매핑 없음');
+      }
+      await nut.keyboard.pressKey(modKey, vKey);
+      await nut.keyboard.releaseKey(vKey, modKey);
+      autoPasted = true;
+    } catch (err) {
+      autoPasted = false;
+      pasteReason = err instanceof Error ? err.message : String(err);
+      console.log('[sticker:paste] Windows 자동 붙여넣기 미지원 — 수동 Ctrl+V 폴백', pasteReason);
+    }
+
+    // 클립보드 복원 — 1500ms로 충분한 시간 확보 (PRD §3.2.1)
+    if (restoreMode) {
+      setTimeout(() => {
+        try {
+          if (prevImage && !prevImage.isEmpty()) {
+            clipboard.writeImage(prevImage);
+          } else if (prevText.length > 0) {
+            clipboard.writeText(prevText);
+          }
+        } catch (restoreErr) {
+          console.log('[sticker:paste] 클립보드 복원 실패', restoreErr);
+        }
+      }, 1500);
+    }
+
+    const result: { ok: boolean; autoPasted: boolean; reason?: string } = {
+      ok: true,
+      autoPasted,
+    };
+    if (!autoPasted && pasteReason !== undefined) {
+      result.reason = pasteReason;
+    }
+    return result;
+  }
+
+  /**
+   * macOS 자동 붙여넣기 — osascript로 System Events에게 Cmd+V keystroke 송신.
+   * 접근성 권한이 없으면 reason: 'accessibility-denied'를 반환하여
+   * 렌더러가 사용자에게 권한 안내 토스트를 띄울 수 있도록 한다.
+   */
+  async function pasteOnMacOS(
+    restoreMode: boolean,
+    prevImage: Electron.NativeImage | null,
+    prevText: string,
+  ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> {
+    // 1) 접근성 권한 체크 (best-effort)
+    if (!hasMacOSAccessibilityPermission()) {
+      // 클립보드는 이미 채워져 있으므로 사용자가 수동 Cmd+V로 붙여넣을 수 있다.
+      return { ok: true, autoPasted: false, reason: 'accessibility-denied' };
+    }
+
+    // 2) 피커 윈도우가 포커스를 완전히 놓도록 짧게 대기
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+
+    // 3) Cmd+V keystroke 송신
+    let autoPasted = false;
+    let pasteReason: string | undefined;
+    try {
+      await runAppleScript(
+        'tell application "System Events" to keystroke "v" using command down',
+      );
+      autoPasted = true;
+    } catch (err) {
+      autoPasted = false;
+      pasteReason = 'osascript-failed';
+      console.error(
+        '[sticker:paste] macOS osascript 실패',
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    // 4) 클립보드 복원 (옵션) — Windows와 동일하게 1500ms
+    if (restoreMode) {
+      setTimeout(() => {
+        try {
+          if (prevImage && !prevImage.isEmpty()) {
+            clipboard.writeImage(prevImage);
+          } else if (prevText.length > 0) {
+            clipboard.writeText(prevText);
+          }
+        } catch (restoreErr) {
+          console.log('[sticker:paste] 클립보드 복원 실패 (macOS)', restoreErr);
+        }
+      }, 1500);
+    }
+
+    const result: { ok: boolean; autoPasted: boolean; reason?: string } = {
+      ok: true,
+      autoPasted,
+    };
+    if (!autoPasted && pasteReason !== undefined) {
+      result.reason = pasteReason;
+    }
+    return result;
+  }
+
+  // sticker:paste — 클립보드에 PNG 복사 + 피커 hide + (가능 시) 자동 Ctrl+V (PRD §3.2)
+  // 플랫폼별 분기:
+  //  - win32: pasteOnWindows (@nut-tree/nut-js 미설치 시 graceful fallback)
+  //  - darwin: pasteOnMacOS (AppleScript via osascript, 접근성 권한 필요)
+  //  - 그 외(linux 등): 클립보드만 채우고 autoPasted=false 반환
+  ipcMain.handle(
+    'sticker:paste',
+    async (
+      _event,
+      args: { stickerId: string; restorePreviousClipboard: boolean },
+    ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> => {
+      const id = validateStickerId(args.stickerId);
+      const restoreMode = args.restorePreviousClipboard === true;
+
+      // 1) 이전 클립보드 스냅샷 (복원 모드)
+      let prevImage: Electron.NativeImage | null = null;
+      let prevText = '';
+      if (restoreMode) {
+        try {
+          prevImage = clipboard.readImage();
+          prevText = clipboard.readText();
+        } catch {
+          // 스냅샷 실패는 치명적이지 않음 — 그대로 진행
+        }
+      }
+
+      // 2) 디스크에서 PNG 로드
+      const filePath = path.join(getStickerImageDir(), `${id}.png`);
+      const image = nativeImage.createFromPath(filePath);
+      if (image.isEmpty()) {
+        return { ok: false, autoPasted: false, reason: '이모티콘 이미지를 찾을 수 없습니다' };
+      }
+
+      // 3) 클립보드에 이미지 쓰기
+      try {
+        clipboard.writeImage(image);
+      } catch (err) {
+        return {
+          ok: false,
+          autoPasted: false,
+          reason: `클립보드 쓰기 실패: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+
+      // 4) 피커 숨기기 — 이전 앱이 포커스를 되찾도록
+      if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) {
+        stickerPickerWindow.hide();
+        stickerPickerWindow.setOpacity(0);
+      }
+
+      // 5) 플랫폼별 자동 붙여넣기 디스패치
+      if (process.platform === 'win32') {
+        return await pasteOnWindows(restoreMode, prevImage, prevText);
+      }
+      if (process.platform === 'darwin') {
+        return await pasteOnMacOS(restoreMode, prevImage, prevText);
+      }
+      // Linux / 기타 — 클립보드만 채우고 사용자에게 수동 붙여넣기 안내
+      return { ok: true, autoPasted: false, reason: 'unsupported-platform' };
+    },
+  );
+
+  // sticker:request-accessibility-permission — macOS 전용.
+  // PRD §4.1.1: accessibility-denied 토스트의 "권한 허용하기" 버튼이 호출.
+  // - isTrustedAccessibilityClient(true)로 system 다이얼로그 표시
+  // - 거부 시 시스템 환경설정 > 보안 및 개인정보 > 접근성 패널을 직접 연다.
+  ipcMain.handle(
+    'sticker:request-accessibility-permission',
+    async (): Promise<{ granted: boolean; requested: boolean; reason?: string }> => {
+      if (process.platform !== 'darwin') {
+        return { granted: true, requested: false };
+      }
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { systemPreferences } = require('electron') as {
+          systemPreferences: {
+            isTrustedAccessibilityClient?: (prompt: boolean) => boolean;
+          };
+        };
+        if (typeof systemPreferences.isTrustedAccessibilityClient === 'function') {
+          // true = 시스템 권한 다이얼로그 prompt
+          const granted = systemPreferences.isTrustedAccessibilityClient(true);
+          if (!granted) {
+            // 사용자가 곧장 패널을 열 수 있도록 보조 — 실패해도 silent
+            try {
+              await shell.openExternal(
+                'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+              );
+            } catch {
+              /* silent */
+            }
+          }
+          return { granted, requested: true };
+        }
+        return { granted: true, requested: false };
+      } catch (error) {
+        return {
+          granted: false,
+          requested: false,
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  );
+
+  // sticker:get-platform — 렌더러가 macOS 전용 UI(접근성 안내 등)를 조건부 렌더링.
+  ipcMain.handle(
+    'sticker:get-platform',
+    (): { platform: 'win32' | 'darwin' | 'linux' } => {
+      const p = process.platform;
+      if (p === 'win32' || p === 'darwin' || p === 'linux') {
+        return { platform: p };
+      }
+      // freebsd, openbsd 등 — UI상 linux 취급
+      return { platform: 'linux' };
+    },
+  );
+
+  // ─── 시트 분할 (Phase 2B / PRD §3.4.3) ───
+  // SheetSplitter 클래스를 inline으로 보유 (tsconfig.electron rootDir=electron 한계).
+  // 동일 로직이 src/infrastructure/sticker/SheetSplitter.ts에도 있음 (renderer 타입/테스트용).
+
+  interface SplitCellResult {
+    index: number;
+    row: number;
+    col: number;
+    pngBuffer: Buffer;
+    contentHash: string;
+    isEmpty: boolean;
+  }
+
+  function detectEmptyCell(img: Electron.NativeImage): boolean {
+    try {
+      const bitmap = img.toBitmap();
+      const size = img.getSize();
+      const SAMPLES_PER_AXIS = 12;
+      const stepX = Math.max(1, Math.floor(size.width / SAMPLES_PER_AXIS));
+      const stepY = Math.max(1, Math.floor(size.height / SAMPLES_PER_AXIS));
+      const colorCounts = new Map<string, number>();
+      let total = 0;
+      for (let y = 0; y < size.height; y += stepY) {
+        for (let x = 0; x < size.width; x += stepX) {
+          const offset = (y * size.width + x) * 4;
+          const b = bitmap[offset] ?? 0;
+          const g = bitmap[offset + 1] ?? 0;
+          const r = bitmap[offset + 2] ?? 0;
+          const a = bitmap[offset + 3] ?? 0;
+          const key = a < 32 ? 'T' : `${r >> 4},${g >> 4},${b >> 4}`;
+          colorCounts.set(key, (colorCounts.get(key) ?? 0) + 1);
+          total++;
+        }
+      }
+      if (total === 0) return false;
+      let maxCount = 0;
+      for (const v of colorCounts.values()) {
+        if (v > maxCount) maxCount = v;
+      }
+      return maxCount / total >= 0.95;
+    } catch {
+      return false;
+    }
+  }
+
+  function splitSheet(input: Buffer, gridSize: 2 | 3 | 4): SplitCellResult[] {
+    const sheet = nativeImage.createFromBuffer(input);
+    if (sheet.isEmpty()) {
+      throw new Error('이미지를 읽을 수 없어요.');
+    }
+    const size = sheet.getSize();
+    const sheetSize = Math.min(size.width, size.height);
+    const cellSize = Math.floor(sheetSize / gridSize);
+    const results: SplitCellResult[] = [];
+    for (let row = 0; row < gridSize; row++) {
+      for (let col = 0; col < gridSize; col++) {
+        const cell = sheet.crop({
+          x: col * cellSize,
+          y: row * cellSize,
+          width: cellSize,
+          height: cellSize,
+        });
+        const normalized = cell.resize({
+          width: 360,
+          height: 360,
+          quality: 'best',
+        });
+        const pngBuffer = normalized.toPNG();
+        const isEmpty = detectEmptyCell(normalized);
+        const contentHash = crypto
+          .createHash('sha256')
+          .update(pngBuffer)
+          .digest('hex')
+          .slice(0, 16);
+        results.push({
+          index: row * gridSize + col,
+          row,
+          col,
+          pngBuffer,
+          contentHash,
+          isEmpty,
+        });
+      }
+    }
+    return results;
+  }
+
+  // 분할 세션 캐시 — buffers를 IPC payload로 매번 보내지 않도록 main에 보관.
+  // 10분 후 자동 만료, sticker:commit-sheet-cells 또는 cancel 시 즉시 정리.
+  const splitSessionCache = new Map<
+    string,
+    {
+      cells: SplitCellResult[];
+      sheetWidth: number;
+      sheetHeight: number;
+      expireTimer: ReturnType<typeof setTimeout>;
+    }
+  >();
+
+  function clearSplitSession(sessionId: string): void {
+    const session = splitSessionCache.get(sessionId);
+    if (session) {
+      clearTimeout(session.expireTimer);
+      splitSessionCache.delete(sessionId);
+    }
+  }
+
+  // sticker:validate-sheet — 시트 dimension 검증용 (renderer가 grid size 선택 전 호출)
+  ipcMain.handle(
+    'sticker:validate-sheet',
+    async (
+      _event,
+      args: { sourcePath: string },
+    ): Promise<{ width: number; height: number }> => {
+      const resolved = validateAbsoluteSourcePath(args.sourcePath);
+      const buffer = await fs.promises.readFile(resolved);
+      const img = nativeImage.createFromBuffer(buffer);
+      if (img.isEmpty()) {
+        throw new Error('이미지를 읽을 수 없어요.');
+      }
+      const size = img.getSize();
+      return { width: size.width, height: size.height };
+    },
+  );
+
+  // sticker:split-sheet — 시트를 N×N으로 분할하고 미리보기 dataUrl + sessionId 반환
+  ipcMain.handle(
+    'sticker:split-sheet',
+    async (
+      _event,
+      args: { sourcePath: string; gridSize: 2 | 3 | 4 },
+    ): Promise<{
+      sessionId: string;
+      gridSize: 2 | 3 | 4;
+      sheetWidth: number;
+      sheetHeight: number;
+      cells: Array<{
+        index: number;
+        row: number;
+        col: number;
+        contentHash: string;
+        isEmpty: boolean;
+        dataUrl: string;
+      }>;
+    }> => {
+      const resolved = validateAbsoluteSourcePath(args.sourcePath);
+      if (![2, 3, 4].includes(args.gridSize)) {
+        throw new Error('지원하지 않는 격자 크기입니다.');
+      }
+      const buffer = await fs.promises.readFile(resolved);
+      const cells = splitSheet(buffer, args.gridSize);
+      const img = nativeImage.createFromBuffer(buffer);
+      const size = img.getSize();
+
+      const sessionId = crypto.randomBytes(16).toString('hex');
+      const expireTimer = setTimeout(
+        () => splitSessionCache.delete(sessionId),
+        10 * 60 * 1000,
+      );
+      splitSessionCache.set(sessionId, {
+        cells,
+        sheetWidth: size.width,
+        sheetHeight: size.height,
+        expireTimer,
+      });
+
+      return {
+        sessionId,
+        gridSize: args.gridSize,
+        sheetWidth: size.width,
+        sheetHeight: size.height,
+        cells: cells.map((c) => ({
+          index: c.index,
+          row: c.row,
+          col: c.col,
+          contentHash: c.contentHash,
+          isEmpty: c.isEmpty,
+          dataUrl: 'data:image/png;base64,' + c.pngBuffer.toString('base64'),
+        })),
+      };
+    },
+  );
+
+  // sticker:commit-sheet-cells — 사용자가 선택한 셀들을 stickers/{id}.png로 저장
+  ipcMain.handle(
+    'sticker:commit-sheet-cells',
+    async (
+      _event,
+      args: {
+        sessionId: string;
+        cells: Array<{ index: number; stickerId: string }>;
+      },
+    ): Promise<{
+      committed: Array<{ index: number; stickerId: string; contentHash: string }>;
+    }> => {
+      const session = splitSessionCache.get(args.sessionId);
+      if (!session) {
+        throw new Error('분할 세션이 만료되었어요. 다시 시도해 주세요.');
+      }
+
+      const dir = getStickerImageDir();
+
+      const committed: Array<{
+        index: number;
+        stickerId: string;
+        contentHash: string;
+      }> = [];
+      for (const requested of args.cells) {
+        const cell = session.cells.find((c) => c.index === requested.index);
+        if (!cell) continue;
+        const id = validateStickerId(requested.stickerId);
+        const target = path.join(dir, `${id}.png`);
+        await fs.promises.writeFile(target, cell.pngBuffer);
+        committed.push({
+          index: cell.index,
+          stickerId: id,
+          contentHash: cell.contentHash,
+        });
+      }
+
+      clearSplitSession(args.sessionId);
+      return { committed };
+    },
+  );
+
+  // sticker:cancel-sheet-session — 사용자가 분할 모달을 닫았을 때 세션 정리
+  ipcMain.handle(
+    'sticker:cancel-sheet-session',
+    async (_event, args: { sessionId: string }): Promise<{ ok: boolean }> => {
+      clearSplitSession(args.sessionId);
+      return { ok: true };
+    },
+  );
+
+  // sticker:close-picker — 렌더러가 ESC/backdrop 클릭 시 호출
+  ipcMain.handle('sticker:close-picker', (): void => {
+    if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) {
+      stickerPickerWindow.hide();
+      stickerPickerWindow.setOpacity(0);
+    }
+  });
+
+  // sticker:trigger-toggle — 글로벌 단축키 등록이 실패한 경우의 fallback.
+  // 메인 윈도우 포커스 상태에서 keydown으로 잡힌 단축키가 이 IPC를 호출하면
+  // main process가 정상적으로 picker 토글을 수행한다.
+  ipcMain.handle('sticker:trigger-toggle', (): void => {
+    triggerShortcut('sticker-picker:toggle');
+  });
+
+  // sticker:notify-data-changed — 메인 창의 관리 화면에서 metadata가 바뀌었을 때
+  // 피커 윈도우(별도 BrowserWindow)에 broadcast하여 store cache를 무효화시킨다.
+  // (피커는 자체 renderer process라 메인 store와 메모리 공유 X)
+  ipcMain.handle('sticker:notify-data-changed', (): void => {
+    if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) {
+      stickerPickerWindow.webContents.send('sticker:data-changed');
+    }
+  });
+
+  // sticker:open-manager — 피커 빈 상태에서 "쌤도구 열기" 클릭 시 호출.
+  // 메인 창을 포커스하고 tool-sticker 페이지로 이동, 피커 윈도우는 hide.
+  ipcMain.handle('sticker:open-manager', (): void => {
+    ensureMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('navigate:to-page', 'tool-sticker');
+    }
+    if (stickerPickerWindow && !stickerPickerWindow.isDestroyed()) {
+      stickerPickerWindow.hide();
+      stickerPickerWindow.setOpacity(0);
+    }
+  });
 }
 
 /** 앱 시작 시 중요 데이터 파일 백업 생성 */
@@ -1836,6 +2698,8 @@ if (!gotTheLock) {
     });
     // QuickAdd 팝업 창 prewarm (앱 시작 5초 후) — 첫 단축키 latency 제거
     setTimeout(() => prewarmQuickAddWindow(), 5000);
+    // Sticker picker prewarm (5.5초 — quickAdd와 약간 stagger)
+    setTimeout(() => prewarmStickerPickerWindow(), 5500);
     createTray();
     setupAutoUpdater();
 
@@ -1916,6 +2780,7 @@ if (!gotTheLock) {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   destroyQuickAddWindow();
+  destroyStickerPickerWindow();
 });
 
 app.on('before-quit', () => {

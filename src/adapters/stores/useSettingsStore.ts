@@ -156,26 +156,30 @@ const DEFAULT_SETTINGS: Settings = {
     deviceId: '',  // 런타임에 generateUUID()로 초기화
   },
   shortcuts: {
-    globalEnabled: false,
+    globalEnabled: true,
     bindings: {
-      'quickAdd.todo':     { combo: 'mod+alt+t', enabled: true },
-      'quickAdd.event':    { combo: 'mod+alt+e', enabled: true },
-      'quickAdd.memo':     { combo: 'mod+alt+m', enabled: true },
-      'quickAdd.note':     { combo: 'mod+alt+n', enabled: true },
-      'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
+      'quickAdd.todo':         { combo: 'mod+alt+t', enabled: true },
+      'quickAdd.event':        { combo: 'mod+alt+e', enabled: true },
+      'quickAdd.memo':         { combo: 'mod+alt+m', enabled: true },
+      'quickAdd.note':         { combo: 'mod+alt+n', enabled: true },
+      'quickAdd.bookmark':     { combo: 'mod+alt+b', enabled: true },
+      'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
     },
+    migratedAutoEnableV2: true,
   },
 };
 
 export const DEFAULT_SHORTCUTS: ShortcutSettings = {
-  globalEnabled: false,
+  globalEnabled: true,
   bindings: {
-    'quickAdd.todo':     { combo: 'mod+alt+t', enabled: true },
-    'quickAdd.event':    { combo: 'mod+alt+e', enabled: true },
-    'quickAdd.memo':     { combo: 'mod+alt+m', enabled: true },
-    'quickAdd.note':     { combo: 'mod+alt+n', enabled: true },
-    'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
+    'quickAdd.todo':         { combo: 'mod+alt+t', enabled: true },
+    'quickAdd.event':        { combo: 'mod+alt+e', enabled: true },
+    'quickAdd.memo':         { combo: 'mod+alt+m', enabled: true },
+    'quickAdd.note':         { combo: 'mod+alt+n', enabled: true },
+    'quickAdd.bookmark':     { combo: 'mod+alt+b', enabled: true },
+    'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
   },
+  migratedAutoEnableV2: true,
 };
 
 interface SettingsState {
@@ -265,10 +269,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           })(),
           shortcuts: (() => {
             const savedShortcuts = (saved as unknown as { shortcuts?: Partial<ShortcutSettings> }).shortcuts;
+            // 레거시 사용자(shortcuts 키 자체가 없음) → DEFAULT_SHORTCUTS 사용 (이미 globalEnabled=true + migrated=true)
             if (!savedShortcuts) return DEFAULT_SHORTCUTS;
+            // v2 자동 활성화 마이그레이션:
+            // - migratedAutoEnableV2=true 인 사용자: 본인 선택 존중 (globalEnabled 그대로)
+            // - migratedAutoEnableV2 미설정 (v2.0.0 이하 저장본): 강제로 true 1회 전환 후 플래그 박음
+            const alreadyMigrated =
+              (savedShortcuts as { migratedAutoEnableV2?: boolean }).migratedAutoEnableV2 === true;
             return {
-              globalEnabled: savedShortcuts.globalEnabled ?? DEFAULT_SHORTCUTS.globalEnabled,
+              globalEnabled: alreadyMigrated
+                ? (savedShortcuts.globalEnabled ?? DEFAULT_SHORTCUTS.globalEnabled)
+                : true,
               bindings: { ...DEFAULT_SHORTCUTS.bindings, ...(savedShortcuts.bindings ?? {}) },
+              migratedAutoEnableV2: true,
             };
           })(),
           dashboardTheme: (saved as unknown as { dashboardTheme?: DashboardThemeSettings }).dashboardTheme,
@@ -365,8 +378,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const current = get().settings;
     const currentShortcuts = current.shortcuts ?? DEFAULT_SHORTCUTS;
     const existing = currentShortcuts.bindings[commandId];
+    // ...currentShortcuts 로 migratedAutoEnableV2 등 메타 필드를 보존한다.
     const nextShortcuts: ShortcutSettings = {
-      globalEnabled: currentShortcuts.globalEnabled,
+      ...currentShortcuts,
       bindings: {
         ...currentShortcuts.bindings,
         [commandId]: {

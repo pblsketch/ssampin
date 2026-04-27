@@ -210,7 +210,8 @@ export type QuickAddShortcutId =
   | 'quickAdd.event'
   | 'quickAdd.memo'
   | 'quickAdd.note'
-  | 'quickAdd.bookmark';
+  | 'quickAdd.bookmark'
+  | 'sticker-picker:toggle';
 
 export interface ShortcutBinding {
   /** 정규화 조합 문자열, 예: "mod+alt+t" */
@@ -222,8 +223,14 @@ export interface ShortcutBinding {
 export interface ShortcutSettings {
   /** 커맨드 ID → 키 조합 매핑 */
   readonly bindings: Record<string, ShortcutBinding>;
-  /** OS 전역 단축키(Electron globalShortcut) 활성화 여부. 기본 false */
+  /** OS 전역 단축키(Electron globalShortcut) 활성화 여부. v2.1+ 기본 true */
   readonly globalEnabled: boolean;
+  /**
+   * v2 자동 활성화 마이그레이션 완료 플래그.
+   * v2.0.0 이하에서 globalEnabled=false로 저장된 사용자를 위해 1회 강제로 true로 전환한 뒤
+   * 이 플래그를 true로 박아서 사용자가 의도적으로 다시 false로 끈 경우 다시 자동 활성화하지 않는다.
+   */
+  readonly migratedAutoEnableV2?: boolean;
 }
 
 export interface MealSchoolSettings {
