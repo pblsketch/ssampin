@@ -7,6 +7,8 @@ import { useMobileScheduleStore } from '@mobile/stores/useMobileScheduleStore';
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
 import { useMobileMealStore } from '@mobile/stores/useMobileMealStore';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
+import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
+import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
 import { CurrentClassCard } from './CurrentClassCard';
 import { HomeroomAttendanceCard } from './HomeroomAttendanceCard';
 import { ClassAttendanceCard } from './ClassAttendanceCard';
@@ -41,6 +43,9 @@ export function TodayHub({ onNavigateAttendance }: Props) {
   const syncState = useMobileDriveSyncStore((s) => s.state);
   const lastSyncedAt = useMobileDriveSyncStore((s) => s.lastSyncedAt);
 
+  const loadTeachingClasses = useMobileTeachingClassStore((s) => s.load);
+  const loadProgress = useMobileProgressStore((s) => s.load);
+
   const periodInfo = useCurrentPeriod(settings.periodTimes);
 
   // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
@@ -51,7 +56,9 @@ export function TodayHub({ onNavigateAttendance }: Props) {
     void loadSettings();
     void loadSchedule();
     void loadAttendance();
-  }, [loadSettings, loadSchedule, loadAttendance]);
+    void loadTeachingClasses();
+    void loadProgress();
+  }, [loadSettings, loadSchedule, loadAttendance, loadTeachingClasses, loadProgress]);
 
   useEffect(() => {
     if (settingsLoaded && mealAtptCode && mealSchoolCode) {
