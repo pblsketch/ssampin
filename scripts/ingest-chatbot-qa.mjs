@@ -347,8 +347,12 @@ const QA_DOCUMENTS = [
     metadata: { source: 'system-qa', category: 'sync', title: 'Q: Google Tasks 연동' },
   },
   {
-    content: `Q: Google Tasks 연동할 때 "이 앱은 Google에서 확인되지 않았습니다" 경고가 나와요.\nA: 쌤핀의 Google Tasks 연동은 현재 구글 앱 인증 심사가 진행 중이에요. 쌤핀 본체는 이미 캘린더·드라이브 심사를 통과한 정식 앱이며, Tasks 스코프 추가 심사만 남은 상태입니다. 경고 화면에서 '고급' → '쌤핀(안전하지 않음)으로 이동'을 눌러 진행하시면 정상적으로 사용하실 수 있어요. 심사가 완료되면 경고 없이 바로 연동됩니다. (v1.9.7 베타)`,
-    metadata: { source: 'system-qa', category: 'sync', title: 'Q: Google Tasks 인증 심사 중 경고' },
+    content: `Q: Google Tasks 연동할 때 "이 앱은 Google에서 확인하지 않았습니다" 경고가 나와요. / 차단된 앱이라고 떠요.\nA: 쌤핀의 Google Tasks 연동 권한이 현재 구글 검증 대기 중이라 그래요. 쌤핀 본체는 이미 캘린더·드라이브 인증을 통과한 정식 앱이고(✓), Tasks 권한만 별도 심사가 남은 상태입니다(데모 영상 재촬영·재제출 단계).\n\n경고 화면이 떴을 때 이렇게 진행하시면 정상적으로 연동됩니다:\n  1) 경고 화면 왼쪽 아래 "고급" 클릭\n  2) "ssampin(안전하지 않음)으로 이동" 클릭\n  3) "할일 관리" 권한에 체크 후 "계속"\n\n쌤핀은 오픈소스이므로 GitHub(github.com/pblsketch/ssampin)에서 코드를 직접 확인할 수 있어요. 검증이 완료되면 경고 없이 바로 연동됩니다. 캘린더·드라이브 연동에는 영향이 없어요.`,
+    metadata: { source: 'system-qa', category: 'sync', title: 'Q: Google Tasks 차단된 앱 경고 · 검증 대기 중 우회 방법' },
+  },
+  {
+    content: `Q: Google Tasks 연동을 시도하면 "차단된 앱"이라고 뜨면서 진행이 안 됩니다.\nA: 일반적으로 두 가지 케이스 중 하나예요.\n\n① "이 앱은 Google에서 확인하지 않음" 경고 화면이 뜬 경우 → 검증 대기 중이라 정상이에요. "고급" → "ssampin(안전하지 않음)으로 이동"을 눌러 진행하시면 됩니다.\n\n② 학교/기관 Google Workspace 계정으로 로그인했는데 관리자가 외부 앱을 차단해 놓은 경우 → 이때는 "고급" 옵션조차 안 나타나고 완전히 차단됩니다. 이 경우엔 개인 Gmail 계정으로 시도하시거나, 학교 Workspace 관리자에게 ssampin 앱 허용을 요청해야 해요.\n\n어떤 화면이 나오는지(경고만 뜨는지, 아예 못 진행하는지) 알려주시면 더 정확히 안내드릴 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'sync', title: 'Q: Google Tasks 차단된 앱 오류 진단' },
   },
   {
     content: `Q: Google Tasks 연동을 켜면 자동으로 동기화되나요?\nA: 네, v1.9.7부터 자동 동기화가 됩니다. 4가지 시점에 자동으로 동작해요: ① 앱 시작 시, ② 창 포커스가 돌아왔을 때, ③ 할 일을 추가·수정·삭제한 뒤 약 2.5초 후, ④ 주기적(설정한 간격). 자동 실행 간격은 Drive 백업 설정과 공유해요. '지금 연동 실행' 버튼은 수동 동기화용으로 계속 사용할 수 있어요.`,
