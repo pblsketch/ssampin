@@ -344,8 +344,7 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
     <div
       onMouseDown={handleBackdropMouseDown}
       className={[
-        'fixed inset-0 z-sp-palette flex items-start justify-center pt-[20vh] px-4',
-        'bg-black/55 backdrop-blur-sm motion-reduce:backdrop-blur-none',
+        'h-screen w-screen flex flex-col bg-transparent',
         'animate-fade-in motion-reduce:animate-none',
         isClosing ? 'pointer-events-none opacity-0 transition-opacity duration-sp-base' : '',
       ].filter(Boolean).join(' ')}
@@ -357,7 +356,7 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
         aria-label="이모티콘 피커"
         onKeyDown={handleKeyDown}
         className={[
-          'w-[min(440px,calc(100vw-32px))] max-h-[480px] flex flex-col',
+          'flex-1 min-h-0 w-full flex flex-col',
           'bg-sp-card border border-sp-border rounded-xl shadow-sp-lg ring-1 ring-white/5',
           'overflow-hidden',
           'animate-scale-in motion-reduce:animate-none',
