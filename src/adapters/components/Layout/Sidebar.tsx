@@ -40,6 +40,7 @@ export type PageId =
   | 'tool-valueline'
   | 'tool-traffic-discussion'
   | 'tool-collab-board'
+  | 'tool-sticker'
   | 'dual-tool-view'
   | 'settings';
 
@@ -109,7 +110,8 @@ const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
   'dashboard', 'export', 'tools',
   'tool-forms',
   'tool-timer', 'tool-random', 'tool-traffic-light', 'tool-scoreboard',
-  'tool-roulette', 'tool-dice', 'tool-coin', 'tool-poll', 'tool-survey', 'tool-seat-picker', 'settings',
+  'tool-roulette', 'tool-dice', 'tool-coin', 'tool-poll', 'tool-survey', 'tool-seat-picker',
+  'tool-sticker', 'settings',
 ]);
 
 /** NAV_ITEMS에서 자동 파생된 PIN 보호 가능 페이지 목록 */

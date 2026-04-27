@@ -716,4 +716,99 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clearDirty: (args: { id: string }): Promise<{ ok: true }> =>
       ipcRenderer.invoke('realtime-wall:board:clear-dirty', args),
   },
+
+  // === 내 이모티콘 (Sticker picker — PRD §4.1) ===
+  sticker: {
+    selectImage: (): Promise<{ canceled: boolean; filePaths: string[] }> =>
+      ipcRenderer.invoke('sticker:select-image'),
+    importImage: (stickerId: string, sourcePath: string): Promise<{ contentHash: string }> =>
+      ipcRenderer.invoke('sticker:import-image', { stickerId, sourcePath }),
+    getImageDataUrl: (stickerId: string): Promise<string | null> =>
+      ipcRenderer.invoke('sticker:get-image-data-url', stickerId),
+    deleteImage: (stickerId: string): Promise<void> =>
+      ipcRenderer.invoke('sticker:delete-image', stickerId),
+    paste: (
+      stickerId: string,
+      restorePreviousClipboard: boolean,
+    ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> =>
+      ipcRenderer.invoke('sticker:paste', { stickerId, restorePreviousClipboard }),
+    closePicker: (): Promise<void> =>
+      ipcRenderer.invoke('sticker:close-picker'),
+    triggerToggle: (): Promise<void> =>
+      ipcRenderer.invoke('sticker:trigger-toggle'),
+    /**
+     * PRD §3.1.4 — globalShortcut.register() 실패 시 메인 프로세스가
+     * 메인 창에 송신하는 이벤트. 렌더러는 토스트 + 설정 안내 표시.
+     */
+    onShortcutConflict: (callback: (combo: string) => void): (() => void) => {
+      const handler = (_event: unknown, payload: { combo: string }) => callback(payload.combo);
+      ipcRenderer.on('sticker:shortcut-conflict', handler);
+      return () => { ipcRenderer.removeListener('sticker:shortcut-conflict', handler); };
+    },
+    /**
+     * 메인 창의 관리 화면이 metadata를 저장한 직후 호출.
+     * Main이 별도 피커 BrowserWindow에 `sticker:data-changed` 이벤트를 송신한다.
+     */
+    notifyDataChanged: (): Promise<void> =>
+      ipcRenderer.invoke('sticker:notify-data-changed'),
+    /**
+     * 피커 윈도우 측에서 데이터 변경 알림을 구독한다.
+     * 호출 시 store load 다시 트리거 → UI 즉시 반영.
+     */
+    onDataChanged: (callback: () => void): (() => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('sticker:data-changed', handler);
+      return () => { ipcRenderer.removeListener('sticker:data-changed', handler); };
+    },
+    /**
+     * 피커 빈 상태에서 "쌤도구 열기" 클릭 시 호출.
+     * Main 창을 tool-sticker 페이지로 이동시키고 피커 윈도우는 hide.
+     */
+    openManager: (): Promise<void> =>
+      ipcRenderer.invoke('sticker:open-manager'),
+    /**
+     * macOS 전용 — 접근성 권한 요청. paste 결과 reason='accessibility-denied'
+     * 토스트의 "권한 허용하기" 버튼이 호출. 시스템 다이얼로그 표시 + 보안 패널 자동 오픈.
+     */
+    requestAccessibilityPermission: (): Promise<{ granted: boolean; requested: boolean; reason?: string }> =>
+      ipcRenderer.invoke('sticker:request-accessibility-permission'),
+    /**
+     * 현재 OS 플랫폼 — 렌더러가 macOS 전용 UI(접근성 안내 배너 등)를 조건부 렌더링.
+     */
+    getPlatform: (): Promise<{ platform: 'win32' | 'darwin' | 'linux' }> =>
+      ipcRenderer.invoke('sticker:get-platform'),
+    // ─── 시트 분할 (Phase 2B / PRD §3.4.3) ───
+    /** 시트 dimension 검증 — renderer가 grid size 선택 전 호출 */
+    validateSheet: (sourcePath: string): Promise<{ width: number; height: number }> =>
+      ipcRenderer.invoke('sticker:validate-sheet', { sourcePath }),
+    /** 시트를 N×N으로 분할 + 미리보기 dataUrl + sessionId 반환 */
+    splitSheet: (
+      sourcePath: string,
+      gridSize: 2 | 3 | 4,
+    ): Promise<{
+      sessionId: string;
+      gridSize: 2 | 3 | 4;
+      sheetWidth: number;
+      sheetHeight: number;
+      cells: Array<{
+        index: number;
+        row: number;
+        col: number;
+        contentHash: string;
+        isEmpty: boolean;
+        dataUrl: string;
+      }>;
+    }> =>
+      ipcRenderer.invoke('sticker:split-sheet', { sourcePath, gridSize }),
+    /** 사용자가 선택한 셀들을 stickers/{id}.png로 저장 */
+    commitSheetCells: (
+      sessionId: string,
+      cells: Array<{ index: number; stickerId: string }>,
+    ): Promise<{
+      committed: Array<{ index: number; stickerId: string; contentHash: string }>;
+    }> => ipcRenderer.invoke('sticker:commit-sheet-cells', { sessionId, cells }),
+    /** 분할 세션 취소 (모달 닫기 시) */
+    cancelSheetSession: (sessionId: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('sticker:cancel-sheet-session', { sessionId }),
+  },
 });

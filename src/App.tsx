@@ -44,6 +44,8 @@ import { AssignmentTool } from '@adapters/components/Tools/Assignment/Assignment
 import { AssignmentDetail } from '@adapters/components/Tools/Assignment/AssignmentDetail';
 import { ToolChalkboard } from '@adapters/components/Tools/ToolChalkboard';
 import { ToolCollabBoard } from '@adapters/components/Tools/ToolCollabBoard';
+import { ToolMyEmoji } from '@adapters/components/Tools/ToolMyEmoji';
+import { StickerPickerApp } from '@adapters/components/StickerPicker/StickerPickerApp';
 import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/Tools/Discussion';
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
@@ -77,6 +79,7 @@ import { useSeatConstraintsStore } from '@adapters/stores/useSeatConstraintsStor
 import { useDDayStore } from '@adapters/stores/useDDayStore';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useMealStore } from '@adapters/stores/useMealStore';
+import { useStickerStore } from '@adapters/stores/useStickerStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useTasksAutoSync } from '@adapters/hooks/useTasksAutoSync';
@@ -105,6 +108,11 @@ function isWidgetMode(): boolean {
 function isQuickAddMode(): boolean {
   const params = new URLSearchParams(window.location.search);
   return params.get('mode') === 'quickAdd';
+}
+
+function isStickerPickerMode(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('mode') === 'stickerPicker';
 }
 
 function getQuickAddKindFromUrl(): QuickAddKind {
@@ -282,6 +290,10 @@ function renderPage(
   if (page === 'tool-collab-board') {
     return wrap(<ToolCollabBoard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
+  if (page === 'tool-sticker') {
+    // 단일 모드 전용 (듀얼 모드 미지원). 모달이 많고 특정 흐름이 있어 좌우 분할 부적합.
+    return <ToolMyEmoji onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />;
+  }
   if (page === 'tool-assignment') {
     return (
       <AssignmentTool
@@ -334,6 +346,9 @@ function WidgetUpdateBanner() {
 }
 
 export function App() {
+  if (isStickerPickerMode()) {
+    return <StickerPickerApp />;
+  }
   if (isQuickAddMode()) {
     return <QuickAddApp />;
   }
@@ -740,6 +755,8 @@ function MainApp() {
       // note-sections / note-pages-meta / note-body는 동일 store이므로
       // syncRegistry에서 subscribeExcluded:true로 처리되어 본 맵에서 제외됨.
       'note-notebooks':   (cb) => useNoteStore.subscribe(cb),
+      // 내 이모티콘 — stickers-meta.json 단일 키.
+      'stickers':         (cb) => useStickerStore.subscribe(cb),
     };
 
     const unsubscribers: Array<() => void> = [];

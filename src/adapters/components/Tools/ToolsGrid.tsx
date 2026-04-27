@@ -42,6 +42,7 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-traffic-discussion', emoji: '🚦', name: '신호등 토론', description: '찬성·보류·반대 의사 표현' },
   { id: 'tool-chalkboard', emoji: '🖍️', name: '칠판', description: '분필로 판서하기' },
   { id: 'tool-collab-board', emoji: '🎨', name: '협업 보드', description: '학생들과 실시간 협업 작업하기', badge: 'BETA' },
+  { id: 'tool-sticker', emoji: '😎', name: '내 이모티콘', description: '단축키 한 번으로 어디든 붙여넣는 나만의 이모티콘', badge: 'NEW' },
   // 실시간 담벼락: 다음 릴리즈 출시 예정 — BETA로 공개.
   { id: 'tool-realtime-wall', emoji: '🗂️', name: '실시간 담벼락', description: '학생 글을 실시간으로 모아 칸반형·자유 배치형으로 정리', badge: 'BETA' },
   { id: 'tool-forms', emoji: '📄', name: '서식', description: 'HWPX · PDF · Excel 서식 모아보기' },

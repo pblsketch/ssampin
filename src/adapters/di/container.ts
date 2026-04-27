@@ -40,6 +40,7 @@ import type { IObservationRepository } from '@domain/repositories/IObservationRe
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
+import type { IStickerRepository } from '@domain/repositories/IStickerRepository';
 import type { IThumbnailer, IPreviewExtractor, IPrinterAdapter } from '@domain/ports/IFormPorts';
 
 import { ElectronStorageAdapter } from '@infrastructure/storage/ElectronStorageAdapter';
@@ -85,6 +86,7 @@ import { JsonObservationRepository } from '@adapters/repositories/JsonObservatio
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
 import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRepository';
+import { JsonStickerRepository } from '@adapters/repositories/JsonStickerRepository';
 import { PdfJsThumbnailer } from '@infrastructure/forms/PdfJsThumbnailer';
 import { HwpxExcelPreviewExtractor } from '@infrastructure/forms/HwpxExcelPreviewExtractor';
 import { ElectronPrinterAdapter } from '@infrastructure/print/ElectronPrinterAdapter';
@@ -180,6 +182,10 @@ export const noteRepository: INotebookRepository =
 // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
 export const wallBoardRepository: IWallBoardRepository =
   new JsonWallBoardRepository(storage);
+
+// === 내 이모티콘 (Sticker Picker) ===
+export const stickerRepository: IStickerRepository =
+  new JsonStickerRepository(storage);
 
 // === 서식 관리 ===
 export const formRepository: IFormTemplateRepository =

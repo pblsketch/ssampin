@@ -282,6 +282,15 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useNoteStore.getState().load(true);
     },
   },
+  // 25. stickers ─ 내 이모티콘
+  {
+    fileName: 'stickers',
+    reload: async () => {
+      const { useStickerStore } = await import('@adapters/stores/useStickerStore');
+      useStickerStore.setState({ loaded: false });
+      await useStickerStore.getState().load();
+    },
+  },
 ];
 
 /**
