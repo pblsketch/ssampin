@@ -773,6 +773,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     requestAccessibilityPermission: (): Promise<{ granted: boolean; requested: boolean; reason?: string }> =>
       ipcRenderer.invoke('sticker:request-accessibility-permission'),
     /**
+     * 자동 Ctrl+V/Cmd+V 시뮬레이션이 실패했을 때 메인 윈도우에서 사용자에게
+     * "수동으로 Ctrl+V 붙여넣기" 안내 토스트를 표시하기 위한 이벤트 구독.
+     *
+     * 피커 윈도우는 paste 시점에 즉시 hide되므로 피커 측 토스트는 보이지 않는다.
+     * 따라서 메인 윈도우(MainApp)에서 본 리스너를 등록해 토스트를 띄워야 한다.
+     */
+    onFallbackPasteNeeded: (callback: (data: { reason: string }) => void): (() => void) => {
+      const handler = (_event: unknown, data: { reason: string }) => callback(data);
+      ipcRenderer.on('sticker:fallback-paste-needed', handler);
+      return () => { ipcRenderer.removeListener('sticker:fallback-paste-needed', handler); };
+    },
+    /**
+     * sticker:paste 진단 로그를 메인 프로세스에서 DevTools 콘솔로 forwarding.
+     * MainApp에서 구독하면 cmd 없이도 DevTools Console에서 흐름 추적 가능.
+     */
+    onDiagLog: (callback: (payload: { message: string; data: unknown }) => void): (() => void) => {
+      const handler = (_e: unknown, payload: { message: string; data: unknown }) => callback(payload);
+      ipcRenderer.on('sticker:diag-log', handler);
+      return () => { ipcRenderer.removeListener('sticker:diag-log', handler); };
+    },
+    /**
      * 현재 OS 플랫폼 — 렌더러가 macOS 전용 UI(접근성 안내 배너 등)를 조건부 렌더링.
      */
     getPlatform: (): Promise<{ platform: 'win32' | 'darwin' | 'linux' }> =>

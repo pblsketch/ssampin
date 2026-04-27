@@ -17,6 +17,12 @@ files:
       - "dist-electron/**/*"
       - "dist-student/**/*"
       - "node_modules/**/*"
+# 네이티브 모듈은 asar 내부에서 require할 수 없으므로 언팩 필요.
+# @nut-tree-fork/nut-js (스티커 자동 붙여넣기용) → libnut-{win32,darwin,linux} 의
+# .node 바이너리가 OS dlopen으로 로드되어야 한다. 미언팩 시 win32에서
+# `Cannot find module ...libnut.node` 런타임 오류 → 자동 Ctrl+V 실패.
+asarUnpack:
+  - "**/node_modules/@nut-tree-fork/**"
 win:
   target:
     - target: nsis

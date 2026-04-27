@@ -592,6 +592,36 @@ function MainApp() {
   // 글로벌 퀵애드 단축키 (Ctrl+Alt+T/E/M/N) 등록
   useGlobalShortcuts();
 
+  // 내 이모티콘 자동 붙여넣기 폴백 안내 — autoPasted=false 시 메인 윈도우에서
+  // 토스트로 "수동 Ctrl+V" 안내. 피커 윈도우는 paste 직후 hide되어 피커 토스트가
+  // 보이지 않기 때문에 MainApp에서 등록해야 한다.
+  useEffect(() => {
+    const subscribe = window.electronAPI?.sticker?.onFallbackPasteNeeded;
+    if (!subscribe) return;
+    const unsubscribe = subscribe(() => {
+      useToastStore.getState().show(
+        '이모티콘이 클립보드에 복사됐어요. 채팅창에서 Ctrl+V로 붙여넣어 주세요.',
+        'info',
+      );
+    });
+    return unsubscribe;
+  }, []);
+
+  // sticker:paste 진단 로그 — main 프로세스 stdout을 DevTools 콘솔로 forwarding.
+  // Ctrl+Shift+I 로 DevTools를 열면 [sticker:paste] 흐름을 콘솔에서 바로 볼 수 있다.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.sticker?.onDiagLog?.((payload) => {
+      if (payload.data !== null && payload.data !== undefined) {
+        // eslint-disable-next-line no-console
+        console.log(payload.message, payload.data);
+      } else {
+        // eslint-disable-next-line no-console
+        console.log(payload.message);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   // .ssampin 파일 열기 이벤트 리스너 (Electron에서 파일 더블클릭 시)
   useEffect(() => {
     const api = window.electronAPI;
