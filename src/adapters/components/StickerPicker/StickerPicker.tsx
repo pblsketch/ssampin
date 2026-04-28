@@ -129,7 +129,11 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
           return;
         }
 
-        const result = await api.paste(stickerId, settings.restorePreviousClipboard);
+        const result = await api.paste(
+          stickerId,
+          settings.restorePreviousClipboard,
+          settings.flattenAlphaOnPaste,
+        );
 
         if (result.ok) {
           // 성공한 경우에만 사용 기록 — 실패한 paste로 카운트가 부풀려지지 않도록.

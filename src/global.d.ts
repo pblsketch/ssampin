@@ -78,6 +78,7 @@ interface StickerElectronAPI {
   paste: (
     stickerId: string,
     restorePreviousClipboard: boolean,
+    flattenAlphaOnPaste?: boolean,
   ) => Promise<StickerPasteResult>;
   closePicker: () => Promise<void>;
   /** 글로벌 단축키 등록 실패 fallback — 메인 윈도우 keydown에서 호출 */

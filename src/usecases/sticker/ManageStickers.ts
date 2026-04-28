@@ -9,6 +9,7 @@ import {
   createDefaultPack,
   createEmptyStickersData,
   DEFAULT_PACK_ID,
+  DEFAULT_STICKER_SETTINGS,
 } from '@domain/entities/Sticker';
 import { incrementUsage, findDuplicate } from '@domain/rules/stickerRules';
 import { generateUUID } from '@infrastructure/utils/uuid';
@@ -34,11 +35,27 @@ export class ManageStickers {
       return empty;
     }
 
+    // 누락된 settings 키를 default로 채우기 (신규 추가 settings 마이그레이션).
+    // 기존 사용자 데이터에 flattenAlphaOnPaste 등이 없을 수 있으므로 호출 시점에 보정한다.
+    const mergedSettings: StickerSettings = {
+      ...DEFAULT_STICKER_SETTINGS,
+      ...data.settings,
+    };
+    const settingsChanged =
+      JSON.stringify(mergedSettings) !== JSON.stringify(data.settings);
+
     if (!data.packs.some((p) => p.id === DEFAULT_PACK_ID)) {
       const migrated: StickersData = {
         ...data,
         packs: [createDefaultPack(now), ...data.packs],
+        settings: mergedSettings,
       };
+      await this.repo.saveStickers(migrated);
+      return migrated;
+    }
+
+    if (settingsChanged) {
+      const migrated: StickersData = { ...data, settings: mergedSettings };
       await this.repo.saveStickers(migrated);
       return migrated;
     }

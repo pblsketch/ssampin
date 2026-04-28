@@ -742,8 +742,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     paste: (
       stickerId: string,
       restorePreviousClipboard: boolean,
+      flattenAlphaOnPaste?: boolean,
     ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> =>
-      ipcRenderer.invoke('sticker:paste', { stickerId, restorePreviousClipboard }),
+      ipcRenderer.invoke('sticker:paste', {
+        stickerId,
+        restorePreviousClipboard,
+        flattenAlphaOnPaste,
+      }),
     closePicker: (): Promise<void> =>
       ipcRenderer.invoke('sticker:close-picker'),
     triggerToggle: (): Promise<void> =>

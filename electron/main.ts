@@ -2084,6 +2084,47 @@ function registerIpcHandlers(): void {
     },
   );
 
+  /**
+   * 투명 PNG의 알파 영역을 흰 배경 위에 합성한다 (카톡 호환용).
+   *
+   * Windows의 표준 클립보드 포맷 CF_BITMAP은 알파 채널을 지원하지 않아,
+   * 카카오톡처럼 CF_BITMAP을 우선 읽는 앱은 투명 영역을 검은색으로 렌더한다.
+   * 클립보드에 올리기 전에 알파를 흰색으로 합쳐(flatten) 이 문제를 회피한다.
+   *
+   * NativeImage.toBitmap()은 BGRA 8-bit per channel buffer를 반환한다.
+   */
+  function flattenAlphaOnWhite(image: Electron.NativeImage): Electron.NativeImage {
+    const size = image.getSize();
+    if (size.width === 0 || size.height === 0) return image;
+    const src = image.toBitmap(); // BGRA
+    const out = Buffer.alloc(src.length);
+    for (let i = 0; i < src.length; i += 4) {
+      const a = src[i + 3];
+      if (a === 255) {
+        out[i] = src[i];
+        out[i + 1] = src[i + 1];
+        out[i + 2] = src[i + 2];
+        out[i + 3] = 255;
+      } else if (a === 0) {
+        out[i] = 255;
+        out[i + 1] = 255;
+        out[i + 2] = 255;
+        out[i + 3] = 255;
+      } else {
+        // straight-alpha → white background composite
+        const inv = 255 - a;
+        out[i] = (src[i] * a + 255 * inv) / 255;
+        out[i + 1] = (src[i + 1] * a + 255 * inv) / 255;
+        out[i + 2] = (src[i + 2] * a + 255 * inv) / 255;
+        out[i + 3] = 255;
+      }
+    }
+    return nativeImage.createFromBitmap(out, {
+      width: size.width,
+      height: size.height,
+    });
+  }
+
   // sticker:delete-image — PNG 파일 삭제 (ENOENT 무시)
   ipcMain.handle(
     'sticker:delete-image',
@@ -2445,9 +2486,15 @@ function registerIpcHandlers(): void {
     'sticker:paste',
     async (
       _event,
-      args: { stickerId: string; restorePreviousClipboard: boolean },
+      args: {
+        stickerId: string;
+        restorePreviousClipboard: boolean;
+        flattenAlphaOnPaste?: boolean;
+      },
     ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> => {
       const id = validateStickerId(args.stickerId);
+      // default false — 투명 배경 보존(Discord/Slack/메모 등 호환). 명시적으로 true일 때만 흰 배경 합성.
+      const flattenAlpha = args.flattenAlphaOnPaste === true;
       // v2.0.x 핫픽스: 사용자 settings의 restorePreviousClipboard 옵션은 일시적으로
       // 강제 비활성화한다. 클립보드 복원 모드가 picker capture로 클립보드를
       // 덮어씌우는 회귀 이슈(수동 paste 시 picker 화면이 붙여넣어지는 버그)를
@@ -2475,18 +2522,30 @@ function registerIpcHandlers(): void {
 
       // 2) 디스크에서 PNG 로드
       const filePath = path.join(getStickerImageDir(), `${id}.png`);
-      const image = nativeImage.createFromPath(filePath);
-      if (image.isEmpty()) {
+      const rawImage = nativeImage.createFromPath(filePath);
+      if (rawImage.isEmpty()) {
         stickerLog('[sticker:paste] sticker image not found at', filePath);
         console.error('[sticker:paste] sticker image not found at', filePath);
         return { ok: false, autoPasted: false, reason: '이모티콘 이미지를 찾을 수 없습니다' };
       }
 
-      // 3) 클립보드에 이미지 쓰기
+      // 2-a) 알파 합성 분기.
+      //    Electron 표준 clipboard API는 단일 atomic write에서 NativeImage + 추가 MIME 버퍼를
+      //    동시 등록할 수 없다. clipboard.writeBuffer는 내부적으로 EmptyClipboard를 호출해
+      //    이전 write를 덮어버린다. 따라서 단일 포맷만 등록한다:
+      //    - flattenAlpha=true (default, 카톡 호환): 흰 배경 합성판만 등록 → 모든 앱에서 흰 배경
+      //    - flattenAlpha=false: 원본 그대로 → CF_DIBV5 알파를 읽는 Discord/Slack/메모 등은
+      //      투명 유지, CF_BITMAP만 읽는 카톡은 검정.
+      const image = flattenAlpha ? flattenAlphaOnWhite(rawImage) : rawImage;
+      stickerLog('[sticker:paste] alpha mode:', {
+        flattenAlpha,
+        size: image.getSize(),
+      });
+
+      // 3) 클립보드에 이미지 쓰기 (단일 포맷, atomic)
       try {
         clipboard.writeImage(image);
-        stickerLog('[sticker:paste] wrote sticker image, size:', {
-          size: image.getSize(),
+        stickerLog('[sticker:paste] wrote sticker image, formats:', {
           formats: clipboard.availableFormats(),
         });
       } catch (err) {
