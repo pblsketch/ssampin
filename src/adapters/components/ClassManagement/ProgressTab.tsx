@@ -5,9 +5,8 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
-import { isSubjectMatch } from '@domain/rules/matchingRules';
-import { getDayOfWeek } from '@domain/rules/periodRules';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
+import { getMatchingPeriods as getMatchingPeriodsRule } from '@domain/rules/progressMatching';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -132,62 +131,23 @@ export function ProgressTab({ classId }: ProgressTabProps) {
 
   /* ── 폼 핸들러 ── */
 
-  // 해당 학급(과목)의 시간표 교시 추출
-  const getMatchingPeriods = useCallback((dateStr: string): number[] => {
+  // 해당 학급(과목)의 시간표 교시 추출 — 도메인 헬퍼(@domain/rules/progressMatching)에 위임
+  const getMatchingPeriods = useCallback((dateStr: string): readonly number[] => {
     if (!dateStr) return [];
     const currentClass = classes.find((c: TeachingClass) => c.id === classId);
     if (!currentClass) return [];
-    const subjectName = currentClass.subject;
-    const className = currentClass.name;
 
     const weekendDays = settings.enableWeekendDays;
-    const dayScheduleTeacher = getEffectiveTeacherSchedule(dateStr, weekendDays);
+    const dayTeacherSchedule = getEffectiveTeacherSchedule(dateStr, weekendDays);
 
-    const periods: number[] = [];
-
-    // 1단계: 교사 시간표에서 교실명 + 과목 동시 매칭 (가장 정확)
-    dayScheduleTeacher.forEach((slot, idx) => {
-      if (!slot) return;
-      const classroomMatch =
-        slot.classroom === className ||
-        slot.classroom.includes(className) ||
-        className.includes(slot.classroom);
-      const subjectMatch = isSubjectMatch(slot.subject, subjectName);
-
-      if (classroomMatch && subjectMatch) {
-        periods.push(idx + 1);
-      }
+    return getMatchingPeriodsRule({
+      date: dateStr,
+      className: currentClass.name,
+      classSubject: currentClass.subject,
+      dayTeacherSchedule,
+      classSchedule,
+      weekendDays,
     });
-
-    // 2단계: 교실명만으로 매칭 (과목명이 약간 다른 경우 커버)
-    if (periods.length === 0) {
-      dayScheduleTeacher.forEach((slot, idx) => {
-        if (!slot) return;
-        const classroomMatch =
-          slot.classroom === className ||
-          slot.classroom.includes(className) ||
-          className.includes(slot.classroom);
-
-        if (classroomMatch) {
-          periods.push(idx + 1);
-        }
-      });
-    }
-
-    // 3단계: 담임반 시간표 폴백 (교사 시간표가 없는 경우)
-    if (periods.length === 0) {
-      const dayOfWeek = getDayOfWeek(new Date(dateStr + 'T00:00:00'), weekendDays);
-      const dayScheduleClass = dayOfWeek ? classSchedule[dayOfWeek] : undefined;
-      if (dayScheduleClass && dayScheduleClass.length > 0) {
-        dayScheduleClass.forEach((slot, idx) => {
-          if (slot.subject && isSubjectMatch(slot.subject, subjectName)) {
-            periods.push(idx + 1);
-          }
-        });
-      }
-    }
-
-    return periods;
   }, [classId, classes, classSchedule, getEffectiveTeacherSchedule, settings.enableWeekendDays]);
 
   // 수업이 있는 요일 인덱스 (JS getDay: 0=일, 1=월, ..., 6=토)

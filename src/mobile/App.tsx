@@ -7,7 +7,7 @@ import { useMobileStudentStore } from './stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from './stores/useMobileStudentRecordsStore';
 import { TodayHub } from './components/Today/TodayHub';
 import { AttendanceCheckPage } from './pages/AttendanceCheckPage';
-import { AttendanceListPage } from './pages/AttendanceListPage';
+import { ClassListPage } from './pages/ClassListPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { StudentsPage } from './pages/StudentsPage';
 import { TodoPage } from './pages/TodoPage';
@@ -76,7 +76,7 @@ const tabs: TabConfig[] = [
   { key: 'schedule', label: '일정', icon: 'event_note' },
   { key: 'todo', label: '할 일', icon: 'check_circle' },
   { key: 'students', label: '담임', icon: 'people' },
-  { key: 'attendance', label: '수업 출결', icon: 'fact_check' },
+  { key: 'attendance', label: '수업', icon: 'co_present' },
   { key: 'more', label: '더보기', icon: 'more_horiz' },
 ];
 
@@ -330,7 +330,7 @@ export function App() {
         {activeTab === 'schedule' && <SchedulePage />}
         {activeTab === 'todo' && <TodoPage />}
         {activeTab === 'students' && <StudentsPage />}
-        {activeTab === 'attendance' && <AttendanceListPage />}
+        {activeTab === 'attendance' && <ClassListPage />}
         {activeTab === 'more' && (
           moreSub === 'settings' ? (
             <SettingsPage onBack={() => setMoreSub(null)} />
