@@ -14,6 +14,13 @@ interface Props {
   period: number; // 0 = 담임출결, 1~7 = 교시출결
   type: 'homeroom' | 'class';
   onBack: () => void;
+  /**
+   * true면 자체 헤더(뒤로가기 + 학급명 + 완료 버튼)와 카운터 카드의 외부 마진을 생략한다.
+   * ClassDetailPage가 헤더를 이미 그리고 있을 때 사용.
+   * 완료(저장)는 자동 디바운스 저장에 의존한다.
+   * default: false — 기존 호출처(App.tsx 담임출결, AttendanceListPage)는 회귀 0.
+   */
+  embedded?: boolean;
 }
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: string; activeColor: string }> = {
@@ -32,7 +39,7 @@ function todayString(): string {
   return `${y}-${m}-${day}`;
 }
 
-export function AttendanceCheckPage({ classId, className, period, type, onBack }: Props) {
+export function AttendanceCheckPage({ classId, className, period, type, onBack, embedded = false }: Props) {
   const saveRecord = useMobileAttendanceStore((s) => s.saveRecord);
   const getTodayRecord = useMobileAttendanceStore((s) => s.getTodayRecord);
   const loadAttendance = useMobileAttendanceStore((s) => s.load);
@@ -185,26 +192,28 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack }
   const classAbsenceCount = values.filter((s) => s === 'classAbsence').length;
 
   return (
-    <div className="flex flex-col h-full bg-sp-bg">
-      {/* 헤더 */}
-      <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
-        <button onClick={onBack} className="touch-target flex items-center justify-center">
-          <span className="material-symbols-outlined text-sp-text">arrow_back</span>
-        </button>
-        <div className="flex-1">
-          <h2 className="text-sp-text font-bold">
-            {type === 'homeroom' ? '담임 출결' : `${period}교시 출결`}
-          </h2>
-          <p className="text-sp-muted text-xs">{className}</p>
-        </div>
-        <button
-          onClick={() => void handleComplete()}
-          disabled={saving}
-          className="px-4 py-2 bg-sp-accent text-sp-accent-fg text-sm font-medium rounded-xl disabled:opacity-50 touch-target active:scale-[0.98] transition-all"
-        >
-          {saving ? '저장 중...' : '완료'}
-        </button>
-      </header>
+    <div className={`flex flex-col h-full ${embedded ? '' : 'bg-sp-bg'}`}>
+      {/* 헤더 — embedded 모드에서는 생략 (ClassDetailPage가 이미 학급 헤더를 그림) */}
+      {!embedded && (
+        <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
+          <button onClick={onBack} className="touch-target flex items-center justify-center">
+            <span className="material-symbols-outlined text-sp-text">arrow_back</span>
+          </button>
+          <div className="flex-1">
+            <h2 className="text-sp-text font-bold">
+              {type === 'homeroom' ? '담임 출결' : `${period}교시 출결`}
+            </h2>
+            <p className="text-sp-muted text-xs">{className}</p>
+          </div>
+          <button
+            onClick={() => void handleComplete()}
+            disabled={saving}
+            className="px-4 py-2 bg-sp-accent text-sp-accent-fg text-sm font-medium rounded-xl disabled:opacity-50 touch-target active:scale-[0.98] transition-all"
+          >
+            {saving ? '저장 중...' : '완료'}
+          </button>
+        </header>
+      )}
 
       {/* 실시간 카운터 */}
       <div className="glass-card flex items-center justify-around mx-4 mt-3 px-4 py-3 rounded-xl shrink-0">
