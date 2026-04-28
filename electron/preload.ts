@@ -727,6 +727,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sticker:get-image-data-url', stickerId),
     deleteImage: (stickerId: string): Promise<void> =>
       ipcRenderer.invoke('sticker:delete-image', stickerId),
+    /**
+     * 다중 이모티콘 PNG를 ZIP 한 파일로 묶어 사용자가 지정한 위치에 저장.
+     * filename은 ZIP 안에 들어갈 사용자 친화 이름(.png 포함). 충돌은 main에서 자동 재명명.
+     */
+    exportZip: (
+      items: ReadonlyArray<{ stickerId: string; filename: string }>,
+    ): Promise<{
+      canceled: boolean;
+      filePath?: string;
+      count?: number;
+      missing?: number;
+    }> => ipcRenderer.invoke('sticker:export-zip', { items }),
     paste: (
       stickerId: string,
       restorePreviousClipboard: boolean,

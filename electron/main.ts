@@ -19,6 +19,12 @@ import {
   registerRealtimeWallBoardHandlers,
   saveDirtyWallBoardsSync,
 } from './ipc/realtimeWallBoard';
+import {
+  buildStoreZip,
+  dedupeFilenames,
+  sanitizeFilename,
+  type ZipEntry,
+} from './lib/zipStore';
 
 declare const __dirname: string;
 
@@ -2090,6 +2096,86 @@ function registerIpcHandlers(): void {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
         throw err;
       }
+    },
+  );
+
+  // sticker:export-zip — 다중 이모티콘 PNG를 ZIP 한 파일로 내보내기.
+  // 입력: items=[{ stickerId, filename }] (filename은 사용자 친화 이름, .png 확장자 포함)
+  // 동작: 파일 저장 다이얼로그 → 각 PNG 읽기 → STORE-only ZIP 빌드 → 저장.
+  // PNG는 이미 deflate되어 있어 STORE 모드로도 효율 손실 없음 + 외부 의존성 0.
+  ipcMain.handle(
+    'sticker:export-zip',
+    async (
+      _event,
+      args: { items: ReadonlyArray<{ stickerId: string; filename: string }> },
+    ): Promise<{
+      canceled: boolean;
+      filePath?: string;
+      count?: number;
+      missing?: number;
+    }> => {
+      if (!Array.isArray(args?.items) || args.items.length === 0) {
+        throw new Error('sticker: 내보낼 이모티콘이 없습니다');
+      }
+      // 모든 stickerId 사전 검증 (path traversal 방어)
+      const validated = args.items.map((it) => ({
+        stickerId: validateStickerId(it.stickerId),
+        filename: sanitizeFilename(
+          typeof it.filename === 'string' ? it.filename : '',
+          `${validateStickerId(it.stickerId)}.png`,
+        ),
+      }));
+      // 동일 파일명 충돌 자동 재명명
+      const finalNames = dedupeFilenames(validated.map((v) => v.filename));
+
+      // 저장 다이얼로그
+      const win = mainWindow ?? BrowserWindow.getFocusedWindow();
+      if (!win) return { canceled: true };
+      const stamp = new Date()
+        .toISOString()
+        .slice(0, 16)
+        .replace(/[:T-]/g, '')
+        .replace(/(\d{8})(\d{4})/, '$1-$2');
+      const result = await dialog.showSaveDialog(win, {
+        title: '이모티콘 ZIP으로 내보내기',
+        defaultPath: `ssampin-stickers-${stamp}.zip`,
+        filters: [{ name: 'ZIP 아카이브', extensions: ['zip'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { canceled: true };
+      }
+
+      // PNG 읽기 (없는 파일은 skip + missing 카운트)
+      const dir = getStickerImageDir();
+      const entries: ZipEntry[] = [];
+      let missing = 0;
+      for (let i = 0; i < validated.length; i++) {
+        const v = validated[i];
+        const src = path.join(dir, `${v.stickerId}.png`);
+        try {
+          const data = await fs.promises.readFile(src);
+          entries.push({ filename: finalNames[i], data });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+            missing += 1;
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (entries.length === 0) {
+        throw new Error('sticker: 내보낼 이미지 파일을 찾지 못했어요');
+      }
+
+      const zipBuf = buildStoreZip(entries);
+      await fs.promises.writeFile(result.filePath, zipBuf);
+      return {
+        canceled: false,
+        filePath: result.filePath,
+        count: entries.length,
+        missing,
+      };
     },
   );
 

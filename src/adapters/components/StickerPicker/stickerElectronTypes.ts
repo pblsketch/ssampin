@@ -79,6 +79,15 @@ export interface StickerElectronAPI {
   getImageDataUrl: (stickerId: string) => Promise<string | null>;
   /** 이모티콘 PNG 파일 삭제 */
   deleteImage: (stickerId: string) => Promise<void>;
+  /** 다중 이모티콘 PNG를 ZIP 한 파일로 내보내기 (사용자 저장 다이얼로그 표시). */
+  exportZip?: (
+    items: ReadonlyArray<{ stickerId: string; filename: string }>,
+  ) => Promise<{
+    canceled: boolean;
+    filePath?: string;
+    count?: number;
+    missing?: number;
+  }>;
   /** 클립보드 복사 + 자동 붙여넣기 */
   paste: (
     stickerId: string,
