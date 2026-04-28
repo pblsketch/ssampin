@@ -611,9 +611,18 @@ function MainApp() {
   // Ctrl+Shift+I 로 DevTools를 열면 [sticker:paste] 흐름을 콘솔에서 바로 볼 수 있다.
   useEffect(() => {
     const unsubscribe = window.electronAPI?.sticker?.onDiagLog?.((payload) => {
+      // v2.0.x 핫픽스: payload.data를 그대로 넘기면 DevTools 콘솔이 'Object'로만 표시되어
+      // 실제 값(width/height/formats 등)을 읽을 수 없다. JSON.stringify로 직렬화해서
+      // 텍스트로 출력 — 진단 가능한 형태로 강제.
       if (payload.data !== null && payload.data !== undefined) {
+        let serialized: string;
+        try {
+          serialized = JSON.stringify(payload.data);
+        } catch {
+          serialized = String(payload.data);
+        }
         // eslint-disable-next-line no-console
-        console.log(payload.message, payload.data);
+        console.log(payload.message, serialized);
       } else {
         // eslint-disable-next-line no-console
         console.log(payload.message);

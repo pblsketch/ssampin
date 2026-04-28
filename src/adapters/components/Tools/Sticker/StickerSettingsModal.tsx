@@ -143,6 +143,13 @@ export function StickerSettingsModal({
             </div>
           )}
 
+          {/*
+            v2.0.x 핫픽스: 일시적으로 비활성화 — nut-js 자동 붙여넣기 회귀 이슈로 인해 임시로 hidden.
+            restoreMode가 켜진 상태에서 prev 클립보드가 picker capture인 경우 수동 paste 시
+            picker 화면이 붙여넣어지는 버그가 발견됨. 메인 프로세스에서도 force-false로
+            오버라이드 중(electron/main.ts sticker:paste 핸들러). 안정화 후 재노출 검토.
+          */}
+          {/*
           <ToggleRow
             title="이전 클립보드 복원"
             description="자동 붙여넣기 후 ~500ms 뒤 이전 클립보드 내용을 되돌려요"
@@ -150,6 +157,7 @@ export function StickerSettingsModal({
             onChange={(v) => void updateSettings({ restorePreviousClipboard: v })}
             badge="실험"
           />
+          */}
 
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
