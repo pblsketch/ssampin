@@ -2362,8 +2362,14 @@ function registerIpcHandlers(): void {
       args: { stickerId: string; restorePreviousClipboard: boolean },
     ): Promise<{ ok: boolean; autoPasted: boolean; reason?: string }> => {
       const id = validateStickerId(args.stickerId);
-      const restoreMode = args.restorePreviousClipboard === true;
-      stickerLog('[sticker:paste] start', { id, restoreMode });
+      // v2.0.x 핫픽스: 사용자 settings의 restorePreviousClipboard 옵션은 일시적으로
+      // 강제 비활성화한다. 클립보드 복원 모드가 picker capture로 클립보드를
+      // 덮어씌우는 회귀 이슈(수동 paste 시 picker 화면이 붙여넣어지는 버그)를
+      // 차단하기 위함. nut-js 자동 붙여넣기 안정화 + prev 클립보드 오염 원인
+      // 규명 후 다시 활성화 검토.
+      // 원래 라인: const restoreMode = args.restorePreviousClipboard === true;
+      const restoreMode = false;
+      stickerLog('[sticker:paste] start', { id, restoreMode, requestedRestore: args.restorePreviousClipboard === true });
 
       // 1) 이전 클립보드 스냅샷 (복원 모드)
       let prevImage: Electron.NativeImage | null = null;

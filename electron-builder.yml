@@ -21,8 +21,21 @@ files:
 # @nut-tree-fork/nut-js (스티커 자동 붙여넣기용) → libnut-{win32,darwin,linux} 의
 # .node 바이너리가 OS dlopen으로 로드되어야 한다. 미언팩 시 win32에서
 # `Cannot find module ...libnut.node` 런타임 오류 → 자동 Ctrl+V 실패.
+#
+# v2.0.x 핫픽스: `**/node_modules/@nut-tree-fork/**` 단일 글롭만으로는 일부
+# 환경에서 .node 바이너리가 asar 외부로 추출되지 않는 회귀가 관찰되어
+# (사용자 진단 로그 → libnut.node 경로 모두 app.asar 내부에서 탐색),
+# (a) nut-js 하위 패키지를 명시 + (b) bindings/file-uri-to-path 의존성도 함께
+# 언팩 + (c) 보험으로 모든 `.node` 파일을 강제 언팩한다.
 asarUnpack:
   - "**/node_modules/@nut-tree-fork/**"
+  - "**/node_modules/@nut-tree-fork/libnut-win32/**"
+  - "**/node_modules/@nut-tree-fork/libnut-darwin/**"
+  - "**/node_modules/@nut-tree-fork/libnut-linux/**"
+  - "**/node_modules/libnut*/**"
+  - "**/node_modules/bindings/**"
+  - "**/node_modules/file-uri-to-path/**"
+  - "**/*.node"
 win:
   target:
     - target: nsis
