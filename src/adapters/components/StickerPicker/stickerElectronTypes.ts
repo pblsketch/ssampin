@@ -92,6 +92,7 @@ export interface StickerElectronAPI {
   paste: (
     stickerId: string,
     restorePreviousClipboard: boolean,
+    flattenAlphaOnPaste?: boolean,
   ) => Promise<StickerPasteResult>;
   /** 피커 윈도우 hide */
   closePicker: () => Promise<void>;

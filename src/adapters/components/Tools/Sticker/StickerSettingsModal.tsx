@@ -113,6 +113,13 @@ export function StickerSettingsModal({
             onChange={(v) => void updateSettings({ autoPaste: v })}
           />
 
+          <ToggleRow
+            title="흰 배경 채우기 (카카오톡 호환)"
+            description="투명 PNG를 흰 배경으로 합쳐 붙여넣어요. 카톡에서 검정으로 보일 때만 켜세요 (기본은 투명 보존)"
+            checked={settings.flattenAlphaOnPaste}
+            onChange={(v) => void updateSettings({ flattenAlphaOnPaste: v })}
+          />
+
           {isMacOS && (
             <div className="text-detail bg-sp-accent/10 border-l-4 border-sp-accent rounded-r-md p-3 flex items-start gap-2.5">
               <span
