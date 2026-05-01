@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Icon Mode PoC</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+      cursor: grab;
+    }
+    body:active { cursor: grabbing; }
+
+    .icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px; /* rounded-2xl */
+      background: #1a2332; /* sp-card */
+      border: 1px solid rgba(42, 53, 72, 0.6); /* sp-border/60 */
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4), 0 4px 6px -4px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    /* PoC 식별용 — 빨간 동그라미 (실제 구현은 build/icon.png 사용) */
+    .dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #ef4444; /* red-500 */
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .label {
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      font-size: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #94a3b8;
+      background: #1a2332;
+      padding: 2px 4px;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+  </style>
+</head>
+<body>
+  <div class="icon">
+    <div class="dot"></div>
+    <div class="label">PoC</div>
+  </div>
+</body>
+</html>
