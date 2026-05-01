@@ -33,6 +33,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     desktopMode: string;
   }): Promise<void> => ipcRenderer.invoke('window:applyWidgetSettings', widget),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:closeApp'),
+  // ─── 아이콘 모드 (v2.0.2~) ───
+  iconShow: (): Promise<void> => ipcRenderer.invoke('icon:show'),
+  iconHide: (): Promise<void> => ipcRenderer.invoke('icon:hide'),
+  iconSetBounds: (bounds: { x: number; y: number }): Promise<void> =>
+    ipcRenderer.invoke('icon:set-bounds', bounds),
+  iconExpand: (target: { to: 'main' | 'widget' | 'restore' }): Promise<void> =>
+    ipcRenderer.invoke('icon:expand', target),
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;

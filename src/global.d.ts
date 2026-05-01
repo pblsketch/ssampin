@@ -142,6 +142,11 @@ interface ElectronAPI {
     desktopMode: string;
   }) => Promise<void>;
   closeWindow: () => Promise<void>;
+  // ─── 아이콘 모드 (v2.0.2~) ───
+  iconShow: () => Promise<void>;
+  iconHide: () => Promise<void>;
+  iconSetBounds: (bounds: { x: number; y: number }) => Promise<void>;
+  iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;

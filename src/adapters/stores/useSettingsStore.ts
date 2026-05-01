@@ -42,6 +42,10 @@ const DEFAULT_SETTINGS: Settings = {
     cardOpacity: 1.0,
     alwaysOnTop: true,
     closeToWidget: true,
+    closeAction: 'widget',
+    icon: {
+      showCoachMark: true,
+    },
     layoutMode: 'full',
     desktopMode: 'normal',
     visibleSections: {
@@ -228,6 +232,27 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
               if (rawMode === 'floating') return 'topmost' as const;
               if (rawMode === 'auto' || rawMode === 'desktop' || rawMode === 'behind' || rawMode === 'above') return 'normal' as const;
               return (saved.widget?.desktopMode ?? DEFAULT_SETTINGS.widget.desktopMode);
+            })(),
+            closeAction: (() => {
+              // v2.0.2~: closeAction 정식 도입.
+              // 하위 호환: closeAction이 명시 없으면 closeToWidget legacy 키로 폴백.
+              //   closeToWidget=true  → 'widget'
+              //   closeToWidget=false → 'tray'
+              const explicit = (saved.widget as unknown as { closeAction?: 'widget' | 'tray' | 'ask' | 'icon' })?.closeAction;
+              if (explicit === 'widget' || explicit === 'tray' || explicit === 'ask' || explicit === 'icon') {
+                return explicit;
+              }
+              const legacy = saved.widget?.closeToWidget;
+              if (legacy === false) return 'tray' as const;
+              return 'widget' as const;
+            })(),
+            icon: (() => {
+              // v2.0.2~: 아이콘 모드 옵션 폴백
+              const savedIcon = (saved.widget as unknown as { icon?: Partial<NonNullable<Settings['widget']['icon']>> })?.icon;
+              return {
+                ...DEFAULT_SETTINGS.widget.icon!,
+                ...(savedIcon ?? {}),
+              };
             })(),
           },
           system: { ...DEFAULT_SETTINGS.system, ...((saved as unknown as { system?: Partial<Settings['system']> }).system ?? {}) },
