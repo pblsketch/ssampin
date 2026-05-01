@@ -207,6 +207,23 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
         <span className="text-sm text-sp-text">전체 화면으로 전환</span>
       </button>
 
+      {/* 아이콘 모드로 접기 (v2.0.2~) */}
+      <button
+        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-sp-text/[0.08] transition-colors text-left"
+        onClick={() => {
+          onClose();
+          void window.electronAPI?.iconShow();
+        }}
+      >
+        <span
+          className="material-symbols-outlined text-sp-muted flex-shrink-0"
+          style={{ fontSize: 20 }}
+        >
+          push_pin
+        </span>
+        <span className="text-sm text-sp-text">아이콘으로 접기</span>
+      </button>
+
       {/* 구분선 */}
       <div className="h-px bg-sp-border mx-3 my-1" />
 
