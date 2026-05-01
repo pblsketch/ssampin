@@ -830,7 +830,7 @@ export function Onboarding() {
 function AccountLinkingStep() {
     const {
         isConnected, email, isLoading,
-        startAuth, disconnect,
+        startAuth, cancelAuth, disconnect,
         showFallbackSuggestion, fallbackSuggestionData, acceptFallback, setShowFallbackSuggestion,
         oauthError, setOAuthError, showPKCEFallback, setShowPKCEFallback,
         startPKCEFallback, completePKCEAuth, error: authError,
@@ -903,24 +903,41 @@ function AccountLinkingStep() {
                                 {authError}
                             </div>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => void startAuth()}
-                            disabled={isLoading}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-sp-accent hover:bg-blue-600 text-white font-medium text-sm transition-all shadow-lg shadow-sp-accent/25 disabled:opacity-50"
-                        >
-                            {isLoading ? (
-                                <>
+                        {isLoading ? (
+                            <div className="space-y-2">
+                                <div className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-sp-accent/40 text-white font-medium text-sm">
                                     <span className="material-symbols-outlined animate-spin text-icon-md">progress_activity</span>
-                                    연결 중...
-                                </>
-                            ) : (
-                                <>
-                                    <span className="material-symbols-outlined text-icon-md">login</span>
-                                    Google 계정 연결
-                                </>
-                            )}
-                        </button>
+                                    연결 중... (브라우저에서 Google 로그인을 완료해주세요)
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => void cancelAuth()}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-text/20 font-medium text-sm transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-icon">close</span>
+                                        취소
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { void cancelAuth().then(() => void startPKCEFallback()); }}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-sp-accent/40 text-sp-accent hover:bg-sp-accent/10 font-medium text-sm transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-icon">key</span>
+                                        수동 인증으로 전환
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => void startAuth()}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-sp-accent hover:bg-blue-600 text-white font-medium text-sm transition-all shadow-lg shadow-sp-accent/25"
+                            >
+                                <span className="material-symbols-outlined text-icon-md">login</span>
+                                Google 계정 연결
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

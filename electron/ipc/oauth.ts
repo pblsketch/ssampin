@@ -10,6 +10,8 @@ import url from 'url';
 
 /** 현재 실행 중인 OAuth 로컬 서버 (하나만 허용) */
 let oauthServer: http.Server | null = null;
+/** 사용자 취소 시 pending Promise를 즉시 reject 하기 위한 핸들 */
+let pendingReject: ((err: Error) => void) | null = null;
 
 /**
  * 포트 바인딩 가능 여부 사전 확인 (500ms 타임아웃)
@@ -57,6 +59,12 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
    * @returns 인증 코드(code) 문자열
    */
   ipcMain.handle('oauth:start', async (_event, authUrl: string): Promise<string> => {
+    // 이전 호출에서 남아있을 수 있는 pending Promise 정리
+    if (pendingReject) {
+      pendingReject(new Error('OAuth cancelled — superseded by new request'));
+      pendingReject = null;
+    }
+
     // 로컬 서버 바인딩 가능 여부 사전 확인
     const canBind = await canBindLocalhost();
     if (!canBind) {
@@ -69,15 +77,29 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
       });
       // throw하지 않고 Promise를 유지 — PKCE 폴백이 처리하므로
       // 렌더러의 startAuth에서 fallbackCleanup이 이벤트를 수신하여 모달 표시
-      // 10분 타임아웃으로 자연 종료
+      // 10분 타임아웃 또는 oauth:cancel로 종료
       return new Promise<string>((_, reject) => {
+        pendingReject = reject;
         setTimeout(() => {
-          reject(new Error('OAuth timeout — localhost blocked, PKCE fallback offered'));
+          if (pendingReject === reject) {
+            pendingReject = null;
+            reject(new Error('OAuth timeout — localhost blocked, PKCE fallback offered'));
+          }
         }, 10 * 60 * 1000);
       });
     }
 
     return new Promise<string>((resolve, reject) => {
+      pendingReject = reject;
+      const wrappedResolve = (code: string) => {
+        if (pendingReject === reject) pendingReject = null;
+        resolve(code);
+      };
+      const wrappedReject = (err: Error) => {
+        if (pendingReject === reject) pendingReject = null;
+        reject(err);
+      };
+
       // 기존 서버 정리
       if (oauthServer) {
         oauthServer.close();
@@ -113,7 +135,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
                 </div>
               </body></html>
             `);
-            resolve(code);
+            wrappedResolve(code);
           } else {
             // access_denied인 경우 (사용자 한도 초과 포함) — 전용 에러 코드 전송
             if (error === 'access_denied') {
@@ -134,7 +156,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
                 </div>
               </body></html>
             `);
-            reject(new Error(error ?? 'OAuth failed'));
+            wrappedReject(new Error(error ?? 'OAuth failed'));
           }
 
           // 콜백 처리 후 1초 뒤 서버 종료
@@ -154,14 +176,14 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
           code: 'SERVER_START_FAILED',
           message: err.message,
         });
-        reject(new Error(`OAuth 로컬 서버 시작 실패: ${err.message}`));
+        wrappedReject(new Error(`OAuth 로컬 서버 시작 실패: ${err.message}`));
       });
 
       // 임의 포트로 서버 시작
       server.listen(0, '127.0.0.1', () => {
         const address = server.address();
         if (!address || typeof address === 'string') {
-          reject(new Error('Failed to start OAuth server'));
+          wrappedReject(new Error('Failed to start OAuth server'));
           return;
         }
 
@@ -205,19 +227,23 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
             code: 'TIMEOUT',
             message: '인증 시간이 초과되었습니다.',
           });
-          reject(new Error('OAuth timeout (10 minutes)'));
+          wrappedReject(new Error('OAuth timeout (10 minutes)'));
         }
       }, 10 * 60 * 1000);
     });
   });
 
   /**
-   * oauth:cancel — OAuth 인증 취소 (로컬 서버 종료)
+   * oauth:cancel — OAuth 인증 취소 (로컬 서버 종료 + pending Promise reject)
    */
   ipcMain.handle('oauth:cancel', (): void => {
     if (oauthServer) {
       oauthServer.close();
       oauthServer = null;
+    }
+    if (pendingReject) {
+      pendingReject(new Error('OAuth cancelled by user'));
+      pendingReject = null;
     }
   });
 }
