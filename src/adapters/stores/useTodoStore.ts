@@ -43,6 +43,24 @@ interface TodoState {
   saveCategories: (categories: readonly TodoCategory[]) => Promise<void>;
 }
 
+/**
+ * Google Tasks 연동된 todo의 원격 삭제 큐 등록.
+ * useTasksSyncStore가 활성화돼 있을 때만 동작.
+ */
+async function enqueueRemoteDeletes(googleTaskIds: readonly string[]): Promise<void> {
+  if (googleTaskIds.length === 0) return;
+  try {
+    const { useTasksSyncStore } = await import('./useTasksSyncStore');
+    const tasksState = useTasksSyncStore.getState();
+    if (!tasksState.isEnabled || !tasksState.taskListId) return;
+    for (const gid of googleTaskIds) {
+      await tasksState.markForRemoteDelete(gid);
+    }
+  } catch (err) {
+    console.error('[Todo] enqueueRemoteDeletes 실패:', err);
+  }
+}
+
 export const useTodoStore = create<TodoState>((set, get) => {
   const manageTodos = new ManageTodos(todoRepository);
 
@@ -89,11 +107,14 @@ export const useTodoStore = create<TodoState>((set, get) => {
     },
 
     addTodo: async (text, dueDate, priority, category, recurrence, time, startDate) => {
+      const now = new Date().toISOString();
       const newTodo: Todo = {
         id: generateUUID(),
         text,
         completed: false,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
+        pendingRemoteOp: 'create',
         priority: priority ?? 'none',
         ...(dueDate !== undefined ? { dueDate } : {}),
         ...(category !== undefined ? { category } : {}),
@@ -106,9 +127,10 @@ export const useTodoStore = create<TodoState>((set, get) => {
     },
 
     toggleTodo: async (id) => {
-      // 즉시 UI 업데이트 (낙관적)
+      // 즉시 UI 업데이트 (낙관적) — 메타데이터도 동기화
       const target = get().todos.find((t) => t.id === id);
       const nextCompleted = target ? !target.completed : true;
+      const now = new Date().toISOString();
       set((state) => ({
         todos: state.todos.map((todo) => {
           if (todo.id !== id) return todo;
@@ -116,7 +138,15 @@ export const useTodoStore = create<TodoState>((set, get) => {
           const subTasks = (todo.subTasks && todo.subTasks.length > 0)
             ? todo.subTasks.map((st) => ({ ...st, completed: nextCompleted }))
             : todo.subTasks;
-          return { ...todo, completed: nextCompleted, subTasks };
+          return {
+            ...todo,
+            completed: nextCompleted,
+            subTasks,
+            updatedAt: now,
+            pendingRemoteOp: todo.archivedAt
+              ? (todo.googleTaskId ? 'delete' as const : undefined)
+              : (todo.googleTaskId ? 'update' as const : 'create' as const),
+          };
         }),
       }));
 
@@ -137,16 +167,8 @@ export const useTodoStore = create<TodoState>((set, get) => {
       }));
 
       // Google Tasks 연동된 할 일이면 원격 삭제 예약
-      if (target?.googleTaskId) {
-        try {
-          const { useTasksSyncStore } = await import('./useTasksSyncStore');
-          const tasksState = useTasksSyncStore.getState();
-          if (tasksState.isEnabled && tasksState.taskListId) {
-            await tasksState.markForRemoteDelete(target.googleTaskId);
-          }
-        } catch (err) {
-          console.error('[Todo] markForRemoteDelete 실패:', err);
-        }
+      if (target?.googleTaskId && !target.remoteDeletedAt) {
+        await enqueueRemoteDeletes([target.googleTaskId]);
       }
     },
 
@@ -159,9 +181,19 @@ export const useTodoStore = create<TodoState>((set, get) => {
         syncedChanges = { ...syncedChanges, status: syncedChanges.completed ? 'done' : 'todo' };
       }
 
+      const now = new Date().toISOString();
       set((state) => ({
         todos: state.todos.map((todo) =>
-          todo.id === id ? { ...todo, ...syncedChanges } : todo,
+          todo.id === id
+            ? {
+                ...todo,
+                ...syncedChanges,
+                updatedAt: now,
+                pendingRemoteOp: todo.archivedAt
+                  ? (todo.googleTaskId ? 'delete' as const : undefined)
+                  : (todo.googleTaskId ? 'update' as const : 'create' as const),
+              }
+            : todo,
         ),
       }));
       await manageTodos.updateTodo(id, syncedChanges);
@@ -169,10 +201,18 @@ export const useTodoStore = create<TodoState>((set, get) => {
 
     addSubTask: async (todoId, text) => {
       const subTask: SubTask = { id: generateUUID(), text, completed: false };
+      const now = new Date().toISOString();
       set((state) => ({
         todos: state.todos.map((todo) =>
           todo.id === todoId
-            ? { ...todo, subTasks: [...(todo.subTasks ?? []), subTask] }
+            ? {
+                ...todo,
+                subTasks: [...(todo.subTasks ?? []), subTask],
+                updatedAt: now,
+                pendingRemoteOp: todo.archivedAt
+                  ? (todo.googleTaskId ? 'delete' as const : undefined)
+                  : (todo.googleTaskId ? 'update' as const : 'create' as const),
+              }
             : todo,
         ),
       }));
@@ -180,6 +220,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
     },
 
     toggleSubTask: async (todoId, subTaskId) => {
+      const now = new Date().toISOString();
       set((state) => ({
         todos: state.todos.map((todo) => {
           if (todo.id !== todoId) return todo;
@@ -190,18 +231,35 @@ export const useTodoStore = create<TodoState>((set, get) => {
           const anyUndone = subTasks.some((st) => !st.completed);
           const completed = allDone ? true : anyUndone ? false : todo.completed;
           const status = allDone ? 'done' as const : anyUndone && todo.status === 'done' ? 'todo' as const : todo.status;
-          return { ...todo, subTasks, completed, status };
+          return {
+            ...todo,
+            subTasks,
+            completed,
+            status,
+            updatedAt: now,
+            pendingRemoteOp: todo.archivedAt
+              ? (todo.googleTaskId ? 'delete' as const : undefined)
+              : (todo.googleTaskId ? 'update' as const : 'create' as const),
+          };
         }),
       }));
       await manageTodos.toggleSubTask(todoId, subTaskId);
     },
 
     deleteSubTask: async (todoId, subTaskId) => {
+      const now = new Date().toISOString();
       set((state) => ({
         todos: state.todos.map((todo) => {
           if (todo.id !== todoId) return todo;
           const subTasks = (todo.subTasks ?? []).filter((st) => st.id !== subTaskId);
-          return { ...todo, subTasks };
+          return {
+            ...todo,
+            subTasks,
+            updatedAt: now,
+            pendingRemoteOp: todo.archivedAt
+              ? (todo.googleTaskId ? 'delete' as const : undefined)
+              : (todo.googleTaskId ? 'update' as const : 'create' as const),
+          };
         }),
       }));
       await manageTodos.deleteSubTask(todoId, subTaskId);
@@ -221,34 +279,69 @@ export const useTodoStore = create<TodoState>((set, get) => {
     },
 
     archiveCompleted: async () => {
-      const count = await manageTodos.archiveCompleted();
-      if (count > 0) {
+      const { archivedCount, pendingDeleteIds } = await manageTodos.archiveCompleted();
+      if (archivedCount > 0) {
         const now = new Date().toISOString();
         set((state) => ({
           todos: state.todos.map((todo) =>
-            todo.completed && !todo.archivedAt ? { ...todo, archivedAt: now } : todo,
+            todo.completed && !todo.archivedAt
+              ? {
+                  ...todo,
+                  archivedAt: now,
+                  updatedAt: now,
+                  pendingRemoteOp: todo.googleTaskId && !todo.remoteDeletedAt ? 'delete' as const : undefined,
+                }
+              : todo,
           ),
         }));
+
+        // Google Tasks 원격 삭제 큐 등록 (Bug 2 핵심 픽스)
+        await enqueueRemoteDeletes(pendingDeleteIds);
       }
-      return count;
+      return archivedCount;
     },
 
     restoreFromArchive: async (id) => {
       await manageTodos.restoreFromArchive(id);
+      const now = new Date().toISOString();
       set((state) => ({
-        todos: state.todos.map((todo) =>
-          todo.id === id ? { ...todo, archivedAt: undefined, completed: false } : todo,
-        ),
+        todos: state.todos.map((todo) => {
+          if (todo.id !== id) return todo;
+          // ManageTodos.restoreFromArchive와 동일 로직
+          if (todo.remoteDeletedAt) {
+            return {
+              ...todo,
+              archivedAt: undefined,
+              completed: false,
+              updatedAt: now,
+              remoteDeletedAt: undefined,
+              googleTaskId: undefined,
+              googleTaskListId: undefined,
+              pendingRemoteOp: 'create' as const,
+            };
+          }
+          return {
+            ...todo,
+            archivedAt: undefined,
+            completed: false,
+            updatedAt: now,
+            pendingRemoteOp: (todo.googleTaskId ? 'update' : 'create') as Todo['pendingRemoteOp'],
+          };
+        }),
       }));
     },
 
     deleteArchived: async (ids) => {
-      await manageTodos.deleteArchived(ids);
+      const { pendingDeleteIds } = await manageTodos.deleteArchived(ids);
+
       set((state) => ({
         todos: ids
           ? state.todos.filter((t) => !ids.includes(t.id))
           : state.todos.filter((t) => !t.archivedAt),
       }));
+
+      // Google Tasks 원격 정리
+      await enqueueRemoteDeletes(pendingDeleteIds);
     },
 
     saveCategories: async (categories) => {
