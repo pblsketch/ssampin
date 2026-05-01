@@ -274,8 +274,8 @@ export function CalendarView({
 
       {/* 주 단위 렌더링 */}
       <div
-        className="flex-1 min-h-0 grid gap-y-1"
-        style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}
+        className="flex-1 min-h-0 grid gap-y-1 overflow-y-auto"
+        style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(auto, 1fr))` }}
       >
         {weeks.map((weekDays, weekIdx) => {
           const { bars, overflowCounts } = weekBars[weekIdx] ?? { bars: [], overflowCounts: Array(7).fill(0) as number[] };
@@ -291,9 +291,12 @@ export function CalendarView({
           }
 
           return (
-            <div key={weekIdx} className="flex flex-col min-h-0 overflow-hidden">
+            <div key={weekIdx} className="flex flex-col min-h-0 overflow-visible">
               {/* 날짜 셀 */}
-              <div className="grid grid-cols-7 gap-x-1 flex-1 min-h-0">
+              <div
+                className="grid grid-cols-7 gap-x-1 flex-shrink-0"
+                style={{ minHeight: '2rem' }}
+              >
                 {weekDays.map((d, dayIdx) => {
                   const isSelected = selectedDate !== null && isSameDate(d.date, selectedDate);
 
@@ -381,7 +384,7 @@ export function CalendarView({
               {/* 다일 바 오버레이 */}
               {bars.length > 0 && (
                 <div
-                  className="grid grid-cols-7 gap-x-1 mt-0.5"
+                  className="grid grid-cols-7 gap-x-1 mt-0.5 flex-shrink-0"
                   style={{ gridTemplateRows: `repeat(${maxRow}, 16px)` }}
                 >
                   {bars.map((bar) => (
@@ -397,7 +400,7 @@ export function CalendarView({
 
               {/* +N 다일 오버플로 */}
               {overflowCounts.some((c) => c > 0) && (
-                <div className="grid grid-cols-7 gap-x-1">
+                <div className="grid grid-cols-7 gap-x-1 flex-shrink-0">
                   {overflowCounts.map((count, colIdx) => (
                     <div key={colIdx} className="flex justify-center">
                       {count > 0 ? (

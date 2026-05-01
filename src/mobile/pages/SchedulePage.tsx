@@ -118,16 +118,21 @@ export function SchedulePage() {
     [visibleEvents],
   );
 
+  const isViewingCurrentMonth = isSameMonth(currentMonth, today);
+
   // Displayed events list
   const displayedEvents: readonly SchoolEvent[] = (() => {
     if (selectedDay) {
       return eventsOnDay(selectedDay);
     }
-    // Upcoming: events in the currently displayed month, sorted by date
+    // Upcoming (current month): only today and after
+    // Past/future month: full month
     return [...visibleEvents]
       .filter((e) => {
         const eventDate = new Date(e.date);
-        return isSameMonth(eventDate, currentMonth);
+        if (!isSameMonth(eventDate, currentMonth)) return false;
+        if (isViewingCurrentMonth) return eventDate >= today;
+        return true;
       })
       .sort((a, b) => a.date.localeCompare(b.date));
   })();
@@ -167,7 +172,9 @@ export function SchedulePage() {
 
   const listHeader = selectedDay
     ? `${format(selectedDay, 'M월 d일', { locale: ko })} 일정`
-    : '다가오는 일정';
+    : isViewingCurrentMonth
+    ? '다가오는 일정'
+    : `${format(currentMonth, 'M월', { locale: ko })} 일정`;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
