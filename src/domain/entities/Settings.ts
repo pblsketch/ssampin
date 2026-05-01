@@ -134,7 +134,14 @@ export interface WidgetSettings {
   readonly cardOpacity: number;
   readonly alwaysOnTop: boolean;
   readonly closeToWidget: boolean;        // keep for backward compat
-  readonly closeAction?: 'widget' | 'tray' | 'ask';  // ADD THIS LINE
+  /**
+   * X 버튼 동작.
+   * - 'widget': 위젯 모드로 전환 (기본)
+   * - 'icon': 아이콘 모드(56×56 floating)로 접기 (v2.0.2~)
+   * - 'tray': 트레이로만 숨김
+   * - 'ask': 매번 다이얼로그
+   */
+  readonly closeAction?: 'widget' | 'tray' | 'ask' | 'icon';
   readonly visibleSections: WidgetVisibleSections;
   readonly layoutMode: WidgetLayoutMode;
   readonly desktopMode: WidgetDesktopMode;
@@ -146,6 +153,19 @@ export interface WidgetSettings {
    * 렌더러 프로세스를 1개로 줄인다. 메인 복귀 시 재생성하며 첫 로드가 약간 느려질 수 있다.
    */
   readonly memorySaverMode?: boolean;
+  /** 아이콘 모드 옵션 (v2.0.2~) */
+  readonly icon?: IconModeOptions;
+}
+
+/**
+ * 아이콘 모드 옵션 (v2.0.2~).
+ *
+ * 풀스크린 자동 hide는 사용자 결정으로 제외됨 — 아이콘은 항상 떠 있음.
+ * 사용자가 가리고 싶으면 트레이 우클릭 또는 위젯/풀앱으로 전환.
+ */
+export interface IconModeOptions {
+  /** 첫 활성화 코치마크 노출 여부 (기본 true → 첫 진입 후 false로 갱신) */
+  readonly showCoachMark: boolean;
 }
 
 export interface SystemSettings {

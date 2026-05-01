@@ -54,6 +54,7 @@ function getAllAppWindows(): BrowserWindow[] {
   const windows: BrowserWindow[] = [];
   if (mainWindow && !mainWindow.isDestroyed()) windows.push(mainWindow);
   if (widgetWindow && !widgetWindow.isDestroyed()) windows.push(widgetWindow);
+  if (iconWindow && !iconWindow.isDestroyed()) windows.push(iconWindow);
   return windows;
 }
 
@@ -545,6 +546,290 @@ function getDefaultWidgetBounds(width: number): { x: number; y: number } {
   };
 }
 
+// ─── 아이콘 모드 (v2.0.2~) ─────────────────────────────────────────────
+// 56×56 frameless transparent floating 아이콘. PoC #1, #3 검증 완료.
+// 패턴: stickerPickerWindow + fadeInQuickAddWindow 복제
+const ICON_SIZE = 56;
+const ICON_MARGIN = 24;
+
+interface IconBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+let iconWindow: BrowserWindow | null = null;
+let saveIconBoundsTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * 마지막으로 사용자가 활성 사용한 모드 (icon 진입 직전 상태).
+ * 아이콘 단일 클릭 시 이 값을 기준으로 main/widget을 복원한다.
+ */
+let lastUserMode: 'main' | 'widget' = 'main';
+
+function getDefaultIconBounds(): IconBounds {
+  const display = screen.getPrimaryDisplay();
+  const { x, y, width, height } = display.workArea;
+  return {
+    x: x + width - ICON_SIZE - ICON_MARGIN,
+    y: y + height - ICON_SIZE - ICON_MARGIN,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+  };
+}
+
+function readIconBoundsOrDefault(): IconBounds {
+  const filePath = path.join(getDataDir(), 'icon-bounds.json');
+  if (!fs.existsSync(filePath)) return getDefaultIconBounds();
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw) as Partial<IconBounds>;
+    if (
+      typeof parsed.x === 'number' &&
+      typeof parsed.y === 'number' &&
+      typeof parsed.width === 'number' &&
+      typeof parsed.height === 'number'
+    ) {
+      return { x: parsed.x, y: parsed.y, width: parsed.width, height: parsed.height };
+    }
+  } catch {
+    // fall through to default
+  }
+  return getDefaultIconBounds();
+}
+
+function saveIconBounds(bounds: IconBounds): void {
+  const filePath = path.join(getDataDir(), 'icon-bounds.json');
+  fs.writeFileSync(filePath, JSON.stringify(bounds), 'utf-8');
+}
+
+function scheduleIconBoundsSave(bounds: IconBounds): void {
+  if (saveIconBoundsTimer !== null) clearTimeout(saveIconBoundsTimer);
+  saveIconBoundsTimer = setTimeout(() => {
+    saveIconBounds(bounds);
+    saveIconBoundsTimer = null;
+  }, 500);
+}
+
+function ensureIconOnScreen(): void {
+  if (!iconWindow || iconWindow.isDestroyed()) return;
+  const bounds = iconWindow.getBounds();
+  const displays = screen.getAllDisplays();
+  const visible = displays.some((d) => {
+    const a = d.workArea;
+    return (
+      bounds.x >= a.x &&
+      bounds.y >= a.y &&
+      bounds.x + bounds.width <= a.x + a.width &&
+      bounds.y + bounds.height <= a.y + a.height
+    );
+  });
+  if (!visible) {
+    const fallback = getDefaultIconBounds();
+    iconWindow.setBounds(fallback);
+    saveIconBounds(fallback);
+  }
+}
+
+function buildIconWindow(): void {
+  const bounds = readIconBoundsOrDefault();
+
+  iconWindow = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    hasShadow: false,
+    opacity: 0,
+    title: '쌤핀 (실행 중)',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  // PoC #1 검증된 옵션 — PPT/F11/YouTube 풀스크린 위에 표시 보장
+  iconWindow.setAlwaysOnTop(true, 'screen-saver');
+  iconWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  if (process.env['VITE_DEV_SERVER_URL']) {
+    void iconWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=icon`);
+  } else {
+    void iconWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
+      query: { mode: 'icon' },
+    });
+  }
+
+  // 사용자 드래그 후 위치 저장 (디바운스 500ms)
+  iconWindow.on('move', () => {
+    if (!iconWindow || iconWindow.isDestroyed()) return;
+    const b = iconWindow.getBounds();
+    scheduleIconBoundsSave({ x: b.x, y: b.y, width: ICON_SIZE, height: ICON_SIZE });
+  });
+
+  // 사용자가 어떻게든 close를 트리거해도 destroy 대신 hide (재사용)
+  iconWindow.on('close', (e) => {
+    if (isQuitting) return;
+    if (!iconWindow || iconWindow.isDestroyed()) return;
+    e.preventDefault();
+    iconWindow.hide();
+    iconWindow.setOpacity(0);
+  });
+
+  iconWindow.on('closed', () => {
+    iconWindow = null;
+  });
+}
+
+/** PoC #3에서 검증된 ease-out cubic — 220ms */
+function fadeInIconWindow(duration = 220): Promise<void> {
+  return new Promise((resolve) => {
+    if (!iconWindow || iconWindow.isDestroyed()) return resolve();
+    const startTime = Date.now();
+    iconWindow.setOpacity(0);
+    iconWindow.show();
+    const interval = setInterval(() => {
+      if (!iconWindow || iconWindow.isDestroyed()) {
+        clearInterval(interval);
+        resolve();
+        return;
+      }
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(1, elapsed / duration);
+      const opacity = 1 - Math.pow(1 - t, 3);
+      iconWindow.setOpacity(opacity);
+      if (t >= 1) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 16);
+  });
+}
+
+/** ease-in cubic — 180ms */
+function fadeOutIconWindow(duration = 180): Promise<void> {
+  return new Promise((resolve) => {
+    if (!iconWindow || iconWindow.isDestroyed()) return resolve();
+    const startTime = Date.now();
+    iconWindow.setOpacity(1);
+    const interval = setInterval(() => {
+      if (!iconWindow || iconWindow.isDestroyed()) {
+        clearInterval(interval);
+        resolve();
+        return;
+      }
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(1, elapsed / duration);
+      const opacity = 1 - Math.pow(t, 3);
+      iconWindow.setOpacity(opacity);
+      if (t >= 1) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 16);
+  });
+}
+
+/**
+ * 3-state 윈도우 전환 단일 진입점.
+ * Promise chain으로 큐잉하여 race condition 차단.
+ */
+type WindowMode = 'icon' | 'widget' | 'main';
+let windowTransitionInProgress: Promise<void> = Promise.resolve();
+
+function executeWindowTransition(target: WindowMode): Promise<void> {
+  windowTransitionInProgress = windowTransitionInProgress.then(async () => {
+    const opts = readSettingsWidgetOptions();
+    console.log(`[icon] transition → ${target}`);
+
+    switch (target) {
+      case 'icon': {
+        // 1) lastUserMode 기록 (icon 진입 직전 상태)
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+          lastUserMode = 'main';
+        } else if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+          lastUserMode = 'widget';
+        }
+
+        // 2) 아이콘 윈도우 보장 + fade-in
+        if (!iconWindow || iconWindow.isDestroyed()) buildIconWindow();
+        if (iconWindow && !iconWindow.isDestroyed()) {
+          if (!iconWindow.isVisible()) iconWindow.setOpacity(0);
+          await fadeInIconWindow(220);
+          ensureIconOnScreen();
+        }
+
+        // 3) 다른 윈도우 숨김
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+          hideOrDestroyMainWindow(opts.memorySaverMode);
+        }
+        if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+          widgetWindow.hide();
+        }
+        break;
+      }
+
+      case 'widget': {
+        // 1) 위젯 보장 + show
+        if (!widgetWindow || widgetWindow.isDestroyed()) {
+          createWidgetWindow(opts);
+        } else {
+          widgetWindow.show();
+        }
+
+        // 2) 아이콘 fade-out 후 hide
+        if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
+          await fadeOutIconWindow(180);
+          iconWindow.hide();
+        }
+
+        // 3) 메인 숨김
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+          hideOrDestroyMainWindow(opts.memorySaverMode);
+        }
+        break;
+      }
+
+      case 'main': {
+        // 1) 메인 보장 + show + focus
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          createWindow();
+        } else {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+
+        // 2) 아이콘 fade-out 후 hide
+        if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
+          await fadeOutIconWindow(180);
+          iconWindow.hide();
+        }
+
+        // 3) 위젯 숨김
+        if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+          widgetWindow.hide();
+        }
+        break;
+      }
+    }
+  });
+
+  return windowTransitionInProgress;
+}
+// ─── 아이콘 모드 끝 ─────────────────────────────────────────────────────
+
 function getAppIcon(): Electron.NativeImage {
   const isMac = process.platform === 'darwin';
   const candidates = isMac
@@ -631,6 +916,12 @@ function createWindow(): void {
         return;
       }
 
+      if (opts.closeAction === 'icon') {
+        // X 버튼 → 아이콘 모드로 접기 (v2.0.2~)
+        void executeWindowTransition('icon');
+        return;
+      }
+
       if (opts.closeAction === 'widget') {
         // X 버튼 → 위젯 모드로 전환
         if (!widgetWindow || widgetWindow.isDestroyed()) {
@@ -672,27 +963,17 @@ function createTray(): void {
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '쌤핀 열기',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
-          } else {
-            createWindow();
-          }
-        },
+        click: () => { void executeWindowTransition('main'); },
       },
       {
         label: '위젯 모드',
-        click: () => {
-          if (!widgetWindow || widgetWindow.isDestroyed()) {
-            const widgetOptions = readSettingsWidgetOptions();
-            createWidgetWindow(widgetOptions);
-            hideOrDestroyMainWindow(widgetOptions.memorySaverMode);
-          } else {
-            widgetWindow.show();
-          }
-        },
+        click: () => { void executeWindowTransition('widget'); },
       },
+      {
+        label: '아이콘 모드',
+        click: () => { void executeWindowTransition('icon'); },
+      },
+      { type: 'separator' },
       {
         label: '위젯 위치 초기화',
         click: () => {
@@ -701,6 +982,16 @@ function createTray(): void {
             const bounds = { x: defaultPos.x, y: defaultPos.y, width: 920, height: 700 };
             widgetWindow.setBounds(bounds);
             saveWidgetBounds(bounds);
+          }
+        },
+      },
+      {
+        label: '아이콘 위치 초기화',
+        click: () => {
+          if (iconWindow && !iconWindow.isDestroyed()) {
+            const fallback = getDefaultIconBounds();
+            iconWindow.setBounds(fallback);
+            saveIconBounds(fallback);
           }
         },
       },
@@ -1498,6 +1789,33 @@ function registerIpcHandlers(): void {
   ipcMain.handle('window:closeApp', (): void => {
     isQuitting = true;
     app.quit();
+  });
+
+  // ─── 아이콘 모드 IPC 핸들러 (v2.0.2~) ─────────────────────────────────
+  ipcMain.handle('icon:show', async (): Promise<void> => {
+    await executeWindowTransition('icon');
+  });
+
+  ipcMain.handle('icon:hide', async (): Promise<void> => {
+    if (!iconWindow || iconWindow.isDestroyed()) return;
+    await fadeOutIconWindow(180);
+    if (iconWindow && !iconWindow.isDestroyed()) iconWindow.hide();
+  });
+
+  ipcMain.handle('icon:set-bounds', (_event, bounds: { x: number; y: number }): void => {
+    if (!iconWindow || iconWindow.isDestroyed()) return;
+    if (typeof bounds?.x !== 'number' || typeof bounds?.y !== 'number') return;
+    iconWindow.setBounds({ x: bounds.x, y: bounds.y, width: ICON_SIZE, height: ICON_SIZE });
+    scheduleIconBoundsSave({ x: bounds.x, y: bounds.y, width: ICON_SIZE, height: ICON_SIZE });
+  });
+
+  ipcMain.handle('icon:expand', async (_event, payload: { to: 'main' | 'widget' | 'restore' }): Promise<void> => {
+    const target = payload?.to ?? 'restore';
+    const resolved: WindowMode =
+      target === 'main' ? 'main' :
+      target === 'widget' ? 'widget' :
+      lastUserMode;  // 'restore' → 마지막 사용 상태
+    await executeWindowTransition(resolved);
   });
 
   // export:showSaveDialog — 파일 저장 대화상자
@@ -3032,12 +3350,19 @@ if (!gotTheLock) {
       }, 4 * 60 * 60 * 1000);
     }
 
-    // 모니터 연결/해제/배율 변경 시 위젯 위치 보정
-    screen.on('display-added', () => ensureWidgetOnScreen());
-    screen.on('display-removed', () => ensureWidgetOnScreen());
+    // 모니터 연결/해제/배율 변경 시 위젯 + 아이콘 위치 보정
+    screen.on('display-added', () => {
+      ensureWidgetOnScreen();
+      ensureIconOnScreen();
+    });
+    screen.on('display-removed', () => {
+      ensureWidgetOnScreen();
+      ensureIconOnScreen();
+    });
     screen.on('display-metrics-changed', () => {
       setTimeout(() => {
         ensureWidgetOnScreen();
+        ensureIconOnScreen();
         // 절전 복귀로 인한 DPI 변경 시에도 위젯 리프레시
         if (widgetWindow && !widgetWindow.isDestroyed()) {
           widgetWindow.webContents.invalidate();
