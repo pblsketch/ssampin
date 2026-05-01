@@ -58,7 +58,8 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
    * @param authUrl Google OAuth 인증 URL (redirect_uri 미포함)
    * @returns 인증 코드(code) 문자열
    */
-  ipcMain.handle('oauth:start', async (_event, authUrl: string): Promise<string> => {
+  ipcMain.handle('oauth:start', async (_event, authUrl: string): Promise<{ code: string; redirectUri: string }> => {
+    console.log('[oauth] oauth:start invoked');
     // 이전 호출에서 남아있을 수 있는 pending Promise 정리
     if (pendingReject) {
       pendingReject(new Error('OAuth cancelled — superseded by new request'));
@@ -67,6 +68,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
 
     // 로컬 서버 바인딩 가능 여부 사전 확인
     const canBind = await canBindLocalhost();
+    console.log('[oauth] canBindLocalhost', canBind);
     if (!canBind) {
       // localhost 차단 → 즉시 PKCE 폴백 제안 (30초 대기 없이)
       console.log('[oauth] localhost 바인딩 불가 — PKCE 폴백 즉시 제안');
@@ -78,7 +80,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
       // throw하지 않고 Promise를 유지 — PKCE 폴백이 처리하므로
       // 렌더러의 startAuth에서 fallbackCleanup이 이벤트를 수신하여 모달 표시
       // 10분 타임아웃 또는 oauth:cancel로 종료
-      return new Promise<string>((_, reject) => {
+      return new Promise<{ code: string; redirectUri: string }>((_, reject) => {
         pendingReject = reject;
         setTimeout(() => {
           if (pendingReject === reject) {
@@ -89,11 +91,17 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
       });
     }
 
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<{ code: string; redirectUri: string }>((resolve, reject) => {
+      let resolvedRedirectUri: string | null = null;
       pendingReject = reject;
       const wrappedResolve = (code: string) => {
         if (pendingReject === reject) pendingReject = null;
-        resolve(code);
+        if (!resolvedRedirectUri) {
+          reject(new Error('OAuth internal error: redirect_uri 미확정 상태에서 code 수신'));
+          return;
+        }
+        console.log('[oauth] IPC promise resolving', { hasCode: Boolean(code), redirectUri: resolvedRedirectUri });
+        resolve({ code, redirectUri: resolvedRedirectUri });
       };
       const wrappedReject = (err: Error) => {
         if (pendingReject === reject) pendingReject = null;
@@ -193,6 +201,9 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
         oauthServer = server;
         const port = address.port;
         const redirectUri = `http://127.0.0.1:${port}/callback`;
+        // 클로저 변수에 저장 — 콜백 도착 시 wrappedResolve가 사용
+        resolvedRedirectUri = redirectUri;
+        console.log('[oauth] server listening', { redirectUri });
 
         // authUrl의 placeholder redirect_uri를 실제 포트로 교체
         const finalUrl = authUrl.replace(
@@ -203,7 +214,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
         // 시스템 브라우저에서 인증 URL 열기
         shell.openExternal(finalUrl);
 
-        // 렌더러에 redirect_uri 전달 (토큰 교환 시 필요)
+        // 렌더러에 redirect_uri 전달 (구버전 호환용 — 신규 코드는 IPC 응답의 redirectUri 사용)
         getMainWindow()?.webContents.send('oauth:redirect-uri', redirectUri);
 
         // 30초 콜백 미수신 → PKCE 폴백 제안

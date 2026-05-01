@@ -139,6 +139,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   },
 
   startAuth: async (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => {
+    console.log('[CalendarSync] startAuth begin');
     set({ isLoading: true, error: null, showFallbackSuggestion: false, fallbackSuggestionData: null });
     try {
       const api = window.electronAPI;
@@ -147,27 +148,9 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       }
 
       const { authenticateGoogle } = await import('@adapters/di/container');
-      // 첫 연결이면 계정 선택 화면 표시
       const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
-      // placeholder redirect_uri로 URL 생성 (IPC 핸들러에서 실제 포트로 교체)
       const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
 
-      // redirect_uri를 IPC에서 받아오기 위한 Promise (수신 시 또는 finally에서 정리)
-      const redirectUriCleanupRef: { current: (() => void) | null } = { current: null };
-      const redirectUriPromise = new Promise<string>((resolve) => {
-        if (api.onOAuthRedirectUri) {
-          const cleanup = api.onOAuthRedirectUri((uri: string) => {
-            redirectUriCleanupRef.current = null;
-            cleanup();
-            resolve(uri);
-          });
-          redirectUriCleanupRef.current = cleanup;
-        } else {
-          resolve('');
-        }
-      });
-
-      // 콜백 미수신 → PKCE 폴백 제안 이벤트 리스너
       let fallbackCleanup: (() => void) | null = null;
       if (api.onOAuthFallbackNeeded) {
         fallbackCleanup = api.onOAuthFallbackNeeded((data) => {
@@ -176,18 +159,13 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       }
 
       try {
-        // Electron IPC: 로컬 서버 시작 + 브라우저 열기 + 코드 수신
-        const [code, actualRedirectUri] = await Promise.all([
-          api.startOAuth(authUrl),
-          redirectUriPromise,
-        ]);
-
-        // 성공 → 폴백 제안 숨기기
+        console.log('[CalendarSync] awaiting api.startOAuth');
+        const result = await api.startOAuth(authUrl);
+        console.log('[CalendarSync] startOAuth resolved', { hasCode: Boolean(result?.code) });
         set({ showFallbackSuggestion: false, fallbackSuggestionData: null });
-        await get().completeAuth(code, actualRedirectUri);
+        await get().completeAuth(result.code, result.redirectUri);
       } finally {
         fallbackCleanup?.();
-        redirectUriCleanupRef.current?.();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.';

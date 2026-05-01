@@ -122,8 +122,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('navigate:to-page', handler);
     return () => { ipcRenderer.removeListener('navigate:to-page', handler); };
   },
-  // Google OAuth
-  startOAuth: (authUrl: string): Promise<string> =>
+  // Google OAuth — 신규 시그니처: {code, redirectUri} 묶음 반환 (별도 oauth:redirect-uri 이벤트 의존 제거)
+  startOAuth: (authUrl: string): Promise<{ code: string; redirectUri: string }> =>
     ipcRenderer.invoke('oauth:start', authUrl),
   cancelOAuth: (): Promise<void> =>
     ipcRenderer.invoke('oauth:cancel'),
