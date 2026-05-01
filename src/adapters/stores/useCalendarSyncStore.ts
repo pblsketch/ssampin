@@ -48,6 +48,7 @@ interface CalendarSyncState {
   // 액션
   initialize: () => Promise<void>;
   startAuth: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
+  cancelAuth: () => Promise<void>;
   completeAuth: (code: string, redirectUri: string) => Promise<void>;
   startPKCEFallback: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   completePKCEAuth: (code: string) => Promise<void>;
@@ -132,13 +133,16 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       // placeholder redirect_uri로 URL 생성 (IPC 핸들러에서 실제 포트로 교체)
       const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
 
-      // redirect_uri를 IPC에서 받아오기 위한 Promise
+      // redirect_uri를 IPC에서 받아오기 위한 Promise (수신 시 또는 finally에서 정리)
+      let redirectUriCleanup: (() => void) | null = null;
       const redirectUriPromise = new Promise<string>((resolve) => {
         if (api.onOAuthRedirectUri) {
           const cleanup = api.onOAuthRedirectUri((uri: string) => {
+            redirectUriCleanup = null;
             cleanup();
             resolve(uri);
           });
+          redirectUriCleanup = cleanup;
         } else {
           resolve('');
         }
@@ -164,6 +168,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         await get().completeAuth(code, actualRedirectUri);
       } finally {
         fallbackCleanup?.();
+        redirectUriCleanup?.();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.';
@@ -172,6 +177,14 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
           error: '구글 인증이 거부되었습니다. 다시 시도해주세요.',
           isLoading: false,
         });
+      } else if (msg.includes('cancelled')) {
+        // 사용자가 취소함 — 에러 표시하지 않음
+        set({
+          isLoading: false,
+          error: null,
+          showFallbackSuggestion: false,
+          fallbackSuggestionData: null,
+        });
       } else if (msg.includes('localhost blocked') || msg.includes('PKCE fallback offered')) {
         // PKCE 폴백으로 처리 중 — 에러 표시하지 않음 (모달이 대신 안내)
         set({ isLoading: false });
@@ -179,6 +192,23 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         set({ error: msg, isLoading: false });
       }
     }
+  },
+
+  cancelAuth: async () => {
+    try {
+      const api = window.electronAPI;
+      if (api?.cancelOAuth) {
+        await api.cancelOAuth();
+      }
+    } catch (err) {
+      console.error('[CalendarSync] cancelAuth error:', err);
+    }
+    set({
+      isLoading: false,
+      error: null,
+      showFallbackSuggestion: false,
+      fallbackSuggestionData: null,
+    });
   },
 
   completeAuth: async (code: string, redirectUri: string) => {
