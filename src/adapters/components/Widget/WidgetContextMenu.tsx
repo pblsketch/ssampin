@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import type { WidgetLayoutMode } from '@domain/entities/Settings';
+import type { WidgetDesktopMode, WidgetLayoutMode } from '@domain/entities/Settings';
 
 interface WidgetContextMenuProps {
   x: number;
@@ -62,6 +62,17 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
     window.electronAPI?.setOpacity(normalized);
   };
 
+  const isAlwaysOnTop = settings.widget.desktopMode === 'topmost';
+  const handleToggleAlwaysOnTop = () => {
+    const nextMode: WidgetDesktopMode = isAlwaysOnTop ? 'normal' : 'topmost';
+    const nextWidget = { ...settings.widget, desktopMode: nextMode };
+    void update({ widget: nextWidget });
+    void window.electronAPI?.applyWidgetSettings({
+      opacity: nextWidget.opacity,
+      desktopMode: nextMode,
+    });
+  };
+
   const handleSettings = () => {
     onClose();
     window.electronAPI?.toggleWidget();
@@ -84,6 +95,31 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
           SsamPin Menu
         </p>
       </div>
+
+      {/* 항상 위에 표시 토글 (Always on Top) */}
+      <button
+        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-sp-text/[0.08] transition-colors text-left"
+        onClick={handleToggleAlwaysOnTop}
+      >
+        <span
+          className="material-symbols-outlined flex-shrink-0"
+          style={{ fontSize: 20, color: isAlwaysOnTop ? '#3b82f6' : undefined }}
+        >
+          push_pin
+        </span>
+        <span className="flex-1 text-sm text-sp-text">항상 위에 표시</span>
+        {isAlwaysOnTop && (
+          <span
+            className="material-symbols-outlined text-blue-400 flex-shrink-0"
+            style={{ fontSize: 18 }}
+          >
+            check
+          </span>
+        )}
+      </button>
+
+      {/* 구분선 */}
+      <div className="h-px bg-sp-border mx-3 my-1" />
 
       {/* 레이아웃 선택 */}
       <div className="px-3 py-2">
