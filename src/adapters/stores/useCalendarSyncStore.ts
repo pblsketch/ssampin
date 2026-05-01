@@ -134,15 +134,15 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
 
       // redirect_uri를 IPC에서 받아오기 위한 Promise (수신 시 또는 finally에서 정리)
-      let redirectUriCleanup: (() => void) | null = null;
+      const redirectUriCleanupRef: { current: (() => void) | null } = { current: null };
       const redirectUriPromise = new Promise<string>((resolve) => {
         if (api.onOAuthRedirectUri) {
           const cleanup = api.onOAuthRedirectUri((uri: string) => {
-            redirectUriCleanup = null;
+            redirectUriCleanupRef.current = null;
             cleanup();
             resolve(uri);
           });
-          redirectUriCleanup = cleanup;
+          redirectUriCleanupRef.current = cleanup;
         } else {
           resolve('');
         }
@@ -168,7 +168,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         await get().completeAuth(code, actualRedirectUri);
       } finally {
         fallbackCleanup?.();
-        redirectUriCleanup?.();
+        redirectUriCleanupRef.current?.();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.';
@@ -177,6 +177,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
           error: '구글 인증이 거부되었습니다. 다시 시도해주세요.',
           isLoading: false,
         });
+      } else if (msg.includes('superseded by new request')) {
+        // 새 요청이 진행 중 — isLoading은 새 요청이 관리하므로 건드리지 않음
       } else if (msg.includes('cancelled')) {
         // 사용자가 취소함 — 에러 표시하지 않음
         set({
