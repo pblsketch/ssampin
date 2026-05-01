@@ -190,8 +190,8 @@ interface ElectronAPI {
   // Cross-window navigation
   navigateToPage: (page: string) => Promise<void>;
   onNavigateToPage: (callback: (page: string) => void) => () => void;
-  // Google OAuth
-  startOAuth: (authUrl: string) => Promise<string>;
+  // Google OAuth — {code, redirectUri} 묶음 반환
+  startOAuth: (authUrl: string) => Promise<{ code: string; redirectUri: string }>;
   cancelOAuth: () => Promise<void>;
   onOAuthRedirectUri: (callback: (uri: string) => void) => () => void;
   onOAuthError: (callback: (error: { code: string; message: string }) => void) => () => void;
