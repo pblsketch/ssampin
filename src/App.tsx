@@ -12,6 +12,7 @@ import { MealPage } from '@adapters/components/Meal/MealPage';
 import { ClassManagementPage } from '@adapters/components/ClassManagement/ClassManagementPage';
 import { SettingsPage } from '@adapters/components/Settings/SettingsPage';
 import { Widget } from '@adapters/components/Widget/Widget';
+import { IconWindow } from '@adapters/components/Icon/IconWindow';
 import { Export } from '@adapters/components/Export/Export';
 const FormsPage = React.lazy(() =>
   import('@adapters/components/Forms/FormsPage').then((m) => ({ default: m.FormsPage })),
@@ -113,6 +114,11 @@ function isQuickAddMode(): boolean {
 function isStickerPickerMode(): boolean {
   const params = new URLSearchParams(window.location.search);
   return params.get('mode') === 'stickerPicker';
+}
+
+function isIconMode(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('mode') === 'icon';
 }
 
 function getQuickAddKindFromUrl(): QuickAddKind {
@@ -352,10 +358,17 @@ export function App() {
   if (isQuickAddMode()) {
     return <QuickAddApp />;
   }
+  if (isIconMode()) {
+    return <IconApp />;
+  }
   if (isWidgetMode()) {
     return <WidgetApp />;
   }
   return <MainApp />;
+}
+
+function IconApp() {
+  return <IconWindow />;
 }
 
 const COMMAND_TO_KIND: Record<string, QuickAddKind> = {

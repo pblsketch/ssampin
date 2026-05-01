@@ -85,6 +85,7 @@ export function WidgetTab({ draft, patch }: Props) {
           <p className="text-xs text-sp-muted mb-2">X 버튼을 누를 때의 동작을 선택합니다.</p>
           {([
             { value: 'widget' as const, label: '위젯 모드로 전환', desc: '작은 위젯 창으로 전환합니다' },
+            { value: 'icon' as const, label: '아이콘 모드로 접기', desc: '화면에 떠 있는 작은 아이콘으로 접습니다 (NEW)' },
             { value: 'tray' as const, label: '트레이로 최소화', desc: '시스템 트레이로 숨깁니다' },
             { value: 'ask' as const, label: '매번 물어보기', desc: '닫을 때마다 선택합니다' },
           ]).map((opt) => (
