@@ -112,6 +112,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
 
       const server = http.createServer((req, res) => {
         const parsedUrl = url.parse(req.url ?? '', true);
+        console.log('[oauth] callback request', { url: req.url, path: parsedUrl.pathname });
 
         if (parsedUrl.pathname === '/callback') {
           callbackReceived = true;
@@ -119,6 +120,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
 
           const code = parsedUrl.query['code'] as string | undefined;
           const error = parsedUrl.query['error'] as string | undefined;
+          console.log('[oauth] callback parsed', { hasCode: Boolean(code), error });
 
           // 성공/실패 페이지 표시
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -135,6 +137,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
                 </div>
               </body></html>
             `);
+            console.log('[oauth] resolving IPC promise with code');
             wrappedResolve(code);
           } else {
             // access_denied인 경우 (사용자 한도 초과 포함) — 전용 에러 코드 전송

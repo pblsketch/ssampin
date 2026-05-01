@@ -996,20 +996,21 @@ function AccountLinkingStep() {
                             </div>
                             <h3 className="text-lg font-bold text-sp-text">수동 인증</h3>
                         </div>
-                        <p className="text-sm text-sp-muted mb-4">브라우저에서 Google 로그인 후 표시된 인증 코드를 아래에 붙여넣어 주세요.</p>
+                        <p className="text-sm text-sp-muted mb-4">
+                            브라우저 주소창이 <code className="text-sp-text">http://127.0.0.1:.../callback?code=...</code>로 바뀐 직후, 그 <strong className="text-sp-text">URL 전체</strong>(또는 <code className="text-sp-text">code=</code> 값)을 그대로 붙여넣어 주세요.
+                        </p>
                         {authError && (
                             <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-400 mb-4">{authError}</div>
                         )}
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={pkceCode}
-                                onChange={(e) => setPkceCode(e.target.value)}
-                                placeholder="인증 코드 입력..."
-                                className="flex-1 rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none"
-                                autoFocus
-                                onKeyDown={(e) => { if (e.key === 'Enter' && pkceCode.trim()) void completePKCEAuth(pkceCode.trim()); }}
-                            />
+                        <textarea
+                            value={pkceCode}
+                            onChange={(e) => setPkceCode(e.target.value)}
+                            placeholder="http://127.0.0.1:8421/callback?code=4/0Acv... 또는 code=4/0Acv..."
+                            rows={3}
+                            className="w-full rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none font-mono mb-2"
+                            autoFocus
+                        />
+                        <div className="flex justify-end">
                             <button
                                 onClick={() => pkceCode.trim() && void completePKCEAuth(pkceCode.trim())}
                                 disabled={isLoading || !pkceCode.trim()}

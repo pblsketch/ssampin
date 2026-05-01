@@ -11,6 +11,25 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
+/** 학교망 등에서 일부 Google API가 응답 없이 늘어지는 경우 대비 timeout (30초) */
+const FETCH_TIMEOUT_MS = 30_000;
+
+/** AbortController 기반 fetch wrapper. 일정 시간 응답이 없으면 abort. */
+async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`Google API 응답 시간 초과 (${timeoutMs / 1000}초): ${input}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** 토큰 교환 API 응답 */
 interface TokenResponse {
   access_token: string;
@@ -104,7 +123,8 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
       body['code_verifier'] = codeVerifier;
     }
 
-    const res = await fetch(GOOGLE_TOKEN_URL, {
+    console.log('[GoogleOAuth] exchangeCode start', { redirectUri, hasVerifier: Boolean(codeVerifier) });
+    const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams(body).toString(),
@@ -116,9 +136,11 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
     }
 
     const data = (await res.json()) as TokenResponse;
+    console.log('[GoogleOAuth] exchangeCode token received');
 
     // 사용자 이메일 가져오기
     const email = await this.fetchUserEmail(data.access_token);
+    console.log('[GoogleOAuth] exchangeCode email received', email);
 
     return {
       accessToken: data.access_token,
@@ -134,7 +156,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
    * @param refreshToken 기존 리프레시 토큰
    */
   async refreshTokens(refreshToken: string): Promise<GoogleAuthTokens> {
-    const res = await fetch(GOOGLE_TOKEN_URL, {
+    const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -173,7 +195,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
    * @param accessToken 폐기할 액세스 토큰
    */
   async revokeTokens(accessToken: string): Promise<void> {
-    await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(accessToken)}`, {
+    await fetchWithTimeout(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(accessToken)}`, {
       method: 'POST',
     });
   }
@@ -197,7 +219,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
    * 액세스 토큰으로 사용자 이메일 조회 (내부 헬퍼)
    */
   private async fetchUserEmail(accessToken: string): Promise<string> {
-    const emailRes = await fetch(GOOGLE_USERINFO_URL, {
+    const emailRes = await fetchWithTimeout(GOOGLE_USERINFO_URL, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 

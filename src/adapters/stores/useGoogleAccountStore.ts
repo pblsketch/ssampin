@@ -1,6 +1,34 @@
 import { create } from 'zustand';
 // DI container에서 use case와 repository를 가져올 것 (dynamic import로 순환 참조 방지)
 
+/**
+ * 사용자가 PKCE 모달에 붙여넣은 값에서 OAuth code 추출.
+ * 다음 모두 허용:
+ *  - 'http://127.0.0.1:8421/callback?code=4/0AcvD...&scope=...' (전체 URL)
+ *  - 'code=4/0AcvD...' (쿼리 단편)
+ *  - '4/0AcvD...' (raw code)
+ */
+function extractAuthCode(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  // URL 형태
+  try {
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      const url = new URL(trimmed);
+      const code = url.searchParams.get('code');
+      if (code) return code;
+    }
+  } catch {
+    // URL 파싱 실패 — 다음 단계로
+  }
+  // code=... 단편
+  const codeMatch = trimmed.match(/(?:^|[?&])code=([^&\s]+)/);
+  if (codeMatch && codeMatch[1]) return decodeURIComponent(codeMatch[1]);
+  // raw code (Google OAuth code는 슬래시 포함)
+  if (/^[\w/_-]+$/.test(trimmed)) return trimmed;
+  return null;
+}
+
 /** OAuth 에러 정보 (에러 모달 표시용) */
 interface OAuthError {
   code: string;
@@ -161,36 +189,41 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
   },
 
   completeAuth: async (code: string, redirectUri: string) => {
+    console.log('[GoogleAccount] completeAuth start', { redirectUri });
     set({ isLoading: true, error: null });
     try {
       const { authenticateGoogle } = await import('@adapters/di/container');
       const tokens = await authenticateGoogle.authenticate(code, redirectUri);
+      console.log('[GoogleAccount] completeAuth tokens saved');
 
-      // 교차 참조: 인증 완료 후 캘린더 스토어에 캘린더 목록 프리로드 + 선택 모달 오픈
-      try {
-        const { manageCalendarMapping } = await import('@adapters/di/container');
-        const calendars = await manageCalendarMapping.listGoogleCalendars();
-        const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
-        useCalendarSyncStore.setState({
-          isConnected: true,
-          email: tokens.email,
-          googleCalendars: calendars,
-          showCalendarPicker: true,
-        });
-      } catch (fetchErr) {
-        console.error('[GoogleAccount] post-auth calendar fetch error:', fetchErr);
-        // 캘린더 프리로드 실패해도 계정 연결 상태는 전파
-        const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
-        useCalendarSyncStore.setState({ isConnected: true, email: tokens.email });
-      }
-
+      // 토큰 저장 직후 즉시 연결 상태로 마크 — 캘린더 프리로드는 별개로 분리.
+      // 학교망 등에서 calendar API가 hang하더라도 isLoading이 풀리지 않는 사고 방지.
+      const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
+      useCalendarSyncStore.setState({ isConnected: true, email: tokens.email });
       set({
         isConnected: true,
         email: tokens.email,
         isLoading: false,
         error: null,
       });
+      console.log('[GoogleAccount] completeAuth marked connected');
+
+      // 캘린더 프리로드 — 백그라운드에서 시도. 실패/지연되어도 연결 상태에는 영향 없음.
+      void (async () => {
+        try {
+          const { manageCalendarMapping } = await import('@adapters/di/container');
+          const calendars = await manageCalendarMapping.listGoogleCalendars();
+          useCalendarSyncStore.setState({
+            googleCalendars: calendars,
+            showCalendarPicker: true,
+          });
+          console.log('[GoogleAccount] background calendar preload done', calendars.length);
+        } catch (fetchErr) {
+          console.error('[GoogleAccount] post-auth calendar fetch error:', fetchErr);
+        }
+      })();
     } catch (err) {
+      console.error('[GoogleAccount] completeAuth error', err);
       set({
         error: err instanceof Error ? err.message : '인증 완료 중 오류가 발생했습니다.',
         isLoading: false,
@@ -223,7 +256,7 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
     }
   },
 
-  completePKCEAuth: async (code: string) => {
+  completePKCEAuth: async (codeOrUrl: string) => {
     set({ isLoading: true, error: null });
     try {
       const api = window.electronAPI;
@@ -231,30 +264,21 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
         throw new Error('PKCE 인증은 데스크톱 앱에서만 가능합니다.');
       }
 
-      // verifier 가져오기
-      const verifier = await api.exchangePKCECode();
-
-      const { authenticateGoogle } = await import('@adapters/di/container');
-      const redirectUri = 'urn:ietf:wg:oauth:2.0:oob';
-      const tokens = await authenticateGoogle.authenticate(code, redirectUri, verifier);
-
-      // 교차 참조: 인증 완료 후 캘린더 스토어에 캘린더 목록 프리로드 + 선택 모달 오픈
-      try {
-        const { manageCalendarMapping } = await import('@adapters/di/container');
-        const calendars = await manageCalendarMapping.listGoogleCalendars();
-        const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
-        useCalendarSyncStore.setState({
-          isConnected: true,
-          email: tokens.email,
-          googleCalendars: calendars,
-          showCalendarPicker: true,
-        });
-      } catch (fetchErr) {
-        console.error('[GoogleAccount] post-PKCE-auth calendar fetch error:', fetchErr);
-        const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
-        useCalendarSyncStore.setState({ isConnected: true, email: tokens.email });
+      // 입력값에서 인증 코드 추출 (URL 통째로 또는 raw code 모두 허용)
+      const code = extractAuthCode(codeOrUrl);
+      if (!code) {
+        throw new Error('인증 코드를 찾지 못했습니다. 브라우저 주소창의 URL 또는 code= 값을 그대로 붙여넣어주세요.');
       }
 
+      // verifier + redirect_uri 가져오기 (PKCE 시작 시 사용한 것과 동일해야 함)
+      const { verifier, redirectUri } = await api.exchangePKCECode();
+
+      const { authenticateGoogle } = await import('@adapters/di/container');
+      const tokens = await authenticateGoogle.authenticate(code, redirectUri, verifier);
+
+      // 즉시 연결 상태 마크 후 캘린더 프리로드는 백그라운드 분리
+      const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
+      useCalendarSyncStore.setState({ isConnected: true, email: tokens.email });
       set({
         isConnected: true,
         email: tokens.email,
@@ -262,6 +286,19 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
         error: null,
         showPKCEFallback: false,
       });
+
+      void (async () => {
+        try {
+          const { manageCalendarMapping } = await import('@adapters/di/container');
+          const calendars = await manageCalendarMapping.listGoogleCalendars();
+          useCalendarSyncStore.setState({
+            googleCalendars: calendars,
+            showCalendarPicker: true,
+          });
+        } catch (fetchErr) {
+          console.error('[GoogleAccount] post-PKCE-auth calendar fetch error:', fetchErr);
+        }
+      })();
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'PKCE 인증 완료 중 오류가 발생했습니다.',
