@@ -133,7 +133,8 @@ function PKCEFallbackModal({
         {/* 안내 */}
         <div className="space-y-3 mb-4">
           <p className="text-sm text-sp-muted">
-            브라우저에서 Google 로그인 후 표시된 인증 코드를 아래에 붙여넣어 주세요.
+            브라우저에서 Google 로그인을 진행하면 주소창이 <code className="text-sp-text">http://127.0.0.1:.../callback?code=...</code>로 바뀝니다.
+            <br />이 <strong className="text-sp-text">주소창 전체 URL</strong>(또는 <code className="text-sp-text">code=</code> 부분)을 그대로 복사해서 붙여넣어 주세요.
           </p>
 
           {error && (
@@ -142,18 +143,13 @@ function PKCEFallbackModal({
             </div>
           )}
 
-          <input
-            type="text"
+          <textarea
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="인증 코드 입력..."
-            className="w-full rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none"
+            placeholder="http://127.0.0.1:8421/callback?code=4/0Acv... 또는 code=4/0Acv... 또는 4/0Acv..."
+            rows={3}
+            className="w-full rounded-lg border border-sp-border bg-sp-surface px-4 py-3 text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none font-mono"
             autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && code.trim()) {
-                onSubmit(code.trim());
-              }
-            }}
           />
         </div>
 
