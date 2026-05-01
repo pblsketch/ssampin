@@ -10,6 +10,12 @@ export interface GoogleTask {
   readonly selfLink?: string;
   readonly completed?: string;  // RFC3339 (완료 시각)
   readonly deleted?: boolean;
+  /**
+   * tasks.clear() 또는 Google Tasks 앱에서 "완료 항목 지우기" 실행 후 마킹되는 플래그.
+   * 사용자 관점에서는 삭제된 것이므로 sync 시 외부 삭제로 처리해야 한다.
+   * read-only.
+   */
+  readonly hidden?: boolean;
   readonly parent?: string;
 }
 

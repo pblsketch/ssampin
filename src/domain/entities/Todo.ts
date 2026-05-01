@@ -61,6 +61,25 @@ export interface Todo {
   readonly googleTaskListId?: string;
   /** Google Tasks의 notes (상세 메모) */
   readonly notes?: string;
+
+  // === Google Tasks 동기화 메타데이터 (v2.0.2~) ===
+  /**
+   * 다음 sync 사이클에서 Google Tasks에 적용할 작업.
+   * - 'create': 원격에 신규 생성 필요 (= googleTaskId 없는 신규 항목)
+   * - 'update': 원격 업데이트 필요 (로컬에서 수정된 항목)
+   * - 'delete': 원격에서 삭제 필요 (아카이브/영구삭제된 항목)
+   * - undefined: 원격과 동기화된 상태
+   */
+  readonly pendingRemoteOp?: 'create' | 'update' | 'delete';
+  /** 로컬에서 마지막으로 사용자가 수정한 시각 (ISO 8601) */
+  readonly updatedAt?: string;
+  /** Google Tasks와 마지막으로 동기화 성공한 시각 (ISO 8601) */
+  readonly lastSyncedAt?: string;
+  /**
+   * Google Tasks 쪽에서 의도적으로 삭제됐음을 마킹하는 tombstone.
+   * 다음 sync에서 이 todo를 다시 push하지 않기 위함 (좀비 부활 방지).
+   */
+  readonly remoteDeletedAt?: string;
 }
 
 export interface TodosData {

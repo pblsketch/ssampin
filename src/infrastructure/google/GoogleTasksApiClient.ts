@@ -96,6 +96,11 @@ export class GoogleTasksApiClient implements IGoogleTasksPort {
         maxResults: '100',
         showCompleted: 'true',
         showHidden: 'true',
+        // 외부 삭제 감지를 위해 tombstone(deleted:true) 응답 수신.
+        // showDeleted=false가 기본이면 삭제된 task는 응답에서 빠지지만,
+        // Google Tasks 앱에서 완료→삭제한 항목은 hidden:true 상태로 살아남아
+        // "응답에 없으면 삭제"로 판정되지 않는 함정이 있음.
+        showDeleted: 'true',
       });
       if (updatedMin) params.set('updatedMin', updatedMin);
       if (pageToken) params.set('pageToken', pageToken);
