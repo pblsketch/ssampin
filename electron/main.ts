@@ -39,6 +39,39 @@ let savePositionTimer: ReturnType<typeof setTimeout> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
+/**
+ * 앱이 사용자 콘텐츠를 렌더링하는 모든 활성 윈도우 목록.
+ *
+ * 데이터 동기화 브로드캐스트(data:changed), autoUpdater 알림, system:resume,
+ * analytics:flush 등을 모든 콘텐츠 윈도우에 일관되게 전파하기 위한 단일 진실 원천.
+ *
+ * 포함: mainWindow, widgetWindow (alive 상태인 것만)
+ * 제외: quickAddWindow, stickerPickerWindow (사용자 콘텐츠 아님 — popup utility)
+ *
+ * 향후 iconWindow 추가 시 이 함수에 한 줄만 추가하면 모든 브로드캐스트 사이트에 자동 반영된다.
+ */
+function getAllAppWindows(): BrowserWindow[] {
+  const windows: BrowserWindow[] = [];
+  if (mainWindow && !mainWindow.isDestroyed()) windows.push(mainWindow);
+  if (widgetWindow && !widgetWindow.isDestroyed()) windows.push(widgetWindow);
+  return windows;
+}
+
+/**
+ * 모든 앱 윈도우에 IPC 메시지 브로드캐스트.
+ * 옵션으로 senderId를 전달하면 echo 방지 (data:changed 패턴).
+ */
+function broadcastToAllWindows(channel: string, payload?: unknown, excludeSenderId?: number): void {
+  for (const win of getAllAppWindows()) {
+    if (excludeSenderId !== undefined && win.webContents.id === excludeSenderId) continue;
+    if (payload === undefined) {
+      win.webContents.send(channel);
+    } else {
+      win.webContents.send(channel, payload);
+    }
+  }
+}
+
 // 위젯 표시 모드 상태 추적: 'normal' | 'topmost'
 let currentDesktopMode: string = 'normal';
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
@@ -858,11 +891,7 @@ async function doRestoreWidget(): Promise<void> {
         console.log('[widget] 절전 복귀 — 위젯 리프레시 완료');
 
         // 렌더러에 시스템 복귀 알림 (날짜/데이터 갱신용)
-        for (const win of [mainWindow, widgetWindow]) {
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('system:resume');
-          }
-        }
+        broadcastToAllWindows('system:resume');
 
         // 500ms 뒤 렌더러 실제 동작 검증
         setTimeout(async () => {
@@ -1116,45 +1145,22 @@ function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false;
 
   autoUpdater.on('update-available', (info: { version: string; releaseNotes?: string | null }) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update:available', {
-        version: info.version,
-        releaseNotes: info.releaseNotes ?? undefined,
-      });
-    }
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-      widgetWindow.webContents.send('update:available', {
-        version: info.version,
-        releaseNotes: info.releaseNotes ?? undefined,
-      });
-    }
+    broadcastToAllWindows('update:available', {
+      version: info.version,
+      releaseNotes: info.releaseNotes ?? undefined,
+    });
   });
 
   autoUpdater.on('update-not-available', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update:not-available');
-    }
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-      widgetWindow.webContents.send('update:not-available');
-    }
+    broadcastToAllWindows('update:not-available');
   });
 
   autoUpdater.on('download-progress', (progress: { percent: number }) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update:download-progress', { percent: progress.percent });
-    }
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-      widgetWindow.webContents.send('update:download-progress', { percent: progress.percent });
-    }
+    broadcastToAllWindows('update:download-progress', { percent: progress.percent });
   });
 
   autoUpdater.on('update-downloaded', (info: { version: string }) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update:update-downloaded', { version: info.version });
-    }
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-      widgetWindow.webContents.send('update:update-downloaded', { version: info.version });
-    }
+    broadcastToAllWindows('update:update-downloaded', { version: info.version });
   });
 
   autoUpdater.on('error', (err: Error) => {
@@ -1264,11 +1270,7 @@ function registerIpcHandlers(): void {
       }
 
       // 다른 창에 데이터 변경 알림 (메인 ↔ 위젯 동기화)
-      for (const win of [mainWindow, widgetWindow]) {
-        if (win && !win.isDestroyed() && win.webContents.id !== _event.sender.id) {
-          win.webContents.send('data:changed', filename);
-        }
-      }
+      broadcastToAllWindows('data:changed', filename, _event.sender.id);
 
       if (filename === 'settings' && !process.env['VITE_DEV_SERVER_URL']) {
         try {
@@ -1300,11 +1302,7 @@ function registerIpcHandlers(): void {
       }
     }
 
-    for (const win of [mainWindow, widgetWindow]) {
-      if (win && !win.isDestroyed() && win.webContents.id !== _event.sender.id) {
-        win.webContents.send('data:changed', filename);
-      }
-    }
+    broadcastToAllWindows('data:changed', filename, _event.sender.id);
   });
 
   // system:getMemoryMetrics — 현재 Electron 앱 프로세스별 메모리 사용량 조회 (진단용)
@@ -3105,12 +3103,7 @@ app.on('before-quit', () => {
   // 실시간 담벼락 dirty WallBoard 동기 저장 (Design §3.3)
   saveDirtyWallBoardsSync();
   // Analytics flush 신호 전송
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('analytics:flush');
-  }
-  if (widgetWindow && !widgetWindow.isDestroyed()) {
-    widgetWindow.webContents.send('analytics:flush');
-  }
+  broadcastToAllWindows('analytics:flush');
 });
 
 app.on('window-all-closed', () => {
