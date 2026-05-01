@@ -56,6 +56,8 @@ docs/.pdca-snapshots/
 
 # 메인 프로세스 임시 빌드 (잘못 생성된 파일)
 main.js
+# 단, spikes/ 안의 PoC main.js는 정식 산출물이므로 추적
+!spikes/**/main.js
 
 # 임시 분석/스크린샷
 docs/examples/
