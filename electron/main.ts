@@ -547,9 +547,15 @@ function getDefaultWidgetBounds(width: number): { x: number; y: number } {
 }
 
 // ─── 아이콘 모드 (v2.0.2~) ─────────────────────────────────────────────
-// 56×56 frameless transparent floating 아이콘. PoC #1, #3 검증 완료.
+// frameless transparent floating 아이콘. PoC #1, #3 검증 완료.
 // 패턴: stickerPickerWindow + fadeInQuickAddWindow 복제
-const ICON_SIZE = 56;
+//
+// IMPORTANT: BrowserWindow는 64×64 (Electron Issue #30171 회피 — Win11 transparent
+// frameless 윈도우가 60px 미만일 때 상단/하단에 어두운 잔상 + 알파 합성 깨짐).
+// 내부 캐릭터는 56×56로 표시하고 외곽 4px은 transparent margin으로 잡혀서
+// 시각적으로는 동일하지만 OS 합성 이슈를 피한다.
+const ICON_SIZE = 64;        // BrowserWindow 크기 (Issue #30171 회피)
+const ICON_VISUAL = 56;      // 내부 캐릭터 표시 크기
 const ICON_MARGIN = 24;
 
 interface IconBounds {
@@ -566,6 +572,11 @@ let saveIconBoundsTimer: ReturnType<typeof setTimeout> | null = null;
  * 아이콘 단일 클릭 시 이 값을 기준으로 main/widget을 복원한다.
  */
 let lastUserMode: 'main' | 'widget' = 'main';
+/**
+ * 현재 활성 윈도우 모드. Win+D 폴링이 'icon' 상태에서 위젯을 잘못 복원하는 것을
+ * 방지하기 위한 가드 (executeWindowTransition에서 갱신).
+ */
+let currentWindowMode: 'main' | 'widget' | 'icon' = 'main';
 
 function getDefaultIconBounds(): IconBounds {
   const display = screen.getPrimaryDisplay();
@@ -611,6 +622,67 @@ function scheduleIconBoundsSave(bounds: IconBounds): void {
   }, 500);
 }
 
+// ─── 아이콘 드래그 — main process polling (가장 견고) ───────────────────
+// Renderer pointer capture 의존 X. screen.getCursorScreenPoint()로 OS 레벨
+// 마우스 위치를 직접 받아 setBounds. mouse가 윈도우 밖으로 나가도 정상 작동.
+let iconDragState: {
+  startMouseX: number;
+  startMouseY: number;
+  startWinX: number;
+  startWinY: number;
+} | null = null;
+let iconDragInterval: NodeJS.Timeout | null = null;
+let iconDragSafetyTimer: NodeJS.Timeout | null = null;
+
+function startIconDrag(): void {
+  if (!iconWindow || iconWindow.isDestroyed()) return;
+  stopIconDrag(); // 기존 드래그 정리
+  const mouse = screen.getCursorScreenPoint();
+  const bounds = iconWindow.getBounds();
+  iconDragState = {
+    startMouseX: mouse.x,
+    startMouseY: mouse.y,
+    startWinX: bounds.x,
+    startWinY: bounds.y,
+  };
+  // 16ms (60fps) 폴링으로 마우스 따라가기
+  iconDragInterval = setInterval(() => {
+    if (!iconDragState || !iconWindow || iconWindow.isDestroyed()) {
+      stopIconDrag();
+      return;
+    }
+    const cur = screen.getCursorScreenPoint();
+    iconWindow.setBounds({
+      x: iconDragState.startWinX + (cur.x - iconDragState.startMouseX),
+      y: iconDragState.startWinY + (cur.y - iconDragState.startMouseY),
+      width: ICON_SIZE,
+      height: ICON_SIZE,
+    });
+  }, 16);
+  // 안전망: renderer가 endDrag IPC 누락해도 5초 후 자동 종료
+  iconDragSafetyTimer = setTimeout(() => {
+    console.warn('[icon] drag safety timeout — auto-stopping after 5s');
+    stopIconDrag();
+  }, 5000);
+}
+
+function stopIconDrag(): void {
+  if (iconDragInterval) {
+    clearInterval(iconDragInterval);
+    iconDragInterval = null;
+  }
+  if (iconDragSafetyTimer) {
+    clearTimeout(iconDragSafetyTimer);
+    iconDragSafetyTimer = null;
+  }
+  iconDragState = null;
+  // 위치 영속화
+  if (iconWindow && !iconWindow.isDestroyed()) {
+    const b = iconWindow.getBounds();
+    saveIconBounds({ x: b.x, y: b.y, width: ICON_SIZE, height: ICON_SIZE });
+  }
+}
+
 function ensureIconOnScreen(): void {
   if (!iconWindow || iconWindow.isDestroyed()) return;
   const bounds = iconWindow.getBounds();
@@ -643,6 +715,7 @@ function buildIconWindow(): void {
     transparent: true,
     backgroundColor: '#00000000',
     resizable: false,
+    movable: true,
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -650,6 +723,10 @@ function buildIconWindow(): void {
     alwaysOnTop: true,
     show: false,
     hasShadow: false,
+    // Windows 11 DWM 흰 모서리/그림자 회피 — transparent 윈도우에서 효과적
+    roundedCorners: false,
+    thickFrame: false,
+    paintWhenInitiallyHidden: false,
     opacity: 0,
     title: '쌤핀 (실행 중)',
     webPreferences: {
@@ -756,14 +833,15 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
 
     switch (target) {
       case 'icon': {
-        // 1) lastUserMode 기록 (icon 진입 직전 상태)
-        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-          lastUserMode = 'main';
-        } else if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
-          lastUserMode = 'widget';
-        }
+        // lastUserMode는 'widget'/'main' 진입 시 이미 동기화됨. icon 진입 시는 건드리지 않음.
+        // (이전 race: case 'icon'에서 lastUserMode를 다시 결정하다 currentWindowMode와
+        //  실제 윈도우 visible 상태가 어긋나는 케이스 발견 → 단순화)
+        console.log(`[icon] lastUserMode = ${lastUserMode} (preserved from previous transition)`);
 
-        // 2) 아이콘 윈도우 보장 + fade-in
+        // 2) currentWindowMode를 먼저 'icon'으로 — Win+D 폴링이 위젯을 다시 띄우는 것 차단
+        currentWindowMode = 'icon';
+
+        // 3) 아이콘 윈도우 보장 + fade-in
         if (!iconWindow || iconWindow.isDestroyed()) buildIconWindow();
         if (iconWindow && !iconWindow.isDestroyed()) {
           if (!iconWindow.isVisible()) iconWindow.setOpacity(0);
@@ -771,7 +849,7 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
           ensureIconOnScreen();
         }
 
-        // 3) 다른 윈도우 숨김
+        // 4) 다른 윈도우 숨김
         if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
           hideOrDestroyMainWindow(opts.memorySaverMode);
         }
@@ -782,27 +860,39 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
       }
 
       case 'widget': {
-        // 1) 위젯 보장 + show
-        if (!widgetWindow || widgetWindow.isDestroyed()) {
-          createWidgetWindow(opts);
-        } else {
-          widgetWindow.show();
-        }
+        currentWindowMode = 'widget';
+        lastUserMode = 'widget';  // icon 진입 시 복원할 위치 즉시 기록
 
-        // 2) 아이콘 fade-out 후 hide
+        // 1) 아이콘 fade-out 먼저 (위젯 표시 전에 사라지게)
         if (iconWindow && !iconWindow.isDestroyed() && iconWindow.isVisible()) {
           await fadeOutIconWindow(180);
           iconWindow.hide();
         }
 
-        // 3) 메인 숨김
-        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-          hideOrDestroyMainWindow(opts.memorySaverMode);
+        // 2) 위젯 보장 + show. 새로 생성하는 경우 ready-to-show 콜백으로
+        //    main hide 타이밍 동기화 (gap 방지 — 기존 패턴 보존)
+        if (!widgetWindow || widgetWindow.isDestroyed()) {
+          await new Promise<void>((resolve) => {
+            createWidgetWindow(opts, () => {
+              if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+                hideOrDestroyMainWindow(opts.memorySaverMode);
+              }
+              resolve();
+            });
+          });
+        } else {
+          widgetWindow.show();
+          if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+            hideOrDestroyMainWindow(opts.memorySaverMode);
+          }
         }
         break;
       }
 
       case 'main': {
+        currentWindowMode = 'main';
+        lastUserMode = 'main';  // icon 진입 시 복원할 위치 즉시 기록
+
         // 1) 메인 보장 + show + focus
         if (!mainWindow || mainWindow.isDestroyed()) {
           createWindow();
@@ -923,16 +1013,12 @@ function createWindow(): void {
       }
 
       if (opts.closeAction === 'widget') {
-        // X 버튼 → 위젯 모드로 전환
-        if (!widgetWindow || widgetWindow.isDestroyed()) {
-          // 위젯이 실제로 표시된 뒤 메인 창을 숨겨/해제하여 "아무것도 안 보이는" gap 방지
-          createWidgetWindow(opts, () => hideOrDestroyMainWindow(opts.memorySaverMode));
-        } else {
-          widgetWindow.show();
-          hideOrDestroyMainWindow(opts.memorySaverMode);
-        }
+        // X 버튼 → 위젯 모드로 전환 (executeWindowTransition으로 통일하여
+        // currentWindowMode 추적 + Win+D 폴링 가드 정합성 보장)
+        void executeWindowTransition('widget');
       } else {
         // tray: 위젯 전환 없이 트레이로만 숨김 (메모리 절약 모드와 무관)
+        currentWindowMode = 'main';  // 트레이로만 숨겼으므로 main 상태 유지
         mainWindow?.hide();
       }
     }
@@ -1066,6 +1152,8 @@ function startWinDRecovery(): void {
   // 백업 폴링: minimize 이벤트가 발동하지 않는 경우 대비
   winDRecoveryTimer = setInterval(() => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    // 아이콘 모드 또는 메인 모드에서는 위젯을 의도적으로 hide한 상태이므로 복원 금지
+    if (currentWindowMode !== 'widget') return;
     const isHidden = widgetWindow.isMinimized() || !widgetWindow.isVisible();
     if (!isHidden) return;
 
@@ -1468,16 +1556,13 @@ function setupAutoUpdater(): void {
 function registerIpcHandlers(): void {
   // 닫기 동작 선택 (매번 물어보기 모드)
   ipcMain.on('close-action:respond', (_event, action: string) => {
-    const opts = readSettingsWidgetOptions();
     if (action === 'widget') {
-      if (!widgetWindow || widgetWindow.isDestroyed()) {
-        createWidgetWindow(opts, () => hideOrDestroyMainWindow(opts.memorySaverMode));
-      } else {
-        widgetWindow.show();
-        hideOrDestroyMainWindow(opts.memorySaverMode);
-      }
+      void executeWindowTransition('widget');
+    } else if (action === 'icon') {
+      void executeWindowTransition('icon');
     } else {
       // tray로 숨김은 메모리 절약 모드 영향 없음
+      currentWindowMode = 'main';
       mainWindow?.hide();
     }
   });
@@ -1807,6 +1892,30 @@ function registerIpcHandlers(): void {
     if (typeof bounds?.x !== 'number' || typeof bounds?.y !== 'number') return;
     iconWindow.setBounds({ x: bounds.x, y: bounds.y, width: ICON_SIZE, height: ICON_SIZE });
     scheduleIconBoundsSave({ x: bounds.x, y: bounds.y, width: ICON_SIZE, height: ICON_SIZE });
+  });
+
+  /**
+   * JS 기반 윈도우 드래그용 IPC.
+   * Renderer가 mouseMove마다 delta(dx, dy)를 보내면 메인은 현재 bounds에 더해 setBounds.
+   * (`-webkit-app-region: drag`를 안 쓰는 이유: drag region 안에서는 click 이벤트가 발생
+   *   안 해서 click/double-click 검출이 불가능. 전체 영역 드래그 + 클릭을 동시 지원하려면
+   *   JS로 직접 윈도우 위치를 업데이트해야 함.)
+   */
+  ipcMain.handle('icon:drag-by', (_event, delta: { dx: number; dy: number }): void => {
+    if (!iconWindow || iconWindow.isDestroyed()) return;
+    if (typeof delta?.dx !== 'number' || typeof delta?.dy !== 'number') return;
+    const b = iconWindow.getBounds();
+    const next = { x: b.x + delta.dx, y: b.y + delta.dy, width: ICON_SIZE, height: ICON_SIZE };
+    iconWindow.setBounds(next);
+    scheduleIconBoundsSave(next);
+  });
+
+  ipcMain.handle('icon:start-drag', (): void => {
+    startIconDrag();
+  });
+
+  ipcMain.handle('icon:end-drag', (): void => {
+    stopIconDrag();
   });
 
   ipcMain.handle('icon:expand', async (_event, payload: { to: 'main' | 'widget' | 'restore' }): Promise<void> => {

@@ -38,6 +38,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   iconHide: (): Promise<void> => ipcRenderer.invoke('icon:hide'),
   iconSetBounds: (bounds: { x: number; y: number }): Promise<void> =>
     ipcRenderer.invoke('icon:set-bounds', bounds),
+  iconStartDrag: (): Promise<void> =>
+    ipcRenderer.invoke('icon:start-drag'),
+  iconEndDrag: (): Promise<void> =>
+    ipcRenderer.invoke('icon:end-drag'),
+  iconDragBy: (delta: { dx: number; dy: number }): Promise<void> =>
+    ipcRenderer.invoke('icon:drag-by', delta),
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }): Promise<void> =>
     ipcRenderer.invoke('icon:expand', target),
   showSaveDialog: (options: {
@@ -610,7 +616,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('close-action:ask', handler);
     return () => { ipcRenderer.removeListener('close-action:ask', handler); };
   },
-  respondCloseAction: (action: 'widget' | 'tray'): void => {
+  respondCloseAction: (action: 'widget' | 'tray' | 'icon'): void => {
     ipcRenderer.send('close-action:respond', action);
   },
   // Cross-window data sync

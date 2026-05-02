@@ -97,6 +97,9 @@ export default {
         'slide-up': 'slideUp 0.3s ease-out',
         // v2.1 (Phase A-A1) — FAB 잠금 시 호버 진동 애니메이션
         'fab-jiggle': 'fabJiggle 0.5s ease-in-out',
+        // v2.0.3 — 아이콘 모드 idle 애니메이션 (귀여운 흔들림)
+        'pin-idle': 'pinIdle 3s ease-in-out infinite',
+        'pin-hover-bounce': 'pinHoverBounce 0.6s ease-in-out infinite',
       },
       keyframes: {
         slideInRight: {
@@ -114,6 +117,18 @@ export default {
         slideUp: {
           '0%': { transform: 'translateY(100%)' },
           '100%': { transform: 'translateY(0)' },
+        },
+        // v2.0.3 — 아이콘 모드 idle 애니메이션 (3초 주기, 살짝 흔들+숨쉬기)
+        pinIdle: {
+          '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+          '25%':      { transform: 'translateY(-2px) rotate(-2deg)' },
+          '50%':      { transform: 'translateY(0px) rotate(0deg)' },
+          '75%':      { transform: 'translateY(-2px) rotate(2deg)' },
+        },
+        // v2.0.3 — 호버 시 통통 점프
+        pinHoverBounce: {
+          '0%, 100%': { transform: 'translateY(0px) scale(1)' },
+          '50%':      { transform: 'translateY(-4px) scale(1.05)' },
         },
         // v2.1 (Phase A-A1) — FAB 잠금 시 호버 진동
         fabJiggle: {

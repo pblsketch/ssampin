@@ -115,6 +115,21 @@ body {
     background: transparent !important;
     background-color: transparent !important;
   }
+
+  /* 아이콘 모드 (v2.0.3~) — transparent BrowserWindow에 PNG 캐릭터만 표시.
+     light 테마에서 body bg-sp-bg(#ffffff)가 적용되면 흰 박스로 보이므로 강제 투명. */
+  body.ssampin-icon-popup,
+  html:has(body.ssampin-icon-popup),
+  body.ssampin-icon-popup #root,
+  body.ssampin-icon-popup * {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+  body.ssampin-icon-popup {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
 }
 
 /* 
