@@ -13,7 +13,7 @@ export function CloseActionDialog() {
 
   if (!visible) return null;
 
-  const handleAction = (action: 'widget' | 'tray') => {
+  const handleAction = (action: 'widget' | 'tray' | 'icon') => {
     setVisible(false);
     window.electronAPI?.respondCloseAction(action);
   };
@@ -33,6 +33,17 @@ export function CloseActionDialog() {
             <div>
               <span className="text-sm font-medium text-sp-text">위젯 모드로 전환</span>
               <p className="text-caption text-sp-muted">작은 위젯 창으로 전환합니다</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => handleAction('icon')}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-sp-surface hover:bg-sp-accent/10 transition-colors text-left"
+          >
+            <span className="material-symbols-outlined text-sp-accent text-xl">push_pin</span>
+            <div>
+              <span className="text-sm font-medium text-sp-text">아이콘으로 접기</span>
+              <p className="text-caption text-sp-muted">화면에 떠 있는 작은 아이콘으로 접습니다</p>
             </div>
           </button>
 

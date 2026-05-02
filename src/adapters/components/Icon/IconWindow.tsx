@@ -18,10 +18,10 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useMemoStore } from '@adapters/stores/useMemoStore';
 import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
-import appIconUrl from '/build/icon.png?url';
 import { IconTooltip } from './IconTooltip';
 import { IconContextMenu } from './IconContextMenu';
 import { CoachMark } from './CoachMark';
+import { PinDisc } from './PinDisc';
 
 const DOUBLE_CLICK_THRESHOLD_MS = 250;
 const HOVER_TOOLTIP_DELAY_MS = 100;
@@ -46,6 +46,17 @@ export function IconWindow() {
   const hoverTimerRef = useRef<number | null>(null);
   const lastClickAtRef = useRef<number>(0);
   const singleClickTimerRef = useRef<number | null>(null);
+  // Pointer Events 기반 드래그 — setPointerCapture로 윈도우 밖에서도 이벤트 유지
+  // 절대 좌표 계산 (mouseDown 시점 offset을 기록하여 매 move마다 newPos = mouseScreen - offset)
+  const dragStateRef = useRef<{
+    startScreenX: number;
+    startScreenY: number;
+    offsetX: number;     // mouseDown 시점 mouse가 윈도우 내에서 어디인지
+    offsetY: number;
+    startTime: number;
+    isDragging: boolean;
+    pointerId: number;
+  } | null>(null);
 
   // 초기 로드
   useEffect(() => {
@@ -55,6 +66,52 @@ export function IconWindow() {
     void loadTodos();
     void loadMemos();
   }, [loadSettings, loadSchedule, loadEvents, loadTodos, loadMemos]);
+
+  // body/html/#root에 transparent 강제 적용 — light 테마의 흰 배경(--sp-bg #ffffff) 무력화
+  // CSS class만으로는 specificity 이슈 가능성 있어 inline style로 직접 강제 (2중 안전망)
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById('root');
+
+    // CSS class
+    body.classList.add('ssampin-icon-popup');
+
+    // 이전 값 백업 후 inline style 강제 적용
+    const prev = {
+      htmlBg: html.style.backgroundColor,
+      htmlColor: html.style.background,
+      bodyBg: body.style.backgroundColor,
+      bodyColor: body.style.background,
+      bodyMargin: body.style.margin,
+      rootBg: root?.style.backgroundColor ?? '',
+      rootHeight: root?.style.height ?? '',
+    };
+
+    html.style.background = 'transparent';
+    html.style.backgroundColor = 'transparent';
+    body.style.background = 'transparent';
+    body.style.backgroundColor = 'transparent';
+    body.style.margin = '0';
+    if (root) {
+      root.style.background = 'transparent';
+      root.style.backgroundColor = 'transparent';
+      root.style.height = '100vh';
+    }
+
+    return () => {
+      body.classList.remove('ssampin-icon-popup');
+      html.style.backgroundColor = prev.htmlBg;
+      html.style.background = prev.htmlColor;
+      body.style.backgroundColor = prev.bodyBg;
+      body.style.background = prev.bodyColor;
+      body.style.margin = prev.bodyMargin;
+      if (root) {
+        root.style.backgroundColor = prev.rootBg;
+        root.style.height = prev.rootHeight;
+      }
+    };
+  }, []);
 
   // 1분 타이머 (현재 교시 갱신용)
   useEffect(() => {
@@ -90,13 +147,63 @@ export function IconWindow() {
     events.some((e) => isUpcomingWithinMinutes(e.date, now, 5)) ||
     todos.some((t) => !t.completed && t.dueDate && isPast(t.dueDate, now));
 
-  const handleClick = () => {
+  // 클릭 vs 드래그 판정 임계
+  const CLICK_MAX_DURATION_MS = 250;
+  const CLICK_MAX_MOVE_PX = 5;
+
+  // 드래그는 main process가 screen.getCursorScreenPoint() 폴링으로 처리.
+  // Renderer는 단순히 startDrag/endDrag IPC만 호출 — pointer capture 의존 X.
+  // mouse가 윈도우 밖으로 나가도, 어떤 OS race가 있어도 안정적.
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return; // 좌클릭만
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    dragStateRef.current = {
+      startScreenX: e.screenX,
+      startScreenY: e.screenY,
+      offsetX: 0,
+      offsetY: 0,
+      startTime: Date.now(),
+      isDragging: false,
+      pointerId: e.pointerId,
+    };
+    // main process drag 폴링 시작
+    void window.electronAPI?.iconStartDrag();
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const state = dragStateRef.current;
+    if (!state) return;
+    if (e.pointerId !== state.pointerId) return;
+    const totalMoved = Math.hypot(e.screenX - state.startScreenX, e.screenY - state.startScreenY);
+    if (!state.isDragging && totalMoved > CLICK_MAX_MOVE_PX) {
+      state.isDragging = true;
+    }
+    // 윈도우 이동은 main이 폴링으로 처리 — 여기선 click/drag 판정만
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const state = dragStateRef.current;
+    if (!state) return;
+    if (e.pointerId !== state.pointerId) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+
+    const elapsed = Date.now() - state.startTime;
+    const totalMoved = Math.hypot(e.screenX - state.startScreenX, e.screenY - state.startScreenY);
+    const wasDragging = state.isDragging;
+    dragStateRef.current = null;
+
+    // main process drag 폴링 종료
+    void window.electronAPI?.iconEndDrag();
+
+    if (wasDragging || elapsed > CLICK_MAX_DURATION_MS || totalMoved > CLICK_MAX_MOVE_PX) {
+      return;
+    }
+
+    // click 검출
     const t = Date.now();
     const isDouble = t - lastClickAtRef.current < DOUBLE_CLICK_THRESHOLD_MS;
     lastClickAtRef.current = t;
-
     if (isDouble) {
-      // 더블클릭 — 풀앱으로 직행
       if (singleClickTimerRef.current) {
         clearTimeout(singleClickTimerRef.current);
         singleClickTimerRef.current = null;
@@ -104,13 +211,20 @@ export function IconWindow() {
       void window.electronAPI?.iconExpand({ to: 'main' });
       return;
     }
-
-    // 단일 클릭 — 약간 기다렸다가 (더블클릭이 아니라고 확정되면) restore
     if (singleClickTimerRef.current) clearTimeout(singleClickTimerRef.current);
     singleClickTimerRef.current = window.setTimeout(() => {
       void window.electronAPI?.iconExpand({ to: 'restore' });
       singleClickTimerRef.current = null;
     }, DOUBLE_CLICK_THRESHOLD_MS + 10);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStateRef.current?.pointerId === e.pointerId) {
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      dragStateRef.current = null;
+      // 안전망 — main drag 폴링도 종료
+      void window.electronAPI?.iconEndDrag();
+    }
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -132,23 +246,37 @@ export function IconWindow() {
 
   return (
     <>
+      {/*
+        Electron drag region 안에서 transform/transition이 적용된 요소는 click
+        이벤트 신뢰성이 깨진다. 그래서 hover:scale-* 사용 금지.
+        대신 brightness/border 변화로 hover 효과 표현.
+
+        구조: 외곽 컨테이너 = drag, 내부 img = no-drag (click 보장).
+        56×56 컨테이너 - 40×40 img = 외곽 8px ring이 drag handle.
+      */}
+      {/*
+        v0.5 (2026-05-02): 사용자 결정 반영
+        - 핀 아이콘만 표시 + 배경/그림자 완전 제거 (transparent 윈도우 알파 합성 이슈 회피)
+        - WebkitAppRegion: drag 사용 안 함 → JS로 mousemove 캡처해 IPC 'icon:drag-by'로 윈도우 이동
+          이렇게 하면 어디를 잡아도 드래그 + click/double-click 정상 동작
+        - 알림 펄스만 ring-only로 표시 (배경 박스 없음)
+      */}
+      {/*
+        BrowserWindow 64×64 (Issue #30171 회피)이지만 캐릭터는 56×56로 중앙 표시.
+        외곽 4px은 transparent — 시각적으로 캐릭터만 보임.
+      */}
       <div
-        className={`relative w-14 h-14 rounded-2xl bg-sp-card border border-sp-border/60 shadow-lg flex items-center justify-center cursor-pointer transition-transform duration-150 hover:scale-105 ${
-          hasAlert ? 'ring-2 ring-sp-accent ring-offset-2 ring-offset-transparent animate-pulse' : ''
-        }`}
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        onClick={handleClick}
+        className="relative w-16 h-16 cursor-pointer flex items-center justify-center"
+        style={{ background: 'transparent', touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onContextMenu={handleContextMenu}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <img
-          src={appIconUrl}
-          alt="쌤핀"
-          className="w-10 h-10 select-none pointer-events-none"
-          draggable={false}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        />
+        <PinDisc hasAlert={hasAlert} hovered={hovered} />
       </div>
       {hovered && periodInfo && (
         <IconTooltip current={periodInfo.current} next={periodInfo.next} />

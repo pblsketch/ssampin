@@ -146,6 +146,9 @@ interface ElectronAPI {
   iconShow: () => Promise<void>;
   iconHide: () => Promise<void>;
   iconSetBounds: (bounds: { x: number; y: number }) => Promise<void>;
+  iconDragBy: (delta: { dx: number; dy: number }) => Promise<void>;
+  iconStartDrag: () => Promise<void>;
+  iconEndDrag: () => Promise<void>;
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
   showSaveDialog: (options: {
     title: string;
@@ -432,7 +435,7 @@ interface ElectronAPI {
   onAnalyticsFlush: (callback: () => void) => () => void;
   // Close action dialog
   onCloseActionAsk: (callback: () => void) => () => void;
-  respondCloseAction: (action: 'widget' | 'tray') => void;
+  respondCloseAction: (action: 'widget' | 'tray' | 'icon') => void;
   // Cross-window data sync
   onDataChanged: (callback: (filename: string) => void) => () => void;
   // 절전/잠금 복귀 알림
