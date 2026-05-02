@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('icon:start-drag'),
   iconEndDrag: (): Promise<void> =>
     ipcRenderer.invoke('icon:end-drag'),
+  iconResetPosition: (): Promise<void> =>
+    ipcRenderer.invoke('icon:reset-position'),
   iconDragBy: (delta: { dx: number; dy: number }): Promise<void> =>
     ipcRenderer.invoke('icon:drag-by', delta),
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }): Promise<void> =>

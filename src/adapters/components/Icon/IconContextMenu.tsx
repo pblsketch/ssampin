@@ -52,10 +52,7 @@ export function IconContextMenu({ x, y, onClose }: IconContextMenuProps) {
     {
       label: '아이콘 위치 초기화',
       onClick: () => {
-        // 트레이 메뉴와 동일한 동작 — 우하단 기본 위치로
-        // 메인의 saveIconBounds 기본값 위치는 main.ts에서 처리 (트레이 메뉴 항목과 동일)
-        // 여기서는 IPC가 없는 기능이므로 트레이 메뉴 사용 안내
-        // 단순히 알림만 띄우고 트레이로 이동 권유 — 첫 버전에서는 트레이 메뉴 의존
+        void window.electronAPI?.iconResetPosition();
         onClose();
       },
     },
