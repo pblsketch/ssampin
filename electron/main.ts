@@ -770,10 +770,34 @@ function buildIconWindow(): void {
   });
 }
 
-/** PoC #3에서 검증된 ease-out cubic — 220ms */
+/**
+ * OS 레벨 prefers-reduced-motion 감지 (FR-14).
+ * Windows: SystemParametersInfo SPI_GETCLIENTAREAANIMATION
+ * 우리는 nativeTheme/setting 에 직접 접근 어렵고 대신 settings.json의 명시 옵션 활용.
+ * 첫 버전: settings.widget.icon.reduceMotion === true 또는 시스템 환경변수 체크.
+ */
+function shouldReduceMotion(): boolean {
+  try {
+    const filePath = path.join(getDataDir(), 'settings.json');
+    if (!fs.existsSync(filePath)) return false;
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const settings = JSON.parse(raw) as { widget?: { icon?: { reduceMotion?: boolean } } };
+    if (settings.widget?.icon?.reduceMotion === true) return true;
+  } catch { /* fall through */ }
+  // env 변수 fallback (테스트/QA용)
+  return process.env['SSAMPIN_REDUCE_MOTION'] === '1';
+}
+
+/** PoC #3에서 검증된 ease-out cubic — 220ms (reduce-motion 시 0ms) */
 function fadeInIconWindow(duration = 220): Promise<void> {
   return new Promise((resolve) => {
     if (!iconWindow || iconWindow.isDestroyed()) return resolve();
+    const actualDuration = shouldReduceMotion() ? 0 : duration;
+    if (actualDuration === 0) {
+      iconWindow.setOpacity(1);
+      iconWindow.show();
+      return resolve();
+    }
     const startTime = Date.now();
     iconWindow.setOpacity(0);
     iconWindow.show();
@@ -784,7 +808,7 @@ function fadeInIconWindow(duration = 220): Promise<void> {
         return;
       }
       const elapsed = Date.now() - startTime;
-      const t = Math.min(1, elapsed / duration);
+      const t = Math.min(1, elapsed / actualDuration);
       const opacity = 1 - Math.pow(1 - t, 3);
       iconWindow.setOpacity(opacity);
       if (t >= 1) {
@@ -795,10 +819,15 @@ function fadeInIconWindow(duration = 220): Promise<void> {
   });
 }
 
-/** ease-in cubic — 180ms */
+/** ease-in cubic — 180ms (reduce-motion 시 0ms) */
 function fadeOutIconWindow(duration = 180): Promise<void> {
   return new Promise((resolve) => {
     if (!iconWindow || iconWindow.isDestroyed()) return resolve();
+    const actualDuration = shouldReduceMotion() ? 0 : duration;
+    if (actualDuration === 0) {
+      iconWindow.setOpacity(0);
+      return resolve();
+    }
     const startTime = Date.now();
     iconWindow.setOpacity(1);
     const interval = setInterval(() => {
@@ -808,7 +837,7 @@ function fadeOutIconWindow(duration = 180): Promise<void> {
         return;
       }
       const elapsed = Date.now() - startTime;
-      const t = Math.min(1, elapsed / duration);
+      const t = Math.min(1, elapsed / actualDuration);
       const opacity = 1 - Math.pow(t, 3);
       iconWindow.setOpacity(opacity);
       if (t >= 1) {
@@ -1916,6 +1945,13 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('icon:end-drag', (): void => {
     stopIconDrag();
+  });
+
+  ipcMain.handle('icon:reset-position', (): void => {
+    if (!iconWindow || iconWindow.isDestroyed()) return;
+    const fallback = getDefaultIconBounds();
+    iconWindow.setBounds(fallback);
+    saveIconBounds(fallback);
   });
 
   ipcMain.handle('icon:expand', async (_event, payload: { to: 'main' | 'widget' | 'restore' }): Promise<void> => {

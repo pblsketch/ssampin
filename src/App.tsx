@@ -533,6 +533,23 @@ function MainApp() {
   useAnalyticsLifecycle();
   const { track } = useAnalytics();
 
+  // FR-21: v2.0.3 첫 실행 시 아이콘 모드 신기능 안내 (1회성)
+  useEffect(() => {
+    const SHOWN_KEY = 'ssampin-icon-mode-toast-v2.0.3';
+    if (localStorage.getItem(SHOWN_KEY) === 'true') return;
+    const timer = window.setTimeout(() => {
+      void import('@adapters/components/common/Toast').then(({ useToastStore }) => {
+        useToastStore.getState().show(
+          '✨ 새 기능: "아이콘 모드"가 추가됐어요! 설정 → 위젯 → 창 닫기 동작에서 켤 수 있어요.',
+          'info',
+          { label: '설정 열기', onClick: () => setCurrentPage('settings') },
+        );
+        localStorage.setItem(SHOWN_KEY, 'true');
+      });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Analytics: 앱 시작 이벤트 + 활성일 기록
   useEffect(() => {
     track('app_open', { launchMode: 'normal' });

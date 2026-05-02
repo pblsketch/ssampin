@@ -149,6 +149,7 @@ interface ElectronAPI {
   iconDragBy: (delta: { dx: number; dy: number }) => Promise<void>;
   iconStartDrag: () => Promise<void>;
   iconEndDrag: () => Promise<void>;
+  iconResetPosition: () => Promise<void>;
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
   showSaveDialog: (options: {
     title: string;
