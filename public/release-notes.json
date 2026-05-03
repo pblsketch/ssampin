@@ -1,14 +1,15 @@
 {
   "versions": [
     {
-      "version": "2.0.3",
-      "date": "2026-05-02",
+      "version": "2.0.2",
+      "date": "2026-05-03",
       "highlights": [
         "📌 아이콘 모드 신설 — 프로그램을 끄면 화면 위에 떠있는 작은 핀 캐릭터로 변신",
         "🎨 귀여운 idle 애니메이션 — 평상시 살짝 흔들흔들, 호버 시 통통 점프",
         "🖱️ 어디든 잡고 드래그 — 마우스가 윈도우 밖으로 나가도 끊기지 않는 견고한 드래그",
         "🪟 풀스크린 위에서도 보임 — PPT 슬라이드쇼·YouTube 풀스크린 위에 그대로",
-        "♿ 모션 줄이기 옵션 — settings.widget.icon.reduceMotion으로 fade 즉시 전환"
+        "✅ Google Tasks 동기화 정밀화 — 신규 할일 사라짐 / 아카이브 좀비 부활 두 버그 해결",
+        "📍 대시보드 Always on Top 토글 — 다른 창 위에 항상 띄우기"
       ],
       "changes": [
         {
@@ -27,6 +28,11 @@
           "description": "아이콘을 어디든 잡고 자유롭게 위치를 옮길 수 있어요. main 프로세스가 OS 레벨에서 마우스 위치를 직접 추적하기 때문에 마우스가 빠르게 움직여 윈도우 밖으로 나가도 드래그가 끊기지 않습니다. 위치는 자동 저장되어 다음 실행 때도 유지되며, 모니터 연결/해제 시에도 안전한 위치로 자동 보정됩니다. 트레이 우클릭 또는 아이콘 우클릭에서 [아이콘 위치 초기화]로 우하단 기본 위치로 되돌릴 수 있어요."
         },
         {
+          "type": "new",
+          "title": "대시보드 Always on Top 토글",
+          "description": "대시보드 헤더에 [항상 위] 토글이 추가됐습니다. 켜면 다른 프로그램 위에도 쌤핀 창이 항상 보여서 수업 중에도 시간표·일정을 바로 확인할 수 있어요. 위젯/아이콘 모드뿐 아니라 풀앱에서도 동일하게 적용됩니다."
+        },
+        {
           "type": "improve",
           "title": "전환 애니메이션 220ms fade",
           "description": "풀앱 ↔ 위젯 ↔ 아이콘 사이 전환 시 220ms ease-out cubic 페이드 애니메이션이 적용됩니다. 모션을 줄이고 싶다면 settings.json의 widget.icon.reduceMotion을 true로 설정하면 즉시 전환됩니다."
@@ -35,6 +41,21 @@
           "type": "improve",
           "title": "윈도우 브로드캐스트 헬퍼 통합 (회귀 격리)",
           "description": "메인·위젯·아이콘 윈도우 모두에 알림을 보내는 코드가 8곳 이상 흩어져 있던 것을 getAllAppWindows()/broadcastToAllWindows() 헬퍼로 통합했습니다. 향후 새 윈도우 추가 시 한 곳만 수정하면 모든 브로드캐스트 사이트에 자동 반영되어 회귀 위험이 줄어듭니다. 메타테스트 6개로 회귀 차단까지 완비."
+        },
+        {
+          "type": "fix",
+          "title": "Google Tasks 동기화 — 신규 할일 사라짐 + 좀비 부활 해결",
+          "description": "(1) 새로 추가한 할일이 동기화 직후 사라지던 race condition, (2) 아카이브한 할일이 다음 동기화 때 좀비처럼 부활하던 문제를 모두 근본 해결했습니다. Push-Before-Pull 5단계 파이프라인(PRE-FLIGHT → PUSH-DELETE → PUSH-CREATE → PUSH-UPDATE → PULL → RECONCILE) + Tombstone + Read-After-Write Reconciliation 도입. Todo 엔티티에 동기화 상태 추적 필드 4개(pendingRemoteOp/updatedAt/lastSyncedAt/remoteDeletedAt) 추가."
+        },
+        {
+          "type": "fix",
+          "title": "Google 인증 흐름 안정화",
+          "description": "메인 인증 플로우에서 무한로딩이 발생하던 IPC 응답 구조를 단일 응답 구조로 redesign했습니다. completeAuth가 hang하던 문제, PKCE OOB → loopback 교체, 연속 클릭 race 차단, 인증 진행 중 [취소] 버튼 + PKCE 수동 인증 전환 버튼이 추가됐습니다."
+        },
+        {
+          "type": "fix",
+          "title": "기타 UX 개선",
+          "description": "설정의 학교 계정 안내 박스를 고대비 솔리드 알림으로 가독성 개선. 모바일 [다가오는 일정]에서 이미 지나간 일정이 노출되던 버그 수정."
         }
       ]
     },
