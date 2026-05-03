@@ -368,6 +368,16 @@ export function App() {
 }
 
 function IconApp() {
+  // body/html 배경 직접 투명화 — IconWindow의 useEffect(body class) 적용 전 첫
+  // 페인트 frame에 light theme bg-sp-bg(#ffffff)가 잠깐 보이는 잔상까지 차단
+  useEffect(() => {
+    document.documentElement.style.background = 'transparent';
+    document.body.style.background = 'transparent';
+    return () => {
+      document.documentElement.style.background = '';
+      document.body.style.background = '';
+    };
+  }, []);
   return <IconWindow />;
 }
 
