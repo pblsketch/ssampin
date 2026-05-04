@@ -19,6 +19,7 @@ import { MemoFocus } from './items/MemoFocus';
 import { FavoriteTools } from './items/FavoriteTools';
 import { MiniCalendar } from './items/MiniCalendar';
 import { ImageSticker1, ImageSticker2, ImageSticker3, ImageSticker4 } from './items/ImageStickerWidget';
+import { DesktopIconZoneWidget } from './items/DesktopIconZoneWidget';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -369,6 +370,23 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: ImageSticker4,
+  },
+
+  // 바탕화면 작업판 (v2.1.0~ Windows 전용) — 켜면 위젯이 Explorer WorkerW 레이어에 attach 되고
+  // 카드 영역에 바탕화면 아이콘이 시각적으로 떠 보인다.
+  {
+    id: 'desktop-icon-zone',
+    name: '바탕화면 작업판',
+    icon: '🖼️',
+    description: 'Windows 바탕화면 아이콘을 지정 영역에 정리합니다',
+    category: 'admin',
+    defaultSize: { w: 2, h: 4 },
+    minSize: { w: 1, h: 3 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: DesktopIconZoneWidget,
   },
 ];
 
