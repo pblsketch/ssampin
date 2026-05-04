@@ -48,6 +48,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('icon:drag-by', delta),
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }): Promise<void> =>
     ipcRenderer.invoke('icon:expand', target),
+  // ─── 위젯 진단·복구 (widget-stability-recovery PDCA) ───
+  widgetDiagnostics: {
+    get: (): Promise<import('./widgetDiagnostics').WidgetDiagnosticsReport> =>
+      ipcRenderer.invoke('widget:getDiagnostics'),
+    recover: (
+      action: import('./widgetDiagnostics').WidgetRecoveryAction,
+    ): Promise<import('./widgetDiagnostics').WidgetRecoveryResult> =>
+      ipcRenderer.invoke('widget:recover', { action }),
+    copyToClipboard: (): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('widget:copyDiagnostics'),
+  },
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;
@@ -769,6 +780,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     /** 위젯 hide / 모드 OFF / 카드 unmount 시 모든 영역 해제 */
     clearBounds: (): Promise<void> =>
       ipcRenderer.invoke('desktopIconZones:clearBounds'),
+    /**
+     * 현재 위젯이 위치한 디스플레이의 scaleFactor 와 위젯 bounds (DIP) 를 가져온다.
+     * renderer 의 window.devicePixelRatio 와 항상 일치하지 않으므로 정확한 좌표 변환을 위해
+     * 매 측정 직전 호출 권장. null 이면 위젯 미존재 — 호출자가 측정 생략.
+     */
+    getDisplayScaleFactor: (): Promise<{
+      scaleFactor: number;
+      bounds: { x: number; y: number; width: number; height: number };
+    } | null> =>
+      ipcRenderer.invoke('desktopIconZones:getDisplayScaleFactor'),
     /**
      * native-desktop 진입 실패 알림 구독.
      * 반환된 unsubscribe 를 호출해 리스너 해제. unmount 시 반드시 호출.

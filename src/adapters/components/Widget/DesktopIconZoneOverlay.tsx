@@ -39,6 +39,8 @@ export function DesktopIconZoneOverlay({ zones }: DesktopIconZoneOverlayProps) {
 
   const cardBodyRefs = useRef(new Map<string, HTMLDivElement>());
   const lastSentSerializedRef = useRef<string>('');
+  const cachedScaleRef = useRef<{ scaleFactor: number; baseDIP: { x: number; y: number } } | null>(null);
+  const lastScaleFetchAtRef = useRef<number>(0);
 
   const setBodyRef = useCallback((id: string) => (el: HTMLDivElement | null) => {
     if (el) {
@@ -49,12 +51,33 @@ export function DesktopIconZoneOverlay({ zones }: DesktopIconZoneOverlayProps) {
   }, []);
 
   // throttle 30Hz ≒ 33ms — 좌표 측정 후 송신.
-  const measureAndSend = useCallback(() => {
+  // scaleFactor / 위젯 DIP origin 은 main 으로부터 받아오는 게 가장 정확하지만
+  // 매번 IPC 로 받으면 비용이 크므로 1초 단위로 캐시한다.
+  const measureAndSend = useCallback(async () => {
     const api = window.electronAPI?.desktopIconZones;
     if (!api) return;
-    const dpr = window.devicePixelRatio || 1;
-    const screenX = window.screenX;
-    const screenY = window.screenY;
+    // 1초 이상 지났으면 main 에 다시 조회. 첫 호출도 fetch.
+    const now = Date.now();
+    if (!cachedScaleRef.current || now - lastScaleFetchAtRef.current > 1000) {
+      try {
+        const info = await api.getDisplayScaleFactor();
+        if (info) {
+          cachedScaleRef.current = {
+            scaleFactor: info.scaleFactor,
+            baseDIP: { x: info.bounds.x, y: info.bounds.y },
+          };
+        }
+      } catch {
+        // ignore — 다음 측정에서 재시도
+      }
+      lastScaleFetchAtRef.current = now;
+    }
+    // fallback: window.devicePixelRatio (다중 모니터에서 부정확할 수 있음)
+    const fallbackDpr = window.devicePixelRatio || 1;
+    const fallbackBase = { x: window.screenX, y: window.screenY };
+    const cached = cachedScaleRef.current;
+    const scale = cached?.scaleFactor ?? fallbackDpr;
+    const baseDIP = cached?.baseDIP ?? fallbackBase;
     const out: Array<{
       id: string;
       name: string;
@@ -65,14 +88,16 @@ export function DesktopIconZoneOverlay({ zones }: DesktopIconZoneOverlayProps) {
       if (!el) continue;
       const rect = el.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) continue;
+      // baseDIP (위젯 좌상단 DIP) + rect.left (위젯 client 내부 CSS px) → physical px
+      // CSS px == DIP 가 일반적이지만 Electron 위젯은 그 가정을 만족한다.
       out.push({
         id: zone.id,
         name: zone.name,
         rect: {
-          x: Math.round((screenX + rect.left) * dpr),
-          y: Math.round((screenY + rect.top) * dpr),
-          width: Math.round(rect.width * dpr),
-          height: Math.round(rect.height * dpr),
+          x: Math.round((baseDIP.x + rect.left) * scale),
+          y: Math.round((baseDIP.y + rect.top) * scale),
+          width: Math.round(rect.width * scale),
+          height: Math.round(rect.height * scale),
         },
       });
     }
@@ -90,7 +115,7 @@ export function DesktopIconZoneOverlay({ zones }: DesktopIconZoneOverlayProps) {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
-        measureAndSend();
+        void measureAndSend();
       });
     };
     const ro = new ResizeObserver(schedule);
@@ -113,7 +138,7 @@ export function DesktopIconZoneOverlay({ zones }: DesktopIconZoneOverlayProps) {
 
   // zones 변경 시 즉시 재측정 (id/order/이름 변경).
   useEffect(() => {
-    measureAndSend();
+    void measureAndSend();
   }, [measureAndSend]);
 
   if (enabledZones.length === 0) return null;

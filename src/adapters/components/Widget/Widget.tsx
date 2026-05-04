@@ -187,11 +187,27 @@ export function Widget() {
   );
 
   // native-desktop 진입 실패 시 main 이 보내는 fallback 알림 구독.
-  // Phase 1 에서는 manager 가 항상 ok=false 를 반환하므로 'not-implemented' 사유로 토스트가 뜬다.
+  // Phase 2 부터 실제 토스트로 사용자에게 안내.
   useEffect(() => {
     const unsubscribe = window.electronAPI?.desktopIconZones?.onFallback?.((payload) => {
       console.log('[widget] native-desktop fallback', payload);
-      // TODO(Phase 2): 실제 토스트 컴포넌트로 사용자에게 안내. 현재는 로그만.
+      const reasonMessage: Record<string, string> = {
+        'not-supported-on-platform': '바탕화면 작업판은 Windows에서만 사용할 수 있습니다.',
+        'not-implemented': '바탕화면 작업판이 아직 활성화되지 않았습니다.',
+        'koffi-load-failed': '바탕화면 작업판 모듈을 로드할 수 없습니다.',
+        'workerw-not-found': 'Windows 바탕화면 레이어를 찾을 수 없어 일반 모드로 전환했습니다.',
+        'set-parent-failed': '바탕화면 작업판 진입 권한이 없어 항상 위에 모드로 전환했습니다.',
+        'hook-install-failed': '마우스 후크 설치가 차단되어 일반 모드로 전환했습니다. 보안 프로그램 설정을 확인해 주세요.',
+        'widget-not-ready': '위젯 준비가 끝나지 않았습니다. 잠시 후 다시 시도해 주세요.',
+        'unknown': '바탕화면 작업판 진입 중 알 수 없는 오류가 발생했습니다.',
+      };
+      const message = reasonMessage[payload.reason] ?? '바탕화면 작업판을 사용할 수 없습니다.';
+      // dynamic import 로 toast 모듈 lazy 로드 (icon-mode 와 동일 패턴)
+      void import('@adapters/components/common/Toast').then((m) => {
+        m.useToastStore.getState().show(message, 'info');
+      }).catch(() => {
+        // toast 모듈 로드 실패는 silent — 로그는 위에 이미 남김
+      });
     });
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();

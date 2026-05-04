@@ -17,7 +17,9 @@ await build({
   // YPERSISTENCE 환경변수 없으면 런타임에 호출되지 않음. fresh npm ci 환경
   // (GitHub Actions macOS)에서 resolve 실패 방지를 위해 external 처리.
   // undici: Node 18+ 내장 모듈. 번들 불필요, 런타임에 node의 내장으로 로드.
-  external: ['electron', 'electron-updater', 'y-leveldb', 'undici'],
+  // koffi: native FFI 모듈. prebuilt binary (.node) 를 require.resolve 로 동적 로드하므로
+  //   번들에 포함하면 Windows DLL 경로가 깨진다. external + asarUnpack 조합 필수.
+  external: ['electron', 'electron-updater', 'y-leveldb', 'undici', 'koffi'],
   sourcemap: false,
 });
 

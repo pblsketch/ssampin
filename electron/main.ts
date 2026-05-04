@@ -39,6 +39,14 @@ import type {
   DesktopIconZoneBounds,
   DesktopModeFallbackPayload,
 } from './desktopIconZoneTypes';
+import {
+  collectWidgetDiagnostics,
+  executeWidgetRecovery,
+  formatDiagnosticsForClipboard,
+  type WidgetDiagnosticsContext,
+  type WidgetRecoveryAction,
+  type WidgetRecoveryResult,
+} from './widgetDiagnostics';
 
 declare const __dirname: string;
 
@@ -1213,6 +1221,24 @@ function recoverWidget(): void {
   if (currentDesktopMode === 'topmost') {
     widgetWindow.setAlwaysOnTop(true);
   }
+  // native-desktop 모드면 attach 가 살아있는지 확인하고 깨졌으면 재시도.
+  // Win+D / 디스플레이 변경 / Explorer 재시작 후 WorkerW HWND 가 invalid 해질 수 있다.
+  if (currentDesktopMode === 'native-desktop' && widgetWindow) {
+    const widget = widgetWindow;
+    void desktopWidgetManager.healthCheck(widget).then((status) => {
+      if (!status.ok && !widget.isDestroyed()) {
+        console.log(`[widget] native-desktop healthCheck 실패 (${status.reason}) — fallback ${status.fallbackMode}`);
+        widget.setAlwaysOnTop(status.fallbackMode === 'topmost');
+        if (!widget.webContents.isDestroyed()) {
+          const payload: DesktopModeFallbackPayload = {
+            reason: status.reason,
+            fallbackMode: status.fallbackMode,
+          };
+          widget.webContents.send('desktopMode:fallback', payload);
+        }
+      }
+    });
+  }
 }
 
 function startWinDRecovery(): void {
@@ -1869,6 +1895,67 @@ function registerIpcHandlers(): void {
     },
   );
 
+  // ─── 위젯 진단·복구 (widget-stability-recovery PDCA) ──────────────────────
+  // 진단·복구 로직은 electron/widgetDiagnostics.ts에 격리되어 있다.
+  // main.ts는 IPC 등록 + 컨텍스트(BrowserWindow + 기존 복구 함수) 주입만 담당.
+  function buildWidgetDiagnosticsContext(): WidgetDiagnosticsContext {
+    return {
+      getWidgetWindow: () => widgetWindow,
+      getCurrentDesktopMode: () =>
+        currentDesktopMode === 'topmost' ? 'topmost' : 'normal',
+      getCurrentWindowMode: () => currentWindowMode,
+      getAllDisplays: () => screen.getAllDisplays(),
+      getDisplayMatching: (rect) => screen.getDisplayMatching(rect),
+      getDefaultWidgetBounds,
+      saveWidgetBounds,
+      recoverWidget,
+      ensureWidgetOnScreen,
+      recreateWidget,
+    };
+  }
+
+  // widget:getDiagnostics — read-only 위젯 상태 스냅샷
+  ipcMain.handle('widget:getDiagnostics', () => {
+    return collectWidgetDiagnostics(buildWidgetDiagnosticsContext());
+  });
+
+  // widget:recover — 사용자 요청 복구 액션 (action union 5종)
+  ipcMain.handle(
+    'widget:recover',
+    (_event, payload: { action: WidgetRecoveryAction }): WidgetRecoveryResult => {
+      const allowed: ReadonlyArray<WidgetRecoveryAction> = [
+        'show',
+        'moveIntoVisibleArea',
+        'recreate',
+        'reapplyAlwaysOnTop',
+        'resetPosition',
+      ];
+      if (!payload || typeof payload !== 'object' || !allowed.includes(payload.action)) {
+        return {
+          ok: false,
+          action: 'show',
+          message: '잘못된 복구 액션이에요.',
+          beforeBounds: null,
+          afterBounds: null,
+        };
+      }
+      return executeWidgetRecovery(payload.action, buildWidgetDiagnosticsContext());
+    },
+  );
+
+  // widget:copyDiagnostics — 진단 정보를 main process clipboard에 복사 (Q2 결정)
+  ipcMain.handle('widget:copyDiagnostics', (): { ok: boolean } => {
+    try {
+      const report = collectWidgetDiagnostics(buildWidgetDiagnosticsContext());
+      const text = formatDiagnosticsForClipboard(report);
+      clipboard.writeText(text);
+      return { ok: true };
+    } catch (err) {
+      console.error('[widget:copyDiagnostics] 실패:', err);
+      return { ok: false };
+    }
+  });
+
   // ─── 바탕화면 작업판 (native-desktop-mode) IPC ───────────────────────────
   // Phase 1 에서는 manager 가 no-op 이라 핸들러도 단순 forward.
   // Phase 2 (Windows native) 진입 시 manager 측 setPassThroughZones 가 실제 hit-test 캐시를 갱신.
@@ -1908,6 +1995,22 @@ function registerIpcHandlers(): void {
   ipcMain.handle('desktopIconZones:clearBounds', (): void => {
     desktopWidgetManager.clearPassThroughZones();
   });
+
+  // 위젯이 현재 위치한 디스플레이의 scaleFactor (DPI 보정용).
+  // renderer 의 window.devicePixelRatio 와 항상 일치하지는 않는다 (Windows 버전·이벤트 타이밍).
+  // renderer 가 매 측정 직전 호출해 주면 정확한 physical px 변환이 가능.
+  ipcMain.handle(
+    'desktopIconZones:getDisplayScaleFactor',
+    (): { scaleFactor: number; bounds: { x: number; y: number; width: number; height: number } } | null => {
+      if (!widgetWindow || widgetWindow.isDestroyed()) return null;
+      const widgetBounds = widgetWindow.getBounds();
+      const display = screen.getDisplayMatching(widgetBounds);
+      return {
+        scaleFactor: display.scaleFactor,
+        bounds: widgetBounds,
+      };
+    },
+  );
 
   // window:toggleWidget — 위젯 토글
   ipcMain.handle('window:toggleWidget', (): void => {
@@ -3667,13 +3770,35 @@ if (!gotTheLock) {
     }
 
     // 모니터 연결/해제/배율 변경 시 위젯 + 아이콘 위치 보정
+    // native-desktop 모드에서는 WorkerW 좌표계가 바뀌었을 가능성이 있어 healthCheck 도 트리거.
+    const triggerNativeDesktopHealthCheck = (): void => {
+      if (currentDesktopMode !== 'native-desktop') return;
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      const widget = widgetWindow;
+      void desktopWidgetManager.healthCheck(widget).then((status) => {
+        if (!widget.isDestroyed()) {
+          desktopWidgetManager.updateWidgetBounds(widget);
+        }
+        if (!status.ok && !widget.isDestroyed() && !widget.webContents.isDestroyed()) {
+          const payload: DesktopModeFallbackPayload = {
+            reason: status.reason,
+            fallbackMode: status.fallbackMode,
+          };
+          widget.webContents.send('desktopMode:fallback', payload);
+          widget.setAlwaysOnTop(status.fallbackMode === 'topmost');
+        }
+      });
+    };
+
     screen.on('display-added', () => {
       ensureWidgetOnScreen();
       ensureIconOnScreen();
+      triggerNativeDesktopHealthCheck();
     });
     screen.on('display-removed', () => {
       ensureWidgetOnScreen();
       ensureIconOnScreen();
+      triggerNativeDesktopHealthCheck();
     });
     screen.on('display-metrics-changed', () => {
       setTimeout(() => {
@@ -3683,6 +3808,7 @@ if (!gotTheLock) {
         if (widgetWindow && !widgetWindow.isDestroyed()) {
           widgetWindow.webContents.invalidate();
         }
+        triggerNativeDesktopHealthCheck();
       }, 500);
     });
 
@@ -3712,7 +3838,14 @@ if (!gotTheLock) {
     powerMonitor.on('resume', () => {
       console.log('[power] 시스템 resume 감지');
       isSystemSuspending = false;
-      setTimeout(() => restoreWidgetAfterSleep(), 1000);
+      setTimeout(() => {
+        restoreWidgetAfterSleep();
+        // native-desktop 모드면 attach 가 살아있는지 다시 확인 (절전 동안 Explorer 가 재시작될 수 있음)
+        if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
+          const widget = widgetWindow;
+          void desktopWidgetManager.healthCheck(widget);
+        }
+      }, 1000);
     });
 
     // 화면 잠금(화면보호기 + "로그온 화면 표시" 옵션 포함) 감지

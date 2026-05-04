@@ -151,6 +151,14 @@ interface ElectronAPI {
   iconEndDrag: () => Promise<void>;
   iconResetPosition: () => Promise<void>;
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
+  // ─── 위젯 진단·복구 (widget-stability-recovery PDCA) ───
+  widgetDiagnostics: {
+    get: () => Promise<import('./types/widgetDiagnostics').WidgetDiagnosticsReport>;
+    recover: (
+      action: import('./types/widgetDiagnostics').WidgetRecoveryAction,
+    ) => Promise<import('./types/widgetDiagnostics').WidgetRecoveryResult>;
+    copyToClipboard: () => Promise<{ ok: boolean }>;
+  };
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;
@@ -547,6 +555,14 @@ interface DesktopIconZonesElectronAPI {
   updateBounds: (zones: ReadonlyArray<DesktopIconZoneBoundsView>) => Promise<void>;
   /** 위젯 hide / 모드 OFF / 카드 unmount 시 모든 영역 해제. */
   clearBounds: () => Promise<void>;
+  /**
+   * 현재 위젯이 위치한 디스플레이의 scaleFactor + 위젯 DIP bounds.
+   * 정확한 physical px 좌표 변환에 사용. null 이면 위젯이 없는 상태.
+   */
+  getDisplayScaleFactor: () => Promise<{
+    scaleFactor: number;
+    bounds: { x: number; y: number; width: number; height: number };
+  } | null>;
   /**
    * native-desktop 진입 실패 알림 구독.
    * 반환된 unsubscribe 를 unmount 시 호출.
