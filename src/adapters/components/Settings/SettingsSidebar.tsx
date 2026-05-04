@@ -22,6 +22,7 @@ const TABS: TabDef[] = [
   { id: 'tools',    icon: 'build',                 label: '도구',      color: 'bg-purple-500/10 text-purple-400' },
   { id: 'shortcuts',icon: 'keyboard',              label: '단축키',     color: 'bg-teal-500/10 text-teal-400' },
   { id: 'system',   icon: 'settings_applications', label: '시스템',     color: 'bg-gray-500/10 text-gray-400' },
+  { id: 'backup',   icon: 'cloud_download',        label: '백업/복원',  color: 'bg-emerald-500/10 text-emerald-400' },
   { id: 'about',    icon: 'info',                  label: '앱 정보',   color: 'bg-violet-500/10 text-violet-400' },
 ];
 

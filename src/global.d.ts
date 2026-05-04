@@ -500,6 +500,61 @@ interface ElectronAPI {
   // 시그니처는 본 파일 상단 StickerElectronAPI에 직접 정의되어 있다.
   // declaration merging 대신 단일 소스로 관리한다.
   sticker?: StickerElectronAPI;
+
+  // === 백업·복원·데이터 위치 센터 (v2.0.3+) ===
+  // 외부 서버 전송 없음 — main 프로세스 fs/dialog/shell만 사용.
+  backup?: BackupElectronAPI;
+}
+
+/** 백업 파일 metadata — 버전 정보 표시용 */
+interface BackupFileMetadataView {
+  readonly schemaVersion: number;
+  readonly appVersion: string;
+  readonly exportedAt: string;
+  readonly platform: string;
+  readonly entryCount: number;
+}
+
+/** 가져오기 실패 사유 — 한국어 메시지가 동봉되며 UI에 그대로 노출 가능 */
+interface BackupImportErrorPayload {
+  readonly code:
+    | 'file-read-failed'
+    | 'invalid-json'
+    | 'invalid-structure'
+    | 'unsupported-future-version'
+    | 'empty-data'
+    | 'write-failed';
+  readonly message: string;
+}
+
+interface BackupElectronAPI {
+  /** 사용자 데이터 디렉토리 정보 (userDataPath / dataDirPath / exists). */
+  getDataLocation: () => Promise<{
+    userDataPath: string;
+    dataDirPath: string;
+    exists: boolean;
+  }>;
+  /** OS 파일 탐색기에서 데이터 디렉토리 열기. */
+  openDataLocation: () => Promise<{ ok: boolean; reason?: string }>;
+  /** 백업 파일 저장 (Save dialog 경유). canceled=true는 사용자 취소. */
+  exportBackup: () => Promise<{
+    canceled: boolean;
+    filePath?: string;
+    entryCount?: number;
+  }>;
+  /**
+   * 백업 파일 가져오기. main이 자동으로 safety backup을 먼저 만든 뒤 적용한다.
+   * canceled=true는 사용자 취소(error 없음).
+   * error가 있으면 한국어 메시지를 그대로 토스트/모달에 표시.
+   */
+  importBackup: () => Promise<{
+    canceled: boolean;
+    restoredCount?: number;
+    restoredFilenames?: readonly string[];
+    safetyBackupPath?: string;
+    metadata?: BackupFileMetadataView;
+    error?: BackupImportErrorPayload;
+  }>;
 }
 
 /** 협업 보드 메타데이터 (Board 엔티티의 renderer-facing 뷰) */

@@ -13,6 +13,7 @@ import { CalendarTab } from './tabs/CalendarTab';
 import { WeatherTab } from './tabs/WeatherTab';
 import { DisplayTab } from './tabs/DisplayTab';
 import { SystemTab } from './tabs/SystemTab';
+import { BackupTab } from './tabs/BackupTab';
 import { AboutTab } from './tabs/AboutTab';
 import { GoogleIntegrationTab } from './tabs/GoogleIntegrationTab';
 import { TodoTab } from './tabs/TodoTab';
@@ -151,6 +152,7 @@ function TabContent({ activeTab, draft, patch, setDraft }: {
     case 'tools':     return <ToolsTab />;
     case 'shortcuts': return <ShortcutsTab />;
     case 'system':    return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
+    case 'backup':    return <BackupTab />;
     case 'about':     return <AboutTab />;
     default:          return null;
   }
