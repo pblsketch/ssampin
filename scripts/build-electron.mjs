@@ -33,7 +33,7 @@ await build({
   entryPoints,
   bundle: true,
   platform: 'node',
-  target: 'node20',
+  target: 'node22',
   outdir: 'dist-electron',
   format: 'cjs',
   // y-leveldb: y-websocket/bin/utils.cjs가 optional require하지만

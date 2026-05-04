@@ -154,6 +154,29 @@ export function IconWindow() {
   // 드래그는 main process가 screen.getCursorScreenPoint() 폴링으로 처리.
   // Renderer는 단순히 startDrag/endDrag IPC만 호출 — pointer capture 의존 X.
   // mouse가 윈도우 밖으로 나가도, 어떤 OS race가 있어도 안정적.
+  //
+  // v2.0.3 fix — "처음엔 되다가 갑자기 안 됨" 버그 대응.
+  //   원인: 마우스를 64×64 아이콘 영역 밖에서 release 하면 transparent/frameless
+  //   윈도우의 setPointerCapture 가 stale 되어 pointerup/cancel 이 안 발사되는 경우가
+  //   있다. → endDrag IPC 누락 → main 의 5초 safety timer 가 발동할 때까지 stale
+  //   iconDragState 가 남아 다음 드래그 시 시작 좌표가 어긋남.
+  //   해법: pointerDown 시 document 레벨 pointerup/cancel/mouseup 핸들러를
+  //   { once, capture:true } 로 등록 → 어떤 경로로든 release 가 발생하면 100%
+  //   endDrag IPC 발사.
+  const globalUpHandlerRef = useRef<((e: PointerEvent | MouseEvent) => void) | null>(null);
+
+  const sendEndDrag = () => {
+    void window.electronAPI?.iconEndDrag();
+    if (globalUpHandlerRef.current) {
+      const h = globalUpHandlerRef.current;
+      document.removeEventListener('pointerup', h as EventListener, true);
+      document.removeEventListener('pointercancel', h as EventListener, true);
+      document.removeEventListener('mouseup', h as EventListener, true);
+      window.removeEventListener('blur', h as EventListener, true);
+      globalUpHandlerRef.current = null;
+    }
+  };
+
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return; // 좌클릭만
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -168,6 +191,21 @@ export function IconWindow() {
     };
     // main process drag 폴링 시작
     void window.electronAPI?.iconStartDrag();
+
+    // 글로벌 fallback — pointer release 가 어떤 경로로든 발생하면 endDrag 강제 발사
+    const handler = () => {
+      // dragStateRef 정리는 handlePointerUp 또는 여기서. 양쪽 idempotent.
+      if (dragStateRef.current) {
+        dragStateRef.current = null;
+      }
+      sendEndDrag();
+    };
+    globalUpHandlerRef.current = handler;
+    document.addEventListener('pointerup', handler, { once: true, capture: true });
+    document.addEventListener('pointercancel', handler, { once: true, capture: true });
+    document.addEventListener('mouseup', handler, { once: true, capture: true });
+    // 윈도우 focus 가 빠져도 drag 종료
+    window.addEventListener('blur', handler, { once: true, capture: true });
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -192,8 +230,8 @@ export function IconWindow() {
     const wasDragging = state.isDragging;
     dragStateRef.current = null;
 
-    // main process drag 폴링 종료
-    void window.electronAPI?.iconEndDrag();
+    // main process drag 폴링 종료 + 글로벌 fallback 핸들러 정리
+    sendEndDrag();
 
     if (wasDragging || elapsed > CLICK_MAX_DURATION_MS || totalMoved > CLICK_MAX_MOVE_PX) {
       return;
@@ -222,10 +260,20 @@ export function IconWindow() {
     if (dragStateRef.current?.pointerId === e.pointerId) {
       try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       dragStateRef.current = null;
-      // 안전망 — main drag 폴링도 종료
-      void window.electronAPI?.iconEndDrag();
+      // 안전망 — main drag 폴링도 종료 + 글로벌 fallback 정리
+      sendEndDrag();
     }
   };
+
+  // 컴포넌트 unmount 시 누수 방지 — drag 중이면 강제 종료
+  useEffect(() => {
+    return () => {
+      if (globalUpHandlerRef.current) {
+        sendEndDrag();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
