@@ -285,13 +285,40 @@ function findDesktopHandles(ensureWorkerLayer: boolean): DesktopHandles | null {
  * widget-mousemove / widget-wheel / widget-mouseleave 콜백 — main process 측에서
  * webContents.send 로 forward 한다.
  */
+export type WidgetDragKind =
+  | 'move'
+  | 'resize-n'
+  | 'resize-s'
+  | 'resize-e'
+  | 'resize-w'
+  | 'resize-ne'
+  | 'resize-nw'
+  | 'resize-se'
+  | 'resize-sw';
+
+export interface WidgetDragStartInfo {
+  kind: WidgetDragKind;
+  /** 클릭 시점 cursor 의 logical-pixel screen 좌표 */
+  startScreenX: number;
+  startScreenY: number;
+  /** 클릭 시점 위젯의 logical-pixel screen rect */
+  startRect: { x: number; y: number; width: number; height: number };
+}
+
 export interface WidgetMouseEventHandlers {
   onMouseMove: (clientX: number, clientY: number) => void;
   onMouseWheel: (clientX: number, clientY: number, deltaY: number) => void;
   onMouseLeave: () => void;
   /**
-   * 위젯 헤더 드래그가 종료될 때 호출 — main 측에서 새 bounds 저장 트리거에 사용.
-   * SetParent 후 widgetWindow.on('move') 가 발동하지 않으므로 직접 통지가 필요하다.
+   * 위젯 헤더/엣지 LBUTTONDOWN 가 감지됐을 때 호출 — main 측에서 폴링 기반
+   * drag/resize 매니저를 시작한다. (icon-mode startIconDrag 와 동일 패턴.)
+   * hook 자체는 dragKind 동안 모든 mouse 메시지를 흡수만 하고 실제 이동은
+   * main 의 setInterval 이 담당.
+   */
+  onDragStart?: (info: WidgetDragStartInfo) => void;
+  /**
+   * 위젯 헤더/엣지 LBUTTONUP 가 감지됐을 때 호출 — main 측 polling drag 를
+   * 종료시키고 새 bounds 저장 트리거.
    */
   onDragEnd?: () => void;
 }
@@ -339,31 +366,19 @@ export function createWin32WidgetController(): Win32WidgetController {
   let remoteHitTestInfo = 0;
   let lastHitTest = { x: 0, y: 0, result: false, ts: 0, valid: false };
 
-  // 헤더 드래그 + 8-방향 리사이즈 시뮬레이션 상태 (PR-3c+).
-  // SetParent 후 DWM NC drag / browser 의 onPointerDown 둘 다 attach 상태에서 무효화되므로,
-  // 헤더(상단 60 logical-px) + 가장자리(8 logical-px) 클릭을 hook 이 가로채 직접 MoveWindow 시뮬레이션.
+  // 헤더 드래그 + 8-방향 리사이즈 (icon-mode polling 패턴 적용).
+  // SetParent 후 DWM NC drag / browser 의 onPointerDown 둘 다 attach 상태에서 무효화되므로
+  // hook 이 헤더(60 logical-px) + 가장자리(8 logical-px) LBUTTONDOWN 을 감지해 onDragStart
+  // 콜백을 호출 → main 에서 16ms setInterval + win32Mouse.isLeftButtonDown +
+  // screen.getCursorScreenPoint + setWidgetBoundsScreen 으로 실제 이동을 수행.
+  // hook 은 dragKind 동안 모든 mouse 메시지를 흡수만 한다 (explorer drag-select 방지).
+  //
+  // 직접 in-hook MoveWindow 방식은 Chromium 40 의 BrowserWindow bounds tracking 이
+  // 외부 SetWindowPos 를 즉시 되돌려놓는 것으로 보이는 케이스에서 1px 만 움직이고
+  // 멈추거나 아예 안 움직임 → polling + Electron 친화 setWidgetBoundsScreen 으로 우회.
   const HEADER_HEIGHT_LOGICAL_PX = 60;
   const RESIZE_EDGE_LOGICAL_PX = 8;
-  const MIN_WIDGET_W_LOGICAL = 300;
-  const MIN_WIDGET_H_LOGICAL = 200;
-  type DragKind =
-    | 'move'
-    | 'resize-n'
-    | 'resize-s'
-    | 'resize-e'
-    | 'resize-w'
-    | 'resize-ne'
-    | 'resize-nw'
-    | 'resize-se'
-    | 'resize-sw';
-  let dragKind: DragKind | null = null;
-  let dragStartScreenX = 0;
-  let dragStartScreenY = 0;
-  // 시작 시점 widget rect (screen physical px)
-  let dragStartLeft = 0;
-  let dragStartTop = 0;
-  let dragStartRight = 0;
-  let dragStartBottom = 0;
+  let dragKind: WidgetDragKind | null = null;
 
   const refreshBounds = (): void => {
     if (!attachedHwnd) return;
@@ -490,81 +505,11 @@ export function createWin32WidgetController(): Win32WidgetController {
         if (isUp && msg === WM_LBUTTONUP) buttonMask &= ~MK_LBUTTON;
         if (isUp && msg === WM_RBUTTONUP) buttonMask &= ~MK_RBUTTON;
 
-        // ── 진행 중 드래그/리사이즈가 있으면 우선 처리 (모든 mouse 메시지 외부 차단)
+        // ── 진행 중 드래그/리사이즈가 있으면 mouse 메시지 흡수만. 실제 이동은
+        //    main 측 polling 매니저가 setWidgetBoundsScreen 으로 적용 중.
         if (dragKind !== null) {
-          if (isMove && workerWHwnd) {
-            const dx = screenX - dragStartScreenX;
-            const dy = screenY - dragStartScreenY;
-            // 새 screen rect 계산 (kind 별)
-            let newLeft = dragStartLeft;
-            let newTop = dragStartTop;
-            let newRight = dragStartRight;
-            let newBottom = dragStartBottom;
-            switch (dragKind) {
-              case 'move':
-                newLeft = dragStartLeft + dx;
-                newTop = dragStartTop + dy;
-                newRight = dragStartRight + dx;
-                newBottom = dragStartBottom + dy;
-                break;
-              case 'resize-n':
-                newTop = dragStartTop + dy;
-                break;
-              case 'resize-s':
-                newBottom = dragStartBottom + dy;
-                break;
-              case 'resize-e':
-                newRight = dragStartRight + dx;
-                break;
-              case 'resize-w':
-                newLeft = dragStartLeft + dx;
-                break;
-              case 'resize-ne':
-                newTop = dragStartTop + dy;
-                newRight = dragStartRight + dx;
-                break;
-              case 'resize-nw':
-                newTop = dragStartTop + dy;
-                newLeft = dragStartLeft + dx;
-                break;
-              case 'resize-se':
-                newBottom = dragStartBottom + dy;
-                newRight = dragStartRight + dx;
-                break;
-              case 'resize-sw':
-                newBottom = dragStartBottom + dy;
-                newLeft = dragStartLeft + dx;
-                break;
-            }
-            // 최소 크기 강제 (physical px 로 변환)
-            let sf = 1;
-            try {
-              const dpi = a.GetDpiForWindow(attachedHwnd) || 96;
-              sf = dpi > 0 ? dpi / 96 : 1;
-            } catch {
-              /* swallow */
-            }
-            const minW = Math.round(MIN_WIDGET_W_LOGICAL * sf);
-            const minH = Math.round(MIN_WIDGET_H_LOGICAL * sf);
-            if (newRight - newLeft < minW) {
-              if (dragKind.includes('w')) newLeft = newRight - minW;
-              else newRight = newLeft + minW;
-            }
-            if (newBottom - newTop < minH) {
-              if (dragKind.includes('n')) newTop = newBottom - minH;
-              else newBottom = newTop + minH;
-            }
-            // screen → workerW client
-            const tlBuf = createPointBuffer(newLeft, newTop);
-            if (a.ScreenToClient(workerWHwnd, tlBuf)) {
-              const cx = tlBuf.readInt32LE(0);
-              const cy = tlBuf.readInt32LE(4);
-              a.MoveWindow(attachedHwnd, cx, cy, newRight - newLeft, newBottom - newTop, true);
-              refreshBounds();
-            }
-            return 1n;
-          }
           if (isUp && msg === WM_LBUTTONUP) {
+            console.log('[hook] drag end (kind=', dragKind, ')');
             dragKind = null;
             const cb = handlersRef?.onDragEnd;
             if (cb) {
@@ -576,7 +521,7 @@ export function createWin32WidgetController(): Win32WidgetController {
             }
             return 1n;
           }
-          // 드래그/리사이즈 중 다른 버튼/휠 — 모두 차단
+          // 드래그 중 모든 mouse 메시지 차단 (explorer drag-select 방지)
           return 1n;
         }
 
@@ -615,7 +560,7 @@ export function createWin32WidgetController(): Win32WidgetController {
           const onTop = relY >= 0 && relY < edgePx;
           const onBottom = relY <= heightPx && relY > heightPx - edgePx;
 
-          let kind: DragKind | null = null;
+          let kind: WidgetDragKind | null = null;
           if (onTop && onLeft) kind = 'resize-nw';
           else if (onTop && onRight) kind = 'resize-ne';
           else if (onBottom && onLeft) kind = 'resize-sw';
@@ -629,13 +574,34 @@ export function createWin32WidgetController(): Win32WidgetController {
           }
 
           if (kind !== null) {
-            dragStartScreenX = screenX;
-            dragStartScreenY = screenY;
-            dragStartLeft = widgetRect.left;
-            dragStartTop = widgetRect.top;
-            dragStartRight = widgetRect.right;
-            dragStartBottom = widgetRect.bottom;
+            // logical px 로 변환해 onDragStart 콜백에 전달
+            const startInfo: WidgetDragStartInfo = {
+              kind,
+              startScreenX: Math.round(screenX / sf),
+              startScreenY: Math.round(screenY / sf),
+              startRect: {
+                x: Math.round(widgetRect.left / sf),
+                y: Math.round(widgetRect.top / sf),
+                width: Math.round((widgetRect.right - widgetRect.left) / sf),
+                height: Math.round((widgetRect.bottom - widgetRect.top) / sf),
+              },
+            };
+            console.log(
+              '[hook] drag start kind=', kind,
+              'rel=', relX, relY,
+              'rectLogical=', startInfo.startRect,
+            );
             dragKind = kind;
+            const cb = handlersRef?.onDragStart;
+            if (cb) {
+              setImmediate(() => {
+                try {
+                  cb(startInfo);
+                } catch (e) {
+                  console.error('[hook] onDragStart error', e);
+                }
+              });
+            }
             return 1n;
           }
         }
