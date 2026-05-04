@@ -732,6 +732,70 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('realtime-wall:board:clear-dirty', args),
   },
 
+  // === 바탕화면 작업판 (native-desktop-mode, v2.1.0~ Windows 전용) ===
+  // 위젯 안의 desktop-icon-zone 카드 영역을 main 측 mouse hook 의 pass-through 캐시에 동기화한다.
+  // Phase 1 (현재): manager 가 no-op 이라 호출은 받지만 실제 라우팅은 일어나지 않는다.
+  desktopIconZones: {
+    /**
+     * 카드 영역 갱신 — renderer 의 ResizeObserver 가 throttle 30Hz 로 호출.
+     * main 도 자체 검증을 수행하지만 1차 검증은 여기서 처리한다 (preload 가 IPC 경계).
+     */
+    updateBounds: (zones: ReadonlyArray<{
+      id: string;
+      name: string;
+      rect: { x: number; y: number; width: number; height: number };
+    }>): Promise<void> => {
+      if (!Array.isArray(zones)) return Promise.resolve();
+      const sanitized: Array<{ id: string; name: string; rect: { x: number; y: number; width: number; height: number } }> = [];
+      for (const z of zones) {
+        if (typeof z?.id !== 'string' || z.id.length === 0) continue;
+        if (typeof z?.name !== 'string') continue;
+        const r = z?.rect;
+        if (!r) continue;
+        if (
+          typeof r.x !== 'number' || !Number.isFinite(r.x) ||
+          typeof r.y !== 'number' || !Number.isFinite(r.y) ||
+          typeof r.width !== 'number' || !Number.isFinite(r.width) || r.width <= 0 ||
+          typeof r.height !== 'number' || !Number.isFinite(r.height) || r.height <= 0
+        ) continue;
+        sanitized.push({
+          id: z.id,
+          name: z.name,
+          rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+        });
+      }
+      return ipcRenderer.invoke('desktopIconZones:updateBounds', sanitized);
+    },
+    /** 위젯 hide / 모드 OFF / 카드 unmount 시 모든 영역 해제 */
+    clearBounds: (): Promise<void> =>
+      ipcRenderer.invoke('desktopIconZones:clearBounds'),
+    /**
+     * native-desktop 진입 실패 알림 구독.
+     * 반환된 unsubscribe 를 호출해 리스너 해제. unmount 시 반드시 호출.
+     */
+    onFallback: (
+      cb: (payload: {
+        reason: string;
+        fallbackMode: 'normal' | 'topmost';
+      }) => void,
+    ): (() => void) => {
+      const handler = (_event: unknown, payload: {
+        reason: string;
+        fallbackMode: 'normal' | 'topmost';
+      }) => {
+        try {
+          cb(payload);
+        } catch (e) {
+          console.error('[desktopIconZones] onFallback handler error', e);
+        }
+      };
+      ipcRenderer.on('desktopMode:fallback', handler);
+      return () => {
+        ipcRenderer.removeListener('desktopMode:fallback', handler);
+      };
+    },
+  },
+
   // === 백업·복원·데이터 위치 센터 ===
   // 외부 서버 전송 없음 — 모든 처리가 사용자 디스크 안에서만 일어난다.
   backup: {
