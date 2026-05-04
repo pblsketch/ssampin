@@ -732,6 +732,50 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('realtime-wall:board:clear-dirty', args),
   },
 
+  // === 백업·복원·데이터 위치 센터 ===
+  // 외부 서버 전송 없음 — 모든 처리가 사용자 디스크 안에서만 일어난다.
+  backup: {
+    /** 사용자 데이터 루트 + JSON 디렉토리 + 존재 여부 */
+    getDataLocation: (): Promise<{
+      userDataPath: string;
+      dataDirPath: string;
+      exists: boolean;
+    }> => ipcRenderer.invoke('backup:getDataLocation'),
+    /** OS 파일 탐색기로 데이터 디렉토리 열기 */
+    openDataLocation: (): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('backup:openDataLocation'),
+    /** 백업 파일 저장 (Save dialog → JSON 직렬화 → 디스크 저장) */
+    exportBackup: (): Promise<{
+      canceled: boolean;
+      filePath?: string;
+      entryCount?: number;
+    }> => ipcRenderer.invoke('backup:export'),
+    /** 백업 파일 가져오기 (Open dialog → 검증 → safety backup → atomic write) */
+    importBackup: (): Promise<{
+      canceled: boolean;
+      restoredCount?: number;
+      restoredFilenames?: readonly string[];
+      safetyBackupPath?: string;
+      metadata?: {
+        schemaVersion: number;
+        appVersion: string;
+        exportedAt: string;
+        platform: string;
+        entryCount: number;
+      };
+      error?: {
+        code:
+          | 'file-read-failed'
+          | 'invalid-json'
+          | 'invalid-structure'
+          | 'unsupported-future-version'
+          | 'empty-data'
+          | 'write-failed';
+        message: string;
+      };
+    }> => ipcRenderer.invoke('backup:import'),
+  },
+
   // === 내 이모티콘 (Sticker picker — PRD §4.1) ===
   sticker: {
     selectImage: (): Promise<{ canceled: boolean; filePaths: string[] }> =>

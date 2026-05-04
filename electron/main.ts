@@ -25,6 +25,12 @@ import {
   sanitizeFilename,
   type ZipEntry,
 } from './lib/zipStore';
+import {
+  getDataLocationInfo,
+  openDataLocation,
+  exportBackup,
+  importBackup,
+} from './backupManager';
 
 declare const __dirname: string;
 
@@ -2066,6 +2072,28 @@ function registerIpcHandlers(): void {
     const win = mainWindow ?? BrowserWindow.getFocusedWindow();
     if (!win) throw new Error('No window available');
     return dialog.showOpenDialog(win, options);
+  });
+
+  // ─── 백업·복원·데이터 위치 센터 ──────────────────────────────────────
+  // 외부 서버 전송 절대 없음. 모든 처리가 main 프로세스 + 사용자 디스크 안에서만 일어난다.
+
+  ipcMain.handle('backup:getDataLocation', () => getDataLocationInfo());
+
+  ipcMain.handle('backup:openDataLocation', async () => openDataLocation());
+
+  ipcMain.handle('backup:export', async () => {
+    const parent = mainWindow ?? BrowserWindow.getFocusedWindow();
+    return exportBackup(parent, app.getVersion());
+  });
+
+  ipcMain.handle('backup:import', async () => {
+    const parent = mainWindow ?? BrowserWindow.getFocusedWindow();
+    return importBackup(parent, app.getVersion(), (filename) => {
+      // 렌더러 store가 reload하도록 data:changed 브로드캐스트.
+      // 협업 보드 등 wall-board-* 도메인은 wallBoards.* IPC로 별도 reload하는데
+      // data:changed 도 함께 받으면 무해(상위 레이어가 알아서 dedupe).
+      broadcastToAllWindows('data:changed', filename);
+    });
   });
 
   // audio:importAlarm — 알람음 파일 가져오기
