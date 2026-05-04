@@ -54,6 +54,12 @@ let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let quickAddWindow: BrowserWindow | null = null;
 let stickerPickerWindow: BrowserWindow | null = null;
+/**
+ * 바탕화면 작업판 (native-desktop-mode v2.2~) — 별도 transparent fullscreen
+ * BrowserWindow. Explorer WorkerW 에 attach 되어 데스크톱 아이콘 아래/wallpaper
+ * 위 레이어에 zone 카드를 그린다. 메인 widgetWindow 는 attach 하지 않음.
+ */
+let desktopZoneWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
 let widgetActiveBeforeSleep = false;  // suspend/lock 시점의 스냅샷
 let isSystemSuspending = false;       // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
@@ -77,6 +83,7 @@ function getAllAppWindows(): BrowserWindow[] {
   if (mainWindow && !mainWindow.isDestroyed()) windows.push(mainWindow);
   if (widgetWindow && !widgetWindow.isDestroyed()) windows.push(widgetWindow);
   if (iconWindow && !iconWindow.isDestroyed()) windows.push(iconWindow);
+  if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) windows.push(desktopZoneWindow);
   return windows;
 }
 
@@ -754,6 +761,25 @@ function ensureIconOnScreen(): void {
 function buildIconWindow(): void {
   const bounds = readIconBoundsOrDefault();
 
+  // ─────────────────────────────────────────────────────────────────────
+  // v2.0.3 잔상 fix — clawd-on-desk(Electron 데스크톱 펫, github.com/rullerzhou-afk/clawd-on-desk)
+  // 의 floating character window 패턴을 따른다. 검증된 핵심 차이:
+  //
+  //   1) backgroundColor 자체를 지정하지 않음
+  //      `'#00000000'` 같은 alpha-zero 값도 일부 Win11 DWM 합성 경로에서
+  //      회색 사각형으로 렌더된다는 사례가 다수 보고됨 (electron #40515).
+  //      transparent: true 만 두고 backgroundColor 는 옵션에서 완전히 제거.
+  //
+  //   2) paintWhenInitiallyHidden 을 명시하지 않음 (=default true)
+  //      false 로 두면 첫 show 직전 페인트가 늦어지면서 빈 사각형이
+  //      한두 프레임 보일 수 있다 (특히 Win11 가속 합성 경로).
+  //
+  //   3) enableLargerThanScreen: true
+  //      디스플레이 경계 인접 / 작업표시줄 위 모서리에서 OS 가 윈도우를
+  //      클램프 / 스냅 처리할 때 발생하는 임시 사각형 페인트를 회피.
+  //
+  // hasShadow:false / roundedCorners:false / thickFrame:false 는 그대로 유지.
+  // ─────────────────────────────────────────────────────────────────────
   iconWindow = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
@@ -761,7 +787,6 @@ function buildIconWindow(): void {
     y: bounds.y,
     frame: false,
     transparent: true,
-    backgroundColor: '#00000000',
     resizable: false,
     movable: true,
     minimizable: false,
@@ -771,10 +796,9 @@ function buildIconWindow(): void {
     alwaysOnTop: true,
     show: false,
     hasShadow: false,
-    // Windows 11 DWM 흰 모서리/그림자 회피 — transparent 윈도우에서 효과적
     roundedCorners: false,
     thickFrame: false,
-    paintWhenInitiallyHidden: false,
+    enableLargerThanScreen: true,
     opacity: 0,
     title: '쌤핀 (실행 중)',
     webPreferences: {
@@ -1221,13 +1245,14 @@ function recoverWidget(): void {
   if (currentDesktopMode === 'topmost') {
     widgetWindow.setAlwaysOnTop(true);
   }
-  // native-desktop 모드면 attach 가 살아있는지 확인하고 깨졌으면 재시도.
+  // native-desktop 모드면 zoneWindow 의 attach 상태를 확인.
   // Win+D / 디스플레이 변경 / Explorer 재시작 후 WorkerW HWND 가 invalid 해질 수 있다.
-  if (currentDesktopMode === 'native-desktop' && widgetWindow) {
-    const widget = widgetWindow;
-    void desktopWidgetManager.healthCheck(widget).then((status) => {
-      if (!status.ok && !widget.isDestroyed()) {
-        console.log(`[widget] native-desktop healthCheck 실패 (${status.reason}) — fallback ${status.fallbackMode}`);
+  if (currentDesktopMode === 'native-desktop' && desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
+    const zone = desktopZoneWindow;
+    void desktopWidgetManager.healthCheck(zone).then((status) => {
+      if (!status.ok && widgetWindow && !widgetWindow.isDestroyed()) {
+        console.log(`[zoneWindow] healthCheck 실패 (${status.reason}) — fallback ${status.fallbackMode}`);
+        const widget = widgetWindow;
         widget.setAlwaysOnTop(status.fallbackMode === 'topmost');
         if (!widget.webContents.isDestroyed()) {
           const payload: DesktopModeFallbackPayload = {
@@ -1236,6 +1261,7 @@ function recoverWidget(): void {
           };
           widget.webContents.send('desktopMode:fallback', payload);
         }
+        destroyDesktopZoneWindow();
       }
     });
   }
@@ -1416,7 +1442,7 @@ function recreateWidget(): void {
   // 기존 위젯 정리
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     stopWinDRecovery();
-    desktopWidgetManager.disable();
+    destroyDesktopZoneWindow();
     widgetWindow.destroy();
   }
   widgetWindow = null;
@@ -1526,11 +1552,10 @@ function createWidgetWindow(
 
   widgetWindow.on('move', () => {
     scheduleWidgetBoundsSave();
-    if (widgetWindow) desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    // Phase 2.2: 메인 위젯은 더 이상 attach 대상이 아니므로 manager 호출 불필요.
   });
   widgetWindow.on('resize', () => {
     scheduleWidgetBoundsSave();
-    if (widgetWindow) desktopWidgetManager.updateWidgetBounds(widgetWindow);
   });
 
   // Win+D minimize 차단: 즉시 복원 (primary)
@@ -1559,7 +1584,7 @@ function createWidgetWindow(
   widgetWindow.on('closed', () => {
     console.log(`[diag] widget closed — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}`);
     stopWinDRecovery();
-    desktopWidgetManager.disable();
+    destroyDesktopZoneWindow();
     widgetWindow = null;
     currentDesktopMode = 'normal';
     if (!isQuitting && !isSystemSuspending) {
@@ -1587,6 +1612,97 @@ function createWidgetWindow(
  * applyWidgetSettings 와 createWidgetWindow attachAndShow 양쪽에서 호출된다.
  * previousMode 는 모드 진입 시 토스트/로그를 위한 정보 — 런타임 결정에는 사용하지 않는다.
  */
+/**
+ * 바탕화면 작업판용 별도 BrowserWindow 생성.
+ *
+ * Phase 2.1 의 결함:
+ *   - 메인 widgetWindow 자체를 WorkerW 에 attach + WH_MOUSE_LL hook 으로 PostMessage
+ *     라우팅을 시도했더니, hook 의 `return 1n` 이 OS input pipeline 을 죽여 커서가
+ *     위젯 영역으로 진입조차 못 함 (visual freeze).
+ *
+ * Phase 2.2 해결:
+ *   - 메인 위젯은 그대로 정상 BrowserWindow.
+ *   - 별도 transparent fullscreen `desktopZoneWindow` 를 만들어 그 BrowserWindow 만
+ *     WorkerW 에 attach. 글로벌 hook 미사용 — BrowserWindow 자체 mouse 라우팅이
+ *     zone 카드 클릭/스크롤을 정상 처리한다.
+ *   - zone 카드 외부의 빈 영역은 mouse-events: none CSS + setIgnoreMouseEvents 조합으로
+ *     데스크톱 아이콘 ListView 로 자연스럽게 통과.
+ */
+function buildDesktopZoneWindow(): void {
+  if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) return;
+  // 가상 데스크톱 전체 크기 = 모든 디스플레이 합집합 bounding box
+  const displays = screen.getAllDisplays();
+  const bounds = displays.reduce(
+    (acc, d) => ({
+      left: Math.min(acc.left, d.bounds.x),
+      top: Math.min(acc.top, d.bounds.y),
+      right: Math.max(acc.right, d.bounds.x + d.bounds.width),
+      bottom: Math.max(acc.bottom, d.bounds.y + d.bounds.height),
+    }),
+    { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
+  );
+  const fullX = Number.isFinite(bounds.left) ? bounds.left : 0;
+  const fullY = Number.isFinite(bounds.top) ? bounds.top : 0;
+  const fullW = Number.isFinite(bounds.right) ? bounds.right - fullX : 1920;
+  const fullH = Number.isFinite(bounds.bottom) ? bounds.bottom - fullY : 1080;
+
+  desktopZoneWindow = new BrowserWindow({
+    x: fullX,
+    y: fullY,
+    width: fullW,
+    height: fullH,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false, // 키보드 포커스 안 가져감 (메인 위젯에 머무름)
+    alwaysOnTop: false,
+    show: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  if (process.env['VITE_DEV_SERVER_URL']) {
+    void desktopZoneWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=desktopZone`);
+  } else {
+    void desktopZoneWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
+      query: { mode: 'desktopZone' },
+    });
+  }
+
+  desktopZoneWindow.once('ready-to-show', () => {
+    if (!desktopZoneWindow || desktopZoneWindow.isDestroyed()) return;
+    desktopZoneWindow.showInactive();
+  });
+
+  desktopZoneWindow.on('closed', () => {
+    desktopZoneWindow = null;
+  });
+}
+
+function destroyDesktopZoneWindow(): void {
+  desktopWidgetManager.disable();
+  if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
+    try {
+      desktopZoneWindow.destroy();
+    } catch {
+      /* swallow */
+    }
+  }
+  desktopZoneWindow = null;
+}
+
 async function applyDesktopModeRuntime(
   widget: BrowserWindow,
   mode: WidgetDesktopMode,
@@ -1594,10 +1710,9 @@ async function applyDesktopModeRuntime(
 ): Promise<void> {
   if (widget.isDestroyed()) return;
 
-  // 다른 모드 → native-desktop 외 진입 시에는 우선 manager 를 disable 해 두 모드가
-  // 동시에 attach 상태가 되는 위험을 차단한다 (Phase 1 no-op 이지만 Phase 2 호환).
+  // native-desktop 외 모드로 전환 시 zoneWindow 제거 + manager disable.
   if (mode !== 'native-desktop') {
-    desktopWidgetManager.disable();
+    destroyDesktopZoneWindow();
   }
 
   switch (mode) {
@@ -1608,28 +1723,52 @@ async function applyDesktopModeRuntime(
       widget.setAlwaysOnTop(false);
       break;
     case 'native-desktop': {
-      // alwaysOnTop=false 가 native-desktop 의 기본 — manager 가 attach 에 성공하든
-      // 실패하든 Z-order 는 시스템이 결정하도록 둔다.
+      // 메인 위젯은 정상 모드 유지 — alwaysOnTop=false (zoneWindow 와 z-order 충돌 방지).
       widget.setAlwaysOnTop(false);
-      const status = await desktopWidgetManager.enable(widget);
-      if (status.ok) {
-        console.log('[widget] native-desktop 모드 진입 성공');
-      } else {
-        const fallback = status.fallbackMode;
-        console.log(
-          `[widget] native-desktop 진입 실패 (${status.reason}) — ${fallback} 로 fallback`,
-        );
-        // 사용자에게는 renderer 측에서 토스트를 띄울 수 있도록 알린다.
+
+      // 1. zoneWindow 빌드 (이미 있으면 재사용)
+      buildDesktopZoneWindow();
+      if (!desktopZoneWindow) {
         const payload: DesktopModeFallbackPayload = {
-          reason: status.reason,
-          fallbackMode: fallback,
+          reason: 'unknown',
+          fallbackMode: 'normal',
         };
         if (!widget.webContents.isDestroyed()) {
           widget.webContents.send('desktopMode:fallback', payload);
         }
-        // 임시 fallback: alwaysOnTop 만 보정하고 currentDesktopMode 자체는 native-desktop 으로
-        // 둔다 (사용자 Settings 저장 의도를 존중). 다음 enable 시도(예: 모드 재토글) 가 가능.
-        widget.setAlwaysOnTop(fallback === 'topmost');
+        widget.setAlwaysOnTop(false);
+        break;
+      }
+
+      // 2. zoneWindow 가 ready 되면 attach
+      const attachOnReady = async (): Promise<void> => {
+        if (!desktopZoneWindow || desktopZoneWindow.isDestroyed()) return;
+        const status = await desktopWidgetManager.enable(desktopZoneWindow);
+        if (status.ok) {
+          console.log('[zoneWindow] native-desktop attach 성공');
+        } else {
+          const fallback = status.fallbackMode;
+          console.log(
+            `[zoneWindow] native-desktop attach 실패 (${status.reason}) — ${fallback} 로 fallback`,
+          );
+          destroyDesktopZoneWindow();
+          const payload: DesktopModeFallbackPayload = {
+            reason: status.reason,
+            fallbackMode: fallback,
+          };
+          if (!widget.webContents.isDestroyed()) {
+            widget.webContents.send('desktopMode:fallback', payload);
+          }
+          widget.setAlwaysOnTop(fallback === 'topmost');
+        }
+      };
+      // ready-to-show 이미 발생한 경우 즉시 attach, 아니면 한 번만 대기.
+      if (desktopZoneWindow.isVisible()) {
+        void attachOnReady();
+      } else {
+        desktopZoneWindow.once('show', () => {
+          void attachOnReady();
+        });
       }
       break;
     }
@@ -1901,8 +2040,9 @@ function registerIpcHandlers(): void {
   function buildWidgetDiagnosticsContext(): WidgetDiagnosticsContext {
     return {
       getWidgetWindow: () => widgetWindow,
-      getCurrentDesktopMode: () =>
-        currentDesktopMode === 'topmost' ? 'topmost' : 'normal',
+      // 3-vary (normal | topmost | native-desktop)을 그대로 전달.
+      // 과거 'topmost' 외 'normal' narrow는 native-desktop 사용자에게 silent 버그 유발했음.
+      getCurrentDesktopMode: () => currentDesktopMode,
       getCurrentWindowMode: () => currentWindowMode,
       getAllDisplays: () => screen.getAllDisplays(),
       getDisplayMatching: (rect) => screen.getDisplayMatching(rect),
@@ -2017,7 +2157,7 @@ function registerIpcHandlers(): void {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       // 위젯이 열려있으면 닫고 메인창 복원 (필요 시 재생성)
       stopWinDRecovery();
-      desktopWidgetManager.disable();
+      destroyDesktopZoneWindow();
       widgetWindow.destroy();
       widgetWindow = null;
       currentDesktopMode = 'normal';
@@ -2032,9 +2172,25 @@ function registerIpcHandlers(): void {
   // window:navigateToPage — 메인 창으로 포커스 이동 + 페이지 이동 + 위젯 닫기
   ipcMain.handle('window:navigateToPage', (_event, page: string) => {
     // 메모리 절약 모드에서 메인창이 destroy된 상태일 수 있으므로 재생성 후 페이지 이동
+    const wasDestroyed = !mainWindow || mainWindow.isDestroyed();
     ensureMainWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('navigate:to-page', page);
+      const target = mainWindow;
+      const sendNavigate = () => {
+        if (!target.isDestroyed()) {
+          target.webContents.send('navigate:to-page', page);
+        }
+      };
+      // 메인이 방금 재생성됐거나 아직 로딩 중이면 did-finish-load 대기.
+      // 그렇지 않으면 즉시 send.
+      if (wasDestroyed || target.webContents.isLoading()) {
+        target.webContents.once('did-finish-load', () => {
+          // React 컴포넌트가 onNavigateToPage 구독자를 등록할 시간을 추가로 확보 (50ms).
+          setTimeout(sendNavigate, 50);
+        });
+      } else {
+        sendNavigate();
+      }
     }
     // Close widget window
     if (widgetWindow && !widgetWindow.isDestroyed()) {
@@ -3773,19 +3929,18 @@ if (!gotTheLock) {
     // native-desktop 모드에서는 WorkerW 좌표계가 바뀌었을 가능성이 있어 healthCheck 도 트리거.
     const triggerNativeDesktopHealthCheck = (): void => {
       if (currentDesktopMode !== 'native-desktop') return;
-      if (!widgetWindow || widgetWindow.isDestroyed()) return;
-      const widget = widgetWindow;
-      void desktopWidgetManager.healthCheck(widget).then((status) => {
-        if (!widget.isDestroyed()) {
-          desktopWidgetManager.updateWidgetBounds(widget);
-        }
-        if (!status.ok && !widget.isDestroyed() && !widget.webContents.isDestroyed()) {
+      if (!desktopZoneWindow || desktopZoneWindow.isDestroyed()) return;
+      const zone = desktopZoneWindow;
+      void desktopWidgetManager.healthCheck(zone).then((status) => {
+        if (!status.ok && widgetWindow && !widgetWindow.isDestroyed() && !widgetWindow.webContents.isDestroyed()) {
+          const widget = widgetWindow;
           const payload: DesktopModeFallbackPayload = {
             reason: status.reason,
             fallbackMode: status.fallbackMode,
           };
           widget.webContents.send('desktopMode:fallback', payload);
           widget.setAlwaysOnTop(status.fallbackMode === 'topmost');
+          destroyDesktopZoneWindow();
         }
       });
     };
@@ -3840,10 +3995,10 @@ if (!gotTheLock) {
       isSystemSuspending = false;
       setTimeout(() => {
         restoreWidgetAfterSleep();
-        // native-desktop 모드면 attach 가 살아있는지 다시 확인 (절전 동안 Explorer 가 재시작될 수 있음)
-        if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
-          const widget = widgetWindow;
-          void desktopWidgetManager.healthCheck(widget);
+        // native-desktop 모드면 zoneWindow attach 살아있는지 다시 확인.
+        if (currentDesktopMode === 'native-desktop' && desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
+          const zone = desktopZoneWindow;
+          void desktopWidgetManager.healthCheck(zone);
         }
       }, 1000);
     });

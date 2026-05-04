@@ -18,12 +18,8 @@ import { getSpanClass } from '@widgets/utils/getSpanClass';
 import { triggerRefreshAll } from '@widgets/hooks/useWidgetRefresh';
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
-import { DesktopIconZoneOverlay } from './DesktopIconZoneOverlay';
 import { WidgetWeatherBar } from '@widgets/components/WidgetWeatherBar';
-import {
-  normalizeDesktopIconZones,
-  type WidgetLayoutMode,
-} from '@domain/entities/Settings';
+import { type WidgetLayoutMode } from '@domain/entities/Settings';
 
 interface ContextMenuState {
   x: number;
@@ -180,14 +176,10 @@ export function Widget() {
   }, []);
 
   // ── 바탕화면 작업판 (v2.1.0~ Windows 전용) ──
-  const isNativeDesktopMode = settings.widget.desktopMode === 'native-desktop';
-  const desktopIconZones = useMemo(
-    () => normalizeDesktopIconZones(settings.widget.desktopIconZones ?? []),
-    [settings.widget.desktopIconZones],
-  );
+  // Phase 2.2 부터 zone 시각화는 별도 desktopZoneWindow 가 담당. 메인 위젯에서는
+  // fallback 토스트만 구독한다.
 
   // native-desktop 진입 실패 시 main 이 보내는 fallback 알림 구독.
-  // Phase 2 부터 실제 토스트로 사용자에게 안내.
   useEffect(() => {
     const unsubscribe = window.electronAPI?.desktopIconZones?.onFallback?.((payload) => {
       console.log('[widget] native-desktop fallback', payload);
@@ -447,10 +439,6 @@ export function Widget() {
           />
         ))}
 
-        {/* 바탕화면 작업판 오버레이 (v2.1.0~ Windows 전용) — 카드 영역만 main 측 mouse hook 으로 Explorer 통과 */}
-        {isNativeDesktopMode && (
-          <DesktopIconZoneOverlay zones={desktopIconZones} />
-        )}
       </div>
 
       {/* 레이아웃 선택 팝업 */}
