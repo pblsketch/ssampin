@@ -293,10 +293,16 @@ export function Widget() {
           '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
         } as React.CSSProperties}
       >
-        {/* ── 헤더 (드래그 영역) ── */}
+        {/* ── 헤더 (드래그 영역) ──
+            native-desktop attach 상태에서는 DWM NC drag (`WebkitAppRegion: 'drag'`) 가 충돌해
+            1px 만 움직이고 OS 가 캡처를 끊는다 → win32 hook 이 헤더 60px 영역을 직접 MoveWindow
+            로 처리하도록 attach 시 'no-drag' 로 전환. */}
         <div
           className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
-          style={{ WebkitAppRegion: 'drag', zoom: settings.dashboardFontScale ?? 1 } as React.CSSProperties}
+          style={{
+            WebkitAppRegion: settings.widget.desktopMode === 'native-desktop' ? 'no-drag' : 'drag',
+            zoom: settings.dashboardFontScale ?? 1,
+          } as React.CSSProperties}
           onDoubleClick={handleHeaderDoubleClick}
         >
           {/* 날짜 + 시간 */}
