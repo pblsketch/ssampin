@@ -1,10 +1,33 @@
 import { build } from 'esbuild';
-import { readdirSync } from 'fs';
+import { readdirSync, statSync } from 'fs';
 import path from 'path';
 
-const entryPoints = readdirSync('electron')
-  .filter(f => f.endsWith('.ts'))
-  .map(f => path.join('electron', f));
+// 최상위 electron/*.ts + electron/platform/*.ts (native FFI 같은 분리 모듈) 수집.
+// 추가 하위 디렉토리는 명시적으로 포함시킨다 (전체 재귀가 아니라 의도된 path 만).
+function collectEntryPoints() {
+  const entries = [];
+  for (const f of readdirSync('electron')) {
+    const full = path.join('electron', f);
+    if (statSync(full).isFile() && f.endsWith('.ts')) {
+      entries.push(full);
+    }
+  }
+  // platform/ — Win32 FFI wrapper (lazy require 대상)
+  const platformDir = path.join('electron', 'platform');
+  try {
+    for (const f of readdirSync(platformDir)) {
+      const full = path.join(platformDir, f);
+      if (statSync(full).isFile() && f.endsWith('.ts')) {
+        entries.push(full);
+      }
+    }
+  } catch {
+    // platform/ 디렉토리가 없으면 무시
+  }
+  return entries;
+}
+
+const entryPoints = collectEntryPoints();
 
 await build({
   entryPoints,
