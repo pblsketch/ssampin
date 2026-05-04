@@ -805,41 +805,54 @@ contextBridge.exposeInMainWorld('electronAPI', {
       };
     },
     /**
-     * Phase 2.3: zoneWindow 가 카드 좌표 갱신을 받기 위해 구독.
-     * 위젯 카드의 BoundingClientRect 를 30Hz 로 forward 받는다.
-     * 반환된 unsubscribe 를 unmount 시 호출.
+     * Phase 3.0: native-desktop 모드에서 위젯이 WorkerW 자식이 되면 일반 mouse
+     * 라우팅이 끊긴다. main 의 WH_MOUSE_LL hook 이 mousemove 를 IPC 로 forward.
+     * 가상 cursor / hover 시뮬레이션은 renderer 가 dispatchEvent + .group:hover 트릭
+     * (외부 데스크톱 위젯 패턴) 으로 처리.
      */
-    onCardsUpdate: (
-      cb: (zones: ReadonlyArray<{
-        id: string;
-        name: string;
-        rect: { x: number; y: number; width: number; height: number };
-      }>) => void,
+    onWidgetMouseMove: (
+      cb: (point: { x: number; y: number }) => void,
     ): (() => void) => {
-      const handler = (_event: unknown, payload: ReadonlyArray<{
-        id: string;
-        name: string;
-        rect: { x: number; y: number; width: number; height: number };
-      }>) => {
+      const handler = (_event: unknown, payload: { x: number; y: number }) => {
         try {
           cb(payload);
         } catch (e) {
-          console.error('[desktopIconZones] onCardsUpdate handler error', e);
+          console.error('[widget-mousemove] handler error', e);
         }
       };
-      ipcRenderer.on('zone:cards-update', handler);
+      ipcRenderer.on('widget-mousemove', handler);
       return () => {
-        ipcRenderer.removeListener('zone:cards-update', handler);
+        ipcRenderer.removeListener('widget-mousemove', handler);
       };
     },
-    /**
-     * Phase 2.3: 위젯 click-through 토글.
-     * - true: 위젯 카드 영역의 클릭이 데스크톱(Explorer)으로 통과
-     * - false: 일반 위젯 모드
-     * forward 옵션 덕에 통과 중에도 위젯이 mousemove 를 받아 leave 감지 가능.
-     */
-    setWidgetClickThrough: (flag: boolean): Promise<void> =>
-      ipcRenderer.invoke('widget:setClickThrough', flag),
+    onWidgetWheel: (
+      cb: (point: { x: number; y: number; deltaY: number }) => void,
+    ): (() => void) => {
+      const handler = (_event: unknown, payload: { x: number; y: number; deltaY: number }) => {
+        try {
+          cb(payload);
+        } catch (e) {
+          console.error('[widget-wheel] handler error', e);
+        }
+      };
+      ipcRenderer.on('widget-wheel', handler);
+      return () => {
+        ipcRenderer.removeListener('widget-wheel', handler);
+      };
+    },
+    onWidgetMouseLeave: (cb: () => void): (() => void) => {
+      const handler = () => {
+        try {
+          cb();
+        } catch (e) {
+          console.error('[widget-mouseleave] handler error', e);
+        }
+      };
+      ipcRenderer.on('widget-mouseleave', handler);
+      return () => {
+        ipcRenderer.removeListener('widget-mouseleave', handler);
+      };
+    },
   },
 
   // === 백업·복원·데이터 위치 센터 ===

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useDashboardConfig } from '@widgets/useDashboardConfig';
 import {
   DEFAULT_DESKTOP_ICON_ZONE_PRESET,
   type WidgetDesktopMode,
@@ -108,6 +109,15 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
       opacity: nextWidget.opacity,
       desktopMode: nextMode,
     });
+
+    // 위젯 dashboard config 의 desktop-icon-zone 카드를 자동 토글.
+    // - ON: visible=true (없으면 신규 추가) → 카드 마운트 → ResizeObserver IPC 송신 →
+    //   zoneWindow 가 카드 위치에 zone 그림 → 사용자 시각적 변화 즉시 발생
+    // - OFF: visible=false (사용자 수동 추가 카드도 함께 숨김 — 다시 ON 하면 같은 위치 복원)
+    useDashboardConfig.getState().setWidgetVisible(
+      'desktop-icon-zone',
+      nextMode === 'native-desktop',
+    );
   };
 
   const handleSettings = () => {

@@ -13,7 +13,6 @@ import { ClassManagementPage } from '@adapters/components/ClassManagement/ClassM
 import { SettingsPage } from '@adapters/components/Settings/SettingsPage';
 import { Widget } from '@adapters/components/Widget/Widget';
 import { IconWindow } from '@adapters/components/Icon/IconWindow';
-import { DesktopZoneWindow } from '@adapters/components/DesktopZone/DesktopZoneWindow';
 import { Export } from '@adapters/components/Export/Export';
 const FormsPage = React.lazy(() =>
   import('@adapters/components/Forms/FormsPage').then((m) => ({ default: m.FormsPage })),
@@ -122,10 +121,7 @@ function isIconMode(): boolean {
   return params.get('mode') === 'icon';
 }
 
-function isDesktopZoneMode(): boolean {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('mode') === 'desktopZone';
-}
+// Phase 3.0: desktopZone 별도 윈도우 모드 폐기. 메인 widgetWindow 자체가 WorkerW 에 attach.
 
 function getQuickAddKindFromUrl(): QuickAddKind {
   const params = new URLSearchParams(window.location.search);
@@ -367,26 +363,10 @@ export function App() {
   if (isIconMode()) {
     return <IconApp />;
   }
-  if (isDesktopZoneMode()) {
-    return <DesktopZoneApp />;
-  }
   if (isWidgetMode()) {
     return <WidgetApp />;
   }
   return <MainApp />;
-}
-
-function DesktopZoneApp() {
-  // 첫 페인트 전에 body/html 배경 transparent 강제 — flash 방지.
-  useEffect(() => {
-    document.documentElement.style.background = 'transparent';
-    document.body.style.background = 'transparent';
-    return () => {
-      document.documentElement.style.background = '';
-      document.body.style.background = '';
-    };
-  }, []);
-  return <DesktopZoneWindow />;
 }
 
 function IconApp() {

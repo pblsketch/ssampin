@@ -1,112 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import {
   DEFAULT_DESKTOP_ICON_ZONE_PRESET,
   normalizeDesktopIconZones,
-  type DesktopIconZoneSettings,
   type WidgetDesktopMode,
 } from '@domain/entities/Settings';
 
 /**
- * 바탕화면 작업판 위젯 카드 (v2.1.0~ Windows 전용, Phase 2.3).
+ * 바탕화면 작업판 위젯 카드 (v2.1.0~ Phase 3.0).
  *
- * 핵심 동작 (Phase 2.3 일체화):
- *   - 카드 슬롯이 곧 zone 영역. 카드 본문 좌표를 IPC 로 main 에 보내면 별도
- *     `desktopZoneWindow` (WorkerW attach 된 transparent fullscreen) 가 동일 위치에
- *     점선 zone 카드를 그려, 시각적으로 위젯 카드와 zoneWindow 가 일체화된다.
- *   - 카드 본문에 마우스가 진입하면 `widget:setClickThrough(true)` 를 호출 →
- *     widgetWindow.setIgnoreMouseEvents(true, {forward: true}) 적용 → 카드 영역의
- *     클릭이 데스크톱(Explorer ListView)으로 통과되어 바탕화면 아이콘 드래그 가능.
- *   - 카드를 벗어나면 false 호출 → 일반 위젯 모드 복귀, 다른 위젯 카드는 영향 없음.
+ * Phase 3.0 동작:
+ *   - 카드 자체는 zone 표시 placeholder. 실제 마법은 main 측 WH_MOUSE_LL hook 이
+ *     LVM_HITTEST 로 폴더 위 클릭은 explorer 양보, 빈 영역은 PostMessage 로 위젯에
+ *     전달하는 방식으로 처리한다.
+ *   - 사용자 시점: 위젯이 WorkerW 자식으로 attach 된 상태에서, 카드 영역에 폴더가
+ *     떠 있으면 폴더가 시각적으로 카드 위에 보이고 폴더 클릭/드래그 정상 동작.
+ *   - 카드 슬롯이 곧 zone — 별도 좌표 IPC 송신 불필요.
  */
 export function DesktopIconZoneWidget() {
   const { settings, update } = useSettingsStore();
   const isWindows =
     typeof navigator !== 'undefined' && /Win/i.test(navigator.platform);
   const isActive = settings.widget.desktopMode === 'native-desktop';
-  const zones = useMemo<DesktopIconZoneSettings[]>(
+  const zones = useMemo(
     () => normalizeDesktopIconZones(settings.widget.desktopIconZones ?? []),
     [settings.widget.desktopIconZones],
   );
-  const enabledZones = useMemo(
-    () => zones.filter((z) => z.enabled),
-    [zones],
-  );
-
-  const cellRefs = useRef(new Map<string, HTMLDivElement>());
-  const lastSentSerializedRef = useRef<string>('');
-  const setCellRef = useCallback((id: string) => (el: HTMLDivElement | null) => {
-    if (el) cellRefs.current.set(id, el);
-    else cellRefs.current.delete(id);
-  }, []);
-
-  // 카드 본문 좌표 측정 + IPC 송신.
-  // physical screen px = (window.screenX + rect.left) * devicePixelRatio.
-  // Electron BrowserWindow 에서 DIP 와 CSS px 는 1:1, devicePixelRatio = display scaleFactor.
-  const measureAndSend = useCallback(() => {
-    const api = window.electronAPI?.desktopIconZones;
-    if (!api?.updateBounds) return;
-    if (!isActive || enabledZones.length === 0) {
-      void api.updateBounds([]);
-      lastSentSerializedRef.current = '[]';
-      return;
-    }
-    const dpr = window.devicePixelRatio || 1;
-    const screenX = window.screenX;
-    const screenY = window.screenY;
-    const out: Array<{
-      id: string;
-      name: string;
-      rect: { x: number; y: number; width: number; height: number };
-    }> = [];
-    for (const zone of enabledZones) {
-      const el = cellRefs.current.get(zone.id);
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) continue;
-      out.push({
-        id: zone.id,
-        name: zone.name,
-        rect: {
-          x: Math.round((screenX + rect.left) * dpr),
-          y: Math.round((screenY + rect.top) * dpr),
-          width: Math.round(rect.width * dpr),
-          height: Math.round(rect.height * dpr),
-        },
-      });
-    }
-    const serialized = JSON.stringify(out);
-    if (serialized === lastSentSerializedRef.current) return;
-    lastSentSerializedRef.current = serialized;
-    void api.updateBounds(out);
-  }, [isActive, enabledZones]);
-
-  // 30Hz 폴링 + ResizeObserver — 위젯 이동/리사이즈 추종.
-  useEffect(() => {
-    if (!isActive) return;
-    let raf = 0;
-    const schedule = (): void => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        measureAndSend();
-      });
-    };
-    const ro = new ResizeObserver(schedule);
-    cellRefs.current.forEach((el) => ro.observe(el));
-    const interval = window.setInterval(schedule, 33);
-    schedule();
-    return () => {
-      ro.disconnect();
-      window.clearInterval(interval);
-      if (raf) cancelAnimationFrame(raf);
-      // unmount 시 정리: zoneWindow 카드 제거 + click-through 해제
-      const api = window.electronAPI?.desktopIconZones;
-      if (api?.clearBounds) void api.clearBounds();
-      if (api?.setWidgetClickThrough) void api.setWidgetClickThrough(false);
-      lastSentSerializedRef.current = '';
-    };
-  }, [isActive, measureAndSend]);
+  const enabledZones = zones.filter((z) => z.enabled);
 
   if (!isWindows) {
     return (
@@ -143,8 +63,6 @@ export function DesktopIconZoneWidget() {
   };
 
   const handleDeactivate = () => {
-    const api = window.electronAPI?.desktopIconZones;
-    if (api?.setWidgetClickThrough) void api.setWidgetClickThrough(false);
     void update({
       widget: { ...settings.widget, desktopMode: 'normal' },
     });
@@ -179,8 +97,8 @@ export function DesktopIconZoneWidget() {
     );
   }
 
-  // Active 상태: 카드 슬롯을 가로 grid 로 분할해 각 zone 셀 렌더링.
-  // 셀 본문은 transparent + pointer-events 가 mouse 진입 시에만 click-through 로 토글.
+  // Active: 카드 슬롯을 가로 grid 로 분할해 각 zone 라벨 + 점선 영역 표시.
+  // 본 영역 위에 바탕화면 폴더가 떠 있으면 LVM_HITTEST 가 폴더 클릭을 explorer 로 양보.
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex items-center justify-between mb-1.5 px-1">
@@ -216,18 +134,13 @@ export function DesktopIconZoneWidget() {
           enabledZones.map((z) => (
             <div
               key={z.id}
-              ref={setCellRef(z.id)}
-              className="rounded-xl bg-transparent"
-              onMouseEnter={() => {
-                const api = window.electronAPI?.desktopIconZones;
-                if (api?.setWidgetClickThrough) void api.setWidgetClickThrough(true);
-              }}
-              onMouseLeave={() => {
-                const api = window.electronAPI?.desktopIconZones;
-                if (api?.setWidgetClickThrough) void api.setWidgetClickThrough(false);
-              }}
-              title={z.name}
-            />
+              className="rounded-xl border border-dashed border-sp-border/60 bg-sp-card/20 flex flex-col overflow-hidden"
+            >
+              <div className="px-2 py-1 text-[11px] font-medium text-sp-muted border-b border-sp-border/40 truncate">
+                {z.name}
+              </div>
+              <div className="flex-1 min-h-[40px]" />
+            </div>
           ))
         )}
       </div>

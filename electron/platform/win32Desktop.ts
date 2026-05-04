@@ -1,26 +1,33 @@
 /**
- * Win32 FFI wrapper — 바탕화면 작업판 (native-desktop-mode) Phase 2.2 (옵션 B).
+ * Win32 FFI wrapper — 바탕화면 작업판 (native-desktop-mode) Phase 3.0.
  *
- * Phase 2.1 의 두 결함:
- *   1. WH_MOUSE_LL 의 `return 1n` 이 OS input pipeline 을 죽여 커서가 위젯 영역으로
- *      진입조차 못 함 (visual freeze)
- *   2. PostMessageW 합성 메시지는 Chromium pointer pipeline 을 깨우지 못함
+ * 외부 데스크톱 위젯 v1.1.5 (`@external-widget/desktop` desktopWidget.js) 의 핵심 트릭을 이식한
+ * 독립 구현. MIT 라이선스. koffi FFI 시그니처는 동일하나 코드 자체는 새로 작성.
  *
- * Phase 2.2 해결:
- *   - **메인 위젯은 attach 하지 않는다.** 별도 `desktopZoneWindow` (BrowserWindow,
- *     transparent fullscreen) 를 만들어 거기에만 attach.
- *   - 그 BrowserWindow 는 일반 React 인스턴스이므로 마우스 hover/클릭이 정상 동작.
- *   - WH_MOUSE_LL global hook **제거**. zone 영역의 클릭은 Z-order 자연 라우팅으로
- *     Explorer 가 받음 (icon 드래그/선택). 비-zone 영역은 zone window 자체가 받음.
+ * ## 핵심 트릭 (사용자가 분석 보고서로 제시)
+ * 1. 위젯 BrowserWindow 를 Explorer WorkerW 자식으로 SetParent → 데스크톱 아이콘과
+ *    동급 Z-order 에서 공존.
+ * 2. `OpenProcess(explorer.exe, READ|WRITE|VM_OP)` + `VirtualAllocEx` 로 explorer
+ *    프로세스 안에 24-byte LVHITTESTINFO 버퍼를 할당.
+ * 3. 매 마우스 좌표마다 `WriteProcessMemory` 로 좌표 쓰고 `SendMessageW(listView,
+ *    LVM_HITTEST, 0, remoteAddr)` 로 원격 hit-test 호출 → 그 좌표에 폴더 아이콘이
+ *    있으면 hitIndex >= 0 반환.
+ * 4. WH_MOUSE_LL hook 결정 트리:
+ *    - 위젯 영역 밖 → CallNextHookEx (시스템 처리)
+ *    - 위젯 영역 안 + 아이콘 위 → CallNextHookEx (explorer 가 폴더 클릭 처리) ⭐
+ *    - 위젯 영역 안 + 빈 공간 + click → PostMessageW(widget, msg) + return 1
+ * 5. externalDrag 상태 추적 — 폴더 드래그 시작 후 mouse-up 까지 위젯이 입을 닫음.
  *
- * 책임 (간소화):
- *   1. Progman → SHELLDLL_DefView → after-defview WorkerW (또는 progman-child) 탐색
- *   2. 대상 BrowserWindow HWND 를 WorkerW 자식으로 SetParent
- *   3. ScreenToClient + MoveWindow 좌표 변환
- *   4. GWL_STYLE / GWL_EXSTYLE 저장·복구 (disable 시)
+ * ## Phase 2.1 의 결함 회피
+ * - 모든 mouse-move 에 return 1 → OS input pipeline 죽임 → 커서 freeze. 본 구현은
+ *   move 는 `webContents.send('widget-mousemove', ...)` IPC 만 보내고 시스템에 양보
+ *   (return CallNextHookEx). hover 효과는 renderer 가 합성 dispatch 로 시뮬레이션
+ *   (외부 데스크톱 위젯 패턴 — 후속 PR 에서 추가).
  *
- * 보안: 외부 네트워크 0건. user32 + kernel32 만 사용.
- * 의존: koffi (prebuilt FFI). lazy require 로 비Windows 빌드 안전.
+ * ## 보안
+ * - 외부 네트워크 0건.
+ * - explorer.exe 권한 = 사용자 세션 권한, UAC 승격 불필요.
+ * - 본 모듈은 user32 + kernel32 만 호출 — 새 DLL 다운로드 없음.
  */
 
 import koffi from 'koffi';
@@ -28,6 +35,7 @@ import type { BrowserWindow } from 'electron';
 
 // ─── Win32 상수 ──────────────────────────────────────────────────────────────
 const WM_SPAWN_WORKER = 0x052c;
+const WH_MOUSE_LL = 14;
 const HWND_TOP = 0;
 const SWP_NOMOVE = 0x0002;
 const SWP_NOSIZE = 0x0001;
@@ -37,28 +45,47 @@ const GWL_STYLE = -16;
 const GWL_EXSTYLE = -20;
 const SMTO_ABORTIFHUNG = 0x0002;
 
+// Mouse messages
+const WM_MOUSEMOVE = 0x0200;
+const WM_LBUTTONDOWN = 0x0201;
+const WM_LBUTTONUP = 0x0202;
+const WM_RBUTTONDOWN = 0x0204;
+const WM_RBUTTONUP = 0x0205;
+const WM_MOUSEWHEEL = 0x020a;
+const MK_LBUTTON = 0x0001;
+const MK_RBUTTON = 0x0002;
+
+// LVM_HITTEST + remote process flags
+const LVM_HITTEST = 0x1012;
+const HITTEST_BUFFER_SIZE = 24; // LVHITTESTINFO (POINT pt + UINT flags + INT iItem + INT iSubItem + INT iGroup, x64 padding 포함)
+const HITTEST_CACHE_MS = 12;
+const PROCESS_VM_OPERATION = 0x0008;
+const PROCESS_VM_READ = 0x0010;
+const PROCESS_VM_WRITE = 0x0020;
+const MEM_COMMIT = 0x1000;
+const MEM_RESERVE = 0x2000;
+const MEM_RELEASE = 0x8000;
+const PAGE_READWRITE = 0x04;
+
 // ─── DLL load (lazy + cache) ─────────────────────────────────────────────────
 interface Win32API {
-  FindWindowW: (className: string | null, windowName: string | null) => number;
-  FindWindowExW: (
-    parent: number,
-    childAfter: number,
-    className: string | null,
-    windowName: string | null,
-  ) => number;
+  FindWindowW: (cls: string | null, name: string | null) => number;
+  FindWindowExW: (parent: number, after: number, cls: string | null, name: string | null) => number;
   SendMessageTimeoutW: (
     hwnd: number,
     msg: number,
-    wParam: number | bigint,
-    lParam: number | bigint,
+    wp: number | bigint,
+    lp: number | bigint,
     flags: number,
     timeout: number,
     result: Buffer,
   ) => number;
+  SendMessageW: (hwnd: number, msg: number, wp: number | bigint, lp: number | bigint) => number;
+  PostMessageW: (hwnd: number, msg: number, wp: number | bigint, lp: number | bigint) => boolean;
   SetParent: (child: number, parent: number) => number;
   SetWindowPos: (
     hwnd: number,
-    insertAfter: number,
+    after: number,
     x: number,
     y: number,
     cx: number,
@@ -71,41 +98,77 @@ interface Win32API {
   GetWindowLongPtrW: (hwnd: number, idx: number) => number;
   SetWindowLongPtrW: (hwnd: number, idx: number, value: number) => number;
   ScreenToClient: (hwnd: number, point: Buffer) => boolean;
+  WindowFromPoint: (point: bigint) => number;
   IsWindow: (hwnd: number) => boolean;
   GetDpiForWindow: (hwnd: number) => number;
+  GetWindowThreadProcessId: (hwnd: number, pidBuf: Buffer) => number;
+  SetWindowsHookExW: (idHook: number, fn: unknown, hMod: number, threadId: number) => number;
+  UnhookWindowsHookEx: (hook: number) => boolean;
+  CallNextHookEx: (hook: number, nCode: number, wp: number | bigint, lp: number | bigint) => number;
+  GetModuleHandleW: (name: string | null) => number;
+  OpenProcess: (access: number, inherit: boolean, pid: number) => number;
+  VirtualAllocEx: (
+    process: number,
+    addr: number | bigint,
+    size: number,
+    type: number,
+    protect: number,
+  ) => number;
+  VirtualFreeEx: (process: number, addr: number, size: number, type: number) => boolean;
+  WriteProcessMemory: (
+    process: number,
+    remote: number,
+    local: Buffer,
+    size: number,
+    written: number | bigint,
+  ) => boolean;
+  CloseHandle: (h: number) => boolean;
 }
 
 let cachedApi: Win32API | null = null;
+let hookProtoRegistered = false;
+let koffiRef: typeof koffi | null = null;
 
 function getApi(): Win32API {
   if (cachedApi) return cachedApi;
+  koffiRef = koffi;
+  if (!hookProtoRegistered) {
+    koffi.proto('intptr __stdcall LLHookProc(int nCode, uintptr wParam, void* lParam)');
+    hookProtoRegistered = true;
+  }
   const user32 = koffi.load('user32.dll');
+  const kernel32 = koffi.load('kernel32.dll');
   cachedApi = {
-    FindWindowW: user32.func('intptr __stdcall FindWindowW(str16, str16)') as unknown as Win32API['FindWindowW'],
-    FindWindowExW: user32.func(
-      'intptr __stdcall FindWindowExW(intptr, intptr, str16, str16)',
-    ) as unknown as Win32API['FindWindowExW'],
+    FindWindowW: user32.func('intptr __stdcall FindWindowW(str16, str16)') as never,
+    FindWindowExW: user32.func('intptr __stdcall FindWindowExW(intptr, intptr, str16, str16)') as never,
     SendMessageTimeoutW: user32.func(
       'intptr __stdcall SendMessageTimeoutW(intptr, uint, uintptr, intptr, uint, uint, void*)',
-    ) as unknown as Win32API['SendMessageTimeoutW'],
-    SetParent: user32.func('intptr __stdcall SetParent(intptr, intptr)') as unknown as Win32API['SetParent'],
-    SetWindowPos: user32.func(
-      'bool __stdcall SetWindowPos(intptr, intptr, int, int, int, int, uint)',
-    ) as unknown as Win32API['SetWindowPos'],
-    MoveWindow: user32.func(
-      'bool __stdcall MoveWindow(intptr, int, int, int, int, bool)',
-    ) as unknown as Win32API['MoveWindow'],
-    GetWindowRect: user32.func('bool __stdcall GetWindowRect(intptr, void*)') as unknown as Win32API['GetWindowRect'],
-    ShowWindow: user32.func('bool __stdcall ShowWindow(intptr, int)') as unknown as Win32API['ShowWindow'],
-    GetWindowLongPtrW: user32.func(
-      'intptr __stdcall GetWindowLongPtrW(intptr, int)',
-    ) as unknown as Win32API['GetWindowLongPtrW'],
-    SetWindowLongPtrW: user32.func(
-      'intptr __stdcall SetWindowLongPtrW(intptr, int, intptr)',
-    ) as unknown as Win32API['SetWindowLongPtrW'],
-    ScreenToClient: user32.func('bool __stdcall ScreenToClient(intptr, void*)') as unknown as Win32API['ScreenToClient'],
-    IsWindow: user32.func('bool __stdcall IsWindow(intptr)') as unknown as Win32API['IsWindow'],
-    GetDpiForWindow: user32.func('uint __stdcall GetDpiForWindow(intptr)') as unknown as Win32API['GetDpiForWindow'],
+    ) as never,
+    SendMessageW: user32.func('intptr __stdcall SendMessageW(intptr, uint, uintptr, intptr)') as never,
+    PostMessageW: user32.func('bool __stdcall PostMessageW(intptr, uint, uintptr, intptr)') as never,
+    SetParent: user32.func('intptr __stdcall SetParent(intptr, intptr)') as never,
+    SetWindowPos: user32.func('bool __stdcall SetWindowPos(intptr, intptr, int, int, int, int, uint)') as never,
+    MoveWindow: user32.func('bool __stdcall MoveWindow(intptr, int, int, int, int, bool)') as never,
+    GetWindowRect: user32.func('bool __stdcall GetWindowRect(intptr, void*)') as never,
+    ShowWindow: user32.func('bool __stdcall ShowWindow(intptr, int)') as never,
+    GetWindowLongPtrW: user32.func('intptr __stdcall GetWindowLongPtrW(intptr, int)') as never,
+    SetWindowLongPtrW: user32.func('intptr __stdcall SetWindowLongPtrW(intptr, int, intptr)') as never,
+    ScreenToClient: user32.func('bool __stdcall ScreenToClient(intptr, void*)') as never,
+    WindowFromPoint: user32.func('intptr __stdcall WindowFromPoint(int64)') as never,
+    IsWindow: user32.func('bool __stdcall IsWindow(intptr)') as never,
+    GetDpiForWindow: user32.func('uint __stdcall GetDpiForWindow(intptr)') as never,
+    GetWindowThreadProcessId: user32.func('uint __stdcall GetWindowThreadProcessId(intptr, void*)') as never,
+    SetWindowsHookExW: user32.func('intptr __stdcall SetWindowsHookExW(int, LLHookProc*, intptr, uint)') as never,
+    UnhookWindowsHookEx: user32.func('bool __stdcall UnhookWindowsHookEx(intptr)') as never,
+    CallNextHookEx: user32.func('intptr __stdcall CallNextHookEx(intptr, int, uintptr, void*)') as never,
+    GetModuleHandleW: kernel32.func('intptr __stdcall GetModuleHandleW(str16)') as never,
+    OpenProcess: kernel32.func('intptr __stdcall OpenProcess(uint, bool, uint)') as never,
+    VirtualAllocEx: kernel32.func('intptr __stdcall VirtualAllocEx(intptr, intptr, uintptr, uint, uint)') as never,
+    VirtualFreeEx: kernel32.func('bool __stdcall VirtualFreeEx(intptr, intptr, uintptr, uint)') as never,
+    WriteProcessMemory: kernel32.func(
+      'bool __stdcall WriteProcessMemory(intptr, intptr, void*, uintptr, intptr)',
+    ) as never,
+    CloseHandle: kernel32.func('bool __stdcall CloseHandle(intptr)') as never,
   };
   return cachedApi;
 }
@@ -135,13 +198,25 @@ function createPointBuffer(x: number, y: number): Buffer {
   return buf;
 }
 
-// ─── Desktop layer 탐색 ──────────────────────────────────────────────────────
+function packPoint(x: number, y: number): bigint {
+  return BigInt((((y & 0xffff) << 16) | (x & 0xffff)) >>> 0);
+}
 
+// ─── Desktop layer 탐색 ──────────────────────────────────────────────────────
 interface DesktopHandles {
   progman: number;
   workerW: number;
   defView: number | null;
-  source: 'after-defview' | 'progman-child' | 'unresolved';
+  listView: number | null;
+}
+
+function findListViewFromDefView(defView: number): number | null {
+  const a = getApi();
+  return (
+    a.FindWindowExW(defView, 0, 'SysListView32', 'FolderView') ||
+    a.FindWindowExW(defView, 0, 'SysListView32', null) ||
+    null
+  );
 }
 
 function findDesktopHandles(ensureWorkerLayer: boolean): DesktopHandles | null {
@@ -162,11 +237,10 @@ function findDesktopHandles(ensureWorkerLayer: boolean): DesktopHandles | null {
     );
   }
 
-  let resolvedDefView: number | null =
-    a.FindWindowExW(progman, 0, 'SHELLDLL_DefView', null) || null;
+  let resolvedDefView: number | null = a.FindWindowExW(progman, 0, 'SHELLDLL_DefView', null) || null;
+  let resolvedListView: number | null = resolvedDefView ? findListViewFromDefView(resolvedDefView) : null;
   let shellWorkerW: number | null = null;
   let resolvedWorker: number | null = null;
-  let source: DesktopHandles['source'] = 'unresolved';
 
   let cursor = 0;
   while (true) {
@@ -177,26 +251,23 @@ function findDesktopHandles(ensureWorkerLayer: boolean): DesktopHandles | null {
     shellWorkerW = cursor;
     if (!resolvedDefView) {
       resolvedDefView = workerDefView;
+      resolvedListView = findListViewFromDefView(workerDefView);
     }
     const after = a.FindWindowExW(0, cursor, 'WorkerW', null);
     if (after) {
       resolvedWorker = after;
-      source = 'after-defview';
       break;
     }
   }
 
-  // fallback: progman 직속 WorkerW 자식 (Windows 11 일부 환경)
   if (!resolvedWorker) {
     const progmanChild = a.FindWindowExW(progman, 0, 'WorkerW', null);
-    if (progmanChild) {
-      resolvedWorker = progmanChild;
-      source = 'progman-child';
-    }
+    if (progmanChild) resolvedWorker = progmanChild;
   }
 
   if (!resolvedDefView && shellWorkerW) {
     resolvedDefView = a.FindWindowExW(shellWorkerW, 0, 'SHELLDLL_DefView', null) || null;
+    resolvedListView = resolvedDefView ? findListViewFromDefView(resolvedDefView) : null;
   }
 
   if (!resolvedWorker) return null;
@@ -204,33 +275,281 @@ function findDesktopHandles(ensureWorkerLayer: boolean): DesktopHandles | null {
     progman,
     workerW: resolvedWorker,
     defView: resolvedDefView,
-    source,
+    listView: resolvedListView,
   };
 }
 
-// ─── Public API (Phase 2.2 — hook 제거된 버전) ───────────────────────────────
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+/**
+ * widget-mousemove / widget-wheel / widget-mouseleave 콜백 — main process 측에서
+ * webContents.send 로 forward 한다.
+ */
+export interface WidgetMouseEventHandlers {
+  onMouseMove: (clientX: number, clientY: number) => void;
+  onMouseWheel: (clientX: number, clientY: number, deltaY: number) => void;
+  onMouseLeave: () => void;
+}
 
 export interface Win32WidgetController {
-  /**
-   * 대상 BrowserWindow 를 데스크톱 WorkerW 레이어에 attach 한다.
-   *
-   * 호출자 책임:
-   *   - 일반적으로 desktopZoneWindow (transparent fullscreen) 를 전달.
-   *   - 메인 widgetWindow 는 전달하지 않는다 (Phase 2.1 의 커서 freeze 결함 때문).
-   */
-  enable(window: BrowserWindow): { ok: true } | { ok: false; reason: string };
+  enable(window: BrowserWindow, handlers: WidgetMouseEventHandlers): { ok: true } | { ok: false; reason: string };
   disable(window: BrowserWindow | null): void;
   isAttached(): boolean;
+  /** 위젯이 이동/리사이즈 됐을 때 caching 된 widget rect 갱신을 강제. */
+  refreshWidgetBounds(): void;
 }
 
 export function createWin32WidgetController(): Win32WidgetController {
   let attachedHwnd: number | null = null;
   let workerWHwnd: number | null = null;
+  let progmanHwnd: number | null = null;
+  let defViewHwnd: number | null = null;
+  let listViewHwnd: number | null = null;
   let savedStyle: number | null = null;
   let savedExStyle: number | null = null;
+  let mouseHook: number | null = null;
+  let hookCbToken: unknown = null;
+  let widgetRect = { left: 0, top: 0, right: 0, bottom: 0 };
+  let buttonMask = 0;
+  let externalDrag = false;
+  let widgetHovering = false;
+  let boundsTimer: ReturnType<typeof setInterval> | null = null;
+  let handlersRef: WidgetMouseEventHandlers | null = null;
+
+  // explorer.exe 원격 메모리 (LVM_HITTEST 용)
+  let explorerProcessHandle = 0;
+  let remoteHitTestInfo = 0;
+  let lastHitTest = { x: 0, y: 0, result: false, ts: 0, valid: false };
+
+  const refreshBounds = (): void => {
+    if (!attachedHwnd) return;
+    const a = getApi();
+    const rect = Buffer.alloc(16);
+    if (!a.GetWindowRect(attachedHwnd, rect)) return;
+    widgetRect.left = rect.readInt32LE(0);
+    widgetRect.top = rect.readInt32LE(4);
+    widgetRect.right = rect.readInt32LE(8);
+    widgetRect.bottom = rect.readInt32LE(12);
+  };
+
+  const isPointInWidget = (x: number, y: number): boolean =>
+    x >= widgetRect.left && x < widgetRect.right && y >= widgetRect.top && y < widgetRect.bottom;
+
+  const isDesktopOrWidgetHwnd = (hwnd: number): boolean => {
+    if (!hwnd) return true;
+    if (hwnd === attachedHwnd) return true;
+    if (hwnd === progmanHwnd || hwnd === workerWHwnd) return true;
+    if (hwnd === defViewHwnd || hwnd === listViewHwnd) return true;
+    return false;
+  };
+
+  const ensureHitTestResources = (): boolean => {
+    if (!listViewHwnd) return false;
+    if (explorerProcessHandle && remoteHitTestInfo) return true;
+    const a = getApi();
+    const pidBuf = Buffer.alloc(4);
+    a.GetWindowThreadProcessId(listViewHwnd, pidBuf);
+    const pid = pidBuf.readUInt32LE(0);
+    if (!pid) return false;
+    const proc = a.OpenProcess(
+      PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE,
+      false,
+      pid,
+    );
+    if (!proc) return false;
+    const remote = a.VirtualAllocEx(
+      proc,
+      0,
+      HITTEST_BUFFER_SIZE,
+      MEM_COMMIT | MEM_RESERVE,
+      PAGE_READWRITE,
+    );
+    if (!remote) {
+      a.CloseHandle(proc);
+      return false;
+    }
+    explorerProcessHandle = proc;
+    remoteHitTestInfo = remote;
+    return true;
+  };
+
+  const cleanupHitTestResources = (): void => {
+    const a = getApi();
+    if (remoteHitTestInfo && explorerProcessHandle) {
+      try {
+        a.VirtualFreeEx(explorerProcessHandle, remoteHitTestInfo, 0, MEM_RELEASE);
+      } catch {
+        /* swallow */
+      }
+    }
+    if (explorerProcessHandle) {
+      try {
+        a.CloseHandle(explorerProcessHandle);
+      } catch {
+        /* swallow */
+      }
+    }
+    explorerProcessHandle = 0;
+    remoteHitTestInfo = 0;
+    lastHitTest.valid = false;
+  };
+
+  const isDesktopIconAtPoint = (screenX: number, screenY: number): boolean => {
+    if (!listViewHwnd) return false;
+    if (!ensureHitTestResources()) return false;
+    const now = Date.now();
+    if (lastHitTest.valid && lastHitTest.x === screenX && lastHitTest.y === screenY && now - lastHitTest.ts < HITTEST_CACHE_MS) {
+      return lastHitTest.result;
+    }
+    const a = getApi();
+    // ListView client 좌표로 변환
+    const point = createPointBuffer(screenX, screenY);
+    if (!a.ScreenToClient(listViewHwnd, point)) return false;
+    const clientX = point.readInt32LE(0);
+    const clientY = point.readInt32LE(4);
+    // LVHITTESTINFO 작성 (POINT pt, 나머지는 ZeroMemory)
+    const info = Buffer.alloc(HITTEST_BUFFER_SIZE);
+    info.writeInt32LE(clientX, 0);
+    info.writeInt32LE(clientY, 4);
+    if (!a.WriteProcessMemory(explorerProcessHandle, remoteHitTestInfo, info, HITTEST_BUFFER_SIZE, BigInt(0))) {
+      return false;
+    }
+    const hitIndex = Number(a.SendMessageW(listViewHwnd, LVM_HITTEST, BigInt(0), BigInt(remoteHitTestInfo)));
+    const result = hitIndex >= 0;
+    lastHitTest = { x: screenX, y: screenY, result, ts: now, valid: true };
+    return result;
+  };
+
+  const installHook = (): boolean => {
+    if (mouseHook) return true;
+    if (!koffiRef) return false;
+    const a = getApi();
+
+    const hookFn = (nCode: number, wParam: bigint, lParam: bigint): bigint => {
+      const passThrough = (): bigint => BigInt(a.CallNextHookEx(mouseHook ?? 0, nCode, wParam, lParam));
+      try {
+        if (nCode < 0 || !attachedHwnd) return passThrough();
+        const msg = Number(wParam);
+        const isMove = msg === WM_MOUSEMOVE;
+        const isDown = msg === WM_LBUTTONDOWN || msg === WM_RBUTTONDOWN;
+        const isUp = msg === WM_LBUTTONUP || msg === WM_RBUTTONUP;
+        const isWheel = msg === WM_MOUSEWHEEL;
+        if (!isMove && !isDown && !isUp && !isWheel) return passThrough();
+
+        const screenX = koffiRef!.decode(lParam, 0, 'int32') as number;
+        const screenY = koffiRef!.decode(lParam, 4, 'int32') as number;
+        const mouseData = koffiRef!.decode(lParam, 8, 'uint32') as number;
+        const inWidget = isPointInWidget(screenX, screenY);
+
+        if (isDown && msg === WM_LBUTTONDOWN) buttonMask |= MK_LBUTTON;
+        if (isDown && msg === WM_RBUTTONDOWN) buttonMask |= MK_RBUTTON;
+        if (isUp && msg === WM_LBUTTONUP) buttonMask &= ~MK_LBUTTON;
+        if (isUp && msg === WM_RBUTTONUP) buttonMask &= ~MK_RBUTTON;
+
+        // externalDrag: explorer 가 드래그 중이면 mouse-up 까지 위젯이 입을 닫음
+        if (isUp && externalDrag) {
+          externalDrag = false;
+          return passThrough();
+        }
+        if (externalDrag) return passThrough();
+
+        if (!inWidget) {
+          if (widgetHovering) {
+            widgetHovering = false;
+            handlersRef?.onMouseLeave();
+          }
+          return passThrough();
+        }
+
+        // 위젯 영역 안 — 폴더 hit-test
+        if (isDesktopIconAtPoint(screenX, screenY)) {
+          if (isDown) {
+            externalDrag = true;
+          }
+          if (widgetHovering) {
+            widgetHovering = false;
+            handlersRef?.onMouseLeave();
+          }
+          return passThrough(); // explorer 가 폴더 클릭/드래그 처리 ⭐
+        }
+
+        // 위젯 영역 + 빈 공간
+        const cpBuf = createPointBuffer(screenX, screenY);
+        if (!a.ScreenToClient(attachedHwnd, cpBuf)) return passThrough();
+        const cx = cpBuf.readInt32LE(0);
+        const cy = cpBuf.readInt32LE(4);
+
+        if (isMove) {
+          widgetHovering = true;
+          handlersRef?.onMouseMove(cx, cy);
+          // move 는 시스템에 양보 (return 1 하면 OS pipeline 죽어 커서 freeze)
+          return passThrough();
+        }
+        if (isWheel) {
+          // wheel data 의 high word 가 deltaY (signed)
+          const rawDelta = (mouseData >>> 16) & 0xffff;
+          const deltaY = rawDelta > 32767 ? rawDelta - 65536 : rawDelta;
+          handlersRef?.onMouseWheel(cx, cy, deltaY);
+          // wheel 도 시스템에 양보 (재차)
+          return passThrough();
+        }
+        // click — PostMessage 로 위젯에 강제 전달 (위젯이 WorkerW 자식이라 일반 라우팅 끊김)
+        // WindowFromPoint 검증으로 다른 앱 창이 위에 있으면 양보
+        const hwndAt = a.WindowFromPoint(packPoint(screenX, screenY));
+        if (!isDesktopOrWidgetHwnd(hwndAt)) {
+          return passThrough();
+        }
+        a.PostMessageW(attachedHwnd, msg, BigInt(buttonMask & 0xffff), packPoint(cx, cy));
+        return 1n; // 시스템 처리 차단 — 같은 click 이 두 번 가지 않게
+      } catch {
+        return passThrough();
+      }
+    };
+
+    hookCbToken = koffiRef.register(hookFn, koffiRef.pointer('LLHookProc'));
+    mouseHook = a.SetWindowsHookExW(WH_MOUSE_LL, hookCbToken, 0, 0);
+    if (!mouseHook) {
+      try {
+        koffiRef.unregister(hookCbToken as never);
+      } catch {
+        /* swallow */
+      }
+      hookCbToken = null;
+      return false;
+    }
+    boundsTimer = setInterval(refreshBounds, 120);
+    return true;
+  };
+
+  const uninstallHook = (): void => {
+    const a = getApi();
+    if (boundsTimer) {
+      clearInterval(boundsTimer);
+      boundsTimer = null;
+    }
+    if (mouseHook) {
+      try {
+        a.UnhookWindowsHookEx(mouseHook);
+      } catch {
+        /* swallow */
+      }
+      mouseHook = null;
+    }
+    if (hookCbToken && koffiRef) {
+      try {
+        koffiRef.unregister(hookCbToken as never);
+      } catch {
+        /* swallow */
+      }
+      hookCbToken = null;
+    }
+    buttonMask = 0;
+    externalDrag = false;
+    widgetHovering = false;
+  };
 
   return {
-    enable(window: BrowserWindow): { ok: true } | { ok: false; reason: string } {
+    enable(window: BrowserWindow, handlers: WidgetMouseEventHandlers): { ok: true } | { ok: false; reason: string } {
       try {
         getApi();
       } catch {
@@ -238,31 +557,26 @@ export function createWin32WidgetController(): Win32WidgetController {
       }
       try {
         const handles = findDesktopHandles(true);
-        if (!handles) {
-          return { ok: false, reason: 'workerw-not-found' };
-        }
+        if (!handles) return { ok: false, reason: 'workerw-not-found' };
+        progmanHwnd = handles.progman;
         workerWHwnd = handles.workerW;
+        defViewHwnd = handles.defView;
+        listViewHwnd = handles.listView;
 
         const buf = window.getNativeWindowHandle();
         const hwnd = decodeHwndFromBuffer(buf);
-        if (!hwnd) {
-          return { ok: false, reason: 'widget-not-ready' };
-        }
+        if (!hwnd) return { ok: false, reason: 'widget-not-ready' };
+
         const a = getApi();
         savedStyle = Number(a.GetWindowLongPtrW(hwnd, GWL_STYLE));
         savedExStyle = Number(a.GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
 
-        // attach 전 screen rect
         const beforeRect = getWindowScreenRect(hwnd);
 
-        // SetParent → 좌표계가 WorkerW client 로 변경
         const setParentResult = a.SetParent(hwnd, workerWHwnd);
-        if (!setParentResult) {
-          return { ok: false, reason: 'set-parent-failed' };
-        }
+        if (!setParentResult) return { ok: false, reason: 'set-parent-failed' };
         a.ShowWindow(hwnd, SW_SHOW);
 
-        // WorkerW client 좌표로 위치 보정
         if (beforeRect) {
           const point = createPointBuffer(beforeRect.x, beforeRect.y);
           if (a.ScreenToClient(workerWHwnd, point)) {
@@ -271,10 +585,27 @@ export function createWin32WidgetController(): Win32WidgetController {
             a.MoveWindow(hwnd, clientX, clientY, beforeRect.width, beforeRect.height, true);
           }
         }
-        // workerW 안에서 최상단 → 데스크톱 아이콘은 그 위 WorkerW(DefView)에 있어 자연스럽게 떠 보임
         a.SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
         attachedHwnd = hwnd;
+        handlersRef = handlers;
+        refreshBounds();
+        // explorer 원격 메모리 lazy 할당 — 첫 hit-test 호출 시 ensureHitTestResources 가 자동
+        if (!installHook()) {
+          a.SetParent(hwnd, 0);
+          if (savedStyle !== null) a.SetWindowLongPtrW(hwnd, GWL_STYLE, savedStyle);
+          if (savedExStyle !== null) a.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, savedExStyle);
+          a.ShowWindow(hwnd, SW_SHOW);
+          attachedHwnd = null;
+          workerWHwnd = null;
+          defViewHwnd = null;
+          listViewHwnd = null;
+          progmanHwnd = null;
+          savedStyle = null;
+          savedExStyle = null;
+          handlersRef = null;
+          return { ok: false, reason: 'hook-install-failed' };
+        }
         return { ok: true };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -284,10 +615,16 @@ export function createWin32WidgetController(): Win32WidgetController {
     },
 
     disable(window: BrowserWindow | null): void {
+      uninstallHook();
+      cleanupHitTestResources();
       if (!attachedHwnd) {
+        progmanHwnd = null;
         workerWHwnd = null;
+        defViewHwnd = null;
+        listViewHwnd = null;
         savedStyle = null;
         savedExStyle = null;
+        handlersRef = null;
         return;
       }
       const a = getApi();
@@ -317,12 +654,21 @@ export function createWin32WidgetController(): Win32WidgetController {
       }
       attachedHwnd = null;
       workerWHwnd = null;
+      defViewHwnd = null;
+      listViewHwnd = null;
+      progmanHwnd = null;
       savedStyle = null;
       savedExStyle = null;
+      handlersRef = null;
+      widgetRect = { left: 0, top: 0, right: 0, bottom: 0 };
     },
 
     isAttached(): boolean {
       return attachedHwnd !== null && workerWHwnd !== null;
+    },
+
+    refreshWidgetBounds(): void {
+      refreshBounds();
     },
   };
 }

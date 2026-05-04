@@ -175,11 +175,11 @@ export function Widget() {
     void window.electronAPI?.navigateToPage(page);
   }, []);
 
-  // ── 바탕화면 작업판 (v2.1.0~ Windows 전용) ──
-  // Phase 2.2 부터 zone 시각화는 별도 desktopZoneWindow 가 담당. 메인 위젯에서는
-  // fallback 토스트만 구독한다.
+  // ── 바탕화면 작업판 (Phase 3.0: 외부 데스크톱 위젯 패턴) ──
+  // 위젯이 WorkerW 자식이 되면 일반 mouse 라우팅이 끊김 → main 의 hook 이 IPC 로
+  // mousemove 좌표 forward → 본 hook 이 가상 hover 시뮬레이션 (.group:hover 트릭).
 
-  // native-desktop 진입 실패 시 main 이 보내는 fallback 알림 구독.
+  // native-desktop 진입 실패 시 fallback 토스트
   useEffect(() => {
     const unsubscribe = window.electronAPI?.desktopIconZones?.onFallback?.((payload) => {
       console.log('[widget] native-desktop fallback', payload);
@@ -194,15 +194,91 @@ export function Widget() {
         'unknown': '바탕화면 작업판 진입 중 알 수 없는 오류가 발생했습니다.',
       };
       const message = reasonMessage[payload.reason] ?? '바탕화면 작업판을 사용할 수 없습니다.';
-      // dynamic import 로 toast 모듈 lazy 로드 (icon-mode 와 동일 패턴)
       void import('@adapters/components/common/Toast').then((m) => {
         m.useToastStore.getState().show(message, 'info');
       }).catch(() => {
-        // toast 모듈 로드 실패는 silent — 로그는 위에 이미 남김
+        /* swallow */
       });
     });
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
+  // 가상 hover 시뮬레이션 — 외부 데스크톱 위젯 패턴 그대로.
+  // CSS 의 `.group:hover` 규칙을 모아 `.group[data-wh]` 로 복제 → mouse-move IPC 받아
+  // closest('.group') 에 data-wh 속성 토글 + synthetic mouseenter/leave dispatch.
+  useEffect(() => {
+    const api = window.electronAPI?.desktopIconZones;
+    if (!api?.onWidgetMouseMove || !api?.onWidgetMouseLeave) return;
+
+    let lastHoveredGroup: Element | null = null;
+    let styleInjected = false;
+
+    const injectHoverCSS = (): void => {
+      if (styleInjected) return;
+      const css: string[] = [];
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          for (let i = 0; i < sheet.cssRules.length; i++) {
+            const rule = sheet.cssRules[i];
+            if (rule && 'cssText' in rule && rule.cssText.includes('.group:hover')) {
+              css.push(rule.cssText.replace(/\.group:hover/g, '.group[data-wh]'));
+            }
+          }
+        } catch {
+          /* CORS 차단된 sheet 무시 */
+        }
+      }
+      if (css.length === 0) return;
+      const style = document.createElement('style');
+      style.id = 'widget-hover-rules';
+      style.textContent = css.join('\n');
+      document.head.appendChild(style);
+      styleInjected = true;
+    };
+
+    const clearHover = (): void => {
+      if (lastHoveredGroup) {
+        lastHoveredGroup.removeAttribute('data-wh');
+        lastHoveredGroup.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        lastHoveredGroup = null;
+      }
+    };
+
+    const handleMove = ({ x, y }: { x: number; y: number }): void => {
+      if (!styleInjected) injectHoverCSS();
+      const dpr = window.devicePixelRatio || 1;
+      const el = document.elementFromPoint(x / dpr, y / dpr);
+      if (!el) {
+        if (lastHoveredGroup) clearHover();
+        return;
+      }
+      const group = el.closest('.group');
+      if (group !== lastHoveredGroup) {
+        if (lastHoveredGroup) {
+          lastHoveredGroup.removeAttribute('data-wh');
+          lastHoveredGroup.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        }
+        lastHoveredGroup = group;
+        if (group) {
+          group.setAttribute('data-wh', '');
+          group.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+        }
+      }
+    };
+
+    // CSS 규칙 수집은 첫 페인트 후 충분히 모인 시점에 — 2 sec 후
+    const timer = window.setTimeout(injectHoverCSS, 2000);
+    const unsubMove = api.onWidgetMouseMove(handleMove);
+    const unsubLeave = api.onWidgetMouseLeave(clearHover);
+    return () => {
+      window.clearTimeout(timer);
+      unsubMove?.();
+      unsubLeave?.();
+      clearHover();
+      document.getElementById('widget-hover-rules')?.remove();
+      styleInjected = false;
     };
   }, []);
 
