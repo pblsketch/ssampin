@@ -47,12 +47,6 @@ let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let quickAddWindow: BrowserWindow | null = null;
 let stickerPickerWindow: BrowserWindow | null = null;
-/**
- * @deprecated Phase 3.0 부터 메인 widgetWindow 자체가 WorkerW 에 attach 되며,
- * 별도 zoneWindow 는 사용하지 않는다 (좌표 IPC + setIgnoreMouseEvents 토글 패턴은
- * 외부 데스크톱 위젯 식 LVM_HITTEST + PostMessageW 로 대체됨). 잔존 변수는 호환용.
- */
-const desktopZoneWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
 let widgetActiveBeforeSleep = false;  // suspend/lock 시점의 스냅샷
 let isSystemSuspending = false;       // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
@@ -786,10 +780,13 @@ function stopIconDrag(reason: IconDragStopReason = 'normal'): void {
     iconDragSafetyTimer = null;
   }
   iconDragState = null;
-  // 위치 영속화
+  // 위치 영속화 + 화면 안 클램프 (v2.0.3 누적 fix — drag 후 화면 밖에 걸려
+  // 다음 click 이 hit 영역 밖으로 가는 케이스 방지). enableLargerThanScreen:true
+  // 라서 가장자리 / 작업표시줄 밖으로 윈도우가 나갈 수 있다.
   if (iconWindow && !iconWindow.isDestroyed()) {
     const b = iconWindow.getBounds();
     saveIconBounds({ x: b.x, y: b.y, width: ICON_SIZE, height: ICON_SIZE });
+    if (reason !== 'restart') ensureIconOnScreen();
   }
   if (wasActive && reason !== 'normal' && reason !== 'restart') {
     console.warn(`[icon] drag stopped via ${reason}`);
@@ -895,9 +892,17 @@ function buildIconWindow(): void {
     iconWindow.setOpacity(0);
   });
 
-  // v2.0.3 drag 안전망 — focus 박탈 / hide 시 진행 중인 drag 폴링 자동 종료
-  // (renderer pointerup/cancel 이 누락되는 path 를 잡는다)
-  iconWindow.on('blur', () => stopIconDrag('blur'));
+  // v2.0.3 drag 안전망 — `hide` 이벤트만 신뢰.
+  //
+  //   `blur` 는 절대 사용하지 않는다 (누적 정밀도 침식의 결정적 원인).
+  //   원인: transparent + frameless 윈도우는 setBounds 호출마다 OS 가 focus 합성을
+  //   재계산하면서 blur 이벤트를 broadcast 한다. 즉 드래그 진행 중에도 blur 가
+  //   끊임없이 발사되어 stopIconDrag('blur') 가 setInterval 을 죽이고, 그 사이
+  //   사용자의 pointermove 가 들어오면 다음 드래그가 갑자기 멈춘다.
+  //   "10번 정도 드래그하면 그 후부터 안 됨" 의 정확한 누적 패턴.
+  //
+  //   대신 'hide' 만 사용 — hide 는 사용자가 명시적으로 아이콘 모드를 종료하거나
+  //   icon:expand 로 widget/main 으로 전환할 때만 발사되므로 safe.
   iconWindow.on('hide', () => stopIconDrag('blur'));
 
   iconWindow.on('closed', () => {
@@ -1504,7 +1509,6 @@ function recreateWidget(): void {
   // 기존 위젯 정리
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     stopWinDRecovery();
-    destroyDesktopZoneWindow();
     widgetWindow.destroy();
   }
   widgetWindow = null;
@@ -1648,7 +1652,6 @@ function createWidgetWindow(
   widgetWindow.on('closed', () => {
     console.log(`[diag] widget closed — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}`);
     stopWinDRecovery();
-    destroyDesktopZoneWindow();
     widgetWindow = null;
     currentDesktopMode = 'normal';
     if (!isQuitting && !isSystemSuspending) {

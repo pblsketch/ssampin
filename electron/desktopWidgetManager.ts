@@ -10,11 +10,13 @@
  * 보안: 외부 통신 0건, koffi (prebuilt FFI) + user32/kernel32 만 사용.
  */
 
-import type { BrowserWindow } from 'electron';
+import { screen, type BrowserWindow } from 'electron';
 import type {
   DesktopIconZoneBounds,
   DesktopWidgetModeStatus,
 } from './desktopIconZoneTypes';
+import type { WidgetDragStartInfo } from './platform/win32Desktop';
+import { getMouseApi } from './platform/win32Mouse';
 
 export interface DesktopWidgetManager {
   /**
@@ -102,6 +104,121 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
   let attachedWindow: import('electron').BrowserWindow | null = null;
   let dragEndCallback: (() => void) | null = null;
 
+  // ─── Polling drag/resize 매니저 (icon-mode 패턴) ───
+  // hook 이 헤더/엣지 LBUTTONDOWN 을 감지해 onDragStart 로 전달하면 16ms setInterval 로
+  // win32Mouse.isLeftButtonDown 으로 release 감지 + screen.getCursorScreenPoint 로 cursor 추적
+  // → setWidgetBoundsScreen 으로 위젯 이동/리사이즈. release 감지 시 자동 종료.
+  const MIN_WIDGET_W = 300;
+  const MIN_WIDGET_H = 200;
+  let dragInterval: ReturnType<typeof setInterval> | null = null;
+  let activeDrag: WidgetDragStartInfo | null = null;
+
+  function computeDragBounds(
+    info: WidgetDragStartInfo,
+    cursorX: number,
+    cursorY: number,
+  ): { x: number; y: number; width: number; height: number } {
+    const dx = cursorX - info.startScreenX;
+    const dy = cursorY - info.startScreenY;
+    let left = info.startRect.x;
+    let top = info.startRect.y;
+    let right = info.startRect.x + info.startRect.width;
+    let bottom = info.startRect.y + info.startRect.height;
+    switch (info.kind) {
+      case 'move':
+        left += dx;
+        top += dy;
+        right += dx;
+        bottom += dy;
+        break;
+      case 'resize-n':
+        top += dy;
+        break;
+      case 'resize-s':
+        bottom += dy;
+        break;
+      case 'resize-e':
+        right += dx;
+        break;
+      case 'resize-w':
+        left += dx;
+        break;
+      case 'resize-ne':
+        top += dy;
+        right += dx;
+        break;
+      case 'resize-nw':
+        top += dy;
+        left += dx;
+        break;
+      case 'resize-se':
+        bottom += dy;
+        right += dx;
+        break;
+      case 'resize-sw':
+        bottom += dy;
+        left += dx;
+        break;
+    }
+    // 최소 크기 강제
+    if (right - left < MIN_WIDGET_W) {
+      if (info.kind.includes('w')) left = right - MIN_WIDGET_W;
+      else right = left + MIN_WIDGET_W;
+    }
+    if (bottom - top < MIN_WIDGET_H) {
+      if (info.kind.includes('n')) top = bottom - MIN_WIDGET_H;
+      else bottom = top + MIN_WIDGET_H;
+    }
+    return { x: left, y: top, width: right - left, height: bottom - top };
+  }
+
+  function stopDragPolling(reason: string): void {
+    if (dragInterval) {
+      clearInterval(dragInterval);
+      dragInterval = null;
+    }
+    activeDrag = null;
+    console.log('[desktopWidgetManager] drag polling stopped:', reason);
+    const cb = dragEndCallback;
+    if (cb) {
+      try {
+        cb();
+      } catch (e) {
+        console.error('[desktopWidgetManager] dragEnd callback error', e);
+      }
+    }
+  }
+
+  function startDragPolling(info: WidgetDragStartInfo): void {
+    if (dragInterval) {
+      clearInterval(dragInterval);
+      dragInterval = null;
+    }
+    activeDrag = info;
+    console.log('[desktopWidgetManager] drag polling start:', info);
+    const mouseApi = getMouseApi();
+    dragInterval = setInterval(() => {
+      if (!activeDrag) {
+        if (dragInterval) clearInterval(dragInterval);
+        dragInterval = null;
+        return;
+      }
+      // ★ 결정적 release 감지: Win32 GetAsyncKeyState 가 truth source.
+      if (!mouseApi.isLeftButtonDown()) {
+        stopDragPolling('mouseup-detected');
+        return;
+      }
+      try {
+        const cur = screen.getCursorScreenPoint();
+        const next = computeDragBounds(activeDrag, cur.x, cur.y);
+        controller.setWidgetBoundsScreen(next.x, next.y, next.width, next.height);
+      } catch (e) {
+        console.error('[desktopWidgetManager] drag tick error', e);
+        stopDragPolling('tick-error');
+      }
+    }, 16);
+  }
+
   const buildHandlers = (window: import('electron').BrowserWindow) => ({
     onMouseMove: (clientX: number, clientY: number) => {
       // hook 콜백 안에서 직접 Electron API 호출 시 타이밍/스레드 이슈가 있어 setImmediate.
@@ -137,8 +254,17 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
         }
       });
     },
+    onDragStart: (info: WidgetDragStartInfo) => {
+      // hook 콜백 스레드에서 startDragPolling 직접 호출 가능. (이미 setImmediate 로 dispatch 됨.)
+      startDragPolling(info);
+    },
     onDragEnd: () => {
-      // hook 콜백 스레드에서 직접 main 의 IPC/저장 로직을 부르면 위험 — setImmediate 로 디퍼.
+      // hook 이 LBUTTONUP 감지 시 호출 — polling 매니저에 즉시 전달 + dragEndCallback 호출.
+      // (polling 매니저도 win32Mouse 로 자체 release 감지하므로 양쪽 어느 쪽이 먼저 와도 OK)
+      if (activeDrag !== null) {
+        stopDragPolling('hook-buttonup');
+        return;
+      }
       const cb = dragEndCallback;
       if (!cb) return;
       setImmediate(() => {
@@ -178,6 +304,12 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
     },
 
     disable(): void {
+      // 진행 중 polling drag 가 있으면 먼저 정리
+      if (dragInterval) {
+        clearInterval(dragInterval);
+        dragInterval = null;
+      }
+      activeDrag = null;
       try {
         controller.disable(attachedWindow);
       } catch (e) {
