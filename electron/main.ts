@@ -577,7 +577,12 @@ function scheduleWidgetBoundsSave(): void {
   }
   savePositionTimer = setTimeout(() => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
-      const bounds = widgetWindow.getBounds();
+      // attach 상태에서는 widgetWindow.getBounds() 가 WorkerW client 좌표계로 보정되므로,
+      // 다음 실행 복원 시 좌표가 어긋난다. desktopWidgetManager 가 screen 좌표를 우선 제공.
+      const inAttach = currentDesktopMode === 'native-desktop' && desktopWidgetManager.isEnabled();
+      const bounds = inAttach
+        ? desktopWidgetManager.getWidgetBoundsScreen() ?? widgetWindow.getBounds()
+        : widgetWindow.getBounds();
       saveWidgetBounds(bounds);
     }
     savePositionTimer = null;
@@ -1707,6 +1712,10 @@ async function applyDesktopModeRuntime(
       break;
     case 'native-desktop': {
       widget.setAlwaysOnTop(false);
+      // 헤더 드래그 종료 시 새 bounds 를 settings 에 저장 (widgetWindow.on('move') 미발동 보완)
+      desktopWidgetManager.onDragEnd(() => {
+        scheduleWidgetBoundsSave();
+      });
       const status = await desktopWidgetManager.enable(widget);
       if (status.ok) {
         console.log('[widget] native-desktop attach 성공 (외부 데스크톱 위젯 패턴)');
@@ -2049,13 +2058,16 @@ function registerIpcHandlers(): void {
   ipcMain.handle('window:setWidgetLayout', (_event, mode: string): void => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
+    const inAttach = currentDesktopMode === 'native-desktop' && desktopWidgetManager.isEnabled();
     // 위젯이 현재 위치한 모니터의 작업 영역을 사용 (다중 모니터 지원)
-    const currentBounds = widgetWindow.getBounds();
+    const currentBounds = inAttach
+      ? desktopWidgetManager.getWidgetBoundsScreen() ?? widgetWindow.getBounds()
+      : widgetWindow.getBounds();
     const workArea = screen.getDisplayMatching(currentBounds).workArea;
 
     // 최초 레이아웃 변경 시 원래 위치/크기 저장 (복원용)
     if (!widgetBoundsBeforeLayout) {
-      widgetBoundsBeforeLayout = widgetWindow.getBounds();
+      widgetBoundsBeforeLayout = currentBounds;
     }
 
     let bounds: { x: number; y: number; width: number; height: number };
@@ -2100,14 +2112,35 @@ function registerIpcHandlers(): void {
       default:
         // 알 수 없는 모드: 원래 크기로 복원
         if (widgetBoundsBeforeLayout) {
-          widgetWindow.setBounds(widgetBoundsBeforeLayout);
+          if (inAttach) {
+            const ok = desktopWidgetManager.setWidgetBoundsScreen(
+              widgetBoundsBeforeLayout.x,
+              widgetBoundsBeforeLayout.y,
+              widgetBoundsBeforeLayout.width,
+              widgetBoundsBeforeLayout.height,
+            );
+            if (!ok) widgetWindow.setBounds(widgetBoundsBeforeLayout);
+          } else {
+            widgetWindow.setBounds(widgetBoundsBeforeLayout);
+          }
           widgetBoundsBeforeLayout = null;
         }
         return;
     }
 
-    widgetWindow.setBounds(bounds);
-    // 레이아웃 변경 후 화면 밖 검증
+    if (inAttach) {
+      const ok = desktopWidgetManager.setWidgetBoundsScreen(
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+      );
+      if (!ok) widgetWindow.setBounds(bounds);
+    } else {
+      widgetWindow.setBounds(bounds);
+    }
+    // 레이아웃 변경 후 화면 밖 검증 (attach 모드에서는 setBounds 가 무의미하지만
+    // ensureWidgetOnScreen 자체가 widgetWindow.getBounds 기반이므로 그대로 호출)
     ensureWidgetOnScreen();
   });
 
@@ -2142,7 +2175,13 @@ function registerIpcHandlers(): void {
   // window:resizeWidget — 위젯 JS 리사이즈 (thickFrame: false 대응)
   ipcMain.handle('window:resizeWidget', (_event, edge: string, dx: number, dy: number) => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
-    const bounds = widgetWindow.getBounds();
+    const inAttach = currentDesktopMode === 'native-desktop' && desktopWidgetManager.isEnabled();
+    // attach 상태에서는 widgetWindow.getBounds() 가 WorkerW client 좌표계로 보정돼 drift 가
+    // 발생한다. desktopWidgetManager.getWidgetBoundsScreen() 으로 screen 좌표를 직접 읽어
+    // 변경 후 setWidgetBoundsScreen 으로 적용한다.
+    const bounds = inAttach
+      ? desktopWidgetManager.getWidgetBoundsScreen() ?? widgetWindow.getBounds()
+      : widgetWindow.getBounds();
 
     const newBounds = { ...bounds };
     if (edge.includes('right'))  newBounds.width = Math.max(300, bounds.width + dx);
@@ -2150,7 +2189,17 @@ function registerIpcHandlers(): void {
     if (edge.includes('left'))   { newBounds.x = bounds.x + dx; newBounds.width = Math.max(300, bounds.width - dx); }
     if (edge.includes('top'))    { newBounds.y = bounds.y + dy; newBounds.height = Math.max(200, bounds.height - dy); }
 
-    widgetWindow.setBounds(newBounds);
+    if (inAttach) {
+      const ok = desktopWidgetManager.setWidgetBoundsScreen(
+        newBounds.x,
+        newBounds.y,
+        newBounds.width,
+        newBounds.height,
+      );
+      if (!ok) widgetWindow.setBounds(newBounds);
+    } else {
+      widgetWindow.setBounds(newBounds);
+    }
     scheduleWidgetBoundsSave();
   });
 
