@@ -289,6 +289,11 @@ export interface WidgetMouseEventHandlers {
   onMouseMove: (clientX: number, clientY: number) => void;
   onMouseWheel: (clientX: number, clientY: number, deltaY: number) => void;
   onMouseLeave: () => void;
+  /**
+   * 위젯 헤더 드래그가 종료될 때 호출 — main 측에서 새 bounds 저장 트리거에 사용.
+   * SetParent 후 widgetWindow.on('move') 가 발동하지 않으므로 직접 통지가 필요하다.
+   */
+  onDragEnd?: () => void;
 }
 
 export interface Win32WidgetController {
@@ -297,6 +302,19 @@ export interface Win32WidgetController {
   isAttached(): boolean;
   /** 위젯이 이동/리사이즈 됐을 때 caching 된 widget rect 갱신을 강제. */
   refreshWidgetBounds(): void;
+  /**
+   * 위젯이 WorkerW 자식인 상태에서 screen 좌표로 이동/리사이즈.
+   * Electron BrowserWindow.setBounds() 와 동일한 logical pixel 단위로 받아
+   * 내부에서 DPI 스케일 + ScreenToClient(workerW) + MoveWindow 로 적용한다.
+   * attach 상태가 아니면 false 반환 (caller 가 일반 setBounds 로 폴백).
+   */
+  setWidgetBoundsScreen(x: number, y: number, width: number, height: number): boolean;
+  /**
+   * 현재 위젯의 screen rect 를 logical pixel 로 반환. attach 상태가 아니면 null.
+   * GetWindowRect 는 부모 관계와 무관하게 screen 좌표를 돌려주므로, 단순히 캐시된
+   * widgetRect 를 DPI 로 나눠 logical 값으로 환산한다.
+   */
+  getWidgetBoundsScreen(): { x: number; y: number; width: number; height: number } | null;
 }
 
 export function createWin32WidgetController(): Win32WidgetController {
@@ -320,6 +338,18 @@ export function createWin32WidgetController(): Win32WidgetController {
   let explorerProcessHandle = 0;
   let remoteHitTestInfo = 0;
   let lastHitTest = { x: 0, y: 0, result: false, ts: 0, valid: false };
+
+  // 헤더 드래그 시뮬레이션 상태 (PR-3c)
+  // SetParent 후 `-webkit-app-region: drag` 가 DWM hit-test 에서 무효화되므로,
+  // hook 의 LBUTTONDOWN 좌표가 widget 상단 60 logical-px 안이면 직접 MoveWindow 로 이동 시뮬레이션.
+  const HEADER_HEIGHT_LOGICAL_PX = 60;
+  let dragMode = false;
+  let dragStartScreenX = 0;
+  let dragStartScreenY = 0;
+  let dragStartClientX = 0;
+  let dragStartClientY = 0;
+  let dragWidth = 0;
+  let dragHeight = 0;
 
   const refreshBounds = (): void => {
     if (!attachedHwnd) return;
@@ -446,6 +476,31 @@ export function createWin32WidgetController(): Win32WidgetController {
         if (isUp && msg === WM_LBUTTONUP) buttonMask &= ~MK_LBUTTON;
         if (isUp && msg === WM_RBUTTONUP) buttonMask &= ~MK_RBUTTON;
 
+        // ── 진행 중 드래그가 있으면 우선 처리 (move/up 모두 가로채 외부 차단)
+        if (dragMode) {
+          if (isMove) {
+            const newClientX = dragStartClientX + (screenX - dragStartScreenX);
+            const newClientY = dragStartClientY + (screenY - dragStartScreenY);
+            a.MoveWindow(attachedHwnd, newClientX, newClientY, dragWidth, dragHeight, true);
+            refreshBounds();
+            return 1n;
+          }
+          if (isUp && msg === WM_LBUTTONUP) {
+            dragMode = false;
+            const cb = handlersRef?.onDragEnd;
+            if (cb) {
+              try {
+                cb();
+              } catch {
+                /* swallow */
+              }
+            }
+            return 1n;
+          }
+          // 드래그 중 다른 버튼/휠 — 모두 차단
+          return 1n;
+        }
+
         // externalDrag: explorer 가 드래그 중이면 mouse-up 까지 위젯이 입을 닫음
         if (isUp && externalDrag) {
           externalDrag = false;
@@ -459,6 +514,33 @@ export function createWin32WidgetController(): Win32WidgetController {
             handlersRef?.onMouseLeave();
           }
           return passThrough();
+        }
+
+        // ── 헤더 영역 LBUTTONDOWN — 헤더 드래그 시작
+        if (isDown && msg === WM_LBUTTONDOWN && workerWHwnd) {
+          let sf = 1;
+          try {
+            const dpi = a.GetDpiForWindow(attachedHwnd) || 96;
+            sf = dpi > 0 ? dpi / 96 : 1;
+          } catch {
+            /* swallow */
+          }
+          const headerPx = Math.round(HEADER_HEIGHT_LOGICAL_PX * sf);
+          const relY = screenY - widgetRect.top;
+          if (relY >= 0 && relY < headerPx && !isDesktopIconAtPoint(screenX, screenY)) {
+            // workerW client 좌표계로 현재 위젯 좌상단 변환
+            const tlBuf = createPointBuffer(widgetRect.left, widgetRect.top);
+            if (a.ScreenToClient(workerWHwnd, tlBuf)) {
+              dragStartScreenX = screenX;
+              dragStartScreenY = screenY;
+              dragStartClientX = tlBuf.readInt32LE(0);
+              dragStartClientY = tlBuf.readInt32LE(4);
+              dragWidth = widgetRect.right - widgetRect.left;
+              dragHeight = widgetRect.bottom - widgetRect.top;
+              dragMode = true;
+              return 1n;
+            }
+          }
         }
 
         // 위젯 영역 안 — 폴더 hit-test
@@ -546,6 +628,7 @@ export function createWin32WidgetController(): Win32WidgetController {
     buttonMask = 0;
     externalDrag = false;
     widgetHovering = false;
+    dragMode = false;
   };
 
   return {
@@ -669,6 +752,48 @@ export function createWin32WidgetController(): Win32WidgetController {
 
     refreshWidgetBounds(): void {
       refreshBounds();
+    },
+
+    setWidgetBoundsScreen(x: number, y: number, width: number, height: number): boolean {
+      if (!attachedHwnd || !workerWHwnd) return false;
+      const a = getApi();
+      let sf = 1;
+      try {
+        const dpi = a.GetDpiForWindow(attachedHwnd) || 96;
+        sf = dpi > 0 ? dpi / 96 : 1;
+      } catch {
+        /* swallow */
+      }
+      const physScreenX = Math.round(x * sf);
+      const physScreenY = Math.round(y * sf);
+      const physW = Math.max(1, Math.round(width * sf));
+      const physH = Math.max(1, Math.round(height * sf));
+      const point = createPointBuffer(physScreenX, physScreenY);
+      if (!a.ScreenToClient(workerWHwnd, point)) return false;
+      const clientX = point.readInt32LE(0);
+      const clientY = point.readInt32LE(4);
+      if (!a.MoveWindow(attachedHwnd, clientX, clientY, physW, physH, true)) return false;
+      refreshBounds();
+      return true;
+    },
+
+    getWidgetBoundsScreen(): { x: number; y: number; width: number; height: number } | null {
+      if (!attachedHwnd) return null;
+      const a = getApi();
+      refreshBounds();
+      let sf = 1;
+      try {
+        const dpi = a.GetDpiForWindow(attachedHwnd) || 96;
+        sf = dpi > 0 ? dpi / 96 : 1;
+      } catch {
+        /* swallow */
+      }
+      return {
+        x: Math.round(widgetRect.left / sf),
+        y: Math.round(widgetRect.top / sf),
+        width: Math.round((widgetRect.right - widgetRect.left) / sf),
+        height: Math.round((widgetRect.bottom - widgetRect.top) / sf),
+      };
     },
   };
 }

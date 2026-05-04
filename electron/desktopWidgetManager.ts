@@ -35,6 +35,25 @@ export interface DesktopWidgetManager {
    */
   updateWidgetBounds(widgetWindow: BrowserWindow): void;
 
+  /**
+   * native-desktop attach 상태에서 screen 좌표 (Electron logical pixel) 로 위젯 이동/리사이즈.
+   * 일반 setBounds() 가 SetParent 후 client 좌표로 해석돼 drift 가 나는 문제를 우회.
+   * attach 상태가 아니거나 실패 시 false → caller 가 setBounds 로 fallback.
+   */
+  setWidgetBoundsScreen(x: number, y: number, width: number, height: number): boolean;
+
+  /**
+   * native-desktop attach 상태에서 screen 좌표 (Electron logical pixel) 의 현재 위젯 rect 반환.
+   * attach 상태가 아니면 null → caller 가 widgetWindow.getBounds() 사용.
+   */
+  getWidgetBoundsScreen(): { x: number; y: number; width: number; height: number } | null;
+
+  /**
+   * 헤더 드래그 종료 시 호출될 콜백 등록 (예: scheduleWidgetBoundsSave).
+   * SetParent 후 widgetWindow.on('move') 가 발동하지 않으므로 직접 통지가 필요하다.
+   */
+  onDragEnd(callback: (() => void) | null): void;
+
   /** 후방 호환 — Phase 3.0 에서는 no-op (zone hit-test 는 LVM_HITTEST 로 통합됨). */
   setPassThroughZones(zones: readonly DesktopIconZoneBounds[]): void;
   clearPassThroughZones(): void;
@@ -57,6 +76,13 @@ function createNoOpDesktopWidgetManager(
     },
     disable(): void {},
     updateWidgetBounds(): void {},
+    setWidgetBoundsScreen(): boolean {
+      return false;
+    },
+    getWidgetBoundsScreen(): { x: number; y: number; width: number; height: number } | null {
+      return null;
+    },
+    onDragEnd(): void {},
     setPassThroughZones(): void {},
     clearPassThroughZones(): void {},
     async healthCheck(): Promise<DesktopWidgetModeStatus> {
@@ -74,6 +100,7 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
   const controller = mod.createWin32WidgetController();
   let enabled = false;
   let attachedWindow: import('electron').BrowserWindow | null = null;
+  let dragEndCallback: (() => void) | null = null;
 
   const buildHandlers = (window: import('electron').BrowserWindow) => ({
     onMouseMove: (clientX: number, clientY: number) => {
@@ -107,6 +134,18 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
           }
         } catch {
           /* swallow */
+        }
+      });
+    },
+    onDragEnd: () => {
+      // hook 콜백 스레드에서 직접 main 의 IPC/저장 로직을 부르면 위험 — setImmediate 로 디퍼.
+      const cb = dragEndCallback;
+      if (!cb) return;
+      setImmediate(() => {
+        try {
+          cb();
+        } catch (e) {
+          console.error('[desktopWidgetManager] onDragEnd error', e);
         }
       });
     },
@@ -155,6 +194,30 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
       } catch (e) {
         console.error('[desktopWidgetManager] updateWidgetBounds error', e);
       }
+    },
+
+    setWidgetBoundsScreen(x: number, y: number, width: number, height: number): boolean {
+      if (!enabled) return false;
+      try {
+        return controller.setWidgetBoundsScreen(x, y, width, height);
+      } catch (e) {
+        console.error('[desktopWidgetManager] setWidgetBoundsScreen error', e);
+        return false;
+      }
+    },
+
+    getWidgetBoundsScreen(): { x: number; y: number; width: number; height: number } | null {
+      if (!enabled) return null;
+      try {
+        return controller.getWidgetBoundsScreen();
+      } catch (e) {
+        console.error('[desktopWidgetManager] getWidgetBoundsScreen error', e);
+        return null;
+      }
+    },
+
+    onDragEnd(callback: (() => void) | null): void {
+      dragEndCallback = callback;
     },
 
     setPassThroughZones(): void {
