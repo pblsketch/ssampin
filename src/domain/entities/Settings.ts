@@ -108,7 +108,27 @@ export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';
 // 위젯 표시 모드
 // - 'normal': 일반 모드 — 다른 창에 가려질 수 있음, Win+D에 사라지지 않음
 // - 'topmost': 항상 위에 — 항상 다른 창 위에 표시, Win+D에 사라지지 않음
-export type WidgetDesktopMode = 'normal' | 'topmost';
+// - 'native-desktop': 바탕화면 작업판 (Windows 전용, v2.1.0~)
+//   위젯을 Explorer WorkerW에 attach하고 desktop-icon-zone 카드 영역만
+//   Explorer로 마우스 이벤트를 통과시킨다. 비Windows에서는 'normal'로 fallback.
+export type WidgetDesktopMode = 'normal' | 'topmost' | 'native-desktop';
+
+/**
+ * 임의의 입력값을 안전하게 WidgetDesktopMode로 정규화한다.
+ *
+ * 기존 코드 곳곳에 흩어진 `value === 'topmost' ? 'topmost' : 'normal'` 패턴이
+ * v2.1.0 도입되는 `'native-desktop'` 값을 silent하게 'normal'로 버리는
+ * 잠재 버그를 가지므로, 모든 정규화 지점은 이 헬퍼를 통과해야 한다.
+ *
+ * - legacy 'floating' alias → 'topmost' 매핑은 호출자 측에서 처리한다
+ *   (이 헬퍼는 정식 타입 값만 인정).
+ */
+export function normalizeDesktopMode(value: unknown): WidgetDesktopMode {
+  if (value === 'topmost' || value === 'native-desktop') {
+    return value;
+  }
+  return 'normal';
+}
 
 export interface WidgetVisibleSections {
   readonly dateTime: boolean;

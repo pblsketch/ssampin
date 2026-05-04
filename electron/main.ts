@@ -79,8 +79,31 @@ function broadcastToAllWindows(channel: string, payload?: unknown, excludeSender
   }
 }
 
-// 위젯 표시 모드 상태 추적: 'normal' | 'topmost'
-let currentDesktopMode: string = 'normal';
+// 위젯 표시 모드.
+// src/domain/entities/Settings.ts 의 WidgetDesktopMode 와 동일하게 유지해야 한다.
+// electron rootDir=electron 한계로 직접 import 불가, 의도적 미러링.
+type WidgetDesktopMode = 'normal' | 'topmost' | 'native-desktop';
+
+/**
+ * 임의의 값을 안전하게 WidgetDesktopMode 로 정규화한다.
+ *
+ * 기존 곳곳의 `value === 'topmost' ? 'topmost' : 'normal'` 패턴이
+ * v2.1.0 도입되는 `'native-desktop'` 값을 silent하게 'normal'로 버리는
+ * 잠재 버그를 가지므로, 모든 정규화 지점은 이 헬퍼를 통과한다.
+ *
+ * - legacy 'floating' / 'desktop' / 'auto' / 'behind' / 'above' alias는
+ *   호출자(readSettingsWidgetOptions)에서 먼저 매핑한다.
+ * - 정식 타입 값만 인정. 그 외 모든 입력 → 'normal'.
+ */
+function normalizeDesktopMode(value: unknown): WidgetDesktopMode {
+  if (value === 'topmost' || value === 'native-desktop') {
+    return value;
+  }
+  return 'normal';
+}
+
+// 위젯 표시 모드 상태 추적
+let currentDesktopMode: WidgetDesktopMode = 'normal';
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 let winDRecoveryDedup = false;  // minimize 핸들러와 폴링 중복 방지
 let widgetBoundsBeforeLayout: WidgetBounds | null = null;
@@ -1366,7 +1389,7 @@ function recreateWidget(): void {
 }
 
 function createWidgetWindow(
-  options: { width: number; height: number; desktopMode?: string },
+  options: { width: number; height: number; desktopMode?: WidgetDesktopMode },
   onReady?: () => void,
 ): void {
   const savedBounds = readWidgetBounds();
@@ -1432,23 +1455,32 @@ function createWidgetWindow(
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
     if (process.platform === 'win32') {
-      const desktopMode = options.desktopMode ?? 'normal';
+      const desktopMode = normalizeDesktopMode(options.desktopMode);
+      currentDesktopMode = desktopMode;
 
-      if (desktopMode === 'topmost') {
-        // ── 항상 위에 모드 ──
-        currentDesktopMode = 'topmost';
-        widgetWindow.setAlwaysOnTop(true);
-        widgetWindow.show();
-        console.log('[widget] 항상 위에 모드');
-      } else {
-        // ── 일반 모드 (normal): 다른 창에 가려질 수 있음 ──
-        currentDesktopMode = 'normal';
-        widgetWindow.setAlwaysOnTop(false);
-        widgetWindow.show();
-        console.log('[widget] 일반 모드');
+      // Phase 2 (v2.1.0~)에서 'native-desktop' 분기에 desktopWidgetManager.enable()이 추가됨.
+      // 현재는 값만 보존하고 런타임은 'normal'과 동일하게 둔다.
+      switch (desktopMode) {
+        case 'topmost':
+          widgetWindow.setAlwaysOnTop(true);
+          widgetWindow.show();
+          console.log('[widget] 항상 위에 모드');
+          break;
+        case 'native-desktop':
+          // 미구현(Phase 2 대기) — 임시 fallback
+          widgetWindow.setAlwaysOnTop(false);
+          widgetWindow.show();
+          console.log('[widget] native-desktop 요청 — Phase 2 미구현, normal로 fallback');
+          break;
+        case 'normal':
+        default:
+          widgetWindow.setAlwaysOnTop(false);
+          widgetWindow.show();
+          console.log('[widget] 일반 모드');
+          break;
       }
 
-      // 양쪽 모드 모두 Win+D 복원 활성화
+      // 모든 모드에서 Win+D 복원 활성화
       startWinDRecovery();
     } else {
       widgetWindow.show();
@@ -1516,7 +1548,7 @@ function createWidgetWindow(
   });
 }
 
-function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeAction: 'widget' | 'tray' | 'ask'; desktopMode: string; memorySaverMode: boolean } {
+function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeAction: 'widget' | 'tray' | 'ask'; desktopMode: WidgetDesktopMode; memorySaverMode: boolean } {
   try {
     const filePath = path.join(getDataDir(), 'settings.json');
     if (fs.existsSync(filePath)) {
@@ -1525,10 +1557,12 @@ function readSettingsWidgetOptions(): { width: number; height: number; startInWi
         widget?: { width?: number; height?: number; transparent?: boolean; closeToWidget?: boolean; desktopMode?: string; memorySaverMode?: boolean };
       };
       const rawMode = settings.widget?.desktopMode ?? 'normal';
-      // 마이그레이션: 이전 모드 → normal/topmost
-      const desktopMode = rawMode === 'floating' ? 'topmost'
+      // 마이그레이션: 이전 모드 alias → 정식 값으로 매핑한 뒤 normalizeDesktopMode 통과시킨다.
+      // 이 두 단계를 거쳐야 'native-desktop'(v2.1.0~) 같은 신규 값이 silent하게 normal로 버려지지 않는다.
+      const aliasedMode = rawMode === 'floating' ? 'topmost'
         : (rawMode === 'auto' || rawMode === 'desktop' || rawMode === 'behind' || rawMode === 'above') ? 'normal'
         : rawMode;
+      const desktopMode: WidgetDesktopMode = normalizeDesktopMode(aliasedMode);
       // 하위 호환: closeAction 없으면 closeToWidget으로 판단
       const closeAction: 'widget' | 'tray' | 'ask' =
         (settings.widget as any)?.closeAction ??
@@ -1545,7 +1579,7 @@ function readSettingsWidgetOptions(): { width: number; height: number; startInWi
   } catch {
     // fall through to defaults
   }
-  return { width: 920, height: 700, startInWidgetMode: false, closeAction: 'widget', desktopMode: 'normal', memorySaverMode: true };
+  return { width: 920, height: 700, startInWidgetMode: false, closeAction: 'widget', desktopMode: 'normal' as const, memorySaverMode: true };
 }
 
 function setupAutoUpdater(): void {
@@ -1870,15 +1904,22 @@ function registerIpcHandlers(): void {
     widgetWindow.setOpacity(Math.max(0, Math.min(1, widget.opacity)));
 
     // 데스크톱 모드 변경
-    const newMode = widget.desktopMode === 'topmost' ? 'topmost' : 'normal';
+    const newMode = normalizeDesktopMode(widget.desktopMode);
     if (newMode !== currentDesktopMode) {
       console.log(`[widget] 설정 변경: ${currentDesktopMode} → ${newMode}`);
       currentDesktopMode = newMode;
 
-      if (newMode === 'topmost') {
-        widgetWindow.setAlwaysOnTop(true);
-      } else {
-        widgetWindow.setAlwaysOnTop(false);
+      // Phase 2 (v2.1.0~)에서 'native-desktop' 분기에 desktopWidgetManager.enable()이 추가됨.
+      // 현재는 'native-desktop' 값을 정상적으로 보존하되 런타임 동작은 'normal'과 동일하게 둔다.
+      switch (newMode) {
+        case 'topmost':
+          widgetWindow.setAlwaysOnTop(true);
+          break;
+        case 'native-desktop':
+        case 'normal':
+        default:
+          widgetWindow.setAlwaysOnTop(false);
+          break;
       }
     }
   });
