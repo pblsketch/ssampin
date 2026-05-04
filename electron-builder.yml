@@ -68,6 +68,10 @@ mac:
         - arm64
   icon: build/icon.png
   category: public.app-category.education
+  minimumSystemVersion: "12.0.0"
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
   fileAssociations:
     - ext: ssampin
       name: SsamPin 일정 파일
