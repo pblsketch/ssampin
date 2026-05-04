@@ -54,6 +54,17 @@ interface DashboardConfigState {
   /** 위젯 표시/숨김 토글 */
   toggleWidget: (widgetId: string) => void;
 
+  /**
+   * 위젯 visible 을 명시적으로 설정 (멱등).
+   *
+   * - 위젯이 config 에 없으면 registry 의 defaultSize 로 신규 추가하면서 visible 적용.
+   * - 이미 있으면 visible 만 갱신 (colSpan/rowSpan/order 보존).
+   *
+   * 사용처: 위젯 우클릭 메뉴에서 native-desktop 모드 토글 시 desktop-icon-zone
+   * 카드를 자동으로 visible=true 로 켜는 경로 등.
+   */
+  setWidgetVisible: (widgetId: string, visible: boolean) => void;
+
   /** 위젯 순서 변경 (드래그앤드롭용) */
   reorderWidgets: (orderedIds: string[]) => void;
 
@@ -136,6 +147,49 @@ export const useDashboardConfig = create<DashboardConfigState>((set, get) => ({
       widgets: config.widgets.map((w) =>
         w.widgetId === widgetId ? { ...w, visible: !w.visible } : w,
       ),
+      lastModified: new Date().toISOString(),
+    };
+
+    saveToStorage(updated);
+    set({ config: updated });
+  },
+
+  setWidgetVisible: (widgetId: string, visible: boolean) => {
+    const { config } = get();
+    if (!config) return;
+
+    const existing = config.widgets.find((w) => w.widgetId === widgetId);
+    let nextWidgets: WidgetInstance[];
+
+    if (existing) {
+      // 이미 존재 → visible 만 멱등하게 갱신
+      if (existing.visible === visible) return;
+      nextWidgets = config.widgets.map((w) =>
+        w.widgetId === widgetId ? { ...w, visible } : w,
+      );
+    } else {
+      // 신규 추가 — registry defaultSize 로 초기화
+      const def = WIDGET_DEFINITIONS.find((d) => d.id === widgetId);
+      if (!def) return; // 알 수 없는 widgetId
+      const maxOrder = config.widgets.reduce(
+        (acc, w) => Math.max(acc, w.order),
+        -1,
+      );
+      nextWidgets = [
+        ...config.widgets,
+        {
+          widgetId,
+          visible,
+          order: maxOrder + 1,
+          colSpan: Math.min(def.defaultSize.w, 4) as 1 | 2 | 3 | 4,
+          rowSpan: def.defaultSize.h,
+        },
+      ];
+    }
+
+    const updated: DashboardConfig = {
+      ...config,
+      widgets: nextWidgets,
       lastModified: new Date().toISOString(),
     };
 

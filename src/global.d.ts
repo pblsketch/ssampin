@@ -563,18 +563,12 @@ interface DesktopIconZonesElectronAPI {
     cb: (payload: DesktopModeFallbackPayloadView) => void,
   ) => () => void;
   /**
-   * Phase 2.3: zoneWindow 가 카드 좌표 갱신을 받기 위해 구독.
-   * 위젯 카드 영역의 BoundingClientRect 가 30Hz 로 forward 된다.
+   * Phase 3.0: 위젯이 WorkerW 자식일 때 main 의 WH_MOUSE_LL hook 이 보내는 mouse
+   * 이벤트 IPC. renderer 가 가상 hover 시뮬레이션 (.group:hover 패턴) 등에 사용.
    */
-  onCardsUpdate: (
-    cb: (zones: ReadonlyArray<DesktopIconZoneBoundsView>) => void,
-  ) => () => void;
-  /**
-   * Phase 2.3: 위젯 BrowserWindow click-through 토글.
-   * - true: 위젯 카드 영역의 클릭이 데스크톱(Explorer)으로 통과
-   * - false: 일반 위젯 모드
-   */
-  setWidgetClickThrough: (flag: boolean) => Promise<void>;
+  onWidgetMouseMove: (cb: (point: { x: number; y: number }) => void) => () => void;
+  onWidgetWheel: (cb: (point: { x: number; y: number; deltaY: number }) => void) => () => void;
+  onWidgetMouseLeave: (cb: () => void) => () => void;
 }
 
 /** 백업 파일 metadata — 버전 정보 표시용 */

@@ -39,6 +39,7 @@ import type {
   DesktopIconZoneBounds,
   DesktopModeFallbackPayload,
 } from './desktopIconZoneTypes';
+import { getMouseApi } from './platform/win32Mouse';
 
 declare const __dirname: string;
 
@@ -47,11 +48,11 @@ let widgetWindow: BrowserWindow | null = null;
 let quickAddWindow: BrowserWindow | null = null;
 let stickerPickerWindow: BrowserWindow | null = null;
 /**
- * 바탕화면 작업판 (native-desktop-mode v2.2~) — 별도 transparent fullscreen
- * BrowserWindow. Explorer WorkerW 에 attach 되어 데스크톱 아이콘 아래/wallpaper
- * 위 레이어에 zone 카드를 그린다. 메인 widgetWindow 는 attach 하지 않음.
+ * @deprecated Phase 3.0 부터 메인 widgetWindow 자체가 WorkerW 에 attach 되며,
+ * 별도 zoneWindow 는 사용하지 않는다 (좌표 IPC + setIgnoreMouseEvents 토글 패턴은
+ * SchoolBoard 식 LVM_HITTEST + PostMessageW 로 대체됨). 잔존 변수는 호환용.
  */
-let desktopZoneWindow: BrowserWindow | null = null;
+const desktopZoneWindow: BrowserWindow | null = null;
 let widgetWasActive = false;
 let widgetActiveBeforeSleep = false;  // suspend/lock 시점의 스냅샷
 let isSystemSuspending = false;       // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
@@ -75,7 +76,6 @@ function getAllAppWindows(): BrowserWindow[] {
   if (mainWindow && !mainWindow.isDestroyed()) windows.push(mainWindow);
   if (widgetWindow && !widgetWindow.isDestroyed()) windows.push(widgetWindow);
   if (iconWindow && !iconWindow.isDestroyed()) windows.push(iconWindow);
-  if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) windows.push(desktopZoneWindow);
   return windows;
 }
 
@@ -673,14 +673,25 @@ function scheduleIconBoundsSave(bounds: IconBounds): void {
 // Renderer pointer capture 의존 X. screen.getCursorScreenPoint()로 OS 레벨
 // 마우스 위치를 직접 받아 setBounds. mouse가 윈도우 밖으로 나가도 정상 작동.
 //
-// v2.0.3 fix — "처음엔 되다가 갑자기 안 됨" 버그 대응 안전망 강화:
-//   1) Cursor idle stop — 마우스가 IDLE_STOP_MS 동안 정지하면 사용자가
-//      release 한 것으로 간주하고 자동 stop. 글로벌 mouseup 을 못 받는
-//      경로(Win11 Snap, focus 박탈 등)에서 endDrag IPC 누락을 잡는다.
-//   2) Hard safety timeout 5s → 30s — 정상 긴 드래그(시작 ↔ 반대편 모서리)
-//      가 false-stop 으로 끊기지 않도록.
-//   3) iconWindow 'blur' 이벤트에서 자동 stop.
-//   4) 진단 console.warn 강화 — 어떤 경로로 stop 됐는지 구분.
+// v2.0.3 fix — "처음엔 되다가 갑자기 안 됨" 버그 결정타 (Win32 GetAsyncKeyState):
+//
+//   문제 분석 (clawd-on-desk 소스 분석에서 결정적 단서):
+//     "Repositioning the input window mid-drag can break pointer capture on Windows"
+//     → Electron transparent + frameless 창에서 setBounds 폴링 호출이 OS 합성 race
+//        를 트리거해 일정 시점부터 renderer 의 pointermove/pointerup 이벤트 자체가
+//        끊긴다. setPointerCapture, document level fallback, idle-stop 모두 이
+//        근본을 못 잡는다.
+//
+//   결정적 fix:
+//     매 16ms 폴링 안에서 Win32 `GetAsyncKeyState(VK_LBUTTON)` 으로 마우스
+//     좌버튼 down/up 상태를 직접 확인. release 즉시 stopIconDrag('mouseup-detected').
+//     pointer capture 가 깨졌든 renderer 가 죽었든 OS 가 truth source.
+//
+//   추가 안전망 (fallback):
+//   1) Cursor idle stop (700ms) — koffi 로드 실패 시 사용자 release 추정
+//   2) Hard safety timeout 30s — 절대 안전망
+//   3) iconWindow 'blur' / 'hide' — focus 박탈 대응
+//   4) 진단 console.warn — 어떤 경로로 stop 됐는지 구분
 let iconDragState: {
   startMouseX: number;
   startMouseY: number;
@@ -712,10 +723,19 @@ function startIconDrag(): void {
     lastCursorY: mouse.y,
     lastMoveAt: now,
   };
-  // 60fps 폴링으로 마우스 따라가기
+  const mouseApi = getMouseApi();
+  // 안전: 시작 시점에 LBUTTON 이 down 이 아니면 무시 (race protection — pointerDown 직후
+  // 사용자가 즉시 release 한 케이스 또는 UI test/automation 가짜 이벤트).
+  // 단 koffi 로드 실패 시 isLeftButtonDown 은 항상 true 이므로 건너뜀.
+  // 60fps 폴링으로 마우스 따라가기 + LBUTTON state 직접 감지
   iconDragInterval = setInterval(() => {
     if (!iconDragState || !iconWindow || iconWindow.isDestroyed()) {
       stopIconDrag('window-gone');
+      return;
+    }
+    // ★ 결정적 안전망: Win32 OS 가 truth source. release 즉시 감지.
+    if (!mouseApi.isLeftButtonDown()) {
+      stopIconDrag('mouseup-detected');
       return;
     }
     const cur = screen.getCursorScreenPoint();
@@ -731,8 +751,7 @@ function startIconDrag(): void {
         height: ICON_SIZE,
       });
     } else if (Date.now() - iconDragState.lastMoveAt > ICON_DRAG_IDLE_STOP_MS) {
-      // 마우스가 700ms 정지 → 사용자가 release 한 것으로 간주.
-      // pointerup IPC 누락 케이스를 잡는 핵심 안전망.
+      // koffi 로드 실패 시 fallback — 700ms 정지하면 release 로 간주.
       stopIconDrag('idle');
     }
   }, ICON_DRAG_POLL_MS);
@@ -742,7 +761,14 @@ function startIconDrag(): void {
   }, ICON_DRAG_HARD_TIMEOUT_MS);
 }
 
-type IconDragStopReason = 'normal' | 'restart' | 'window-gone' | 'idle' | 'hard-timeout' | 'blur';
+type IconDragStopReason =
+  | 'normal'
+  | 'restart'
+  | 'window-gone'
+  | 'idle'
+  | 'hard-timeout'
+  | 'blur'
+  | 'mouseup-detected';
 
 function stopIconDrag(reason: IconDragStopReason = 'normal'): void {
   const wasActive = iconDragInterval !== null || iconDragState !== null;
@@ -1277,14 +1303,13 @@ function recoverWidget(): void {
   if (currentDesktopMode === 'topmost') {
     widgetWindow.setAlwaysOnTop(true);
   }
-  // native-desktop 모드면 zoneWindow 의 attach 상태를 확인.
+  // native-desktop 모드면 위젯의 WorkerW attach 상태 확인.
   // Win+D / 디스플레이 변경 / Explorer 재시작 후 WorkerW HWND 가 invalid 해질 수 있다.
-  if (currentDesktopMode === 'native-desktop' && desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
-    const zone = desktopZoneWindow;
-    void desktopWidgetManager.healthCheck(zone).then((status) => {
-      if (!status.ok && widgetWindow && !widgetWindow.isDestroyed()) {
-        console.log(`[zoneWindow] healthCheck 실패 (${status.reason}) — fallback ${status.fallbackMode}`);
-        const widget = widgetWindow;
+  if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
+    const widget = widgetWindow;
+    void desktopWidgetManager.healthCheck(widget).then((status) => {
+      if (!status.ok && !widget.isDestroyed()) {
+        console.log(`[widget] healthCheck 실패 (${status.reason}) — fallback ${status.fallbackMode}`);
         widget.setAlwaysOnTop(status.fallbackMode === 'topmost');
         if (!widget.webContents.isDestroyed()) {
           const payload: DesktopModeFallbackPayload = {
@@ -1293,7 +1318,7 @@ function recoverWidget(): void {
           };
           widget.webContents.send('desktopMode:fallback', payload);
         }
-        destroyDesktopZoneWindow();
+        desktopWidgetManager.disable();
       }
     });
   }
@@ -1584,10 +1609,12 @@ function createWidgetWindow(
 
   widgetWindow.on('move', () => {
     scheduleWidgetBoundsSave();
-    // Phase 2.2: 메인 위젯은 더 이상 attach 대상이 아니므로 manager 호출 불필요.
+    // Phase 3.0: 위젯 자체가 attach 되어 있으므로 hook 의 widgetRect 캐시 갱신 필요.
+    if (widgetWindow) desktopWidgetManager.updateWidgetBounds(widgetWindow);
   });
   widgetWindow.on('resize', () => {
     scheduleWidgetBoundsSave();
+    if (widgetWindow) desktopWidgetManager.updateWidgetBounds(widgetWindow);
   });
 
   // Win+D minimize 차단: 즉시 복원 (primary)
@@ -1645,96 +1672,15 @@ function createWidgetWindow(
  * previousMode 는 모드 진입 시 토스트/로그를 위한 정보 — 런타임 결정에는 사용하지 않는다.
  */
 /**
- * 바탕화면 작업판용 별도 BrowserWindow 생성.
+ * 위젯 desktopMode 변경에 따른 런타임 적용 (Phase 3.0 — SchoolBoard 패턴).
  *
- * Phase 2.1 의 결함:
- *   - 메인 widgetWindow 자체를 WorkerW 에 attach + WH_MOUSE_LL hook 으로 PostMessage
- *     라우팅을 시도했더니, hook 의 `return 1n` 이 OS input pipeline 을 죽여 커서가
- *     위젯 영역으로 진입조차 못 함 (visual freeze).
+ * - 'normal' / 'topmost': alwaysOnTop 만 토글, manager disable.
+ * - 'native-desktop': 메인 widgetWindow 자체를 WorkerW 에 attach (SetParent +
+ *   ScreenToClient + MoveWindow). hook 이 폴더 위 클릭은 explorer 에 양보, 빈 영역
+ *   클릭은 PostMessageW 로 위젯에 전달. mousemove 는 webContents.send IPC 로 전달.
  *
- * Phase 2.2 해결:
- *   - 메인 위젯은 그대로 정상 BrowserWindow.
- *   - 별도 transparent fullscreen `desktopZoneWindow` 를 만들어 그 BrowserWindow 만
- *     WorkerW 에 attach. 글로벌 hook 미사용 — BrowserWindow 자체 mouse 라우팅이
- *     zone 카드 클릭/스크롤을 정상 처리한다.
- *   - zone 카드 외부의 빈 영역은 mouse-events: none CSS + setIgnoreMouseEvents 조합으로
- *     데스크톱 아이콘 ListView 로 자연스럽게 통과.
+ * 실패 시 fallback 토스트 + alwaysOnTop 보정.
  */
-function buildDesktopZoneWindow(): void {
-  if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) return;
-  // 가상 데스크톱 전체 크기 = 모든 디스플레이 합집합 bounding box
-  const displays = screen.getAllDisplays();
-  const bounds = displays.reduce(
-    (acc, d) => ({
-      left: Math.min(acc.left, d.bounds.x),
-      top: Math.min(acc.top, d.bounds.y),
-      right: Math.max(acc.right, d.bounds.x + d.bounds.width),
-      bottom: Math.max(acc.bottom, d.bounds.y + d.bounds.height),
-    }),
-    { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
-  );
-  const fullX = Number.isFinite(bounds.left) ? bounds.left : 0;
-  const fullY = Number.isFinite(bounds.top) ? bounds.top : 0;
-  const fullW = Number.isFinite(bounds.right) ? bounds.right - fullX : 1920;
-  const fullH = Number.isFinite(bounds.bottom) ? bounds.bottom - fullY : 1080;
-
-  desktopZoneWindow = new BrowserWindow({
-    x: fullX,
-    y: fullY,
-    width: fullW,
-    height: fullH,
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
-    resizable: false,
-    movable: false,
-    minimizable: false,
-    maximizable: false,
-    closable: false,
-    fullscreenable: false,
-    skipTaskbar: true,
-    focusable: false, // 키보드 포커스 안 가져감 (메인 위젯에 머무름)
-    alwaysOnTop: false,
-    show: false,
-    hasShadow: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false,
-    },
-  });
-
-  if (process.env['VITE_DEV_SERVER_URL']) {
-    void desktopZoneWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=desktopZone`);
-  } else {
-    void desktopZoneWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
-      query: { mode: 'desktopZone' },
-    });
-  }
-
-  desktopZoneWindow.once('ready-to-show', () => {
-    if (!desktopZoneWindow || desktopZoneWindow.isDestroyed()) return;
-    desktopZoneWindow.showInactive();
-  });
-
-  desktopZoneWindow.on('closed', () => {
-    desktopZoneWindow = null;
-  });
-}
-
-function destroyDesktopZoneWindow(): void {
-  desktopWidgetManager.disable();
-  if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
-    try {
-      desktopZoneWindow.destroy();
-    } catch {
-      /* swallow */
-    }
-  }
-  desktopZoneWindow = null;
-}
-
 async function applyDesktopModeRuntime(
   widget: BrowserWindow,
   mode: WidgetDesktopMode,
@@ -1742,10 +1688,9 @@ async function applyDesktopModeRuntime(
 ): Promise<void> {
   if (widget.isDestroyed()) return;
 
-  // native-desktop 외 모드로 전환 시 zoneWindow 제거 + manager disable +
-  // 위젯의 click-through 도 강제 해제 (다른 모드 진입 시 잔존하면 위젯 클릭 불가 회귀).
+  // native-desktop 외 모드로 전환 시 manager disable (SetParent NULL + style 복구).
   if (mode !== 'native-desktop') {
-    destroyDesktopZoneWindow();
+    desktopWidgetManager.disable();
     try {
       widget.setIgnoreMouseEvents(false);
     } catch {
@@ -1761,52 +1706,23 @@ async function applyDesktopModeRuntime(
       widget.setAlwaysOnTop(false);
       break;
     case 'native-desktop': {
-      // 메인 위젯은 정상 모드 유지 — alwaysOnTop=false (zoneWindow 와 z-order 충돌 방지).
       widget.setAlwaysOnTop(false);
-
-      // 1. zoneWindow 빌드 (이미 있으면 재사용)
-      buildDesktopZoneWindow();
-      if (!desktopZoneWindow) {
+      const status = await desktopWidgetManager.enable(widget);
+      if (status.ok) {
+        console.log('[widget] native-desktop attach 성공 (SchoolBoard 패턴)');
+      } else {
+        const fallback = status.fallbackMode;
+        console.log(
+          `[widget] native-desktop attach 실패 (${status.reason}) — ${fallback} 로 fallback`,
+        );
         const payload: DesktopModeFallbackPayload = {
-          reason: 'unknown',
-          fallbackMode: 'normal',
+          reason: status.reason,
+          fallbackMode: fallback,
         };
         if (!widget.webContents.isDestroyed()) {
           widget.webContents.send('desktopMode:fallback', payload);
         }
-        widget.setAlwaysOnTop(false);
-        break;
-      }
-
-      // 2. zoneWindow 가 ready 되면 attach
-      const attachOnReady = async (): Promise<void> => {
-        if (!desktopZoneWindow || desktopZoneWindow.isDestroyed()) return;
-        const status = await desktopWidgetManager.enable(desktopZoneWindow);
-        if (status.ok) {
-          console.log('[zoneWindow] native-desktop attach 성공');
-        } else {
-          const fallback = status.fallbackMode;
-          console.log(
-            `[zoneWindow] native-desktop attach 실패 (${status.reason}) — ${fallback} 로 fallback`,
-          );
-          destroyDesktopZoneWindow();
-          const payload: DesktopModeFallbackPayload = {
-            reason: status.reason,
-            fallbackMode: fallback,
-          };
-          if (!widget.webContents.isDestroyed()) {
-            widget.webContents.send('desktopMode:fallback', payload);
-          }
-          widget.setAlwaysOnTop(fallback === 'topmost');
-        }
-      };
-      // ready-to-show 이미 발생한 경우 즉시 attach, 아니면 한 번만 대기.
-      if (desktopZoneWindow.isVisible()) {
-        void attachOnReady();
-      } else {
-        desktopZoneWindow.once('show', () => {
-          void attachOnReady();
-        });
+        widget.setAlwaysOnTop(fallback === 'topmost');
       }
       break;
     }
@@ -2072,104 +1988,30 @@ function registerIpcHandlers(): void {
     },
   );
 
-  // ─── 바탕화면 작업판 (native-desktop-mode) IPC ───────────────────────────
-  // Phase 1 에서는 manager 가 no-op 이라 핸들러도 단순 forward.
-  // Phase 2 (Windows native) 진입 시 manager 측 setPassThroughZones 가 실제 hit-test 캐시를 갱신.
+  // ─── 바탕화면 작업판 (native-desktop-mode v3.0) IPC ─────────────────────
+  // Phase 3.0: 위젯 자체가 WorkerW 자식. LVM_HITTEST 가 픽셀 단위로 폴더/빈 영역을
+  // 판별하므로 zone bounds IPC 는 더 이상 필요 없다 (no-op 으로 후방 호환만 유지).
 
-  ipcMain.handle(
-    'desktopIconZones:updateBounds',
-    (_event, rawZones: unknown): void => {
-      // renderer 측 preload 에서 이미 1차 검증을 통과하지만, 시그널 무결성을 위해
-      // main 쪽에서도 형식·범위를 다시 확인한다 (rect 가 음수/0 이면 무시).
-      if (!Array.isArray(rawZones)) return;
-      const zones: DesktopIconZoneBounds[] = [];
-      for (const z of rawZones) {
-        if (typeof z !== 'object' || z === null) continue;
-        const o = z as { id?: unknown; name?: unknown; rect?: unknown };
-        if (typeof o.id !== 'string' || o.id.length === 0) continue;
-        if (typeof o.name !== 'string') continue;
-        if (typeof o.rect !== 'object' || o.rect === null) continue;
-        const r = o.rect as { x?: unknown; y?: unknown; width?: unknown; height?: unknown };
-        if (
-          typeof r.x !== 'number' || !Number.isFinite(r.x) ||
-          typeof r.y !== 'number' || !Number.isFinite(r.y) ||
-          typeof r.width !== 'number' || !Number.isFinite(r.width) || r.width <= 0 ||
-          typeof r.height !== 'number' || !Number.isFinite(r.height) || r.height <= 0
-        ) {
-          continue;
-        }
-        zones.push({
-          id: o.id,
-          name: o.name,
-          rect: { x: r.x, y: r.y, width: r.width, height: r.height },
-        });
-      }
-      desktopWidgetManager.setPassThroughZones(zones);
-      // Phase 2.3: 위젯 카드 좌표를 zoneWindow 로 forward — zoneWindow 가 동일 좌표에
-      // 점선 카드를 그려 시각적으로 위젯 카드와 일체화한다.
-      if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
-        try {
-          desktopZoneWindow.webContents.send('zone:cards-update', zones);
-        } catch {
-          /* swallow */
-        }
-      }
-    },
-  );
-
-  ipcMain.handle('desktopIconZones:clearBounds', (): void => {
-    desktopWidgetManager.clearPassThroughZones();
-    if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
-      try {
-        desktopZoneWindow.webContents.send('zone:cards-update', []);
-      } catch {
-        /* swallow */
-      }
-    }
+  ipcMain.handle('desktopIconZones:updateBounds', (): void => {
+    // no-op (Phase 3.0). 기존 클라이언트가 호출해도 안전.
   });
 
-  /**
-   * Phase 2.3: 위젯 BrowserWindow 의 클릭 통과 모드를 동적으로 토글한다.
-   *
-   * 사용 시나리오:
-   *   - 마우스가 desktop-icon-zone 카드 영역에 진입하면 renderer 가 true 호출 →
-   *     setIgnoreMouseEvents(true, { forward: true }) 적용 → 카드 영역 클릭이
-   *     데스크톱(Explorer ListView)으로 통과되어 바탕화면 아이콘 드래그 가능.
-   *   - 카드 영역을 벗어나면 false 호출 → 일반 위젯 모드 복귀.
-   *
-   * forward: true 옵션 덕에 click-through 활성 중에도 webContents 가 mousemove 를
-   * 계속 받아서 leave 감지가 정상 동작한다.
-   */
-  ipcMain.handle(
-    'widget:setClickThrough',
-    (_event, flag: unknown): void => {
-      if (typeof flag !== 'boolean') return;
-      if (!widgetWindow || widgetWindow.isDestroyed()) return;
-      try {
-        if (flag) {
-          widgetWindow.setIgnoreMouseEvents(true, { forward: true });
-        } else {
-          widgetWindow.setIgnoreMouseEvents(false);
-        }
-      } catch (e) {
-        console.error('[widget:setClickThrough] error', e);
-      }
-    },
-  );
+  ipcMain.handle('desktopIconZones:clearBounds', (): void => {
+    // no-op (Phase 3.0).
+  });
 
-  // 위젯이 현재 위치한 디스플레이의 scaleFactor (DPI 보정용).
-  // renderer 의 window.devicePixelRatio 와 항상 일치하지는 않는다 (Windows 버전·이벤트 타이밍).
-  // renderer 가 매 측정 직전 호출해 주면 정확한 physical px 변환이 가능.
+  // Phase 3.0 에서는 hook 이 PostMessageW 로 click 을 전달하므로 setClickThrough 불필요.
+  ipcMain.handle('widget:setClickThrough', (): void => {
+    // no-op
+  });
+
   ipcMain.handle(
     'desktopIconZones:getDisplayScaleFactor',
     (): { scaleFactor: number; bounds: { x: number; y: number; width: number; height: number } } | null => {
       if (!widgetWindow || widgetWindow.isDestroyed()) return null;
       const widgetBounds = widgetWindow.getBounds();
       const display = screen.getDisplayMatching(widgetBounds);
-      return {
-        scaleFactor: display.scaleFactor,
-        bounds: widgetBounds,
-      };
+      return { scaleFactor: display.scaleFactor, bounds: widgetBounds };
     },
   );
 
@@ -2178,7 +2020,7 @@ function registerIpcHandlers(): void {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       // 위젯이 열려있으면 닫고 메인창 복원 (필요 시 재생성)
       stopWinDRecovery();
-      destroyDesktopZoneWindow();
+      desktopWidgetManager.disable();
       widgetWindow.destroy();
       widgetWindow = null;
       currentDesktopMode = 'normal';
@@ -3934,18 +3776,18 @@ if (!gotTheLock) {
     // native-desktop 모드에서는 WorkerW 좌표계가 바뀌었을 가능성이 있어 healthCheck 도 트리거.
     const triggerNativeDesktopHealthCheck = (): void => {
       if (currentDesktopMode !== 'native-desktop') return;
-      if (!desktopZoneWindow || desktopZoneWindow.isDestroyed()) return;
-      const zone = desktopZoneWindow;
-      void desktopWidgetManager.healthCheck(zone).then((status) => {
-        if (!status.ok && widgetWindow && !widgetWindow.isDestroyed() && !widgetWindow.webContents.isDestroyed()) {
-          const widget = widgetWindow;
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      const widget = widgetWindow;
+      desktopWidgetManager.updateWidgetBounds(widget);
+      void desktopWidgetManager.healthCheck(widget).then((status) => {
+        if (!status.ok && !widget.isDestroyed() && !widget.webContents.isDestroyed()) {
           const payload: DesktopModeFallbackPayload = {
             reason: status.reason,
             fallbackMode: status.fallbackMode,
           };
           widget.webContents.send('desktopMode:fallback', payload);
           widget.setAlwaysOnTop(status.fallbackMode === 'topmost');
-          destroyDesktopZoneWindow();
+          desktopWidgetManager.disable();
         }
       });
     };
@@ -4000,10 +3842,9 @@ if (!gotTheLock) {
       isSystemSuspending = false;
       setTimeout(() => {
         restoreWidgetAfterSleep();
-        // native-desktop 모드면 zoneWindow attach 살아있는지 다시 확인.
-        if (currentDesktopMode === 'native-desktop' && desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
-          const zone = desktopZoneWindow;
-          void desktopWidgetManager.healthCheck(zone);
+        // native-desktop 모드면 위젯 attach 살아있는지 다시 확인.
+        if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
+          void desktopWidgetManager.healthCheck(widgetWindow);
         }
       }, 1000);
     });
