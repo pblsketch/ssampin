@@ -48,17 +48,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('icon:drag-by', delta),
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }): Promise<void> =>
     ipcRenderer.invoke('icon:expand', target),
-  // ─── 위젯 진단·복구 (widget-stability-recovery PDCA) ───
-  widgetDiagnostics: {
-    get: (): Promise<import('./widgetDiagnostics').WidgetDiagnosticsReport> =>
-      ipcRenderer.invoke('widget:getDiagnostics'),
-    recover: (
-      action: import('./widgetDiagnostics').WidgetRecoveryAction,
-    ): Promise<import('./widgetDiagnostics').WidgetRecoveryResult> =>
-      ipcRenderer.invoke('widget:recover', { action }),
-    copyToClipboard: (): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('widget:copyDiagnostics'),
-  },
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;
@@ -815,6 +804,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('desktopMode:fallback', handler);
       };
     },
+    /**
+     * Phase 2.3: zoneWindow 가 카드 좌표 갱신을 받기 위해 구독.
+     * 위젯 카드의 BoundingClientRect 를 30Hz 로 forward 받는다.
+     * 반환된 unsubscribe 를 unmount 시 호출.
+     */
+    onCardsUpdate: (
+      cb: (zones: ReadonlyArray<{
+        id: string;
+        name: string;
+        rect: { x: number; y: number; width: number; height: number };
+      }>) => void,
+    ): (() => void) => {
+      const handler = (_event: unknown, payload: ReadonlyArray<{
+        id: string;
+        name: string;
+        rect: { x: number; y: number; width: number; height: number };
+      }>) => {
+        try {
+          cb(payload);
+        } catch (e) {
+          console.error('[desktopIconZones] onCardsUpdate handler error', e);
+        }
+      };
+      ipcRenderer.on('zone:cards-update', handler);
+      return () => {
+        ipcRenderer.removeListener('zone:cards-update', handler);
+      };
+    },
+    /**
+     * Phase 2.3: 위젯 click-through 토글.
+     * - true: 위젯 카드 영역의 클릭이 데스크톱(Explorer)으로 통과
+     * - false: 일반 위젯 모드
+     * forward 옵션 덕에 통과 중에도 위젯이 mousemove 를 받아 leave 감지 가능.
+     */
+    setWidgetClickThrough: (flag: boolean): Promise<void> =>
+      ipcRenderer.invoke('widget:setClickThrough', flag),
   },
 
   // === 백업·복원·데이터 위치 센터 ===

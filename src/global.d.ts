@@ -151,14 +151,6 @@ interface ElectronAPI {
   iconEndDrag: () => Promise<void>;
   iconResetPosition: () => Promise<void>;
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
-  // ─── 위젯 진단·복구 (widget-stability-recovery PDCA) ───
-  widgetDiagnostics: {
-    get: () => Promise<import('./types/widgetDiagnostics').WidgetDiagnosticsReport>;
-    recover: (
-      action: import('./types/widgetDiagnostics').WidgetRecoveryAction,
-    ) => Promise<import('./types/widgetDiagnostics').WidgetRecoveryResult>;
-    copyToClipboard: () => Promise<{ ok: boolean }>;
-  };
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;
@@ -570,6 +562,19 @@ interface DesktopIconZonesElectronAPI {
   onFallback: (
     cb: (payload: DesktopModeFallbackPayloadView) => void,
   ) => () => void;
+  /**
+   * Phase 2.3: zoneWindow 가 카드 좌표 갱신을 받기 위해 구독.
+   * 위젯 카드 영역의 BoundingClientRect 가 30Hz 로 forward 된다.
+   */
+  onCardsUpdate: (
+    cb: (zones: ReadonlyArray<DesktopIconZoneBoundsView>) => void,
+  ) => () => void;
+  /**
+   * Phase 2.3: 위젯 BrowserWindow click-through 토글.
+   * - true: 위젯 카드 영역의 클릭이 데스크톱(Explorer)으로 통과
+   * - false: 일반 위젯 모드
+   */
+  setWidgetClickThrough: (flag: boolean) => Promise<void>;
 }
 
 /** 백업 파일 metadata — 버전 정보 표시용 */
