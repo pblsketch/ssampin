@@ -721,29 +721,11 @@ function MainApp() {
     const api = window.electronAPI;
     if (!api?.onNavigateToPage) return;
 
-    const pendingDispatchTimers: number[] = [];
     const unsubscribe = api.onNavigateToPage((page: string) => {
-      // hash 형식 지원: 'settings#widget-troubleshooting' → 페이지 + 섹션 이동
-      const [pageId, hash] = page.split('#');
-      setCurrentPage((pageId ?? page) as PageId);
-      if (hash) {
-        // 페이지가 setCurrentPage로 갈리고 SettingsPage가 mount → useEffect 등록까지의
-        // race를 피하기 위해 50/200/600ms 세 번 디스패치한다 (멱등 — 같은 hash 반복 OK).
-        // unmount 시 cleanup에서 clearTimeout으로 leak 차단.
-        const dispatch = () =>
-          window.dispatchEvent(
-            new CustomEvent('ssampin:navigate-section', { detail: { hash } }),
-          );
-        pendingDispatchTimers.push(window.setTimeout(dispatch, 50));
-        pendingDispatchTimers.push(window.setTimeout(dispatch, 200));
-        pendingDispatchTimers.push(window.setTimeout(dispatch, 600));
-      }
+      setCurrentPage(page as PageId);
     });
 
-    return () => {
-      unsubscribe();
-      for (const t of pendingDispatchTimers) clearTimeout(t);
-    };
+    return unsubscribe;
   }, []);
 
   // 다른 창에서 데이터 변경 시 스토어 리로드 (메인 ↔ 위젯 동기화)
