@@ -168,33 +168,18 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
       attachedWindow = null;
     },
 
-    updateWidgetBounds(window): void {
-      if (!enabled) return;
-      try {
-        controller.updateWidgetBounds(window);
-      } catch (e) {
-        console.error('[desktopWidgetManager] updateWidgetBounds() error', e);
-      }
+    updateWidgetBounds(_window): void {
+      // Phase 2.2: zoneWindow 는 fullscreen 고정이라 bounds 변경 추적 불필요.
+      // hook 도 제거됐으므로 업데이트할 캐시도 없음.
     },
 
-    setPassThroughZones(zones): void {
-      if (!enabled) return;
-      try {
-        controller.setHitTestZones(
-          zones.map((z) => ({ id: z.id, rect: z.rect })),
-        );
-      } catch (e) {
-        console.error('[desktopWidgetManager] setPassThroughZones() error', e);
-      }
+    setPassThroughZones(_zones): void {
+      // Phase 2.2: hook 제거 — zone hit-test 는 BrowserWindow 자체 mouse 라우팅이 처리.
+      // 본 메서드는 후방 호환을 위한 no-op.
     },
 
     clearPassThroughZones(): void {
-      if (!enabled) return;
-      try {
-        controller.setHitTestZones([]);
-      } catch (e) {
-        console.error('[desktopWidgetManager] clearPassThroughZones() error', e);
-      }
+      // 동일.
     },
 
     async healthCheck(window): Promise<DesktopWidgetModeStatus> {

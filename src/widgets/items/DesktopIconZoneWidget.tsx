@@ -7,21 +7,21 @@ import {
 } from '@domain/entities/Settings';
 
 /**
- * 바탕화면 작업판 위젯 카드 (v2.1.0~ Windows 전용).
+ * 바탕화면 작업판 위젯 카드 (v2.1.0~ Windows 전용, Phase 2.2 단순화 버전).
  *
- * 사용자 경험:
- *   - 위젯 카드 토글 ON → 즉시 native-desktop 모드 활성화 + zone 카드 표시
- *   - 토글 OFF → 일반 모드 복귀
- *   - Windows 가 아닐 경우 안내 문구만 표시
+ * Phase 2.2 변경:
+ *   - 카드 자체는 더 이상 zone 영역을 직접 표시하지 않는다 (이중 렌더 결함 제거).
+ *   - 실제 zone 카드는 별도 `desktopZoneWindow` BrowserWindow 가 가상 데스크톱
+ *     전체에 걸쳐 그린다.
+ *   - 본 위젯 카드는 켜기/끄기 토글 + zone 라벨 미리보기 + 안내 문구만 담당한다.
  *
- * 본 카드 자체가 zone 영역의 시각화를 담당하며, native-desktop 모드 진입 시
- * `DesktopIconZoneOverlay` (Widget.tsx 의 absolute 오버레이) 가 main 측 mouse hook
- * pass-through 캐시에 카드 영역을 등록한다.
- *
- * Phase 2 정책:
- *   - 카드 헤더(이름) 영역은 클릭 가능 (native mode 에서 PostMessage 라우팅)
- *   - 카드 본문은 pointer-events-none — 바탕화면 아이콘이 시각적으로 위에 떠 있으며,
- *     클릭/드래그가 자연스럽게 Explorer ListView 로 통과된다.
+ * 사용자 시나리오:
+ *   1. 위젯 우클릭 또는 위젯 설정에서 본 카드를 추가
+ *   2. "켜기" 클릭 → settings.widget.desktopMode = 'native-desktop' + 프리셋 시드
+ *   3. main 프로세스가 desktopZoneWindow 를 빌드 + Explorer WorkerW 에 attach
+ *   4. zone 영역(`작업 전 / 작업 중 / 작업 완료`)이 가상 데스크톱 전체에 떠 있으며
+ *      바탕화면 아이콘이 영역 위로 자유롭게 드래그됨
+ *   5. "끄기" 클릭 또는 모드 전환 시 desktopZoneWindow 파괴 + 일반 모드 복귀
  */
 export function DesktopIconZoneWidget() {
   const { settings, update } = useSettingsStore();
@@ -102,7 +102,8 @@ export function DesktopIconZoneWidget() {
     );
   }
 
-  // Active 상태: 카드 zones 미리보기 (실제 pass-through 영역은 DesktopIconZoneOverlay 가 그린다)
+  // Active 상태: zones 라벨 미리보기 + "끄기" 버튼.
+  // 실제 zone 카드는 별도 desktopZoneWindow 가 가상 데스크톱에 그림.
   return (
     <div className="h-full p-3 flex flex-col bg-sp-card/40 rounded-xl">
       <div className="flex items-center justify-between mb-2 px-1">
@@ -117,14 +118,14 @@ export function DesktopIconZoneWidget() {
         </div>
         <button
           type="button"
-          className="text-xs text-sp-muted hover:text-sp-text transition-colors"
+          className="text-xs text-sp-muted hover:text-sp-text transition-colors px-2 py-0.5 rounded hover:bg-sp-text/10"
           onClick={handleDeactivate}
           title="일반 위젯 모드로 되돌리기"
         >
           끄기
         </button>
       </div>
-      <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.max(zones.length, 1)}, minmax(0, 1fr))` }}>
+      <div className="flex-1 grid gap-1.5 overflow-hidden" style={{ gridTemplateColumns: `repeat(${Math.max(zones.length, 1)}, minmax(0, 1fr))` }}>
         {zones.length === 0 ? (
           <div className="text-xs text-sp-muted italic flex items-center justify-center">
             구역이 없습니다
@@ -133,16 +134,16 @@ export function DesktopIconZoneWidget() {
           zones.map((z) => (
             <div
               key={z.id}
-              className="flex flex-col items-center justify-center text-center rounded-lg bg-sp-card/60 border border-dashed border-sp-border p-2"
+              className="flex items-center justify-center text-center rounded-lg bg-emerald-500/10 border border-emerald-400/30 p-2 min-w-0"
               title={z.name}
             >
-              <span className="text-[10px] text-sp-muted truncate w-full">{z.name}</span>
+              <span className="text-[10px] text-sp-text truncate w-full">{z.name}</span>
             </div>
           ))
         )}
       </div>
       <p className="text-[10px] text-sp-muted/60 mt-2 px-1 leading-tight">
-        실제 카드는 위젯 하단 오버레이로 표시되며, 위 항목은 미리보기입니다.
+        실제 영역은 바탕화면 위에 표시됩니다.
       </p>
     </div>
   );
