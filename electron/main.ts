@@ -31,6 +31,14 @@ import {
   exportBackup,
   importBackup,
 } from './backupManager';
+import {
+  createDesktopWidgetManager,
+  type DesktopWidgetManager,
+} from './desktopWidgetManager';
+import type {
+  DesktopIconZoneBounds,
+  DesktopModeFallbackPayload,
+} from './desktopIconZoneTypes';
 
 declare const __dirname: string;
 
@@ -104,6 +112,9 @@ function normalizeDesktopMode(value: unknown): WidgetDesktopMode {
 
 // 위젯 표시 모드 상태 추적
 let currentDesktopMode: WidgetDesktopMode = 'normal';
+
+// 바탕화면 작업판 (native-desktop) — Phase 1 은 no-op, Phase 2 에서 win32 manager 로 교체.
+const desktopWidgetManager: DesktopWidgetManager = createDesktopWidgetManager();
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 let winDRecoveryDedup = false;  // minimize 핸들러와 폴링 중복 방지
 let widgetBoundsBeforeLayout: WidgetBounds | null = null;
@@ -1379,6 +1390,7 @@ function recreateWidget(): void {
   // 기존 위젯 정리
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     stopWinDRecovery();
+    desktopWidgetManager.disable();
     widgetWindow.destroy();
   }
   widgetWindow = null;
@@ -1458,27 +1470,11 @@ function createWidgetWindow(
       const desktopMode = normalizeDesktopMode(options.desktopMode);
       currentDesktopMode = desktopMode;
 
-      // Phase 2 (v2.1.0~)에서 'native-desktop' 분기에 desktopWidgetManager.enable()이 추가됨.
-      // 현재는 값만 보존하고 런타임은 'normal'과 동일하게 둔다.
-      switch (desktopMode) {
-        case 'topmost':
-          widgetWindow.setAlwaysOnTop(true);
-          widgetWindow.show();
-          console.log('[widget] 항상 위에 모드');
-          break;
-        case 'native-desktop':
-          // 미구현(Phase 2 대기) — 임시 fallback
-          widgetWindow.setAlwaysOnTop(false);
-          widgetWindow.show();
-          console.log('[widget] native-desktop 요청 — Phase 2 미구현, normal로 fallback');
-          break;
-        case 'normal':
-        default:
-          widgetWindow.setAlwaysOnTop(false);
-          widgetWindow.show();
-          console.log('[widget] 일반 모드');
-          break;
-      }
+      // 위젯이 처음 표시되기 전에 alwaysOnTop / native-desktop attach 결정을 적용.
+      // applyDesktopModeRuntime 은 비동기지만 show() 호출과 race 해도 안전하다 (윈도우는 이미 생성됨).
+      void applyDesktopModeRuntime(widgetWindow, desktopMode, null);
+      widgetWindow.show();
+      console.log(`[widget] 표시 모드 = ${desktopMode}`);
 
       // 모든 모드에서 Win+D 복원 활성화
       startWinDRecovery();
@@ -1502,8 +1498,14 @@ function createWidgetWindow(
     }, 300);
   });
 
-  widgetWindow.on('move', scheduleWidgetBoundsSave);
-  widgetWindow.on('resize', scheduleWidgetBoundsSave);
+  widgetWindow.on('move', () => {
+    scheduleWidgetBoundsSave();
+    if (widgetWindow) desktopWidgetManager.updateWidgetBounds(widgetWindow);
+  });
+  widgetWindow.on('resize', () => {
+    scheduleWidgetBoundsSave();
+    if (widgetWindow) desktopWidgetManager.updateWidgetBounds(widgetWindow);
+  });
 
   // Win+D minimize 차단: 즉시 복원 (primary)
   widgetWindow.on('minimize', () => {
@@ -1531,6 +1533,7 @@ function createWidgetWindow(
   widgetWindow.on('closed', () => {
     console.log(`[diag] widget closed — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}`);
     stopWinDRecovery();
+    desktopWidgetManager.disable();
     widgetWindow = null;
     currentDesktopMode = 'normal';
     if (!isQuitting && !isSystemSuspending) {
@@ -1546,6 +1549,74 @@ function createWidgetWindow(
   widgetWindow.webContents.on('render-process-gone', (_e, details) => {
     console.log('[diag] widget renderer gone:', details);
   });
+}
+
+/**
+ * 위젯의 desktopMode 변경에 따른 런타임 동작을 일관되게 적용한다.
+ *
+ * - 'topmost': alwaysOnTop=true, manager.disable()
+ * - 'normal': alwaysOnTop=false, manager.disable()
+ * - 'native-desktop': manager.enable() 시도, 실패 시 자동 fallback (Phase 1 은 항상 실패).
+ *
+ * applyWidgetSettings 와 createWidgetWindow attachAndShow 양쪽에서 호출된다.
+ * previousMode 는 모드 진입 시 토스트/로그를 위한 정보 — 런타임 결정에는 사용하지 않는다.
+ */
+async function applyDesktopModeRuntime(
+  widget: BrowserWindow,
+  mode: WidgetDesktopMode,
+  previousMode: WidgetDesktopMode | null,
+): Promise<void> {
+  if (widget.isDestroyed()) return;
+
+  // 다른 모드 → native-desktop 외 진입 시에는 우선 manager 를 disable 해 두 모드가
+  // 동시에 attach 상태가 되는 위험을 차단한다 (Phase 1 no-op 이지만 Phase 2 호환).
+  if (mode !== 'native-desktop') {
+    desktopWidgetManager.disable();
+  }
+
+  switch (mode) {
+    case 'topmost':
+      widget.setAlwaysOnTop(true);
+      break;
+    case 'normal':
+      widget.setAlwaysOnTop(false);
+      break;
+    case 'native-desktop': {
+      // alwaysOnTop=false 가 native-desktop 의 기본 — manager 가 attach 에 성공하든
+      // 실패하든 Z-order 는 시스템이 결정하도록 둔다.
+      widget.setAlwaysOnTop(false);
+      const status = await desktopWidgetManager.enable(widget);
+      if (status.ok) {
+        console.log('[widget] native-desktop 모드 진입 성공');
+      } else {
+        const fallback = status.fallbackMode;
+        console.log(
+          `[widget] native-desktop 진입 실패 (${status.reason}) — ${fallback} 로 fallback`,
+        );
+        // 사용자에게는 renderer 측에서 토스트를 띄울 수 있도록 알린다.
+        const payload: DesktopModeFallbackPayload = {
+          reason: status.reason,
+          fallbackMode: fallback,
+        };
+        if (!widget.webContents.isDestroyed()) {
+          widget.webContents.send('desktopMode:fallback', payload);
+        }
+        // 임시 fallback: alwaysOnTop 만 보정하고 currentDesktopMode 자체는 native-desktop 으로
+        // 둔다 (사용자 Settings 저장 의도를 존중). 다음 enable 시도(예: 모드 재토글) 가 가능.
+        widget.setAlwaysOnTop(fallback === 'topmost');
+      }
+      break;
+    }
+    default: {
+      // exhaustiveness 체크: 미래에 새 모드가 추가됐는데 여기에 누락되면 컴파일 에러.
+      const _exhaustive: never = mode;
+      void _exhaustive;
+    }
+  }
+
+  if (previousMode !== null && previousMode !== mode) {
+    void previousMode; // 디버깅 시 활용 — 향후 텔레메트리 hook
+  }
 }
 
 function readSettingsWidgetOptions(): { width: number; height: number; startInWidgetMode: boolean; closeAction: 'widget' | 'tray' | 'ask'; desktopMode: WidgetDesktopMode; memorySaverMode: boolean } {
@@ -1798,11 +1869,52 @@ function registerIpcHandlers(): void {
     },
   );
 
+  // ─── 바탕화면 작업판 (native-desktop-mode) IPC ───────────────────────────
+  // Phase 1 에서는 manager 가 no-op 이라 핸들러도 단순 forward.
+  // Phase 2 (Windows native) 진입 시 manager 측 setPassThroughZones 가 실제 hit-test 캐시를 갱신.
+
+  ipcMain.handle(
+    'desktopIconZones:updateBounds',
+    (_event, rawZones: unknown): void => {
+      // renderer 측 preload 에서 이미 1차 검증을 통과하지만, 시그널 무결성을 위해
+      // main 쪽에서도 형식·범위를 다시 확인한다 (rect 가 음수/0 이면 무시).
+      if (!Array.isArray(rawZones)) return;
+      const zones: DesktopIconZoneBounds[] = [];
+      for (const z of rawZones) {
+        if (typeof z !== 'object' || z === null) continue;
+        const o = z as { id?: unknown; name?: unknown; rect?: unknown };
+        if (typeof o.id !== 'string' || o.id.length === 0) continue;
+        if (typeof o.name !== 'string') continue;
+        if (typeof o.rect !== 'object' || o.rect === null) continue;
+        const r = o.rect as { x?: unknown; y?: unknown; width?: unknown; height?: unknown };
+        if (
+          typeof r.x !== 'number' || !Number.isFinite(r.x) ||
+          typeof r.y !== 'number' || !Number.isFinite(r.y) ||
+          typeof r.width !== 'number' || !Number.isFinite(r.width) || r.width <= 0 ||
+          typeof r.height !== 'number' || !Number.isFinite(r.height) || r.height <= 0
+        ) {
+          continue;
+        }
+        zones.push({
+          id: o.id,
+          name: o.name,
+          rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+        });
+      }
+      desktopWidgetManager.setPassThroughZones(zones);
+    },
+  );
+
+  ipcMain.handle('desktopIconZones:clearBounds', (): void => {
+    desktopWidgetManager.clearPassThroughZones();
+  });
+
   // window:toggleWidget — 위젯 토글
   ipcMain.handle('window:toggleWidget', (): void => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       // 위젯이 열려있으면 닫고 메인창 복원 (필요 시 재생성)
       stopWinDRecovery();
+      desktopWidgetManager.disable();
       widgetWindow.destroy();
       widgetWindow = null;
       currentDesktopMode = 'normal';
@@ -1907,20 +2019,10 @@ function registerIpcHandlers(): void {
     const newMode = normalizeDesktopMode(widget.desktopMode);
     if (newMode !== currentDesktopMode) {
       console.log(`[widget] 설정 변경: ${currentDesktopMode} → ${newMode}`);
+      const previousMode = currentDesktopMode;
       currentDesktopMode = newMode;
 
-      // Phase 2 (v2.1.0~)에서 'native-desktop' 분기에 desktopWidgetManager.enable()이 추가됨.
-      // 현재는 'native-desktop' 값을 정상적으로 보존하되 런타임 동작은 'normal'과 동일하게 둔다.
-      switch (newMode) {
-        case 'topmost':
-          widgetWindow.setAlwaysOnTop(true);
-          break;
-        case 'native-desktop':
-        case 'normal':
-        default:
-          widgetWindow.setAlwaysOnTop(false);
-          break;
-      }
+      void applyDesktopModeRuntime(widgetWindow, newMode, previousMode);
     }
   });
 

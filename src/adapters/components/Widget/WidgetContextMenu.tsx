@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import type { WidgetDesktopMode, WidgetLayoutMode } from '@domain/entities/Settings';
+import {
+  DEFAULT_DESKTOP_ICON_ZONE_PRESET,
+  type WidgetDesktopMode,
+  type WidgetLayoutMode,
+} from '@domain/entities/Settings';
 
 interface WidgetContextMenuProps {
   x: number;
@@ -63,9 +67,42 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
   };
 
   const isAlwaysOnTop = settings.widget.desktopMode === 'topmost';
-  const handleToggleAlwaysOnTop = () => {
-    const nextMode: WidgetDesktopMode = isAlwaysOnTop ? 'normal' : 'topmost';
+  const isNativeDesktop = settings.widget.desktopMode === 'native-desktop';
+  const isWindows = typeof navigator !== 'undefined' && /Win/i.test(navigator.platform);
+
+  const applyDesktopMode = (nextMode: WidgetDesktopMode) => {
     const nextWidget = { ...settings.widget, desktopMode: nextMode };
+    void update({ widget: nextWidget });
+    void window.electronAPI?.applyWidgetSettings({
+      opacity: nextWidget.opacity,
+      desktopMode: nextMode,
+    });
+  };
+
+  const handleToggleAlwaysOnTop = () => {
+    // 항상 위에 ↔ 일반. native-desktop 상태에서 토글하면 일반으로 전환.
+    const nextMode: WidgetDesktopMode = isAlwaysOnTop ? 'normal' : 'topmost';
+    applyDesktopMode(nextMode);
+  };
+
+  const handleToggleNativeDesktop = () => {
+    // 바탕화면 작업판 ↔ 일반. topmost 였더라도 native-desktop 진입 시 일반으로 회귀하지 않고
+    // native-desktop 으로 직접 전환 (사용자 의도 반영).
+    const nextMode: WidgetDesktopMode = isNativeDesktop ? 'normal' : 'native-desktop';
+
+    // 첫 활성화 시 desktopIconZones 가 비어있으면 기본 프리셋을 채워 사용자가 즉시
+    // 카드 3개(작업 전/중/완료)를 볼 수 있게 한다. 기존 사용자 데이터는 절대 덮어쓰지 않는다.
+    const existingZones = settings.widget.desktopIconZones ?? [];
+    const shouldSeedPreset = nextMode === 'native-desktop' && existingZones.length === 0;
+    const nextZones = shouldSeedPreset
+      ? DEFAULT_DESKTOP_ICON_ZONE_PRESET.map((z) => ({ ...z }))
+      : existingZones;
+
+    const nextWidget = {
+      ...settings.widget,
+      desktopMode: nextMode,
+      desktopIconZones: nextZones,
+    };
     void update({ widget: nextWidget });
     void window.electronAPI?.applyWidgetSettings({
       opacity: nextWidget.opacity,
@@ -117,6 +154,31 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
           </span>
         )}
       </button>
+
+      {/* 바탕화면 작업판 토글 — Windows 전용 (v2.1.0~) */}
+      {isWindows && (
+        <button
+          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-sp-text/[0.08] transition-colors text-left"
+          onClick={handleToggleNativeDesktop}
+          title="Windows 바탕화면 아이콘을 위젯의 지정 영역 위에 올려 정리합니다."
+        >
+          <span
+            className="material-symbols-outlined flex-shrink-0"
+            style={{ fontSize: 20, color: isNativeDesktop ? '#10b981' : undefined }}
+          >
+            wallpaper
+          </span>
+          <span className="flex-1 text-sm text-sp-text">바탕화면 작업판</span>
+          {isNativeDesktop && (
+            <span
+              className="material-symbols-outlined text-emerald-400 flex-shrink-0"
+              style={{ fontSize: 18 }}
+            >
+              check
+            </span>
+          )}
+        </button>
+      )}
 
       {/* 구분선 */}
       <div className="h-px bg-sp-border mx-3 my-1" />

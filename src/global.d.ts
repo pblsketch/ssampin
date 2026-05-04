@@ -504,6 +504,56 @@ interface ElectronAPI {
   // === 백업·복원·데이터 위치 센터 (v2.0.3+) ===
   // 외부 서버 전송 없음 — main 프로세스 fs/dialog/shell만 사용.
   backup?: BackupElectronAPI;
+
+  // === 바탕화면 작업판 (v2.1.0~, Windows 전용) ===
+  // Phase 1 에서는 manager 가 no-op 이라 호출은 받지만 실제 동작은 Phase 2 에서.
+  desktopIconZones?: DesktopIconZonesElectronAPI;
+}
+
+/** 바탕화면 작업판 — desktop-icon-zone 카드 1개의 화면 위치 (physical screen px). */
+interface DesktopIconZoneBoundsView {
+  readonly id: string;
+  readonly name: string;
+  readonly rect: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
+}
+
+/** 바탕화면 작업판 진입 실패 사유 (한국어 메시지 변환은 UI 책임). */
+type DesktopWidgetFallbackReason =
+  | 'not-supported-on-platform'
+  | 'not-implemented'
+  | 'koffi-load-failed'
+  | 'workerw-not-found'
+  | 'set-parent-failed'
+  | 'hook-install-failed'
+  | 'widget-not-ready'
+  | 'unknown';
+
+/** 바탕화면 작업판 main → renderer fallback 페이로드. */
+interface DesktopModeFallbackPayloadView {
+  readonly reason: DesktopWidgetFallbackReason;
+  readonly fallbackMode: 'normal' | 'topmost';
+}
+
+interface DesktopIconZonesElectronAPI {
+  /**
+   * 카드 영역 갱신 — renderer ResizeObserver 가 throttle 30Hz 로 호출.
+   * preload 와 main 양쪽에서 형식·범위를 검증하므로 이 함수는 invalid 입력을 silently 무시한다.
+   */
+  updateBounds: (zones: ReadonlyArray<DesktopIconZoneBoundsView>) => Promise<void>;
+  /** 위젯 hide / 모드 OFF / 카드 unmount 시 모든 영역 해제. */
+  clearBounds: () => Promise<void>;
+  /**
+   * native-desktop 진입 실패 알림 구독.
+   * 반환된 unsubscribe 를 unmount 시 호출.
+   */
+  onFallback: (
+    cb: (payload: DesktopModeFallbackPayloadView) => void,
+  ) => () => void;
 }
 
 /** 백업 파일 metadata — 버전 정보 표시용 */

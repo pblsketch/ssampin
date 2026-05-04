@@ -18,8 +18,12 @@ import { getSpanClass } from '@widgets/utils/getSpanClass';
 import { triggerRefreshAll } from '@widgets/hooks/useWidgetRefresh';
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
+import { DesktopIconZoneOverlay } from './DesktopIconZoneOverlay';
 import { WidgetWeatherBar } from '@widgets/components/WidgetWeatherBar';
-import type { WidgetLayoutMode } from '@domain/entities/Settings';
+import {
+  normalizeDesktopIconZones,
+  type WidgetLayoutMode,
+} from '@domain/entities/Settings';
 
 interface ContextMenuState {
   x: number;
@@ -173,6 +177,25 @@ export function Widget() {
   // 위젯 → 메인 윈도우 네비게이션 (IPC)
   const handleWidgetNavigate = useCallback((page: string) => {
     void window.electronAPI?.navigateToPage(page);
+  }, []);
+
+  // ── 바탕화면 작업판 (v2.1.0~ Windows 전용) ──
+  const isNativeDesktopMode = settings.widget.desktopMode === 'native-desktop';
+  const desktopIconZones = useMemo(
+    () => normalizeDesktopIconZones(settings.widget.desktopIconZones ?? []),
+    [settings.widget.desktopIconZones],
+  );
+
+  // native-desktop 진입 실패 시 main 이 보내는 fallback 알림 구독.
+  // Phase 1 에서는 manager 가 항상 ok=false 를 반환하므로 'not-implemented' 사유로 토스트가 뜬다.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.desktopIconZones?.onFallback?.((payload) => {
+      console.log('[widget] native-desktop fallback', payload);
+      // TODO(Phase 2): 실제 토스트 컴포넌트로 사용자에게 안내. 현재는 로그만.
+    });
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, []);
 
   return (
@@ -407,6 +430,11 @@ export function Widget() {
             }}
           />
         ))}
+
+        {/* 바탕화면 작업판 오버레이 (v2.1.0~ Windows 전용) — 카드 영역만 main 측 mouse hook 으로 Explorer 통과 */}
+        {isNativeDesktopMode && (
+          <DesktopIconZoneOverlay zones={desktopIconZones} />
+        )}
       </div>
 
       {/* 레이아웃 선택 팝업 */}
