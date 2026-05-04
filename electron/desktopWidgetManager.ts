@@ -126,6 +126,7 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
   const mod = require('./platform/win32Desktop') as typeof import('./platform/win32Desktop');
   const controller = mod.createWin32WidgetController();
   let enabled = false;
+  let attachedWindow: import('electron').BrowserWindow | null = null;
 
   return {
     async enable(window): Promise<DesktopWidgetModeStatus> {
@@ -153,16 +154,18 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
         };
       }
       enabled = true;
+      attachedWindow = window;
       return { ok: true, mode: 'native-desktop' };
     },
 
     disable(): void {
       try {
-        controller.disable();
+        controller.disable(attachedWindow);
       } catch (e) {
         console.error('[desktopWidgetManager] disable() error', e);
       }
       enabled = false;
+      attachedWindow = null;
     },
 
     updateWidgetBounds(window): void {
@@ -205,11 +208,12 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
       // Explorer 재시작 등으로 detach 되었으면 재시도.
       console.log('[desktopWidgetManager] healthCheck: detached, retry enable');
       try {
-        controller.disable();
+        controller.disable(attachedWindow);
       } catch {
         // ignore
       }
       enabled = false;
+      attachedWindow = null;
       const result = controller.enable(window);
       if (!result.ok) {
         const fallbackMode: 'normal' | 'topmost' =
@@ -217,6 +221,7 @@ function createWin32DesktopWidgetManager(): DesktopWidgetManager {
         return { ok: false, reason: 'unknown', fallbackMode };
       }
       enabled = true;
+      attachedWindow = window;
       return { ok: true, mode: 'native-desktop' };
     },
 
