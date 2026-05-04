@@ -339,17 +339,31 @@ export function createWin32WidgetController(): Win32WidgetController {
   let remoteHitTestInfo = 0;
   let lastHitTest = { x: 0, y: 0, result: false, ts: 0, valid: false };
 
-  // 헤더 드래그 시뮬레이션 상태 (PR-3c)
-  // SetParent 후 `-webkit-app-region: drag` 가 DWM hit-test 에서 무효화되므로,
-  // hook 의 LBUTTONDOWN 좌표가 widget 상단 60 logical-px 안이면 직접 MoveWindow 로 이동 시뮬레이션.
+  // 헤더 드래그 + 8-방향 리사이즈 시뮬레이션 상태 (PR-3c+).
+  // SetParent 후 DWM NC drag / browser 의 onPointerDown 둘 다 attach 상태에서 무효화되므로,
+  // 헤더(상단 60 logical-px) + 가장자리(8 logical-px) 클릭을 hook 이 가로채 직접 MoveWindow 시뮬레이션.
   const HEADER_HEIGHT_LOGICAL_PX = 60;
-  let dragMode = false;
+  const RESIZE_EDGE_LOGICAL_PX = 8;
+  const MIN_WIDGET_W_LOGICAL = 300;
+  const MIN_WIDGET_H_LOGICAL = 200;
+  type DragKind =
+    | 'move'
+    | 'resize-n'
+    | 'resize-s'
+    | 'resize-e'
+    | 'resize-w'
+    | 'resize-ne'
+    | 'resize-nw'
+    | 'resize-se'
+    | 'resize-sw';
+  let dragKind: DragKind | null = null;
   let dragStartScreenX = 0;
   let dragStartScreenY = 0;
-  let dragStartClientX = 0;
-  let dragStartClientY = 0;
-  let dragWidth = 0;
-  let dragHeight = 0;
+  // 시작 시점 widget rect (screen physical px)
+  let dragStartLeft = 0;
+  let dragStartTop = 0;
+  let dragStartRight = 0;
+  let dragStartBottom = 0;
 
   const refreshBounds = (): void => {
     if (!attachedHwnd) return;
@@ -476,17 +490,82 @@ export function createWin32WidgetController(): Win32WidgetController {
         if (isUp && msg === WM_LBUTTONUP) buttonMask &= ~MK_LBUTTON;
         if (isUp && msg === WM_RBUTTONUP) buttonMask &= ~MK_RBUTTON;
 
-        // ── 진행 중 드래그가 있으면 우선 처리 (move/up 모두 가로채 외부 차단)
-        if (dragMode) {
-          if (isMove) {
-            const newClientX = dragStartClientX + (screenX - dragStartScreenX);
-            const newClientY = dragStartClientY + (screenY - dragStartScreenY);
-            a.MoveWindow(attachedHwnd, newClientX, newClientY, dragWidth, dragHeight, true);
-            refreshBounds();
+        // ── 진행 중 드래그/리사이즈가 있으면 우선 처리 (모든 mouse 메시지 외부 차단)
+        if (dragKind !== null) {
+          if (isMove && workerWHwnd) {
+            const dx = screenX - dragStartScreenX;
+            const dy = screenY - dragStartScreenY;
+            // 새 screen rect 계산 (kind 별)
+            let newLeft = dragStartLeft;
+            let newTop = dragStartTop;
+            let newRight = dragStartRight;
+            let newBottom = dragStartBottom;
+            switch (dragKind) {
+              case 'move':
+                newLeft = dragStartLeft + dx;
+                newTop = dragStartTop + dy;
+                newRight = dragStartRight + dx;
+                newBottom = dragStartBottom + dy;
+                break;
+              case 'resize-n':
+                newTop = dragStartTop + dy;
+                break;
+              case 'resize-s':
+                newBottom = dragStartBottom + dy;
+                break;
+              case 'resize-e':
+                newRight = dragStartRight + dx;
+                break;
+              case 'resize-w':
+                newLeft = dragStartLeft + dx;
+                break;
+              case 'resize-ne':
+                newTop = dragStartTop + dy;
+                newRight = dragStartRight + dx;
+                break;
+              case 'resize-nw':
+                newTop = dragStartTop + dy;
+                newLeft = dragStartLeft + dx;
+                break;
+              case 'resize-se':
+                newBottom = dragStartBottom + dy;
+                newRight = dragStartRight + dx;
+                break;
+              case 'resize-sw':
+                newBottom = dragStartBottom + dy;
+                newLeft = dragStartLeft + dx;
+                break;
+            }
+            // 최소 크기 강제 (physical px 로 변환)
+            let sf = 1;
+            try {
+              const dpi = a.GetDpiForWindow(attachedHwnd) || 96;
+              sf = dpi > 0 ? dpi / 96 : 1;
+            } catch {
+              /* swallow */
+            }
+            const minW = Math.round(MIN_WIDGET_W_LOGICAL * sf);
+            const minH = Math.round(MIN_WIDGET_H_LOGICAL * sf);
+            if (newRight - newLeft < minW) {
+              if (dragKind.includes('w')) newLeft = newRight - minW;
+              else newRight = newLeft + minW;
+            }
+            if (newBottom - newTop < minH) {
+              if (dragKind.includes('n')) newTop = newBottom - minH;
+              else newBottom = newTop + minH;
+            }
+            // screen → workerW client
+            const tlBuf = createPointBuffer(newLeft, newTop);
+            if (a.ScreenToClient(workerWHwnd, tlBuf)) {
+              const cx = tlBuf.readInt32LE(0);
+              const cy = tlBuf.readInt32LE(4);
+              a.MoveWindow(attachedHwnd, cx, cy, newRight - newLeft, newBottom - newTop, true);
+              refreshBounds();
+            }
             return 1n;
           }
           if (isUp && msg === WM_LBUTTONUP) {
-            dragMode = false;
+            dragKind = null;
             const cb = handlersRef?.onDragEnd;
             if (cb) {
               try {
@@ -497,7 +576,7 @@ export function createWin32WidgetController(): Win32WidgetController {
             }
             return 1n;
           }
-          // 드래그 중 다른 버튼/휠 — 모두 차단
+          // 드래그/리사이즈 중 다른 버튼/휠 — 모두 차단
           return 1n;
         }
 
@@ -516,7 +595,7 @@ export function createWin32WidgetController(): Win32WidgetController {
           return passThrough();
         }
 
-        // ── 헤더 영역 LBUTTONDOWN — 헤더 드래그 시작
+        // ── LBUTTONDOWN — 가장자리(리사이즈) → 헤더(이동) 우선 감지
         if (isDown && msg === WM_LBUTTONDOWN && workerWHwnd) {
           let sf = 1;
           try {
@@ -525,21 +604,39 @@ export function createWin32WidgetController(): Win32WidgetController {
           } catch {
             /* swallow */
           }
+          const edgePx = Math.round(RESIZE_EDGE_LOGICAL_PX * sf);
           const headerPx = Math.round(HEADER_HEIGHT_LOGICAL_PX * sf);
+          const relX = screenX - widgetRect.left;
           const relY = screenY - widgetRect.top;
-          if (relY >= 0 && relY < headerPx && !isDesktopIconAtPoint(screenX, screenY)) {
-            // workerW client 좌표계로 현재 위젯 좌상단 변환
-            const tlBuf = createPointBuffer(widgetRect.left, widgetRect.top);
-            if (a.ScreenToClient(workerWHwnd, tlBuf)) {
-              dragStartScreenX = screenX;
-              dragStartScreenY = screenY;
-              dragStartClientX = tlBuf.readInt32LE(0);
-              dragStartClientY = tlBuf.readInt32LE(4);
-              dragWidth = widgetRect.right - widgetRect.left;
-              dragHeight = widgetRect.bottom - widgetRect.top;
-              dragMode = true;
-              return 1n;
-            }
+          const widthPx = widgetRect.right - widgetRect.left;
+          const heightPx = widgetRect.bottom - widgetRect.top;
+          const onLeft = relX >= 0 && relX < edgePx;
+          const onRight = relX <= widthPx && relX > widthPx - edgePx;
+          const onTop = relY >= 0 && relY < edgePx;
+          const onBottom = relY <= heightPx && relY > heightPx - edgePx;
+
+          let kind: DragKind | null = null;
+          if (onTop && onLeft) kind = 'resize-nw';
+          else if (onTop && onRight) kind = 'resize-ne';
+          else if (onBottom && onLeft) kind = 'resize-sw';
+          else if (onBottom && onRight) kind = 'resize-se';
+          else if (onTop) kind = 'resize-n';
+          else if (onBottom) kind = 'resize-s';
+          else if (onLeft) kind = 'resize-w';
+          else if (onRight) kind = 'resize-e';
+          else if (relY >= 0 && relY < headerPx && !isDesktopIconAtPoint(screenX, screenY)) {
+            kind = 'move';
+          }
+
+          if (kind !== null) {
+            dragStartScreenX = screenX;
+            dragStartScreenY = screenY;
+            dragStartLeft = widgetRect.left;
+            dragStartTop = widgetRect.top;
+            dragStartRight = widgetRect.right;
+            dragStartBottom = widgetRect.bottom;
+            dragKind = kind;
+            return 1n;
           }
         }
 
@@ -628,7 +725,7 @@ export function createWin32WidgetController(): Win32WidgetController {
     buttonMask = 0;
     externalDrag = false;
     widgetHovering = false;
-    dragMode = false;
+    dragKind = null;
   };
 
   return {
