@@ -1,51 +1,74 @@
-import { useEffect, useMemo } from 'react';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import {
-  normalizeDesktopIconZones,
-  type DesktopIconZoneSettings,
-} from '@domain/entities/Settings';
+import { useEffect, useState } from 'react';
+
+interface ZoneCardBounds {
+  readonly id: string;
+  readonly name: string;
+  readonly rect: {
+    readonly x: number; // physical screen px (가상 데스크톱 절대 좌표)
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
+}
 
 /**
- * 바탕화면 작업판 별도 BrowserWindow 의 root 컴포넌트 (v2.1.0~).
+ * 바탕화면 작업판 별도 BrowserWindow 의 root 컴포넌트 (v2.1.0~ Phase 2.3).
  *
  * 동작:
- *   - 가상 데스크톱 전체 영역에 fullscreen 으로 떠 있는 transparent 윈도우.
- *   - main 프로세스가 Explorer WorkerW (after-defview / progman-child) 자식으로
- *     SetParent 한 상태이므로 데스크톱 아이콘이 시각적으로 위에 떠 보인다.
- *   - 본 컴포넌트는 zones 배열을 가져와 카드별 영역에 점선 테두리 + 라벨만 그린다.
- *   - 카드 외부 영역은 `pointer-events: none` 으로 두어 데스크톱 아이콘 클릭이
- *     자연스럽게 통과되도록 한다.
- *
- * Phase 2.2 의 핵심 단순화:
- *   - 메인 위젯 (widgetWindow) 은 attach 대상이 아니다 → 위젯 UX 그대로 유지.
- *   - WH_MOUSE_LL 글로벌 hook 미사용 → 커서 freeze 결함 없음.
- *   - 좌표 IPC 도 보내지 않는다 (zone 영역은 본 윈도우 자체가 시각화 + 호버 처리).
+ *   - 가상 데스크톱 전체 영역에 fullscreen + transparent 로 떠 있다.
+ *   - main 프로세스가 Explorer WorkerW 자식으로 SetParent 한 상태이므로
+ *     데스크톱 아이콘이 시각적으로 위에 떠 보인다.
+ *   - 위젯 안의 desktop-icon-zone 카드 좌표(physical screen px)를 IPC 로 받아
+ *     **그 위치에 정확히** zone 점선 카드 + 라벨을 그린다 → 시각적으로 위젯 카드와
+ *     일체화.
+ *   - 카드 본문은 `pointer-events: none` 으로 두어 데스크톱 아이콘 클릭 자연 통과.
  */
 export function DesktopZoneWindow() {
-  const { settings, load } = useSettingsStore();
+  const [zones, setZones] = useState<ReadonlyArray<ZoneCardBounds>>([]);
+  const [scaleFactor, setScaleFactor] = useState<number>(1);
+  const [originDIP, setOriginDIP] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // settings 가 아직 메모리에 없을 수 있으므로 mount 시 1회 load.
   useEffect(() => {
-    void load();
-  }, [load]);
+    const api = window.electronAPI?.desktopIconZones;
+    if (!api) return;
+    const unsubscribe = api.onCardsUpdate?.((next) => {
+      setZones(next ?? []);
+    });
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
 
-  const zones = useMemo<DesktopIconZoneSettings[]>(
-    () => normalizeDesktopIconZones(settings.widget.desktopIconZones ?? []),
-    [settings.widget.desktopIconZones],
-  );
+  // physical px → zoneWindow client px 변환을 위해 위젯이 위치한 디스플레이의
+  // scaleFactor 와 zoneWindow 자체의 origin 을 알아야 한다.
+  // zoneWindow 는 가상 데스크톱 전체에 걸쳐 있으므로 그 origin = 가상 데스크톱 (0,0)
+  // 또는 좌상단 디스플레이 원점. main 이 보내는 카드 좌표는 widget BrowserWindow
+  // 의 DIP 기반(`getBoundingClientRect` + window.screenX) 이라 1차 근사: scaleFactor=1
+  // 가정. 정확도가 필요하면 main 의 getDisplayScaleFactor 를 호출.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = (): void => {
+      const api = window.electronAPI?.desktopIconZones;
+      if (!api?.getDisplayScaleFactor) return;
+      void api.getDisplayScaleFactor().then((info) => {
+        if (cancelled || !info) return;
+        setScaleFactor(info.scaleFactor || 1);
+        // info.bounds 는 widget BrowserWindow 의 DIP bounds
+        // zoneWindow 는 가상 데스크톱 전체에 걸쳐 있으나 DOM 좌표는 0,0 부터.
+        // physical px 좌표를 zoneWindow client(CSS px) 로 변환하려면
+        // 가상 데스크톱의 origin DIP 를 빼야 한다.
+        // 단순화: zoneWindow 가 항상 가상 데스크톱 좌상단 (0,0) 에서 시작한다고 가정.
+        setOriginDIP({ x: 0, y: 0 });
+      });
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
-  const enabledZones = zones.filter((z) => z.enabled);
-
-  // 데스크톱 모드가 아니면 렌더링도 하지 않음 (혹시 실수로 켜진 경우 방어막).
-  if (settings.widget.desktopMode !== 'native-desktop') {
-    return null;
-  }
-
-  if (enabledZones.length === 0) return null;
-
-  // 화면 중앙 1/3 띠에 가로로 카드 배치.
-  // 카드는 시각화 전용 — pointer-events: auto 라도 BrowserWindow 자체가 자연스럽게 hover.
-  // 카드 외 영역은 pointer-events: none 로 배치해 desktop ListView click 통과.
   return (
     <div
       style={{
@@ -56,43 +79,47 @@ export function DesktopZoneWindow() {
       }}
       data-zone-root
     >
-      <div
-        style={{
-          position: 'absolute',
-          left: '5vw',
-          right: '5vw',
-          top: '40vh',
-          height: '40vh',
-          display: 'grid',
-          gridTemplateColumns: `repeat(${enabledZones.length}, minmax(0, 1fr))`,
-          gap: '24px',
-          pointerEvents: 'none',
-        }}
-      >
-        {enabledZones.map((z) => (
+      {zones.map((z) => {
+        // physical px → CSS px (zoneWindow DOM 기준).
+        // zoneWindow 는 가상 데스크톱 전체에 걸친 BrowserWindow 라 OS 가 자체 DPI
+        // 보정을 적용한다. CSS px = physical px / scaleFactor.
+        const sf = scaleFactor || 1;
+        const left = (z.rect.x - originDIP.x) / sf;
+        const top = (z.rect.y - originDIP.y) / sf;
+        const width = z.rect.width / sf;
+        const height = z.rect.height / sf;
+        if (width <= 0 || height <= 0) return null;
+        return (
           <div
             key={z.id}
             style={{
-              display: 'flex',
-              flexDirection: 'column',
+              position: 'absolute',
+              left,
+              top,
+              width,
+              height,
               borderRadius: '14px',
               border: '2px dashed rgba(120, 140, 180, 0.65)',
               background: 'rgba(20, 26, 40, 0.18)',
               backdropFilter: 'blur(2px)',
               overflow: 'hidden',
-              pointerEvents: 'auto',
+              pointerEvents: 'none',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             <div
               style={{
-                padding: '8px 14px',
-                fontSize: '13px',
+                padding: '6px 12px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#cbd5e1',
                 textShadow: '0 1px 2px rgba(0,0,0,0.7)',
                 background: 'rgba(15, 20, 32, 0.55)',
                 borderBottom: '1px solid rgba(120, 140, 180, 0.35)',
                 userSelect: 'none',
+                pointerEvents: 'none',
               }}
               title={z.name}
             >
@@ -101,15 +128,12 @@ export function DesktopZoneWindow() {
             <div
               style={{
                 flex: 1,
-                pointerEvents: 'none', // 카드 본문은 데스크톱 아이콘 통과 영역
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                pointerEvents: 'none', // 본문 영역은 데스크톱 아이콘 클릭 통과
               }}
             />
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

@@ -39,14 +39,6 @@ import type {
   DesktopIconZoneBounds,
   DesktopModeFallbackPayload,
 } from './desktopIconZoneTypes';
-import {
-  collectWidgetDiagnostics,
-  executeWidgetRecovery,
-  formatDiagnosticsForClipboard,
-  type WidgetDiagnosticsContext,
-  type WidgetRecoveryAction,
-  type WidgetRecoveryResult,
-} from './widgetDiagnostics';
 
 declare const __dirname: string;
 
@@ -680,48 +672,80 @@ function scheduleIconBoundsSave(bounds: IconBounds): void {
 // ─── 아이콘 드래그 — main process polling (가장 견고) ───────────────────
 // Renderer pointer capture 의존 X. screen.getCursorScreenPoint()로 OS 레벨
 // 마우스 위치를 직접 받아 setBounds. mouse가 윈도우 밖으로 나가도 정상 작동.
+//
+// v2.0.3 fix — "처음엔 되다가 갑자기 안 됨" 버그 대응 안전망 강화:
+//   1) Cursor idle stop — 마우스가 IDLE_STOP_MS 동안 정지하면 사용자가
+//      release 한 것으로 간주하고 자동 stop. 글로벌 mouseup 을 못 받는
+//      경로(Win11 Snap, focus 박탈 등)에서 endDrag IPC 누락을 잡는다.
+//   2) Hard safety timeout 5s → 30s — 정상 긴 드래그(시작 ↔ 반대편 모서리)
+//      가 false-stop 으로 끊기지 않도록.
+//   3) iconWindow 'blur' 이벤트에서 자동 stop.
+//   4) 진단 console.warn 강화 — 어떤 경로로 stop 됐는지 구분.
 let iconDragState: {
   startMouseX: number;
   startMouseY: number;
   startWinX: number;
   startWinY: number;
+  lastCursorX: number;
+  lastCursorY: number;
+  lastMoveAt: number;
 } | null = null;
 let iconDragInterval: NodeJS.Timeout | null = null;
 let iconDragSafetyTimer: NodeJS.Timeout | null = null;
 
+const ICON_DRAG_POLL_MS = 16;            // 60fps polling
+const ICON_DRAG_IDLE_STOP_MS = 700;      // 마우스 정지 → 사용자 release 추정
+const ICON_DRAG_HARD_TIMEOUT_MS = 30000; // 절대 안전망 — 30s
+
 function startIconDrag(): void {
   if (!iconWindow || iconWindow.isDestroyed()) return;
-  stopIconDrag(); // 기존 드래그 정리
+  stopIconDrag('restart'); // 기존 드래그 정리
   const mouse = screen.getCursorScreenPoint();
   const bounds = iconWindow.getBounds();
+  const now = Date.now();
   iconDragState = {
     startMouseX: mouse.x,
     startMouseY: mouse.y,
     startWinX: bounds.x,
     startWinY: bounds.y,
+    lastCursorX: mouse.x,
+    lastCursorY: mouse.y,
+    lastMoveAt: now,
   };
-  // 16ms (60fps) 폴링으로 마우스 따라가기
+  // 60fps 폴링으로 마우스 따라가기
   iconDragInterval = setInterval(() => {
     if (!iconDragState || !iconWindow || iconWindow.isDestroyed()) {
-      stopIconDrag();
+      stopIconDrag('window-gone');
       return;
     }
     const cur = screen.getCursorScreenPoint();
-    iconWindow.setBounds({
-      x: iconDragState.startWinX + (cur.x - iconDragState.startMouseX),
-      y: iconDragState.startWinY + (cur.y - iconDragState.startMouseY),
-      width: ICON_SIZE,
-      height: ICON_SIZE,
-    });
-  }, 16);
-  // 안전망: renderer가 endDrag IPC 누락해도 5초 후 자동 종료
+    const moved = cur.x !== iconDragState.lastCursorX || cur.y !== iconDragState.lastCursorY;
+    if (moved) {
+      iconDragState.lastCursorX = cur.x;
+      iconDragState.lastCursorY = cur.y;
+      iconDragState.lastMoveAt = Date.now();
+      iconWindow.setBounds({
+        x: iconDragState.startWinX + (cur.x - iconDragState.startMouseX),
+        y: iconDragState.startWinY + (cur.y - iconDragState.startMouseY),
+        width: ICON_SIZE,
+        height: ICON_SIZE,
+      });
+    } else if (Date.now() - iconDragState.lastMoveAt > ICON_DRAG_IDLE_STOP_MS) {
+      // 마우스가 700ms 정지 → 사용자가 release 한 것으로 간주.
+      // pointerup IPC 누락 케이스를 잡는 핵심 안전망.
+      stopIconDrag('idle');
+    }
+  }, ICON_DRAG_POLL_MS);
+  // Hard 안전망: 30초 절대 종료 (정상 드래그가 30초 넘는 경우는 없음)
   iconDragSafetyTimer = setTimeout(() => {
-    console.warn('[icon] drag safety timeout — auto-stopping after 5s');
-    stopIconDrag();
-  }, 5000);
+    stopIconDrag('hard-timeout');
+  }, ICON_DRAG_HARD_TIMEOUT_MS);
 }
 
-function stopIconDrag(): void {
+type IconDragStopReason = 'normal' | 'restart' | 'window-gone' | 'idle' | 'hard-timeout' | 'blur';
+
+function stopIconDrag(reason: IconDragStopReason = 'normal'): void {
+  const wasActive = iconDragInterval !== null || iconDragState !== null;
   if (iconDragInterval) {
     clearInterval(iconDragInterval);
     iconDragInterval = null;
@@ -735,6 +759,9 @@ function stopIconDrag(): void {
   if (iconWindow && !iconWindow.isDestroyed()) {
     const b = iconWindow.getBounds();
     saveIconBounds({ x: b.x, y: b.y, width: ICON_SIZE, height: ICON_SIZE });
+  }
+  if (wasActive && reason !== 'normal' && reason !== 'restart') {
+    console.warn(`[icon] drag stopped via ${reason}`);
   }
 }
 
@@ -836,6 +863,11 @@ function buildIconWindow(): void {
     iconWindow.hide();
     iconWindow.setOpacity(0);
   });
+
+  // v2.0.3 drag 안전망 — focus 박탈 / hide 시 진행 중인 drag 폴링 자동 종료
+  // (renderer pointerup/cancel 이 누락되는 path 를 잡는다)
+  iconWindow.on('blur', () => stopIconDrag('blur'));
+  iconWindow.on('hide', () => stopIconDrag('blur'));
 
   iconWindow.on('closed', () => {
     iconWindow = null;
@@ -1710,9 +1742,15 @@ async function applyDesktopModeRuntime(
 ): Promise<void> {
   if (widget.isDestroyed()) return;
 
-  // native-desktop 외 모드로 전환 시 zoneWindow 제거 + manager disable.
+  // native-desktop 외 모드로 전환 시 zoneWindow 제거 + manager disable +
+  // 위젯의 click-through 도 강제 해제 (다른 모드 진입 시 잔존하면 위젯 클릭 불가 회귀).
   if (mode !== 'native-desktop') {
     destroyDesktopZoneWindow();
+    try {
+      widget.setIgnoreMouseEvents(false);
+    } catch {
+      /* swallow */
+    }
   }
 
   switch (mode) {
@@ -2034,68 +2072,6 @@ function registerIpcHandlers(): void {
     },
   );
 
-  // ─── 위젯 진단·복구 (widget-stability-recovery PDCA) ──────────────────────
-  // 진단·복구 로직은 electron/widgetDiagnostics.ts에 격리되어 있다.
-  // main.ts는 IPC 등록 + 컨텍스트(BrowserWindow + 기존 복구 함수) 주입만 담당.
-  function buildWidgetDiagnosticsContext(): WidgetDiagnosticsContext {
-    return {
-      getWidgetWindow: () => widgetWindow,
-      // 3-vary (normal | topmost | native-desktop)을 그대로 전달.
-      // 과거 'topmost' 외 'normal' narrow는 native-desktop 사용자에게 silent 버그 유발했음.
-      getCurrentDesktopMode: () => currentDesktopMode,
-      getCurrentWindowMode: () => currentWindowMode,
-      getAllDisplays: () => screen.getAllDisplays(),
-      getDisplayMatching: (rect) => screen.getDisplayMatching(rect),
-      getDefaultWidgetBounds,
-      saveWidgetBounds,
-      recoverWidget,
-      ensureWidgetOnScreen,
-      recreateWidget,
-    };
-  }
-
-  // widget:getDiagnostics — read-only 위젯 상태 스냅샷
-  ipcMain.handle('widget:getDiagnostics', () => {
-    return collectWidgetDiagnostics(buildWidgetDiagnosticsContext());
-  });
-
-  // widget:recover — 사용자 요청 복구 액션 (action union 5종)
-  ipcMain.handle(
-    'widget:recover',
-    (_event, payload: { action: WidgetRecoveryAction }): WidgetRecoveryResult => {
-      const allowed: ReadonlyArray<WidgetRecoveryAction> = [
-        'show',
-        'moveIntoVisibleArea',
-        'recreate',
-        'reapplyAlwaysOnTop',
-        'resetPosition',
-      ];
-      if (!payload || typeof payload !== 'object' || !allowed.includes(payload.action)) {
-        return {
-          ok: false,
-          action: 'show',
-          message: '잘못된 복구 액션이에요.',
-          beforeBounds: null,
-          afterBounds: null,
-        };
-      }
-      return executeWidgetRecovery(payload.action, buildWidgetDiagnosticsContext());
-    },
-  );
-
-  // widget:copyDiagnostics — 진단 정보를 main process clipboard에 복사 (Q2 결정)
-  ipcMain.handle('widget:copyDiagnostics', (): { ok: boolean } => {
-    try {
-      const report = collectWidgetDiagnostics(buildWidgetDiagnosticsContext());
-      const text = formatDiagnosticsForClipboard(report);
-      clipboard.writeText(text);
-      return { ok: true };
-    } catch (err) {
-      console.error('[widget:copyDiagnostics] 실패:', err);
-      return { ok: false };
-    }
-  });
-
   // ─── 바탕화면 작업판 (native-desktop-mode) IPC ───────────────────────────
   // Phase 1 에서는 manager 가 no-op 이라 핸들러도 단순 forward.
   // Phase 2 (Windows native) 진입 시 manager 측 setPassThroughZones 가 실제 hit-test 캐시를 갱신.
@@ -2129,12 +2105,57 @@ function registerIpcHandlers(): void {
         });
       }
       desktopWidgetManager.setPassThroughZones(zones);
+      // Phase 2.3: 위젯 카드 좌표를 zoneWindow 로 forward — zoneWindow 가 동일 좌표에
+      // 점선 카드를 그려 시각적으로 위젯 카드와 일체화한다.
+      if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
+        try {
+          desktopZoneWindow.webContents.send('zone:cards-update', zones);
+        } catch {
+          /* swallow */
+        }
+      }
     },
   );
 
   ipcMain.handle('desktopIconZones:clearBounds', (): void => {
     desktopWidgetManager.clearPassThroughZones();
+    if (desktopZoneWindow && !desktopZoneWindow.isDestroyed()) {
+      try {
+        desktopZoneWindow.webContents.send('zone:cards-update', []);
+      } catch {
+        /* swallow */
+      }
+    }
   });
+
+  /**
+   * Phase 2.3: 위젯 BrowserWindow 의 클릭 통과 모드를 동적으로 토글한다.
+   *
+   * 사용 시나리오:
+   *   - 마우스가 desktop-icon-zone 카드 영역에 진입하면 renderer 가 true 호출 →
+   *     setIgnoreMouseEvents(true, { forward: true }) 적용 → 카드 영역 클릭이
+   *     데스크톱(Explorer ListView)으로 통과되어 바탕화면 아이콘 드래그 가능.
+   *   - 카드 영역을 벗어나면 false 호출 → 일반 위젯 모드 복귀.
+   *
+   * forward: true 옵션 덕에 click-through 활성 중에도 webContents 가 mousemove 를
+   * 계속 받아서 leave 감지가 정상 동작한다.
+   */
+  ipcMain.handle(
+    'widget:setClickThrough',
+    (_event, flag: unknown): void => {
+      if (typeof flag !== 'boolean') return;
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      try {
+        if (flag) {
+          widgetWindow.setIgnoreMouseEvents(true, { forward: true });
+        } else {
+          widgetWindow.setIgnoreMouseEvents(false);
+        }
+      } catch (e) {
+        console.error('[widget:setClickThrough] error', e);
+      }
+    },
+  );
 
   // 위젯이 현재 위치한 디스플레이의 scaleFactor (DPI 보정용).
   // renderer 의 window.devicePixelRatio 와 항상 일치하지는 않는다 (Windows 버전·이벤트 타이밍).
@@ -2172,25 +2193,9 @@ function registerIpcHandlers(): void {
   // window:navigateToPage — 메인 창으로 포커스 이동 + 페이지 이동 + 위젯 닫기
   ipcMain.handle('window:navigateToPage', (_event, page: string) => {
     // 메모리 절약 모드에서 메인창이 destroy된 상태일 수 있으므로 재생성 후 페이지 이동
-    const wasDestroyed = !mainWindow || mainWindow.isDestroyed();
     ensureMainWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
-      const target = mainWindow;
-      const sendNavigate = () => {
-        if (!target.isDestroyed()) {
-          target.webContents.send('navigate:to-page', page);
-        }
-      };
-      // 메인이 방금 재생성됐거나 아직 로딩 중이면 did-finish-load 대기.
-      // 그렇지 않으면 즉시 send.
-      if (wasDestroyed || target.webContents.isLoading()) {
-        target.webContents.once('did-finish-load', () => {
-          // React 컴포넌트가 onNavigateToPage 구독자를 등록할 시간을 추가로 확보 (50ms).
-          setTimeout(sendNavigate, 50);
-        });
-      } else {
-        sendNavigate();
-      }
+      mainWindow.webContents.send('navigate:to-page', page);
     }
     // Close widget window
     if (widgetWindow && !widgetWindow.isDestroyed()) {

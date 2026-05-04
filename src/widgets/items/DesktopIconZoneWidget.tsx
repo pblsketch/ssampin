@@ -1,37 +1,112 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import {
   DEFAULT_DESKTOP_ICON_ZONE_PRESET,
   normalizeDesktopIconZones,
+  type DesktopIconZoneSettings,
   type WidgetDesktopMode,
 } from '@domain/entities/Settings';
 
 /**
- * 바탕화면 작업판 위젯 카드 (v2.1.0~ Windows 전용, Phase 2.2 단순화 버전).
+ * 바탕화면 작업판 위젯 카드 (v2.1.0~ Windows 전용, Phase 2.3).
  *
- * Phase 2.2 변경:
- *   - 카드 자체는 더 이상 zone 영역을 직접 표시하지 않는다 (이중 렌더 결함 제거).
- *   - 실제 zone 카드는 별도 `desktopZoneWindow` BrowserWindow 가 가상 데스크톱
- *     전체에 걸쳐 그린다.
- *   - 본 위젯 카드는 켜기/끄기 토글 + zone 라벨 미리보기 + 안내 문구만 담당한다.
- *
- * 사용자 시나리오:
- *   1. 위젯 우클릭 또는 위젯 설정에서 본 카드를 추가
- *   2. "켜기" 클릭 → settings.widget.desktopMode = 'native-desktop' + 프리셋 시드
- *   3. main 프로세스가 desktopZoneWindow 를 빌드 + Explorer WorkerW 에 attach
- *   4. zone 영역(`작업 전 / 작업 중 / 작업 완료`)이 가상 데스크톱 전체에 떠 있으며
- *      바탕화면 아이콘이 영역 위로 자유롭게 드래그됨
- *   5. "끄기" 클릭 또는 모드 전환 시 desktopZoneWindow 파괴 + 일반 모드 복귀
+ * 핵심 동작 (Phase 2.3 일체화):
+ *   - 카드 슬롯이 곧 zone 영역. 카드 본문 좌표를 IPC 로 main 에 보내면 별도
+ *     `desktopZoneWindow` (WorkerW attach 된 transparent fullscreen) 가 동일 위치에
+ *     점선 zone 카드를 그려, 시각적으로 위젯 카드와 zoneWindow 가 일체화된다.
+ *   - 카드 본문에 마우스가 진입하면 `widget:setClickThrough(true)` 를 호출 →
+ *     widgetWindow.setIgnoreMouseEvents(true, {forward: true}) 적용 → 카드 영역의
+ *     클릭이 데스크톱(Explorer ListView)으로 통과되어 바탕화면 아이콘 드래그 가능.
+ *   - 카드를 벗어나면 false 호출 → 일반 위젯 모드 복귀, 다른 위젯 카드는 영향 없음.
  */
 export function DesktopIconZoneWidget() {
   const { settings, update } = useSettingsStore();
   const isWindows =
     typeof navigator !== 'undefined' && /Win/i.test(navigator.platform);
   const isActive = settings.widget.desktopMode === 'native-desktop';
-  const zones = useMemo(
+  const zones = useMemo<DesktopIconZoneSettings[]>(
     () => normalizeDesktopIconZones(settings.widget.desktopIconZones ?? []),
     [settings.widget.desktopIconZones],
   );
+  const enabledZones = useMemo(
+    () => zones.filter((z) => z.enabled),
+    [zones],
+  );
+
+  const cellRefs = useRef(new Map<string, HTMLDivElement>());
+  const lastSentSerializedRef = useRef<string>('');
+  const setCellRef = useCallback((id: string) => (el: HTMLDivElement | null) => {
+    if (el) cellRefs.current.set(id, el);
+    else cellRefs.current.delete(id);
+  }, []);
+
+  // 카드 본문 좌표 측정 + IPC 송신.
+  // physical screen px = (window.screenX + rect.left) * devicePixelRatio.
+  // Electron BrowserWindow 에서 DIP 와 CSS px 는 1:1, devicePixelRatio = display scaleFactor.
+  const measureAndSend = useCallback(() => {
+    const api = window.electronAPI?.desktopIconZones;
+    if (!api?.updateBounds) return;
+    if (!isActive || enabledZones.length === 0) {
+      void api.updateBounds([]);
+      lastSentSerializedRef.current = '[]';
+      return;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    const screenX = window.screenX;
+    const screenY = window.screenY;
+    const out: Array<{
+      id: string;
+      name: string;
+      rect: { x: number; y: number; width: number; height: number };
+    }> = [];
+    for (const zone of enabledZones) {
+      const el = cellRefs.current.get(zone.id);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      out.push({
+        id: zone.id,
+        name: zone.name,
+        rect: {
+          x: Math.round((screenX + rect.left) * dpr),
+          y: Math.round((screenY + rect.top) * dpr),
+          width: Math.round(rect.width * dpr),
+          height: Math.round(rect.height * dpr),
+        },
+      });
+    }
+    const serialized = JSON.stringify(out);
+    if (serialized === lastSentSerializedRef.current) return;
+    lastSentSerializedRef.current = serialized;
+    void api.updateBounds(out);
+  }, [isActive, enabledZones]);
+
+  // 30Hz 폴링 + ResizeObserver — 위젯 이동/리사이즈 추종.
+  useEffect(() => {
+    if (!isActive) return;
+    let raf = 0;
+    const schedule = (): void => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        measureAndSend();
+      });
+    };
+    const ro = new ResizeObserver(schedule);
+    cellRefs.current.forEach((el) => ro.observe(el));
+    const interval = window.setInterval(schedule, 33);
+    schedule();
+    return () => {
+      ro.disconnect();
+      window.clearInterval(interval);
+      if (raf) cancelAnimationFrame(raf);
+      // unmount 시 정리: zoneWindow 카드 제거 + click-through 해제
+      const api = window.electronAPI?.desktopIconZones;
+      if (api?.clearBounds) void api.clearBounds();
+      if (api?.setWidgetClickThrough) void api.setWidgetClickThrough(false);
+      lastSentSerializedRef.current = '';
+    };
+  }, [isActive, measureAndSend]);
 
   if (!isWindows) {
     return (
@@ -68,6 +143,8 @@ export function DesktopIconZoneWidget() {
   };
 
   const handleDeactivate = () => {
+    const api = window.electronAPI?.desktopIconZones;
+    if (api?.setWidgetClickThrough) void api.setWidgetClickThrough(false);
     void update({
       widget: { ...settings.widget, desktopMode: 'normal' },
     });
@@ -102,15 +179,15 @@ export function DesktopIconZoneWidget() {
     );
   }
 
-  // Active 상태: zones 라벨 미리보기 + "끄기" 버튼.
-  // 실제 zone 카드는 별도 desktopZoneWindow 가 가상 데스크톱에 그림.
+  // Active 상태: 카드 슬롯을 가로 grid 로 분할해 각 zone 셀 렌더링.
+  // 셀 본문은 transparent + pointer-events 가 mouse 진입 시에만 click-through 로 토글.
   return (
-    <div className="h-full p-3 flex flex-col bg-sp-card/40 rounded-xl">
-      <div className="flex items-center justify-between mb-2 px-1">
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between mb-1.5 px-1">
         <div className="flex items-center gap-1.5">
           <span
             className="material-symbols-outlined text-emerald-400"
-            style={{ fontSize: 18 }}
+            style={{ fontSize: 16 }}
           >
             wallpaper
           </span>
@@ -118,33 +195,42 @@ export function DesktopIconZoneWidget() {
         </div>
         <button
           type="button"
-          className="text-xs text-sp-muted hover:text-sp-text transition-colors px-2 py-0.5 rounded hover:bg-sp-text/10"
+          className="text-xs text-sp-muted hover:text-sp-text transition-colors px-1.5 py-0.5 rounded hover:bg-sp-text/10"
           onClick={handleDeactivate}
           title="일반 위젯 모드로 되돌리기"
         >
           끄기
         </button>
       </div>
-      <div className="flex-1 grid gap-1.5 overflow-hidden" style={{ gridTemplateColumns: `repeat(${Math.max(zones.length, 1)}, minmax(0, 1fr))` }}>
-        {zones.length === 0 ? (
+      <div
+        className="flex-1 grid gap-2 min-h-0"
+        style={{
+          gridTemplateColumns: `repeat(${Math.max(enabledZones.length, 1)}, minmax(0, 1fr))`,
+        }}
+      >
+        {enabledZones.length === 0 ? (
           <div className="text-xs text-sp-muted italic flex items-center justify-center">
             구역이 없습니다
           </div>
         ) : (
-          zones.map((z) => (
+          enabledZones.map((z) => (
             <div
               key={z.id}
-              className="flex items-center justify-center text-center rounded-lg bg-emerald-500/10 border border-emerald-400/30 p-2 min-w-0"
+              ref={setCellRef(z.id)}
+              className="rounded-xl bg-transparent"
+              onMouseEnter={() => {
+                const api = window.electronAPI?.desktopIconZones;
+                if (api?.setWidgetClickThrough) void api.setWidgetClickThrough(true);
+              }}
+              onMouseLeave={() => {
+                const api = window.electronAPI?.desktopIconZones;
+                if (api?.setWidgetClickThrough) void api.setWidgetClickThrough(false);
+              }}
               title={z.name}
-            >
-              <span className="text-[10px] text-sp-text truncate w-full">{z.name}</span>
-            </div>
+            />
           ))
         )}
       </div>
-      <p className="text-[10px] text-sp-muted/60 mt-2 px-1 leading-tight">
-        실제 영역은 바탕화면 위에 표시됩니다.
-      </p>
     </div>
   );
 }
