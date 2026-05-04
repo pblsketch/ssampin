@@ -73,7 +73,7 @@ export interface DesktopWidgetManager {
  * 호출자가 fallback 모드로 보정하도록 신호한다.
  */
 function createNoOpDesktopWidgetManager(
-  reason: 'not-supported-on-platform' | 'not-implemented',
+  reason: 'not-supported-on-platform' | 'not-implemented' | 'koffi-load-failed',
 ): DesktopWidgetManager {
   return {
     async enable(): Promise<DesktopWidgetModeStatus> {
@@ -115,23 +115,134 @@ function createNoOpDesktopWidgetManager(
 }
 
 /**
+ * Win32 native manager — Phase 2.
+ *
+ * createWin32WidgetController() 를 lazy require 로 가져와 koffi 의존성을 격리한다.
+ * 비Windows / 빌드 시점에는 import 되지 않으므로 macOS/Linux 빌드를 깨뜨리지 않는다.
+ */
+function createWin32DesktopWidgetManager(): DesktopWidgetManager {
+  // require 시점에 실패하면 에러를 던져 호출자에서 fallback 처리.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require('./platform/win32Desktop') as typeof import('./platform/win32Desktop');
+  const controller = mod.createWin32WidgetController();
+  let enabled = false;
+
+  return {
+    async enable(window): Promise<DesktopWidgetModeStatus> {
+      if (enabled) return { ok: true, mode: 'native-desktop' };
+      const result = controller.enable(window);
+      if (!result.ok) {
+        // attach 실패 사유에 따라 적절한 fallback 모드 결정.
+        // SetParent 실패는 권한 문제 → 'topmost' 로 가시성 유지.
+        // 그 외는 'normal' 로.
+        const fallbackMode: 'normal' | 'topmost' =
+          result.reason === 'set-parent-failed' ? 'topmost' : 'normal';
+        const reasonMap: Record<
+          string,
+          'workerw-not-found' | 'set-parent-failed' | 'hook-install-failed' | 'unknown'
+        > = {
+          'workerw-not-found': 'workerw-not-found',
+          'set-parent-failed': 'set-parent-failed',
+          'hook-install-failed': 'hook-install-failed',
+        };
+        const mappedReason = reasonMap[result.reason] ?? 'unknown';
+        return {
+          ok: false,
+          reason: mappedReason,
+          fallbackMode,
+        };
+      }
+      enabled = true;
+      return { ok: true, mode: 'native-desktop' };
+    },
+
+    disable(): void {
+      try {
+        controller.disable();
+      } catch (e) {
+        console.error('[desktopWidgetManager] disable() error', e);
+      }
+      enabled = false;
+    },
+
+    updateWidgetBounds(window): void {
+      if (!enabled) return;
+      try {
+        controller.updateWidgetBounds(window);
+      } catch (e) {
+        console.error('[desktopWidgetManager] updateWidgetBounds() error', e);
+      }
+    },
+
+    setPassThroughZones(zones): void {
+      if (!enabled) return;
+      try {
+        controller.setHitTestZones(
+          zones.map((z) => ({ id: z.id, rect: z.rect })),
+        );
+      } catch (e) {
+        console.error('[desktopWidgetManager] setPassThroughZones() error', e);
+      }
+    },
+
+    clearPassThroughZones(): void {
+      if (!enabled) return;
+      try {
+        controller.setHitTestZones([]);
+      } catch (e) {
+        console.error('[desktopWidgetManager] clearPassThroughZones() error', e);
+      }
+    },
+
+    async healthCheck(window): Promise<DesktopWidgetModeStatus> {
+      if (!enabled) {
+        // 비활성 상태에서 healthCheck 가 들어오면 그대로 fallback.
+        return { ok: false, reason: 'unknown', fallbackMode: 'normal' };
+      }
+      if (controller.isAttached()) {
+        return { ok: true, mode: 'native-desktop' };
+      }
+      // Explorer 재시작 등으로 detach 되었으면 재시도.
+      console.log('[desktopWidgetManager] healthCheck: detached, retry enable');
+      try {
+        controller.disable();
+      } catch {
+        // ignore
+      }
+      enabled = false;
+      const result = controller.enable(window);
+      if (!result.ok) {
+        const fallbackMode: 'normal' | 'topmost' =
+          result.reason === 'set-parent-failed' ? 'topmost' : 'normal';
+        return { ok: false, reason: 'unknown', fallbackMode };
+      }
+      enabled = true;
+      return { ok: true, mode: 'native-desktop' };
+    },
+
+    isEnabled(): boolean {
+      return enabled;
+    },
+  };
+}
+
+/**
  * 플랫폼·구현 단계에 맞는 DesktopWidgetManager 인스턴스를 만든다.
  *
  * - 비Windows: 항상 no-op('not-supported-on-platform')
- * - Windows + Phase 1: no-op('not-implemented') — Phase 2 PR 에서 win32 구현으로 교체
- * - Windows + Phase 2 (TODO): require('./platform/win32Desktop') 를 통해 win32 manager 로딩
+ * - Windows + Phase 2: createWin32DesktopWidgetManager() — koffi 로드 실패 시 no-op 으로 fallback
  */
 export function createDesktopWidgetManager(): DesktopWidgetManager {
   if (process.platform !== 'win32') {
     return createNoOpDesktopWidgetManager('not-supported-on-platform');
   }
-  // Phase 2 진입점:
-  //   try {
-  //     const { createWin32DesktopWidgetManager } = require('./platform/win32Desktop');
-  //     return createWin32DesktopWidgetManager();
-  //   } catch (e) {
-  //     console.error('[desktopWidgetManager] win32 manager load failed', e);
-  //     return createNoOpDesktopWidgetManager('not-implemented');
-  //   }
-  return createNoOpDesktopWidgetManager('not-implemented');
+  try {
+    return createWin32DesktopWidgetManager();
+  } catch (e) {
+    console.error(
+      '[desktopWidgetManager] win32 manager load failed — falling back to no-op',
+      e,
+    );
+    return createNoOpDesktopWidgetManager('koffi-load-failed');
+  }
 }
