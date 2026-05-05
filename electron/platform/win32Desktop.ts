@@ -20,6 +20,7 @@
  */
 
 import type { BrowserWindow } from 'electron';
+import { diagLog, diagWarn } from '../nativeDesktopDiag';
 
 // ────────────────────────────────────────────────────────────
 // Error classes
@@ -491,7 +492,7 @@ export function findOrCreateWorkerW(): bigint {
 
   // 1. Progman 탐색
   const progman = toBigInt(b.FindWindowW('Progman', null));
-  console.log(`[native-desktop][diag] findOrCreateWorkerW: Progman=0x${progman.toString(16)}`);
+  diagLog('native-desktop', `findOrCreateWorkerW: Progman=0x${progman.toString(16)}`);
   if (isNullHandle(progman)) {
     throw new WorkerWNotFoundError('Progman 창을 찾을 수 없음');
   }
@@ -501,10 +502,10 @@ export function findOrCreateWorkerW(): bigint {
   // SMTO_NORMAL=0, SMTO_ABORTIFHUNG=2. 0x0002로 hung 시 중단.
   try {
     b.SendMessageTimeoutW(progman, WM_SPAWN_WORKER, 0xd, 0, 0x0002, 1000, 0);
-    console.log('[native-desktop][diag] WM_SPAWN_WORKER(0x052C, 0xD, 0) sent to Progman');
+    diagLog('native-desktop', 'WM_SPAWN_WORKER(0x052C, 0xD, 0) sent to Progman');
   } catch (e) {
     // SendMessageTimeoutW 실패도 무해 — 다음 단계 탐색에서 결과를 본다.
-    console.warn('[native-desktop][diag] WM_SPAWN_WORKER send 실패 (무시):', e instanceof Error ? e.message : String(e));
+    diagWarn('native-desktop', `WM_SPAWN_WORKER send 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // 3. 모든 WorkerW 순회 → SHELLDLL_DefView 자식이 있는 첫 후보 반환.
@@ -518,22 +519,22 @@ export function findOrCreateWorkerW(): bigint {
     if (isNullHandle(workerW)) break;
     count++;
     const shellDef = toBigInt(b.FindWindowExW(workerW, null, 'SHELLDLL_DefView', null));
-    console.log(`[native-desktop][diag] WorkerW candidate #${count}: 0x${workerW.toString(16)}, SHELLDLL_DefView=${isNullHandle(shellDef) ? 'NONE' : '0x' + shellDef.toString(16)}`);
+    diagLog('native-desktop', `WorkerW candidate #${count}: 0x${workerW.toString(16)}, SHELLDLL_DefView=${isNullHandle(shellDef) ? 'NONE' : '0x' + shellDef.toString(16)}`);
     if (!isNullHandle(shellDef)) {
-      console.log(`[native-desktop][diag] findOrCreateWorkerW SUCCESS: WorkerW=0x${workerW.toString(16)} (after ${count} candidates)`);
+      diagLog('native-desktop', `findOrCreateWorkerW SUCCESS: WorkerW=0x${workerW.toString(16)} (after ${count} candidates)`);
       return workerW;
     }
     prev = workerW;
   }
 
-  console.log(`[native-desktop][diag] WorkerW 후보 ${count}개 검사했으나 SHELLDLL_DefView 자식 없음 — Progman 자체 검사`);
+  diagLog('native-desktop', `WorkerW 후보 ${count}개 검사했으나 SHELLDLL_DefView 자식 없음 — Progman 자체 검사`);
 
   // 4. WorkerW에서 못 찾으면 Progman 자체 자식 검사 (icons-on-desktop OFF 환경 등).
   const shellDefInProgman = toBigInt(b.FindWindowExW(progman, null, 'SHELLDLL_DefView', null));
-  console.log(`[native-desktop][diag] Progman child SHELLDLL_DefView=${isNullHandle(shellDefInProgman) ? 'NONE' : '0x' + shellDefInProgman.toString(16)}`);
+  diagLog('native-desktop', `Progman child SHELLDLL_DefView=${isNullHandle(shellDefInProgman) ? 'NONE' : '0x' + shellDefInProgman.toString(16)}`);
   if (!isNullHandle(shellDefInProgman)) {
     // Progman attach는 시각적 부작용이 있을 수 있지만 fallback으로 허용.
-    console.log(`[native-desktop][diag] findOrCreateWorkerW FALLBACK to Progman: 0x${progman.toString(16)}`);
+    diagLog('native-desktop', `findOrCreateWorkerW FALLBACK to Progman: 0x${progman.toString(16)}`);
     return progman;
   }
 
@@ -591,15 +592,15 @@ export function attachToWorkerW(widgetHwnd: bigint, workerW: bigint): Win32Deskt
   // 1. ExStyle 저장
   const prevExStyleRaw = b.GetWindowLongPtrW(widgetHwnd, GWL_EXSTYLE);
   const prevExStyle = typeof prevExStyleRaw === 'bigint' ? prevExStyleRaw : BigInt(prevExStyleRaw);
-  console.log(`[native-desktop][diag] attachToWorkerW step1 prevExStyle=0x${prevExStyle.toString(16)}`);
+  diagLog('native-desktop', `attachToWorkerW step1 prevExStyle=0x${prevExStyle.toString(16)}`);
 
   // 2. 기존 부모 저장
   const prevParent = toBigInt(b.GetParent(widgetHwnd));
-  console.log(`[native-desktop][diag] attachToWorkerW step2 prevParent=0x${prevParent.toString(16)}`);
+  diagLog('native-desktop', `attachToWorkerW step2 prevParent=0x${prevParent.toString(16)}`);
 
   // 3. SetParent
   const setParentResult = toBigInt(b.SetParent(widgetHwnd, workerW));
-  console.log(`[native-desktop][diag] attachToWorkerW step3 SetParent return=0x${setParentResult.toString(16)} (returns previous parent on success)`);
+  diagLog('native-desktop', `attachToWorkerW step3 SetParent return=0x${setParentResult.toString(16)} (returns previous parent on success)`);
   if (isNullHandle(setParentResult) && !isNullHandle(prevParent)) {
     // SetParent는 성공 시 "이전 부모"를 반환. 이전 부모가 있었는데 결과가 0이면 실패.
     // 이전 부모가 없는 (top-level) 창의 경우 정상 결과도 0이라 추가 검증 필요.
@@ -612,7 +613,7 @@ export function attachToWorkerW(widgetHwnd: bigint, workerW: bigint): Win32Deskt
 
   // 3-bis. SetParent 결과 검증: 위젯의 새 부모가 workerW인지 확인
   const newParent = toBigInt(b.GetParent(widgetHwnd));
-  console.log(`[native-desktop][diag] attachToWorkerW step3-bis newParent=0x${newParent.toString(16)} (expected=0x${workerW.toString(16)})`);
+  diagLog('native-desktop', `attachToWorkerW step3-bis newParent=0x${newParent.toString(16)} (expected=0x${workerW.toString(16)})`);
   if (newParent !== workerW) {
     throw new AttachFailedError(
       `SetParent 후 부모 검증 실패 (expected=${workerW}, actual=${newParent})`,
@@ -629,11 +630,11 @@ export function attachToWorkerW(widgetHwnd: bigint, workerW: bigint): Win32Deskt
     0, 0, 0, 0,
     SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_FRAMECHANGED,
   );
-  console.log(`[native-desktop][diag] attachToWorkerW step5 SetWindowPos(HWND_BOTTOM)=${swpResult}`);
+  diagLog('native-desktop', `attachToWorkerW step5 SetWindowPos(HWND_BOTTOM)=${swpResult}`);
 
   // 6. 표시 (포커스 빼앗지 않음)
   const showResult = b.ShowWindow(widgetHwnd, SW_SHOWNOACTIVATE);
-  console.log(`[native-desktop][diag] attachToWorkerW step6 ShowWindow(SW_SHOWNOACTIVATE)=${showResult} (was ${showResult === 0 ? 'previously hidden' : 'previously visible'})`);
+  diagLog('native-desktop', `attachToWorkerW step6 ShowWindow(SW_SHOWNOACTIVATE)=${showResult} (was ${showResult === 0 ? 'previously hidden' : 'previously visible'})`);
 
   return {
     workerW,

@@ -149,6 +149,16 @@ interface ElectronAPI {
   onDesktopModeFallback: (
     callback: (info: { reason: string; fallbackMode: 'normal' | 'topmost' }) => void,
   ) => () => void;
+  /**
+   * native-desktop / widget 진단 로그 forwarding (디버깅용 — G1 게이트 단계 임시).
+   * Main process console + 파일 + IPC 3-way fanout 중 IPC 측 수신.
+   * App.tsx의 useNativeDesktopDiagListener hook이 마운트하여 DevTools 콘솔에 출력한다.
+   *
+   * 디버깅 종료 후 본 채널 + helper 모듈 일괄 제거 예정.
+   */
+  onNativeDesktopDiag?: (
+    callback: (payload: { message: string; args?: unknown[] }) => void,
+  ) => () => void;
   closeWindow: () => Promise<void>;
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: () => Promise<void>;

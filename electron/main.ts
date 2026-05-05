@@ -36,6 +36,7 @@ import {
   type DesktopWidgetManager,
 } from './desktopWidgetManager';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
+import { initNativeDesktopDiag, diagLog, diagWarn } from './nativeDesktopDiag';
 
 declare const __dirname: string;
 
@@ -1489,18 +1490,18 @@ function createWidgetWindow(
   let attached = false; // ready-to-show + did-finish-load 폴백 중복 호출 방어
   const attachAndShow = async () => {
     if (attached) {
-      console.log('[widget][diag] attachAndShow 중복 호출 무시 (이미 attach 완료)');
+      diagLog('widget', 'attachAndShow 중복 호출 무시 (이미 attach 완료)');
       return;
     }
     if (!widgetWindow || widgetWindow.isDestroyed()) {
-      console.log('[widget][diag] attachAndShow: widgetWindow destroyed, abort');
+      diagLog('widget', 'attachAndShow: widgetWindow destroyed, abort');
       return;
     }
     attached = true;
 
     if (process.platform === 'win32') {
       const desktopMode = normalizeDesktopMode(options.desktopMode, true);
-      console.log(`[widget][diag] attachAndShow start — requested desktopMode=${desktopMode} (raw=${String(options.desktopMode)})`);
+      diagLog('widget', `attachAndShow start — requested desktopMode=${desktopMode} (raw=${String(options.desktopMode)})`);
 
       switch (desktopMode) {
         case 'topmost':
@@ -1521,9 +1522,9 @@ function createWidgetWindow(
           let appliedMode: WidgetDesktopMode = 'native-desktop';
           let fallbackEvent: DesktopModeFallbackEvent | null = null;
           try {
-            console.log('[widget][diag] desktopWidgetManager.enable() 호출 (createWidgetWindow path)');
+            diagLog('widget', 'desktopWidgetManager.enable() 호출 (createWidgetWindow path)');
             const result = await desktopWidgetManager.enable(widgetWindow);
-            console.log(`[widget][diag] enable() returned: ok=${result.ok}, ${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`);
+            diagLog('widget', `enable() returned: ok=${result.ok}, ${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`);
             if (result.ok) {
               widgetWindow.setAlwaysOnTop(false);
               console.log('[widget] 바탕화면 아이콘 아래 모드 (WorkerW attach 성공)');
@@ -1535,7 +1536,7 @@ function createWidgetWindow(
             }
           } catch (err) {
             // manager.enable은 throw하지 않도록 설계됐지만, 안전망.
-            console.error('[widget][diag] enable() 예상 외 throw — normal fallback', err);
+            diagWarn('widget', 'enable() 예상 외 throw — normal fallback', err);
             appliedMode = 'normal';
             fallbackEvent = { reason: 'enable-threw', fallbackMode: 'normal' };
             widgetWindow.setAlwaysOnTop(false);
@@ -2016,7 +2017,7 @@ function registerIpcHandlers(): void {
       requestedMode === currentDesktopMode &&
       !(requestedMode === 'native-desktop' && !desktopWidgetManager.isEnabled());
     if (shouldSkip) {
-      console.log(`[widget][diag] applyWidgetSettings skip (already ${currentDesktopMode}, manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
+      diagLog('widget', `applyWidgetSettings skip (already ${currentDesktopMode}, manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
       return;
     }
 
@@ -2033,9 +2034,9 @@ function registerIpcHandlers(): void {
 
     if (requestedMode === 'native-desktop') {
       // manager.enable()을 시도. 실패 시 fallback.
-      console.log('[widget][diag] desktopWidgetManager.enable() 호출 (applyWidgetSettings path)');
+      diagLog('widget', 'desktopWidgetManager.enable() 호출 (applyWidgetSettings path)');
       const result = await desktopWidgetManager.enable(widgetWindow);
-      console.log(`[widget][diag] enable() returned: ok=${result.ok}, ${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`);
+      diagLog('widget', `enable() returned: ok=${result.ok}, ${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`);
       if (result.ok) {
         appliedMode = 'native-desktop';
         // attach가 alwaysOnTop과 충돌할 수 있어 명시적으로 false
@@ -3662,6 +3663,16 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     applySystemSettings();
+    // 진단 로그 fanout (console + IPC + file) 초기화.
+    // BrowserWindow 직접 import를 피하기 위해 closure로 주입.
+    initNativeDesktopDiag(
+      () => BrowserWindow.getAllWindows() as unknown as readonly {
+        isDestroyed: () => boolean;
+        webContents: { isDestroyed: () => boolean; send: (channel: string, payload: unknown) => void };
+      }[],
+      app.getPath('userData'),
+    );
+    diagLog('native-desktop', `nativeDesktopDiag initialized — log file=${app.getPath('userData')}/native-desktop-diag.log`);
     createStartupBackups();
     checkInstallation();
     registerIpcHandlers();

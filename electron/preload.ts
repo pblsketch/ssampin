@@ -47,6 +47,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('desktopMode:fallback', handler);
     return () => { ipcRenderer.removeListener('desktopMode:fallback', handler); };
   },
+  /**
+   * native-desktop / widget 진단 로그 forwarding (디버깅용 — 임시).
+   *
+   * Main process는 stdout으로만 console.log를 내보내기 때문에 packaged 빌드에서는
+   * cmd로 ssampin.exe를 실행하지 않으면 진단 흐름을 볼 수 없다. 본 listener는
+   * main → renderer로 IPC mirror된 동일 메시지를 DevTools 콘솔에 그대로 출력한다.
+   *
+   * 참고: main 프로세스도 동일 메시지를 `app.getPath('userData')/native-desktop-diag.log`에
+   * 기록한다 (메모장으로 열어 그대로 공유 가능).
+   *
+   * @returns unsubscribe 함수
+   */
+  onNativeDesktopDiag: (
+    callback: (payload: { message: string; args?: unknown[] }) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, payload: { message: string; args?: unknown[] }) => callback(payload);
+    ipcRenderer.on('native-desktop:diag', handler);
+    return () => { ipcRenderer.removeListener('native-desktop:diag', handler); };
+  },
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:closeApp'),
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: (): Promise<void> => ipcRenderer.invoke('icon:show'),
