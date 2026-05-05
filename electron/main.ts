@@ -1475,12 +1475,32 @@ function createWidgetWindow(
     });
   }
 
-  // 렌더러가 첫 프레임을 그린 뒤 표시
-  const attachAndShow = () => {
-    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  // 렌더러가 첫 프레임을 그린 뒤 표시.
+  //
+  // ★ PR-2 G1 fix: 본 클로저는 native-desktop 모드일 때 manager.enable()을 await 호출한다.
+  //   이전 구현은 currentDesktopMode = 'native-desktop'으로만 표시하고 attach를 적용하지
+  //   않아, 위젯이 일반 윈도우처럼 떠 있고 transparent로 바탕화면 아이콘이 비치기만 했음.
+  //   fix: applyWidgetSettings의 enable+fallback 패턴을 본 경로에서도 재사용.
+  //
+  // 자동 self-attach 정책: 본 호출은 settings.json에 저장된 사용자 의도(desktopMode)를
+  //   기동 시 복원하는 것일 뿐, 사용자 동의 없이 native-desktop으로 전환하지 않는다.
+  //   manager 생성 자체는 createDesktopWidgetManager()가 platform/load 가드를 거쳐
+  //   이미 no-op 또는 win32 manager를 반환했고, no-op이면 enable이 ok:false → fallback.
+  let attached = false; // ready-to-show + did-finish-load 폴백 중복 호출 방어
+  const attachAndShow = async () => {
+    if (attached) {
+      console.log('[widget][diag] attachAndShow 중복 호출 무시 (이미 attach 완료)');
+      return;
+    }
+    if (!widgetWindow || widgetWindow.isDestroyed()) {
+      console.log('[widget][diag] attachAndShow: widgetWindow destroyed, abort');
+      return;
+    }
+    attached = true;
 
     if (process.platform === 'win32') {
       const desktopMode = normalizeDesktopMode(options.desktopMode, true);
+      console.log(`[widget][diag] attachAndShow start — requested desktopMode=${desktopMode} (raw=${String(options.desktopMode)})`);
 
       switch (desktopMode) {
         case 'topmost':
@@ -1490,17 +1510,45 @@ function createWidgetWindow(
           widgetWindow.show();
           console.log('[widget] 항상 위에 모드');
           break;
-        case 'native-desktop':
-          // ── 바탕화면 아이콘 아래 모드 ──
-          // Phase 1: 타입/저장 보존만. native attach는 Phase 2(no-op)에서 manager로 위임,
-          // PR-2 Phase 4+에서 실제 WorkerW attach. 본 분기에서는 normal과 동일 표시 동작.
-          // applyWidgetSettings에서 manager.enable()이 호출되며, 실패 시 fallback으로 모드가
-          // 다시 normal/topmost로 정정된다.
-          currentDesktopMode = 'native-desktop';
-          widgetWindow.setAlwaysOnTop(false);
-          widgetWindow.show();
-          console.log('[widget] 바탕화면 아이콘 아래 모드 (no-op fallback 단계)');
+        case 'native-desktop': {
+          // ── 바탕화면 아이콘 아래 모드 — manager.enable() 시도 ──
+          // attachAndShow가 ready-to-show 콜백이라 originally non-async였음.
+          // fix: async로 승격하고 enable을 await. show()는 enable 결과와 무관하게 보장.
+          //   - WorkerW attach 성공: setAlwaysOnTop(false) + show() (manager가 SetParent + Z-order만 처리)
+          //   - 실패(no-op manager 포함): fallbackMode 적용 + IPC 송신 + 안내 토스트
+          widgetWindow.show(); // 표시 자체는 항상 보장 (실패 시에도 사용자가 위젯을 볼 수 있도록)
+
+          let appliedMode: WidgetDesktopMode = 'native-desktop';
+          let fallbackEvent: DesktopModeFallbackEvent | null = null;
+          try {
+            console.log('[widget][diag] desktopWidgetManager.enable() 호출 (createWidgetWindow path)');
+            const result = await desktopWidgetManager.enable(widgetWindow);
+            console.log(`[widget][diag] enable() returned: ok=${result.ok}, ${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`);
+            if (result.ok) {
+              widgetWindow.setAlwaysOnTop(false);
+              console.log('[widget] 바탕화면 아이콘 아래 모드 (WorkerW attach 성공)');
+            } else {
+              appliedMode = result.fallbackMode;
+              fallbackEvent = { reason: result.reason, fallbackMode: result.fallbackMode };
+              widgetWindow.setAlwaysOnTop(result.fallbackMode === 'topmost');
+              console.log(`[widget] native-desktop 실패: ${result.reason} → ${result.fallbackMode} fallback (createWidgetWindow path)`);
+            }
+          } catch (err) {
+            // manager.enable은 throw하지 않도록 설계됐지만, 안전망.
+            console.error('[widget][diag] enable() 예상 외 throw — normal fallback', err);
+            appliedMode = 'normal';
+            fallbackEvent = { reason: 'enable-threw', fallbackMode: 'normal' };
+            widgetWindow.setAlwaysOnTop(false);
+          }
+          currentDesktopMode = appliedMode;
+
+          if (fallbackEvent) {
+            // renderer 토스트 — App.tsx의 useDesktopModeFallback hook이 수신.
+            // setImmediate로 묶어 listenerRegister + IPC 타이밍 보호.
+            setImmediate(() => broadcastToAllWindows('desktopMode:fallback', fallbackEvent));
+          }
           break;
+        }
         case 'normal':
         default:
           // ── 일반 모드 (normal): 다른 창에 가려질 수 있음 ──
@@ -1525,13 +1573,16 @@ function createWidgetWindow(
   };
 
   // ready-to-show: 렌더러가 첫 프레임을 그린 직후 (투명 플래시 방지)
-  widgetWindow.once('ready-to-show', attachAndShow);
+  // attachAndShow가 async이므로 void 처리 — once 핸들러는 promise를 기다리지 않음.
+  widgetWindow.once('ready-to-show', () => {
+    void attachAndShow();
+  });
 
   // 폴백: Electron 이슈 #25253 — transparent 창에서 ready-to-show 미발동 대비
   widgetWindow.webContents.on('did-finish-load', () => {
     setTimeout(() => {
-      if (widgetWindow && !widgetWindow.isDestroyed() && !widgetWindow.isVisible()) {
-        attachAndShow();
+      if (widgetWindow && !widgetWindow.isDestroyed() && !widgetWindow.isVisible() && !attached) {
+        void attachAndShow();
       }
     }, 300);
   });
@@ -1956,9 +2007,20 @@ function registerIpcHandlers(): void {
 
     // 데스크톱 모드 변경 (정규화 helper 통과 — 'native-desktop' silent drop 방지)
     const requestedMode = normalizeDesktopMode(widget.desktopMode, process.platform === 'win32');
-    if (requestedMode === currentDesktopMode) return;
 
-    console.log(`[widget] 설정 변경 요청: ${currentDesktopMode} → ${requestedMode}`);
+    // 가드 보강: 같은 모드여도 native-desktop이면서 manager가 enable 상태가 아니면 재시도 허용.
+    //   - createWidgetWindow가 attachAndShow 실행 중인 동안 사용자가 라디오를 다시 누르는 race
+    //   - healthCheck 후 stale로 판정되어 disable됐는데 settings상 모드는 그대로인 경우
+    //   - dev 핫리로드로 manager 인스턴스가 살아있지만 attach 상태가 깨진 경우
+    const shouldSkip =
+      requestedMode === currentDesktopMode &&
+      !(requestedMode === 'native-desktop' && !desktopWidgetManager.isEnabled());
+    if (shouldSkip) {
+      console.log(`[widget][diag] applyWidgetSettings skip (already ${currentDesktopMode}, manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
+      return;
+    }
+
+    console.log(`[widget] 설정 변경 요청: ${currentDesktopMode} → ${requestedMode} (manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
 
     // ── 기존 모드가 native-desktop이면 먼저 disable() ──
     if (currentDesktopMode === 'native-desktop') {
@@ -1971,7 +2033,9 @@ function registerIpcHandlers(): void {
 
     if (requestedMode === 'native-desktop') {
       // manager.enable()을 시도. 실패 시 fallback.
+      console.log('[widget][diag] desktopWidgetManager.enable() 호출 (applyWidgetSettings path)');
       const result = await desktopWidgetManager.enable(widgetWindow);
+      console.log(`[widget][diag] enable() returned: ok=${result.ok}, ${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`);
       if (result.ok) {
         appliedMode = 'native-desktop';
         // attach가 alwaysOnTop과 충돌할 수 있어 명시적으로 false
