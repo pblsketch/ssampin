@@ -418,14 +418,40 @@ function loadWin32Bindings(): Win32Bindings {
 
 /**
  * koffi 'void *' 반환값을 bigint로 정규화.
- * null/undefined/0 → 0n
- * number → BigInt(number)
- * bigint → 그대로
+ *
+ * **중요 — koffi 2.x ABI**:
+ *   - 함수 시그너처가 `void *` (또는 `HWND` 등 opaque pointer) 반환이면
+ *     koffi는 **External pointer object**(JS 'object' typeof)를 반환한다.
+ *     BigInt도 number도 아니다.
+ *   - 이 객체를 `BigInt()`나 template literal/concatenation에 넣으면
+ *     "Cannot convert object to primitive value" TypeError가 발생한다.
+ *   - 정수 값을 얻으려면 반드시 `koffi.address(ptr)`를 호출해야 하며,
+ *     `koffi.address(null)`은 0n을 안전하게 반환한다.
+ *
+ * 따라서 본 함수는 koffi External pointer를 1차 케이스로 처리하고,
+ * 그 외에는 BigInt/number/null로 fallback한다.
+ *
+ * - null / undefined / 0 → 0n
+ * - bigint → 그대로
+ * - number → BigInt(number)
+ * - 그 외(객체) → koffi.address(handle) 호출 (External pointer 가정)
+ *
+ * @throws Error koffi.address가 unsupported value를 받으면 koffi 자체가 throw한다.
+ *   호출자는 try/catch로 흡수해 명시적 도메인 에러로 변환할 책임이 있다.
  */
-function toBigInt(handle: bigint | number | null | undefined): bigint {
+function toBigInt(handle: unknown): bigint {
   if (handle === null || handle === undefined) return 0n;
   if (typeof handle === 'bigint') return handle;
-  return BigInt(handle);
+  if (typeof handle === 'number') return BigInt(handle);
+  // 'object' 또는 'function' (External pointer) — koffi.address로 BigInt 추출.
+  // cachedKoffi는 loadKoffi()가 cache했어야 함. 호출 순서상 toBigInt가 먼저 도달할 수 없다.
+  if (cachedKoffi) {
+    return cachedKoffi.address(handle as never);
+  }
+  // koffi 미초기화 상태에서 객체가 들어오면 안 된다 — 호출 순서 위반.
+  throw new Error(
+    `toBigInt: koffi 미초기화 상태에서 외부 포인터 객체 수신 (typeof=${typeof handle})`,
+  );
 }
 
 function isNullHandle(h: bigint): boolean {
@@ -488,11 +514,28 @@ export function getWidgetHwnd(win: BrowserWindow): bigint {
  * @throws WorkerWNotFoundError Progman 미발견 또는 SHELLDLL_DefView 보유 창 미발견
  */
 export function findOrCreateWorkerW(): bigint {
+  diagLog('native-desktop', 'findOrCreateWorkerW.A: enter');
   const b = loadWin32Bindings();
+  diagLog('native-desktop', 'findOrCreateWorkerW.B: bindings loaded');
 
   // 1. Progman 탐색
-  const progman = toBigInt(b.FindWindowW('Progman', null));
-  diagLog('native-desktop', `findOrCreateWorkerW: Progman=0x${progman.toString(16)}`);
+  let progmanRaw: unknown;
+  try {
+    progmanRaw = b.FindWindowW('Progman', null);
+  } catch (e) {
+    diagWarn('native-desktop', `findOrCreateWorkerW.C: FindWindowW(Progman) throw: ${e instanceof Error ? e.message : String(e)}`);
+    throw e;
+  }
+  diagLog('native-desktop', `findOrCreateWorkerW.C: FindWindowW(Progman) returned typeof=${typeof progmanRaw}`);
+
+  let progman: bigint;
+  try {
+    progman = toBigInt(progmanRaw);
+  } catch (e) {
+    diagWarn('native-desktop', `findOrCreateWorkerW.D: toBigInt(progman) throw: ${e instanceof Error ? e.message : String(e)}`);
+    throw e;
+  }
+  diagLog('native-desktop', `findOrCreateWorkerW.D: Progman=0x${progman.toString(16)}`);
   if (isNullHandle(progman)) {
     throw new WorkerWNotFoundError('Progman 창을 찾을 수 없음');
   }
@@ -502,10 +545,10 @@ export function findOrCreateWorkerW(): bigint {
   // SMTO_NORMAL=0, SMTO_ABORTIFHUNG=2. 0x0002로 hung 시 중단.
   try {
     b.SendMessageTimeoutW(progman, WM_SPAWN_WORKER, 0xd, 0, 0x0002, 1000, 0);
-    diagLog('native-desktop', 'WM_SPAWN_WORKER(0x052C, 0xD, 0) sent to Progman');
+    diagLog('native-desktop', 'findOrCreateWorkerW.E: WM_SPAWN_WORKER sent');
   } catch (e) {
     // SendMessageTimeoutW 실패도 무해 — 다음 단계 탐색에서 결과를 본다.
-    diagWarn('native-desktop', `WM_SPAWN_WORKER send 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
+    diagWarn('native-desktop', `findOrCreateWorkerW.E: WM_SPAWN_WORKER send 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // 3. 모든 WorkerW 순회 → SHELLDLL_DefView 자식이 있는 첫 후보 반환.
@@ -513,28 +556,41 @@ export function findOrCreateWorkerW(): bigint {
   let prev: bigint = 0n;
   let count = 0;
   for (let i = 0; i < 64; i++) {
-    const workerW = toBigInt(
-      b.FindWindowExW(null, prev === 0n ? null : prev, 'WorkerW', null),
-    );
+    let workerWRaw: unknown;
+    try {
+      // FindWindowExW의 prev는 BigInt → koffi 'void *' 인자로 그대로 전달 가능.
+      // koffi 2.x: BigInt/number 모두 'void *' 인자로 허용. null도 허용.
+      workerWRaw = b.FindWindowExW(null, prev === 0n ? null : prev, 'WorkerW', null);
+    } catch (e) {
+      diagWarn('native-desktop', `findOrCreateWorkerW.F[${i}]: FindWindowExW(WorkerW) throw: ${e instanceof Error ? e.message : String(e)}`);
+      throw e;
+    }
+    let workerW: bigint;
+    try {
+      workerW = toBigInt(workerWRaw);
+    } catch (e) {
+      diagWarn('native-desktop', `findOrCreateWorkerW.F[${i}]: toBigInt(workerW) throw: ${e instanceof Error ? e.message : String(e)}`);
+      throw e;
+    }
     if (isNullHandle(workerW)) break;
     count++;
     const shellDef = toBigInt(b.FindWindowExW(workerW, null, 'SHELLDLL_DefView', null));
-    diagLog('native-desktop', `WorkerW candidate #${count}: 0x${workerW.toString(16)}, SHELLDLL_DefView=${isNullHandle(shellDef) ? 'NONE' : '0x' + shellDef.toString(16)}`);
+    diagLog('native-desktop', `findOrCreateWorkerW.G: WorkerW#${count}=0x${workerW.toString(16)}, SHELLDLL_DefView=${isNullHandle(shellDef) ? 'NONE' : '0x' + shellDef.toString(16)}`);
     if (!isNullHandle(shellDef)) {
-      diagLog('native-desktop', `findOrCreateWorkerW SUCCESS: WorkerW=0x${workerW.toString(16)} (after ${count} candidates)`);
+      diagLog('native-desktop', `findOrCreateWorkerW.H: SUCCESS WorkerW=0x${workerW.toString(16)} (after ${count} candidates)`);
       return workerW;
     }
     prev = workerW;
   }
 
-  diagLog('native-desktop', `WorkerW 후보 ${count}개 검사했으나 SHELLDLL_DefView 자식 없음 — Progman 자체 검사`);
+  diagLog('native-desktop', `findOrCreateWorkerW.I: WorkerW 후보 ${count}개 검사했으나 SHELLDLL_DefView 자식 없음 — Progman 자체 검사`);
 
   // 4. WorkerW에서 못 찾으면 Progman 자체 자식 검사 (icons-on-desktop OFF 환경 등).
   const shellDefInProgman = toBigInt(b.FindWindowExW(progman, null, 'SHELLDLL_DefView', null));
-  diagLog('native-desktop', `Progman child SHELLDLL_DefView=${isNullHandle(shellDefInProgman) ? 'NONE' : '0x' + shellDefInProgman.toString(16)}`);
+  diagLog('native-desktop', `findOrCreateWorkerW.J: Progman child SHELLDLL_DefView=${isNullHandle(shellDefInProgman) ? 'NONE' : '0x' + shellDefInProgman.toString(16)}`);
   if (!isNullHandle(shellDefInProgman)) {
     // Progman attach는 시각적 부작용이 있을 수 있지만 fallback으로 허용.
-    diagLog('native-desktop', `findOrCreateWorkerW FALLBACK to Progman: 0x${progman.toString(16)}`);
+    diagLog('native-desktop', `findOrCreateWorkerW.K: FALLBACK to Progman 0x${progman.toString(16)}`);
     return progman;
   }
 
