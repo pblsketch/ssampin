@@ -35,6 +35,10 @@ asarUnpack:
   - "**/node_modules/libnut*/**"
   - "**/node_modules/bindings/**"
   - "**/node_modules/file-uri-to-path/**"
+  # koffi: 바탕화면 아이콘 아래 모드(native-desktop) FFI. Win32 전용이지만 packaging은
+  # 모든 OS 빌드에 포함되며, win32 패키지에서만 require된다. .node 바이너리는 asar
+  # 외부에서 dlopen 가능해야 함 (Phase 4-1~).
+  - "**/node_modules/koffi/**"
   - "**/*.node"
 win:
   target:
