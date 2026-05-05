@@ -155,30 +155,43 @@ export function IconWindow() {
   // Renderer는 단순히 startDrag/endDrag IPC만 호출 — pointer capture 의존 X.
   // mouse가 윈도우 밖으로 나가도, 어떤 OS race가 있어도 안정적.
   //
-  // v2.0.3 fix — "처음엔 되다가 갑자기 안 됨" 버그 대응.
-  //   원인: 마우스를 64×64 아이콘 영역 밖에서 release 하면 transparent/frameless
-  //   윈도우의 setPointerCapture 가 stale 되어 pointerup/cancel 이 안 발사되는 경우가
-  //   있다. → endDrag IPC 누락 → main 의 5초 safety timer 가 발동할 때까지 stale
-  //   iconDragState 가 남아 다음 드래그 시 시작 좌표가 어긋남.
-  //   해법: pointerDown 시 document 레벨 pointerup/cancel/mouseup 핸들러를
-  //   { once, capture:true } 로 등록 → 어떤 경로로든 release 가 발생하면 100%
-  //   endDrag IPC 발사.
-  const globalUpHandlerRef = useRef<((e: PointerEvent | MouseEvent) => void) | null>(null);
+  // v2.0.3 누적 fix — listener leak 으로 "10번 후 click 도 drag 도 안 됨" 회피.
+  //
+  //   문제: 이전 패턴은 4개 listener 를 `{ once:true }` 로 등록했는데, 그중 1개만
+  //   발사되면 나머지 3개는 listener registry 에 남는다 (once 는 발사된 자기 자신만
+  //   자동 해제). pointerDown 마다 새 4개 listener 가 등록되어 누적 → DOM listener
+  //   table 폭주 + 다음 release 시 stale closure 가 한꺼번에 발사 → renderer race.
+  //
+  //   해법:
+  //     1. once 제거. 명시적 cleanupGlobalListeners 로 한 번에 4개 모두 정리.
+  //     2. pointerDown 진입 시 기존 handler 가 살아있으면 먼저 cleanup.
+  //     3. handler 가 발사되면 자기 자신만 정리 (다른 핸들러 ref 와 비교 X).
+  const globalUpHandlerRef = useRef<(() => void) | null>(null);
+
+  const cleanupGlobalListeners = (h: (() => void) | null) => {
+    if (!h) return;
+    document.removeEventListener('pointerup', h, true);
+    document.removeEventListener('pointercancel', h, true);
+    document.removeEventListener('mouseup', h, true);
+    window.removeEventListener('blur', h, true);
+  };
 
   const sendEndDrag = () => {
     void window.electronAPI?.iconEndDrag();
-    if (globalUpHandlerRef.current) {
-      const h = globalUpHandlerRef.current;
-      document.removeEventListener('pointerup', h as EventListener, true);
-      document.removeEventListener('pointercancel', h as EventListener, true);
-      document.removeEventListener('mouseup', h as EventListener, true);
-      window.removeEventListener('blur', h as EventListener, true);
+    const h = globalUpHandlerRef.current;
+    if (h) {
+      cleanupGlobalListeners(h);
       globalUpHandlerRef.current = null;
     }
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return; // 좌클릭만
+    // 이전 drag 의 누락된 fallback handler 강제 정리 (누적 leak 방지)
+    if (globalUpHandlerRef.current) {
+      cleanupGlobalListeners(globalUpHandlerRef.current);
+      globalUpHandlerRef.current = null;
+    }
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     dragStateRef.current = {
       startScreenX: e.screenX,
@@ -192,20 +205,24 @@ export function IconWindow() {
     // main process drag 폴링 시작
     void window.electronAPI?.iconStartDrag();
 
-    // 글로벌 fallback — pointer release 가 어떤 경로로든 발생하면 endDrag 강제 발사
+    // 글로벌 fallback — release 가 어떤 경로로든 발생하면 endDrag 발사 + 자기 정리
     const handler = () => {
-      // dragStateRef 정리는 handlePointerUp 또는 여기서. 양쪽 idempotent.
       if (dragStateRef.current) {
         dragStateRef.current = null;
       }
-      sendEndDrag();
+      // 자기 자신만 정리 (다른 ref 와 비교하지 않음 — 이미 새 drag 이면 ref 가
+      // 이미 다른 핸들러를 가리키므로 sendEndDrag 의 ref 비교 패턴은 stale).
+      cleanupGlobalListeners(handler);
+      if (globalUpHandlerRef.current === handler) {
+        globalUpHandlerRef.current = null;
+      }
+      void window.electronAPI?.iconEndDrag();
     };
     globalUpHandlerRef.current = handler;
-    document.addEventListener('pointerup', handler, { once: true, capture: true });
-    document.addEventListener('pointercancel', handler, { once: true, capture: true });
-    document.addEventListener('mouseup', handler, { once: true, capture: true });
-    // 윈도우 focus 가 빠져도 drag 종료
-    window.addEventListener('blur', handler, { once: true, capture: true });
+    document.addEventListener('pointerup', handler, true);
+    document.addEventListener('pointercancel', handler, true);
+    document.addEventListener('mouseup', handler, true);
+    window.addEventListener('blur', handler, true);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
