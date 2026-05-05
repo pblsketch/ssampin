@@ -94,6 +94,7 @@ import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
+import { useNativeDesktopDiagListener } from '@adapters/hooks/useNativeDesktopDiagListener';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
 import { ShareModal } from '@adapters/components/Share/ShareModal';
@@ -457,6 +458,9 @@ function WidgetApp() {
   // 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~)
   useDesktopModeFallback();
 
+  // native-desktop / widget 진단 로그 listener (G1 게이트 디버깅 임시)
+  useNativeDesktopDiagListener();
+
   // Analytics: 위젯 오픈 이벤트 + 활성일 기록
   useEffect(() => {
     track('app_open', { launchMode: 'widget' });
@@ -538,6 +542,9 @@ function MainApp() {
 
   // 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~)
   useDesktopModeFallback();
+
+  // native-desktop / widget 진단 로그 listener (G1 게이트 디버깅 임시)
+  useNativeDesktopDiagListener();
 
   // 듀얼 모드 진입 시 초기 좌측 도구 힌트로 쓰일, 마지막으로 본 단일 듀얼지원 도구
   const [lastSingleTool, setLastSingleTool] = useState<DualToolId | null>(null);

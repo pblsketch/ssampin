@@ -20,6 +20,7 @@ import { screen } from 'electron';
 import type { BrowserWindow } from 'electron';
 import type { DesktopWidgetModeStatus, PhysicalRect } from './desktopWidgetTypes';
 import { dipToPhysical } from './desktopWidgetTypes';
+import { diagLog, diagWarn } from './nativeDesktopDiag';
 
 export interface DesktopWidgetManager {
   /**
@@ -85,9 +86,9 @@ export interface DesktopWidgetManager {
  * 절대 throw하지 않는다 — 비Win32, koffi 미설치, native module load 실패 모두 흡수.
  */
 export function createDesktopWidgetManager(): DesktopWidgetManager {
-  console.log(`[native-desktop][diag] createDesktopWidgetManager() called — platform=${process.platform}`);
+  diagLog('native-desktop', `createDesktopWidgetManager() called — platform=${process.platform}`);
   if (process.platform !== 'win32') {
-    console.log('[native-desktop][diag] non-win32 → no-op manager (reason=platform-not-win32)');
+    diagLog('native-desktop', 'non-win32 → no-op manager (reason=platform-not-win32)');
     return createNoopManager('platform-not-win32');
   }
 
@@ -97,31 +98,29 @@ export function createDesktopWidgetManager(): DesktopWidgetManager {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     win32Desktop = require('./platform/win32Desktop') as typeof import('./platform/win32Desktop');
-    console.log('[native-desktop][diag] win32Desktop module loaded');
+    diagLog('native-desktop', 'win32Desktop module loaded');
   } catch (e) {
     const reason = e instanceof Error ? e.message : 'unknown-error';
-    console.warn('[native-desktop] win32Desktop require 실패:', reason);
+    diagWarn('native-desktop', `win32Desktop require 실패: ${reason}`);
     return createNoopManager('native-load-failed');
   }
 
   // koffi/kernel32/user32 load 가능 여부 확인 (실패하면 KoffiLoadError throw).
   try {
     const pidFromFFI = win32Desktop.getCurrentProcessId();
-    console.log(`[native-desktop][diag] FFI smoke test pidFromFFI=${pidFromFFI} (node.pid=${process.pid})`);
+    diagLog('native-desktop', `FFI smoke test pidFromFFI=${pidFromFFI} (node.pid=${process.pid})`);
     if (pidFromFFI !== process.pid) {
-      console.warn(
-        `[native-desktop] FFI PID 불일치 (ffi=${pidFromFFI}, node=${process.pid}) — no-op fallback`,
-      );
+      diagWarn('native-desktop', `FFI PID 불일치 (ffi=${pidFromFFI}, node=${process.pid}) — no-op fallback`);
       return createNoopManager('koffi-pid-mismatch');
     }
   } catch (e) {
     const reason = e instanceof Error ? e.message : 'unknown-error';
     const code = e instanceof Error && e.name === 'KoffiLoadError' ? 'koffi-load-failed' : 'native-load-failed';
-    console.warn(`[native-desktop] win32 native load 실패 (${code}):`, reason);
+    diagWarn('native-desktop', `win32 native load 실패 (${code}): ${reason}`);
     return createNoopManager(code);
   }
 
-  console.log('[native-desktop][diag] win32 manager 생성 완료 (FFI 검증 통과)');
+  diagLog('native-desktop', 'win32 manager 생성 완료 (FFI 검증 통과)');
   return createWin32Manager(win32Desktop);
 }
 
@@ -278,17 +277,17 @@ function createWin32Manager(
 
   return {
     async enable(window: BrowserWindow): Promise<DesktopWidgetModeStatus> {
-      console.log('[native-desktop][diag] win32 manager enable() invoked');
+      diagLog('native-desktop', 'win32 manager enable() invoked');
       // 중복 호출 방어: 이미 attach 상태면 healthCheck로 위임.
       if (handles) {
         const valid = win32.isWindowAlive(handles.workerW)
           && win32.isWindowAlive(handles.widgetHwnd);
         if (valid) {
-          console.log('[native-desktop][diag] enable: 이미 attach 상태 + valid → no-op return ok');
+          diagLog('native-desktop', 'enable: 이미 attach 상태 + valid → no-op return ok');
           return { ok: true, mode: 'native-desktop' };
         }
         // 핸들 stale → 정리 후 재시도
-        console.log('[native-desktop][diag] enable: 기존 handles stale → clear + retry');
+        diagLog('native-desktop', 'enable: 기존 handles stale → clear + retry');
         clearHandles();
       }
 
@@ -296,10 +295,10 @@ function createWin32Manager(
       let widgetHwnd: bigint;
       try {
         widgetHwnd = win32.getWidgetHwnd(window);
-        console.log(`[native-desktop][diag] step1 widgetHwnd=0x${widgetHwnd.toString(16)}`);
+        diagLog('native-desktop', `step1 widgetHwnd=0x${widgetHwnd.toString(16)}`);
       } catch (e) {
         const reason = e instanceof Error ? e.message : 'getWidgetHwnd-failed';
-        console.warn('[native-desktop] getWidgetHwnd 실패:', reason);
+        diagWarn('native-desktop', `getWidgetHwnd 실패: ${reason}`);
         return { ok: false, reason: 'widget-hwnd-failed', fallbackMode: 'normal' };
       }
 
@@ -307,20 +306,20 @@ function createWin32Manager(
       let workerW: bigint;
       try {
         workerW = win32.findOrCreateWorkerW();
-        console.log(`[native-desktop][diag] step2 workerW=0x${workerW.toString(16)}`);
+        diagLog('native-desktop', `step2 workerW=0x${workerW.toString(16)}`);
       } catch (e) {
         const reason = e instanceof Error ? e.message : 'findOrCreateWorkerW-failed';
-        console.warn('[native-desktop] WorkerW 탐색 실패:', reason);
+        diagWarn('native-desktop', `WorkerW 탐색 실패: ${reason}`);
         return { ok: false, reason: 'workerw-not-found', fallbackMode: 'normal' };
       }
 
       // 3. SetParent attach
       try {
         handles = win32.attachToWorkerW(widgetHwnd, workerW);
-        console.log(`[native-desktop][diag] step3 attachToWorkerW success — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`);
+        diagLog('native-desktop', `step3 attachToWorkerW success — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`);
       } catch (e) {
         const reason = e instanceof Error ? e.message : 'attach-failed';
-        console.warn('[native-desktop] attachToWorkerW 실패:', reason);
+        diagWarn('native-desktop', `attachToWorkerW 실패: ${reason}`);
         // SetParent는 UAC/무결성 차이로 실패하는 경우가 가장 흔함 → topmost fallback이 더 안전.
         const fallback = e instanceof Error && e.name === 'AttachFailedError' ? 'topmost' : 'normal';
         return { ok: false, reason: 'setparent-denied', fallbackMode: fallback };
