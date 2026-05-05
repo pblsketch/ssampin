@@ -227,11 +227,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
               return { ...DEFAULT_SETTINGS.widget.visibleSections, ...migrated } as WidgetVisibleSections;
             })(),
             desktopMode: (() => {
-              // Migrate old values → 'normal' | 'topmost'
+              // Migrate old values → 'normal' | 'topmost' | 'native-desktop' (v2.1.0~)
               const rawMode = (saved.widget as unknown as { desktopMode?: string })?.desktopMode;
               if (rawMode === 'floating') return 'topmost' as const;
               if (rawMode === 'auto' || rawMode === 'desktop' || rawMode === 'behind' || rawMode === 'above') return 'normal' as const;
-              return (saved.widget?.desktopMode ?? DEFAULT_SETTINGS.widget.desktopMode);
+              // 정식 값만 보존 (native-desktop 포함). 그 외는 기본값으로 fallback.
+              if (rawMode === 'normal' || rawMode === 'topmost' || rawMode === 'native-desktop') return rawMode;
+              return DEFAULT_SETTINGS.widget.desktopMode;
             })(),
             closeAction: (() => {
               // v2.0.2~: closeAction 정식 도입.

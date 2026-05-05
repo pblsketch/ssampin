@@ -32,6 +32,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     opacity: number;
     desktopMode: string;
   }): Promise<void> => ipcRenderer.invoke('window:applyWidgetSettings', widget),
+  /**
+   * 바탕화면 아이콘 아래 모드 fallback 알림 수신 (v2.1.0~).
+   *
+   * native attach 실패 시 main process가 settings의 desktopMode를 fallbackMode로
+   * 정정해야 하며, renderer는 이 콜백에서 토스트 + settings store 업데이트를 수행한다.
+   *
+   * @returns unsubscribe 함수
+   */
+  onDesktopModeFallback: (
+    callback: (info: { reason: string; fallbackMode: 'normal' | 'topmost' }) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, info: { reason: string; fallbackMode: 'normal' | 'topmost' }) => callback(info);
+    ipcRenderer.on('desktopMode:fallback', handler);
+    return () => { ipcRenderer.removeListener('desktopMode:fallback', handler); };
+  },
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:closeApp'),
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: (): Promise<void> => ipcRenderer.invoke('icon:show'),
