@@ -60,17 +60,31 @@ export function createDesktopWidgetManager(): DesktopWidgetManager {
     return createNoopManager('platform-not-win32');
   }
 
-  // PR-2 Phase 4+에서 koffi-based win32Desktop.ts를 lazy require할 예정.
-  // 현 시점(PR-1)에서는 모듈이 존재하지 않으므로 즉시 no-op을 반환한다.
-  // try/catch로 감싸 동적 import 실패 시에도 앱이 죽지 않도록 한다.
+  // PR-2 Phase 4-1: koffi-based win32Desktop.ts를 lazy require하고, 단순 동작 검증
+  // (getCurrentProcessId)을 수행한다. 검증 통과 시에도 아직 native attach는 미구현이므로
+  // 'not-implemented' no-op을 반환한다. WorkerW attach는 Phase 4-2에서 추가된다.
+  //
+  // try/catch로 감싸 동적 require / FFI 바인딩 실패 시에도 앱이 죽지 않도록 한다.
   try {
-    // Phase 4+ 진입 시 이 분기에서 require('./platform/win32Desktop')을 시도하고,
-    // 성공 시 createWin32DesktopWidgetManager()를 반환한다.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const win32Desktop = require('./platform/win32Desktop') as typeof import('./platform/win32Desktop');
+    // 골격 검증: koffi/kernel32/user32 load 가능 여부와 함수 바인딩 동작 확인.
+    // 실패 시 KoffiLoadError를 throw하므로 catch로 흡수한다.
+    const pidFromFFI = win32Desktop.getCurrentProcessId();
+    const pidFromNode = process.pid;
+    if (pidFromFFI !== pidFromNode) {
+      console.warn(
+        `[desktopWidgetManager] FFI PID 불일치 (ffi=${pidFromFFI}, node=${pidFromNode}) — no-op fallback`,
+      );
+      return createNoopManager('koffi-pid-mismatch');
+    }
+    // Phase 4-2에서 createWin32DesktopWidgetManager(win32Desktop)로 교체.
     return createNoopManager('not-implemented');
   } catch (e) {
     const reason = e instanceof Error ? e.message : 'unknown-error';
-    console.warn('[desktopWidgetManager] win32 native load 실패, no-op fallback:', reason);
-    return createNoopManager(`native-load-failed:${reason}`);
+    const code = e instanceof Error && e.name === 'KoffiLoadError' ? 'koffi-load-failed' : 'native-load-failed';
+    console.warn(`[desktopWidgetManager] win32 native load 실패 (${code}):`, reason);
+    return createNoopManager(code);
   }
 }
 
