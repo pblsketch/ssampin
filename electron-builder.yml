@@ -35,9 +35,6 @@ asarUnpack:
   - "**/node_modules/libnut*/**"
   - "**/node_modules/bindings/**"
   - "**/node_modules/file-uri-to-path/**"
-  # koffi (v2.1.0~): native-desktop-mode 의 Win32 FFI. prebuilt .node 가 plugin 디렉터리에서
-  # require.resolve 로 로드되므로 asar 외부에 있어야 한다.
-  - "**/node_modules/koffi/**"
   - "**/*.node"
 win:
   target:

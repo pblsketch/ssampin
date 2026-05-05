@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Settings, WidgetSettings, WidgetDesktopMode } from '@domain/entities/Settings';
-import { DEFAULT_DESKTOP_ICON_ZONE_PRESET } from '@domain/entities/Settings';
-import { useDashboardConfig } from '@widgets/useDashboardConfig';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
-
-const IS_WINDOWS = typeof navigator !== 'undefined' && /Win/i.test(navigator.platform);
 
 interface Props {
   draft: Settings;
@@ -109,39 +105,20 @@ export function WidgetTab({ draft, patch }: Props) {
           ))}
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex flex-col flex-1 mr-3 min-w-0">
+          <div className="flex flex-col">
             <span className="text-sm font-medium text-sp-text">위젯 표시 모드</span>
-            <span className="text-xs text-sp-muted leading-relaxed">
+            <span className="text-xs text-sp-muted">
               {draft.widget.desktopMode === 'normal' && '일반: 다른 창에 가려질 수 있습니다. Win+D를 눌러도 사라지지 않습니다.'}
               {draft.widget.desktopMode === 'topmost' && '항상 위에: 항상 다른 창 위에 표시됩니다. Win+D를 눌러도 사라지지 않습니다.'}
-              {draft.widget.desktopMode === 'native-desktop' && '바탕화면 아이콘 밑에: 위젯이 바탕화면 아이콘 아래로 깔리고, 영역 위 폴더 클릭은 그대로 동작합니다.'}
             </span>
           </div>
           <select
             value={draft.widget.desktopMode}
-            onChange={(e) => {
-              const nextMode = e.target.value as WidgetDesktopMode;
-              // Settings 변경 흐름: desktopMode 갱신 + native-desktop 진입 시 카드 자동 추가/표시.
-              const seedZones =
-                nextMode === 'native-desktop' && (draft.widget.desktopIconZones ?? []).length === 0
-                  ? DEFAULT_DESKTOP_ICON_ZONE_PRESET.map((z) => ({ ...z }))
-                  : undefined;
-              const widgetPatch: Partial<WidgetSettings> = seedZones
-                ? { desktopMode: nextMode, desktopIconZones: seedZones }
-                : { desktopMode: nextMode };
-              patchWidget(widgetPatch);
-              useDashboardConfig.getState().setWidgetVisible(
-                'desktop-icon-zone',
-                nextMode === 'native-desktop',
-              );
-            }}
+            onChange={(e) => patchWidget({ desktopMode: e.target.value as WidgetDesktopMode })}
             className="bg-sp-card border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
           >
             <option value="normal">일반</option>
             <option value="topmost">항상 위에</option>
-            <option value="native-desktop" disabled={!IS_WINDOWS}>
-              바탕화면 아이콘 밑에 {IS_WINDOWS ? '' : '(Windows 전용)'}
-            </option>
           </select>
         </div>
         <div className="flex items-center justify-between pt-4 border-t border-sp-border">

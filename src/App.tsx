@@ -121,8 +121,6 @@ function isIconMode(): boolean {
   return params.get('mode') === 'icon';
 }
 
-// Phase 3.0: desktopZone 별도 윈도우 모드 폐기. 메인 widgetWindow 자체가 WorkerW 에 attach.
-
 function getQuickAddKindFromUrl(): QuickAddKind {
   const params = new URLSearchParams(window.location.search);
   const raw = params.get('kind');
