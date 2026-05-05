@@ -82,6 +82,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('icon:drag-by', delta),
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }): Promise<void> =>
     ipcRenderer.invoke('icon:expand', target),
+  iconDiag: (payload: { event: string; data?: unknown }): Promise<void> =>
+    ipcRenderer.invoke('icon:diag', payload),
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;

@@ -169,6 +169,7 @@ interface ElectronAPI {
   iconEndDrag: () => Promise<void>;
   iconResetPosition: () => Promise<void>;
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
+  iconDiag: (payload: { event: string; data?: unknown }) => Promise<void>;
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;
