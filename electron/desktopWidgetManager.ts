@@ -178,6 +178,17 @@ function createWin32Manager(
   let cachedPhysicalBounds: PhysicalRect | null = null;
   let cachedListView: bigint | null = null; // Phase 6 — Explorer SysListView32 핸들
   let mouseHook: import('./platform/win32Desktop').MouseHookHandle | null = null; // Phase 7
+  /**
+   * Phase 7-A: hook callback이 PostMessage 라우팅 대상으로 사용할 widget HWND.
+   * handles.widgetHwnd와 동일하지만 hot path에서 nullable check 한 번 줄이려고 별도 캐시.
+   * enable() 성공 시 채워지고 clearHandles에서 0n으로 리셋.
+   */
+  let cachedWidgetHwnd: bigint = 0n;
+  /**
+   * Phase 7-A: 라우팅 통계 — 디버그용 카운터. 빈번하게 갱신되지만 atomic 증가만 하므로 hot path 영향 없음.
+   * post-success/skipped(아이콘)/skipped(영역밖)/failed 4분류.
+   */
+  let routingStats = { posted: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0 };
 
   // 16ms TTL 캐시 (Phase 6/7 — mouse hook hot path 성능)
   // 동일 좌표로 짧은 시간 안에 여러 번 호출되는 경우(드래그 중)에 유리.
@@ -212,11 +223,14 @@ function createWin32Manager(
     handles = null;
     cachedPhysicalBounds = null;
     cachedListView = null;
+    cachedWidgetHwnd = 0n;
     // hit cache 초기화
     lastHitX = Number.NaN;
     lastHitY = Number.NaN;
     lastHitResult = false;
     lastHitUntil = 0;
+    // Phase 7-A 통계 초기화 (다음 enable에서 깨끗하게 시작)
+    routingStats = { posted: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0 };
   }
 
   // Phase 7 — hot path. shouldPassThroughToDesktop을 별도 명명 함수로 분리해 hook callback에서
@@ -367,8 +381,9 @@ function createWin32Manager(
         return { ok: false, reason: 'workerw-not-found-or-rejected', fallbackMode: 'normal' };
       }
 
-      // 4. 초기 physical bounds 캐시 (Phase 5)
+      // 4. 초기 physical bounds 캐시 (Phase 5) + Phase 7-A widget HWND 캐시
       cachedPhysicalBounds = recalcPhysicalBounds(window);
+      cachedWidgetHwnd = handles.widgetHwnd;
 
       // 5. Phase 6: ListView 탐색 (실패해도 attach 자체는 유지 — 모든 hit이 Electron으로 처리됨)
       try {
@@ -385,17 +400,48 @@ function createWin32Manager(
       // 중복 가드: enable이 두 번 호출되거나 dev 핫리로드로 hook이 살아있으면 우선 정리.
       clearHook();
       try {
-        mouseHook = win32.installLowLevelMouseHook((p) => {
-          // hook callback hot path — passThroughCheck는 0.5ms 이내 반환.
-          // 결과는 사용하지 않지만 호출함으로써 manager TTL 캐시가 데워진다.
-          // 차단/주입은 하지 않으므로 라우팅 효과는 SetParent + Z-order에서만 비롯됨.
-          passThroughCheck(p);
+        mouseHook = win32.installLowLevelMouseHook((p, msgType, mouseData) => {
+          // ───────────────────────────────────────────────────────────────
+          // Phase 7-A: hook callback hot path — 라우팅 결정 + PostMessage.
+          //
+          // 호출 빈도: WM_MOUSEMOVE는 초당 수백 회. 따라서 빠른 reject 우선:
+          //   1. 관심 메시지 아니면 즉시 return (휠/NC* 등은 다음 phase에서)
+          //   2. widget bounds 밖이면 즉시 return (글로벌 마우스 움직임)
+          //   3. widget 안 + 아이콘 위면 return (Explorer가 자연 처리)
+          //   4. widget 안 + 빈공간이면 PostMessage로 widget HWND에 forward
+          //
+          // 모든 단계 throw 금지(installLowLevelMouseHook 내부 try/catch가 있지만 여기서도
+          // 명시적으로 회피). 0.5ms 이내 처리 목표.
+          // ───────────────────────────────────────────────────────────────
+          if (!win32.isMouseMessageOfInterest(msgType)) return;
+          if (!isInsideCachedBoundsLocal(p)) {
+            routingStats.skippedOutOfBounds++;
+            return;
+          }
+          if (passThroughCheck(p)) {
+            // 아이콘 위 — Explorer가 처리하도록 OS의 자연 라우팅에 맡김.
+            routingStats.skippedIcon++;
+            return;
+          }
+          // 빈 공간 → widget HWND에 PostMessage 라우팅.
+          if (cachedWidgetHwnd === 0n || !cachedPhysicalBounds) return;
+          const client = win32.physicalToClient(p, cachedPhysicalBounds);
+          const ok = win32.postMouseMessageToWidget(
+            cachedWidgetHwnd,
+            msgType,
+            client.x,
+            client.y,
+            mouseData,
+          );
+          if (ok) routingStats.posted++;
+          else routingStats.failed++;
         });
+        diagLog('native-desktop', 'Phase 7-A: mouse hook 설치 완료 — routing 활성');
       } catch (e) {
-        // hook 설치 실패는 치명적이지 않다 (라우팅은 Z-order만으로도 동작).
-        // 다만 사용자에게 noise 없이 로그만 남긴다.
+        // hook 설치 실패는 치명적이지 않다 (라우팅은 Z-order만으로도 일부 동작 — 아이콘 위만).
+        // 위젯 위 빈 공간 클릭은 안 되겠지만 attach 자체는 유지.
         const reason = e instanceof Error ? e.message : 'hook-install-failed';
-        console.warn('[desktopWidgetManager] mouse hook 설치 실패 (계속 진행):', reason);
+        diagWarn('native-desktop', `mouse hook 설치 실패 (계속 진행): ${reason}`);
         mouseHook = null;
       }
 

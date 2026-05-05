@@ -153,6 +153,29 @@ const WH_MOUSE_LL = 14;
 const GW_HWNDNEXT = 2;
 const GW_HWNDPREV = 3;
 
+/**
+ * Phase 7-A — Win32 mouse 메시지 상수.
+ *
+ * WH_MOUSE_LL hook callback은 wParam에 본 메시지 타입을 받는다 (MSDN: lowlevelmouseproc).
+ * WS_CHILD가 된 위젯 HWND가 정상적으로 받지 못하는 (top-level이 아니므로 OS의 default
+ * routing이 부모 WorkerW로 전달하지 않음) 마우스 이벤트들 중 가장 자주 쓰이는 것을
+ * PostMessage로 직접 전달한다.
+ *
+ * 분류:
+ *   - 클릭/이동 (Phase 7-A): LBUTTONDOWN/UP/DBLCLK, RBUTTONDOWN/UP, MBUTTONDOWN/UP, MOUSEMOVE
+ *   - 휠 (Phase 7-B 예정): MOUSEWHEEL, MOUSEHWHEEL
+ *   - 헤더 드래그 (Phase 7-C 예정): WM_NCLBUTTONDOWN
+ *   - resize (Phase 7-D 예정): WM_NCHITTEST 기반 cursor 처리
+ */
+const WM_MOUSEMOVE = 0x0200;
+const WM_LBUTTONDOWN = 0x0201;
+const WM_LBUTTONUP = 0x0202;
+const WM_LBUTTONDBLCLK = 0x0203;
+const WM_RBUTTONDOWN = 0x0204;
+const WM_RBUTTONUP = 0x0205;
+const WM_MBUTTONDOWN = 0x0207;
+const WM_MBUTTONUP = 0x0208;
+
 // ────────────────────────────────────────────────────────────
 // Bindings
 // ────────────────────────────────────────────────────────────
@@ -186,6 +209,21 @@ interface Win32Bindings {
     uTimeout: number,
     lpdwResult: unknown,
   ) => bigint | number;
+  /**
+   * Phase 7-A — 비동기 메시지 송신.
+   *
+   * WH_MOUSE_LL callback hot path에서 widget HWND로 마우스 메시지를 전달하려면 SendMessage는
+   * 부적합(callback 동기 wait + Chromium message pump가 hook callback 안에 갇혀 deadlock).
+   * PostMessage는 즉시 반환하고 윈도우 큐에 enqueue → renderer가 일반 message loop에서 소비.
+   *
+   * @returns nonzero = success, 0 = failure (큐 가득 참 등). 본 단계에선 silent ignore.
+   */
+  PostMessageW: (
+    hWnd: bigint | number,
+    msg: number,
+    wParam: bigint | number,
+    lParam: bigint | number,
+  ) => number;
 
   // user32 — 부모/스타일/표시
   SetParent: (child: bigint | number, newParent: bigint | number | null) => bigint | null;
@@ -322,6 +360,10 @@ function loadWin32Bindings(): Win32Bindings {
       'intptr_t __stdcall SendMessageTimeoutW(void*, uint32, intptr_t, intptr_t, uint32, uint32, intptr_t *)',
     ) as Win32Bindings['SendMessageTimeoutW'];
 
+    const PostMessageW = user32.func(
+      'int __stdcall PostMessageW(void*, uint32, intptr_t, intptr_t)',
+    ) as Win32Bindings['PostMessageW'];
+
     const SetParent = user32.func(
       'void* __stdcall SetParent(void*, void*)',
     ) as Win32Bindings['SetParent'];
@@ -411,6 +453,7 @@ function loadWin32Bindings(): Win32Bindings {
       EnumWindows,
       SendMessageW,
       SendMessageTimeoutW,
+      PostMessageW,
       SetParent,
       GetParent,
       GetWindowLongPtrW,
@@ -1136,31 +1179,50 @@ export interface MouseHookHandle {
 }
 
 /**
+ * WH_MOUSE_LL hook callback signature.
+ *
+ * Phase 7-A에서 시그너처 확장 — 이전(`(p) => boolean`)에서 메시지 타입과 mouseData를 받게 변경.
+ * manager는 본 callback 안에서 라우팅 결정 + PostMessage 호출을 직접 수행한다.
+ *
+ * **Hot path 제약**:
+ *   - 0.5ms 이내 반환할 것. async/IPC/log 사용 금지(파일 I/O는 절대 금지).
+ *   - throw 금지. 어떤 에러도 silent하게 swallow해야 hook이 다음 callback도 받는다.
+ *   - 호출 빈도: WM_MOUSEMOVE는 초당 수백 회. 캐싱 필수.
+ *
+ * @param physicalPoint MSLLHOOKSTRUCT.pt (physical screen coordinate, DPI 무관 device pixel)
+ * @param msgType wParam에 들어온 Win32 mouse 메시지 타입 (WM_LBUTTONDOWN 등)
+ * @param mouseData MSLLHOOKSTRUCT.mouseData (wheel delta, XBUTTON 식별 등). 클릭/이동에선 0.
+ */
+export type MouseHookCallback = (
+  physicalPoint: { x: number; y: number },
+  msgType: number,
+  mouseData: number,
+) => void;
+
+/**
  * WH_MOUSE_LL low-level mouse hook 설치.
  *
- * shouldPassThrough(physicalPoint)는 callback hot path에서 호출된다 — 매우 빠르게(0.5ms 이내)
- * 반환해야 한다. async/IPC/PostMessage 등 호출 금지.
+ * 본 함수 자체는 **차단/주입을 하지 않는다**. 모든 마우스 메시지를 CallNextHookEx로
+ * 그대로 전달하며, callback이 PostMessage로 widget HWND에 메시지를 enqueue하더라도 OS 자체의
+ * 메시지 흐름은 변경되지 않는다 (PostMessage는 부가 라우팅).
  *
- * 본 구현은 **차단/주입을 하지 않는다**. 모든 마우스 메시지를 CallNextHookEx로
- * 그대로 전달하며, hook의 가치는:
- *   1. AV false-positive 회피용 minimal presence
- *   2. 향후 라우팅 정책 변경 시 좌표 분석 기반 마련
+ * 라우팅 효과:
+ *   - 위젯 위 빈 공간(클릭): WS_CHILD가 된 위젯 HWND가 OS의 default routing으로는 받지 못한다 →
+ *     callback이 PostMessage로 직접 전달
+ *   - 위젯 위 아이콘: callback이 라우팅을 skip → Explorer ListView가 정상 처리
+ *   - 위젯 영역 밖: callback이 즉시 skip
  *
- * 라우팅 효과는 SetParent + Z-order(HWND_BOTTOM)만으로 자연스럽게 발생한다:
- *   - 위젯 위 빈 공간 → Electron(위젯)이 처리 (위젯이 forefront)
- *   - 위젯 위 아이콘 → Explorer ListView가 처리 (Z-order로 ListView가 위)
- *
- * MSLLHOOKSTRUCT 메모리 레이아웃 (x64, packed = 40 bytes):
- *   POINT pt;       // 8 bytes (x, y)
- *   DWORD mouseData;// 4 bytes
- *   DWORD flags;    // 4 bytes
- *   DWORD time;     // 4 bytes
- *   ULONG_PTR dwExtraInfo; // 8 bytes (x64)
+ * MSLLHOOKSTRUCT 메모리 레이아웃 (x64, packed):
+ *   POINT pt;       // offset 0, 8 bytes (LONG x, LONG y)
+ *   DWORD mouseData;// offset 8, 4 bytes
+ *   DWORD flags;    // offset 12, 4 bytes
+ *   DWORD time;     // offset 16, 4 bytes
+ *   ULONG_PTR dwExtraInfo; // offset 24 (x64), 8 bytes
  *
  * @throws HookInstallError SetWindowsHookExW 실패 (보안 차단 등)
  */
 export function installLowLevelMouseHook(
-  shouldPassThrough: (physicalPoint: { x: number; y: number }) => boolean,
+  onMouseEvent: MouseHookCallback,
 ): MouseHookHandle {
   const b = loadWin32Bindings();
 
@@ -1177,21 +1239,19 @@ export function installLowLevelMouseHook(
     }
 
     try {
-      // lParam은 MSLLHOOKSTRUCT*. koffi.decode로 buffer를 얻거나 raw pointer로 직접 읽는다.
-      // 가장 안전한 방법: koffi.decode(pointer, sizeBytes, type) — 단, MSLLHOOKSTRUCT 정의가 필요.
-      // 본 구현은 koffi가 노출하는 raw memory 읽기 (decode + raw bytes) 패턴을 사용.
-      // 더 단순화: pt만 필요하므로 lParam을 buffer로 decode해 처음 8 bytes만 읽는다.
+      // lParam은 MSLLHOOKSTRUCT*. pt(8 bytes) + mouseData(4 bytes) = 12 bytes만 읽으면 충분.
+      // koffi.decode(pointer, type, count): pointer 시작에서 type을 count 만큼 읽는다.
+      // int32 3개 = 12 bytes로 pt.x, pt.y, mouseData를 한 번에 디코드.
       const lparamBig = typeof lParamRaw === 'bigint' ? lParamRaw : BigInt(lParamRaw);
       if (lparamBig !== 0n) {
-        // koffi.decode(address, length, type) — type은 'unsigned char[N]' 등 사용 가능.
-        // 더 단순: koffi.decode(pointer, 'int32', count) → int32 배열로 읽기.
-        const decoded = b.koffi.decode(lparamBig, 'int32', 2) as number[] | Int32Array;
+        const decoded = b.koffi.decode(lparamBig, 'int32', 3) as number[] | Int32Array;
         const x = Array.isArray(decoded) ? decoded[0] : decoded[0];
         const y = Array.isArray(decoded) ? decoded[1] : decoded[1];
-        // shouldPassThrough는 manager가 제공 — 차단/주입은 하지 않으므로 결과는 메트릭/캐시용.
-        // 호출만 해도 manager TTL 캐시가 데워져 다음 hot path가 빨라진다.
+        const mouseDataRaw = Array.isArray(decoded) ? decoded[2] : decoded[2];
+        // wParam = mouse 메시지 타입 (WM_LBUTTONDOWN 등). 64-bit이지만 메시지 타입은 16-bit이내라 안전 변환.
+        const msgType = typeof wParam === 'bigint' ? Number(BigInt.asUintN(32, wParam)) : (wParam >>> 0);
         try {
-          shouldPassThrough({ x: x ?? 0, y: y ?? 0 });
+          onMouseEvent({ x: x ?? 0, y: y ?? 0 }, msgType, mouseDataRaw ?? 0);
         } catch {
           /* callback 안에서 throw 금지 */
         }
@@ -1251,5 +1311,125 @@ export function uninstallLowLevelMouseHook(h: MouseHookHandle): void {
     b.koffi.unregister(h.registeredCallback);
   } catch {
     /* best-effort */
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-A — Mouse routing helpers
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Phase 7-A에서 widget HWND로 PostMessage 라우팅할 마우스 메시지 식별.
+ *
+ * 포함:
+ *   - WM_MOUSEMOVE (0x0200) — hover 효과, mouseenter/leave 트래킹
+ *   - WM_LBUTTONDOWN/UP/DBLCLK (0x0201/2/3) — 좌클릭, 더블클릭
+ *   - WM_RBUTTONDOWN/UP (0x0204/5) — 우클릭(컨텍스트 메뉴)
+ *   - WM_MBUTTONDOWN/UP (0x0207/8) — 휠 클릭
+ *
+ * 제외 (다음 Phase로 분리):
+ *   - WM_MOUSEWHEEL/HWHEEL — Phase 7-B (휠 스크롤)
+ *   - WM_NCLBUTTONDOWN — Phase 7-C (헤더 드래그로 위젯 이동)
+ *   - WM_NCHITTEST 기반 cursor 처리 — Phase 7-D (테두리 resize)
+ *
+ * 본 함수는 hot path(WH_MOUSE_LL callback)에서 호출되므로 inline 가능한 단순 비교.
+ */
+export function isMouseMessageOfInterest(msgType: number): boolean {
+  return (
+    msgType === WM_LBUTTONDOWN
+    || msgType === WM_LBUTTONUP
+    || msgType === WM_RBUTTONDOWN
+    || msgType === WM_RBUTTONUP
+    || msgType === WM_MBUTTONDOWN
+    || msgType === WM_MBUTTONUP
+    || msgType === WM_LBUTTONDBLCLK
+    || msgType === WM_MOUSEMOVE
+  );
+}
+
+/**
+ * physical screen coordinate를 widget client coordinate로 변환.
+ *
+ * Win32 마우스 메시지의 lParam은 일반적으로 client coordinate (target window의
+ * client area 좌상단 기준). MSDN(WM_MOUSEMOVE 등): "The high-order word specifies
+ * the y-coordinate ... the low-order word specifies the x-coordinate of the cursor.
+ * The coordinate is relative to the upper-left corner of the client area."
+ *
+ * physical screen → physical client 변환:
+ *   client.x = physical.x - widgetBounds.x
+ *   client.y = physical.y - widgetBounds.y
+ *
+ * 본 함수는 widget bounds를 physical pixel로 받기 때문에 추가 DPI 변환이 필요 없다
+ * (manager가 이미 dipToPhysical로 갱신해 캐시).
+ *
+ * 음수가 될 수 있는데(이론상 widget 영역 밖이지만 caller가 잘못 호출), Win32 마우스 메시지의
+ * client coord는 음수도 합법(클라이언트 영역 밖이지만 OS가 그대로 전달).
+ *
+ * **주의**: WM_MOUSEMOVE 등의 lParam 인코딩은 16-bit signed × 2이지만 PostMessage 호출 시
+ * 32-bit 합치기는 caller(`postMouseMessageToWidget`)가 책임진다.
+ */
+export function physicalToClient(
+  physicalPoint: { readonly x: number; readonly y: number },
+  widgetPhysicalBounds: { readonly x: number; readonly y: number },
+): { x: number; y: number } {
+  return {
+    x: physicalPoint.x - widgetPhysicalBounds.x,
+    y: physicalPoint.y - widgetPhysicalBounds.y,
+  };
+}
+
+/**
+ * Win32 마우스 메시지를 widget HWND에 PostMessage로 송신.
+ *
+ * lParam encoding:
+ *   - low-order WORD = client.x (16-bit signed)
+ *   - high-order WORD = client.y (16-bit signed)
+ *   - 32-bit 정수 한 개로 packing: (clientY << 16) | (clientX & 0xFFFF)
+ *   - JS bitwise는 32-bit signed → 그대로 사용 가능
+ *
+ * wParam encoding (메시지별 다름, Phase 7-A에선 0으로 충분):
+ *   - WM_MOUSEMOVE: MK_LBUTTON | MK_RBUTTON 등 button state. 0이면 "어떤 버튼도 안 눌림".
+ *   - WM_LBUTTONDOWN/UP: 다른 키(SHIFT/CTRL) state. 0이면 "수정자 없음".
+ *   - 정확한 state가 필요하면 GetAsyncKeyState로 보강 가능 (현재는 미구현 — 단순 클릭/이동만
+ *     처리하면 사용자 입장에서 시각적 차이 없음).
+ *
+ * @param widgetHwnd PostMessage 대상 HWND (위젯 native handle)
+ * @param msgType WM_LBUTTONDOWN 등
+ * @param clientX widget client area 기준 x (physical pixel)
+ * @param clientY widget client area 기준 y (physical pixel)
+ * @param mouseData MSLLHOOKSTRUCT.mouseData. wheel/XBUTTON에서만 의미. 클릭/이동에선 0.
+ * @returns true = PostMessage success, false = 실패(큐 가득 참 등)
+ */
+export function postMouseMessageToWidget(
+  widgetHwnd: bigint,
+  msgType: number,
+  clientX: number,
+  clientY: number,
+  mouseData: number = 0,
+): boolean {
+  if (isNullHandle(widgetHwnd)) return false;
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return false;
+  }
+
+  // 16-bit signed clamp (값이 범위 밖이면 잘리는 게 정상 — Win32 마우스 메시지의 client coord는
+  // 16-bit signed로 packing되며 매우 큰 값(±32767 초과)은 어차피 의미가 없다).
+  const cx = clientX | 0;
+  const cy = clientY | 0;
+  const lparam = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF);
+
+  // wParam: Phase 7-A에서는 0 (수정자 키/버튼 state 미보강).
+  // mouseData는 wheel/XBUTTON에서만 lParam 또는 wParam high word로 들어가므로 본 단계에서 미사용.
+  const wParam = 0;
+  void mouseData; // 의도적 미사용 — Phase 7-B에서 wheel delta로 활용 예정.
+
+  try {
+    const result = b.PostMessageW(widgetHwnd, msgType, wParam, lparam);
+    return result !== 0;
+  } catch {
+    return false;
   }
 }
