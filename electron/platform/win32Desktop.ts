@@ -131,6 +131,10 @@ const LVM_HITTEST = LVM_FIRST + 18;
 /** SetWindowsHookExW idHook */
 const WH_MOUSE_LL = 14;
 
+/** GetWindow uCmd */
+const GW_HWNDNEXT = 2;
+const GW_HWNDPREV = 3;
+
 // ────────────────────────────────────────────────────────────
 // Bindings
 // ────────────────────────────────────────────────────────────
@@ -178,6 +182,9 @@ interface Win32Bindings {
   ) => number;
   ShowWindow: (hWnd: bigint | number, nCmdShow: number) => number;
   IsWindow: (hWnd: bigint | number) => number;
+
+  // user32 — sibling/child traversal (Strategy 2/3 보조)
+  GetWindow: (hWnd: bigint | number, uCmd: number) => bigint | null;
 
   // user32 — Phase 6: 좌표/스레드/프로세스
   GetWindowThreadProcessId: (hWnd: bigint | number, lpdwProcessId: unknown) => number;
@@ -325,6 +332,10 @@ function loadWin32Bindings(): Win32Bindings {
       'int __stdcall IsWindow(void*)',
     ) as Win32Bindings['IsWindow'];
 
+    const GetWindow = user32.func(
+      'void* __stdcall GetWindow(void*, uint32)',
+    ) as Win32Bindings['GetWindow'];
+
     // Phase 6 추가 바인딩
     const GetWindowThreadProcessId = user32.func(
       'uint32 __stdcall GetWindowThreadProcessId(void*, uint32 *)',
@@ -389,6 +400,7 @@ function loadWin32Bindings(): Win32Bindings {
       SetWindowPos,
       ShowWindow,
       IsWindow,
+      GetWindow,
       GetWindowThreadProcessId,
       ScreenToClient,
       OpenProcess,
@@ -491,111 +503,173 @@ export function getWidgetHwnd(win: BrowserWindow): bigint {
 }
 
 /**
- * Progman → WM_SPAWN_WORKER로 WorkerW 생성을 유도한 뒤,
- * EnumWindows로 SHELLDLL_DefView를 자식으로 둔 WorkerW를 찾는다.
+ * G2 게이트 진단으로 발견된 환경 분기를 위한 인터페이스.
  *
- * Windows 10/11에서 일반적인 패턴:
- *   1. FindWindow("Progman", null) — 데스크톱 부모창
- *   2. SendMessageTimeout(Progman, 0x052C, 0xD, 0) — WorkerW spawn 유도
- *   3. EnumWindows로 모든 top-level 창 순회
- *      → 각 창의 자식 중 SHELLDLL_DefView가 있는지 FindWindowEx로 확인
- *      → 발견하면 그 창의 형제(GetWindow GW_HWNDPREV) 또는 자기 자신이 후보
- *   4. 그 중 클래스명이 "WorkerW"이고 SHELLDLL_DefView 자식을 가진 창
+ * 사용자 환경 데스크톱 윈도우 계층은 표준과 다를 수 있다:
+ *   - 표준: Progman → WorkerW → SHELLDLL_DefView → SysListView32
+ *   - 변종: Progman → SHELLDLL_DefView → SysListView32 (Wallpaper Engine, ExplorerPatcher 등)
  *
- * 단, EnumWindows 콜백을 koffi proto/pointer로 등록하면 콜백 메모리 관리 이슈가
- * 있을 수 있어, 본 구현은 더 안전한 폴백 방식을 사용한다:
- *   - Progman의 자식 SHELLDLL_DefView가 있으면 (icons-on-desktop 모드) Progman 자체에
- *     attach. 단, Progman attach는 일부 환경에서 시각적 깨짐이 발생할 수 있어
- *     WorkerW를 찾는 시도를 우선한다.
- *   - WorkerW 탐색: FindWindowEx(NULL, lastWorkerW, "WorkerW", NULL) 반복.
- *     각 WorkerW에 대해 FindWindowEx(workerW, NULL, "SHELLDLL_DefView", NULL)
- *     를 호출하고 자식이 발견되는 첫 WorkerW를 반환.
+ * `enable()`은 다음 우선순위로 attach 후보를 시도한다:
+ *   STRATEGY1: 표준 WorkerW (SHELLDLL_DefView 자식 보유)
+ *   STRATEGY2: SHELLDLL_DefView의 sibling WorkerW (Wallpaper Engine 패턴)
+ *   STRATEGY3: SHELLDLL_DefView 자체 (Progman 직속 SHELLDLL_DefView 환경)
  *
- * @throws WorkerWNotFoundError Progman 미발견 또는 SHELLDLL_DefView 보유 창 미발견
+ * Progman 자체는 SetParent 거부 환경이 다수 발견되어(G2 진단 결과) 사용하지 않는다.
  */
-export function findOrCreateWorkerW(): bigint {
-  diagLog('native-desktop', 'findOrCreateWorkerW.A: enter');
-  const b = loadWin32Bindings();
-  diagLog('native-desktop', 'findOrCreateWorkerW.B: bindings loaded');
+export interface DesktopAttachCandidates {
+  /** 표준 패턴으로 발견된 WorkerW들 (0개~여러 개) */
+  readonly standardWorkerWs: readonly bigint[];
+  /** SHELLDLL_DefView 핸들 (Progman 직속 자식). 없으면 0n. */
+  readonly shellDefView: bigint;
+  /** SHELLDLL_DefView의 sibling WorkerW (Strategy 2). 없으면 0n. */
+  readonly shellDefViewSiblingWorkerW: bigint;
+  /** Progman 핸들. 진단/대체 검색용. SetParent 대상으로 사용 금지. */
+  readonly progman: bigint;
+}
 
-  // 1. Progman 탐색
+/**
+ * 데스크톱 attach 후보 핸들 목록을 모두 수집한다.
+ *
+ * 이전 `findOrCreateWorkerW()`를 대체. 단일 핸들이 아니라 strategy별 후보 묶음을 반환.
+ * 호출자(enable)는 우선순위에 따라 순차 시도한다.
+ *
+ * @throws WorkerWNotFoundError Progman 자체가 없는 경우(매우 비정상적)
+ */
+export function collectDesktopAttachCandidates(): DesktopAttachCandidates {
+  diagLog('native-desktop', 'collectDesktopAttachCandidates.A: enter');
+  const b = loadWin32Bindings();
+  diagLog('native-desktop', 'collectDesktopAttachCandidates.B: bindings loaded');
+
+  // 1. Progman 탐색 (필수 anchor)
   let progmanRaw: unknown;
   try {
     progmanRaw = b.FindWindowW('Progman', null);
   } catch (e) {
-    diagWarn('native-desktop', `findOrCreateWorkerW.C: FindWindowW(Progman) throw: ${e instanceof Error ? e.message : String(e)}`);
+    diagWarn('native-desktop', `collectDesktopAttachCandidates.C: FindWindowW(Progman) throw: ${e instanceof Error ? e.message : String(e)}`);
     throw e;
   }
-  diagLog('native-desktop', `findOrCreateWorkerW.C: FindWindowW(Progman) returned typeof=${typeof progmanRaw}`);
-
   let progman: bigint;
   try {
     progman = toBigInt(progmanRaw);
   } catch (e) {
-    diagWarn('native-desktop', `findOrCreateWorkerW.D: toBigInt(progman) throw: ${e instanceof Error ? e.message : String(e)}`);
+    diagWarn('native-desktop', `collectDesktopAttachCandidates.D: toBigInt(progman) throw: ${e instanceof Error ? e.message : String(e)}`);
     throw e;
   }
-  diagLog('native-desktop', `findOrCreateWorkerW.D: Progman=0x${progman.toString(16)}`);
+  diagLog('native-desktop', `collectDesktopAttachCandidates.D: Progman=0x${progman.toString(16)}`);
   if (isNullHandle(progman)) {
     throw new WorkerWNotFoundError('Progman 창을 찾을 수 없음');
   }
 
-  // 2. WorkerW 생성 유도 (idempotent — 이미 있으면 무해)
-  // SendMessageTimeoutW로 1초 내 응답 없으면 무시. 결과 buffer는 사용하지 않음.
-  // SMTO_NORMAL=0, SMTO_ABORTIFHUNG=2. 0x0002로 hung 시 중단.
+  // 2. WM_SPAWN_WORKER 송신 — idempotent. WorkerW 생성을 유도.
   try {
     b.SendMessageTimeoutW(progman, WM_SPAWN_WORKER, 0xd, 0, 0x0002, 1000, 0);
-    diagLog('native-desktop', 'findOrCreateWorkerW.E: WM_SPAWN_WORKER sent');
+    diagLog('native-desktop', 'collectDesktopAttachCandidates.E: WM_SPAWN_WORKER sent');
   } catch (e) {
-    // SendMessageTimeoutW 실패도 무해 — 다음 단계 탐색에서 결과를 본다.
-    diagWarn('native-desktop', `findOrCreateWorkerW.E: WM_SPAWN_WORKER send 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
+    diagWarn('native-desktop', `collectDesktopAttachCandidates.E: WM_SPAWN_WORKER send 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // 3. 모든 WorkerW 순회 → SHELLDLL_DefView 자식이 있는 첫 후보 반환.
-  // FindWindowExW(NULL, prev, "WorkerW", NULL)을 prev=null부터 반복 호출.
+  // 3. STRATEGY 1 — 모든 top-level WorkerW 순회. SHELLDLL_DefView 자식 보유 후보 모두 수집.
+  diagLog('native-desktop', 'collectDesktopAttachCandidates.STRATEGY1: 표준 WorkerW 탐색...');
+  const standardWorkerWs: bigint[] = [];
   let prev: bigint = 0n;
   let count = 0;
   for (let i = 0; i < 64; i++) {
     let workerWRaw: unknown;
     try {
-      // FindWindowExW의 prev는 BigInt → koffi 'void *' 인자로 그대로 전달 가능.
-      // koffi 2.x: BigInt/number 모두 'void *' 인자로 허용. null도 허용.
       workerWRaw = b.FindWindowExW(null, prev === 0n ? null : prev, 'WorkerW', null);
     } catch (e) {
-      diagWarn('native-desktop', `findOrCreateWorkerW.F[${i}]: FindWindowExW(WorkerW) throw: ${e instanceof Error ? e.message : String(e)}`);
+      diagWarn('native-desktop', `collectDesktopAttachCandidates.F[${i}]: FindWindowExW(WorkerW) throw: ${e instanceof Error ? e.message : String(e)}`);
       throw e;
     }
     let workerW: bigint;
     try {
       workerW = toBigInt(workerWRaw);
     } catch (e) {
-      diagWarn('native-desktop', `findOrCreateWorkerW.F[${i}]: toBigInt(workerW) throw: ${e instanceof Error ? e.message : String(e)}`);
+      diagWarn('native-desktop', `collectDesktopAttachCandidates.F[${i}]: toBigInt(workerW) throw: ${e instanceof Error ? e.message : String(e)}`);
       throw e;
     }
     if (isNullHandle(workerW)) break;
     count++;
     const shellDef = toBigInt(b.FindWindowExW(workerW, null, 'SHELLDLL_DefView', null));
-    diagLog('native-desktop', `findOrCreateWorkerW.G: WorkerW#${count}=0x${workerW.toString(16)}, SHELLDLL_DefView=${isNullHandle(shellDef) ? 'NONE' : '0x' + shellDef.toString(16)}`);
+    diagLog('native-desktop', `collectDesktopAttachCandidates.G: WorkerW#${count}=0x${workerW.toString(16)}, SHELLDLL_DefView=${isNullHandle(shellDef) ? 'NONE' : '0x' + shellDef.toString(16)}`);
     if (!isNullHandle(shellDef)) {
-      diagLog('native-desktop', `findOrCreateWorkerW.H: SUCCESS WorkerW=0x${workerW.toString(16)} (after ${count} candidates)`);
-      return workerW;
+      standardWorkerWs.push(workerW);
     }
     prev = workerW;
   }
+  diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY1_RESULT: ${standardWorkerWs.length}개 표준 WorkerW 후보 (검사 ${count}개)`);
 
-  diagLog('native-desktop', `findOrCreateWorkerW.I: WorkerW 후보 ${count}개 검사했으나 SHELLDLL_DefView 자식 없음 — Progman 자체 검사`);
-
-  // 4. WorkerW에서 못 찾으면 Progman 자체 자식 검사 (icons-on-desktop OFF 환경 등).
-  const shellDefInProgman = toBigInt(b.FindWindowExW(progman, null, 'SHELLDLL_DefView', null));
-  diagLog('native-desktop', `findOrCreateWorkerW.J: Progman child SHELLDLL_DefView=${isNullHandle(shellDefInProgman) ? 'NONE' : '0x' + shellDefInProgman.toString(16)}`);
-  if (!isNullHandle(shellDefInProgman)) {
-    // Progman attach는 시각적 부작용이 있을 수 있지만 fallback으로 허용.
-    diagLog('native-desktop', `findOrCreateWorkerW.K: FALLBACK to Progman 0x${progman.toString(16)}`);
-    return progman;
+  // 4. SHELLDLL_DefView (Progman 직속) — STRATEGY 2/3에서 사용
+  let shellDefView: bigint = 0n;
+  try {
+    shellDefView = toBigInt(b.FindWindowExW(progman, null, 'SHELLDLL_DefView', null));
+  } catch (e) {
+    diagWarn('native-desktop', `collectDesktopAttachCandidates.H: FindWindowExW(Progman, SHELLDLL_DefView) throw: ${e instanceof Error ? e.message : String(e)}`);
   }
+  diagLog('native-desktop', `collectDesktopAttachCandidates.H: Progman 직속 SHELLDLL_DefView=${isNullHandle(shellDefView) ? 'NONE' : '0x' + shellDefView.toString(16)}`);
 
+  // 5. STRATEGY 2 — SHELLDLL_DefView의 sibling WorkerW 탐색
+  // Progman의 자식 트리에서 GetWindow(shellDefView, GW_HWNDPREV/NEXT)로 sibling 검사.
+  // 또는 FindWindowExW로 Progman의 모든 자식을 순회하며 클래스가 WorkerW이고
+  // GW_HWNDNEXT가 shellDefView인 후보를 찾는다.
+  diagLog('native-desktop', 'collectDesktopAttachCandidates.STRATEGY2: SHELLDLL_DefView sibling 탐색...');
+  let shellDefViewSiblingWorkerW: bigint = 0n;
+  if (!isNullHandle(shellDefView)) {
+    // 방법 A: GetWindow(shellDefView, GW_HWNDPREV/NEXT)로 직접 sibling 조회
+    // 단, sibling은 같은 부모(=Progman)의 자식 사이에서만 의미 있음.
+    try {
+      const prevSibling = toBigInt(b.GetWindow(shellDefView, GW_HWNDPREV));
+      const nextSibling = toBigInt(b.GetWindow(shellDefView, GW_HWNDNEXT));
+      diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY2.A: shellDefView siblings prev=0x${prevSibling.toString(16)} next=0x${nextSibling.toString(16)}`);
+
+      // 클래스 검증은 EnumChildWindows 없이 GetClassName으로 해야 하지만 본 구현엔
+      // GetClassName이 없다. 대신 FindWindowExW로 Progman의 자식 WorkerW를 순회하며
+      // 각 WorkerW의 GetWindow(GW_HWNDNEXT)가 shellDefView인 것을 찾는다.
+      let childPrev: bigint = 0n;
+      for (let i = 0; i < 32; i++) {
+        const childRaw = b.FindWindowExW(progman, childPrev === 0n ? null : childPrev, 'WorkerW', null);
+        const child = toBigInt(childRaw);
+        if (isNullHandle(child)) break;
+        const childNextSibling = toBigInt(b.GetWindow(child, GW_HWNDNEXT));
+        const childPrevSibling = toBigInt(b.GetWindow(child, GW_HWNDPREV));
+        diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY2.B: Progman 자식 WorkerW#${i + 1}=0x${child.toString(16)}, prev=0x${childPrevSibling.toString(16)}, next=0x${childNextSibling.toString(16)}`);
+        if (childNextSibling === shellDefView || childPrevSibling === shellDefView) {
+          shellDefViewSiblingWorkerW = child;
+          diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY2.C: SUCCESS sibling WorkerW=0x${child.toString(16)}`);
+          break;
+        }
+        childPrev = child;
+      }
+    } catch (e) {
+      diagWarn('native-desktop', `collectDesktopAttachCandidates.STRATEGY2: 예외 (무시): ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  diagLog('native-desktop', `collectDesktopAttachCandidates.STRATEGY2_RESULT: ${isNullHandle(shellDefViewSiblingWorkerW) ? 'NONE' : '0x' + shellDefViewSiblingWorkerW.toString(16)}`);
+
+  return {
+    standardWorkerWs,
+    shellDefView,
+    shellDefViewSiblingWorkerW,
+    progman,
+  };
+}
+
+/**
+ * 하위 호환 래퍼.
+ *
+ * @deprecated `enable()`은 `collectDesktopAttachCandidates`를 직접 사용한다.
+ *   이 함수는 첫 번째 표준 WorkerW만 반환하며, sibling WorkerW나 SHELLDLL_DefView를
+ *   고려하지 않는다. 외부 호출자가 있으면 정리 후 제거 예정.
+ *
+ * @throws WorkerWNotFoundError 표준 WorkerW 후보가 0개인 경우.
+ */
+export function findOrCreateWorkerW(): bigint {
+  const cands = collectDesktopAttachCandidates();
+  if (cands.standardWorkerWs.length > 0) {
+    return cands.standardWorkerWs[0]!;
+  }
   throw new WorkerWNotFoundError(
-    'SHELLDLL_DefView를 자식으로 둔 WorkerW/Progman을 찾을 수 없음',
+    'SHELLDLL_DefView를 자식으로 둔 표준 WorkerW를 찾을 수 없음 (Progman fallback은 G2 진단에서 거부 확인됨)',
   );
 }
 
@@ -614,90 +688,152 @@ export interface Win32DesktopHandles {
 }
 
 /**
- * 위젯 HWND를 WorkerW 자식으로 SetParent attach.
+ * SetParent 검증을 race-tolerant하게 수행한다.
  *
- * 단계:
- *   1. GetWindowLongPtrW(GWL_EXSTYLE) — 기존 ExStyle 저장
- *   2. GetParent — 기존 부모 저장 (보통 0)
- *   3. SetParent(widgetHwnd, workerW) — 부모 변경
- *      반환값 0이면 실패 (UAC, 무결성 레벨 차이 등) → AttachFailedError
- *   4. SetWindowLongPtrW(GWL_EXSTYLE, prevExStyle) — WS_EX_LAYERED 등 보존
- *      (SetParent 후 일부 ExStyle이 영향받을 수 있어 명시 복원)
- *   5. SetWindowPos(HWND_BOTTOM, NOACTIVATE | NOSIZE | NOMOVE | FRAMECHANGED)
- *      Z-order는 WorkerW 내부에서만 의미. 다른 형제(아이콘 ListView) 위에 둔다.
- *   6. ShowWindow(SW_SHOWNOACTIVATE)
+ * 일부 환경(특히 셸 변종)에서는 SetParent 직후 GetParent가 일시적으로 0을 반환했다가
+ * 짧은 지연 후 정상값을 반환한다. 반대로 SetParent 직후 OS가 즉시 부모를 떼어낸 경우
+ * (Progman 등 거부 환경)도 마찬가지로 0을 반환한다. 두 경우를 구분하기 위해
+ * 짧은 sleep 후 재검증한다.
  *
- * @throws AttachFailedError SetParent 실패 또는 사전 검증 실패
+ * @returns true면 성공 (newParent === expected). false면 부모가 expected가 아님.
  */
-export function attachToWorkerW(widgetHwnd: bigint, workerW: bigint): Win32DesktopHandles {
+function verifySetParent(
+  b: Win32Bindings,
+  widgetHwnd: bigint,
+  expected: bigint,
+  diagPrefix: string,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    // 1차 검증 — 즉시
+    const newParent1 = toBigInt(b.GetParent(widgetHwnd));
+    diagLog('native-desktop', `${diagPrefix} verifySetParent.t0: newParent=0x${newParent1.toString(16)} expected=0x${expected.toString(16)}`);
+    if (newParent1 === expected) {
+      resolve(true);
+      return;
+    }
+
+    // 2차 — 50ms 후
+    setTimeout(() => {
+      const newParent2 = toBigInt(b.GetParent(widgetHwnd));
+      diagLog('native-desktop', `${diagPrefix} verifySetParent.t50: newParent=0x${newParent2.toString(16)} expected=0x${expected.toString(16)}`);
+      if (newParent2 === expected) {
+        resolve(true);
+        return;
+      }
+
+      // 3차 — 추가 100ms (총 150ms) 후
+      setTimeout(() => {
+        const newParent3 = toBigInt(b.GetParent(widgetHwnd));
+        diagLog('native-desktop', `${diagPrefix} verifySetParent.t150: newParent=0x${newParent3.toString(16)} expected=0x${expected.toString(16)}`);
+        resolve(newParent3 === expected);
+      }, 100);
+    }, 50);
+  });
+}
+
+/**
+ * 위젯 HWND를 SetParent로 attach 시도하는 공통 코어.
+ *
+ * `attachToWorkerW`와 `attachToShellDefView`가 공유한다. 둘 다 SetParent + ExStyle 복원 +
+ * Z-order 보정 + ShowWindow 단계를 거치며, parent 핸들만 다르다.
+ */
+async function attachToTarget(
+  widgetHwnd: bigint,
+  target: bigint,
+  diagLabel: string,
+): Promise<Win32DesktopHandles> {
   const b = loadWin32Bindings();
 
   if (isNullHandle(widgetHwnd)) {
-    throw new AttachFailedError('attachToWorkerW: widgetHwnd is null');
+    throw new AttachFailedError(`${diagLabel}: widgetHwnd is null`);
   }
-  if (isNullHandle(workerW)) {
-    throw new AttachFailedError('attachToWorkerW: workerW is null');
+  if (isNullHandle(target)) {
+    throw new AttachFailedError(`${diagLabel}: target parent is null`);
   }
   if (b.IsWindow(widgetHwnd) === 0) {
-    throw new AttachFailedError('attachToWorkerW: widgetHwnd is not a valid window');
+    throw new AttachFailedError(`${diagLabel}: widgetHwnd is not a valid window`);
   }
-  if (b.IsWindow(workerW) === 0) {
-    throw new AttachFailedError('attachToWorkerW: workerW is not a valid window');
+  if (b.IsWindow(target) === 0) {
+    throw new AttachFailedError(`${diagLabel}: target parent is not a valid window`);
   }
 
   // 1. ExStyle 저장
   const prevExStyleRaw = b.GetWindowLongPtrW(widgetHwnd, GWL_EXSTYLE);
   const prevExStyle = typeof prevExStyleRaw === 'bigint' ? prevExStyleRaw : BigInt(prevExStyleRaw);
-  diagLog('native-desktop', `attachToWorkerW step1 prevExStyle=0x${prevExStyle.toString(16)}`);
+  diagLog('native-desktop', `${diagLabel} step1 prevExStyle=0x${prevExStyle.toString(16)}`);
 
   // 2. 기존 부모 저장
   const prevParent = toBigInt(b.GetParent(widgetHwnd));
-  diagLog('native-desktop', `attachToWorkerW step2 prevParent=0x${prevParent.toString(16)}`);
+  diagLog('native-desktop', `${diagLabel} step2 prevParent=0x${prevParent.toString(16)}`);
 
   // 3. SetParent
-  const setParentResult = toBigInt(b.SetParent(widgetHwnd, workerW));
-  diagLog('native-desktop', `attachToWorkerW step3 SetParent return=0x${setParentResult.toString(16)} (returns previous parent on success)`);
-  if (isNullHandle(setParentResult) && !isNullHandle(prevParent)) {
-    // SetParent는 성공 시 "이전 부모"를 반환. 이전 부모가 있었는데 결과가 0이면 실패.
-    // 이전 부모가 없는 (top-level) 창의 경우 정상 결과도 0이라 추가 검증 필요.
-    if (b.IsWindow(prevParent) !== 0) {
-      throw new AttachFailedError(
-        'SetParent 실패 (UAC/integrity-level/policy 차단 추정)',
-      );
-    }
-  }
+  const setParentResult = toBigInt(b.SetParent(widgetHwnd, target));
+  diagLog('native-desktop', `${diagLabel} step3 SetParent return=0x${setParentResult.toString(16)} (returns previous parent on success)`);
 
-  // 3-bis. SetParent 결과 검증: 위젯의 새 부모가 workerW인지 확인
-  const newParent = toBigInt(b.GetParent(widgetHwnd));
-  diagLog('native-desktop', `attachToWorkerW step3-bis newParent=0x${newParent.toString(16)} (expected=0x${workerW.toString(16)})`);
-  if (newParent !== workerW) {
+  // 3-bis. SetParent 검증 — race 대응 retry. target이 widget을 진짜로 받아들였는지 확인.
+  const verified = await verifySetParent(b, widgetHwnd, target, diagLabel);
+  if (!verified) {
+    const finalParent = toBigInt(b.GetParent(widgetHwnd));
     throw new AttachFailedError(
-      `SetParent 후 부모 검증 실패 (expected=${workerW}, actual=${newParent})`,
+      `${diagLabel}: SetParent 후 부모 검증 실패 (expected=0x${target.toString(16)}, final=0x${finalParent.toString(16)}). 대상이 자식을 거부했음.`,
     );
   }
 
-  // 4. ExStyle 복원 (SetParent 후 영향 가능)
+  // 4. ExStyle 복원
   b.SetWindowLongPtrW(widgetHwnd, GWL_EXSTYLE, prevExStyle);
 
-  // 5. Z-order: WorkerW 내부에서 가장 아래(아이콘 ListView 아래)로.
+  // 5. Z-order: 부모 내부에서 가장 아래로.
   const swpResult = b.SetWindowPos(
     widgetHwnd,
     HWND_BOTTOM_HANDLE,
     0, 0, 0, 0,
     SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_FRAMECHANGED,
   );
-  diagLog('native-desktop', `attachToWorkerW step5 SetWindowPos(HWND_BOTTOM)=${swpResult}`);
+  diagLog('native-desktop', `${diagLabel} step5 SetWindowPos(HWND_BOTTOM)=${swpResult}`);
 
   // 6. 표시 (포커스 빼앗지 않음)
   const showResult = b.ShowWindow(widgetHwnd, SW_SHOWNOACTIVATE);
-  diagLog('native-desktop', `attachToWorkerW step6 ShowWindow(SW_SHOWNOACTIVATE)=${showResult} (was ${showResult === 0 ? 'previously hidden' : 'previously visible'})`);
+  diagLog('native-desktop', `${diagLabel} step6 ShowWindow(SW_SHOWNOACTIVATE)=${showResult}`);
 
   return {
-    workerW,
+    workerW: target,
     widgetHwnd,
     prevParent,
     prevExStyle,
   };
+}
+
+/**
+ * 위젯 HWND를 WorkerW 자식으로 SetParent attach.
+ *
+ * 단계:
+ *   1. GetWindowLongPtrW(GWL_EXSTYLE) — 기존 ExStyle 저장
+ *   2. GetParent — 기존 부모 저장 (보통 0)
+ *   3. SetParent(widgetHwnd, workerW) — 부모 변경 (race 검증 50ms+100ms retry)
+ *   4. GWL_EXSTYLE 복원
+ *   5. SetWindowPos(HWND_BOTTOM)
+ *   6. ShowWindow(SW_SHOWNOACTIVATE)
+ *
+ * @throws AttachFailedError SetParent 후 부모 검증 실패 또는 사전 검증 실패.
+ */
+export async function attachToWorkerW(widgetHwnd: bigint, workerW: bigint): Promise<Win32DesktopHandles> {
+  return attachToTarget(widgetHwnd, workerW, 'attachToWorkerW');
+}
+
+/**
+ * 위젯 HWND를 SHELLDLL_DefView 자식으로 SetParent attach.
+ *
+ * STRATEGY 3 — 표준 WorkerW가 없거나 sibling WorkerW도 없는 환경 대비.
+ * SHELLDLL_DefView는 SysListView32(아이콘 ListView)를 자식으로 가지므로 Z-order 충돌
+ * 가능성이 있다. SetWindowPos(HWND_BOTTOM)으로 가장 아래로 보내 ListView 위에 가려지게
+ * 한다. 다만 환경에 따라 여전히 시각적 부작용이 있을 수 있어 마지막 수단.
+ *
+ * 인터페이스는 attachToWorkerW와 동일.
+ *
+ * @throws AttachFailedError SetParent 후 부모 검증 실패.
+ */
+export async function attachToShellDefView(widgetHwnd: bigint, shellDefView: bigint): Promise<Win32DesktopHandles> {
+  return attachToTarget(widgetHwnd, shellDefView, 'attachToShellDefView');
 }
 
 /**
@@ -791,8 +927,15 @@ export function findDesktopListView(workerW: bigint): bigint | null {
     return null;
   }
 
-  const shellDef = toBigInt(b.FindWindowExW(workerW, null, 'SHELLDLL_DefView', null));
-  if (isNullHandle(shellDef)) return null;
+  // 후보 1: workerW의 자식 SHELLDLL_DefView (표준/sibling 케이스)
+  let shellDef = toBigInt(b.FindWindowExW(workerW, null, 'SHELLDLL_DefView', null));
+
+  // 후보 2 (STRATEGY 3 케이스): workerW 자체가 이미 SHELLDLL_DefView일 수 있음.
+  //   collectDesktopAttachCandidates의 STRATEGY 3에서는 SHELLDLL_DefView를
+  //   직접 부모로 사용한다. 이때 handles.workerW === SHELLDLL_DefView.
+  if (isNullHandle(shellDef)) {
+    shellDef = workerW;
+  }
 
   const listView = toBigInt(b.FindWindowExW(shellDef, null, 'SysListView32', null));
   if (isNullHandle(listView)) return null;

@@ -18,6 +18,8 @@ import {
   HookInstallError,
   isWindowAlive,
   findDesktopListView,
+  attachToShellDefView,
+  collectDesktopAttachCandidates,
 } from './win32Desktop';
 
 describe('win32Desktop error classes', () => {
@@ -61,5 +63,23 @@ describe('win32Desktop null-handle safety', () => {
 
   it('findDesktopListView(0n) → null (throw 없음)', () => {
     expect(findDesktopListView(0n)).toBeNull();
+  });
+});
+
+describe('win32Desktop new strategy API exports (G2 게이트 후속)', () => {
+  it('collectDesktopAttachCandidates는 함수로 export된다', () => {
+    expect(typeof collectDesktopAttachCandidates).toBe('function');
+  });
+
+  it('attachToShellDefView는 함수로 export된다 (STRATEGY 3)', () => {
+    expect(typeof attachToShellDefView).toBe('function');
+  });
+
+  it('attachToShellDefView(0n, 0n)은 AttachFailedError로 reject (Promise)', async () => {
+    if (process.platform !== 'win32') {
+      // 비Win32에선 koffi load 자체가 실패해 KoffiLoadError. 본 검증 스킵.
+      return;
+    }
+    await expect(attachToShellDefView(0n, 0n)).rejects.toBeInstanceOf(AttachFailedError);
   });
 });

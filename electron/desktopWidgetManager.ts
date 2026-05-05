@@ -302,27 +302,64 @@ function createWin32Manager(
         return { ok: false, reason: 'widget-hwnd-failed', fallbackMode: 'normal' };
       }
 
-      // 2. WorkerW 탐색 (필요 시 spawn 유도)
-      let workerW: bigint;
+      // 2. attach 후보 수집 (Strategy 1/2/3 후보가 한꺼번에 들어 있다)
+      let candidates: import('./platform/win32Desktop').DesktopAttachCandidates;
       try {
-        workerW = win32.findOrCreateWorkerW();
-        diagLog('native-desktop', `step2 workerW=0x${workerW.toString(16)}`);
+        candidates = win32.collectDesktopAttachCandidates();
+        diagLog('native-desktop', `step2 candidates: standardWorkerWs=${candidates.standardWorkerWs.length}, shellDefViewSibling=${candidates.shellDefViewSiblingWorkerW === 0n ? 'NONE' : '0x' + candidates.shellDefViewSiblingWorkerW.toString(16)}, shellDefView=${candidates.shellDefView === 0n ? 'NONE' : '0x' + candidates.shellDefView.toString(16)}`);
       } catch (e) {
-        const reason = e instanceof Error ? e.message : 'findOrCreateWorkerW-failed';
-        diagWarn('native-desktop', `WorkerW 탐색 실패: ${reason}`);
+        const reason = e instanceof Error ? e.message : 'collectDesktopAttachCandidates-failed';
+        diagWarn('native-desktop', `attach 후보 수집 실패: ${reason}`);
         return { ok: false, reason: 'workerw-not-found', fallbackMode: 'normal' };
       }
 
-      // 3. SetParent attach
-      try {
-        handles = win32.attachToWorkerW(widgetHwnd, workerW);
-        diagLog('native-desktop', `step3 attachToWorkerW success — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`);
-      } catch (e) {
-        const reason = e instanceof Error ? e.message : 'attach-failed';
-        diagWarn('native-desktop', `attachToWorkerW 실패: ${reason}`);
-        // SetParent는 UAC/무결성 차이로 실패하는 경우가 가장 흔함 → topmost fallback이 더 안전.
-        const fallback = e instanceof Error && e.name === 'AttachFailedError' ? 'topmost' : 'normal';
-        return { ok: false, reason: 'setparent-denied', fallbackMode: fallback };
+      // 3. STRATEGY 우선순위로 attach 시도. 첫 성공한 후보 사용.
+      let lastError: Error | null = null;
+
+      // STRATEGY 1: 표준 WorkerW (SHELLDLL_DefView 자식 보유)
+      for (const candidate of candidates.standardWorkerWs) {
+        diagLog('native-desktop', `STRATEGY1: 표준 WorkerW=0x${candidate.toString(16)} attach 시도`);
+        try {
+          handles = await win32.attachToWorkerW(widgetHwnd, candidate);
+          diagLog('native-desktop', `STRATEGY1: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`);
+          break;
+        } catch (e) {
+          lastError = e instanceof Error ? e : new Error(String(e));
+          diagWarn('native-desktop', `STRATEGY1: 0x${candidate.toString(16)} 거부 (${lastError.name}: ${lastError.message})`);
+        }
+      }
+
+      // STRATEGY 2: SHELLDLL_DefView sibling WorkerW (Wallpaper Engine 패턴)
+      if (!handles && candidates.shellDefViewSiblingWorkerW !== 0n) {
+        const sibling = candidates.shellDefViewSiblingWorkerW;
+        diagLog('native-desktop', `STRATEGY2: sibling WorkerW=0x${sibling.toString(16)} attach 시도`);
+        try {
+          handles = await win32.attachToWorkerW(widgetHwnd, sibling);
+          diagLog('native-desktop', `STRATEGY2: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`);
+        } catch (e) {
+          lastError = e instanceof Error ? e : new Error(String(e));
+          diagWarn('native-desktop', `STRATEGY2: 0x${sibling.toString(16)} 거부 (${lastError.name}: ${lastError.message})`);
+        }
+      }
+
+      // STRATEGY 3: SHELLDLL_DefView 자체 (Progman 직속 SHELLDLL_DefView 환경)
+      if (!handles && candidates.shellDefView !== 0n) {
+        const shellDef = candidates.shellDefView;
+        diagLog('native-desktop', `STRATEGY3: SHELLDLL_DefView=0x${shellDef.toString(16)} 자체 attach 시도`);
+        try {
+          handles = await win32.attachToShellDefView(widgetHwnd, shellDef);
+          diagLog('native-desktop', `STRATEGY3: SUCCESS — prevParent=0x${handles.prevParent.toString(16)}, prevExStyle=0x${handles.prevExStyle.toString(16)}`);
+        } catch (e) {
+          lastError = e instanceof Error ? e : new Error(String(e));
+          diagWarn('native-desktop', `STRATEGY3: 0x${shellDef.toString(16)} 거부 (${lastError.name}: ${lastError.message})`);
+        }
+      }
+
+      if (!handles) {
+        // 모든 strategy 실패 → topmost fallback. Progman은 G2 진단에서 거부 확인되어 사용 안 함.
+        const reason = lastError ? `${lastError.name}: ${lastError.message}` : 'no-strategy-succeeded';
+        diagWarn('native-desktop', `모든 STRATEGY 실패 (마지막 에러: ${reason})`);
+        return { ok: false, reason: 'workerw-not-found-or-rejected', fallbackMode: 'topmost' };
       }
 
       // 4. 초기 physical bounds 캐시 (Phase 5)
@@ -400,15 +437,43 @@ function createWin32Manager(
         return { ok: false, reason: 'widget-hwnd-failed', fallbackMode: 'normal' };
       }
 
+      // 재attach: 최초 enable과 동일한 STRATEGY 우선순위 적용.
       try {
-        const newWorkerW = win32.findOrCreateWorkerW();
-        handles = win32.attachToWorkerW(widgetHwnd, newWorkerW);
-        return { ok: true, mode: 'native-desktop' };
+        const cands = win32.collectDesktopAttachCandidates();
+        let lastError: Error | null = null;
+
+        for (const c of cands.standardWorkerWs) {
+          try {
+            handles = await win32.attachToWorkerW(widgetHwnd, c);
+            return { ok: true, mode: 'native-desktop' };
+          } catch (e) {
+            lastError = e instanceof Error ? e : new Error(String(e));
+          }
+        }
+        if (cands.shellDefViewSiblingWorkerW !== 0n) {
+          try {
+            handles = await win32.attachToWorkerW(widgetHwnd, cands.shellDefViewSiblingWorkerW);
+            return { ok: true, mode: 'native-desktop' };
+          } catch (e) {
+            lastError = e instanceof Error ? e : new Error(String(e));
+          }
+        }
+        if (cands.shellDefView !== 0n) {
+          try {
+            handles = await win32.attachToShellDefView(widgetHwnd, cands.shellDefView);
+            return { ok: true, mode: 'native-desktop' };
+          } catch (e) {
+            lastError = e instanceof Error ? e : new Error(String(e));
+          }
+        }
+
+        const reason = lastError ? `${lastError.name}: ${lastError.message}` : 'no-strategy-succeeded';
+        console.warn('[desktopWidgetManager] healthCheck 재attach 실패:', reason);
+        return { ok: false, reason: 'workerw-stale', fallbackMode: 'topmost' };
       } catch (e) {
         const reason = e instanceof Error ? e.message : 're-attach-failed';
-        console.warn('[desktopWidgetManager] healthCheck 재attach 실패:', reason);
-        const fallback = e instanceof Error && e.name === 'AttachFailedError' ? 'topmost' : 'normal';
-        return { ok: false, reason: 'workerw-stale', fallbackMode: fallback };
+        console.warn('[desktopWidgetManager] healthCheck 재attach 예외:', reason);
+        return { ok: false, reason: 'workerw-stale', fallbackMode: 'topmost' };
       }
     },
 
