@@ -108,7 +108,44 @@ export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';
 // 위젯 표시 모드
 // - 'normal': 일반 모드 — 다른 창에 가려질 수 있음, Win+D에 사라지지 않음
 // - 'topmost': 항상 위에 — 항상 다른 창 위에 표시, Win+D에 사라지지 않음
-export type WidgetDesktopMode = 'normal' | 'topmost';
+// - 'native-desktop': 바탕화면 아이콘 아래 (Windows 전용, v2.1.0~)
+//   위젯을 Explorer WorkerW에 attach하여 바탕화면 아이콘이 위에서 보이도록 한다.
+//   비Windows OS 또는 native module 로드 실패 시 'normal'로 fallback한다.
+export type WidgetDesktopMode = 'normal' | 'topmost' | 'native-desktop';
+
+/**
+ * 임의의 입력값을 안전하게 WidgetDesktopMode로 정규화한다.
+ *
+ * 기존 코드 곳곳에 흩어진 `value === 'topmost' ? 'topmost' : 'normal'` 패턴이
+ * v2.1.0 도입되는 `'native-desktop'` 값을 silent하게 'normal'로 버리는
+ * 잠재 버그를 가지므로, 모든 정규화 지점은 이 헬퍼를 통과해야 한다.
+ *
+ * @param value     설정 저장값/IPC payload 등 임의 입력
+ * @param platformIsWin32  현재 플랫폼이 Win32인지 여부.
+ *   false(=비Windows)이면 'native-desktop'은 'normal'로 강제 다운그레이드된다.
+ *   호출자가 플랫폼 분기를 직접 모르는 경우(렌더러 등) 생략 가능.
+ *
+ * legacy 'floating' alias → 'topmost' 매핑은 호출자 측에서 처리한다
+ * (이 헬퍼는 정식 타입 값만 인정).
+ */
+export function normalizeDesktopMode(
+  value: unknown,
+  platformIsWin32?: boolean,
+): WidgetDesktopMode {
+  if (value === 'topmost') {
+    return 'topmost';
+  }
+  if (value === 'native-desktop') {
+    // 명시적으로 platformIsWin32가 false인 경우만 다운그레이드한다.
+    // undefined(미지정)는 호출자가 플랫폼 분기를 신경쓰지 않는 컨텍스트(예: 렌더러)이므로
+    // 값을 보존한다. 실제 적용은 main process가 거부할 수 있다.
+    if (platformIsWin32 === false) {
+      return 'normal';
+    }
+    return 'native-desktop';
+  }
+  return 'normal';
+}
 
 export interface WidgetVisibleSections {
   readonly dateTime: boolean;
