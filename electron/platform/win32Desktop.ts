@@ -56,6 +56,27 @@ export class AttachFailedError extends Error {
   }
 }
 
+/**
+ * Phase 6 — Explorer process OpenProcess 거부 (ACCESS_DENIED).
+ * UAC 환경(관리자 권한 Explorer + 일반 권한 쌤핀) 또는 보안 정책 차단.
+ */
+export class OpenProcessDeniedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OpenProcessDeniedError';
+  }
+}
+
+/**
+ * Phase 6 — VirtualAllocEx / WriteProcessMemory 등 원격 메모리 조작 실패.
+ */
+export class RemoteMemoryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RemoteMemoryError';
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // Win32 constants
 // ────────────────────────────────────────────────────────────
@@ -77,6 +98,24 @@ const SW_SHOWNOACTIVATE = 4;
 
 /** SetWindowPos hWndInsertAfter */
 const HWND_BOTTOM_HANDLE = 1; // 0이 아닌 sentinel — koffi에서 bigint(1)로 전달
+
+/** OpenProcess access flags */
+const PROCESS_VM_OPERATION = 0x0008;
+const PROCESS_VM_READ = 0x0010;
+const PROCESS_VM_WRITE = 0x0020;
+const PROCESS_QUERY_INFORMATION = 0x0400;
+
+/** VirtualAllocEx flAllocationType */
+const MEM_COMMIT = 0x1000;
+const MEM_RESERVE = 0x2000;
+/** VirtualAllocEx flProtect */
+const PAGE_READWRITE = 0x04;
+/** VirtualFreeEx dwFreeType */
+const MEM_RELEASE = 0x8000;
+
+/** ListView messages */
+const LVM_FIRST = 0x1000;
+const LVM_HITTEST = LVM_FIRST + 18;
 
 // ────────────────────────────────────────────────────────────
 // Bindings
@@ -126,9 +165,43 @@ interface Win32Bindings {
   ShowWindow: (hWnd: bigint | number, nCmdShow: number) => number;
   IsWindow: (hWnd: bigint | number) => number;
 
-  // koffi pointer factory (callback 등록용 — Phase 7에서 사용)
-  pointer: (type: unknown) => unknown;
-  proto: (signature: string) => unknown;
+  // user32 — Phase 6: 좌표/스레드/프로세스
+  GetWindowThreadProcessId: (hWnd: bigint | number, lpdwProcessId: unknown) => number;
+  ScreenToClient: (hWnd: bigint | number, lpPoint: unknown) => number;
+
+  // kernel32 — Phase 6: 원격 메모리 조작
+  OpenProcess: (dwDesiredAccess: number, bInheritHandle: number, dwProcessId: number) => bigint | null;
+  CloseHandle: (hObject: bigint | number) => number;
+  VirtualAllocEx: (
+    hProcess: bigint | number,
+    lpAddress: bigint | number,
+    dwSize: number | bigint,
+    flAllocationType: number,
+    flProtect: number,
+  ) => bigint | null;
+  VirtualFreeEx: (
+    hProcess: bigint | number,
+    lpAddress: bigint | number,
+    dwSize: number | bigint,
+    dwFreeType: number,
+  ) => number;
+  WriteProcessMemory: (
+    hProcess: bigint | number,
+    lpBaseAddress: bigint | number,
+    lpBuffer: unknown,
+    nSize: number | bigint,
+    lpNumberOfBytesWritten: unknown,
+  ) => number;
+  ReadProcessMemory: (
+    hProcess: bigint | number,
+    lpBaseAddress: bigint | number,
+    lpBuffer: unknown,
+    nSize: number | bigint,
+    lpNumberOfBytesRead: unknown,
+  ) => number;
+
+  // koffi 헬퍼 (callback 등록 등 Phase 7에서 사용)
+  koffi: typeof import('koffi');
 }
 
 let cachedBindings: Win32Bindings | null = null;
@@ -230,6 +303,39 @@ function loadWin32Bindings(): Win32Bindings {
       'int __stdcall IsWindow(void*)',
     ) as Win32Bindings['IsWindow'];
 
+    // Phase 6 추가 바인딩
+    const GetWindowThreadProcessId = user32.func(
+      'uint32 __stdcall GetWindowThreadProcessId(void*, uint32 *)',
+    ) as Win32Bindings['GetWindowThreadProcessId'];
+
+    const ScreenToClient = user32.func(
+      'int __stdcall ScreenToClient(void*, void *)',
+    ) as Win32Bindings['ScreenToClient'];
+
+    const OpenProcess = kernel32.func(
+      'void* __stdcall OpenProcess(uint32, int, uint32)',
+    ) as Win32Bindings['OpenProcess'];
+
+    const CloseHandle = kernel32.func(
+      'int __stdcall CloseHandle(void*)',
+    ) as Win32Bindings['CloseHandle'];
+
+    const VirtualAllocEx = kernel32.func(
+      'void* __stdcall VirtualAllocEx(void*, void*, size_t, uint32, uint32)',
+    ) as Win32Bindings['VirtualAllocEx'];
+
+    const VirtualFreeEx = kernel32.func(
+      'int __stdcall VirtualFreeEx(void*, void*, size_t, uint32)',
+    ) as Win32Bindings['VirtualFreeEx'];
+
+    const WriteProcessMemory = kernel32.func(
+      'int __stdcall WriteProcessMemory(void*, void*, void *, size_t, size_t *)',
+    ) as Win32Bindings['WriteProcessMemory'];
+
+    const ReadProcessMemory = kernel32.func(
+      'int __stdcall ReadProcessMemory(void*, void*, void *, size_t, size_t *)',
+    ) as Win32Bindings['ReadProcessMemory'];
+
     cachedBindings = {
       GetCurrentProcessId,
       FindWindowW,
@@ -244,8 +350,15 @@ function loadWin32Bindings(): Win32Bindings {
       SetWindowPos,
       ShowWindow,
       IsWindow,
-      pointer: koffi.pointer,
-      proto: koffi.proto,
+      GetWindowThreadProcessId,
+      ScreenToClient,
+      OpenProcess,
+      CloseHandle,
+      VirtualAllocEx,
+      VirtualFreeEx,
+      WriteProcessMemory,
+      ReadProcessMemory,
+      koffi,
     };
     return cachedBindings;
   } catch (e) {
@@ -533,5 +646,148 @@ export function isWindowAlive(handle: bigint): boolean {
     return b.IsWindow(handle) !== 0;
   } catch {
     return false;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase 6 — 바탕화면 아이콘 ListView + LVM_HITTEST
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Explorer가 관리하는 바탕화면 아이콘 ListView를 찾는다.
+ *
+ * 경로:
+ *   workerW (또는 Progman)
+ *     └─ SHELLDLL_DefView
+ *           └─ SysListView32  ← 본 함수가 반환
+ *
+ * 사용자가 "아이콘 자동 정렬"을 끄고 다른 셸을 쓰면 ListView 클래스명이 다를 수 있다.
+ * 본 구현은 SysListView32 단일 후보만 검사. 미발견 시 null 반환 (throw 안 함).
+ *
+ * @param workerW findOrCreateWorkerW가 반환한 핸들. Progman일 수도 있음 (fallback).
+ */
+export function findDesktopListView(workerW: bigint): bigint | null {
+  if (isNullHandle(workerW)) return null;
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return null;
+  }
+
+  const shellDef = toBigInt(b.FindWindowExW(workerW, null, 'SHELLDLL_DefView', null));
+  if (isNullHandle(shellDef)) return null;
+
+  const listView = toBigInt(b.FindWindowExW(shellDef, null, 'SysListView32', null));
+  if (isNullHandle(listView)) return null;
+
+  return listView;
+}
+
+/**
+ * 화면 좌표(physical pixel)에 바탕화면 아이콘이 있는지 LVM_HITTEST로 판정.
+ *
+ * 절차:
+ *   1. GetWindowThreadProcessId(listView, &pid) — Explorer PID 획득
+ *   2. OpenProcess(VM_OPERATION | VM_READ | VM_WRITE | QUERY_INFO, false, pid)
+ *      ACCESS_DENIED → OpenProcessDeniedError
+ *   3. ScreenToClient: physical screen → listView client 좌표 변환
+ *      (ScreenToClient는 lparam이 POINT 구조체. koffi 'void *'로 raw pointer 전달)
+ *   4. VirtualAllocEx(listView process, sizeof(LVHITTESTINFO), MEM_COMMIT|MEM_RESERVE, PAGE_RW)
+ *   5. WriteProcessMemory(remote, &lvhti, sizeof)
+ *   6. SendMessageW(listView, LVM_HITTEST, 0, remoteAddr) → 결과 인덱스 반환 (-1 = miss)
+ *   7. try/finally: VirtualFreeEx(remote, MEM_RELEASE) + CloseHandle
+ *
+ * 결과: 인덱스 ≥ 0 → 아이콘 위, -1 → miss(빈 공간)
+ *
+ * LVHITTESTINFO 메모리 레이아웃 (x64, packed = 24 bytes):
+ *   POINT pt;        // 8 bytes (LONG x, LONG y)
+ *   UINT flags;      // 4 bytes
+ *   int iItem;       // 4 bytes  ← 아이콘 인덱스 (없으면 -1)
+ *   int iSubItem;    // 4 bytes
+ *   int iGroup;      // 4 bytes (Vista+, 본 사용에선 무시)
+ *
+ * @throws OpenProcessDeniedError UAC 등 권한 문제로 Explorer 프로세스 open 실패
+ * @throws RemoteMemoryError VirtualAllocEx / WriteProcessMemory 실패
+ */
+export function lvmHitTest(
+  listView: bigint,
+  physicalPoint: { x: number; y: number },
+): boolean {
+  if (isNullHandle(listView)) return false;
+  const b = loadWin32Bindings();
+
+  // 1. Explorer PID
+  // GetWindowThreadProcessId의 두번째 인자는 LPDWORD out. koffi에서는 'uint32 *'를
+  // 받기 위해 출력 buffer를 4바이트 Buffer로 직접 전달하고 readUInt32LE로 디코딩.
+  const pidBuf = Buffer.alloc(4);
+  b.GetWindowThreadProcessId(listView, pidBuf);
+  const pid = pidBuf.readUInt32LE(0);
+  if (pid === 0) return false; // 잘못된 핸들
+
+  // 2. OpenProcess
+  const access = PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION;
+  const hProcess = toBigInt(b.OpenProcess(access, 0, pid));
+  if (isNullHandle(hProcess)) {
+    throw new OpenProcessDeniedError(`OpenProcess(pid=${pid}) ACCESS_DENIED 또는 실패`);
+  }
+
+  let remote: bigint = 0n;
+  try {
+    // 3. ScreenToClient: client 좌표로 변환
+    // POINT 구조체 (8 bytes: LONG x, LONG y)
+    const pointBuf = Buffer.alloc(8);
+    pointBuf.writeInt32LE(Math.round(physicalPoint.x), 0);
+    pointBuf.writeInt32LE(Math.round(physicalPoint.y), 4);
+    const stcResult = b.ScreenToClient(listView, pointBuf);
+    if (stcResult === 0) {
+      // ScreenToClient 실패 — 위젯 영역 외부 또는 invalid handle
+      return false;
+    }
+    const clientX = pointBuf.readInt32LE(0);
+    const clientY = pointBuf.readInt32LE(4);
+
+    // 4. VirtualAllocEx — Explorer process에 LVHITTESTINFO(24 bytes) 공간 확보
+    const SIZE_LVHITTESTINFO = 24;
+    remote = toBigInt(
+      b.VirtualAllocEx(hProcess, 0, SIZE_LVHITTESTINFO, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE),
+    );
+    if (isNullHandle(remote)) {
+      throw new RemoteMemoryError(`VirtualAllocEx(${SIZE_LVHITTESTINFO} bytes) 실패`);
+    }
+
+    // 5. WriteProcessMemory — pt만 채워서 보냄. flags/iItem 등은 0/미사용.
+    const lvhti = Buffer.alloc(SIZE_LVHITTESTINFO);
+    lvhti.writeInt32LE(clientX, 0);
+    lvhti.writeInt32LE(clientY, 4);
+    // iItem(offset 12) = -1 (= 0xFFFFFFFF as int32)로 초기화 → 결과 비교 시 -1 = miss로 명확.
+    lvhti.writeInt32LE(-1, 12);
+    const wpmOk = b.WriteProcessMemory(hProcess, remote, lvhti, SIZE_LVHITTESTINFO, 0);
+    if (wpmOk === 0) {
+      throw new RemoteMemoryError('WriteProcessMemory(LVHITTESTINFO) 실패');
+    }
+
+    // 6. SendMessage(LVM_HITTEST) — 동기 호출. 결과는 hit된 아이콘 인덱스 또는 -1.
+    // SendMessage 자체의 반환값을 사용 (LVM_HITTEST는 LRESULT로 인덱스 반환).
+    const result = b.SendMessageW(listView, LVM_HITTEST, 0, remote);
+    const idx = typeof result === 'bigint'
+      ? Number(BigInt.asIntN(32, result))
+      : (result | 0);
+
+    return idx >= 0;
+  } finally {
+    // 7. cleanup — 항상 실행
+    if (!isNullHandle(remote)) {
+      try {
+        b.VirtualFreeEx(hProcess, remote, 0, MEM_RELEASE);
+      } catch {
+        /* best-effort */
+      }
+    }
+    try {
+      b.CloseHandle(hProcess);
+    } catch {
+      /* best-effort */
+    }
   }
 }

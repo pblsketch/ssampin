@@ -59,6 +59,21 @@ export interface DesktopWidgetManager {
    * 아직 호출된 적 없으면 null.
    */
   getCachedPhysicalBounds(): PhysicalRect | null;
+
+  /**
+   * Phase 6+ — 위젯 위 좌표가 바탕화면 아이콘 위인지 판정.
+   *
+   * 라우팅 규칙(Phase 7 mouse hook callback에서 사용):
+   *   - 위젯 bounds 밖 → false (Electron이 처리하지 않음, hook은 통과)
+   *   - 위젯 bounds 안 + 아이콘 위 → true (Explorer가 처리하도록 통과)
+   *   - 위젯 bounds 안 + 빈 공간 → false (Electron이 처리)
+   *
+   * 결과는 16ms TTL 캐시로 hot path 성능 보장.
+   * 캐시 만료 또는 좌표가 다르면 lvmHitTest 재호출.
+   *
+   * 실패 시(ACCESS_DENIED 등) false 반환 + 1회 토큰을 떨궈 manager가 후속 disable 결정.
+   */
+  shouldPassThroughToDesktop(physicalPoint: { x: number; y: number }): boolean;
 }
 
 /**
@@ -134,6 +149,9 @@ function createNoopManager(reason: string): DesktopWidgetManager {
     getCachedPhysicalBounds(): PhysicalRect | null {
       return null;
     },
+    shouldPassThroughToDesktop(_p: { x: number; y: number }): boolean {
+      return false;
+    },
   };
 }
 
@@ -154,6 +172,15 @@ function createWin32Manager(
 ): DesktopWidgetManager {
   let handles: import('./platform/win32Desktop').Win32DesktopHandles | null = null;
   let cachedPhysicalBounds: PhysicalRect | null = null;
+  let cachedListView: bigint | null = null; // Phase 6 — Explorer SysListView32 핸들
+
+  // 16ms TTL 캐시 (Phase 6/7 — mouse hook hot path 성능)
+  // 동일 좌표로 짧은 시간 안에 여러 번 호출되는 경우(드래그 중)에 유리.
+  const HIT_CACHE_TTL_MS = 16;
+  let lastHitX = Number.NaN;
+  let lastHitY = Number.NaN;
+  let lastHitResult = false;
+  let lastHitUntil = 0;
 
   function clearHandles(): void {
     if (handles) {
@@ -166,6 +193,23 @@ function createWin32Manager(
     }
     handles = null;
     cachedPhysicalBounds = null;
+    cachedListView = null;
+    // hit cache 초기화
+    lastHitX = Number.NaN;
+    lastHitY = Number.NaN;
+    lastHitResult = false;
+    lastHitUntil = 0;
+  }
+
+  function isInsideCachedBounds(p: { x: number; y: number }): boolean {
+    const r = cachedPhysicalBounds;
+    if (!r) return false;
+    return (
+      p.x >= r.x
+      && p.x < r.x + r.width
+      && p.y >= r.y
+      && p.y < r.y + r.height
+    );
   }
 
   function recalcPhysicalBounds(window: BrowserWindow): PhysicalRect | null {
@@ -225,6 +269,17 @@ function createWin32Manager(
 
       // 4. 초기 physical bounds 캐시 (Phase 5)
       cachedPhysicalBounds = recalcPhysicalBounds(window);
+
+      // 5. Phase 6: ListView 탐색 (실패해도 attach 자체는 유지 — 모든 hit이 Electron으로 처리됨)
+      try {
+        cachedListView = win32.findDesktopListView(handles.workerW);
+        if (!cachedListView) {
+          console.log('[desktopWidgetManager] SysListView32 미발견 — 아이콘 pass-through 비활성');
+        }
+      } catch (e) {
+        console.warn('[desktopWidgetManager] findDesktopListView 예외:', e);
+        cachedListView = null;
+      }
 
       return { ok: true, mode: 'native-desktop' };
     },
@@ -287,6 +342,50 @@ function createWin32Manager(
 
     getCachedPhysicalBounds(): PhysicalRect | null {
       return cachedPhysicalBounds;
+    },
+
+    /**
+     * Phase 6 — 16ms TTL 캐시 + LVM_HITTEST.
+     *
+     * 빠르게 종료되는 경로를 우선 — bounds 밖이면 즉시 false 반환.
+     * 권한 실패(OpenProcessDeniedError) 발생 시 listView를 무효화해 추후 호출에서
+     * 즉시 false (Electron이 처리) 경로로 빠지게 한다. 실제 disable + topmost fallback은
+     * Phase 7의 mouse hook에서 통합 처리된다.
+     */
+    shouldPassThroughToDesktop(p: { x: number; y: number }): boolean {
+      if (!handles || !cachedListView) return false;
+      if (!isInsideCachedBounds(p)) return false;
+
+      // TTL 캐시
+      const now = Date.now();
+      if (
+        p.x === lastHitX
+        && p.y === lastHitY
+        && now < lastHitUntil
+      ) {
+        return lastHitResult;
+      }
+
+      let hit = false;
+      try {
+        hit = win32.lvmHitTest(cachedListView, p);
+      } catch (e) {
+        // OpenProcessDeniedError 또는 RemoteMemoryError → 더 이상 시도하지 않도록 listView 무효화.
+        // Phase 7에서 hook callback이 next 호출 시 수신할 수 있게 별도 disable 트리거는 두지 않는다.
+        if (e instanceof Error) {
+          console.warn(`[desktopWidgetManager] lvmHitTest 실패 (${e.name}): ${e.message} — listView 무효화`);
+        } else {
+          console.warn('[desktopWidgetManager] lvmHitTest 알 수 없는 예외:', e);
+        }
+        cachedListView = null;
+        hit = false;
+      }
+
+      lastHitX = p.x;
+      lastHitY = p.y;
+      lastHitResult = hit;
+      lastHitUntil = now + HIT_CACHE_TTL_MS;
+      return hit;
     },
   };
 }
