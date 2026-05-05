@@ -3673,6 +3673,23 @@ if (!gotTheLock) {
       console.log('[power] 시스템 resume 감지');
       isSystemSuspending = false;
       setTimeout(() => restoreWidgetAfterSleep(), 1000);
+      // 바탕화면 아이콘 아래 모드: WorkerW가 절전 복귀 후 stale일 수 있어 재검사.
+      if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
+        setTimeout(() => {
+          if (!widgetWindow || widgetWindow.isDestroyed()) return;
+          desktopWidgetManager.healthCheck(widgetWindow).then((result) => {
+            if (!result.ok) {
+              console.log(`[widget] resume 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`);
+              currentDesktopMode = result.fallbackMode;
+              widgetWindow?.setAlwaysOnTop(result.fallbackMode === 'topmost');
+              broadcastToAllWindows('desktopMode:fallback', {
+                reason: result.reason,
+                fallbackMode: result.fallbackMode,
+              } satisfies DesktopModeFallbackEvent);
+            }
+          }).catch((e) => console.warn('[widget] resume healthCheck 예외:', e));
+        }, 1500);
+      }
     });
 
     // 화면 잠금(화면보호기 + "로그온 화면 표시" 옵션 포함) 감지
@@ -3687,6 +3704,22 @@ if (!gotTheLock) {
       console.log('[power] 화면 잠금 해제 감지');
       isSystemSuspending = false;
       setTimeout(() => restoreWidgetAfterSleep(), 500);
+      if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
+        setTimeout(() => {
+          if (!widgetWindow || widgetWindow.isDestroyed()) return;
+          desktopWidgetManager.healthCheck(widgetWindow).then((result) => {
+            if (!result.ok) {
+              console.log(`[widget] unlock 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`);
+              currentDesktopMode = result.fallbackMode;
+              widgetWindow?.setAlwaysOnTop(result.fallbackMode === 'topmost');
+              broadcastToAllWindows('desktopMode:fallback', {
+                reason: result.reason,
+                fallbackMode: result.fallbackMode,
+              } satisfies DesktopModeFallbackEvent);
+            }
+          }).catch((e) => console.warn('[widget] unlock healthCheck 예외:', e));
+        }, 1000);
+      }
     });
   });
 }
