@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Settings, WidgetSettings, WidgetDesktopMode } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
+import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
 
 interface Props {
   draft: Settings;
@@ -104,22 +105,80 @@ export function WidgetTab({ draft, patch }: Props) {
             </label>
           ))}
         </div>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-sp-text">위젯 표시 모드</span>
-            <span className="text-xs text-sp-muted">
-              {draft.widget.desktopMode === 'normal' && '일반: 다른 창에 가려질 수 있습니다. Win+D를 눌러도 사라지지 않습니다.'}
-              {draft.widget.desktopMode === 'topmost' && '항상 위에: 항상 다른 창 위에 표시됩니다. Win+D를 눌러도 사라지지 않습니다.'}
-            </span>
-          </div>
-          <select
-            value={draft.widget.desktopMode}
-            onChange={(e) => patchWidget({ desktopMode: e.target.value as WidgetDesktopMode })}
-            className="bg-sp-card border border-sp-border rounded-lg px-3 py-1.5 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
-          >
-            <option value="normal">일반</option>
-            <option value="topmost">항상 위에</option>
-          </select>
+        <div className="space-y-1.5">
+          <span className="text-sm font-medium text-sp-text">위젯 표시 모드</span>
+          <p className="text-xs text-sp-muted mb-2">위젯 창이 다른 창과 어떻게 어울릴지 선택합니다.</p>
+          {(() => {
+            const winSupported = isWindows();
+            const opts: Array<{ value: WidgetDesktopMode; label: string; desc: string; winOnly?: boolean }> = [
+              {
+                value: 'normal',
+                label: '일반',
+                desc: '다른 창에 가려질 수 있습니다. Win+D를 눌러도 사라지지 않습니다.',
+              },
+              {
+                value: 'topmost',
+                label: '항상 위에',
+                desc: '항상 다른 창 위에 표시됩니다. Win+D를 눌러도 사라지지 않습니다.',
+              },
+              {
+                value: 'native-desktop',
+                label: '바탕화면 아이콘 아래',
+                desc: '쌤핀 위젯을 바탕화면 작업판처럼 깔고, 바탕화면 아이콘은 위에서 그대로 클릭ㆍ이동할 수 있습니다. Windows 전용 기능입니다.',
+                winOnly: true,
+              },
+            ];
+            return opts.map((opt) => {
+              const disabled = opt.winOnly === true && !winSupported;
+              const isSelected = draft.widget.desktopMode === opt.value;
+              return (
+                <label
+                  key={opt.value}
+                  title={disabled ? 'Windows에서만 사용할 수 있는 기능입니다.' : undefined}
+                  className={[
+                    'flex items-start gap-3 px-3 py-2 rounded-lg transition-colors',
+                    disabled
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-sp-surface/50 cursor-pointer',
+                  ].join(' ')}
+                >
+                  <input
+                    type="radio"
+                    name="widgetDesktopMode"
+                    value={opt.value}
+                    checked={isSelected}
+                    disabled={disabled}
+                    onChange={() => patchWidget({ desktopMode: opt.value })}
+                    className="mt-0.5 w-3.5 h-3.5 text-sp-accent focus:ring-sp-accent"
+                  />
+                  <div className="flex-1">
+                    <span className="text-xs font-medium text-sp-text">
+                      {opt.label}
+                      {opt.winOnly && (
+                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-sp-accent/15 text-sp-accent text-[10px] font-semibold">
+                          Windows
+                        </span>
+                      )}
+                      {opt.value === 'native-desktop' && (
+                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px] font-semibold">
+                          NEW
+                        </span>
+                      )}
+                    </span>
+                    <p className="text-caption text-sp-muted mt-0.5 leading-relaxed">{opt.desc}</p>
+                  </div>
+                </label>
+              );
+            });
+          })()}
+          {draft.widget.desktopMode === 'native-desktop' && (
+            <div className="mt-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20">
+              <p className="text-xs text-amber-300/90 leading-relaxed">
+                <span className="material-symbols-outlined text-icon-sm align-middle mr-1">info</span>
+                이 모드는 바탕화면 아이콘과 함께 동작하기 위해 Windows 바탕화면 창 계층과 마우스 이벤트를 제어합니다. 일부 보안 프로그램에서 민감하게 볼 수 있으며, 문제가 있으면 일반 모드로 되돌릴 수 있습니다.
+              </p>
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-between pt-4 border-t border-sp-border">
           <div className="flex flex-col">
