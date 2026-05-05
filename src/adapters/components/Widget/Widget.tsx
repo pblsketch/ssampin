@@ -19,7 +19,7 @@ import { triggerRefreshAll } from '@widgets/hooks/useWidgetRefresh';
 import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
 import { WidgetWeatherBar } from '@widgets/components/WidgetWeatherBar';
-import { type WidgetLayoutMode } from '@domain/entities/Settings';
+import type { WidgetLayoutMode } from '@domain/entities/Settings';
 
 interface ContextMenuState {
   x: number;
@@ -175,113 +175,6 @@ export function Widget() {
     void window.electronAPI?.navigateToPage(page);
   }, []);
 
-  // ── 바탕화면 작업판 (Phase 3.0: 외부 데스크톱 위젯 패턴) ──
-  // 위젯이 WorkerW 자식이 되면 일반 mouse 라우팅이 끊김 → main 의 hook 이 IPC 로
-  // mousemove 좌표 forward → 본 hook 이 가상 hover 시뮬레이션 (.group:hover 트릭).
-
-  // native-desktop 진입 실패 시 fallback 토스트
-  useEffect(() => {
-    const unsubscribe = window.electronAPI?.desktopIconZones?.onFallback?.((payload) => {
-      console.log('[widget] native-desktop fallback', payload);
-      const reasonMessage: Record<string, string> = {
-        'not-supported-on-platform': '바탕화면 작업판은 Windows에서만 사용할 수 있습니다.',
-        'not-implemented': '바탕화면 작업판이 아직 활성화되지 않았습니다.',
-        'koffi-load-failed': '바탕화면 작업판 모듈을 로드할 수 없습니다.',
-        'workerw-not-found': 'Windows 바탕화면 레이어를 찾을 수 없어 일반 모드로 전환했습니다.',
-        'set-parent-failed': '바탕화면 작업판 진입 권한이 없어 항상 위에 모드로 전환했습니다.',
-        'hook-install-failed': '마우스 후크 설치가 차단되어 일반 모드로 전환했습니다. 보안 프로그램 설정을 확인해 주세요.',
-        'widget-not-ready': '위젯 준비가 끝나지 않았습니다. 잠시 후 다시 시도해 주세요.',
-        'unknown': '바탕화면 작업판 진입 중 알 수 없는 오류가 발생했습니다.',
-      };
-      const message = reasonMessage[payload.reason] ?? '바탕화면 작업판을 사용할 수 없습니다.';
-      void import('@adapters/components/common/Toast').then((m) => {
-        m.useToastStore.getState().show(message, 'info');
-      }).catch(() => {
-        /* swallow */
-      });
-    });
-    return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
-    };
-  }, []);
-
-  // 가상 hover 시뮬레이션 — 외부 데스크톱 위젯 패턴 그대로.
-  // CSS 의 `.group:hover` 규칙을 모아 `.group[data-wh]` 로 복제 → mouse-move IPC 받아
-  // closest('.group') 에 data-wh 속성 토글 + synthetic mouseenter/leave dispatch.
-  useEffect(() => {
-    const api = window.electronAPI?.desktopIconZones;
-    if (!api?.onWidgetMouseMove || !api?.onWidgetMouseLeave) return;
-
-    let lastHoveredGroup: Element | null = null;
-    let styleInjected = false;
-
-    const injectHoverCSS = (): void => {
-      if (styleInjected) return;
-      const css: string[] = [];
-      for (const sheet of Array.from(document.styleSheets)) {
-        try {
-          for (let i = 0; i < sheet.cssRules.length; i++) {
-            const rule = sheet.cssRules[i];
-            if (rule && 'cssText' in rule && rule.cssText.includes('.group:hover')) {
-              css.push(rule.cssText.replace(/\.group:hover/g, '.group[data-wh]'));
-            }
-          }
-        } catch {
-          /* CORS 차단된 sheet 무시 */
-        }
-      }
-      if (css.length === 0) return;
-      const style = document.createElement('style');
-      style.id = 'widget-hover-rules';
-      style.textContent = css.join('\n');
-      document.head.appendChild(style);
-      styleInjected = true;
-    };
-
-    const clearHover = (): void => {
-      if (lastHoveredGroup) {
-        lastHoveredGroup.removeAttribute('data-wh');
-        lastHoveredGroup.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-        lastHoveredGroup = null;
-      }
-    };
-
-    const handleMove = ({ x, y }: { x: number; y: number }): void => {
-      if (!styleInjected) injectHoverCSS();
-      const dpr = window.devicePixelRatio || 1;
-      const el = document.elementFromPoint(x / dpr, y / dpr);
-      if (!el) {
-        if (lastHoveredGroup) clearHover();
-        return;
-      }
-      const group = el.closest('.group');
-      if (group !== lastHoveredGroup) {
-        if (lastHoveredGroup) {
-          lastHoveredGroup.removeAttribute('data-wh');
-          lastHoveredGroup.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-        }
-        lastHoveredGroup = group;
-        if (group) {
-          group.setAttribute('data-wh', '');
-          group.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-        }
-      }
-    };
-
-    // CSS 규칙 수집은 첫 페인트 후 충분히 모인 시점에 — 2 sec 후
-    const timer = window.setTimeout(injectHoverCSS, 2000);
-    const unsubMove = api.onWidgetMouseMove(handleMove);
-    const unsubLeave = api.onWidgetMouseLeave(clearHover);
-    return () => {
-      window.clearTimeout(timer);
-      unsubMove?.();
-      unsubLeave?.();
-      clearHover();
-      document.getElementById('widget-hover-rules')?.remove();
-      styleInjected = false;
-    };
-  }, []);
-
   return (
     <>
       <div
@@ -293,16 +186,10 @@ export function Widget() {
           '--sp-card': `color-mix(in srgb, var(--sp-card-base) ${(settings.widget.cardOpacity ?? 1) * 100}%, transparent)`,
         } as React.CSSProperties}
       >
-        {/* ── 헤더 (드래그 영역) ──
-            native-desktop attach 상태에서는 DWM NC drag (`WebkitAppRegion: 'drag'`) 가 충돌해
-            1px 만 움직이고 OS 가 캡처를 끊는다 → win32 hook 이 헤더 60px 영역을 직접 MoveWindow
-            로 처리하도록 attach 시 'no-drag' 로 전환. */}
+        {/* ── 헤더 (드래그 영역) ── */}
         <div
           className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
-          style={{
-            WebkitAppRegion: settings.widget.desktopMode === 'native-desktop' ? 'no-drag' : 'drag',
-            zoom: settings.dashboardFontScale ?? 1,
-          } as React.CSSProperties}
+          style={{ WebkitAppRegion: 'drag', zoom: settings.dashboardFontScale ?? 1 } as React.CSSProperties}
           onDoubleClick={handleHeaderDoubleClick}
         >
           {/* 날짜 + 시간 */}
@@ -520,7 +407,6 @@ export function Widget() {
             }}
           />
         ))}
-
       </div>
 
       {/* 레이아웃 선택 팝업 */}

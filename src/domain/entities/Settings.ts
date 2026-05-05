@@ -108,27 +108,7 @@ export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';
 // 위젯 표시 모드
 // - 'normal': 일반 모드 — 다른 창에 가려질 수 있음, Win+D에 사라지지 않음
 // - 'topmost': 항상 위에 — 항상 다른 창 위에 표시, Win+D에 사라지지 않음
-// - 'native-desktop': 바탕화면 작업판 (Windows 전용, v2.1.0~)
-//   위젯을 Explorer WorkerW에 attach하고 desktop-icon-zone 카드 영역만
-//   Explorer로 마우스 이벤트를 통과시킨다. 비Windows에서는 'normal'로 fallback.
-export type WidgetDesktopMode = 'normal' | 'topmost' | 'native-desktop';
-
-/**
- * 임의의 입력값을 안전하게 WidgetDesktopMode로 정규화한다.
- *
- * 기존 코드 곳곳에 흩어진 `value === 'topmost' ? 'topmost' : 'normal'` 패턴이
- * v2.1.0 도입되는 `'native-desktop'` 값을 silent하게 'normal'로 버리는
- * 잠재 버그를 가지므로, 모든 정규화 지점은 이 헬퍼를 통과해야 한다.
- *
- * - legacy 'floating' alias → 'topmost' 매핑은 호출자 측에서 처리한다
- *   (이 헬퍼는 정식 타입 값만 인정).
- */
-export function normalizeDesktopMode(value: unknown): WidgetDesktopMode {
-  if (value === 'topmost' || value === 'native-desktop') {
-    return value;
-  }
-  return 'normal';
-}
+export type WidgetDesktopMode = 'normal' | 'topmost';
 
 export interface WidgetVisibleSections {
   readonly dateTime: boolean;
@@ -175,18 +155,6 @@ export interface WidgetSettings {
   readonly memorySaverMode?: boolean;
   /** 아이콘 모드 옵션 (v2.0.2~) */
   readonly icon?: IconModeOptions;
-  /**
-   * 바탕화면 작업판 — desktop-icon-zone 카드 정의 (v2.1.0~ Windows 전용).
-   *
-   * 사용자가 만든 칸반 구역(`작업 전 / 작업 중 / 작업 완료` 등)의
-   * 이름·개수·표시순서만 저장한다. 바탕화면 파일 자체는 Explorer가 관리하며
-   * 본 필드에는 어떤 파일 데이터도 들어가지 않는다.
-   *
-   * - 빈 배열 또는 undefined: 사용자가 한 번도 native-desktop을 켜본 적 없음.
-   *   처음 켤 때 DEFAULT_DESKTOP_ICON_ZONE_PRESET을 제안한다.
-   * - desktopMode === 'native-desktop' 일 때만 실제로 사용된다.
-   */
-  readonly desktopIconZones?: readonly DesktopIconZoneSettings[];
 }
 
 /**
@@ -198,93 +166,6 @@ export interface WidgetSettings {
 export interface IconModeOptions {
   /** 첫 활성화 코치마크 노출 여부 (기본 true → 첫 진입 후 false로 갱신) */
   readonly showCoachMark: boolean;
-}
-
-/**
- * 바탕화면 작업판 구역 카드 1개 (v2.1.0~).
- *
- * 한 카드는 사용자가 직접 정한 이름의 칸반 구역이며, 위젯 안에서 점선 테두리
- * 영역으로 시각화된다. 활성화 시 이 영역의 마우스 이벤트만 Explorer로 통과돼
- * 사용자가 실제 바탕화면 아이콘을 카드 위에 배치할 수 있다.
- *
- * 본 엔티티에는 파일 정보, 아이콘 정보, 좌표 정보가 들어가지 않는다.
- * 좌표는 카드 DOM 측정 결과를 기반으로 main 프로세스가 매번 재계산한다.
- */
-export interface DesktopIconZoneSettings {
-  /** 영속화 식별자 (uuid 권장, 프리셋은 '__preset_*' 형태). */
-  readonly id: string;
-  /** 사용자가 보는 이름. 1~20자. */
-  readonly name: string;
-  /** false면 위젯에 카드를 그리지 않고 bounds도 main에 보내지 않는다. */
-  readonly enabled: boolean;
-  /** 위젯 내 표시 순서. 0부터, 같은 값이면 id 알파벳 순. */
-  readonly order: number;
-}
-
-/**
- * 처음 native-desktop을 켤 때 사용자에게 제안하는 기본 프리셋.
- * 기존 사용자의 `desktopIconZones` 값은 이 프리셋으로 덮어쓰지 않는다.
- */
-export const DEFAULT_DESKTOP_ICON_ZONE_PRESET: readonly DesktopIconZoneSettings[] = Object.freeze([
-  { id: '__preset_todo', name: '작업 전', enabled: true, order: 0 },
-  { id: '__preset_doing', name: '작업 중', enabled: true, order: 1 },
-  { id: '__preset_done', name: '작업 완료', enabled: true, order: 2 },
-]);
-
-/** UI 정책 상수 — 디자인 §5.2 / FR-05 */
-export const DESKTOP_ICON_ZONE_LIMITS = Object.freeze({
-  /** 최소 카드 개수 (켜둔 상태에서 마지막 1개는 삭제 불가). */
-  MIN_COUNT: 1,
-  /** 최대 카드 개수. */
-  MAX_COUNT: 6,
-  /** 이름 최소 길이 (trim 후). */
-  MIN_NAME_LENGTH: 1,
-  /** 이름 최대 길이. */
-  MAX_NAME_LENGTH: 20,
-});
-
-/**
- * 임의의 입력값을 안전하게 DesktopIconZoneSettings 배열로 정규화한다.
- *
- * 마이그레이션·IPC 검증·테스트 픽스처가 모두 이 함수를 통과하도록 한다.
- *
- * - 배열이 아니면 빈 배열.
- * - 각 항목은 id/name/enabled/order를 검증·보정한다.
- * - 이름은 trim 후 1~20자 사이로 잘라낸다. 비면 `구역 N`으로 대체.
- * - id가 비거나 중복되면 `zone-{order}-{Date.now()}` fallback (정규화 단계 결정성을 위해 호출자가 uuid 주입을 권장).
- * - 최대 6개로 절단.
- * - order 오름차순 정렬, 같으면 id 알파벳 순.
- */
-export function normalizeDesktopIconZones(
-  value: unknown,
-): DesktopIconZoneSettings[] {
-  if (!Array.isArray(value)) return [];
-  const seenIds = new Set<string>();
-  const sanitized: DesktopIconZoneSettings[] = [];
-  value.forEach((raw, idx) => {
-    if (typeof raw !== 'object' || raw === null) return;
-    const obj = raw as Record<string, unknown>;
-    const rawName = typeof obj['name'] === 'string' ? (obj['name'] as string).trim() : '';
-    const name = (rawName.length === 0 ? `구역 ${idx + 1}` : rawName).slice(
-      0,
-      DESKTOP_ICON_ZONE_LIMITS.MAX_NAME_LENGTH,
-    );
-    const enabled = typeof obj['enabled'] === 'boolean' ? (obj['enabled'] as boolean) : true;
-    const order = typeof obj['order'] === 'number' && Number.isFinite(obj['order'])
-      ? Math.trunc(obj['order'] as number)
-      : idx;
-    let id = typeof obj['id'] === 'string' && (obj['id'] as string).length > 0
-      ? (obj['id'] as string)
-      : `zone-${idx}`;
-    if (seenIds.has(id)) {
-      // 중복 id는 충돌 회피용 suffix 부여.
-      id = `${id}-dup-${idx}`;
-    }
-    seenIds.add(id);
-    sanitized.push({ id, name, enabled, order });
-  });
-  sanitized.sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id));
-  return sanitized.slice(0, DESKTOP_ICON_ZONE_LIMITS.MAX_COUNT);
 }
 
 export interface SystemSettings {
