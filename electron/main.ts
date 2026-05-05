@@ -1536,8 +1536,18 @@ function createWidgetWindow(
     }, 300);
   });
 
-  widgetWindow.on('move', scheduleWidgetBoundsSave);
-  widgetWindow.on('resize', scheduleWidgetBoundsSave);
+  widgetWindow.on('move', () => {
+    scheduleWidgetBoundsSave();
+    if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
+  });
+  widgetWindow.on('resize', () => {
+    scheduleWidgetBoundsSave();
+    if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
+  });
 
   // Win+D minimize 차단: 즉시 복원 (primary)
   widgetWindow.on('minimize', () => {
@@ -1929,6 +1939,9 @@ function registerIpcHandlers(): void {
     widgetWindow.setBounds(bounds);
     // 레이아웃 변경 후 화면 밖 검증
     ensureWidgetOnScreen();
+    if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
   });
 
   // window:applyWidgetSettings — 설정 페이지에서 위젯 설정 변경 시 실시간 적용
@@ -2006,6 +2019,9 @@ function registerIpcHandlers(): void {
 
     widgetWindow.setBounds(newBounds);
     scheduleWidgetBoundsSave();
+    if (desktopWidgetManager.isEnabled()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
   });
 
   // window:closeApp — 앱 완전 종료
@@ -3642,6 +3658,10 @@ if (!gotTheLock) {
         // 절전 복귀로 인한 DPI 변경 시에도 위젯 리프레시
         if (widgetWindow && !widgetWindow.isDestroyed()) {
           widgetWindow.webContents.invalidate();
+          // native-desktop 활성 시 새 scaleFactor로 physical bounds 재계산
+          if (desktopWidgetManager.isEnabled()) {
+            desktopWidgetManager.updateWidgetBounds(widgetWindow);
+          }
         }
       }, 500);
     });

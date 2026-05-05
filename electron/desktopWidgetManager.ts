@@ -16,8 +16,10 @@
  *   - 위젯 close/before-quit: disable() (정리 보장)
  */
 
+import { screen } from 'electron';
 import type { BrowserWindow } from 'electron';
-import type { DesktopWidgetModeStatus } from './desktopWidgetTypes';
+import type { DesktopWidgetModeStatus, PhysicalRect } from './desktopWidgetTypes';
+import { dipToPhysical } from './desktopWidgetTypes';
 
 export interface DesktopWidgetManager {
   /**
@@ -49,6 +51,14 @@ export interface DesktopWidgetManager {
 
   /** 현재 native-desktop 모드가 active인지 */
   isEnabled(): boolean;
+
+  /**
+   * Phase 5+ — 가장 최근 updateWidgetBounds로 캐시된 physical pixel rect.
+   *
+   * Phase 6/7에서 mouse hook callback이 위젯 영역 hit 판정에 사용한다.
+   * 아직 호출된 적 없으면 null.
+   */
+  getCachedPhysicalBounds(): PhysicalRect | null;
 }
 
 /**
@@ -121,6 +131,9 @@ function createNoopManager(reason: string): DesktopWidgetManager {
     isEnabled(): boolean {
       return active;
     },
+    getCachedPhysicalBounds(): PhysicalRect | null {
+      return null;
+    },
   };
 }
 
@@ -140,6 +153,7 @@ function createWin32Manager(
   win32: typeof import('./platform/win32Desktop'),
 ): DesktopWidgetManager {
   let handles: import('./platform/win32Desktop').Win32DesktopHandles | null = null;
+  let cachedPhysicalBounds: PhysicalRect | null = null;
 
   function clearHandles(): void {
     if (handles) {
@@ -151,6 +165,18 @@ function createWin32Manager(
       }
     }
     handles = null;
+    cachedPhysicalBounds = null;
+  }
+
+  function recalcPhysicalBounds(window: BrowserWindow): PhysicalRect | null {
+    if (!window || window.isDestroyed()) {
+      return null;
+    }
+    const dipBounds = window.getBounds();
+    // 위젯 중심에 가장 가까운 디스플레이 — 멀티모니터 환경에서 정확한 scaleFactor 선택.
+    const display = screen.getDisplayMatching(dipBounds);
+    const scaleFactor = display.scaleFactor || 1;
+    return dipToPhysical(dipBounds, scaleFactor);
   }
 
   return {
@@ -197,6 +223,9 @@ function createWin32Manager(
         return { ok: false, reason: 'setparent-denied', fallbackMode: fallback };
       }
 
+      // 4. 초기 physical bounds 캐시 (Phase 5)
+      cachedPhysicalBounds = recalcPhysicalBounds(window);
+
       return { ok: true, mode: 'native-desktop' };
     },
 
@@ -204,9 +233,10 @@ function createWin32Manager(
       clearHandles();
     },
 
-    updateWidgetBounds(_window: BrowserWindow): void {
-      // Phase 5: DIP→physical 변환 + 캐시 + WorkerW 좌표계 보정.
-      // Phase 4-2 단계에서는 no-op (move/resize 시 attach 자체는 영향 없음).
+    updateWidgetBounds(window: BrowserWindow): void {
+      // attach 상태가 아니면 캐시 갱신할 의미 없음.
+      if (!handles) return;
+      cachedPhysicalBounds = recalcPhysicalBounds(window);
     },
 
     async healthCheck(window: BrowserWindow): Promise<DesktopWidgetModeStatus> {
@@ -253,6 +283,10 @@ function createWin32Manager(
 
     isEnabled(): boolean {
       return handles !== null;
+    },
+
+    getCachedPhysicalBounds(): PhysicalRect | null {
+      return cachedPhysicalBounds;
     },
   };
 }
