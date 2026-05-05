@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { WidgetDesktopMode, WidgetLayoutMode } from '@domain/entities/Settings';
+import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
 
 interface WidgetContextMenuProps {
   x: number;
@@ -73,6 +74,19 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
     });
   };
 
+  // 바탕화면 아이콘 아래 모드 (Windows 전용, v2.1.0~)
+  const isNativeDesktop = settings.widget.desktopMode === 'native-desktop';
+  const supportsNativeDesktop = isWindows();
+  const handleToggleNativeDesktop = () => {
+    const nextMode: WidgetDesktopMode = isNativeDesktop ? 'normal' : 'native-desktop';
+    const nextWidget = { ...settings.widget, desktopMode: nextMode };
+    void update({ widget: nextWidget });
+    void window.electronAPI?.applyWidgetSettings({
+      opacity: nextWidget.opacity,
+      desktopMode: nextMode,
+    });
+  };
+
   const handleSettings = () => {
     onClose();
     window.electronAPI?.toggleWidget();
@@ -109,6 +123,36 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
         </span>
         <span className="flex-1 text-sm text-sp-text">항상 위에 표시</span>
         {isAlwaysOnTop && (
+          <span
+            className="material-symbols-outlined text-blue-400 flex-shrink-0"
+            style={{ fontSize: 18 }}
+          >
+            check
+          </span>
+        )}
+      </button>
+
+      {/* 바탕화면 아이콘 아래 토글 (v2.1.0~, Windows 전용) */}
+      <button
+        type="button"
+        className={[
+          'w-full flex items-center gap-3 px-3 py-2 transition-colors text-left',
+          supportsNativeDesktop
+            ? 'hover:bg-sp-text/[0.08]'
+            : 'opacity-50 cursor-not-allowed',
+        ].join(' ')}
+        onClick={supportsNativeDesktop ? handleToggleNativeDesktop : undefined}
+        disabled={!supportsNativeDesktop}
+        title={supportsNativeDesktop ? undefined : 'Windows에서만 사용할 수 있는 기능입니다.'}
+      >
+        <span
+          className="material-symbols-outlined flex-shrink-0"
+          style={{ fontSize: 20, color: isNativeDesktop ? '#3b82f6' : undefined }}
+        >
+          desktop_windows
+        </span>
+        <span className="flex-1 text-sm text-sp-text">바탕화면 아이콘 아래</span>
+        {isNativeDesktop && (
           <span
             className="material-symbols-outlined text-blue-400 flex-shrink-0"
             style={{ fontSize: 18 }}

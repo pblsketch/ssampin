@@ -103,3 +103,19 @@ export function isMacOS(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 }
+
+/**
+ * Windows 감지 (renderer 안전).
+ *
+ * 'native-desktop' 위젯 모드는 Windows 전용이므로 비Windows에서는 라디오를
+ * disabled로 노출해야 한다. 이 helper는 navigator.platform/userAgent 기반의
+ * 보수적 판정으로, false positive보다 false negative를 선호한다.
+ */
+export function isWindows(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  // navigator.platform 표준값: 'Win32', 'Win64' (Edge/Chrome 모두)
+  if (/^Win/i.test(navigator.platform)) return true;
+  // 일부 환경에서 platform이 비어있을 수 있어 userAgent도 확인
+  if (typeof navigator.userAgent === 'string' && /Windows/i.test(navigator.userAgent)) return true;
+  return false;
+}

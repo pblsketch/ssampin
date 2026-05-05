@@ -93,6 +93,7 @@ import { SYNC_REGISTRY } from '@usecases/sync/syncRegistry';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
+import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
 import { ShareModal } from '@adapters/components/Share/ShareModal';
@@ -453,6 +454,9 @@ function WidgetApp() {
   const { settings } = useSettingsStore();
   const { track } = useAnalytics();
 
+  // 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~)
+  useDesktopModeFallback();
+
   // Analytics: 위젯 오픈 이벤트 + 활성일 기록
   useEffect(() => {
     track('app_open', { launchMode: 'widget' });
@@ -531,6 +535,9 @@ function MainApp() {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+
+  // 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~)
+  useDesktopModeFallback();
 
   // 듀얼 모드 진입 시 초기 좌측 도구 힌트로 쓰일, 마지막으로 본 단일 듀얼지원 도구
   const [lastSingleTool, setLastSingleTool] = useState<DualToolId | null>(null);
