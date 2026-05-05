@@ -83,3 +83,49 @@ describe('win32Desktop new strategy API exports (G2 게이트 후속)', () => {
     await expect(attachToShellDefView(0n, 0n)).rejects.toBeInstanceOf(AttachFailedError);
   });
 });
+
+describe('win32Desktop G2-bis (WS_POPUP→WS_CHILD 전환)', () => {
+  // Win32DesktopHandles의 prevStyle 필드는 attach 시 캡처되어야 한다.
+  // 본 테스트는 type shape만 검증 — 실제 attach는 Win32 환경에서만 가능.
+  it('Win32DesktopHandles 타입은 prevStyle: bigint 필드를 포함한다', () => {
+    // 컴파일 타임 타입 체크 — 본 구문이 tsc 통과하면 필드 존재 보장.
+    const sample: import('./win32Desktop').Win32DesktopHandles = {
+      workerW: 0n,
+      widgetHwnd: 0n,
+      prevParent: 0n,
+      prevExStyle: 0n,
+      prevStyle: 0n,
+    };
+    expect(sample.prevStyle).toBe(0n);
+  });
+
+  it('WS_POPUP→WS_CHILD 비트 변환 산술 — 다른 스타일 비트는 보존', () => {
+    // 32-bit unsigned로 가정하되 BigInt 연산.
+    const WS_POPUP = 0x80000000n;
+    const WS_CHILD = 0x40000000n;
+    const WS_VISIBLE = 0x10000000n;
+    const WS_CLIPSIBLINGS = 0x04000000n;
+
+    // BrowserWindow가 transparent+frame:false일 때 일반적인 style 조합.
+    const original = WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS;
+    expect(original & WS_POPUP).toBe(WS_POPUP);
+    expect(original & WS_CHILD).toBe(0n);
+
+    const transformed = (original & ~WS_POPUP) | WS_CHILD;
+
+    expect(transformed & WS_POPUP).toBe(0n); // WS_POPUP 제거 확인
+    expect(transformed & WS_CHILD).toBe(WS_CHILD); // WS_CHILD 추가 확인
+    expect(transformed & WS_VISIBLE).toBe(WS_VISIBLE); // WS_VISIBLE 보존
+    expect(transformed & WS_CLIPSIBLINGS).toBe(WS_CLIPSIBLINGS); // WS_CLIPSIBLINGS 보존
+  });
+
+  it('이미 WS_CHILD인 윈도우에 변환을 적용해도 idempotent하다 (no-op)', () => {
+    const WS_POPUP = 0x80000000n;
+    const WS_CHILD = 0x40000000n;
+    const original = WS_CHILD | 0x10000000n; // 이미 child
+
+    const transformed = (original & ~WS_POPUP) | WS_CHILD;
+
+    expect(transformed).toBe(original); // 변경 없음
+  });
+});
