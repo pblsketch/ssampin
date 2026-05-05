@@ -3764,6 +3764,30 @@ app.on('before-quit', () => {
 
 app.on('window-all-closed', () => {
   // Don't quit — app stays in system tray
+  // 바탕화면 아이콘 아래 모드: 모든 창이 닫혔다면 hook/attach도 정리해야 잔류 안 남음.
+  desktopWidgetManager.disable();
+});
+
+// ────────────────────────────────────────────────────────────
+// 안전망: uncaughtException / unhandledRejection 발생 시 native attach/hook 정리.
+// 본 핸들러는 native-desktop 모드의 mouse hook이 살아남아 시스템 마우스에 영향을
+// 주는 시나리오를 차단한다. 일반 에러 흐름은 기존 try/catch에 맡긴다.
+// ────────────────────────────────────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[desktopWidgetManager] uncaughtException — native cleanup 실시:', err);
+  try {
+    desktopWidgetManager.disable();
+  } catch {
+    /* 안전망 안에서 또 throw하면 의미 없음 */
+  }
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[desktopWidgetManager] unhandledRejection — native cleanup 실시:', reason);
+  try {
+    desktopWidgetManager.disable();
+  } catch {
+    /* same */
+  }
 });
 
 app.on('activate', () => {

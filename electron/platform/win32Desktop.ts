@@ -77,6 +77,16 @@ export class RemoteMemoryError extends Error {
   }
 }
 
+/**
+ * Phase 7 — SetWindowsHookExW 실패. 보안 프로그램 차단 등.
+ */
+export class HookInstallError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HookInstallError';
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // Win32 constants
 // ────────────────────────────────────────────────────────────
@@ -116,6 +126,9 @@ const MEM_RELEASE = 0x8000;
 /** ListView messages */
 const LVM_FIRST = 0x1000;
 const LVM_HITTEST = LVM_FIRST + 18;
+
+/** SetWindowsHookExW idHook */
+const WH_MOUSE_LL = 14;
 
 // ────────────────────────────────────────────────────────────
 // Bindings
@@ -199,6 +212,14 @@ interface Win32Bindings {
     nSize: number | bigint,
     lpNumberOfBytesRead: unknown,
   ) => number;
+
+  // user32 — Phase 7: low-level mouse hook
+  SetWindowsHookExW: (idHook: number, lpfn: unknown, hmod: bigint | number | null, dwThreadId: number) => bigint | null;
+  UnhookWindowsHookEx: (hhk: bigint | number) => number;
+  CallNextHookEx: (hhk: bigint | number | null, nCode: number, wParam: bigint | number, lParam: bigint | number) => bigint | number;
+
+  // kernel32 — Phase 7: 모듈 핸들 (hook callback이 모듈에 속해야 함)
+  GetModuleHandleW: (lpModuleName: string | null) => bigint | null;
 
   // koffi 헬퍼 (callback 등록 등 Phase 7에서 사용)
   koffi: typeof import('koffi');
@@ -336,6 +357,23 @@ function loadWin32Bindings(): Win32Bindings {
       'int __stdcall ReadProcessMemory(void*, void*, void *, size_t, size_t *)',
     ) as Win32Bindings['ReadProcessMemory'];
 
+    // Phase 7
+    const SetWindowsHookExW = user32.func(
+      'void* __stdcall SetWindowsHookExW(int, void *, void*, uint32)',
+    ) as Win32Bindings['SetWindowsHookExW'];
+
+    const UnhookWindowsHookEx = user32.func(
+      'int __stdcall UnhookWindowsHookEx(void*)',
+    ) as Win32Bindings['UnhookWindowsHookEx'];
+
+    const CallNextHookEx = user32.func(
+      'intptr_t __stdcall CallNextHookEx(void*, int, intptr_t, intptr_t)',
+    ) as Win32Bindings['CallNextHookEx'];
+
+    const GetModuleHandleW = kernel32.func(
+      'void* __stdcall GetModuleHandleW(str16)',
+    ) as Win32Bindings['GetModuleHandleW'];
+
     cachedBindings = {
       GetCurrentProcessId,
       FindWindowW,
@@ -358,6 +396,10 @@ function loadWin32Bindings(): Win32Bindings {
       VirtualFreeEx,
       WriteProcessMemory,
       ReadProcessMemory,
+      SetWindowsHookExW,
+      UnhookWindowsHookEx,
+      CallNextHookEx,
+      GetModuleHandleW,
       koffi,
     };
     return cachedBindings;
@@ -789,5 +831,143 @@ export function lvmHitTest(
     } catch {
       /* best-effort */
     }
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase 7 — WH_MOUSE_LL hook
+// ────────────────────────────────────────────────────────────
+
+/**
+ * 설치된 mouse hook의 핸들 묶음.
+ * uninstallLowLevelMouseHook에 그대로 전달해 정리한다.
+ */
+export interface MouseHookHandle {
+  /** SetWindowsHookExW가 반환한 HHOOK */
+  readonly hhk: bigint;
+  /**
+   * koffi.register로 등록된 callback 함수 포인터.
+   * GC가 회수하지 않도록 strong reference 유지.
+   * unregister 시 동일 식별자 사용.
+   */
+  readonly registeredCallback: unknown;
+}
+
+/**
+ * WH_MOUSE_LL low-level mouse hook 설치.
+ *
+ * shouldPassThrough(physicalPoint)는 callback hot path에서 호출된다 — 매우 빠르게(0.5ms 이내)
+ * 반환해야 한다. async/IPC/PostMessage 등 호출 금지.
+ *
+ * 본 구현은 **차단/주입을 하지 않는다**. 모든 마우스 메시지를 CallNextHookEx로
+ * 그대로 전달하며, hook의 가치는:
+ *   1. AV false-positive 회피용 minimal presence
+ *   2. 향후 라우팅 정책 변경 시 좌표 분석 기반 마련
+ *
+ * 라우팅 효과는 SetParent + Z-order(HWND_BOTTOM)만으로 자연스럽게 발생한다:
+ *   - 위젯 위 빈 공간 → Electron(위젯)이 처리 (위젯이 forefront)
+ *   - 위젯 위 아이콘 → Explorer ListView가 처리 (Z-order로 ListView가 위)
+ *
+ * MSLLHOOKSTRUCT 메모리 레이아웃 (x64, packed = 40 bytes):
+ *   POINT pt;       // 8 bytes (x, y)
+ *   DWORD mouseData;// 4 bytes
+ *   DWORD flags;    // 4 bytes
+ *   DWORD time;     // 4 bytes
+ *   ULONG_PTR dwExtraInfo; // 8 bytes (x64)
+ *
+ * @throws HookInstallError SetWindowsHookExW 실패 (보안 차단 등)
+ */
+export function installLowLevelMouseHook(
+  shouldPassThrough: (physicalPoint: { x: number; y: number }) => boolean,
+): MouseHookHandle {
+  const b = loadWin32Bindings();
+
+  // 1. callback proto/register
+  // LowLevelMouseProc: LRESULT CALLBACK Proc(int nCode, WPARAM wParam, LPARAM lParam)
+  // x64에서 LRESULT/WPARAM/LPARAM 모두 64-bit → intptr_t.
+  const proto = b.koffi.proto('intptr_t __stdcall LowLevelMouseProc(int, intptr_t, intptr_t)');
+
+  // koffi 콜백 — JS 함수를 함수 포인터로 변환. 등록된 callback은 unregister할 때까지 GC 불가.
+  const callback = (nCode: number, wParam: bigint | number, lParamRaw: bigint | number): bigint | number => {
+    // Win32 contract: nCode < 0이면 즉시 CallNextHookEx 호출
+    if (nCode < 0) {
+      return b.CallNextHookEx(null, nCode, wParam, lParamRaw);
+    }
+
+    try {
+      // lParam은 MSLLHOOKSTRUCT*. koffi.decode로 buffer를 얻거나 raw pointer로 직접 읽는다.
+      // 가장 안전한 방법: koffi.decode(pointer, sizeBytes, type) — 단, MSLLHOOKSTRUCT 정의가 필요.
+      // 본 구현은 koffi가 노출하는 raw memory 읽기 (decode + raw bytes) 패턴을 사용.
+      // 더 단순화: pt만 필요하므로 lParam을 buffer로 decode해 처음 8 bytes만 읽는다.
+      const lparamBig = typeof lParamRaw === 'bigint' ? lParamRaw : BigInt(lParamRaw);
+      if (lparamBig !== 0n) {
+        // koffi.decode(address, length, type) — type은 'unsigned char[N]' 등 사용 가능.
+        // 더 단순: koffi.decode(pointer, 'int32', count) → int32 배열로 읽기.
+        const decoded = b.koffi.decode(lparamBig, 'int32', 2) as number[] | Int32Array;
+        const x = Array.isArray(decoded) ? decoded[0] : decoded[0];
+        const y = Array.isArray(decoded) ? decoded[1] : decoded[1];
+        // shouldPassThrough는 manager가 제공 — 차단/주입은 하지 않으므로 결과는 메트릭/캐시용.
+        // 호출만 해도 manager TTL 캐시가 데워져 다음 hot path가 빨라진다.
+        try {
+          shouldPassThrough({ x: x ?? 0, y: y ?? 0 });
+        } catch {
+          /* callback 안에서 throw 금지 */
+        }
+      }
+    } catch {
+      /* hook은 매우 자주 호출되므로 어떤 에러도 silent하게 swallow */
+    }
+
+    // 항상 다음 hook으로 패스 — 차단 없음
+    return b.CallNextHookEx(null, nCode, wParam, lParamRaw);
+  };
+
+  const registered = b.koffi.register(callback, b.koffi.pointer(proto));
+
+  // 2. 모듈 핸들. WH_MOUSE_LL은 dwThreadId=0(global), hMod 인자는 어떤 모듈에 hook이
+  //    속하는지 식별. 일반적으로 GetModuleHandle(NULL) (현재 EXE)을 넘긴다.
+  const hModule = toBigInt(b.GetModuleHandleW(null));
+
+  // 3. SetWindowsHookExW
+  const hhk = toBigInt(b.SetWindowsHookExW(WH_MOUSE_LL, registered, hModule === 0n ? null : hModule, 0));
+
+  if (isNullHandle(hhk)) {
+    // 등록된 callback도 정리
+    try {
+      b.koffi.unregister(registered);
+    } catch {
+      /* ignore */
+    }
+    throw new HookInstallError('SetWindowsHookExW(WH_MOUSE_LL) 실패 — 보안 정책 차단 추정');
+  }
+
+  return {
+    hhk,
+    registeredCallback: registered,
+  };
+}
+
+/**
+ * mouse hook 정리 — UnhookWindowsHookEx + koffi.unregister.
+ * 둘 다 best-effort. 실패해도 throw하지 않는다.
+ */
+export function uninstallLowLevelMouseHook(h: MouseHookHandle): void {
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return;
+  }
+  try {
+    if (!isNullHandle(h.hhk)) {
+      b.UnhookWindowsHookEx(h.hhk);
+    }
+  } catch {
+    /* best-effort */
+  }
+  try {
+    b.koffi.unregister(h.registeredCallback);
+  } catch {
+    /* best-effort */
   }
 }

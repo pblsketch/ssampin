@@ -15,6 +15,7 @@ import {
   AttachFailedError,
   OpenProcessDeniedError,
   RemoteMemoryError,
+  HookInstallError,
   isWindowAlive,
   findDesktopListView,
 } from './win32Desktop';
@@ -45,6 +46,11 @@ describe('win32Desktop error classes', () => {
   it('RemoteMemoryError은 name이 "RemoteMemoryError"', () => {
     const e = new RemoteMemoryError('msg');
     expect(e.name).toBe('RemoteMemoryError');
+  });
+
+  it('HookInstallError은 name이 "HookInstallError"', () => {
+    const e = new HookInstallError('msg');
+    expect(e.name).toBe('HookInstallError');
   });
 });
 

@@ -173,6 +173,7 @@ function createWin32Manager(
   let handles: import('./platform/win32Desktop').Win32DesktopHandles | null = null;
   let cachedPhysicalBounds: PhysicalRect | null = null;
   let cachedListView: bigint | null = null; // Phase 6 — Explorer SysListView32 핸들
+  let mouseHook: import('./platform/win32Desktop').MouseHookHandle | null = null; // Phase 7
 
   // 16ms TTL 캐시 (Phase 6/7 — mouse hook hot path 성능)
   // 동일 좌표로 짧은 시간 안에 여러 번 호출되는 경우(드래그 중)에 유리.
@@ -182,7 +183,20 @@ function createWin32Manager(
   let lastHitResult = false;
   let lastHitUntil = 0;
 
+  function clearHook(): void {
+    if (mouseHook) {
+      try {
+        win32.uninstallLowLevelMouseHook(mouseHook);
+      } catch (e) {
+        console.warn('[desktopWidgetManager] uninstallLowLevelMouseHook 예외 (무시):', e);
+      }
+    }
+    mouseHook = null;
+  }
+
   function clearHandles(): void {
+    // hook을 먼저 정리해야 callback이 살아있는 동안 detach 발생을 피할 수 있음.
+    clearHook();
     if (handles) {
       try {
         win32.detachFromWorkerW(handles);
@@ -201,7 +215,40 @@ function createWin32Manager(
     lastHitUntil = 0;
   }
 
-  function isInsideCachedBounds(p: { x: number; y: number }): boolean {
+  // Phase 7 — hot path. shouldPassThroughToDesktop을 별도 명명 함수로 분리해 hook callback에서
+  // 안정적으로 reference 가능하게 한다 (this 바인딩 회피).
+  function passThroughCheck(p: { x: number; y: number }): boolean {
+    if (!handles || !cachedListView) return false;
+    if (!isInsideCachedBoundsLocal(p)) return false;
+
+    const now = Date.now();
+    if (
+      p.x === lastHitX
+      && p.y === lastHitY
+      && now < lastHitUntil
+    ) {
+      return lastHitResult;
+    }
+
+    let hit = false;
+    try {
+      hit = win32.lvmHitTest(cachedListView, p);
+    } catch (e) {
+      if (e instanceof Error) {
+        console.warn(`[desktopWidgetManager] lvmHitTest 실패 (${e.name}): ${e.message} — listView 무효화`);
+      }
+      cachedListView = null;
+      hit = false;
+    }
+
+    lastHitX = p.x;
+    lastHitY = p.y;
+    lastHitResult = hit;
+    lastHitUntil = now + HIT_CACHE_TTL_MS;
+    return hit;
+  }
+
+  function isInsideCachedBoundsLocal(p: { x: number; y: number }): boolean {
     const r = cachedPhysicalBounds;
     if (!r) return false;
     return (
@@ -211,6 +258,7 @@ function createWin32Manager(
       && p.y < r.y + r.height
     );
   }
+
 
   function recalcPhysicalBounds(window: BrowserWindow): PhysicalRect | null {
     if (!window || window.isDestroyed()) {
@@ -281,6 +329,24 @@ function createWin32Manager(
         cachedListView = null;
       }
 
+      // 6. Phase 7: low-level mouse hook 설치 (중복 가드 + 실패 시 attach 유지하고 hook만 미설치)
+      // 중복 가드: enable이 두 번 호출되거나 dev 핫리로드로 hook이 살아있으면 우선 정리.
+      clearHook();
+      try {
+        mouseHook = win32.installLowLevelMouseHook((p) => {
+          // hook callback hot path — passThroughCheck는 0.5ms 이내 반환.
+          // 결과는 사용하지 않지만 호출함으로써 manager TTL 캐시가 데워진다.
+          // 차단/주입은 하지 않으므로 라우팅 효과는 SetParent + Z-order에서만 비롯됨.
+          passThroughCheck(p);
+        });
+      } catch (e) {
+        // hook 설치 실패는 치명적이지 않다 (라우팅은 Z-order만으로도 동작).
+        // 다만 사용자에게 noise 없이 로그만 남긴다.
+        const reason = e instanceof Error ? e.message : 'hook-install-failed';
+        console.warn('[desktopWidgetManager] mouse hook 설치 실패 (계속 진행):', reason);
+        mouseHook = null;
+      }
+
       return { ok: true, mode: 'native-desktop' };
     },
 
@@ -349,43 +415,10 @@ function createWin32Manager(
      *
      * 빠르게 종료되는 경로를 우선 — bounds 밖이면 즉시 false 반환.
      * 권한 실패(OpenProcessDeniedError) 발생 시 listView를 무효화해 추후 호출에서
-     * 즉시 false (Electron이 처리) 경로로 빠지게 한다. 실제 disable + topmost fallback은
-     * Phase 7의 mouse hook에서 통합 처리된다.
+     * 즉시 false (Electron이 처리) 경로로 빠지게 한다.
      */
     shouldPassThroughToDesktop(p: { x: number; y: number }): boolean {
-      if (!handles || !cachedListView) return false;
-      if (!isInsideCachedBounds(p)) return false;
-
-      // TTL 캐시
-      const now = Date.now();
-      if (
-        p.x === lastHitX
-        && p.y === lastHitY
-        && now < lastHitUntil
-      ) {
-        return lastHitResult;
-      }
-
-      let hit = false;
-      try {
-        hit = win32.lvmHitTest(cachedListView, p);
-      } catch (e) {
-        // OpenProcessDeniedError 또는 RemoteMemoryError → 더 이상 시도하지 않도록 listView 무효화.
-        // Phase 7에서 hook callback이 next 호출 시 수신할 수 있게 별도 disable 트리거는 두지 않는다.
-        if (e instanceof Error) {
-          console.warn(`[desktopWidgetManager] lvmHitTest 실패 (${e.name}): ${e.message} — listView 무효화`);
-        } else {
-          console.warn('[desktopWidgetManager] lvmHitTest 알 수 없는 예외:', e);
-        }
-        cachedListView = null;
-        hit = false;
-      }
-
-      lastHitX = p.x;
-      lastHitY = p.y;
-      lastHitResult = hit;
-      lastHitUntil = now + HIT_CACHE_TTL_MS;
-      return hit;
+      return passThroughCheck(p);
     },
   };
 }
