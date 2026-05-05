@@ -356,10 +356,15 @@ function createWin32Manager(
       }
 
       if (!handles) {
-        // 모든 strategy 실패 → topmost fallback. Progman은 G2 진단에서 거부 확인되어 사용 안 함.
+        // 모든 strategy 실패 → normal fallback (사용자 의도 보존).
+        //
+        // 정책 변경(G2-bis): 이전에는 'topmost'로 fallback했으나 사용자가 native-desktop을
+        // 명시 선택한 의도와 정반대(아래로 → 위로)라 혼란을 야기했다. 'normal'로 변경하면
+        // 위젯이 일반 창처럼 동작하고, 호출자(main.ts)가 토스트로 안내한다.
+        // healthCheck 단계의 fallback은 이미 attach 됐다 깨진 케이스라 'topmost' 유지가 안전 (안 보이는 것보단 낫다).
         const reason = lastError ? `${lastError.name}: ${lastError.message}` : 'no-strategy-succeeded';
         diagWarn('native-desktop', `모든 STRATEGY 실패 (마지막 에러: ${reason})`);
-        return { ok: false, reason: 'workerw-not-found-or-rejected', fallbackMode: 'topmost' };
+        return { ok: false, reason: 'workerw-not-found-or-rejected', fallbackMode: 'normal' };
       }
 
       // 4. 초기 physical bounds 캐시 (Phase 5)

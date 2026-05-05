@@ -98,6 +98,24 @@ const WM_SPAWN_WORKER = 0x052c;
 /** GWL_EXSTYLE — GetWindowLongPtrW 인덱스 (extended window styles) */
 const GWL_EXSTYLE = -20;
 
+/** GWL_STYLE — GetWindowLongPtrW 인덱스 (basic window styles)
+ *
+ * G2-bis 게이트 진단:
+ *   transparent+frame:false BrowserWindow는 Win32 레벨에서 WS_POPUP top-level이다.
+ *   SetParent 호출은 success를 반환하지만 WS_POPUP 윈도우는 진짜 child가 되지 않고
+ *   owner relationship으로만 처리된다 → GetParent(hwnd)는 0n 반환 → 검증 실패.
+ *
+ *   해결책: SetParent 직전에 WS_POPUP 비트 제거 + WS_CHILD 추가.
+ *   detach 시 원래 style 복원 필수.
+ *
+ *   참고: Wallpaper Engine, Lively Wallpaper, RainMeter 등 데스크톱 widget 도구가 동일 패턴 사용.
+ */
+const GWL_STYLE = -16;
+
+/** Window style 비트 — WS_POPUP / WS_CHILD 변환에만 사용. 다른 비트는 그대로 보존. */
+const WS_POPUP = 0x80000000n;
+const WS_CHILD = 0x40000000n;
+
 /** SetWindowPos uFlags */
 const SWP_NOACTIVATE = 0x0010;
 const SWP_NOSIZE = 0x0001;
@@ -685,6 +703,18 @@ export interface Win32DesktopHandles {
   readonly prevParent: bigint;
   /** attach 직전의 GWL_EXSTYLE (예: WS_EX_LAYERED 보존용) */
   readonly prevExStyle: bigint;
+  /**
+   * attach 직전의 GWL_STYLE.
+   *
+   * G2-bis 진단 결과: transparent+frame:false BrowserWindow는 WS_POPUP top-level이라
+   * SetParent만으로는 child relationship이 수립되지 않는다.
+   * attach 시 WS_POPUP을 제거하고 WS_CHILD를 추가하며, detach 시 본 값으로 정확히 복원해야
+   * 위젯이 다시 정상 top-level로 동작한다.
+   *
+   * **반드시 detach 시 SetParent보다 뒤에 복원** (style 변경이 message pump을 흔들어
+   * 부모 관계가 재계산되기 때문에 순서가 중요).
+   */
+  readonly prevStyle: bigint;
 }
 
 /**
@@ -766,6 +796,21 @@ async function attachToTarget(
   const prevParent = toBigInt(b.GetParent(widgetHwnd));
   diagLog('native-desktop', `${diagLabel} step2 prevParent=0x${prevParent.toString(16)}`);
 
+  // 2-bis. GWL_STYLE 저장 (G2-bis 게이트 — WS_POPUP→WS_CHILD 전환 준비).
+  //
+  // 이전(G2 단계): SetParent만 호출하면 transparent+frame:false BrowserWindow는
+  // WS_POPUP top-level 그대로라서 진짜 child가 되지 않고 GetParent=0n 반환.
+  // 이를 해결하려면 SetParent 직전에 GWL_STYLE에서 WS_POPUP 비트를 제거하고
+  // WS_CHILD 비트를 추가해야 한다 (Wallpaper Engine 등 데스크톱 widget 도구 정통 패턴).
+  const prevStyleRaw = b.GetWindowLongPtrW(widgetHwnd, GWL_STYLE);
+  const prevStyle = typeof prevStyleRaw === 'bigint' ? prevStyleRaw : BigInt(prevStyleRaw);
+  diagLog('native-desktop', `${diagLabel} step2-bis prevStyle=0x${prevStyle.toString(16)}`);
+
+  // 2-ter. WS_POPUP 제거 + WS_CHILD 추가. 다른 모든 style 비트(WS_VISIBLE, WS_CLIPSIBLINGS 등)는 보존.
+  const newStyle = (prevStyle & ~WS_POPUP) | WS_CHILD;
+  b.SetWindowLongPtrW(widgetHwnd, GWL_STYLE, newStyle);
+  diagLog('native-desktop', `${diagLabel} step2-ter newStyle=0x${newStyle.toString(16)} (WS_POPUP 제거 + WS_CHILD 추가)`);
+
   // 3. SetParent
   const setParentResult = toBigInt(b.SetParent(widgetHwnd, target));
   diagLog('native-desktop', `${diagLabel} step3 SetParent return=0x${setParentResult.toString(16)} (returns previous parent on success)`);
@@ -774,8 +819,18 @@ async function attachToTarget(
   const verified = await verifySetParent(b, widgetHwnd, target, diagLabel);
   if (!verified) {
     const finalParent = toBigInt(b.GetParent(widgetHwnd));
+    // 검증 실패 → style 원복 (부분 변경 상태로 두지 않음). best-effort.
+    try {
+      b.SetWindowLongPtrW(widgetHwnd, GWL_STYLE, prevStyle);
+      diagLog('native-desktop', `${diagLabel} step3-bis 검증 실패 → prevStyle 0x${prevStyle.toString(16)} 원복`);
+    } catch (e) {
+      diagWarn('native-desktop', `${diagLabel} step3-bis style 원복 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
+    }
+    // SetParent도 가능하면 원복. SetParent 자체는 success를 반환했으므로 부모는 setParentResult가 이전 부모.
+    // 다만 여기서 다시 원복 시도하면 추가 race가 생기므로 style 원복만으로 충분 (Win32 SetWindowLongPtrW가
+    // 부모 관계도 재계산하게 한다).
     throw new AttachFailedError(
-      `${diagLabel}: SetParent 후 부모 검증 실패 (expected=0x${target.toString(16)}, final=0x${finalParent.toString(16)}). 대상이 자식을 거부했음.`,
+      `${diagLabel}: SetParent 후 부모 검증 실패 (expected=0x${target.toString(16)}, final=0x${finalParent.toString(16)}). 대상이 자식을 거부했음 (style 원복 완료).`,
     );
   }
 
@@ -800,6 +855,7 @@ async function attachToTarget(
     widgetHwnd,
     prevParent,
     prevExStyle,
+    prevStyle,
   };
 }
 
@@ -867,14 +923,23 @@ export function detachFromWorkerW(h: Win32DesktopHandles): void {
     /* best-effort */
   }
 
-  // 2. ExStyle 복원
+  // 2. GWL_STYLE 복원 (G2-bis — attach 시 WS_POPUP→WS_CHILD 전환했던 것 원복).
+  //    SetParent 뒤에 호출해야 부모 관계가 먼저 떨어지고 나서 style이 정확히 적용된다.
+  //    이 단계가 누락되면 위젯이 영원히 WS_CHILD로 남아 다음 mode 전환에서 정상 top-level로 복귀 불가.
+  try {
+    b.SetWindowLongPtrW(h.widgetHwnd, GWL_STYLE, h.prevStyle);
+  } catch {
+    /* best-effort */
+  }
+
+  // 3. ExStyle 복원
   try {
     b.SetWindowLongPtrW(h.widgetHwnd, GWL_EXSTYLE, h.prevExStyle);
   } catch {
     /* best-effort */
   }
 
-  // 3. Frame 변경 신호 (Z-order는 top-level이 됐으므로 OS가 처리)
+  // 4. Frame 변경 신호 (Z-order는 top-level이 됐으므로 OS가 처리)
   try {
     b.SetWindowPos(
       h.widgetHwnd,
