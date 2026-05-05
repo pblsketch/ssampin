@@ -119,7 +119,7 @@ function broadcastToRenderers(message: string, args: readonly unknown[]): void {
  * @param message 사람이 읽을 메시지 (이미 여기 prefix가 들어있으면 자동으로 정제하지 않음 — 호출자가 깨끗한 본문만 전달할 것).
  * @param args 부가 데이터 (handle 값, 객체 등). console.log에 spread로 전달되며 IPC에는 직렬화되어 함께 송출된다.
  */
-export function diagLog(scope: 'native-desktop' | 'widget', message: string, ...args: unknown[]): void {
+export function diagLog(scope: 'native-desktop' | 'widget' | 'icon', message: string, ...args: unknown[]): void {
   const fullMsg = `[${scope}][diag] ${message}`;
   // 1. console (기존 동작)
   console.log(fullMsg, ...args);
@@ -140,7 +140,7 @@ export function diagLog(scope: 'native-desktop' | 'widget', message: string, ...
 /**
  * `diagLog`의 warn 변형. console.warn으로 라우팅 (스타일 구분용).
  */
-export function diagWarn(scope: 'native-desktop' | 'widget', message: string, ...args: unknown[]): void {
+export function diagWarn(scope: 'native-desktop' | 'widget' | 'icon', message: string, ...args: unknown[]): void {
   const fullMsg = `[${scope}][diag][warn] ${message}`;
   console.warn(fullMsg, ...args);
   broadcastToRenderers(fullMsg, args);

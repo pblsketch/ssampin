@@ -689,8 +689,15 @@ let iconDragState: {
 let iconDragInterval: NodeJS.Timeout | null = null;
 let iconDragSafetyTimer: NodeJS.Timeout | null = null;
 
+let iconDragSeq = 0;
+
 function startIconDrag(): void {
-  if (!iconWindow || iconWindow.isDestroyed()) return;
+  iconDragSeq++;
+  diagLog('icon', `startIconDrag seq=${iconDragSeq} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`);
+  if (!iconWindow || iconWindow.isDestroyed()) {
+    diagWarn('icon', 'startIconDrag aborted — no window');
+    return;
+  }
   stopIconDrag(); // 기존 드래그 정리
   const mouse = screen.getCursorScreenPoint();
   const bounds = iconWindow.getBounds();
@@ -700,6 +707,7 @@ function startIconDrag(): void {
     startWinX: bounds.x,
     startWinY: bounds.y,
   };
+  diagLog('icon', `startIconDrag start mouse=(${mouse.x},${mouse.y}) bounds=(${bounds.x},${bounds.y})`);
   // 16ms (60fps) 폴링으로 마우스 따라가기
   iconDragInterval = setInterval(() => {
     if (!iconDragState || !iconWindow || iconWindow.isDestroyed()) {
@@ -716,12 +724,15 @@ function startIconDrag(): void {
   }, 16);
   // 안전망: renderer가 endDrag IPC 누락해도 5초 후 자동 종료
   iconDragSafetyTimer = setTimeout(() => {
-    console.warn('[icon] drag safety timeout — auto-stopping after 5s');
+    diagWarn('icon', `drag safety timeout (seq=${iconDragSeq}) — auto-stopping after 5s`);
     stopIconDrag();
   }, 5000);
 }
 
 function stopIconDrag(): void {
+  const hadInterval = !!iconDragInterval;
+  const hadSafety = !!iconDragSafetyTimer;
+  const hadState = !!iconDragState;
   if (iconDragInterval) {
     clearInterval(iconDragInterval);
     iconDragInterval = null;
@@ -735,6 +746,9 @@ function stopIconDrag(): void {
   if (iconWindow && !iconWindow.isDestroyed()) {
     const b = iconWindow.getBounds();
     saveIconBounds({ x: b.x, y: b.y, width: ICON_SIZE, height: ICON_SIZE });
+  }
+  if (hadInterval || hadSafety || hadState) {
+    diagLog('icon', `stopIconDrag (interval=${hadInterval} safety=${hadSafety} state=${hadState})`);
   }
 }
 
@@ -798,6 +812,11 @@ function buildIconWindow(): void {
 
   if (process.env['VITE_DEV_SERVER_URL']) {
     void iconWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=icon`);
+    // dev 모드에서만 DevTools 자동 오픈 — 진단 로그(`[icon-renderer]`) 확인용.
+    // 디태치드(Detached)로 띄워야 64×64 작은 윈도우 영역과 겹치지 않는다.
+    iconWindow.webContents.once('did-finish-load', () => {
+      iconWindow?.webContents.openDevTools({ mode: 'detach' });
+    });
   } else {
     void iconWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
       query: { mode: 'icon' },
@@ -2150,7 +2169,18 @@ function registerIpcHandlers(): void {
       target === 'main' ? 'main' :
       target === 'widget' ? 'widget' :
       lastUserMode;  // 'restore' → 마지막 사용 상태
+    diagLog('icon', `icon:expand to=${target} resolved=${resolved} lastUserMode=${lastUserMode}`);
     await executeWindowTransition(resolved);
+  });
+
+  /**
+   * 아이콘 윈도우 renderer 가 송출하는 진단 로그를 main 의 diagLog 로 라우팅.
+   * → 파일 `app.getPath('userData')/native-desktop-diag.log` 에 append 됨.
+   * 사용자는 메모장으로 그 파일을 열어 그대로 공유 가능.
+   */
+  ipcMain.handle('icon:diag', (_event, payload: { event: string; data?: unknown }): void => {
+    if (!payload || typeof payload.event !== 'string') return;
+    diagLog('icon', `[renderer] ${payload.event}`, payload.data);
   });
 
   // export:showSaveDialog — 파일 저장 대화상자
