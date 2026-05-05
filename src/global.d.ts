@@ -141,6 +141,14 @@ interface ElectronAPI {
     opacity: number;
     desktopMode: string;
   }) => Promise<void>;
+  /**
+   * 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~).
+   * native attach 실패 시 main이 모드를 fallbackMode로 정정하며 이 콜백이 호출된다.
+   * renderer는 토스트 표시 + settings store에 fallbackMode 반영을 책임진다.
+   */
+  onDesktopModeFallback: (
+    callback: (info: { reason: string; fallbackMode: 'normal' | 'topmost' }) => void,
+  ) => () => void;
   closeWindow: () => Promise<void>;
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: () => Promise<void>;

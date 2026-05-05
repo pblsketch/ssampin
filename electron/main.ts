@@ -31,6 +31,11 @@ import {
   exportBackup,
   importBackup,
 } from './backupManager';
+import {
+  createDesktopWidgetManager,
+  type DesktopWidgetManager,
+} from './desktopWidgetManager';
+import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 
 declare const __dirname: string;
 
@@ -115,6 +120,15 @@ function normalizeDesktopMode(
 }
 
 let currentDesktopMode: WidgetDesktopMode = 'normal';
+
+/**
+ * 바탕화면 아이콘 아래 모드 manager (single instance).
+ *
+ * 비Win32 또는 native module 미설치 환경에서는 no-op manager를 반환하므로
+ * 호출자는 플랫폼 분기 없이 동일한 API로 사용할 수 있다.
+ */
+const desktopWidgetManager: DesktopWidgetManager = createDesktopWidgetManager();
+
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 let winDRecoveryDedup = false;  // minimize 핸들러와 폴링 중복 방지
 let widgetBoundsBeforeLayout: WidgetBounds | null = null;
@@ -1551,6 +1565,8 @@ function createWidgetWindow(
   widgetWindow.on('closed', () => {
     console.log(`[diag] widget closed — isQuitting=${isQuitting}, isSystemSuspending=${isSystemSuspending}`);
     stopWinDRecovery();
+    // 바탕화면 아이콘 아래 모드: 위젯 창이 사라졌으므로 native attach 정리
+    desktopWidgetManager.disable();
     widgetWindow = null;
     currentDesktopMode = 'normal';
     if (!isQuitting && !isSystemSuspending) {
@@ -1916,35 +1932,57 @@ function registerIpcHandlers(): void {
   });
 
   // window:applyWidgetSettings — 설정 페이지에서 위젯 설정 변경 시 실시간 적용
-  ipcMain.handle('window:applyWidgetSettings', (
+  ipcMain.handle('window:applyWidgetSettings', async (
     _event,
     widget: { opacity: number; desktopMode: string },
-  ): void => {
+  ): Promise<void> => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
     // 투명도 직접 적용
     widgetWindow.setOpacity(Math.max(0, Math.min(1, widget.opacity)));
 
     // 데스크톱 모드 변경 (정규화 helper 통과 — 'native-desktop' silent drop 방지)
-    const newMode = normalizeDesktopMode(widget.desktopMode, process.platform === 'win32');
-    if (newMode !== currentDesktopMode) {
-      console.log(`[widget] 설정 변경: ${currentDesktopMode} → ${newMode}`);
-      currentDesktopMode = newMode;
+    const requestedMode = normalizeDesktopMode(widget.desktopMode, process.platform === 'win32');
+    if (requestedMode === currentDesktopMode) return;
 
-      switch (newMode) {
-        case 'topmost':
-          widgetWindow.setAlwaysOnTop(true);
-          break;
-        case 'native-desktop':
-          // Phase 1: 타입 보존만. native attach는 Phase 2에서 manager로 위임.
-          // 현재 단계에서는 normal과 동일한 표시 동작.
-          widgetWindow.setAlwaysOnTop(false);
-          break;
-        case 'normal':
-        default:
-          widgetWindow.setAlwaysOnTop(false);
-          break;
+    console.log(`[widget] 설정 변경 요청: ${currentDesktopMode} → ${requestedMode}`);
+
+    // ── 기존 모드가 native-desktop이면 먼저 disable() ──
+    if (currentDesktopMode === 'native-desktop') {
+      desktopWidgetManager.disable();
+    }
+
+    // ── 새 모드 적용 ──
+    let appliedMode: WidgetDesktopMode = requestedMode;
+    let fallbackEvent: DesktopModeFallbackEvent | null = null;
+
+    if (requestedMode === 'native-desktop') {
+      // manager.enable()을 시도. 실패 시 fallback.
+      const result = await desktopWidgetManager.enable(widgetWindow);
+      if (result.ok) {
+        appliedMode = 'native-desktop';
+        // attach가 alwaysOnTop과 충돌할 수 있어 명시적으로 false
+        widgetWindow.setAlwaysOnTop(false);
+      } else {
+        appliedMode = result.fallbackMode;
+        fallbackEvent = { reason: result.reason, fallbackMode: result.fallbackMode };
+        console.log(`[widget] native-desktop 실패: ${result.reason} → ${result.fallbackMode} fallback`);
+        // fallback 모드의 alwaysOnTop 적용
+        widgetWindow.setAlwaysOnTop(result.fallbackMode === 'topmost');
       }
+    } else if (requestedMode === 'topmost') {
+      widgetWindow.setAlwaysOnTop(true);
+    } else {
+      // normal
+      widgetWindow.setAlwaysOnTop(false);
+    }
+
+    currentDesktopMode = appliedMode;
+    console.log(`[widget] 적용 완료: ${appliedMode}`);
+
+    // ── fallback 발생 시 renderer에 토스트 알림 ──
+    if (fallbackEvent) {
+      broadcastToAllWindows('desktopMode:fallback', fallbackEvent);
     }
   });
 
@@ -3665,6 +3703,8 @@ app.on('before-quit', () => {
   endActiveBoardSessionSync();
   // 실시간 담벼락 dirty WallBoard 동기 저장 (Design §3.3)
   saveDirtyWallBoardsSync();
+  // 바탕화면 아이콘 아래 모드: native attach/hook 정리 보장 (no-op manager는 무해)
+  desktopWidgetManager.disable();
   // Analytics flush 신호 전송
   broadcastToAllWindows('analytics:flush');
 });
