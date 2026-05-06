@@ -319,22 +319,49 @@ function createWin32Manager(
   ): readonly PhysicalRect[] {
     if (!cachedPhysicalBounds || dipRects.length === 0) return [];
     if (window.isDestroyed()) return [];
-    const display = screen.getDisplayMatching(window.getBounds());
-    const sf = display.scaleFactor || 1;
-    const base = cachedPhysicalBounds;
+    // 멀티 모니터 결정적 fix(2026-05-06): screen.dipToScreenRect로 widget 자체의
+    // physical 좌표를 다시 정확히 계산하고, 그 origin에 client DIP rect를 더하는 패턴.
+    //
+    // r은 widget client area DIP 기준이므로 screen 절대 좌표로 변환하려면:
+    //   1. widgetDipBounds = window.getBounds() — widget의 screen DIP origin
+    //   2. clientDipRect = { x: widgetDipBounds.x + r.x, ... } — screen DIP 절대
+    //   3. dipToScreenRect(window, clientDipRect) → screen physical 절대
+    // 이 방식은 monitor 경계를 가로지르는 widget이나 per-monitor DPI 환경에서도 정확.
+    const widgetDipBounds = window.getBounds();
     return dipRects.map((r) => {
-      // r은 widget client area DIP 기준 → screen physical로 변환:
-      //   physicalX = widgetOriginX + round(rDip.x * sf)
-      const x = base.x + Math.round(r.x * sf);
-      const y = base.y + Math.round(r.y * sf);
-      const right = base.x + Math.round((r.x + r.width) * sf);
-      const bottom = base.y + Math.round((r.y + r.height) * sf);
-      return {
-        x,
-        y,
-        width: right - x,
-        height: bottom - y,
+      const absoluteDip = {
+        x: widgetDipBounds.x + r.x,
+        y: widgetDipBounds.y + r.y,
+        width: r.width,
+        height: r.height,
       };
+      try {
+        const physical = screen.dipToScreenRect(window, absoluteDip);
+        return {
+          x: Math.round(physical.x),
+          y: Math.round(physical.y),
+          width: Math.round(physical.width),
+          height: Math.round(physical.height),
+        };
+      } catch {
+        // Fallback — 단순 scaleFactor 곱셈
+        const display = screen.getDisplayMatching(widgetDipBounds);
+        const sf = display.scaleFactor || 1;
+        const base = cachedPhysicalBounds;
+        if (!base) {
+          return { x: 0, y: 0, width: 0, height: 0 };
+        }
+        const x = base.x + Math.round(r.x * sf);
+        const y = base.y + Math.round(r.y * sf);
+        const right = base.x + Math.round((r.x + r.width) * sf);
+        const bottom = base.y + Math.round((r.y + r.height) * sf);
+        return {
+          x,
+          y,
+          width: right - x,
+          height: bottom - y,
+        };
+      }
     });
   }
 
@@ -474,10 +501,37 @@ function createWin32Manager(
       return null;
     }
     const dipBounds = window.getBounds();
-    // 위젯 중심에 가장 가까운 디스플레이 — 멀티모니터 환경에서 정확한 scaleFactor 선택.
-    const display = screen.getDisplayMatching(dipBounds);
-    const scaleFactor = display.scaleFactor || 1;
-    return dipToPhysical(dipBounds, scaleFactor);
+    // 멀티 모니터 결정적 fix(2026-05-06): Electron 공식 API screen.dipToScreenRect 사용.
+    //
+    // 이전 구현(dipToPhysical 단순 곱셈)의 문제:
+    //   - per-monitor DPI 환경에서 보조 모니터의 physical origin은 단순히
+    //     `dip * scaleFactor`가 아니다. primary monitor의 physical 우측 경계를 기준으로
+    //     누적 좌표를 계산해야 한다.
+    //   - 예: primary 100% (1920×1080), 보조 우측 150% (2560×1440 → physical 3840×2160).
+    //         widget DIP x=1920 (보조 모니터 좌상단)이면, physical x는 1920 (primary 폭)
+    //         이지 1920*1.5=2880이 아님.
+    //   - 음수 DIP(좌측 보조 모니터) 케이스도 동일 문제.
+    //
+    // screen.dipToScreenRect는 OS의 monitor 레이아웃을 직접 조회해 정확히 변환한다.
+    // window 인자는 현재 widget의 monitor를 OS에 hint(주로 multi-DPI 환경에서 정확도 향상).
+    try {
+      const physical = screen.dipToScreenRect(window, dipBounds);
+      return {
+        x: Math.round(physical.x),
+        y: Math.round(physical.y),
+        width: Math.round(physical.width),
+        height: Math.round(physical.height),
+      };
+    } catch (e) {
+      // 호환성 fallback — 단순 scaleFactor 곱셈 (single monitor 환경에서는 정확).
+      diagWarn(
+        'native-desktop',
+        `dipToScreenRect 실패 — dipToPhysical fallback: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      const display = screen.getDisplayMatching(dipBounds);
+      const scaleFactor = display.scaleFactor || 1;
+      return dipToPhysical(dipBounds, scaleFactor);
+    }
   }
 
   return {
@@ -692,12 +746,12 @@ function createWin32Manager(
           // ─── Phase 7-stable — z-order 검증 (다른 윈도우가 위젯 위에 깔려있는지) ───
           // 사용자 보고 회귀(2026-05-05): 위젯 위에 띄운 브라우저/탐색기 창의 종료 버튼이나
           // 타이틀바 클릭이 가끔 위젯으로 흘러가서 그 창을 조작 못 하는 race가 발생.
-          // 원인: WH_MOUSE_LL hook은 system-wide라 widget bounds 안 좌표면 z-order 위에 다른
-          // 창이 있어도 우리는 widget으로 sendInputEvent를 보냈고, OS는 자연 라우팅으로 위 창에도
-          // 클릭을 보냄 → 둘 다 받게 됨.
-          // 해결: WindowFromPoint으로 그 좌표 top-most window를 조회 → widget(또는 ancestor)이
-          // 아니면 sendInputEvent 호출 안 함. CallNextHookEx는 정상 패스(return false)하므로 OS는
-          // 자연 라우팅으로 위에 있는 창에 클릭을 정상 전달.
+          // 해결: WindowFromPoint + GetAncestor(GA_ROOT)으로 widget chain 안에 있는지
+          // 판정. chain 안이면 widget으로 라우팅, 다른 top-level 창이면 OS 자연 라우팅에 맡김.
+          //
+          // 결정적 fix(2026-05-06): isWidgetOrAncestor가 GetAncestor(GA_ROOT)으로 chain
+          // 추적하도록 강화. 이전 raw 등치 비교는 widget의 자식 element/Explorer ListView
+          // 등을 모두 skip해 sent=0 회귀를 일으켰음.
           //
           // 단, drag 진행 중에는 본 검증 skip — 이미 위 dragState 분기에서 처리됨(여기 도달 X).
           // LBUTTONUP 직후 Explorer rubber band 시작 race 등은 drag 분기가 흡수.
@@ -711,10 +765,11 @@ function createWin32Manager(
             );
             if (!isWidgetTop) {
               routingStats.skippedAbove++;
-              if (msgType !== 0x0200) {
+              // 진단 로그 — 클릭류만 + 첫 5건만 (디스크 포화 회피).
+              if (msgType !== 0x0200 && routingStats.skippedAbove <= 5) {
                 diagLog(
                   'native-desktop',
-                  `[7-stable] skipped — top window is not widget (top=0x${top.toString(16)}, widget=0x${cachedWidgetHwnd.toString(16)}, msg=0x${msgType.toString(16)})`,
+                  `[z-order] skipped — top=0x${top.toString(16)} (msg=0x${msgType.toString(16)}, count=${routingStats.skippedAbove})`,
                 );
               }
               return; // OS 자연 라우팅에 맡김 (위에 있는 창이 정상 처리)

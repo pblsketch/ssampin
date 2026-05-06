@@ -1218,24 +1218,34 @@ export function getWindowAncestor(hWnd: bigint, gaFlags: number = GA_ROOT): bigi
 }
 
 /**
- * z-order 검증: 주어진 top-most HWND가 widget 또는 그 attach 대상 ancestor인지 판정.
+ * z-order 검증: 주어진 top-most HWND가 widget 또는 그 attach chain 안에 있는지 판정.
+ *
+ * **2026-05-06 결정적 fix** — 사용자 환경 진단 로그 (`sent=0 skipAbove=1441`):
+ *   `WindowFromPoint`은 WS_CHILD가 된 widget의 자식 element(Chromium 렌더러 wrapper),
+ *   widget bounds 안의 SHELLDLL_DefView/SysListView32, 또는 WorkerW의 다른 자식 등을
+ *   반환할 수 있다. 이전 구현은 raw 등치 비교만 해 widget이 z-order 가장 위인 정상
+ *   상태에서도 거의 모든 클릭을 skip → 결정적 회귀.
+ *
+ *   해법: `top` 자체가 일치하면 즉시 true를 반환하고, 일치하지 않더라도
+ *   `GetAncestor(top, GA_ROOT)`로 root를 추출해 그 root가 widget chain의 일부
+ *   (widgetHwnd / workerW / progman)이면 true. 그래야 widget의 child element와
+ *   부모 chain 모두 정상 라우팅된다. **widget bounds 안에 위치한 다른 top-level
+ *   윈도우(브라우저, 탐색기 등)만 skip된다.**
  *
  * 케이스 분석:
- *   1. top === widgetHwnd → widget 자체. true.
- *   2. top === workerW → widget의 부모(WS_CHILD attach 후의 root). true.
- *   3. top === progman → STRATEGY 3에서 SHELLDLL_DefView 직접 attach인 경우 root가 Progman. true.
- *   4. top === 0n → WindowFromPoint 실패. false (안전 차단).
- *   5. 그 외 → 다른 top-level 윈도우(브라우저, 탐색기 등)가 위에 있음. false.
+ *   1. top === 0n → WindowFromPoint 실패. true (안전 통과 — 검증을 over-block 하지 않음).
+ *   2. top === widgetHwnd / workerW / progman → 정확히 일치. true.
+ *   3. GetAncestor(top, GA_ROOT) === widgetHwnd / workerW / progman → ancestor chain
+ *      안에 있음. true. (예: top이 widget의 자식 element이거나 WorkerW의 다른 자식.)
+ *   4. 그 외 → 다른 top-level 윈도우가 z-order 위에 있음. false.
  *
- * **drag 진행 중에는 호출하지 말 것**: drag 시작 직후 mouse가 빠르게 움직이면 다른 윈도우가
- * 일시적으로 위에 올라올 수 있어도 drag는 계속해야 한다 (caller 책임).
- *
- * 본 함수는 매우 가벼운 비교만 — hook hot path에서 호출 가능.
+ * **드래그 진행 중에는 호출하지 말 것**: drag 시작 직후 mouse가 빠르게 움직이면 다른
+ * 윈도우가 일시적으로 위에 올라올 수 있어도 drag는 계속해야 한다 (caller 책임).
  *
  * @param top WindowFromPoint이 반환한 HWND
  * @param widgetHwnd 위젯 native HWND
- * @param workerW attach 대상(보통 WorkerW)
- * @param progman Progman HWND (있으면 — 없으면 0n)
+ * @param workerW attach 대상(보통 WorkerW). 미설정이면 0n.
+ * @param progman Progman HWND. 미설정이면 0n.
  */
 export function isWidgetOrAncestor(
   top: bigint,
@@ -1243,10 +1253,31 @@ export function isWidgetOrAncestor(
   workerW: bigint,
   progman: bigint,
 ): boolean {
-  if (top === 0n) return false;
+  // top === 0n: WindowFromPoint이 좌표 위에 윈도우를 못 찾은 경우. 매우 드물지만 화면
+  //   가장자리(0,0) 외부 등에서 발생. 이 경우 over-block 회피 — true 반환해 widget으로 라우팅.
+  if (top === 0n) return true;
+
+  // 1차 — 직접 등치
   if (top === widgetHwnd) return true;
   if (workerW !== 0n && top === workerW) return true;
   if (progman !== 0n && top === progman) return true;
+
+  // 2차 — GetAncestor(GA_ROOT)으로 chain 추적.
+  //   WS_CHILD가 된 widget의 root는 부모 chain 끝의 top-level이다.
+  //   widget이 WorkerW에 attach: root = WorkerW (또는 그 부모인 Progman)
+  //   widget이 SHELLDLL_DefView에 attach (STRATEGY 3): root = Progman
+  //   widget의 자식 element (Chromium wrapper 등): GA_ROOT = widget HWND
+  //   widget bounds 안의 SHELLDLL_DefView (Explorer 자식): root = WorkerW
+  //   다른 top-level 창(브라우저, 탐색기): 자기 자신이 root.
+  const root = getWindowAncestor(top, GA_ROOT);
+  if (root === 0n) {
+    // GetAncestor 실패 — over-block 회피해 true.
+    return true;
+  }
+  if (root === widgetHwnd) return true;
+  if (workerW !== 0n && root === workerW) return true;
+  if (progman !== 0n && root === progman) return true;
+
   return false;
 }
 
