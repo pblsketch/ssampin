@@ -21,6 +21,7 @@ import type { ISeatConstraintsRepository } from '@domain/repositories/ISeatConst
 import type { ISeatPickerConfigRepository } from '@domain/repositories/ISeatPickerConfigRepository';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 import type { IBookmarkRepository } from '@domain/repositories/IBookmarkRepository';
+import type { IDesktopOrganizeRepository } from '@domain/repositories/IDesktopOrganizeRepository';
 import type { IDDayRepository } from '@domain/repositories/IDDayRepository';
 import type { IAnalyticsPort } from '@domain/ports/IAnalyticsPort';
 import type { IAssignmentRepository } from '@domain/repositories/IAssignmentRepository';
@@ -72,6 +73,7 @@ import { JsonSeatConstraintsRepository } from '@adapters/repositories/JsonSeatCo
 import { JsonSeatPickerConfigRepository } from '@adapters/repositories/JsonSeatPickerConfigRepository';
 import { JsonTeachingClassRepository } from '@adapters/repositories/JsonTeachingClassRepository';
 import { JsonBookmarkRepository } from '@adapters/repositories/JsonBookmarkRepository';
+import { JsonDesktopOrganizeRepository } from '@adapters/repositories/JsonDesktopOrganizeRepository';
 import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentRepository';
 import { JsonConsultationRepository } from '@adapters/repositories/JsonConsultationRepository';
@@ -154,6 +156,9 @@ export const teachingClassRepository: ITeachingClassRepository =
 
 export const bookmarkRepository: IBookmarkRepository =
   new JsonBookmarkRepository(storage);
+
+export const desktopOrganizeRepository: IDesktopOrganizeRepository =
+  new JsonDesktopOrganizeRepository(storage);
 
 export const ddayRepository: IDDayRepository =
   new JsonDDayRepository(storage);

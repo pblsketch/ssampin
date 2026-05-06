@@ -19,6 +19,7 @@ import { MemoFocus } from './items/MemoFocus';
 import { FavoriteTools } from './items/FavoriteTools';
 import { MiniCalendar } from './items/MiniCalendar';
 import { ImageSticker1, ImageSticker2, ImageSticker3, ImageSticker4 } from './items/ImageStickerWidget';
+import { DesktopOrganize } from './items/DesktopOrganize';
 
 /**
  * 전체 위젯 정의 레지스트리
@@ -208,6 +209,20 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   },
 
   // ─── 관리 카테고리 ───
+  {
+    id: 'desktop-organize',
+    name: '바탕화면 정리',
+    icon: '📌',
+    description: '바탕화면 아이콘을 카테고리 박스로 정리합니다 (Windows 위젯 모드 전용)',
+    category: 'admin',
+    defaultSize: { w: 4, h: 6 },
+    minSize: { w: 2, h: 3 },
+    availableFor: {
+      schoolLevel: ['elementary', 'middle', 'high', 'custom'],
+      role: ['homeroom', 'subject', 'admin'],
+    },
+    component: DesktopOrganize,
+  },
   {
     id: 'todo',
     name: '할 일',

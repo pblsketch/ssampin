@@ -1,0 +1,1 @@
+export { DesktopOrganize } from './DesktopOrganize';
