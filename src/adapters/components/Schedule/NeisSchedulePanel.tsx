@@ -342,11 +342,11 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
                     <div className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-amber-400 text-icon mt-0.5">info</span>
-                      <p className="text-detail text-amber-200/90 flex-1">
+                      <p className="text-detail text-sp-text/90 flex-1">
                         {orphanedGoogleEventCount > 0 ? (
-                          <>이전에 보낸 학사일정 <span className="font-bold">{orphanedGoogleEventCount}건</span>이 정리되지 않은 채 남아있어요.</>
+                          <>이전에 보낸 학사일정 <span className="font-bold text-sp-text">{orphanedGoogleEventCount}건</span>이 정리되지 않은 채 남아있어요.</>
                         ) : (
-                          <>구글 캘린더에 학사일정이 남아있나요? <span className="font-bold">자동 정리</span>는 push 후 즉시 삭제합니다.</>
+                          <>구글 캘린더에 학사일정이 남아있나요? <span className="font-bold text-sp-text">자동 정리</span>는 push 후 즉시 삭제합니다.</>
                         )}
                       </p>
                     </div>
@@ -365,7 +365,7 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                         }
                       }}
                       disabled={neisSyncInProgress}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 text-sm font-medium transition-all disabled:opacity-50"
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-amber-500/15 border border-amber-500/40 text-sp-text hover:bg-amber-500/25 text-sm font-medium transition-all disabled:opacity-50"
                     >
                       {neisSyncInProgress ? (
                         <div className="w-4 h-4 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
