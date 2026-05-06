@@ -288,7 +288,7 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
         <div className="px-1">
           <input
             type="range"
-            min={20}
+            min={0}
             max={100}
             step={5}
             value={Math.round(opacity * 100)}
