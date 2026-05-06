@@ -81,6 +81,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('native-desktop:diag', handler);
     return () => { ipcRenderer.removeListener('native-desktop:diag', handler); };
   },
+  /**
+   * 진단 라운드 (2026-05-06) — 이슈 B/D 분석용 종합 dump 트리거.
+   *
+   * 사용자가 시나리오 재현 직후 DevTools 콘솔에서:
+   *   `await electronAPI.widgetDiagDump('after-mode-toggle')` 또는 `'after-secondary-clicks')`
+   * 를 호출하면 main process가 디스플레이/widget/WorkerW/Win32 state/routingStats를 한꺼번에
+   * `native-desktop-diag.log`에 기록한다. label은 사용자가 어떤 시나리오 직후인지 식별하려고 적는 자유 문자열.
+   *
+   * 반환값 없음 — 결과는 파일 + DevTools 콘솔(IPC mirror)에 비동기로 흐른다.
+   */
+  widgetDiagDump: (label: string): Promise<void> =>
+    ipcRenderer.invoke('widget:diagDump', label),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:closeApp'),
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: (): Promise<void> => ipcRenderer.invoke('icon:show'),

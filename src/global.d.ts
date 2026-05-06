@@ -169,6 +169,14 @@ interface ElectronAPI {
   onNativeDesktopDiag?: (
     callback: (payload: { message: string; args?: unknown[] }) => void,
   ) => () => void;
+  /**
+   * 진단 라운드 (2026-05-06) — 이슈 B/D 분석용 종합 dump 트리거.
+   *
+   * DevTools 콘솔에서 `await electronAPI.widgetDiagDump('label')` 호출 시
+   * main process가 디스플레이/widget/WorkerW/Win32 state/routingStats를 한꺼번에
+   * `native-desktop-diag.log`에 기록한다. label은 시나리오 식별용 자유 문자열.
+   */
+  widgetDiagDump?: (label: string) => Promise<void>;
   closeWindow: () => Promise<void>;
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: () => Promise<void>;

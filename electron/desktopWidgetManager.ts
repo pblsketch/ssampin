@@ -100,6 +100,35 @@ export interface DesktopWidgetManager {
     window: BrowserWindow,
     excludeDipRects?: readonly DipRect[],
   ): void;
+
+  /**
+   * 진단 라운드 (2026-05-06) — 이슈 B/D 분석용 외부 호출자.
+   *
+   * **이슈 B**: widget의 native Win32 상태(GWL_STYLE/EXSTYLE, parent, ancestor, IsWindowVisible,
+   *   GetWindowRect)를 한 줄 dump로 반환. transitionWidgetMode 단계별 호출로 BrowserWindow
+   *   API 결과와 OS 결과 disconnect 가시화.
+   *
+   * **이슈 D**: WorkerW 후보별 cover 영역 + 디스플레이 레이아웃 dump 반환.
+   *
+   * Win32 미가용 환경(no-op manager)에서는 빈 문자열 또는 'unavailable' 반환.
+   */
+  diagnosticSnapshot(window: BrowserWindow): {
+    widgetWin32: string;
+    workerWLayout: string;
+  };
+
+  /**
+   * 진단 라운드 — 라우팅 통계 dump (사용자 요청 시 즉시 가져올 수 있도록).
+   * native-desktop 모드 hook이 callback을 한 번도 못 받으면 sent=0이고 totalCallbacks=0.
+   */
+  getRoutingStats(): {
+    sent: number;
+    skippedIcon: number;
+    skippedOutOfBounds: number;
+    skippedAbove: number;
+    failed: number;
+    totalCallbacks: number;
+  };
 }
 
 /**
@@ -187,6 +216,22 @@ function createNoopManager(reason: string): DesktopWidgetManager {
       _excludeDipRects?: readonly DipRect[],
     ): void {
       // no-op manager는 hook이 없으므로 헤더 영역 정보가 의미 없음.
+    },
+    diagnosticSnapshot(_window: BrowserWindow): { widgetWin32: string; workerWLayout: string } {
+      return {
+        widgetWin32: `noop-manager(reason=${reason})`,
+        workerWLayout: `noop-manager(reason=${reason})`,
+      };
+    },
+    getRoutingStats() {
+      return {
+        sent: 0,
+        skippedIcon: 0,
+        skippedOutOfBounds: 0,
+        skippedAbove: 0,
+        failed: 0,
+        totalCallbacks: 0,
+      };
     },
   };
 }
@@ -740,6 +785,19 @@ function createWin32Manager(
 
           if (!isInsideCachedBoundsLocal(p)) {
             routingStats.skippedOutOfBounds++;
+            // 진단 라운드 (이슈 D — 보조 모니터): non-MOUSEMOVE 클릭이 widget bounds 밖으로
+            // 판정될 때 첫 5건 dump. cachedPhysicalBounds와 hook callback의 p가 어떤 좌표계 차이로
+            // mismatch되는지 가시화 (예: hook의 pt는 virtual screen, bounds는 primary 모니터 좌표 등).
+            if (msgType !== 0x0200 && routingStats.skippedOutOfBounds <= 5) {
+              const r = cachedPhysicalBounds;
+              diagLog(
+                'native-desktop',
+                `[issue-D] skipOOB msg=0x${msgType.toString(16)} ` +
+                  `pt=(${p.x},${p.y}) ` +
+                  `cachedBounds=${r ? `(${r.x},${r.y},${r.width}x${r.height})` : 'null'} ` +
+                  `count=${routingStats.skippedOutOfBounds}`,
+              );
+            }
             return;
           }
 
@@ -1137,6 +1195,44 @@ function createWin32Manager(
           `[7-C] header regions cached but inactive (handles=${!!handles}, bounds=${!!cachedPhysicalBounds})`,
         );
       }
+    },
+
+    /**
+     * 진단 라운드 (2026-05-06) — 이슈 B/D 가시화.
+     *
+     * widgetWin32:
+     *   - widget HWND가 알려져 있으면 (cachedWidgetHwnd 또는 BrowserWindow에서 추출)
+     *     snapshotWidgetWin32State 결과 반환.
+     *   - 추출 실패 시 'unknown-hwnd' 반환.
+     *
+     * workerWLayout:
+     *   - dumpWorkerWLayout 결과 — 매 호출마다 collectDesktopAttachCandidates 재실행.
+     *     비싸지 않음(< 5ms typical).
+     */
+    diagnosticSnapshot(window: BrowserWindow): { widgetWin32: string; workerWLayout: string } {
+      let widgetWin32 = 'unknown-hwnd';
+      try {
+        let hwnd = cachedWidgetHwnd;
+        if (hwnd === 0n && !window.isDestroyed()) {
+          hwnd = win32.getWidgetHwnd(window);
+        }
+        if (hwnd !== 0n) {
+          widgetWin32 = win32.snapshotWidgetWin32State(hwnd);
+        }
+      } catch (e) {
+        widgetWin32 = `snapshot-error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+      let workerWLayout = 'unknown';
+      try {
+        workerWLayout = win32.dumpWorkerWLayout();
+      } catch (e) {
+        workerWLayout = `layout-error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+      return { widgetWin32, workerWLayout };
+    },
+
+    getRoutingStats() {
+      return { ...routingStats };
     },
   };
 }
