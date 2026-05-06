@@ -651,6 +651,17 @@ function createWin32Manager(
           // 아이콘 위는 passThroughCheck로 Explorer가 처리하도록 양보 (아래 분기).
           // 헤더가 아닌 일반 위젯 영역의 LBUTTONDOWN은 정상 sendInputEvent로 흘러감.
           // 0x0201 = WM_LBUTTONDOWN
+          // ─── 진단: LBUTTONDOWN 좌표가 어떤 region에 들어왔는지 ───
+          // drag 안 됨 회귀 디버깅용. 모든 LBUTTONDOWN을 1회 로그.
+          if (msgType === 0x0201) {
+            const inDrag = isInsideAnyRect(p, cachedHeaderRegions);
+            const inExclude = isInsideAnyRect(p, cachedHeaderExcludeRegions);
+            const draggable = isInDraggableHeaderRegion(p);
+            diagLog(
+              'native-desktop',
+              `[7-C] LBUTTONDOWN screen=(${p.x},${p.y}) inDrag=${inDrag} inExclude=${inExclude} draggable=${draggable} cachedDrag=${cachedHeaderRegions.length} cachedExclude=${cachedHeaderExcludeRegions.length}`,
+            );
+          }
           if (msgType === 0x0201 && cachedHeaderRegions.length > 0 && isInDraggableHeaderRegion(p)) {
             // 아이콘 영역 체크 — 헤더는 보통 위젯 상단이라 아이콘과 안 겹치지만 안전 차단.
             if (!passThroughCheck(p) && cachedPhysicalBounds) {
@@ -981,9 +992,12 @@ function createWin32Manager(
       // attach 상태일 때만 physical 변환. 미attach면 빈 배열로 유지.
       if (handles && cachedPhysicalBounds && !window.isDestroyed()) {
         recalcHeaderRegionsPhysical(window);
+        // 진단: 실제 변환 좌표 dump (회귀 디버깅).
+        const dragSummary = cachedHeaderRegions.map(r => `(${r.x},${r.y},${r.width}x${r.height})`).join(' ');
+        const exSummary = cachedHeaderExcludeRegions.map(r => `(${r.x},${r.y},${r.width}x${r.height})`).join(' ');
         diagLog(
           'native-desktop',
-          `[7-C] header regions updated: ${cachedHeaderRegions.length} rect(s) (input: ${dipRects.length}), excludes: ${cachedHeaderExcludeRegions.length} rect(s)`,
+          `[7-C] header regions updated: drag=${cachedHeaderRegions.length} ${dragSummary} | exclude=${cachedHeaderExcludeRegions.length} ${exSummary}`,
         );
       } else {
         cachedHeaderRegions = [];
