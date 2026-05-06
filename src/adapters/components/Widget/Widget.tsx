@@ -20,6 +20,8 @@ import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
 import { WidgetWeatherBar } from '@widgets/components/WidgetWeatherBar';
 import type { WidgetLayoutMode } from '@domain/entities/Settings';
+import { DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
+import { useNearScrollbar } from '@adapters/hooks/useNearScrollbar';
 
 interface ContextMenuState {
   x: number;
@@ -53,6 +55,14 @@ export function Widget() {
   const buttonGroupRef = useRef<HTMLDivElement>(null);
 
   const layoutMode = settings.widget.layoutMode ?? 'full';
+  const widgetStyle = useMemo(
+    () => ({ ...DEFAULT_WIDGET_STYLE, ...settings.widgetStyle }),
+    [settings.widgetStyle],
+  );
+
+  // 스크롤바 트랙 영역(가장자리 12px) 근처에서만 스크롤바 노출 (macOS overlay 관습)
+  const editScroll = useNearScrollbar(12);
+  const normalScroll = useNearScrollbar(12);
 
   // 반응형 폴백: 창 크기가 작으면 강제 full 모드
   const [effectiveMode, setEffectiveMode] = useState<WidgetLayoutMode>(layoutMode);
@@ -238,7 +248,10 @@ export function Widget() {
   return (
     <>
       <div
-        className="w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl border border-sp-border/50 flex flex-col overflow-hidden text-sp-text relative select-none"
+        className={[
+          'w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl flex flex-col overflow-hidden text-sp-text relative select-none',
+          widgetStyle.hideWindowBorder ? '' : 'border border-sp-border/50',
+        ].filter(Boolean).join(' ')}
         onContextMenu={handleContextMenu}
         style={{
           fontFamily: 'inherit',
@@ -361,12 +374,20 @@ export function Widget() {
               </div>
             ) : isEditMode ? (
               /* 편집 모드: WidgetGrid (DnD 지원) */
-              <div className="h-full overflow-y-auto scrollbar-hover-only">
+              <div
+                ref={editScroll.ref}
+                className={`h-full overflow-y-auto scrollbar-hover-only${editScroll.near ? ' is-near-scrollbar' : ''}`}
+                {...editScroll.handlers}
+              >
                 <WidgetGrid isEditMode onNavigate={handleWidgetNavigate} />
               </div>
             ) : (
               /* 전체/분할 공통: 3열 그리드 + 단일 스크롤 + scale 축소 */
-              <div className="h-full overflow-y-auto scrollbar-hover-only">
+              <div
+                ref={normalScroll.ref}
+                className={`h-full overflow-y-auto scrollbar-hover-only${normalScroll.near ? ' is-near-scrollbar' : ''}`}
+                {...normalScroll.handlers}
+              >
                 {/* 탭 바 */}
                 {visibleWidgets.length > 4 && (
                   <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />

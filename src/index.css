@@ -530,6 +530,44 @@ body {
   background: rgba(148, 163, 184, 0.5);
 }
 
+/* Hover-only scrollbar (위젯 모드 루트 그리드용)
+ * 평상시 thumb를 투명으로 숨기고 hover/focus-within 시 즉시 노출.
+ * transition 제거: Chromium scrollbar pseudo-element에서 paint layer 재사용으로
+ * transition이 비결정적으로 스킵되는 알려진 이슈를 회피.
+ * background-clip + transparent border: layout shift 없이 8px 공간 유지하면서
+ * thumb 시각 padding 확보 (Electron/Chromium 전용, Safari 불필요). */
+.scrollbar-hover-only {
+  scrollbar-width: none; /* Firefox: 평상시 완전 숨김 */
+}
+.scrollbar-hover-only::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-hover-only::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-hover-only::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  /* transition 의도적 미사용: scrollbar pseudo transition은 Chromium에서 불안정 */
+}
+/* .is-near-scrollbar: JS hook(useNearScrollbar)이 마우스가 트랙 영역(가장자리 12px) 근처에 있을 때 토글.
+ * :focus-within: 키보드 사용자 접근성 — 컨테이너에 포커스가 진입하면 항상 노출. */
+.scrollbar-hover-only.is-near-scrollbar,
+.scrollbar-hover-only:focus-within {
+  scrollbar-width: thin; /* Firefox */
+}
+.scrollbar-hover-only.is-near-scrollbar::-webkit-scrollbar-thumb,
+.scrollbar-hover-only:focus-within::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.5);
+}
+.scrollbar-hover-only.is-near-scrollbar::-webkit-scrollbar-thumb:hover,
+.scrollbar-hover-only:focus-within::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.75);
+}
+
 /* PIN Overlay Animations */
 @keyframes pin-shake {
 

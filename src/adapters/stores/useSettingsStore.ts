@@ -136,6 +136,7 @@ const DEFAULT_SETTINGS: Settings = {
     backgroundImageOpacity: 0.15,
     fontFamily: 'pretendard',
     gridRowHeight: 80,
+    hideWindowBorder: false,
   },
   seatingDefaultView: 'teacher',
   seatingNameSize: 'sm',

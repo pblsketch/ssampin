@@ -110,6 +110,7 @@ export const DEFAULT_WIDGET_STYLE: WidgetStyleSettings = {
   backgroundImageOpacity: 0.15,
   fontFamily: 'noto-sans',
   gridRowHeight: 80,
+  hideWindowBorder: false,
 };
 
 export const SHADOW_MAP: Record<ShadowLevel, string> = {
