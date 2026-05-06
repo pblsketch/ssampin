@@ -167,6 +167,18 @@ const GW_HWNDNEXT = 2;
 const GW_HWNDPREV = 3;
 
 /**
+ * Phase 7-D — 시스템 cursor 리소스 ID (LoadCursorW의 lpCursorName으로 사용).
+ *
+ * MAKEINTRESOURCE 매크로로 정수→포인터 캐스팅하지만 koffi에서는 BigInt 그대로 전달.
+ * Win11/Win10 시스템 cursor는 LoadCursor(NULL, IDC_*)로 즉시 가져올 수 있으며 매번
+ * 같은 핸들 반환(reusable). enable()에서 1회 캐시 후 재사용 가능.
+ */
+const IDC_SIZENWSE = 32642n; // ↘↖ (top-left ↔ bottom-right corner)
+const IDC_SIZENESW = 32643n; // ↗↙ (top-right ↔ bottom-left corner)
+const IDC_SIZEWE = 32644n;   // ↔ (left/right edge)
+const IDC_SIZENS = 32645n;   // ↕ (top/bottom edge)
+
+/**
  * GetAncestor gaFlags.
  *
  * GA_PARENT(1)  : 직계 부모.
@@ -299,6 +311,17 @@ interface Win32Bindings {
 
   // user32 — sibling/child traversal (Strategy 2/3 보조)
   GetWindow: (hWnd: bigint | number, uCmd: number) => bigint | null;
+
+  /**
+   * Phase 7-D — 시스템 cursor 로드. lpCursorName은 IDC_*(BigInt)로 시스템 cursor 가져옴.
+   * hInstance=null이면 시스템 cursor를 의미.
+   */
+  LoadCursorW: (hInstance: bigint | number | null, lpCursorName: bigint | number) => bigint | null;
+  /**
+   * Phase 7-D — 현재 thread의 cursor 변경. 매 MOUSEMOVE마다 hook callback에서 호출 가능.
+   * 반환값(이전 cursor)은 무시.
+   */
+  SetCursor: (hCursor: bigint | number | null) => bigint | null;
 
   // user32 — Phase 7-stable: z-order 검증 (다른 창이 위에 있는지 확인)
   /**
@@ -517,6 +540,18 @@ function loadWin32Bindings(): Win32Bindings {
       'void* __stdcall GetWindow(void*, uint32)',
     ) as Win32Bindings['GetWindow'];
 
+    // Phase 7-D — 시스템 cursor handle 로드 + 적용.
+    // LoadCursorW: hInstance=NULL + lpCursorName=IDC_*(MAKEINTRESOURCE 정수)로 시스템 cursor 반환.
+    // SetCursor: 현재 thread cursor 즉시 변경. WS_CHILD widget의 cursor를 부모(WorkerW)가 관리하지
+    // 않게 가로채는 정통 패턴.
+    const LoadCursorW = user32.func(
+      'void* __stdcall LoadCursorW(void*, void*)',
+    ) as Win32Bindings['LoadCursorW'];
+
+    const SetCursor = user32.func(
+      'void* __stdcall SetCursor(void*)',
+    ) as Win32Bindings['SetCursor'];
+
     // Phase 7-stable: WindowFromPoint — POINT by-value 인자.
     //   koffi의 'POINT' 타입은 위에서 cachedPointStruct로 등록됨. 같은 이름 'POINT'를
     //   func 시그니처에서 참조하면 koffi가 by-value 마샬링을 적용한다.
@@ -612,6 +647,8 @@ function loadWin32Bindings(): Win32Bindings {
       IsWindowVisible,
       GetWindowRect,
       GetWindow,
+      LoadCursorW,
+      SetCursor,
       WindowFromPoint,
       GetAncestor,
       GetWindowThreadProcessId,
@@ -2124,6 +2161,65 @@ export function dumpWorkerWLayout(): string {
   });
 
   return lines.join(' | ');
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-D — Resize edge cursor (WS_CHILD widget cursor 직접 제어)
+// ────────────────────────────────────────────────────────────
+
+export type ResizeCursorKind = 'ns' | 'we' | 'nwse' | 'nesw';
+
+/**
+ * Phase 7-D — 시스템 cursor 핸들 lazy 캐시.
+ *
+ * LoadCursorW(NULL, IDC_*)는 매번 같은 시스템 핸들을 반환하지만 호출 자체에 syscall 오버헤드가
+ * 있으므로 첫 호출 시 1회 캐시. uninstall 시점이나 KoffiLoadError 발생 시 자동 invalidate.
+ */
+let cachedCursorHandles: { ns: bigint; we: bigint; nwse: bigint; nesw: bigint } | null = null;
+
+function getCursorHandles(b: Win32Bindings): { ns: bigint; we: bigint; nwse: bigint; nesw: bigint } | null {
+  if (cachedCursorHandles) return cachedCursorHandles;
+  try {
+    const ns = toBigInt(b.LoadCursorW(null, IDC_SIZENS));
+    const we = toBigInt(b.LoadCursorW(null, IDC_SIZEWE));
+    const nwse = toBigInt(b.LoadCursorW(null, IDC_SIZENWSE));
+    const nesw = toBigInt(b.LoadCursorW(null, IDC_SIZENESW));
+    if (isNullHandle(ns) || isNullHandle(we) || isNullHandle(nwse) || isNullHandle(nesw)) {
+      return null;
+    }
+    cachedCursorHandles = { ns, we, nwse, nesw };
+    return cachedCursorHandles;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Phase 7-D — resize edge에 맞는 시스템 cursor를 즉시 적용.
+ *
+ * 호출 빈도: hook callback의 MOUSEMOVE에서 hover 위치가 resize edge에 들어올 때마다.
+ * SetCursor 자체는 단순 register update라 hot path에서 안전(< 1µs).
+ *
+ * 다만 OS는 cursor를 매 mouse move 시 reset하기 때문에 한 번 호출로는 부족하고
+ * MOUSEMOVE마다 반복 호출 필요(WM_SETCURSOR 핸들러처럼 동작).
+ *
+ * @returns true = cursor 변경 성공, false = koffi/cursor handle 미가용 (silent fail).
+ */
+export function setResizeCursor(kind: ResizeCursorKind): boolean {
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return false;
+  }
+  const handles = getCursorHandles(b);
+  if (!handles) return false;
+  try {
+    b.SetCursor(handles[kind]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -941,16 +941,30 @@ function createWin32Manager(
               }
 
               resizeState.moveCount = (resizeState.moveCount ?? 0) + 1;
-              try {
-                const moveOk = win32.moveWidget(cachedWidgetHwnd, newX, newY, newW, newH);
-                if (resizeState.moveCount % 30 === 1) {
-                  diagLog(
-                    'native-desktop',
-                    `[7-D] resize move #${resizeState.moveCount} edge=${resizeState.edge} mouse=(${p.x},${p.y}) delta=(${dx},${dy}) newRect=(${newX},${newY},${newW}x${newH}) moveOk=${moveOk}`,
-                  );
+              // Electron BrowserWindow.setBounds 사용 (DIP 단위) — win32 SetWindowPos는
+              // origin+size 동시 변경 시 SWP_ASYNCWINDOWPOS와 race로 left/top edge에서
+              // origin을 무시하는 회귀가 사용자 검증에서 확인됨(2026-05-07).
+              // setBounds는 Electron 내부 state도 동기 갱신해 더 안정적.
+              let setOk = false;
+              if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
+                try {
+                  const sf = screen.getDisplayMatching({ x: newX, y: newY, width: newW, height: newH }).scaleFactor || 1;
+                  cachedWidgetWindow.setBounds({
+                    x: Math.round(newX / sf),
+                    y: Math.round(newY / sf),
+                    width: Math.round(newW / sf),
+                    height: Math.round(newH / sf),
+                  });
+                  setOk = true;
+                } catch (e) {
+                  diagWarn('native-desktop', `[7-D] setBounds 실패: ${e instanceof Error ? e.message : String(e)}`);
                 }
-              } catch (e) {
-                diagWarn('native-desktop', `[7-D] resize move 실패: ${e instanceof Error ? e.message : String(e)}`);
+              }
+              if (resizeState.moveCount % 30 === 1) {
+                diagLog(
+                  'native-desktop',
+                  `[7-D] resize move #${resizeState.moveCount} edge=${resizeState.edge} mouse=(${p.x},${p.y}) delta=(${dx},${dy}) newRect=(${newX},${newY},${newW}x${newH}) setOk=${setOk}`,
+                );
               }
               // MOUSEMOVE는 차단하지 않음 (drag와 동일 — Win11 24H2 회귀 회피).
               return false;
@@ -988,6 +1002,30 @@ function createWin32Manager(
                   // hover cb는 globalShortcut 호출 등을 하므로 throw 가능성 있지만
                   // hook callback hot path를 보호 — silent swallow.
                 }
+              }
+            }
+          }
+
+          // ─── Phase 7-D — resize edge cursor ───
+          // WS_CHILD widget은 cursor 결정 권한이 부모(WorkerW)로 빠져 DOM의 cursor:ew-resize
+          // 등이 적용 안 됨. MOUSEMOVE마다 hook이 직접 SetCursor를 호출해 OS가 매 프레임 cursor를
+          // resize 기호로 그리게 만든다. resize 활성 중에도 동일 cursor 유지.
+          // 비-MOUSEMOVE는 cursor 갱신 안 함(클릭 시점에는 OS가 자동 처리).
+          if (msgType === 0x0200 && cachedResizeRegions.length > 0) {
+            const hoveredEdge = resizeState && resizeState.active
+              ? resizeState.edge
+              : findResizeEdgeAtPoint(p);
+            if (hoveredEdge) {
+              // edge → cursor kind 매핑.
+              let kind: 'ns' | 'we' | 'nwse' | 'nesw';
+              if (hoveredEdge === 'top' || hoveredEdge === 'bottom') kind = 'ns';
+              else if (hoveredEdge === 'left' || hoveredEdge === 'right') kind = 'we';
+              else if (hoveredEdge === 'top-left' || hoveredEdge === 'bottom-right') kind = 'nwse';
+              else kind = 'nesw'; // top-right | bottom-left
+              try {
+                win32.setResizeCursor(kind);
+              } catch {
+                // cursor SetCursor는 hot path에서 throw하면 안 됨 — silent swallow.
               }
             }
           }
