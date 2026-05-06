@@ -137,6 +137,12 @@ interface ElectronAPI {
   toggleWidget: () => Promise<void>;
   setOpacity: (value: number) => Promise<void>;
   setWidgetLayout: (mode: string) => Promise<void>;
+  /**
+   * Phase 7-G — native-desktop hover 시 main process가 globalShortcut(Ctrl+1~4)으로
+   * layout mode 변경을 신호 송신. 콜백을 등록하면 mode('full'|'split-h'|'split-v'|'quad')를 받음.
+   * 반환값은 구독 해제 함수 (cleanup 시 호출 권장).
+   */
+  onLayoutShortcut?: (cb: (mode: string) => void) => () => void;
   applyWidgetSettings: (widget: {
     opacity: number;
     desktopMode: string;

@@ -133,6 +133,17 @@ let currentDesktopMode: WidgetDesktopMode = 'normal';
  */
 const desktopWidgetManager: DesktopWidgetManager = createDesktopWidgetManager();
 
+// Phase 7-G — manager 생성 직후 hover 콜백 등록.
+// mouse hook이 widget bounds enter/leave를 감지할 때마다 호출되어 layout shortcut
+// register/unregister를 toggle. no-op manager에서는 cb 호출되지 않으므로 안전.
+desktopWidgetManager.setHoverCallback((inside) => {
+  if (inside) {
+    registerLayoutShortcuts();
+  } else {
+    unregisterLayoutShortcuts();
+  }
+});
+
 // ──────────────────────────────────────────────────────────────────────
 // 위젯 모드 전환 단일 흐름 — race 안정화 (PR-2 안정화 라운드)
 // ──────────────────────────────────────────────────────────────────────
@@ -655,6 +666,59 @@ function triggerShortcut(commandId: string): void {
   }
   // 메인 창이 hidden/destroyed (위젯 모드 또는 트레이 상태) → 별도 팝업 창
   createOrFocusQuickAddWindow(commandId);
+}
+
+// ─── Phase 7-G — native-desktop hover 시 임시 globalShortcut (Ctrl+1~4 레이아웃) ─────────
+//
+// native-desktop 모드(WS_CHILD)에선 위젯이 keyboard focus를 받지 못해 renderer keydown
+// listener가 작동 안 함. 사용자가 위젯 위에 마우스 hover 시에만 globalShortcut으로 가로채
+// IPC로 widget renderer에 전달, 기존 setLayoutMode 함수를 재사용한다.
+//
+// 충돌 회피: 마우스가 위젯 영역 밖으로 나가면 즉시 unregister → 다른 앱에서 Ctrl+1 사용
+// 가능. user-configurable globalShortcut(applyGlobalShortcuts)이 unregisterAll을 호출하면
+// 우리 layout shortcut도 같이 사라지지만, 다음 마우스 enter 시점에 자동 재등록되지 않을
+// 수 있음(P2 — 사용자 단축키 변경 직후 마우스를 위젯 밖으로 한 번 뺐다가 다시 넣으면 복원).
+
+const LAYOUT_SHORTCUTS: ReadonlyArray<{ accel: string; mode: string }> = [
+  { accel: 'CommandOrControl+1', mode: 'full' },
+  { accel: 'CommandOrControl+2', mode: 'split-h' },
+  { accel: 'CommandOrControl+3', mode: 'split-v' },
+  { accel: 'CommandOrControl+4', mode: 'quad' },
+];
+
+let layoutShortcutsRegistered = false;
+
+function registerLayoutShortcuts(): void {
+  if (layoutShortcutsRegistered) return;
+  for (const { accel, mode } of LAYOUT_SHORTCUTS) {
+    try {
+      const ok = globalShortcut.register(accel, () => {
+        if (widgetWindow && !widgetWindow.isDestroyed()) {
+          widgetWindow.webContents.send('widget:layout-shortcut', mode);
+        }
+      });
+      if (!ok) {
+        diagWarn('widget', `[7-G] layout shortcut ${accel} 등록 실패 (OS 충돌 등)`);
+      }
+    } catch (e) {
+      diagWarn('widget', `[7-G] layout shortcut ${accel} register 예외: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  layoutShortcutsRegistered = true;
+  diagLog('widget', '[7-G] layout shortcuts registered (mouse entered widget bounds)');
+}
+
+function unregisterLayoutShortcuts(): void {
+  if (!layoutShortcutsRegistered) return;
+  for (const { accel } of LAYOUT_SHORTCUTS) {
+    try {
+      globalShortcut.unregister(accel);
+    } catch {
+      // best-effort — 다른 누가 이미 unregister했을 수 있음
+    }
+  }
+  layoutShortcutsRegistered = false;
+  diagLog('widget', '[7-G] layout shortcuts unregistered (mouse left widget bounds)');
 }
 
 function applyGlobalShortcuts(config: ShortcutSyncConfig): { registered: string[]; failed: string[] } {

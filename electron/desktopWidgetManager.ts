@@ -129,6 +129,21 @@ export interface DesktopWidgetManager {
     failed: number;
     totalCallbacks: number;
   };
+
+  /**
+   * Phase 7-G — widget bounds 안 ↔ 밖 hover 트랜지션 콜백 등록.
+   *
+   * 용도: native-desktop 모드(WS_CHILD)에선 위젯이 keyboard focus를 받지 못해 renderer
+   * keydown listener가 작동 안 함. 사용자가 위젯 위에 마우스 hover 시에만 main process가
+   * globalShortcut.register로 Ctrl+1/2/3/4 등을 가로채 위젯에 IPC로 전달하는 패턴.
+   *
+   * 호출 빈도: hover state가 실제 변경될 때만 (enter/leave 시점). hot path 부담 없음.
+   * cb는 throw 금지 — manager가 try/catch로 흡수하지만 호출자가 안전한 cb를 제공해야 함.
+   *
+   * null을 넘기면 콜백 해제. enable/disable 라이프사이클에 무관하게 등록 가능 (단,
+   * mouse hook이 active일 때만 실제 호출됨).
+   */
+  setHoverCallback(cb: ((inside: boolean) => void) | null): void;
 }
 
 /**
@@ -233,6 +248,11 @@ function createNoopManager(reason: string): DesktopWidgetManager {
         totalCallbacks: 0,
       };
     },
+    setHoverCallback(_cb: ((inside: boolean) => void) | null): void {
+      // no-op manager는 mouse hook이 없으므로 hover 트랜지션을 감지 못함.
+      // 일반/topmost 모드에선 어차피 widget이 focus를 받아 keydown이 정상 작동하므로
+      // hover-based shortcut 인프라 자체가 불필요.
+    },
   };
 }
 
@@ -326,6 +346,14 @@ function createWin32Manager(
   let lastHitY = Number.NaN;
   let lastHitResult = false;
   let lastHitUntil = 0;
+
+  // ─── Phase 7-G — widget bounds hover 트랜지션 ────────────────
+  /**
+   * 마우스가 widget bounds 안에 있는지의 직전 상태. mouse hook callback이 매번 갱신.
+   * 변경 시(enter/leave)에만 hoverCallback을 발사해 main이 globalShortcut을 toggle.
+   */
+  let lastHoverInside = false;
+  let hoverCallback: ((inside: boolean) => void) | null = null;
 
   // ─── Phase 7-C — Header drag 상태 ───────────────────────────
   /**
@@ -494,6 +522,17 @@ function createWin32Manager(
     cachedHeaderRegions = [];
     cachedHeaderExcludeRegionsDip = [];
     cachedHeaderExcludeRegions = [];
+    // Phase 7-G: hover state 정리 + leave 신호 1회 발사 (main이 globalShortcut unregister하도록).
+    if (lastHoverInside && hoverCallback) {
+      try {
+        hoverCallback(false);
+      } catch {
+        // ignore
+      }
+    }
+    lastHoverInside = false;
+    // hoverCallback 자체는 유지 — manager가 destroy되는 게 아니라 disable 사이클이라서
+    // 다음 enable 시 같은 cb를 재사용. 명시적 setHoverCallback(null) 호출 시에만 해제.
   }
 
   // Phase 7 — hot path. shouldPassThroughToDesktop을 별도 명명 함수로 분리해 hook callback에서
@@ -781,6 +820,25 @@ function createWin32Manager(
             }
             // 다른 버튼/메시지가 drag 중에 들어오면 일단 무시 (drag 우선) + 차단.
             return true;
+          }
+
+          // ─── Phase 7-G — hover state 트랜지션 발사 ───
+          // bounds inside/outside 변경 시점에만 hoverCallback 1회 호출. main이 이걸 받아
+          // globalShortcut(Ctrl+1~4 등)을 toggle해 native-desktop 모드에서도 단축키 작동.
+          // hot path 부담 없음(lastHoverInside 비교 1회 + 변경 시에만 cb 호출).
+          {
+            const insideForHover = isInsideCachedBoundsLocal(p);
+            if (insideForHover !== lastHoverInside) {
+              lastHoverInside = insideForHover;
+              if (hoverCallback) {
+                try {
+                  hoverCallback(insideForHover);
+                } catch {
+                  // hover cb는 globalShortcut 호출 등을 하므로 throw 가능성 있지만
+                  // hook callback hot path를 보호 — silent swallow.
+                }
+              }
+            }
           }
 
           if (!isInsideCachedBoundsLocal(p)) {
@@ -1233,6 +1291,19 @@ function createWin32Manager(
 
     getRoutingStats() {
       return { ...routingStats };
+    },
+
+    /**
+     * Phase 7-G — main이 globalShortcut toggle 콜백을 등록.
+     *
+     * mouse hook callback이 widget bounds enter/leave 트랜지션을 감지하면 cb(true|false)를
+     * 호출한다. main은 inside=true에서 register, false에서 unregister.
+     *
+     * null을 넘기면 콜백 해제 (lastHoverInside는 보존 — 다시 등록 시 enter/leave 이벤트가
+     * 즉시 발사되도록 의도하지 않음, 다음 실제 트랜지션에서 발사).
+     */
+    setHoverCallback(cb: ((inside: boolean) => void) | null): void {
+      hoverCallback = cb;
     },
   };
 }

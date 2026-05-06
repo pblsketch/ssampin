@@ -28,6 +28,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleWidget: (): Promise<void> => ipcRenderer.invoke('window:toggleWidget'),
   setOpacity: (value: number): Promise<void> => ipcRenderer.invoke('window:setOpacity', value),
   setWidgetLayout: (mode: string): Promise<void> => ipcRenderer.invoke('window:setWidgetLayout', mode),
+  /**
+   * Phase 7-G — native-desktop hover 시 globalShortcut(Ctrl+1~4)으로 layout 변경 신호 수신.
+   *
+   * native-desktop 모드(WS_CHILD)에선 위젯이 keyboard focus를 못 받아 renderer keydown
+   * listener가 작동 안 함. main이 마우스 hover 시점에만 globalShortcut을 register하고 발사
+   * 시점에 본 채널로 layout mode를 송신한다. renderer가 받아 setLayoutMode(mode) 호출.
+   *
+   * @param cb 콜백. mode는 'full' | 'split-h' | 'split-v' | 'quad'.
+   * @returns 구독 해제 함수.
+   */
+  onLayoutShortcut: (cb: (mode: string) => void): (() => void) => {
+    const handler = (_e: unknown, mode: string): void => cb(mode);
+    ipcRenderer.on('widget:layout-shortcut', handler);
+    return (): void => {
+      ipcRenderer.off('widget:layout-shortcut', handler);
+    };
+  },
   applyWidgetSettings: (widget: {
     opacity: number;
     desktopMode: string;
