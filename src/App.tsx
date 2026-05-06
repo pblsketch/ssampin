@@ -94,6 +94,7 @@ import { validateShareFile } from '@domain/rules/shareRules';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
 import { useFontApplier } from '@adapters/hooks/useFontApplier';
 import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
+import { useNativeDesktopAvWarning } from '@adapters/hooks/useNativeDesktopAvWarning';
 import { useNativeDesktopDiagListener } from '@adapters/hooks/useNativeDesktopDiagListener';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
@@ -458,6 +459,8 @@ function WidgetApp() {
 
   // 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~)
   useDesktopModeFallback();
+  // 바탕화면 아이콘 아래 모드 첫 활성화 시 1회 사전 안내 토스트 (Phase 7-E)
+  useNativeDesktopAvWarning();
 
   // native-desktop / widget 진단 로그 listener (G1 게이트 디버깅 임시)
   useNativeDesktopDiagListener();
@@ -543,6 +546,8 @@ function MainApp() {
 
   // 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~)
   useDesktopModeFallback();
+  // 바탕화면 아이콘 아래 모드 첫 활성화 시 1회 사전 안내 토스트 (Phase 7-E)
+  useNativeDesktopAvWarning();
 
   // native-desktop / widget 진단 로그 listener (G1 게이트 디버깅 임시)
   useNativeDesktopDiagListener();

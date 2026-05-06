@@ -197,6 +197,14 @@ export interface WidgetSettings {
   readonly memorySaverMode?: boolean;
   /** 아이콘 모드 옵션 (v2.0.2~) */
   readonly icon?: IconModeOptions;
+  /**
+   * Phase 7-E (v2.1.0~) — 사용자가 native-desktop 모드를 처음 활성화할 때 노출되는 AV 안내
+   * 토스트를 봤는지 여부. true이면 다시 노출 안 함.
+   *
+   * AV 차단으로 hook 설치가 실패한 경우는 별도 흐름(useDesktopModeFallback)이 처리하므로
+   * 본 플래그는 "사용 전 가벼운 사전 안내" 용도로만 사용된다.
+   */
+  readonly nativeDesktopAvWarningShown?: boolean;
 }
 
 /**

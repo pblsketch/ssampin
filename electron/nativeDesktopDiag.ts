@@ -138,6 +138,22 @@ export function diagLog(scope: 'native-desktop' | 'widget' | 'icon', message: st
 }
 
 /**
+ * Phase 7-F (v2.1.0~) — verbose 진단 토글.
+ *
+ * 평소(production)에는 핵심 진단(STRATEGY 시도/성공/실패, attach/detach, fallback)만 출력.
+ * 사용자가 환경변수 `SSAMPIN_NATIVE_DESKTOP_VERBOSE=1`을 설정하고 실행하면 transitionMode의
+ * stage0~6 단계별 dump 같은 매 호출 단위 진단까지 모두 출력.
+ *
+ * `diagLogVerbose`는 verbose 모드일 때만 fanout한다. 평소에는 silent — log 파일에도 안 남음.
+ */
+const VERBOSE = process.env.SSAMPIN_NATIVE_DESKTOP_VERBOSE === '1';
+
+export function diagLogVerbose(scope: 'native-desktop' | 'widget' | 'icon', message: string, ...args: unknown[]): void {
+  if (!VERBOSE) return;
+  diagLog(scope, message, ...args);
+}
+
+/**
  * `diagLog`의 warn 변형. console.warn으로 라우팅 (스타일 구분용).
  */
 export function diagWarn(scope: 'native-desktop' | 'widget' | 'icon', message: string, ...args: unknown[]): void {

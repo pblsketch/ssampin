@@ -36,7 +36,7 @@ import {
   type DesktopWidgetManager,
 } from './desktopWidgetManager';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
-import { initNativeDesktopDiag, diagLog, diagWarn } from './nativeDesktopDiag';
+import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
 
 declare const __dirname: string;
 
@@ -181,8 +181,10 @@ async function transitionWidgetMode(
   // ─── 진단 라운드 (이슈 B) — STAGE 0: enter 시점 native state 스냅샷 ───
   // BrowserWindow API 결과(visible/opacity/alwaysOnTop)와 OS 결과(IsWindowVisible/style 비트)
   // 가 disconnect되는 race를 가시화. 매 단계 호출마다 새 dump를 찍어 직전 단계 효과 확인.
+  // Phase 7-F: stage 단위 dump는 verbose 모드에서만 출력 (SSAMPIN_NATIVE_DESKTOP_VERBOSE=1).
+  // 평소엔 stage3 (enable 호출/결과)만 핵심 진단으로 유지 — fallback 추적에 충분.
   const stage0 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
-  diagLog(
+  diagLogVerbose(
     'widget',
     `[transitionMode][stage0-enter] from=${fromMode} → newMode=${newMode} reason=${reason} ` +
       `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
@@ -190,18 +192,18 @@ async function transitionWidgetMode(
       `bounds=${JSON.stringify(widgetWindow.getBounds())} ` +
       `manager.isEnabled=${desktopWidgetManager.isEnabled()}`,
   );
-  diagLog('widget', `[transitionMode][stage0-enter] win32=${stage0.widgetWin32}`);
+  diagLogVerbose('widget', `[transitionMode][stage0-enter] win32=${stage0.widgetWin32}`);
 
   // 1. 이전 모드 정리: native-desktop이었거나 manager가 살아있으면 disable.
   //    'idempotent' — disable이 이미 풀린 상태면 no-op.
   if (fromMode === 'native-desktop' || desktopWidgetManager.isEnabled()) {
-    diagLog('widget', '[transitionMode][stage1-pre-disable] disable() 호출 (이전 native-desktop 정리)');
+    diagLogVerbose('widget', '[transitionMode][stage1-pre-disable] disable() 호출 (이전 native-desktop 정리)');
     desktopWidgetManager.disable();
 
     // ─── 진단 (이슈 B) — STAGE 1: disable 직후 native state ───
     // GWL_STYLE의 WS_CHILD 비트가 이 시점에 떨어졌는지 확인. 여전히 WS_CHILD면 detach 실패.
     const stage1 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
-    diagLog(
+    diagLogVerbose(
       'widget',
       `[transitionMode][stage1-post-disable] visible=${widgetWindow.isVisible()} ` +
         `opacity=${widgetWindow.getOpacity()} win32=${stage1.widgetWin32}`,
@@ -219,7 +221,7 @@ async function transitionWidgetMode(
 
     // ─── 진단 (이슈 B) — STAGE 2: 50ms 안정화 후 native state ───
     const stage2 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
-    diagLog(
+    diagLogVerbose(
       'widget',
       `[transitionMode][stage2-after-50ms] visible=${widgetWindow.isVisible()} ` +
         `opacity=${widgetWindow.getOpacity()} win32=${stage2.widgetWin32}`,
@@ -258,16 +260,16 @@ async function transitionWidgetMode(
   // 4. 명시적 표시 보장 (이중 안전망 — detach 내부 ShowWindow가 있어도 BrowserWindow
   //    visible state와 OS HWND visibility가 어긋날 수 있음)
   if (!widgetWindow.isVisible()) {
-    diagLog('widget', '[transitionMode][stage4-show] !visible — show() 호출');
+    diagLogVerbose('widget', '[transitionMode][stage4-show] !visible — show() 호출');
     widgetWindow.show();
   } else {
-    diagLog('widget', '[transitionMode][stage4-show] visible=true — show() skip');
+    diagLogVerbose('widget', '[transitionMode][stage4-show] visible=true — show() skip');
   }
 
   // ─── 진단 (이슈 B) — STAGE 4: 새 모드 적용 + show() 직후 native state ───
   // 이 시점에 IsWindowVisible=0이면 WS_VISIBLE 비트가 OS에 반영되지 않음 → 사라짐 race 핵심 단서.
   const stage4 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
-  diagLog(
+  diagLogVerbose(
     'widget',
     `[transitionMode][stage4-sync-complete] appliedMode=${appliedMode} ` +
       `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
@@ -282,12 +284,13 @@ async function transitionWidgetMode(
     if (!widgetWindow.isDestroyed()) {
       // ─── 진단 (이슈 B) — STAGE 5: 100ms 후 native state (지연 회복 가시화) ───
       const stage5 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
-      diagLog(
+      diagLogVerbose(
         'widget',
         `[transitionMode][stage5-100ms-check] mode=${appliedMode} ` +
           `visible=${widgetWindow.isVisible()} opacity=${widgetWindow.getOpacity()} ` +
           `win32=${stage5.widgetWin32}`,
       );
+      // hidden 감지는 회귀 단서이므로 verbose가 아닌 평상시 로그(diagWarn)에 남김.
       if (!widgetWindow.isVisible()) {
         diagWarn(
           'widget',
@@ -297,7 +300,7 @@ async function transitionWidgetMode(
         widgetWindow.show();
         // STAGE 6: 토글 직후 추가 진단
         const stage6 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
-        diagLog(
+        diagLogVerbose(
           'widget',
           `[transitionMode][stage6-after-toggle] visible=${widgetWindow.isVisible()} ` +
             `opacity=${widgetWindow.getOpacity()} win32=${stage6.widgetWin32}`,
