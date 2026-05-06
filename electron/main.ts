@@ -2088,9 +2088,15 @@ function registerIpcHandlers(): void {
       }
     } else if (requestedMode === 'topmost') {
       widgetWindow.setAlwaysOnTop(true);
+      // Phase 7-C 회귀 fix: native-desktop → topmost 전환 시 widget이 hidden 상태로 남는 문제.
+      // detachFromWorkerW의 ShowWindow가 native 차원의 안전망이지만, BrowserWindow 자체의
+      // visible state도 명시적으로 show()로 복구해 IPC 일관성 보장.
+      widgetWindow.show();
     } else {
       // normal
       widgetWindow.setAlwaysOnTop(false);
+      // Phase 7-C 회귀 fix: native-desktop → normal 전환 시 위젯 표시 보장(상동).
+      widgetWindow.show();
     }
 
     currentDesktopMode = appliedMode;
@@ -2141,22 +2147,32 @@ function registerIpcHandlers(): void {
    * native-desktop 모드의 WH_MOUSE_LL hook callback이 LBUTTONDOWN을 받을 때 이 영역
    * 안이면 widget을 마우스 따라 이동시킨다 (WS_CHILD가 된 widget은 nc drag 작동 안 하므로).
    *
+   * Phase 7-C 회귀 fix: excludeRects는 drag 영역 안에서 빼야 하는 사각형(헤더 우측 버튼 그룹).
+   * 헤더 안의 no-drag 버튼 위 LBUTTONDOWN이 drag 시작으로 처리되면 버튼 클릭이 동작하지 않음.
+   *
    * native-desktop 모드가 아니거나 widget이 없으면 무시(IPC만 silent ignore).
    * dipRects는 widget client area 좌상단 기준 좌표.
    */
   ipcMain.handle(
     'widget:setHeaderRegion',
-    (_event, rects: { x: number; y: number; width: number; height: number }[]): void => {
+    (
+      _event,
+      rects: { x: number; y: number; width: number; height: number }[],
+      excludeRects?: { x: number; y: number; width: number; height: number }[],
+    ): void => {
       if (!widgetWindow || widgetWindow.isDestroyed()) return;
       // 안전 변환 — renderer가 보낸 객체에서 명시적으로 값 추출.
-      const sanitized = (Array.isArray(rects) ? rects : []).map((r) => ({
-        x: Number(r?.x) || 0,
-        y: Number(r?.y) || 0,
-        width: Math.max(0, Number(r?.width) || 0),
-        height: Math.max(0, Number(r?.height) || 0),
-      }));
+      const sanitize = (arr: unknown): { x: number; y: number; width: number; height: number }[] =>
+        (Array.isArray(arr) ? arr : []).map((r) => ({
+          x: Number((r as { x?: unknown })?.x) || 0,
+          y: Number((r as { y?: unknown })?.y) || 0,
+          width: Math.max(0, Number((r as { width?: unknown })?.width) || 0),
+          height: Math.max(0, Number((r as { height?: unknown })?.height) || 0),
+        }));
+      const sanitized = sanitize(rects);
+      const sanitizedExcludes = sanitize(excludeRects);
       try {
-        desktopWidgetManager.setHeaderRegions(sanitized, widgetWindow);
+        desktopWidgetManager.setHeaderRegions(sanitized, widgetWindow, sanitizedExcludes);
       } catch (e) {
         // setHeaderRegions는 manager 내부에서 throw하지 않지만 안전망.
         diagLog('widget', `setHeaderRegions 예외 (무시): ${e instanceof Error ? e.message : String(e)}`);
