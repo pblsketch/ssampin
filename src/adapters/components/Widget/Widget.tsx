@@ -208,6 +208,23 @@ export function Widget() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [layoutMode, setLayoutMode]);
 
+  // Phase 7-G — native-desktop 모드(WS_CHILD)일 때는 위젯이 keyboard focus를 받지 못해
+  // 위 keydown listener가 작동 안 함. main이 마우스 hover 시 globalShortcut으로 가로채
+  // IPC `widget:layout-shortcut`로 mode를 전달하면 그대로 setLayoutMode 호출.
+  // 일반/topmost 모드에서는 이 IPC가 발사되지 않으므로 (manager가 hoverCallback을 호출 안 함)
+  // 일반 keydown listener가 그대로 작동.
+  useEffect(() => {
+    const onShortcut = window.electronAPI?.onLayoutShortcut;
+    if (!onShortcut) return;
+    const dispose = onShortcut((mode) => {
+      const valid: ReadonlyArray<WidgetLayoutMode> = ['full', 'split-h', 'split-v', 'quad'];
+      if ((valid as readonly string[]).includes(mode)) {
+        setLayoutMode(mode as WidgetLayoutMode);
+      }
+    });
+    return dispose;
+  }, [setLayoutMode]);
+
   // 우클릭 컨텍스트 메뉴
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
