@@ -1,9 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
+import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { getGradeList } from '@domain/entities/NeisSchedule';
+import {
+  getGradeList,
+  classifyNeisEvent,
+  shouldSyncToGoogle,
+  NEIS_GROUP_LABELS,
+} from '@domain/entities/NeisSchedule';
+import type { NeisGroup } from '@domain/entities/NeisSchedule';
+import { NeisSyncSelectModal } from '@adapters/components/Calendar/NeisSyncSelectModal';
+
+const GROUP_ORDER: readonly NeisGroup[] = ['holiday', 'exam', 'vacation', 'event', 'etc'];
+
+const GROUP_DOT_COLOR: Readonly<Record<NeisGroup, string>> = {
+  holiday: 'bg-red-400',
+  exam: 'bg-orange-400',
+  vacation: 'bg-yellow-400',
+  event: 'bg-green-400',
+  etc: 'bg-sp-muted',
+};
 
 /* ─── Toggle Switch ─── */
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -47,9 +65,36 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
   const hasNeisGoogleMapping = useCalendarSyncStore((s) =>
     s.mappings.some((m) => m.categoryId === 'neis-schedule'),
   );
+  const setGoogleSyncGroup = useNeisScheduleStore((s) => s.setGoogleSyncGroup);
+  const allEvents = useEventsStore((s) => s.events);
   const { show: showToast } = useToastStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showSelectModal, setShowSelectModal] = useState(false);
+
+  const groupCounts = useMemo(() => {
+    const result: Record<NeisGroup, { total: number; on: number }> = {
+      holiday: { total: 0, on: 0 },
+      exam: { total: 0, on: 0 },
+      vacation: { total: 0, on: 0 },
+      event: { total: 0, on: 0 },
+      etc: { total: 0, on: 0 },
+    };
+    for (const ev of allEvents) {
+      if (ev.category !== 'neis-schedule' || !ev.neis) continue;
+      const g = classifyNeisEvent({ title: ev.title, subtractDayType: ev.neis.subtractDayType });
+      result[g].total += 1;
+      const on = shouldSyncToGoogle(
+        { eventId: ev.neis.eventId, title: ev.title, subtractDayType: ev.neis.subtractDayType },
+        settings,
+      );
+      if (on) result[g].on += 1;
+    }
+    return result;
+  }, [allEvents, settings]);
+
+  const totalNeis = groupCounts.holiday.total + groupCounts.exam.total + groupCounts.vacation.total + groupCounts.event.total + groupCounts.etc.total;
+  const totalOn = groupCounts.holiday.on + groupCounts.exam.on + groupCounts.vacation.on + groupCounts.event.on + groupCounts.etc.on;
 
   const hasSchoolInfo = Boolean(appSettings.neis.atptCode && appSettings.neis.schoolCode);
   const schoolName = appSettings.neis.schoolName ?? '';
@@ -237,6 +282,55 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                   {syncStatus === 'syncing' ? '동기화 중...' : '지금 동기화'}
                 </button>
 
+                {/* 구글 캘린더 동기화 대상 그룹 선택 */}
+                {totalNeis > 0 && (
+                  <div className="rounded-lg border border-sp-border bg-sp-card/40 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-detail font-semibold text-sp-muted uppercase tracking-wider">
+                        구글 캘린더 동기화 대상
+                      </p>
+                      <span className="text-detail text-sp-muted">
+                        {totalOn}/{totalNeis}건
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {GROUP_ORDER.map((group) => {
+                        const count = groupCounts[group];
+                        if (count.total === 0) return null;
+                        const checked = settings.googleSyncGroups[group];
+                        return (
+                          <label
+                            key={group}
+                            className="flex items-center gap-2.5 px-1.5 py-1 rounded hover:bg-sp-text/5 cursor-pointer transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => void setGoogleSyncGroup(group, e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-sp-border bg-sp-bg text-blue-500 focus:ring-blue-500"
+                            />
+                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${GROUP_DOT_COLOR[group]}`} />
+                            <span className="text-sm text-sp-text flex-1">
+                              {NEIS_GROUP_LABELS[group]}
+                            </span>
+                            <span className="text-detail text-sp-muted">
+                              {count.on}/{count.total}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSelectModal(true)}
+                      className="w-full flex items-center justify-center gap-2 px-2 py-1 rounded-md text-detail text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-icon">tune</span>
+                      세부 선택
+                    </button>
+                  </div>
+                )}
+
                 {/* 구글 캘린더로 동기화 버튼 */}
                 <button
                   type="button"
@@ -402,6 +496,9 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
           </div>
         </>
       )}
+
+      {/* 그룹/개별 세부 선택 모달 */}
+      <NeisSyncSelectModal open={showSelectModal} onClose={() => setShowSelectModal(false)} />
     </>
   );
 }
