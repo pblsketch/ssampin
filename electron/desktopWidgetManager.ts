@@ -185,10 +185,42 @@ function createWin32Manager(
    */
   let cachedWidgetHwnd: bigint = 0n;
   /**
-   * Phase 7-A: 라우팅 통계 — 디버그용 카운터. 빈번하게 갱신되지만 atomic 증가만 하므로 hot path 영향 없음.
-   * post-success/skipped(아이콘)/skipped(영역밖)/failed 4분류.
+   * Phase 7-A (재시도): hook callback이 webContents.sendInputEvent 호출 대상으로 사용할
+   * BrowserWindow 인스턴스 캐시.
+   *
+   * PostMessageW 라우팅이 Chromium에 의해 무시되는 문제(사용자 검증 결과)를 해결하기 위해
+   * Electron 공식 API인 sendInputEvent로 전환. BrowserWindow.webContents.sendInputEvent는
+   * Chromium renderer의 input router에 직접 이벤트를 enqueue한다.
+   *
+   * 캐시 정책:
+   *   - enable() 성공 시 인자로 받은 widgetWindow를 저장.
+   *   - clearHandles에서 null로 리셋 (BrowserWindow 자체는 main.ts가 관리하므로 destroy 안 함).
+   *   - hot path에서 isDestroyed() 가드 후 사용.
    */
-  let routingStats = { posted: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0 };
+  let cachedWidgetWindow: BrowserWindow | null = null;
+  /**
+   * Phase 7-A (재시도): 라우팅 방식 토글.
+   *
+   * - 'send-input-event' (기본값): Electron webContents.sendInputEvent 사용. Chromium renderer가
+   *   native 이벤트와 동등하게 처리.
+   * - 'post-message' (legacy fallback): Win32 PostMessageW로 widget HWND에 직접 송신.
+   *   Electron 버전이나 환경에서 sendInputEvent가 실패할 가능성 대비 보존.
+   *
+   * 환경변수 SSAMPIN_NATIVE_DESKTOP_ROUTING으로 디버그 시 'post-message'로 강제 가능.
+   * 정식 빌드에선 'send-input-event'만 사용.
+   */
+  const routingMethod: 'send-input-event' | 'post-message' = (() => {
+    const envVal = process.env.SSAMPIN_NATIVE_DESKTOP_ROUTING;
+    if (envVal === 'post-message') return 'post-message';
+    return 'send-input-event';
+  })();
+  /**
+   * Phase 7-A: 라우팅 통계 — 디버그용 카운터. 빈번하게 갱신되지만 atomic 증가만 하므로 hot path 영향 없음.
+   * sent/skipped(아이콘)/skipped(영역밖)/failed 4분류.
+   *
+   * Phase 7-A 재시도: 'posted' → 'sent'로 명명 통일 (sendInputEvent와 PostMessage 둘 다 포함).
+   */
+  let routingStats = { sent: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0 };
 
   // 16ms TTL 캐시 (Phase 6/7 — mouse hook hot path 성능)
   // 동일 좌표로 짧은 시간 안에 여러 번 호출되는 경우(드래그 중)에 유리.
@@ -224,13 +256,15 @@ function createWin32Manager(
     cachedPhysicalBounds = null;
     cachedListView = null;
     cachedWidgetHwnd = 0n;
+    // BrowserWindow 자체는 main.ts가 관리하므로 우리는 reference만 떨어뜨린다.
+    cachedWidgetWindow = null;
     // hit cache 초기화
     lastHitX = Number.NaN;
     lastHitY = Number.NaN;
     lastHitResult = false;
     lastHitUntil = 0;
     // Phase 7-A 통계 초기화 (다음 enable에서 깨끗하게 시작)
-    routingStats = { posted: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0 };
+    routingStats = { sent: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0 };
   }
 
   // Phase 7 — hot path. shouldPassThroughToDesktop을 별도 명명 함수로 분리해 hook callback에서
@@ -381,9 +415,13 @@ function createWin32Manager(
         return { ok: false, reason: 'workerw-not-found-or-rejected', fallbackMode: 'normal' };
       }
 
-      // 4. 초기 physical bounds 캐시 (Phase 5) + Phase 7-A widget HWND 캐시
+      // 4. 초기 physical bounds 캐시 (Phase 5) + Phase 7-A widget HWND/BrowserWindow 캐시
       cachedPhysicalBounds = recalcPhysicalBounds(window);
       cachedWidgetHwnd = handles.widgetHwnd;
+      // Phase 7-A 재시도 — sendInputEvent 호출용 BrowserWindow 캐시.
+      // hook callback에서 isDestroyed 가드 후 webContents.sendInputEvent 호출.
+      cachedWidgetWindow = window;
+      diagLog('native-desktop', `Phase 7-A: routingMethod='${routingMethod}', BrowserWindow 캐시 완료`);
 
       // 5. Phase 6: ListView 탐색 (실패해도 attach 자체는 유지 — 모든 hit이 Electron으로 처리됨)
       try {
@@ -402,16 +440,20 @@ function createWin32Manager(
       try {
         mouseHook = win32.installLowLevelMouseHook((p, msgType, mouseData) => {
           // ───────────────────────────────────────────────────────────────
-          // Phase 7-A: hook callback hot path — 라우팅 결정 + PostMessage.
+          // Phase 7-A (재시도): hook callback hot path — 라우팅 결정 + sendInputEvent.
           //
           // 호출 빈도: WM_MOUSEMOVE는 초당 수백 회. 따라서 빠른 reject 우선:
           //   1. 관심 메시지 아니면 즉시 return (휠/NC* 등은 다음 phase에서)
           //   2. widget bounds 밖이면 즉시 return (글로벌 마우스 움직임)
           //   3. widget 안 + 아이콘 위면 return (Explorer가 자연 처리)
-          //   4. widget 안 + 빈공간이면 PostMessage로 widget HWND에 forward
+          //   4. widget 안 + 빈공간이면 webContents.sendInputEvent로 라우팅
           //
           // 모든 단계 throw 금지(installLowLevelMouseHook 내부 try/catch가 있지만 여기서도
           // 명시적으로 회피). 0.5ms 이내 처리 목표.
+          //
+          // 진단 로그 정책:
+          //   - WM_MOUSEMOVE는 너무 자주 호출되므로 로그 안 찍음 (file/IPC fanout으로 디스크 사망).
+          //   - 클릭/우클릭/휠클릭/더블클릭은 모두 진단 로그 (사용자 검증 시 명확히 가시).
           // ───────────────────────────────────────────────────────────────
           if (!win32.isMouseMessageOfInterest(msgType)) return;
           if (!isInsideCachedBoundsLocal(p)) {
@@ -421,22 +463,98 @@ function createWin32Manager(
           if (passThroughCheck(p)) {
             // 아이콘 위 — Explorer가 처리하도록 OS의 자연 라우팅에 맡김.
             routingStats.skippedIcon++;
+            // 클릭류만 로깅 (MOUSEMOVE 제외)
+            if (msgType !== 0x0200) {
+              diagLog('native-desktop', `[7-A] skip-icon msg=0x${msgType.toString(16)} screen=(${p.x},${p.y})`);
+            }
             return;
           }
-          // 빈 공간 → widget HWND에 PostMessage 라우팅.
-          if (cachedWidgetHwnd === 0n || !cachedPhysicalBounds) return;
+          if (!cachedPhysicalBounds) return;
           const client = win32.physicalToClient(p, cachedPhysicalBounds);
-          const ok = win32.postMouseMessageToWidget(
-            cachedWidgetHwnd,
-            msgType,
-            client.x,
-            client.y,
-            mouseData,
-          );
-          if (ok) routingStats.posted++;
-          else routingStats.failed++;
+
+          if (routingMethod === 'send-input-event') {
+            // ─── 정통 패턴: webContents.sendInputEvent ───
+            const win = cachedWidgetWindow;
+            if (!win || win.isDestroyed()) {
+              routingStats.failed++;
+              return;
+            }
+            const eventType = win32.mapWin32MsgToElectronEvent(msgType);
+            if (!eventType) {
+              // 매핑 불가 메시지 — Phase 7-A 관심 메시지인데 매핑 미정의면 코드 일관성 문제.
+              routingStats.failed++;
+              return;
+            }
+            // sendInputEvent는 DIP 좌표(BrowserWindow의 client area 기준)를 받는다.
+            // hook callback의 p는 physical pixel, cachedPhysicalBounds도 physical.
+            // physicalToClient 결과(client)도 physical pixel이므로 scaleFactor로 나눠 DIP로 변환.
+            // bounds.scaleFactor를 매번 조회하지 않기 위해 hot path 캐시는 다음 라운드에. 현 단계에선 정확성 우선.
+            const dipBounds = win.getBounds();
+            const widthRatio = cachedPhysicalBounds.width === 0
+              ? 1
+              : dipBounds.width / cachedPhysicalBounds.width;
+            const heightRatio = cachedPhysicalBounds.height === 0
+              ? 1
+              : dipBounds.height / cachedPhysicalBounds.height;
+            const dipX = Math.round(client.x * widthRatio);
+            const dipY = Math.round(client.y * heightRatio);
+            try {
+              win.webContents.sendInputEvent({
+                type: eventType,
+                x: dipX,
+                y: dipY,
+                button: win32.mapWin32MsgToButton(msgType),
+                clickCount: win32.mapWin32MsgToClickCount(msgType),
+              });
+              routingStats.sent++;
+              if (msgType !== 0x0200) {
+                diagLog(
+                  'native-desktop',
+                  `[7-A] sendInput msg=0x${msgType.toString(16)} type=${eventType} dip=(${dipX},${dipY}) client=(${client.x},${client.y})`,
+                );
+              }
+            } catch (e) {
+              routingStats.failed++;
+              if (msgType !== 0x0200) {
+                diagWarn(
+                  'native-desktop',
+                  `[7-A] sendInput 실패 msg=0x${msgType.toString(16)}: ${e instanceof Error ? e.message : String(e)}`,
+                );
+              }
+            }
+            void mouseData; // sendInputEvent 경로에선 미사용 (Phase 7-B wheel에서 사용 예정)
+          } else {
+            // ─── Legacy fallback: PostMessageW ───
+            // 환경변수 SSAMPIN_NATIVE_DESKTOP_ROUTING=post-message 로 켰을 때만 도달.
+            // Chromium 무시 가능성 있음 (사용자 검증 결과). 디버깅용으로만 유지.
+            if (cachedWidgetHwnd === 0n) return;
+            const ok = win32.postMouseMessageToWidget(
+              cachedWidgetHwnd,
+              msgType,
+              client.x,
+              client.y,
+              mouseData,
+            );
+            if (ok) {
+              routingStats.sent++;
+              if (msgType !== 0x0200) {
+                diagLog(
+                  'native-desktop',
+                  `[7-A] postMsg msg=0x${msgType.toString(16)} client=(${client.x},${client.y})`,
+                );
+              }
+            } else {
+              routingStats.failed++;
+              if (msgType !== 0x0200) {
+                diagWarn(
+                  'native-desktop',
+                  `[7-A] postMsg 실패 msg=0x${msgType.toString(16)} client=(${client.x},${client.y})`,
+                );
+              }
+            }
+          }
         });
-        diagLog('native-desktop', 'Phase 7-A: mouse hook 설치 완료 — routing 활성');
+        diagLog('native-desktop', `Phase 7-A: mouse hook 설치 완료 — routing 활성 (method='${routingMethod}')`);
       } catch (e) {
         // hook 설치 실패는 치명적이지 않다 (라우팅은 Z-order만으로도 일부 동작 — 아이콘 위만).
         // 위젯 위 빈 공간 클릭은 안 되겠지만 attach 자체는 유지.

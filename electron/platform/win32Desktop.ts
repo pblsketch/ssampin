@@ -1319,7 +1319,7 @@ export function uninstallLowLevelMouseHook(h: MouseHookHandle): void {
 // ────────────────────────────────────────────────────────────
 
 /**
- * Phase 7-A에서 widget HWND로 PostMessage 라우팅할 마우스 메시지 식별.
+ * Phase 7-A에서 widget HWND로 라우팅할 마우스 메시지 식별.
  *
  * 포함:
  *   - WM_MOUSEMOVE (0x0200) — hover 효과, mouseenter/leave 트래킹
@@ -1432,4 +1432,98 @@ export function postMouseMessageToWidget(
   } catch {
     return false;
   }
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-A (재시도) — Electron sendInputEvent 라우팅 매핑
+// ────────────────────────────────────────────────────────────
+//
+// 사용자 검증 결과: PostMessageW로 widget HWND에 마우스 메시지를 보내도 Chromium이
+// 무시한다. Chromium의 input pipeline은 OS native 마우스 이벤트만 신뢰하고,
+// 합성된 win32 메시지는 button state(wParam) 검증 등에서 invalid로 판정될 가능성이 높다.
+//
+// 정통 패턴은 Electron 공식 API인 `webContents.sendInputEvent`. 본 메서드는 Chromium
+// renderer의 input router에 직접 이벤트를 enqueue하므로 hit-test/focus/event handler가
+// native 이벤트와 동일하게 처리한다.
+//
+// 본 헬퍼들은 WH_MOUSE_LL callback에서 받은 win32 메시지 타입을 sendInputEvent payload로
+// 변환할 때 사용한다. PostMessage 인프라는 fallback으로 보존(routingMethod === 'post-message').
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Electron `sendInputEvent` mouse event type. Electron 공식 타입과 동일하지만 import 의존을
+ * 피하기 위해 string literal union으로 직접 정의.
+ *
+ * 참고: https://www.electronjs.org/docs/latest/api/web-contents#contentssendinputeventinputevent
+ */
+export type ElectronMouseEventType =
+  | 'mouseDown'
+  | 'mouseUp'
+  | 'mouseMove'
+  | 'mouseEnter'
+  | 'mouseLeave';
+
+/**
+ * Electron `sendInputEvent` mouse button.
+ */
+export type ElectronMouseButton = 'left' | 'right' | 'middle';
+
+/**
+ * win32 mouse 메시지 타입 → Electron sendInputEvent type 매핑.
+ *
+ * 매핑 규칙:
+ *   - WM_LBUTTONDOWN/RBUTTONDOWN/MBUTTONDOWN/LBUTTONDBLCLK → 'mouseDown'
+ *   - WM_LBUTTONUP/RBUTTONUP/MBUTTONUP → 'mouseUp'
+ *   - WM_MOUSEMOVE → 'mouseMove'
+ *   - 그 외(휠/NC* 등) → null (다음 phase)
+ *
+ * 더블클릭(WM_LBUTTONDBLCLK)은 mouseDown으로 매핑하고 호출자가 clickCount=2를 함께 전달.
+ *
+ * @returns 매핑 가능한 메시지면 type, 아니면 null
+ */
+export function mapWin32MsgToElectronEvent(msg: number): ElectronMouseEventType | null {
+  switch (msg) {
+    case WM_LBUTTONDOWN:
+    case WM_RBUTTONDOWN:
+    case WM_MBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
+      return 'mouseDown';
+    case WM_LBUTTONUP:
+    case WM_RBUTTONUP:
+    case WM_MBUTTONUP:
+      return 'mouseUp';
+    case WM_MOUSEMOVE:
+      return 'mouseMove';
+    default:
+      return null;
+  }
+}
+
+/**
+ * win32 mouse 메시지 → Electron mouse button 매핑.
+ *
+ * - 우측: WM_RBUTTONDOWN/UP → 'right'
+ * - 휠 클릭: WM_MBUTTONDOWN/UP → 'middle'
+ * - 그 외(좌측/이동/더블클릭) → 'left' (기본값)
+ *
+ * WM_MOUSEMOVE는 button이 '필수'가 아니지만 Electron API가 string을 요구해 'left'로
+ * 채워둔다. mouseMove에서 button은 의미 없음.
+ */
+export function mapWin32MsgToButton(msg: number): ElectronMouseButton {
+  if (msg === WM_RBUTTONDOWN || msg === WM_RBUTTONUP) return 'right';
+  if (msg === WM_MBUTTONDOWN || msg === WM_MBUTTONUP) return 'middle';
+  return 'left';
+}
+
+/**
+ * win32 mouse 메시지 → Electron clickCount 매핑.
+ *
+ * - WM_LBUTTONDBLCLK → 2 (더블클릭)
+ * - 그 외 → 1 (단일 클릭/이동)
+ *
+ * Electron의 sendInputEvent는 clickCount를 직접 받기 때문에 OS의 더블클릭 자동 합성을
+ * 신뢰하지 않고 본 매핑으로 명시 전달한다.
+ */
+export function mapWin32MsgToClickCount(msg: number): number {
+  return msg === WM_LBUTTONDBLCLK ? 2 : 1;
 }

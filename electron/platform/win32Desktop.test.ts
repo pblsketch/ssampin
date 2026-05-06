@@ -23,6 +23,9 @@ import {
   isMouseMessageOfInterest,
   physicalToClient,
   postMouseMessageToWidget,
+  mapWin32MsgToElectronEvent,
+  mapWin32MsgToButton,
+  mapWin32MsgToClickCount,
 } from './win32Desktop';
 
 describe('win32Desktop error classes', () => {
@@ -213,6 +216,82 @@ describe('Phase 7-A — postMouseMessageToWidget null/safety', () => {
   it('mouseData 인자 미전달 시 default 0으로 동작 (throw 없음)', () => {
     // 실제 Win32 호출은 안 일어남 (handle 0n에서 early return). 시그너처 호환만 검증.
     expect(() => postMouseMessageToWidget(0n, 0x0200, 0, 0)).not.toThrow();
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-A 재시도: Electron sendInputEvent 매핑
+// ────────────────────────────────────────────────────────────
+
+describe('Phase 7-A 재시도 — mapWin32MsgToElectronEvent', () => {
+  it('mouseDown 매핑 — LBUTTONDOWN/RBUTTONDOWN/MBUTTONDOWN/LBUTTONDBLCLK', () => {
+    expect(mapWin32MsgToElectronEvent(0x0201)).toBe('mouseDown'); // WM_LBUTTONDOWN
+    expect(mapWin32MsgToElectronEvent(0x0204)).toBe('mouseDown'); // WM_RBUTTONDOWN
+    expect(mapWin32MsgToElectronEvent(0x0207)).toBe('mouseDown'); // WM_MBUTTONDOWN
+    expect(mapWin32MsgToElectronEvent(0x0203)).toBe('mouseDown'); // WM_LBUTTONDBLCLK
+  });
+
+  it('mouseUp 매핑 — LBUTTONUP/RBUTTONUP/MBUTTONUP', () => {
+    expect(mapWin32MsgToElectronEvent(0x0202)).toBe('mouseUp'); // WM_LBUTTONUP
+    expect(mapWin32MsgToElectronEvent(0x0205)).toBe('mouseUp'); // WM_RBUTTONUP
+    expect(mapWin32MsgToElectronEvent(0x0208)).toBe('mouseUp'); // WM_MBUTTONUP
+  });
+
+  it('mouseMove 매핑 — WM_MOUSEMOVE', () => {
+    expect(mapWin32MsgToElectronEvent(0x0200)).toBe('mouseMove');
+  });
+
+  it('매핑 불가 메시지 → null', () => {
+    expect(mapWin32MsgToElectronEvent(0x020A)).toBeNull(); // WM_MOUSEWHEEL
+    expect(mapWin32MsgToElectronEvent(0x00A1)).toBeNull(); // WM_NCLBUTTONDOWN
+    expect(mapWin32MsgToElectronEvent(0)).toBeNull();
+    expect(mapWin32MsgToElectronEvent(0xFFFF)).toBeNull();
+  });
+
+  it('isMouseMessageOfInterest이 true인 메시지 8종은 모두 mapping 가능 (null 아님)', () => {
+    const interesting = [0x0200, 0x0201, 0x0202, 0x0203, 0x0204, 0x0205, 0x0207, 0x0208];
+    for (const msg of interesting) {
+      expect(isMouseMessageOfInterest(msg)).toBe(true);
+      expect(mapWin32MsgToElectronEvent(msg)).not.toBeNull();
+    }
+  });
+});
+
+describe('Phase 7-A 재시도 — mapWin32MsgToButton', () => {
+  it("좌측: LBUTTONDOWN/UP/DBLCLK + MOUSEMOVE → 'left'", () => {
+    expect(mapWin32MsgToButton(0x0201)).toBe('left'); // LBUTTONDOWN
+    expect(mapWin32MsgToButton(0x0202)).toBe('left'); // LBUTTONUP
+    expect(mapWin32MsgToButton(0x0203)).toBe('left'); // LBUTTONDBLCLK
+    expect(mapWin32MsgToButton(0x0200)).toBe('left'); // MOUSEMOVE (의미 없지만 안전 기본값)
+  });
+
+  it("우측: RBUTTONDOWN/UP → 'right'", () => {
+    expect(mapWin32MsgToButton(0x0204)).toBe('right'); // RBUTTONDOWN
+    expect(mapWin32MsgToButton(0x0205)).toBe('right'); // RBUTTONUP
+  });
+
+  it("휠클릭: MBUTTONDOWN/UP → 'middle'", () => {
+    expect(mapWin32MsgToButton(0x0207)).toBe('middle'); // MBUTTONDOWN
+    expect(mapWin32MsgToButton(0x0208)).toBe('middle'); // MBUTTONUP
+  });
+
+  it("매핑 불가 메시지도 안전하게 'left' 기본값", () => {
+    // hot path 안전성 — switch/case 누락이 아닌 default 분기 검증
+    expect(mapWin32MsgToButton(0xFFFF)).toBe('left');
+    expect(mapWin32MsgToButton(0)).toBe('left');
+  });
+});
+
+describe('Phase 7-A 재시도 — mapWin32MsgToClickCount', () => {
+  it('WM_LBUTTONDBLCLK → 2', () => {
+    expect(mapWin32MsgToClickCount(0x0203)).toBe(2);
+  });
+
+  it('단일 클릭/이동 → 1', () => {
+    expect(mapWin32MsgToClickCount(0x0201)).toBe(1); // LBUTTONDOWN
+    expect(mapWin32MsgToClickCount(0x0202)).toBe(1); // LBUTTONUP
+    expect(mapWin32MsgToClickCount(0x0204)).toBe(1); // RBUTTONDOWN
+    expect(mapWin32MsgToClickCount(0x0200)).toBe(1); // MOUSEMOVE
   });
 });
 
