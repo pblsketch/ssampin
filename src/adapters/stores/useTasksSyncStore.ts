@@ -14,6 +14,13 @@ interface TasksSyncState {
   isSyncing: boolean;
   lastSyncedAt: string | null;
   error: string | null;
+  /**
+   * 일일 쿼터(`1/d/{project}`) 초과 시 재시도 차단 시각 (ISO).
+   * Google Tasks API 일일 한도(50K)를 소진한 상태에서는 어떤 syncNow도
+   * 무의미한 호출이 되므로 다음 자정(로컬 새벽 4시)까지 모든 트리거를 차단한다.
+   * null이면 차단 없음.
+   */
+  quotaCooldownUntil: string | null;
 
   // 모달 표시
   showScopeRequestModal: boolean;
@@ -33,6 +40,8 @@ interface TasksSyncState {
   initialize: () => Promise<void>;
   /** 삭제 예약 (로컬 hard delete 시 호출) */
   markForRemoteDelete: (googleTaskId: string) => Promise<void>;
+  /** 쿼터 쿨다운을 즉시 해제 (사용자가 설정 화면에서 "지금 다시 시도"를 누를 때) */
+  clearQuotaCooldown: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'tasks-sync-state';
@@ -44,6 +53,29 @@ interface PersistedState {
   taskListName: string | null;
   lastSyncedAt: string | null;
   pendingDeleteIds: readonly string[];
+  /** v2 추가 — 일일 쿼터 초과 시 재시도 차단 시각 */
+  quotaCooldownUntil?: string | null;
+}
+
+/**
+ * 일일 쿼터 초과 시 다음 재시도 시각.
+ * 새벽 4시(로컬)로 잡으면 한국 4시 = PT 11~12시 전날이라 PT 자정 자동 리셋 이후가 보장된다.
+ * 이미 새벽 4시 지난 경우 다음 날 4시.
+ */
+function nextQuotaResetISO(): string {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(4, 0, 0, 0);
+  if (next.getTime() <= now.getTime()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next.toISOString();
+}
+
+/** 에러 객체에서 dailyQuotaExceeded 마커 추출 */
+function isDailyQuotaError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  return (err as { dailyQuotaExceeded?: boolean }).dailyQuotaExceeded === true;
 }
 
 async function persistState(state: PersistedState): Promise<void> {
@@ -76,6 +108,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
   isSyncing: false,
   lastSyncedAt: null,
   error: null,
+  quotaCooldownUntil: null,
   showScopeRequestModal: false,
   showTaskListPicker: false,
   pendingDeleteIds: [],
@@ -114,6 +147,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
       taskListName: null,
       lastSyncedAt: null,
       error: null,
+      quotaCooldownUntil: null,
       pendingDeleteIds: [],
     });
 
@@ -124,6 +158,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         taskListName: null,
         lastSyncedAt: null,
         pendingDeleteIds: [],
+        quotaCooldownUntil: null,
       });
     } catch (err) {
       console.error('[TasksSync] disableSync 저장 오류:', err);
@@ -161,6 +196,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         taskListName: name,
         lastSyncedAt: state.lastSyncedAt,
         pendingDeleteIds: state.pendingDeleteIds,
+        quotaCooldownUntil: state.quotaCooldownUntil,
       });
     } catch (err) {
       console.error('[TasksSync] selectTaskList 저장 오류:', err);
@@ -188,6 +224,18 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
 
     const state = get();
     if (!state.isEnabled || !state.taskListId) return;
+
+    // 일일 쿼터 쿨다운 체크 — 차단 시간 안에는 어떤 호출도 하지 않는다.
+    // listTasks는 페이지네이션으로 매 sync당 N회 호출되므로, 쿼터 소진 후
+    // 재시도가 누적되면 다음 날도 빠르게 한도에 도달한다.
+    if (state.quotaCooldownUntil) {
+      const cooldownMs = new Date(state.quotaCooldownUntil).getTime();
+      if (Number.isFinite(cooldownMs) && Date.now() < cooldownMs) {
+        return;
+      }
+      // 쿨다운 만료 — 상태 정리 후 진행
+      set({ quotaCooldownUntil: null });
+    }
 
     set({ isSyncing: true, error: null });
     const taskListId = state.taskListId;
@@ -499,9 +547,51 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
           taskListName: get().taskListName,
           lastSyncedAt,
           pendingDeleteIds: get().pendingDeleteIds,
+          quotaCooldownUntil: get().quotaCooldownUntil,
         });
       } catch (err) {
         console.error('[TasksSync] syncNow 오류:', err);
+
+        // 일일 쿼터 초과 — 다음 자정까지 모든 트리거 차단 + 1회성 토스트
+        if (isDailyQuotaError(err)) {
+          const cooldownUntil = nextQuotaResetISO();
+          const wasInCooldown = !!get().quotaCooldownUntil
+            && new Date(get().quotaCooldownUntil!).getTime() > Date.now();
+
+          set({
+            isSyncing: false,
+            quotaCooldownUntil: cooldownUntil,
+            error: 'Google Tasks 일일 동기화 한도에 도달했습니다. 잠시 후 자동으로 재시도합니다.',
+          });
+
+          try {
+            await persistState({
+              isEnabled: get().isEnabled,
+              taskListId: get().taskListId,
+              taskListName: get().taskListName,
+              lastSyncedAt: get().lastSyncedAt,
+              pendingDeleteIds: get().pendingDeleteIds,
+              quotaCooldownUntil: cooldownUntil,
+            });
+          } catch (persistErr) {
+            console.error('[TasksSync] 쿼터 쿨다운 저장 오류:', persistErr);
+          }
+
+          // 쿨다운 진입 시 1회만 안내 (이미 쿨다운 중이었으면 중복 토스트 방지)
+          if (!wasInCooldown) {
+            try {
+              const { useToastStore } = await import('@adapters/components/common/Toast');
+              useToastStore.getState().show(
+                'Google Tasks 일일 동기화 한도(50,000건)에 도달했어요. 자동 동기화를 잠시 멈추고 내일 새벽에 다시 시도합니다.',
+                'info',
+              );
+            } catch {
+              // 토스트 표시 실패는 무시
+            }
+          }
+          return;
+        }
+
         set({
           isSyncing: false,
           error: err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.',
@@ -522,12 +612,21 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
       const saved = await storage.read<PersistedState>(STORAGE_KEY);
       if (!saved) return;
 
+      // 만료된 쿨다운은 복원하지 않음 (재실행 시 즉시 sync 재개)
+      const cooldownUntil = saved.quotaCooldownUntil ?? null;
+      const cooldownMs = cooldownUntil ? new Date(cooldownUntil).getTime() : 0;
+      const validCooldown =
+        cooldownUntil && Number.isFinite(cooldownMs) && cooldownMs > Date.now()
+          ? cooldownUntil
+          : null;
+
       set({
         isEnabled: saved.isEnabled,
         taskListId: saved.taskListId,
         taskListName: saved.taskListName,
         lastSyncedAt: saved.lastSyncedAt,
         pendingDeleteIds: saved.pendingDeleteIds ?? [],
+        quotaCooldownUntil: validCooldown,
       });
     } catch (err) {
       console.error('[TasksSync] initialize 오류:', err);
@@ -548,9 +647,27 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         taskListName: state.taskListName,
         lastSyncedAt: state.lastSyncedAt,
         pendingDeleteIds: next,
+        quotaCooldownUntil: state.quotaCooldownUntil,
       });
     } catch (err) {
       console.error('[TasksSync] markForRemoteDelete 저장 오류:', err);
+    }
+  },
+
+  clearQuotaCooldown: async () => {
+    set({ quotaCooldownUntil: null, error: null });
+    try {
+      const state = get();
+      await persistState({
+        isEnabled: state.isEnabled,
+        taskListId: state.taskListId,
+        taskListName: state.taskListName,
+        lastSyncedAt: state.lastSyncedAt,
+        pendingDeleteIds: state.pendingDeleteIds,
+        quotaCooldownUntil: null,
+      });
+    } catch (err) {
+      console.error('[TasksSync] clearQuotaCooldown 저장 오류:', err);
     }
   },
 }));

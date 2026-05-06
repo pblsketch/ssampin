@@ -23,7 +23,42 @@ interface TasksResponse {
 
 interface ApiError extends Error {
   code: number;
+  /** 일일 쿼터(1/d/{project}) 초과로 24시간 안에 회복 불가능한 상태 */
+  dailyQuotaExceeded?: boolean;
+  /** 서버가 명시한 Retry-After (ms). transient 429/5xx 한정 */
+  retryAfterMs?: number;
 }
+
+/**
+ * 429 응답 본문에서 "일일 쿼터 초과"인지 판정.
+ * 매분/매초 단위 throttle은 짧은 백오프로 회복 가능하지만,
+ * `1/d/{project}` 쿼터는 PT 자정까지 어떤 재시도도 의미 없음.
+ */
+function isDailyQuotaExceeded(body: string): boolean {
+  // quota_unit: "1/d/{project}" — 일/프로젝트
+  if (body.includes('1/d/{project}')) return true;
+  // quota_limit: "defaultPerDayPerProject"
+  if (body.includes('PerDayPerProject')) return true;
+  // 메시지: "Quota exceeded ... limit 'Queries per day'"
+  if (/Queries per day/i.test(body)) return true;
+  return false;
+}
+
+/** Retry-After 헤더(seconds 또는 HTTP-date) → ms. 못 읽으면 null. */
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const sec = Number(header);
+  if (Number.isFinite(sec) && sec >= 0) return Math.min(sec * 1000, 60_000);
+  const dateMs = Date.parse(header);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    if (delta > 0) return Math.min(delta, 60_000);
+  }
+  return null;
+}
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 export class GoogleTasksApiClient implements IGoogleTasksPort {
   private onTokenRefresh: (() => Promise<string>) | null = null;
@@ -37,6 +72,7 @@ export class GoogleTasksApiClient implements IGoogleTasksPort {
     path: string,
     options?: RequestInit,
     isRetry = false,
+    backoffAttempt = 0,
   ): Promise<T> {
     const res = await fetch(`${BASE_URL}${path}`, {
       ...options,
@@ -51,19 +87,36 @@ export class GoogleTasksApiClient implements IGoogleTasksPort {
       if (res.status === 401 && !isRetry && this.onTokenRefresh) {
         try {
           const newToken = await this.onTokenRefresh();
-          return this.request<T>(newToken, path, options, true);
+          return this.request<T>(newToken, path, options, true, backoffAttempt);
         } catch {
           // 갱신 실패 시 원래 에러 throw
         }
       }
 
-      const err = await res.text();
+      const body = await res.text();
+
+      // 429 / 503: transient 케이스만 1~2회 재시도 (일일 쿼터는 즉시 throw)
+      if ((res.status === 429 || res.status === 503) && !isDailyQuotaExceeded(body) && backoffAttempt < 2) {
+        const retryAfter = parseRetryAfterMs(res.headers.get('Retry-After'));
+        const backoffMs = retryAfter ?? Math.min(1000 * 2 ** backoffAttempt, 4000);
+        await sleep(backoffMs);
+        return this.request<T>(accessToken, path, options, isRetry, backoffAttempt + 1);
+      }
+
       const message =
         res.status === 401
           ? GOOGLE_AUTH_BLOCKED_MESSAGE
-          : `Google Tasks API error: ${res.status} ${err}`;
+          : `Google Tasks API error: ${res.status} ${body}`;
       const error = new Error(message) as ApiError;
       error.code = res.status;
+      if (res.status === 429) {
+        if (isDailyQuotaExceeded(body)) {
+          error.dailyQuotaExceeded = true;
+        } else {
+          const retryAfter = parseRetryAfterMs(res.headers.get('Retry-After'));
+          if (retryAfter !== null) error.retryAfterMs = retryAfter;
+        }
+      }
       throw error;
     }
 
