@@ -71,6 +71,11 @@ export interface WidgetStyleSettings {
   readonly fontFamily: FontFamily;
   /** 그리드 행 높이 (40~100px, 기본 80) */
   readonly gridRowHeight: number;
+  /**
+   * 위젯 창 외곽 테두리 숨김 (false → 표시, true → 숨김)
+   * NOTE: 추후 `showBorder`(카드 테두리)와 명명 통일 대상 — show-flavor로 일괄 리팩터링 예정
+   */
+  readonly hideWindowBorder: boolean;
 }
 
 export type AlarmSoundId = 'beep' | 'school-bell' | 'alarm-clock' | 'gentle-chime' | 'buzzer' | 'custom';

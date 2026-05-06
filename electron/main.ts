@@ -36,6 +36,7 @@ import {
   type DesktopWidgetManager,
 } from './desktopWidgetManager';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
+import { initNativeDesktopDiag, diagLog, diagWarn } from './nativeDesktopDiag';
 
 declare const __dirname: string;
 
@@ -126,8 +127,188 @@ let currentDesktopMode: WidgetDesktopMode = 'normal';
  *
  * 비Win32 또는 native module 미설치 환경에서는 no-op manager를 반환하므로
  * 호출자는 플랫폼 분기 없이 동일한 API로 사용할 수 있다.
+ *
+ * `transitionWidgetMode`는 위 manager 인스턴스를 참조하므로 createDesktopWidgetManager()
+ * 호출 직후에 정의된다 (아래 참조).
  */
 const desktopWidgetManager: DesktopWidgetManager = createDesktopWidgetManager();
+
+// Phase 7-G — manager 생성 직후 hover 콜백 등록.
+// mouse hook이 widget bounds enter/leave를 감지할 때마다 호출되어 layout shortcut
+// register/unregister를 toggle. no-op manager에서는 cb 호출되지 않으므로 안전.
+desktopWidgetManager.setHoverCallback((inside) => {
+  if (inside) {
+    registerLayoutShortcuts();
+  } else {
+    unregisterLayoutShortcuts();
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// 위젯 모드 전환 단일 흐름 — race 안정화 (PR-2 안정화 라운드)
+// ──────────────────────────────────────────────────────────────────────
+//
+// 배경: native-desktop ↔ topmost/normal 전환 시 가끔 위젯이 사라지는 회귀가
+// 보고됨 ("어쩔 땐 일반 모드 전환, 어쩔 땐 창이 그냥 사라짐").
+//
+// 모드 전환 진입점은 4곳에 분산되어 있었음:
+//   1. createWidgetWindow.attachAndShow (시동 시 settings 복원)
+//   2. ipcMain 'window:applyWidgetSettings' (사용자 라디오 클릭)
+//   3. powerMonitor 'resume' healthCheck (절전 복귀 후 fallback)
+//   4. powerMonitor 'unlock-screen' healthCheck (잠금 해제 후 fallback)
+//
+// 각 분기가 독립적으로 disable→setAlwaysOnTop→show 시퀀스를 갖다 보니
+// 다음 race 중 하나가 발생할 수 있었음:
+//   A. desktopWidgetManager.disable()의 SetParent + GWL_STYLE 복원 + ShowWindow는
+//      sync 호출이지만 DWM 합성은 비동기 → 직후 widgetWindow.show()가 visible
+//      bit 안 켜는 케이스
+//   B. fallback 분기에서 setAlwaysOnTop만 호출하고 show() 누락 (powerMonitor 경로)
+//   C. enable() 도중에 사용자가 라디오를 다시 누르면 Promise 결과 도착 시점과
+//      currentDesktopMode 갱신 시점이 어긋남
+//
+// 해법: 모드 전환을 단일 helper로 통합 + 50ms detach 안정화 대기 + show() 명시적
+// 재호출 + 100ms 후 visibility 검증(이중 안전망).
+//
+// 진단: 각 단계별 visible/isAlwaysOnTop 상태를 diagLog로 기록해 race 패턴 재발
+// 시 로그만으로 식별 가능.
+async function transitionWidgetMode(
+  widgetWindow: BrowserWindow,
+  newMode: WidgetDesktopMode,
+  reason: string,
+): Promise<{ appliedMode: WidgetDesktopMode; fallbackEvent: DesktopModeFallbackEvent | null }> {
+  const fromMode = currentDesktopMode;
+
+  // ─── 진단 라운드 (이슈 B) — STAGE 0: enter 시점 native state 스냅샷 ───
+  // BrowserWindow API 결과(visible/opacity/alwaysOnTop)와 OS 결과(IsWindowVisible/style 비트)
+  // 가 disconnect되는 race를 가시화. 매 단계 호출마다 새 dump를 찍어 직전 단계 효과 확인.
+  const stage0 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+  diagLog(
+    'widget',
+    `[transitionMode][stage0-enter] from=${fromMode} → newMode=${newMode} reason=${reason} ` +
+      `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
+      `opacity=${widgetWindow.getOpacity()} ` +
+      `bounds=${JSON.stringify(widgetWindow.getBounds())} ` +
+      `manager.isEnabled=${desktopWidgetManager.isEnabled()}`,
+  );
+  diagLog('widget', `[transitionMode][stage0-enter] win32=${stage0.widgetWin32}`);
+
+  // 1. 이전 모드 정리: native-desktop이었거나 manager가 살아있으면 disable.
+  //    'idempotent' — disable이 이미 풀린 상태면 no-op.
+  if (fromMode === 'native-desktop' || desktopWidgetManager.isEnabled()) {
+    diagLog('widget', '[transitionMode][stage1-pre-disable] disable() 호출 (이전 native-desktop 정리)');
+    desktopWidgetManager.disable();
+
+    // ─── 진단 (이슈 B) — STAGE 1: disable 직후 native state ───
+    // GWL_STYLE의 WS_CHILD 비트가 이 시점에 떨어졌는지 확인. 여전히 WS_CHILD면 detach 실패.
+    const stage1 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+    diagLog(
+      'widget',
+      `[transitionMode][stage1-post-disable] visible=${widgetWindow.isVisible()} ` +
+        `opacity=${widgetWindow.getOpacity()} win32=${stage1.widgetWin32}`,
+    );
+
+    // 2. 안정화 대기 — DWM이 SetParent/GWL_STYLE 복원 + ShowWindow 처리 시간.
+    //    50ms는 Win11/Win10 양쪽에서 vsync 1~3프레임 안에 흡수되는 경험치.
+    //    너무 짧으면(<30ms) 일부 케이스에서 visibility 미반영, 너무 길면(>100ms)
+    //    사용자 체감 지연 → 50ms 채택.
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    if (widgetWindow.isDestroyed()) {
+      diagWarn('widget', '[transitionMode] 안정화 대기 중 widget destroyed — abort');
+      return { appliedMode: fromMode, fallbackEvent: null };
+    }
+
+    // ─── 진단 (이슈 B) — STAGE 2: 50ms 안정화 후 native state ───
+    const stage2 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+    diagLog(
+      'widget',
+      `[transitionMode][stage2-after-50ms] visible=${widgetWindow.isVisible()} ` +
+        `opacity=${widgetWindow.getOpacity()} win32=${stage2.widgetWin32}`,
+    );
+  }
+
+  // 3. 새 모드 적용
+  let appliedMode: WidgetDesktopMode = newMode;
+  let fallbackEvent: DesktopModeFallbackEvent | null = null;
+
+  if (newMode === 'native-desktop') {
+    diagLog('widget', '[transitionMode][stage3-pre-enable] enable() 호출');
+    const result = await desktopWidgetManager.enable(widgetWindow);
+    diagLog(
+      'widget',
+      `[transitionMode][stage3-post-enable] enable() returned: ok=${result.ok}, ` +
+        `${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`,
+    );
+    if (widgetWindow.isDestroyed()) {
+      diagWarn('widget', '[transitionMode] enable() 후 widget destroyed — abort');
+      return { appliedMode: fromMode, fallbackEvent: null };
+    }
+    if (result.ok) {
+      appliedMode = 'native-desktop';
+      widgetWindow.setAlwaysOnTop(false);
+    } else {
+      appliedMode = result.fallbackMode;
+      fallbackEvent = { reason: result.reason, fallbackMode: result.fallbackMode };
+      widgetWindow.setAlwaysOnTop(result.fallbackMode === 'topmost', 'normal');
+    }
+  } else {
+    // normal | topmost
+    widgetWindow.setAlwaysOnTop(newMode === 'topmost', 'normal');
+  }
+
+  // 4. 명시적 표시 보장 (이중 안전망 — detach 내부 ShowWindow가 있어도 BrowserWindow
+  //    visible state와 OS HWND visibility가 어긋날 수 있음)
+  if (!widgetWindow.isVisible()) {
+    diagLog('widget', '[transitionMode][stage4-show] !visible — show() 호출');
+    widgetWindow.show();
+  } else {
+    diagLog('widget', '[transitionMode][stage4-show] visible=true — show() skip');
+  }
+
+  // ─── 진단 (이슈 B) — STAGE 4: 새 모드 적용 + show() 직후 native state ───
+  // 이 시점에 IsWindowVisible=0이면 WS_VISIBLE 비트가 OS에 반영되지 않음 → 사라짐 race 핵심 단서.
+  const stage4 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+  diagLog(
+    'widget',
+    `[transitionMode][stage4-sync-complete] appliedMode=${appliedMode} ` +
+      `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
+      `opacity=${widgetWindow.getOpacity()} bounds=${JSON.stringify(widgetWindow.getBounds())} ` +
+      `win32=${stage4.widgetWin32}`,
+  );
+
+  // 5. 비동기 추가 안전망 — 100ms 후 visible 재확인.
+  //    DWM 합성이 늦게 반영되는 케이스에서 ShowWindow가 무시됐을 가능성 대응.
+  //    hide+show 토글은 Electron의 알려진 visibility 회복 패턴.
+  setTimeout(() => {
+    if (!widgetWindow.isDestroyed()) {
+      // ─── 진단 (이슈 B) — STAGE 5: 100ms 후 native state (지연 회복 가시화) ───
+      const stage5 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+      diagLog(
+        'widget',
+        `[transitionMode][stage5-100ms-check] mode=${appliedMode} ` +
+          `visible=${widgetWindow.isVisible()} opacity=${widgetWindow.getOpacity()} ` +
+          `win32=${stage5.widgetWin32}`,
+      );
+      if (!widgetWindow.isVisible()) {
+        diagWarn(
+          'widget',
+          `[transitionMode][stage5-100ms-check] hidden 감지 — hide+show 토글 강제 (mode=${appliedMode})`,
+        );
+        widgetWindow.hide();
+        widgetWindow.show();
+        // STAGE 6: 토글 직후 추가 진단
+        const stage6 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+        diagLog(
+          'widget',
+          `[transitionMode][stage6-after-toggle] visible=${widgetWindow.isVisible()} ` +
+            `opacity=${widgetWindow.getOpacity()} win32=${stage6.widgetWin32}`,
+        );
+      }
+    }
+  }, 100);
+
+  currentDesktopMode = appliedMode;
+  return { appliedMode, fallbackEvent };
+}
 
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 let winDRecoveryDedup = false;  // minimize 핸들러와 폴링 중복 방지
@@ -487,6 +668,59 @@ function triggerShortcut(commandId: string): void {
   createOrFocusQuickAddWindow(commandId);
 }
 
+// ─── Phase 7-G — native-desktop hover 시 임시 globalShortcut (Ctrl+1~4 레이아웃) ─────────
+//
+// native-desktop 모드(WS_CHILD)에선 위젯이 keyboard focus를 받지 못해 renderer keydown
+// listener가 작동 안 함. 사용자가 위젯 위에 마우스 hover 시에만 globalShortcut으로 가로채
+// IPC로 widget renderer에 전달, 기존 setLayoutMode 함수를 재사용한다.
+//
+// 충돌 회피: 마우스가 위젯 영역 밖으로 나가면 즉시 unregister → 다른 앱에서 Ctrl+1 사용
+// 가능. user-configurable globalShortcut(applyGlobalShortcuts)이 unregisterAll을 호출하면
+// 우리 layout shortcut도 같이 사라지지만, 다음 마우스 enter 시점에 자동 재등록되지 않을
+// 수 있음(P2 — 사용자 단축키 변경 직후 마우스를 위젯 밖으로 한 번 뺐다가 다시 넣으면 복원).
+
+const LAYOUT_SHORTCUTS: ReadonlyArray<{ accel: string; mode: string }> = [
+  { accel: 'CommandOrControl+1', mode: 'full' },
+  { accel: 'CommandOrControl+2', mode: 'split-h' },
+  { accel: 'CommandOrControl+3', mode: 'split-v' },
+  { accel: 'CommandOrControl+4', mode: 'quad' },
+];
+
+let layoutShortcutsRegistered = false;
+
+function registerLayoutShortcuts(): void {
+  if (layoutShortcutsRegistered) return;
+  for (const { accel, mode } of LAYOUT_SHORTCUTS) {
+    try {
+      const ok = globalShortcut.register(accel, () => {
+        if (widgetWindow && !widgetWindow.isDestroyed()) {
+          widgetWindow.webContents.send('widget:layout-shortcut', mode);
+        }
+      });
+      if (!ok) {
+        diagWarn('widget', `[7-G] layout shortcut ${accel} 등록 실패 (OS 충돌 등)`);
+      }
+    } catch (e) {
+      diagWarn('widget', `[7-G] layout shortcut ${accel} register 예외: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  layoutShortcutsRegistered = true;
+  diagLog('widget', '[7-G] layout shortcuts registered (mouse entered widget bounds)');
+}
+
+function unregisterLayoutShortcuts(): void {
+  if (!layoutShortcutsRegistered) return;
+  for (const { accel } of LAYOUT_SHORTCUTS) {
+    try {
+      globalShortcut.unregister(accel);
+    } catch {
+      // best-effort — 다른 누가 이미 unregister했을 수 있음
+    }
+  }
+  layoutShortcutsRegistered = false;
+  diagLog('widget', '[7-G] layout shortcuts unregistered (mouse left widget bounds)');
+}
+
 function applyGlobalShortcuts(config: ShortcutSyncConfig): { registered: string[]; failed: string[] } {
   globalShortcut.unregisterAll();
   const registered: string[] = [];
@@ -688,8 +922,15 @@ let iconDragState: {
 let iconDragInterval: NodeJS.Timeout | null = null;
 let iconDragSafetyTimer: NodeJS.Timeout | null = null;
 
+let iconDragSeq = 0;
+
 function startIconDrag(): void {
-  if (!iconWindow || iconWindow.isDestroyed()) return;
+  iconDragSeq++;
+  diagLog('icon', `startIconDrag seq=${iconDragSeq} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`);
+  if (!iconWindow || iconWindow.isDestroyed()) {
+    diagWarn('icon', 'startIconDrag aborted — no window');
+    return;
+  }
   stopIconDrag(); // 기존 드래그 정리
   const mouse = screen.getCursorScreenPoint();
   const bounds = iconWindow.getBounds();
@@ -699,6 +940,7 @@ function startIconDrag(): void {
     startWinX: bounds.x,
     startWinY: bounds.y,
   };
+  diagLog('icon', `startIconDrag start mouse=(${mouse.x},${mouse.y}) bounds=(${bounds.x},${bounds.y})`);
   // 16ms (60fps) 폴링으로 마우스 따라가기
   iconDragInterval = setInterval(() => {
     if (!iconDragState || !iconWindow || iconWindow.isDestroyed()) {
@@ -715,12 +957,15 @@ function startIconDrag(): void {
   }, 16);
   // 안전망: renderer가 endDrag IPC 누락해도 5초 후 자동 종료
   iconDragSafetyTimer = setTimeout(() => {
-    console.warn('[icon] drag safety timeout — auto-stopping after 5s');
+    diagWarn('icon', `drag safety timeout (seq=${iconDragSeq}) — auto-stopping after 5s`);
     stopIconDrag();
   }, 5000);
 }
 
 function stopIconDrag(): void {
+  const hadInterval = !!iconDragInterval;
+  const hadSafety = !!iconDragSafetyTimer;
+  const hadState = !!iconDragState;
   if (iconDragInterval) {
     clearInterval(iconDragInterval);
     iconDragInterval = null;
@@ -734,6 +979,9 @@ function stopIconDrag(): void {
   if (iconWindow && !iconWindow.isDestroyed()) {
     const b = iconWindow.getBounds();
     saveIconBounds({ x: b.x, y: b.y, width: ICON_SIZE, height: ICON_SIZE });
+  }
+  if (hadInterval || hadSafety || hadState) {
+    diagLog('icon', `stopIconDrag (interval=${hadInterval} safety=${hadSafety} state=${hadState})`);
   }
 }
 
@@ -759,6 +1007,7 @@ function ensureIconOnScreen(): void {
 
 function buildIconWindow(): void {
   const bounds = readIconBoundsOrDefault();
+  diagLog('icon', `buildIconWindow start bounds=${JSON.stringify(bounds)}`);
 
   iconWindow = new BrowserWindow({
     width: bounds.width,
@@ -797,11 +1046,30 @@ function buildIconWindow(): void {
 
   if (process.env['VITE_DEV_SERVER_URL']) {
     void iconWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=icon`);
+    iconWindow.webContents.once('did-finish-load', () => {
+      iconWindow?.webContents.openDevTools({ mode: 'detach' });
+    });
   } else {
     void iconWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
       query: { mode: 'icon' },
     });
   }
+
+  iconWindow.webContents.once('did-finish-load', () => {
+    diagLog('icon', `iconWindow did-finish-load (URL=${iconWindow?.webContents.getURL()})`);
+  });
+  iconWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    diagWarn('icon', `iconWindow did-fail-load code=${code} desc=${desc} url=${url}`);
+  });
+  iconWindow.webContents.on('render-process-gone', (_e, details) => {
+    diagWarn('icon', `iconWindow render-process-gone reason=${details.reason} exitCode=${details.exitCode}`);
+  });
+  iconWindow.on('show', () => {
+    diagLog('icon', `iconWindow event:show bounds=${JSON.stringify(iconWindow?.getBounds())}`);
+  });
+  iconWindow.on('hide', () => {
+    diagLog('icon', `iconWindow event:hide`);
+  });
 
   // 사용자 드래그 후 위치 저장 (디바운스 500ms)
   iconWindow.on('move', () => {
@@ -910,26 +1178,29 @@ type WindowMode = 'icon' | 'widget' | 'main';
 let windowTransitionInProgress: Promise<void> = Promise.resolve();
 
 function executeWindowTransition(target: WindowMode): Promise<void> {
+  diagLog('icon', `executeWindowTransition queued target=${target}`);
   windowTransitionInProgress = windowTransitionInProgress.then(async () => {
     const opts = readSettingsWidgetOptions();
-    console.log(`[icon] transition → ${target}`);
+    diagLog('icon', `executeWindowTransition running target=${target} currentWindowMode=${currentWindowMode}`);
 
     switch (target) {
       case 'icon': {
-        // lastUserMode는 'widget'/'main' 진입 시 이미 동기화됨. icon 진입 시는 건드리지 않음.
-        // (이전 race: case 'icon'에서 lastUserMode를 다시 결정하다 currentWindowMode와
-        //  실제 윈도우 visible 상태가 어긋나는 케이스 발견 → 단순화)
-        console.log(`[icon] lastUserMode = ${lastUserMode} (preserved from previous transition)`);
-
-        // 2) currentWindowMode를 먼저 'icon'으로 — Win+D 폴링이 위젯을 다시 띄우는 것 차단
+        diagLog('icon', `case icon: lastUserMode=${lastUserMode} (preserved)`);
         currentWindowMode = 'icon';
 
         // 3) 아이콘 윈도우 보장 + fade-in
-        if (!iconWindow || iconWindow.isDestroyed()) buildIconWindow();
+        const needsBuild = !iconWindow || iconWindow.isDestroyed();
+        diagLog('icon', `case icon: needsBuild=${needsBuild} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`);
+        if (needsBuild) buildIconWindow();
         if (iconWindow && !iconWindow.isDestroyed()) {
-          if (!iconWindow.isVisible()) iconWindow.setOpacity(0);
+          const wasVisible = iconWindow.isVisible();
+          diagLog('icon', `case icon: pre-fadeIn isVisible=${wasVisible}`);
+          if (!wasVisible) iconWindow.setOpacity(0);
           await fadeInIconWindow(220);
           ensureIconOnScreen();
+          diagLog('icon', `case icon: post-fadeIn bounds=${JSON.stringify(iconWindow.getBounds())} isVisible=${iconWindow.isVisible()}`);
+        } else {
+          diagWarn('icon', 'case icon: iconWindow null/destroyed AFTER buildIconWindow attempt');
         }
 
         // 4) 다른 윈도우 숨김
@@ -939,6 +1210,7 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
         if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
           widgetWindow.hide();
         }
+        diagLog('icon', 'case icon: complete');
         break;
       }
 
@@ -1082,15 +1354,14 @@ function createWindow(): void {
     if (!isQuitting) {
       e.preventDefault();
       const opts = readSettingsWidgetOptions();
+      diagLog('icon', `mainWindow.close fired closeAction=${opts.closeAction}`);
 
       if (opts.closeAction === 'ask') {
-        // 매번 물어보기 — 렌더러에 다이얼로그 요청
         mainWindow?.webContents.send('close-action:ask');
         return;
       }
 
       if (opts.closeAction === 'icon') {
-        // X 버튼 → 아이콘 모드로 접기 (v2.0.2~)
         void executeWindowTransition('icon');
         return;
       }
@@ -1475,40 +1746,51 @@ function createWidgetWindow(
     });
   }
 
-  // 렌더러가 첫 프레임을 그린 뒤 표시
-  const attachAndShow = () => {
-    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  // 렌더러가 첫 프레임을 그린 뒤 표시.
+  //
+  // ★ PR-2 G1 fix: 본 클로저는 native-desktop 모드일 때 manager.enable()을 await 호출한다.
+  //   이전 구현은 currentDesktopMode = 'native-desktop'으로만 표시하고 attach를 적용하지
+  //   않아, 위젯이 일반 윈도우처럼 떠 있고 transparent로 바탕화면 아이콘이 비치기만 했음.
+  //   fix: applyWidgetSettings의 enable+fallback 패턴을 본 경로에서도 재사용.
+  //
+  // 자동 self-attach 정책: 본 호출은 settings.json에 저장된 사용자 의도(desktopMode)를
+  //   기동 시 복원하는 것일 뿐, 사용자 동의 없이 native-desktop으로 전환하지 않는다.
+  //   manager 생성 자체는 createDesktopWidgetManager()가 platform/load 가드를 거쳐
+  //   이미 no-op 또는 win32 manager를 반환했고, no-op이면 enable이 ok:false → fallback.
+  let attached = false; // ready-to-show + did-finish-load 폴백 중복 호출 방어
+  const attachAndShow = async () => {
+    if (attached) {
+      diagLog('widget', 'attachAndShow 중복 호출 무시 (이미 attach 완료)');
+      return;
+    }
+    if (!widgetWindow || widgetWindow.isDestroyed()) {
+      diagLog('widget', 'attachAndShow: widgetWindow destroyed, abort');
+      return;
+    }
+    attached = true;
 
     if (process.platform === 'win32') {
       const desktopMode = normalizeDesktopMode(options.desktopMode, true);
+      diagLog('widget', `attachAndShow start — requested desktopMode=${desktopMode} (raw=${String(options.desktopMode)})`);
 
-      switch (desktopMode) {
-        case 'topmost':
-          // ── 항상 위에 모드 ──
-          currentDesktopMode = 'topmost';
-          widgetWindow.setAlwaysOnTop(true);
-          widgetWindow.show();
-          console.log('[widget] 항상 위에 모드');
-          break;
-        case 'native-desktop':
-          // ── 바탕화면 아이콘 아래 모드 ──
-          // Phase 1: 타입/저장 보존만. native attach는 Phase 2(no-op)에서 manager로 위임,
-          // PR-2 Phase 4+에서 실제 WorkerW attach. 본 분기에서는 normal과 동일 표시 동작.
-          // applyWidgetSettings에서 manager.enable()이 호출되며, 실패 시 fallback으로 모드가
-          // 다시 normal/topmost로 정정된다.
-          currentDesktopMode = 'native-desktop';
-          widgetWindow.setAlwaysOnTop(false);
-          widgetWindow.show();
-          console.log('[widget] 바탕화면 아이콘 아래 모드 (no-op fallback 단계)');
-          break;
-        case 'normal':
-        default:
-          // ── 일반 모드 (normal): 다른 창에 가려질 수 있음 ──
-          currentDesktopMode = 'normal';
-          widgetWindow.setAlwaysOnTop(false);
-          widgetWindow.show();
-          console.log('[widget] 일반 모드');
-          break;
+      // 시동 시점은 currentDesktopMode='normal' 초기값이라 transitionWidgetMode의
+      // disable() 분기는 자연스럽게 skip된다. enable + visibility 보장 흐름은
+      // 라디오 클릭과 동일하게 적용 — 단일 책임 유지.
+      // 단, 첫 frame을 빠르게 사용자에게 보여주려고 transition 호출 전에 show() 호출.
+      widgetWindow.show();
+
+      const { appliedMode, fallbackEvent } = await transitionWidgetMode(
+        widgetWindow,
+        desktopMode,
+        'createWidgetWindow.attachAndShow',
+      );
+
+      console.log(`[widget] 시동 모드 적용: ${appliedMode}`);
+      if (fallbackEvent) {
+        // renderer 토스트 — App.tsx의 useDesktopModeFallback hook이 수신.
+        // setImmediate로 묶어 listenerRegister + IPC 타이밍 보호.
+        const captured = fallbackEvent;
+        setImmediate(() => broadcastToAllWindows('desktopMode:fallback', captured));
       }
 
       // 모든 모드에서 Win+D 복원 활성화
@@ -1525,19 +1807,32 @@ function createWidgetWindow(
   };
 
   // ready-to-show: 렌더러가 첫 프레임을 그린 직후 (투명 플래시 방지)
-  widgetWindow.once('ready-to-show', attachAndShow);
+  // attachAndShow가 async이므로 void 처리 — once 핸들러는 promise를 기다리지 않음.
+  widgetWindow.once('ready-to-show', () => {
+    void attachAndShow();
+  });
 
   // 폴백: Electron 이슈 #25253 — transparent 창에서 ready-to-show 미발동 대비
   widgetWindow.webContents.on('did-finish-load', () => {
     setTimeout(() => {
-      if (widgetWindow && !widgetWindow.isDestroyed() && !widgetWindow.isVisible()) {
-        attachAndShow();
+      if (widgetWindow && !widgetWindow.isDestroyed() && !widgetWindow.isVisible() && !attached) {
+        void attachAndShow();
       }
     }, 300);
   });
 
-  widgetWindow.on('move', scheduleWidgetBoundsSave);
-  widgetWindow.on('resize', scheduleWidgetBoundsSave);
+  widgetWindow.on('move', () => {
+    scheduleWidgetBoundsSave();
+    if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
+  });
+  widgetWindow.on('resize', () => {
+    scheduleWidgetBoundsSave();
+    if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
+  });
 
   // Win+D minimize 차단: 즉시 복원 (primary)
   widgetWindow.on('minimize', () => {
@@ -1663,6 +1958,7 @@ function setupAutoUpdater(): void {
 function registerIpcHandlers(): void {
   // 닫기 동작 선택 (매번 물어보기 모드)
   ipcMain.on('close-action:respond', (_event, action: string) => {
+    diagLog('icon', `close-action:respond received action=${action}`);
     if (action === 'widget') {
       void executeWindowTransition('widget');
     } else if (action === 'icon') {
@@ -1929,6 +2225,9 @@ function registerIpcHandlers(): void {
     widgetWindow.setBounds(bounds);
     // 레이아웃 변경 후 화면 밖 검증
     ensureWidgetOnScreen();
+    if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
   });
 
   // window:applyWidgetSettings — 설정 페이지에서 위젯 설정 변경 시 실시간 적용
@@ -1938,46 +2237,39 @@ function registerIpcHandlers(): void {
   ): Promise<void> => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
-    // 투명도 직접 적용
-    widgetWindow.setOpacity(Math.max(0, Math.min(1, widget.opacity)));
+    // OS BrowserWindow.setOpacity는 native-desktop(WS_CHILD) 모드에서 OS가 무시하기 때문에
+    // 모드별로 위젯 가시성이 부조화하게 보이는 회귀를 일으킨다(사용자 보고: native-desktop에서
+    // 일반/항상 위로 전환할 때 갑자기 어두워짐).
+    //
+    // 결정(2026-05-06): widget.opacity는 **CSS 배경 투명도(Widget.tsx의 rgba)** 로만 사용한다.
+    // OS 알파 호출은 영구 차단해 모든 모드에서 일관되게 동작.
+    // payload의 opacity는 settings store가 이미 갱신했고 renderer가 CSS rgba에 적용 중이므로
+    // main process는 무시한다.
 
     // 데스크톱 모드 변경 (정규화 helper 통과 — 'native-desktop' silent drop 방지)
     const requestedMode = normalizeDesktopMode(widget.desktopMode, process.platform === 'win32');
-    if (requestedMode === currentDesktopMode) return;
 
-    console.log(`[widget] 설정 변경 요청: ${currentDesktopMode} → ${requestedMode}`);
-
-    // ── 기존 모드가 native-desktop이면 먼저 disable() ──
-    if (currentDesktopMode === 'native-desktop') {
-      desktopWidgetManager.disable();
+    // 가드 보강: 같은 모드여도 native-desktop이면서 manager가 enable 상태가 아니면 재시도 허용.
+    //   - createWidgetWindow가 attachAndShow 실행 중인 동안 사용자가 라디오를 다시 누르는 race
+    //   - healthCheck 후 stale로 판정되어 disable됐는데 settings상 모드는 그대로인 경우
+    //   - dev 핫리로드로 manager 인스턴스가 살아있지만 attach 상태가 깨진 경우
+    const shouldSkip =
+      requestedMode === currentDesktopMode &&
+      !(requestedMode === 'native-desktop' && !desktopWidgetManager.isEnabled());
+    if (shouldSkip) {
+      diagLog('widget', `applyWidgetSettings skip (already ${currentDesktopMode}, manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
+      return;
     }
 
-    // ── 새 모드 적용 ──
-    let appliedMode: WidgetDesktopMode = requestedMode;
-    let fallbackEvent: DesktopModeFallbackEvent | null = null;
+    console.log(`[widget] 설정 변경 요청: ${currentDesktopMode} → ${requestedMode} (manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
 
-    if (requestedMode === 'native-desktop') {
-      // manager.enable()을 시도. 실패 시 fallback.
-      const result = await desktopWidgetManager.enable(widgetWindow);
-      if (result.ok) {
-        appliedMode = 'native-desktop';
-        // attach가 alwaysOnTop과 충돌할 수 있어 명시적으로 false
-        widgetWindow.setAlwaysOnTop(false);
-      } else {
-        appliedMode = result.fallbackMode;
-        fallbackEvent = { reason: result.reason, fallbackMode: result.fallbackMode };
-        console.log(`[widget] native-desktop 실패: ${result.reason} → ${result.fallbackMode} fallback`);
-        // fallback 모드의 alwaysOnTop 적용
-        widgetWindow.setAlwaysOnTop(result.fallbackMode === 'topmost');
-      }
-    } else if (requestedMode === 'topmost') {
-      widgetWindow.setAlwaysOnTop(true);
-    } else {
-      // normal
-      widgetWindow.setAlwaysOnTop(false);
-    }
-
-    currentDesktopMode = appliedMode;
+    // 모드 전환 단일 흐름 — disable + 안정화 대기 + 새 모드 적용 + visibility 보장
+    // (transitionWidgetMode 내부에서 currentDesktopMode 갱신 + 100ms 후 visibility 재검증).
+    const { appliedMode, fallbackEvent } = await transitionWidgetMode(
+      widgetWindow,
+      requestedMode,
+      'applyWidgetSettings',
+    );
     console.log(`[widget] 적용 완료: ${appliedMode}`);
 
     // ── fallback 발생 시 renderer에 토스트 알림 ──
@@ -1986,11 +2278,13 @@ function registerIpcHandlers(): void {
     }
   });
 
-  // window:setOpacity — 위젯 투명도 설정
-  ipcMain.handle('window:setOpacity', (_event, value: number): void => {
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-      widgetWindow.setOpacity(Math.max(0, Math.min(1, value)));
-    }
+  // window:setOpacity — 호환성 유지를 위한 no-op IPC.
+  // 결정(2026-05-06): widget.opacity는 CSS 배경 투명도(Widget.tsx rgba)로만 사용하고
+  // OS BrowserWindow.setOpacity는 영구 차단(native-desktop ↔ 일반 모드 부조화 차단).
+  // renderer는 이 IPC를 호출하더라도 main은 OS alpha를 변경하지 않는다.
+  // payload value는 settings store가 이미 반영했으므로 main이 추가로 할 일 없음.
+  ipcMain.handle('window:setOpacity', (_event, _value: number): void => {
+    // intentionally no-op — see comment above.
   });
 
   // window:resizeWidget — 위젯 JS 리사이즈 (thickFrame: false 대응)
@@ -2006,6 +2300,9 @@ function registerIpcHandlers(): void {
 
     widgetWindow.setBounds(newBounds);
     scheduleWidgetBoundsSave();
+    if (desktopWidgetManager.isEnabled()) {
+      desktopWidgetManager.updateWidgetBounds(widgetWindow);
+    }
   });
 
   // window:closeApp — 앱 완전 종료
@@ -2013,6 +2310,47 @@ function registerIpcHandlers(): void {
     isQuitting = true;
     app.quit();
   });
+
+  /**
+   * Phase 7-C — widget 헤더 드래그 영역 등록.
+   *
+   * widget renderer가 mount/resize 시 자기 헤더(`-webkit-app-region: drag`) 영역의
+   * client DIP rect를 보내면, desktopWidgetManager가 physical screen으로 변환해 caching.
+   * native-desktop 모드의 WH_MOUSE_LL hook callback이 LBUTTONDOWN을 받을 때 이 영역
+   * 안이면 widget을 마우스 따라 이동시킨다 (WS_CHILD가 된 widget은 nc drag 작동 안 하므로).
+   *
+   * Phase 7-C 회귀 fix: excludeRects는 drag 영역 안에서 빼야 하는 사각형(헤더 우측 버튼 그룹).
+   * 헤더 안의 no-drag 버튼 위 LBUTTONDOWN이 drag 시작으로 처리되면 버튼 클릭이 동작하지 않음.
+   *
+   * native-desktop 모드가 아니거나 widget이 없으면 무시(IPC만 silent ignore).
+   * dipRects는 widget client area 좌상단 기준 좌표.
+   */
+  ipcMain.handle(
+    'widget:setHeaderRegion',
+    (
+      _event,
+      rects: { x: number; y: number; width: number; height: number }[],
+      excludeRects?: { x: number; y: number; width: number; height: number }[],
+    ): void => {
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      // 안전 변환 — renderer가 보낸 객체에서 명시적으로 값 추출.
+      const sanitize = (arr: unknown): { x: number; y: number; width: number; height: number }[] =>
+        (Array.isArray(arr) ? arr : []).map((r) => ({
+          x: Number((r as { x?: unknown })?.x) || 0,
+          y: Number((r as { y?: unknown })?.y) || 0,
+          width: Math.max(0, Number((r as { width?: unknown })?.width) || 0),
+          height: Math.max(0, Number((r as { height?: unknown })?.height) || 0),
+        }));
+      const sanitized = sanitize(rects);
+      const sanitizedExcludes = sanitize(excludeRects);
+      try {
+        desktopWidgetManager.setHeaderRegions(sanitized, widgetWindow, sanitizedExcludes);
+      } catch (e) {
+        // setHeaderRegions는 manager 내부에서 throw하지 않지만 안전망.
+        diagLog('widget', `setHeaderRegions 예외 (무시): ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+  );
 
   // ─── 아이콘 모드 IPC 핸들러 (v2.0.2~) ─────────────────────────────────
   ipcMain.handle('icon:show', async (): Promise<void> => {
@@ -2069,7 +2407,119 @@ function registerIpcHandlers(): void {
       target === 'main' ? 'main' :
       target === 'widget' ? 'widget' :
       lastUserMode;  // 'restore' → 마지막 사용 상태
+    diagLog('icon', `icon:expand to=${target} resolved=${resolved} lastUserMode=${lastUserMode}`);
     await executeWindowTransition(resolved);
+  });
+
+  /**
+   * 아이콘 윈도우 renderer 가 송출하는 진단 로그를 main 의 diagLog 로 라우팅.
+   * → 파일 `app.getPath('userData')/native-desktop-diag.log` 에 append 됨.
+   * 사용자는 메모장으로 그 파일을 열어 그대로 공유 가능.
+   */
+  ipcMain.handle('icon:diag', (_event, payload: { event: string; data?: unknown }): void => {
+    if (!payload || typeof payload.event !== 'string') return;
+    diagLog('icon', `[renderer] ${payload.event}`, payload.data);
+  });
+
+  /**
+   * 진단 라운드 (2026-05-06) — 이슈 B/D 분석용 종합 dump.
+   *
+   * 사용자가 시나리오 재현 직후 이 IPC를 호출하면 다음 정보를 한 번에 로그에 기록:
+   *   1. screen.getAllDisplays() 상세 — 모든 모니터의 bounds(DIP)/scaleFactor/internal 등
+   *   2. screen.getPrimaryDisplay() — primary 식별
+   *   3. widget의 BrowserWindow.getBounds() (DIP) + screen.getDisplayMatching 결과
+   *   4. WorkerW + Progman + SHELLDLL_DefView 후보별 GetWindowRect (physical screen)
+   *   5. widget native HWND의 Win32 state snapshot
+   *   6. routingStats — 마지막 호출 이후 누적 카운터
+   *   7. cachedPhysicalBounds (manager가 보는 widget physical 영역)
+   *
+   * 모든 정보가 native-desktop-diag.log에 기록되므로 사용자는 메모장으로 파일을 열어
+   * Claude에게 그대로 붙여넣기만 하면 됨. UI 변화는 없음.
+   *
+   * 보조 모니터 진단 사용법(이슈 D):
+   *   1. native-desktop 활성 상태에서 widget을 보조 모니터로 옮긴다.
+   *   2. 보조 모니터 위에서 widget 위 빈 영역을 클릭/스크롤 5~10회.
+   *   3. 이 IPC를 호출 (현재는 IPC만 있음; 다음 라운드에서 위젯 디버그 메뉴에 노출 예정).
+   *      당장은 DevTools 콘솔에서 `electronAPI.widgetDiagDump('after-secondary-clicks')` 호출.
+   */
+  ipcMain.handle('widget:diagDump', (_event, label: string): void => {
+    const safeLabel = typeof label === 'string' ? label : 'unlabeled';
+    diagLog('widget', `[diagDump:${safeLabel}] === BEGIN ===`);
+    try {
+      // 1. 모든 디스플레이 정보 (DIP)
+      const displays = screen.getAllDisplays();
+      const primary = screen.getPrimaryDisplay();
+      diagLog(
+        'widget',
+        `[diagDump:${safeLabel}] displays.count=${displays.length} primary.id=${primary.id}`,
+      );
+      displays.forEach((d, i) => {
+        diagLog(
+          'widget',
+          `[diagDump:${safeLabel}] display#${i} id=${d.id} ` +
+            `bounds=${JSON.stringify(d.bounds)} workArea=${JSON.stringify(d.workArea)} ` +
+            `scaleFactor=${d.scaleFactor} rotation=${d.rotation} internal=${d.internal} ` +
+            `${d.id === primary.id ? '[PRIMARY]' : ''}`,
+        );
+      });
+
+      // 2. widget 정보 (DIP + 매칭 디스플레이)
+      if (widgetWindow && !widgetWindow.isDestroyed()) {
+        const wDip = widgetWindow.getBounds();
+        const matched = screen.getDisplayMatching(wDip);
+        diagLog(
+          'widget',
+          `[diagDump:${safeLabel}] widget.dipBounds=${JSON.stringify(wDip)} ` +
+            `visible=${widgetWindow.isVisible()} opacity=${widgetWindow.getOpacity()} ` +
+            `alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
+            `matchedDisplay.id=${matched.id} matchedDisplay.scaleFactor=${matched.scaleFactor} ` +
+            `matchedDisplay.bounds=${JSON.stringify(matched.bounds)}`,
+        );
+        // dipToScreenRect 결과(physical) — widget이 OS 좌표계에서 어디로 매핑되는지
+        try {
+          const physical = screen.dipToScreenRect(widgetWindow, wDip);
+          diagLog(
+            'widget',
+            `[diagDump:${safeLabel}] widget.dipToScreenRect=${JSON.stringify(physical)}`,
+          );
+        } catch (e) {
+          diagWarn(
+            'widget',
+            `[diagDump:${safeLabel}] dipToScreenRect 실패: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+
+        // 3. desktopWidgetManager 캐시 + Win32 state
+        const snap = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+        diagLog(
+          'widget',
+          `[diagDump:${safeLabel}] manager.isEnabled=${desktopWidgetManager.isEnabled()} ` +
+            `cachedPhysicalBounds=${JSON.stringify(desktopWidgetManager.getCachedPhysicalBounds())}`,
+        );
+        diagLog('widget', `[diagDump:${safeLabel}] widget.win32=${snap.widgetWin32}`);
+        diagLog('widget', `[diagDump:${safeLabel}] workerW.layout=${snap.workerWLayout}`);
+
+        // 4. 라우팅 통계
+        diagLog(
+          'widget',
+          `[diagDump:${safeLabel}] routingStats=${JSON.stringify(desktopWidgetManager.getRoutingStats())}`,
+        );
+      } else {
+        diagLog('widget', `[diagDump:${safeLabel}] widgetWindow=null/destroyed`);
+      }
+
+      // 5. 현재 모드 상태
+      diagLog(
+        'widget',
+        `[diagDump:${safeLabel}] currentDesktopMode=${currentDesktopMode}`,
+      );
+    } catch (e) {
+      diagWarn(
+        'widget',
+        `[diagDump:${safeLabel}] dump 도중 예외: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    diagLog('widget', `[diagDump:${safeLabel}] === END ===`);
   });
 
   // export:showSaveDialog — 파일 저장 대화상자
@@ -3582,6 +4032,16 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     applySystemSettings();
+    // 진단 로그 fanout (console + IPC + file) 초기화.
+    // BrowserWindow 직접 import를 피하기 위해 closure로 주입.
+    initNativeDesktopDiag(
+      () => BrowserWindow.getAllWindows() as unknown as readonly {
+        isDestroyed: () => boolean;
+        webContents: { isDestroyed: () => boolean; send: (channel: string, payload: unknown) => void };
+      }[],
+      app.getPath('userData'),
+    );
+    diagLog('native-desktop', `nativeDesktopDiag initialized — log file=${app.getPath('userData')}/native-desktop-diag.log`);
     createStartupBackups();
     checkInstallation();
     registerIpcHandlers();
@@ -3642,6 +4102,10 @@ if (!gotTheLock) {
         // 절전 복귀로 인한 DPI 변경 시에도 위젯 리프레시
         if (widgetWindow && !widgetWindow.isDestroyed()) {
           widgetWindow.webContents.invalidate();
+          // native-desktop 활성 시 새 scaleFactor로 physical bounds 재계산
+          if (desktopWidgetManager.isEnabled()) {
+            desktopWidgetManager.updateWidgetBounds(widgetWindow);
+          }
         }
       }, 500);
     });
@@ -3673,6 +4137,25 @@ if (!gotTheLock) {
       console.log('[power] 시스템 resume 감지');
       isSystemSuspending = false;
       setTimeout(() => restoreWidgetAfterSleep(), 1000);
+      // 바탕화면 아이콘 아래 모드: WorkerW가 절전 복귀 후 stale일 수 있어 재검사.
+      if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
+        setTimeout(() => {
+          if (!widgetWindow || widgetWindow.isDestroyed()) return;
+          const win = widgetWindow;
+          desktopWidgetManager.healthCheck(win).then(async (result) => {
+            if (!result.ok) {
+              console.log(`[widget] resume 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`);
+              // transitionWidgetMode 통해 visibility 보장 — fallback 모드에서 widget이
+              // hidden 상태로 남는 이전 회귀 차단.
+              const { fallbackEvent } = await transitionWidgetMode(win, result.fallbackMode, 'resume-healthCheck-fallback');
+              broadcastToAllWindows('desktopMode:fallback', (fallbackEvent ?? {
+                reason: result.reason,
+                fallbackMode: result.fallbackMode,
+              }) satisfies DesktopModeFallbackEvent);
+            }
+          }).catch((e) => console.warn('[widget] resume healthCheck 예외:', e));
+        }, 1500);
+      }
     });
 
     // 화면 잠금(화면보호기 + "로그온 화면 표시" 옵션 포함) 감지
@@ -3687,6 +4170,23 @@ if (!gotTheLock) {
       console.log('[power] 화면 잠금 해제 감지');
       isSystemSuspending = false;
       setTimeout(() => restoreWidgetAfterSleep(), 500);
+      if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
+        setTimeout(() => {
+          if (!widgetWindow || widgetWindow.isDestroyed()) return;
+          const win = widgetWindow;
+          desktopWidgetManager.healthCheck(win).then(async (result) => {
+            if (!result.ok) {
+              console.log(`[widget] unlock 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`);
+              // resume 분기와 동일 — transitionWidgetMode로 visibility 보장.
+              const { fallbackEvent } = await transitionWidgetMode(win, result.fallbackMode, 'unlock-healthCheck-fallback');
+              broadcastToAllWindows('desktopMode:fallback', (fallbackEvent ?? {
+                reason: result.reason,
+                fallbackMode: result.fallbackMode,
+              }) satisfies DesktopModeFallbackEvent);
+            }
+          }).catch((e) => console.warn('[widget] unlock healthCheck 예외:', e));
+        }, 1000);
+      }
     });
   });
 }
@@ -3711,6 +4211,30 @@ app.on('before-quit', () => {
 
 app.on('window-all-closed', () => {
   // Don't quit — app stays in system tray
+  // 바탕화면 아이콘 아래 모드: 모든 창이 닫혔다면 hook/attach도 정리해야 잔류 안 남음.
+  desktopWidgetManager.disable();
+});
+
+// ────────────────────────────────────────────────────────────
+// 안전망: uncaughtException / unhandledRejection 발생 시 native attach/hook 정리.
+// 본 핸들러는 native-desktop 모드의 mouse hook이 살아남아 시스템 마우스에 영향을
+// 주는 시나리오를 차단한다. 일반 에러 흐름은 기존 try/catch에 맡긴다.
+// ────────────────────────────────────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[desktopWidgetManager] uncaughtException — native cleanup 실시:', err);
+  try {
+    desktopWidgetManager.disable();
+  } catch {
+    /* 안전망 안에서 또 throw하면 의미 없음 */
+  }
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[desktopWidgetManager] unhandledRejection — native cleanup 실시:', reason);
+  try {
+    desktopWidgetManager.disable();
+  } catch {
+    /* same */
+  }
 });
 
 app.on('activate', () => {

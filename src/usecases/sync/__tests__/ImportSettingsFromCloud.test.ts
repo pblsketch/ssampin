@@ -409,6 +409,7 @@ describe('ImportSettingsFromCloud', () => {
         backgroundImageOpacity: 0.15,
         fontFamily: 'pretendard',
         gridRowHeight: 80,
+        hideWindowBorder: false,
       };
       const remoteWidgetStyle: WidgetStyleSettings = {
         ...localWidgetStyle,
@@ -442,6 +443,7 @@ describe('ImportSettingsFromCloud', () => {
         backgroundImageOpacity: 0.15,
         fontFamily: 'pretendard',
         gridRowHeight: 80,
+        hideWindowBorder: false,
       };
       const ctx = makeContext({
         localSettings: null,

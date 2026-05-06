@@ -55,14 +55,19 @@ export function WidgetTab({ draft, patch }: Props) {
       <div className="space-y-6">
         <div className="space-y-3">
           <div className="flex justify-between">
-            <span className="text-sm font-medium text-sp-text">기본 투명도</span>
-            <span className="text-sm font-bold text-sp-accent">{Math.round(draft.widget.opacity * 100)}%</span>
+            <span className="text-sm font-medium text-sp-text">배경 투명도</span>
+            <span className="text-sm font-bold text-sp-accent">{Math.round((draft.widget.opacity ?? 1) * 100)}%</span>
           </div>
+          {/*
+            widget.opacity는 위젯 카드 배경의 CSS rgba alpha로만 사용된다(OS BrowserWindow.setOpacity는
+            영구 차단). 0%여도 BrowserWindow 자체는 100% 유지 → 텍스트는 항상 가시.
+            스타일 탭(WidgetSettingsPanel·DisplayTab)의 동일 슬라이더가 min={0}이므로 통일.
+          */}
           <input
             type="range"
             min={0}
             max={100}
-            value={Math.round(draft.widget.opacity * 100)}
+            value={Math.round((draft.widget.opacity ?? 1) * 100)}
             onChange={(e) => patchWidget({ opacity: Number(e.target.value) / 100 })}
             className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
           />

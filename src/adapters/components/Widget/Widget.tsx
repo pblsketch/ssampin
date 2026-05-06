@@ -20,6 +20,8 @@ import { LayoutSelector } from '@widgets/components/LayoutSelector';
 import { WidgetContextMenu } from './WidgetContextMenu';
 import { WidgetWeatherBar } from '@widgets/components/WidgetWeatherBar';
 import type { WidgetLayoutMode } from '@domain/entities/Settings';
+import { DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
+import { useNearScrollbar } from '@adapters/hooks/useNearScrollbar';
 
 interface ContextMenuState {
   x: number;
@@ -45,8 +47,22 @@ export function Widget() {
   const [showLayoutSelector, setShowLayoutSelector] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const layoutBtnRef = useRef<HTMLButtonElement>(null);
+  // Phase 7-C — 헤더 드래그 영역 좌표를 main에 등록 (native-desktop 모드 헤더 드래그용).
+  // WS_CHILD가 된 위젯은 -webkit-app-region:drag가 작동 안 하므로, hook이 직접 widget을 이동시킨다.
+  const headerRef = useRef<HTMLDivElement>(null);
+  // Phase 7-C 회귀 fix — 헤더 우측 버튼 그룹은 drag region에서 제외해야 클릭이 정상 라우팅된다.
+  // (헤더 전체를 drag로 등록하면 LBUTTONDOWN이 widget 이동으로 처리돼 버튼 클릭이 안 됨.)
+  const buttonGroupRef = useRef<HTMLDivElement>(null);
 
   const layoutMode = settings.widget.layoutMode ?? 'full';
+  const widgetStyle = useMemo(
+    () => ({ ...DEFAULT_WIDGET_STYLE, ...settings.widgetStyle }),
+    [settings.widgetStyle],
+  );
+
+  // 스크롤바 트랙 영역(가장자리 12px) 근처에서만 스크롤바 노출 (macOS overlay 관습)
+  const editScroll = useNearScrollbar(12);
+  const normalScroll = useNearScrollbar(12);
 
   // 반응형 폴백: 창 크기가 작으면 강제 full 모드
   const [effectiveMode, setEffectiveMode] = useState<WidgetLayoutMode>(layoutMode);
@@ -77,6 +93,60 @@ export function Widget() {
     return () => {
       document.documentElement.style.backgroundColor = '';
       document.body.style.backgroundColor = '';
+    };
+  }, []);
+
+  // Phase 7-C — 헤더 영역 좌표를 main에 등록.
+  // native-desktop 모드: WH_MOUSE_LL hook이 헤더 안에서 LBUTTONDOWN 받으면 widget 이동.
+  // 이 effect는 환경 무관하게 IPC를 보내며(main이 native-desktop 비활성이면 단순 caching),
+  // mount/resize 시 헤더 client rect를 갱신한다.
+  useEffect(() => {
+    const headerEl = headerRef.current;
+    if (!headerEl) return;
+    if (typeof window.electronAPI?.setWidgetHeaderRegion !== 'function') return;
+
+    const update = () => {
+      const headerRect = headerEl.getBoundingClientRect();
+      // getBoundingClientRect는 viewport(=widget client area) 기준 DIP 좌표. 음수/NaN 방지.
+      const dragRects = [
+        {
+          x: Math.max(0, headerRect.left),
+          y: Math.max(0, headerRect.top),
+          width: Math.max(0, headerRect.width),
+          height: Math.max(0, headerRect.height),
+        },
+      ];
+
+      // Phase 7-C 회귀 fix — 헤더 우측 버튼 그룹(no-drag)을 drag 영역에서 빼낸다.
+      // 그렇지 않으면 LBUTTONDOWN이 buttonGroup 위에서 발생해도 drag mode가 시작돼
+      // 버튼 클릭(새로고침/편집/그리드/확장)이 동작하지 않음.
+      const btnEl = buttonGroupRef.current;
+      const excludeRects: { x: number; y: number; width: number; height: number }[] = [];
+      if (btnEl) {
+        const btnRect = btnEl.getBoundingClientRect();
+        if (btnRect.width > 0 && btnRect.height > 0) {
+          excludeRects.push({
+            x: Math.max(0, btnRect.left),
+            y: Math.max(0, btnRect.top),
+            width: Math.max(0, btnRect.width),
+            height: Math.max(0, btnRect.height),
+          });
+        }
+      }
+
+      void window.electronAPI?.setWidgetHeaderRegion?.(dragRects, excludeRects);
+    };
+    update();
+
+    // ResizeObserver로 헤더/버튼 그룹 크기 변화(날씨바 toggle, 편집 모드 토글 등) 감지.
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(headerEl);
+    if (buttonGroupRef.current) ro?.observe(buttonGroupRef.current);
+    // 위젯 창 resize는 헤더의 width를 바꾸므로 window resize도 듣는다.
+    window.addEventListener('resize', update);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', update);
     };
   }, []);
 
@@ -138,6 +208,23 @@ export function Widget() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [layoutMode, setLayoutMode]);
 
+  // Phase 7-G — native-desktop 모드(WS_CHILD)일 때는 위젯이 keyboard focus를 받지 못해
+  // 위 keydown listener가 작동 안 함. main이 마우스 hover 시 globalShortcut으로 가로채
+  // IPC `widget:layout-shortcut`로 mode를 전달하면 그대로 setLayoutMode 호출.
+  // 일반/topmost 모드에서는 이 IPC가 발사되지 않으므로 (manager가 hoverCallback을 호출 안 함)
+  // 일반 keydown listener가 그대로 작동.
+  useEffect(() => {
+    const onShortcut = window.electronAPI?.onLayoutShortcut;
+    if (!onShortcut) return;
+    const dispose = onShortcut((mode) => {
+      const valid: ReadonlyArray<WidgetLayoutMode> = ['full', 'split-h', 'split-v', 'quad'];
+      if ((valid as readonly string[]).includes(mode)) {
+        setLayoutMode(mode as WidgetLayoutMode);
+      }
+    });
+    return dispose;
+  }, [setLayoutMode]);
+
   // 우클릭 컨텍스트 메뉴
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -178,7 +265,10 @@ export function Widget() {
   return (
     <>
       <div
-        className="w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl border border-sp-border/50 flex flex-col overflow-hidden text-sp-text relative select-none"
+        className={[
+          'w-full h-screen backdrop-blur-md rounded-2xl shadow-2xl flex flex-col overflow-hidden text-sp-text relative select-none',
+          widgetStyle.hideWindowBorder ? '' : 'border border-sp-border/50',
+        ].filter(Boolean).join(' ')}
         onContextMenu={handleContextMenu}
         style={{
           fontFamily: 'inherit',
@@ -188,6 +278,7 @@ export function Widget() {
       >
         {/* ── 헤더 (드래그 영역) ── */}
         <div
+          ref={headerRef}
           className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
           style={{ WebkitAppRegion: 'drag', zoom: settings.dashboardFontScale ?? 1 } as React.CSSProperties}
           onDoubleClick={handleHeaderDoubleClick}
@@ -208,6 +299,7 @@ export function Widget() {
 
           {/* 헤더 우측 버튼 그룹 */}
           <div
+            ref={buttonGroupRef}
             className="absolute top-3 right-3 flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
@@ -299,12 +391,20 @@ export function Widget() {
               </div>
             ) : isEditMode ? (
               /* 편집 모드: WidgetGrid (DnD 지원) */
-              <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+              <div
+                ref={editScroll.ref}
+                className={`h-full overflow-y-auto scrollbar-hover-only${editScroll.near ? ' is-near-scrollbar' : ''}`}
+                {...editScroll.handlers}
+              >
                 <WidgetGrid isEditMode onNavigate={handleWidgetNavigate} />
               </div>
             ) : (
               /* 전체/분할 공통: 3열 그리드 + 단일 스크롤 + scale 축소 */
-              <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+              <div
+                ref={normalScroll.ref}
+                className={`h-full overflow-y-auto scrollbar-hover-only${normalScroll.near ? ' is-near-scrollbar' : ''}`}
+                {...normalScroll.handlers}
+              >
                 {/* 탭 바 */}
                 {visibleWidgets.length > 4 && (
                   <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />

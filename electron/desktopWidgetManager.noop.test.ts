@@ -94,6 +94,59 @@ describe('createDesktopWidgetManager (no-op)', () => {
     });
   });
 
+  describe('setHeaderRegions() — Phase 7-C', () => {
+    it('빈 배열 호출이 throw하지 않는다', () => {
+      expect(() => manager.setHeaderRegions([], fakeWindow)).not.toThrow();
+    });
+
+    it('rect 1개 호출이 throw하지 않는다', () => {
+      expect(() =>
+        manager.setHeaderRegions(
+          [{ x: 0, y: 0, width: 100, height: 50 }],
+          fakeWindow,
+        ),
+      ).not.toThrow();
+    });
+
+    it('연속 호출이 idempotent', () => {
+      expect(() => {
+        manager.setHeaderRegions([{ x: 0, y: 0, width: 100, height: 50 }], fakeWindow);
+        manager.setHeaderRegions([{ x: 10, y: 10, width: 80, height: 40 }], fakeWindow);
+        manager.setHeaderRegions([], fakeWindow);
+      }).not.toThrow();
+    });
+
+    it('Phase 7-C 회귀 fix: excludeDipRects 인자가 옵셔널이고 throw하지 않는다', () => {
+      expect(() =>
+        manager.setHeaderRegions(
+          [{ x: 0, y: 0, width: 100, height: 50 }],
+          fakeWindow,
+          [{ x: 80, y: 0, width: 20, height: 50 }],
+        ),
+      ).not.toThrow();
+    });
+
+    it('Phase 7-C 회귀 fix: excludeDipRects 빈 배열 호출이 throw하지 않는다', () => {
+      expect(() =>
+        manager.setHeaderRegions(
+          [{ x: 0, y: 0, width: 100, height: 50 }],
+          fakeWindow,
+          [],
+        ),
+      ).not.toThrow();
+    });
+
+    it('Phase 7-C 회귀 fix: excludeDipRects 미전달도 backward-compatible', () => {
+      // 3rd 인자 생략 — 기존 호출처(excludeRects 모르는 코드)와 호환되어야 함.
+      expect(() =>
+        manager.setHeaderRegions(
+          [{ x: 0, y: 0, width: 100, height: 50 }],
+          fakeWindow,
+        ),
+      ).not.toThrow();
+    });
+  });
+
   describe('singleton 안전성', () => {
     it('createDesktopWidgetManager()를 여러 번 호출해도 충돌하지 않는다', () => {
       const m1 = createDesktopWidgetManager();

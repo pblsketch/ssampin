@@ -28,10 +28,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleWidget: (): Promise<void> => ipcRenderer.invoke('window:toggleWidget'),
   setOpacity: (value: number): Promise<void> => ipcRenderer.invoke('window:setOpacity', value),
   setWidgetLayout: (mode: string): Promise<void> => ipcRenderer.invoke('window:setWidgetLayout', mode),
+  /**
+   * Phase 7-G — native-desktop hover 시 globalShortcut(Ctrl+1~4)으로 layout 변경 신호 수신.
+   *
+   * native-desktop 모드(WS_CHILD)에선 위젯이 keyboard focus를 못 받아 renderer keydown
+   * listener가 작동 안 함. main이 마우스 hover 시점에만 globalShortcut을 register하고 발사
+   * 시점에 본 채널로 layout mode를 송신한다. renderer가 받아 setLayoutMode(mode) 호출.
+   *
+   * @param cb 콜백. mode는 'full' | 'split-h' | 'split-v' | 'quad'.
+   * @returns 구독 해제 함수.
+   */
+  onLayoutShortcut: (cb: (mode: string) => void): (() => void) => {
+    const handler = (_e: unknown, mode: string): void => cb(mode);
+    ipcRenderer.on('widget:layout-shortcut', handler);
+    return (): void => {
+      ipcRenderer.off('widget:layout-shortcut', handler);
+    };
+  },
   applyWidgetSettings: (widget: {
     opacity: number;
     desktopMode: string;
   }): Promise<void> => ipcRenderer.invoke('window:applyWidgetSettings', widget),
+  /**
+   * Phase 7-C (native-desktop) — widget 헤더(`-webkit-app-region: drag`) 영역의 client DIP rect를
+   * main에 등록한다. WH_MOUSE_LL hook이 LBUTTONDOWN을 헤더 안에서 받으면 widget을 마우스 따라
+   * 이동시킨다. 일반 모드에서는 main이 caching만 하고 hook이 없으므로 무영향.
+   *
+   * Phase 7-C 회귀 fix: excludeRects는 drag 영역 내부에서 제외할 사각형(버튼 그룹 등).
+   * 헤더 안의 no-drag 버튼 영역을 빼지 않으면 버튼 LBUTTONDOWN이 widget 이동으로 처리돼
+   * 클릭이 동작하지 않음.
+   *
+   * mount/resize 시 갱신 호출. 빈 배열을 넘기면 drag 비활성화.
+   */
+  setWidgetHeaderRegion: (
+    rects: { x: number; y: number; width: number; height: number }[],
+    excludeRects?: { x: number; y: number; width: number; height: number }[],
+  ): Promise<void> => ipcRenderer.invoke('widget:setHeaderRegion', rects, excludeRects ?? []),
   /**
    * 바탕화면 아이콘 아래 모드 fallback 알림 수신 (v2.1.0~).
    *
@@ -47,6 +79,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('desktopMode:fallback', handler);
     return () => { ipcRenderer.removeListener('desktopMode:fallback', handler); };
   },
+  /**
+   * native-desktop / widget 진단 로그 forwarding (디버깅용 — 임시).
+   *
+   * Main process는 stdout으로만 console.log를 내보내기 때문에 packaged 빌드에서는
+   * cmd로 ssampin.exe를 실행하지 않으면 진단 흐름을 볼 수 없다. 본 listener는
+   * main → renderer로 IPC mirror된 동일 메시지를 DevTools 콘솔에 그대로 출력한다.
+   *
+   * 참고: main 프로세스도 동일 메시지를 `app.getPath('userData')/native-desktop-diag.log`에
+   * 기록한다 (메모장으로 열어 그대로 공유 가능).
+   *
+   * @returns unsubscribe 함수
+   */
+  onNativeDesktopDiag: (
+    callback: (payload: { message: string; args?: unknown[] }) => void,
+  ): (() => void) => {
+    const handler = (_event: unknown, payload: { message: string; args?: unknown[] }) => callback(payload);
+    ipcRenderer.on('native-desktop:diag', handler);
+    return () => { ipcRenderer.removeListener('native-desktop:diag', handler); };
+  },
+  /**
+   * 진단 라운드 (2026-05-06) — 이슈 B/D 분석용 종합 dump 트리거.
+   *
+   * 사용자가 시나리오 재현 직후 DevTools 콘솔에서:
+   *   `await electronAPI.widgetDiagDump('after-mode-toggle')` 또는 `'after-secondary-clicks')`
+   * 를 호출하면 main process가 디스플레이/widget/WorkerW/Win32 state/routingStats를 한꺼번에
+   * `native-desktop-diag.log`에 기록한다. label은 사용자가 어떤 시나리오 직후인지 식별하려고 적는 자유 문자열.
+   *
+   * 반환값 없음 — 결과는 파일 + DevTools 콘솔(IPC mirror)에 비동기로 흐른다.
+   */
+  widgetDiagDump: (label: string): Promise<void> =>
+    ipcRenderer.invoke('widget:diagDump', label),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:closeApp'),
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: (): Promise<void> => ipcRenderer.invoke('icon:show'),
@@ -63,6 +126,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('icon:drag-by', delta),
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }): Promise<void> =>
     ipcRenderer.invoke('icon:expand', target),
+  iconDiag: (payload: { event: string; data?: unknown }): Promise<void> =>
+    ipcRenderer.invoke('icon:diag', payload),
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;

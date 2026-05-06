@@ -209,6 +209,11 @@ function StyleTab() {
           onChange={(v) => void updateSettings({ widget: { ...settings.widget, cardOpacity: v / 100 } })} />
       </StyleSection>
 
+      <StyleSection title="위젯 창" compact>
+        <ToggleRow label="창 외곽선 표시" checked={!ws.hideWindowBorder} compact
+          onChange={(v) => updateStyle({ hideWindowBorder: !v })} />
+      </StyleSection>
+
       <StyleSection title="테마" compact>
         <div className="grid grid-cols-3 gap-1.5">
           {(() => {

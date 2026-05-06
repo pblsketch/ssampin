@@ -137,10 +137,26 @@ interface ElectronAPI {
   toggleWidget: () => Promise<void>;
   setOpacity: (value: number) => Promise<void>;
   setWidgetLayout: (mode: string) => Promise<void>;
+  /**
+   * Phase 7-G — native-desktop hover 시 main process가 globalShortcut(Ctrl+1~4)으로
+   * layout mode 변경을 신호 송신. 콜백을 등록하면 mode('full'|'split-h'|'split-v'|'quad')를 받음.
+   * 반환값은 구독 해제 함수 (cleanup 시 호출 권장).
+   */
+  onLayoutShortcut?: (cb: (mode: string) => void) => () => void;
   applyWidgetSettings: (widget: {
     opacity: number;
     desktopMode: string;
   }) => Promise<void>;
+  /**
+   * Phase 7-C (native-desktop) — widget 헤더 드래그 영역 등록.
+   * mount/resize 시 호출. 빈 배열이면 drag 비활성화.
+   *
+   * Phase 7-C 회귀 fix: excludeRects는 drag 영역 내부에서 제외할 사각형(헤더 우측 버튼 그룹 등).
+   */
+  setWidgetHeaderRegion?: (
+    rects: { x: number; y: number; width: number; height: number }[],
+    excludeRects?: { x: number; y: number; width: number; height: number }[],
+  ) => Promise<void>;
   /**
    * 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~).
    * native attach 실패 시 main이 모드를 fallbackMode로 정정하며 이 콜백이 호출된다.
@@ -149,6 +165,24 @@ interface ElectronAPI {
   onDesktopModeFallback: (
     callback: (info: { reason: string; fallbackMode: 'normal' | 'topmost' }) => void,
   ) => () => void;
+  /**
+   * native-desktop / widget 진단 로그 forwarding (디버깅용 — G1 게이트 단계 임시).
+   * Main process console + 파일 + IPC 3-way fanout 중 IPC 측 수신.
+   * App.tsx의 useNativeDesktopDiagListener hook이 마운트하여 DevTools 콘솔에 출력한다.
+   *
+   * 디버깅 종료 후 본 채널 + helper 모듈 일괄 제거 예정.
+   */
+  onNativeDesktopDiag?: (
+    callback: (payload: { message: string; args?: unknown[] }) => void,
+  ) => () => void;
+  /**
+   * 진단 라운드 (2026-05-06) — 이슈 B/D 분석용 종합 dump 트리거.
+   *
+   * DevTools 콘솔에서 `await electronAPI.widgetDiagDump('label')` 호출 시
+   * main process가 디스플레이/widget/WorkerW/Win32 state/routingStats를 한꺼번에
+   * `native-desktop-diag.log`에 기록한다. label은 시나리오 식별용 자유 문자열.
+   */
+  widgetDiagDump?: (label: string) => Promise<void>;
   closeWindow: () => Promise<void>;
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: () => Promise<void>;
@@ -159,6 +193,7 @@ interface ElectronAPI {
   iconEndDrag: () => Promise<void>;
   iconResetPosition: () => Promise<void>;
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
+  iconDiag: (payload: { event: string; data?: unknown }) => Promise<void>;
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;

@@ -21,7 +21,7 @@ import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
 import { IconTooltip } from './IconTooltip';
 import { IconContextMenu } from './IconContextMenu';
 import { CoachMark } from './CoachMark';
-import { PinDisc } from './PinDisc';
+import { SsampinIconSvg, type IconState } from './SsampinIconSvg';
 
 const DOUBLE_CLICK_THRESHOLD_MS = 250;
 const HOVER_TOOLTIP_DELAY_MS = 100;
@@ -46,25 +46,64 @@ export function IconWindow() {
   const hoverTimerRef = useRef<number | null>(null);
   const lastClickAtRef = useRef<number>(0);
   const singleClickTimerRef = useRef<number | null>(null);
-  // Pointer Events 기반 드래그 — setPointerCapture로 윈도우 밖에서도 이벤트 유지
-  // 절대 좌표 계산 (mouseDown 시점 offset을 기록하여 매 move마다 newPos = mouseScreen - offset)
+  // 드래그 판정 상태. 실제 윈도우 이동은 main process가 screen.getCursorScreenPoint()를
+  // 16ms 폴링으로 처리하고, renderer는 click vs drag 판정용 메타데이터만 들고 있는다.
+  //
+  // setPointerCapture 사용 안 함 — main의 setBounds 폴링과 결합하면 Windows가
+  // WM_MOUSELEAVE를 새 클라이언트 좌표 기준으로 발사 → Chromium이 pointer hit-test
+  // invariant 깨졌다고 판단해 pointercancel/lostpointercapture를 stealth하게 발사 →
+  // renderer pointer-state desync(W3C/PEP issue #327, Chromium #1166044). 그 결과
+  // "1~2회 드래그 후 capture가 nominally accept되지만 events가 retarget되지 않는"
+  // stuck state 발생. 윈도우가 항상 커서 아래로 따라오므로 capture 없이도
+  // pointermove/pointerup이 element에 정상 도달한다.
   const dragStateRef = useRef<{
     startScreenX: number;
     startScreenY: number;
-    offsetX: number;     // mouseDown 시점 mouse가 윈도우 내에서 어디인지
-    offsetY: number;
     startTime: number;
     isDragging: boolean;
     pointerId: number;
   } | null>(null);
 
-  // 초기 로드
+  // ─── 진단 로그 ──────────────────────────────────────────────────────────
+  // v2.0.4: 사용자가 "1~2회 후 stuck" 재현 시 어디서 멈추는지 가시화.
+  // 출력 경로(3중 fanout):
+  //   1) 아이콘 윈도우 DevTools 콘솔 (dev 모드에서 자동 오픈)
+  //   2) IPC `icon:diag` → main 프로세스 diagLog → packaged exe stdout
+  //   3) 파일 `app.getPath('userData')/native-desktop-diag.log` 에 append
+  //      (Win: `%APPDATA%\ssampin\native-desktop-diag.log`)
+  //
+  // 따라서 release exe 로 실행해도 메모장으로 로그 파일만 열면 진단이 가능.
+  const diagSeqRef = useRef<number>(0);
+  const diag = (event: string, extra: Record<string, unknown> = {}) => {
+    const seq = ++diagSeqRef.current;
+    const data = {
+      state: dragStateRef.current ? 'dragging' : 'idle',
+      handler: !!globalUpHandlerRef.current,
+      ...extra,
+    };
+    // eslint-disable-next-line no-console
+    console.log(`[icon-renderer] #${seq} ${event}`, data);
+    // main 으로 forward — 파일 로그에 append. IPC 실패는 silently swallow.
+    void window.electronAPI?.iconDiag({ event: `#${seq} ${event}`, data });
+  };
+
+  // 초기 로드 — 그리고 mount 사실 자체를 main 에 보고 (icon mode 진입 가시화)
   useEffect(() => {
+    void window.electronAPI?.iconDiag({
+      event: 'IconWindow:mount',
+      data: { url: window.location.href, ts: Date.now() },
+    });
     void loadSettings();
     void loadSchedule();
     void loadEvents();
     void loadTodos();
     void loadMemos();
+    return () => {
+      void window.electronAPI?.iconDiag({
+        event: 'IconWindow:unmount',
+        data: { ts: Date.now() },
+      });
+    };
   }, [loadSettings, loadSchedule, loadEvents, loadTodos, loadMemos]);
 
   // body/html/#root에 transparent 강제 적용 — light 테마의 흰 배경(--sp-bg #ffffff) 무력화
@@ -147,36 +186,62 @@ export function IconWindow() {
     events.some((e) => isUpcomingWithinMinutes(e.date, now, 5)) ||
     todos.some((t) => !t.completed && t.dueDate && isPast(t.dueDate, now));
 
+  // 아이콘 마스코트 상태: alert > active(수업 중) > sleep(방과후) > idle
+  const iconState: IconState = (() => {
+    if (hasAlert) return 'alert';
+    if (periodInfo?.current) return 'active';
+    const lastPeriod = settings.periodTimes?.[settings.periodTimes.length - 1];
+    if (lastPeriod) {
+      const [h, m] = lastPeriod.end.split(':').map(Number);
+      if (h !== undefined && m !== undefined) {
+        const endMinutes = h * 60 + m;
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        if (nowMinutes > endMinutes) return 'sleep';
+      }
+    }
+    return 'idle';
+  })();
+
   // 클릭 vs 드래그 판정 임계
   const CLICK_MAX_DURATION_MS = 250;
   const CLICK_MAX_MOVE_PX = 5;
 
   // 드래그는 main process가 screen.getCursorScreenPoint() 폴링으로 처리.
   // Renderer는 단순히 startDrag/endDrag IPC만 호출 — pointer capture 의존 X.
-  // mouse가 윈도우 밖으로 나가도, 어떤 OS race가 있어도 안정적.
   //
-  // v2.0.3 누적 fix — listener leak 으로 "10번 후 click 도 drag 도 안 됨" 회피.
+  // v2.0.3 fix #1 — listener leak 으로 "10번 후 click 도 drag 도 안 됨" 회피.
+  //   이전 패턴은 4개 listener 를 `{ once:true }` 로 등록했는데, 그중 1개만 발사되면
+  //   나머지 3개는 listener registry 에 남는다. pointerDown 마다 누적 → DOM listener
+  //   table 폭주 → 다음 release 시 stale closure 가 한꺼번에 발사 → renderer race.
+  //   해법: once 제거 + 명시적 cleanup + pointerDown 진입 시 기존 handler 강제 정리.
   //
-  //   문제: 이전 패턴은 4개 listener 를 `{ once:true }` 로 등록했는데, 그중 1개만
-  //   발사되면 나머지 3개는 listener registry 에 남는다 (once 는 발사된 자기 자신만
-  //   자동 해제). pointerDown 마다 새 4개 listener 가 등록되어 누적 → DOM listener
-  //   table 폭주 + 다음 release 시 stale closure 가 한꺼번에 발사 → renderer race.
+  // v2.0.4 fix #2 — capture phase race 로 "더블클릭 무반응" 회피.
+  //   이전 패턴은 fallback listener 를 capture: true 로 등록했는데, 사양상 capture phase
+  //   는 window→document→#root→...→target 순으로 발사되므로 document 핸들러가 React 의
+  //   onPointerUp(루트 컨테이너 위임)보다 먼저 실행되어 dragStateRef 를 null 로 만든다.
+  //   그 다음 발사된 React handlePointerUp 이 `if (!state) return` 가드에 막혀 click 검출
+  //   분기에 도달하지 못함 → 단일/더블 클릭이 한 번도 처리되지 않는다.
+  //   해법: capture phase → bubble phase(false). React 핸들러가 먼저 발사돼 정상 처리하고,
+  //   normal flow 에서는 React 가 이미 cleanupGlobalListeners 를 호출하므로 document
+  //   fallback 은 발사되지 않는다(removeEventListener 가 같은 dispatch 안에서 적용됨).
   //
-  //   해법:
-  //     1. once 제거. 명시적 cleanupGlobalListeners 로 한 번에 4개 모두 정리.
-  //     2. pointerDown 진입 시 기존 handler 가 살아있으면 먼저 cleanup.
-  //     3. handler 가 발사되면 자기 자신만 정리 (다른 핸들러 ref 와 비교 X).
+  // v2.0.4 fix #3 — setPointerCapture 자체 제거.
+  //   main 의 setBounds 폴링과 결합하면 Chromium pointer-state 가 desync 되어 1~2회 후
+  //   stuck. 윈도우가 항상 커서 아래로 따라오므로 capture 없이도 events 가 element 에
+  //   정상 도달한다.
   const globalUpHandlerRef = useRef<(() => void) | null>(null);
 
   const cleanupGlobalListeners = (h: (() => void) | null) => {
     if (!h) return;
-    document.removeEventListener('pointerup', h, true);
-    document.removeEventListener('pointercancel', h, true);
-    document.removeEventListener('mouseup', h, true);
-    window.removeEventListener('blur', h, true);
+    // capture: false 로 등록했으므로 remove 도 capture: false (혹은 third arg 생략).
+    document.removeEventListener('pointerup', h);
+    document.removeEventListener('pointercancel', h);
+    document.removeEventListener('mouseup', h);
+    window.removeEventListener('blur', h);
   };
 
-  const sendEndDrag = () => {
+  const sendEndDrag = (origin: string) => {
+    diag('sendEndDrag', { origin });
     void window.electronAPI?.iconEndDrag();
     const h = globalUpHandlerRef.current;
     if (h) {
@@ -186,18 +251,28 @@ export function IconWindow() {
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return; // 좌클릭만
+    diag('pointerDown:enter', {
+      button: e.button,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      screenX: e.screenX,
+      screenY: e.screenY,
+    });
+    if (e.button !== 0) {
+      diag('pointerDown:skip-non-left');
+      return;
+    }
     // 이전 drag 의 누락된 fallback handler 강제 정리 (누적 leak 방지)
     if (globalUpHandlerRef.current) {
+      diag('pointerDown:cleanup-stale-handler');
       cleanupGlobalListeners(globalUpHandlerRef.current);
       globalUpHandlerRef.current = null;
     }
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    // setPointerCapture 호출 안 함 — main 의 setBounds 폴링이 윈도우를 커서 아래로
+    // 따라오게 하므로 capture 없이도 events 가 element 에 도달한다.
     dragStateRef.current = {
       startScreenX: e.screenX,
       startScreenY: e.screenY,
-      offsetX: 0,
-      offsetY: 0,
       startTime: Date.now(),
       isDragging: false,
       pointerId: e.pointerId,
@@ -205,13 +280,15 @@ export function IconWindow() {
     // main process drag 폴링 시작
     void window.electronAPI?.iconStartDrag();
 
-    // 글로벌 fallback — release 가 어떤 경로로든 발생하면 endDrag 발사 + 자기 정리
+    // 글로벌 fallback — pointerup 이 어떤 경로로든 React 핸들러에 도달하지 못하는
+    // edge case(window blur, alt-tab 등) 안전망. 정상 flow 에선 React handlePointerUp
+    // 이 먼저 실행돼 cleanupGlobalListeners 로 본 listener 들을 떼어내므로 본 handler
+    // 는 발사되지 않는다(같은 dispatch 안의 removeEventListener 는 이후 phase 에 적용됨).
     const handler = () => {
+      diag('fallback-handler:fired');
       if (dragStateRef.current) {
         dragStateRef.current = null;
       }
-      // 자기 자신만 정리 (다른 ref 와 비교하지 않음 — 이미 새 drag 이면 ref 가
-      // 이미 다른 핸들러를 가리키므로 sendEndDrag 의 ref 비교 패턴은 stale).
       cleanupGlobalListeners(handler);
       if (globalUpHandlerRef.current === handler) {
         globalUpHandlerRef.current = null;
@@ -219,10 +296,13 @@ export function IconWindow() {
       void window.electronAPI?.iconEndDrag();
     };
     globalUpHandlerRef.current = handler;
-    document.addEventListener('pointerup', handler, true);
-    document.addEventListener('pointercancel', handler, true);
-    document.addEventListener('mouseup', handler, true);
-    window.addEventListener('blur', handler, true);
+    // capture: false (bubble phase). React 의 onPointerUp(루트 위임)이 본 document
+    // 핸들러보다 먼저 발사되도록 보장 — 더블클릭 검출 가능.
+    document.addEventListener('pointerup', handler);
+    document.addEventListener('pointercancel', handler);
+    document.addEventListener('mouseup', handler);
+    window.addEventListener('blur', handler);
+    diag('pointerDown:exit-ready');
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -232,15 +312,27 @@ export function IconWindow() {
     const totalMoved = Math.hypot(e.screenX - state.startScreenX, e.screenY - state.startScreenY);
     if (!state.isDragging && totalMoved > CLICK_MAX_MOVE_PX) {
       state.isDragging = true;
+      diag('pointerMove:drag-detected', { totalMoved });
     }
     // 윈도우 이동은 main이 폴링으로 처리 — 여기선 click/drag 판정만
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    diag('pointerUp:enter', {
+      pointerId: e.pointerId,
+      screenX: e.screenX,
+      screenY: e.screenY,
+    });
     const state = dragStateRef.current;
-    if (!state) return;
-    if (e.pointerId !== state.pointerId) return;
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (!state) {
+      diag('pointerUp:skip-state-null');
+      return;
+    }
+    if (e.pointerId !== state.pointerId) {
+      diag('pointerUp:skip-pointerId-mismatch', { expected: state.pointerId });
+      return;
+    }
+    // releasePointerCapture 호출 안 함 — handlePointerDown 에서 capture 를 잡지 않았다.
 
     const elapsed = Date.now() - state.startTime;
     const totalMoved = Math.hypot(e.screenX - state.startScreenX, e.screenY - state.startScreenY);
@@ -248,37 +340,42 @@ export function IconWindow() {
     dragStateRef.current = null;
 
     // main process drag 폴링 종료 + 글로벌 fallback 핸들러 정리
-    sendEndDrag();
+    sendEndDrag('pointerUp');
 
     if (wasDragging || elapsed > CLICK_MAX_DURATION_MS || totalMoved > CLICK_MAX_MOVE_PX) {
+      diag('pointerUp:treated-as-drag', { wasDragging, elapsed, totalMoved });
       return;
     }
 
     // click 검출
     const t = Date.now();
     const isDouble = t - lastClickAtRef.current < DOUBLE_CLICK_THRESHOLD_MS;
+    diag('pointerUp:click-detected', { isDouble, sinceLast: t - lastClickAtRef.current });
     lastClickAtRef.current = t;
     if (isDouble) {
       if (singleClickTimerRef.current) {
         clearTimeout(singleClickTimerRef.current);
         singleClickTimerRef.current = null;
       }
+      diag('iconExpand:fire', { to: 'main' });
       void window.electronAPI?.iconExpand({ to: 'main' });
       return;
     }
     if (singleClickTimerRef.current) clearTimeout(singleClickTimerRef.current);
     singleClickTimerRef.current = window.setTimeout(() => {
+      diag('iconExpand:fire', { to: 'restore' });
       void window.electronAPI?.iconExpand({ to: 'restore' });
       singleClickTimerRef.current = null;
     }, DOUBLE_CLICK_THRESHOLD_MS + 10);
   };
 
   const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    diag('pointerCancel:enter', { pointerId: e.pointerId });
     if (dragStateRef.current?.pointerId === e.pointerId) {
-      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      // releasePointerCapture 호출 안 함 — capture 를 잡지 않았으므로 풀 것도 없다.
       dragStateRef.current = null;
       // 안전망 — main drag 폴링도 종료 + 글로벌 fallback 정리
-      sendEndDrag();
+      sendEndDrag('pointerCancel');
     }
   };
 
@@ -286,7 +383,7 @@ export function IconWindow() {
   useEffect(() => {
     return () => {
       if (globalUpHandlerRef.current) {
-        sendEndDrag();
+        sendEndDrag('unmount');
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -341,7 +438,11 @@ export function IconWindow() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <PinDisc hasAlert={hasAlert} hovered={hovered} />
+        <SsampinIconSvg
+          state={iconState}
+          size={56}
+          className="select-none pointer-events-none"
+        />
       </div>
       {hovered && periodInfo && (
         <IconTooltip current={periodInfo.current} next={periodInfo.next} />
