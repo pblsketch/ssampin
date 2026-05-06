@@ -1011,13 +1011,25 @@ export function detachFromWorkerW(h: Win32DesktopHandles): void {
   try {
     b = loadWin32Bindings();
   } catch {
+    diagWarn('native-desktop', '[detach] koffi load 실패 — detach skip');
     return; // koffi가 죽었으면 detach 시도조차 무의미.
   }
 
-  if (isNullHandle(h.widgetHwnd)) return;
+  diagLog(
+    'native-desktop',
+    `[detach] enter widgetHwnd=0x${h.widgetHwnd.toString(16)} prevStyle=0x${h.prevStyle.toString(16)} prevExStyle=0x${h.prevExStyle.toString(16)} prevParent=0x${h.prevParent.toString(16)}`,
+  );
+
+  if (isNullHandle(h.widgetHwnd)) {
+    diagWarn('native-desktop', '[detach] widgetHwnd null — skip');
+    return;
+  }
   // 위젯 창이 이미 destroy됐으면 IsWindow가 0 반환 → 그냥 종료.
   try {
-    if (b.IsWindow(h.widgetHwnd) === 0) return;
+    if (b.IsWindow(h.widgetHwnd) === 0) {
+      diagWarn('native-desktop', '[detach] widget already destroyed — skip');
+      return;
+    }
   } catch {
     return;
   }
@@ -1064,11 +1076,13 @@ export function detachFromWorkerW(h: Win32DesktopHandles): void {
   //    복원만으로는 visibility가 자동 복구되지 않는다.
   //    BrowserWindow 자체 visible state는 main.ts의 widgetWindow.show() 호출이 보장하지만,
   //    여기서 한 번 더 native ShowWindow를 호출해 단일 책임의 안전망을 마련.
+  let showResult = -1;
   try {
-    b.ShowWindow(h.widgetHwnd, SW_SHOWNOACTIVATE);
+    showResult = b.ShowWindow(h.widgetHwnd, SW_SHOWNOACTIVATE);
   } catch {
     /* best-effort */
   }
+  diagLog('native-desktop', `[detach] complete ShowWindow=${showResult}`);
 }
 
 /**
