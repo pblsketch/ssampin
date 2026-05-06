@@ -78,6 +78,57 @@ export interface DragState {
 }
 
 /**
+ * Phase 7-D — 위젯 가장자리 resize edge 식별자.
+ *
+ * Widget.tsx의 8개 resize handle DOM과 1:1 매칭. main.ts의 `window:resizeWidget` IPC가
+ * 이미 같은 문자열을 받으므로(`edge.includes('right')` 패턴) 동일 컨벤션 유지.
+ */
+export type ResizeEdge =
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right';
+
+/**
+ * Phase 7-D — renderer가 main에 등록하는 resize region.
+ *
+ * dipRect는 widget client area 좌상단 기준 DIP 좌표.
+ * manager가 enable/updateWidgetBounds 시점에 PhysicalRect로 변환해 hook callback에서
+ * isInsideAnyRect로 즉시 판정 가능하게 한다.
+ */
+export interface ResizeRegion {
+  readonly edge: ResizeEdge;
+  readonly dipRect: DipRect;
+}
+
+/**
+ * Phase 7-D — resize 진행 상태.
+ *
+ * WS_CHILD가 된 widget은 nc resize가 부모(WorkerW)로 흘러 작동 안 함. WH_MOUSE_LL hook
+ * callback이 LBUTTONDOWN을 resize edge에서 감지하면 본 state를 활성화하고 MOUSEMOVE마다
+ * delta를 계산해 SetWindowPos로 widget 크기를 조절한다. LBUTTONUP에서 해제.
+ *
+ * 좌표계:
+ *   - startMouse: resize 시작 시점의 physical screen mouse position
+ *   - startBounds: resize 시작 시점의 physical bounds (delta 누적 base)
+ *   - edge: 어느 가장자리/모서리에서 시작했는가 (방향에 따라 dx/dy 적용 방식 다름)
+ *
+ * resize 중에는 hook callback이 click 라우팅을 차단해야 함 (drag와 동일).
+ */
+export interface ResizeState {
+  readonly active: boolean;
+  readonly edge: ResizeEdge;
+  readonly startMouse: { readonly x: number; readonly y: number };
+  readonly startBounds: PhysicalRect;
+  /** resize 진행 중 MOUSEMOVE 진입 카운트 (진단용 sampling). hot path mutate. */
+  moveCount?: number;
+}
+
+/**
  * Phase 7-C — DipRect 좌표가 widget client 안의 어느 사각형 안에 있는지 판정.
  *
  * physical screen coordinate p가 PhysicalRect들 중 하나라도 포함하면 true.

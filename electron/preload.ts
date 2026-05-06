@@ -65,6 +65,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     excludeRects?: { x: number; y: number; width: number; height: number }[],
   ): Promise<void> => ipcRenderer.invoke('widget:setHeaderRegion', rects, excludeRects ?? []),
   /**
+   * Phase 7-D — widget 8개 resize edge의 client DIP rect 등록.
+   *
+   * native-desktop 모드(WS_CHILD)에서 nc resize가 작동 안 하므로 hook이 LBUTTONDOWN을
+   * 등록된 edge에서 감지해 SetWindowPos로 widget 크기를 조절한다.
+   * 일반/topmost 모드에서는 main이 setResizeRegions를 noop manager에 위임 → 무영향.
+   *
+   * mount/resize 시 호출. 빈 배열이면 resize 비활성.
+   */
+  setWidgetResizeRegion: (
+    regions: {
+      edge: 'top'|'bottom'|'left'|'right'|'top-left'|'top-right'|'bottom-left'|'bottom-right';
+      dipRect: { x: number; y: number; width: number; height: number };
+    }[],
+  ): Promise<void> => ipcRenderer.invoke('widget:setResizeRegion', regions),
+  /**
    * 바탕화면 아이콘 아래 모드 fallback 알림 수신 (v2.1.0~).
    *
    * native attach 실패 시 main process가 settings의 desktopMode를 fallbackMode로

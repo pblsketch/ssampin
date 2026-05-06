@@ -18,7 +18,7 @@
 
 import { screen } from 'electron';
 import type { BrowserWindow } from 'electron';
-import type { DesktopWidgetModeStatus, DipRect, DragState, PhysicalRect } from './desktopWidgetTypes';
+import type { DesktopWidgetModeStatus, DipRect, DragState, PhysicalRect, ResizeRegion, ResizeState } from './desktopWidgetTypes';
 import { dipToPhysical, isInsideAnyRect } from './desktopWidgetTypes';
 import { diagLog, diagWarn } from './nativeDesktopDiag';
 
@@ -129,6 +129,25 @@ export interface DesktopWidgetManager {
     failed: number;
     totalCallbacks: number;
   };
+
+  /**
+   * Phase 7-D — renderer가 widget 가장자리 resize handle의 client DIP rect들을 등록한다.
+   *
+   * native-desktop 모드(WS_CHILD)에선 nc resize가 부모(WorkerW)로 흘러 작동 안 함. hook이
+   * LBUTTONDOWN을 등록된 resize region에서 감지하면 resize mode 진입 → MOUSEMOVE마다
+   * SetWindowPos로 widget 크기 조절.
+   *
+   * 호출 시점:
+   *   - widget mount/resize 시 renderer가 갱신 호출
+   *   - widget 자체가 move/resize되면 manager가 cachedResizeRegions를 자동 재계산하므로
+   *     renderer는 dipRects 자체가 바뀌지 않으면 재호출 불필요
+   *
+   * 빈 배열을 넘기면 resize 비활성화.
+   *
+   * @param regions widget client area 기준 8개 edge DIP rect (top/bottom/left/right + 4 corner)
+   * @param window widget BrowserWindow — display.scaleFactor 추출용
+   */
+  setResizeRegions(regions: readonly ResizeRegion[], window: BrowserWindow): void;
 
   /**
    * Phase 7-G — widget bounds 안 ↔ 밖 hover 트랜지션 콜백 등록.
@@ -253,6 +272,10 @@ function createNoopManager(reason: string): DesktopWidgetManager {
       // 일반/topmost 모드에선 어차피 widget이 focus를 받아 keydown이 정상 작동하므로
       // hover-based shortcut 인프라 자체가 불필요.
     },
+    setResizeRegions(_regions: readonly ResizeRegion[], _window: BrowserWindow): void {
+      // 일반/topmost 모드에선 위젯이 top-level이라 renderer DOM의 resize handle이
+      // pointerdown으로 직접 작동(Widget.tsx:466). hook 기반 resize 불필요.
+    },
   };
 }
 
@@ -346,6 +369,61 @@ function createWin32Manager(
   let lastHitY = Number.NaN;
   let lastHitResult = false;
   let lastHitUntil = 0;
+
+  // ─── Phase 7-D — Resize 상태 ─────────────────────────────────
+  /**
+   * 활성 resize state. null이면 resize 중 아님.
+   * LBUTTONDOWN이 resize edge 안에서 발생하면 채워지고, LBUTTONUP에서 null로 리셋.
+   * disable() / clearHandles에서도 정리.
+   */
+  let resizeState: ResizeState | null = null;
+  /**
+   * renderer가 IPC로 등록한 resize edge 영역 — widget client area 기준 DIP rect + edge 식별자.
+   * widget이 move/resize될 때마다 cachedResizeRegions(physical screen)를 재계산하기 위해
+   * 원본 DIP rect는 별도로 보관.
+   */
+  let cachedResizeRegionsDip: readonly ResizeRegion[] = [];
+  /**
+   * cachedResizeRegionsDip를 현재 widget bounds + display scaleFactor로 변환한
+   * (physical screen rect, edge) 배열. hook callback hot path에서 LBUTTONDOWN 위치 hit-test에 사용.
+   */
+  let cachedResizeRegions: ReadonlyArray<{ rect: PhysicalRect; edge: ResizeRegion['edge'] }> = [];
+
+  function recalcResizeRegionsPhysical(window: BrowserWindow): void {
+    if (!cachedPhysicalBounds || cachedResizeRegionsDip.length === 0) {
+      cachedResizeRegions = [];
+      return;
+    }
+    if (window.isDestroyed()) {
+      cachedResizeRegions = [];
+      return;
+    }
+    // dipRectsToPhysical은 DipRect[]만 받으므로 edge metadata는 별도 매핑.
+    const physical = dipRectsToPhysical(cachedResizeRegionsDip.map(r => r.dipRect), window);
+    cachedResizeRegions = cachedResizeRegionsDip.map((r, i) => ({
+      rect: physical[i] ?? { x: 0, y: 0, width: 0, height: 0 },
+      edge: r.edge,
+    }));
+  }
+
+  /**
+   * Phase 7-D — physical screen point가 어느 resize region에 들어가는지 판정.
+   * 첫 번째 매칭 region 반환 (배열 순서대로 검사). 없으면 null.
+   */
+  function findResizeEdgeAtPoint(p: { x: number; y: number }): ResizeRegion['edge'] | null {
+    for (let i = 0; i < cachedResizeRegions.length; i++) {
+      const r = cachedResizeRegions[i]!;
+      if (
+        p.x >= r.rect.x
+        && p.x < r.rect.x + r.rect.width
+        && p.y >= r.rect.y
+        && p.y < r.rect.y + r.rect.height
+      ) {
+        return r.edge;
+      }
+    }
+    return null;
+  }
 
   // ─── Phase 7-G — widget bounds hover 트랜지션 ────────────────
   /**
@@ -522,6 +600,10 @@ function createWin32Manager(
     cachedHeaderRegions = [];
     cachedHeaderExcludeRegionsDip = [];
     cachedHeaderExcludeRegions = [];
+    // Phase 7-D: resize state + regions 정리
+    resizeState = null;
+    cachedResizeRegionsDip = [];
+    cachedResizeRegions = [];
     // Phase 7-G: hover state 정리 + leave 신호 1회 발사 (main이 globalShortcut unregister하도록).
     if (lastHoverInside && hoverCallback) {
       try {
@@ -722,6 +804,8 @@ function createWin32Manager(
       // Phase 7-C: 이전에 setHeaderRegions로 등록된 dipRects가 있으면 즉시 physical 재계산.
       // (renderer가 enable 이전에 IPC로 등록한 경우 대비.)
       recalcHeaderRegionsPhysical(window);
+      // Phase 7-D: resize regions도 동일.
+      recalcResizeRegionsPhysical(window);
       diagLog('native-desktop', `Phase 7-A: routingMethod='${routingMethod}', BrowserWindow 캐시 완료, headerRegions=${cachedHeaderRegions.length}`);
 
       // 5. Phase 6: ListView 탐색 (실패해도 attach 자체는 유지 — 모든 hit이 Electron으로 처리됨)
@@ -814,11 +898,78 @@ function createWin32Manager(
               if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
                 cachedPhysicalBounds = recalcPhysicalBounds(cachedWidgetWindow);
                 recalcHeaderRegionsPhysical(cachedWidgetWindow);
+                recalcResizeRegionsPhysical(cachedWidgetWindow);
               }
               // ★ Explorer rubber band 종료 차단: BUTTONUP도 흡수.
               return true;
             }
             // 다른 버튼/메시지가 drag 중에 들어오면 일단 무시 (drag 우선) + 차단.
+            return true;
+          }
+
+          // ─── Phase 7-D — Resize 처리 ───
+          // resize 활성 중에는 click/hover 라우팅 모두 차단. resize 종료 후에야 정상 라우팅 재개.
+          if (resizeState && resizeState.active) {
+            // 0x0200 = WM_MOUSEMOVE
+            if (msgType === 0x0200) {
+              const dx = p.x - resizeState.startMouse.x;
+              const dy = p.y - resizeState.startMouse.y;
+              const start = resizeState.startBounds;
+              let newX = start.x;
+              let newY = start.y;
+              let newW = start.width;
+              let newH = start.height;
+
+              // edge가 'right'/'bottom' 포함이면 폭/높이만 증가.
+              // 'left'/'top' 포함이면 origin도 함께 이동(폭/높이는 반대 부호로).
+              if (resizeState.edge.includes('right'))  newW = start.width + dx;
+              if (resizeState.edge.includes('bottom')) newH = start.height + dy;
+              if (resizeState.edge.includes('left'))   { newX = start.x + dx; newW = start.width - dx; }
+              if (resizeState.edge.includes('top'))    { newY = start.y + dy; newH = start.height - dy; }
+
+              // min size 클램핑(physical px 기준 — DPI 100% 환경에서 dipBounds 300×200과 동일).
+              // left/top edge 끌 때는 origin도 함께 보정해야 widget이 우/하로 밀려나지 않음.
+              const MIN_W = 300;
+              const MIN_H = 200;
+              if (newW < MIN_W) {
+                if (resizeState.edge.includes('left')) newX = start.x + start.width - MIN_W;
+                newW = MIN_W;
+              }
+              if (newH < MIN_H) {
+                if (resizeState.edge.includes('top')) newY = start.y + start.height - MIN_H;
+                newH = MIN_H;
+              }
+
+              resizeState.moveCount = (resizeState.moveCount ?? 0) + 1;
+              try {
+                const moveOk = win32.moveWidget(cachedWidgetHwnd, newX, newY, newW, newH);
+                if (resizeState.moveCount % 30 === 1) {
+                  diagLog(
+                    'native-desktop',
+                    `[7-D] resize move #${resizeState.moveCount} edge=${resizeState.edge} mouse=(${p.x},${p.y}) delta=(${dx},${dy}) newRect=(${newX},${newY},${newW}x${newH}) moveOk=${moveOk}`,
+                  );
+                }
+              } catch (e) {
+                diagWarn('native-desktop', `[7-D] resize move 실패: ${e instanceof Error ? e.message : String(e)}`);
+              }
+              // MOUSEMOVE는 차단하지 않음 (drag와 동일 — Win11 24H2 회귀 회피).
+              return false;
+            }
+            // 0x0202 = WM_LBUTTONUP
+            if (msgType === 0x0202) {
+              diagLog(
+                'native-desktop',
+                `[7-D] resize end edge=${resizeState.edge} mouse=(${p.x},${p.y}) totalDelta=(${p.x - resizeState.startMouse.x},${p.y - resizeState.startMouse.y})`,
+              );
+              resizeState = null;
+              if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
+                cachedPhysicalBounds = recalcPhysicalBounds(cachedWidgetWindow);
+                recalcHeaderRegionsPhysical(cachedWidgetWindow);
+                recalcResizeRegionsPhysical(cachedWidgetWindow);
+              }
+              return true;
+            }
+            // resize 중 다른 버튼/메시지는 차단(클릭 흘러가지 않게).
             return true;
           }
 
@@ -892,11 +1043,32 @@ function createWin32Manager(
             }
           }
 
+          // ─── Phase 7-D — Resize edge LBUTTONDOWN으로 resize 시작 ───
+          // 우선순위는 drag보다 위 — corner 영역(예: top-left)은 헤더와 겹칠 수 있어
+          // resize가 우선 처리되어야 자연스러움.
+          // 0x0201 = WM_LBUTTONDOWN
+          if (msgType === 0x0201 && cachedResizeRegions.length > 0 && cachedPhysicalBounds) {
+            const hitEdge = findResizeEdgeAtPoint(p);
+            if (hitEdge) {
+              resizeState = {
+                active: true,
+                edge: hitEdge,
+                startMouse: { x: p.x, y: p.y },
+                startBounds: cachedPhysicalBounds,
+              };
+              diagLog(
+                'native-desktop',
+                `[7-D] resize start edge=${hitEdge} mouse=(${p.x},${p.y}) startBounds=(${cachedPhysicalBounds.x},${cachedPhysicalBounds.y},${cachedPhysicalBounds.width}x${cachedPhysicalBounds.height})`,
+              );
+              // Explorer rubber band 차단(drag와 동일 정책).
+              return true;
+            }
+          }
+
           // ─── Phase 7-C — Header LBUTTONDOWN으로 drag 시작 ───
           // 우선순위: bounds 안 + 헤더 영역 안 + 아이콘 위 아님 → drag 시작.
           // 아이콘 위는 passThroughCheck로 Explorer가 처리하도록 양보 (아래 분기).
           // 헤더가 아닌 일반 위젯 영역의 LBUTTONDOWN은 정상 sendInputEvent로 흘러감.
-          // 0x0201 = WM_LBUTTONDOWN
           // ─── 진단: LBUTTONDOWN 좌표가 어떤 region에 들어왔는지 ───
           // drag 안 됨 회귀 디버깅용. 모든 LBUTTONDOWN을 1회 로그.
           if (msgType === 0x0201) {
@@ -1128,6 +1300,34 @@ function createWin32Manager(
       cachedPhysicalBounds = recalcPhysicalBounds(window);
       // Phase 7-C: widget이 이동/리사이즈되면 헤더 영역도 따라 이동 — 재계산.
       recalcHeaderRegionsPhysical(window);
+      // Phase 7-D: resize 영역도 widget 자체 크기와 함께 변하므로 재계산.
+      recalcResizeRegionsPhysical(window);
+    },
+
+    /**
+     * Phase 7-D — renderer가 widget 가장자리 8개 edge resize handle의 DIP rect를 등록.
+     *
+     * dipRects 자체를 보존하고 즉시 physical 좌표 재계산. attach 안 된 상태에서도
+     * dipRects는 보존되어 다음 enable 시 즉시 사용 가능.
+     */
+    setResizeRegions(regions: readonly ResizeRegion[], window: BrowserWindow): void {
+      cachedResizeRegionsDip = regions;
+      if (handles && cachedPhysicalBounds && !window.isDestroyed()) {
+        recalcResizeRegionsPhysical(window);
+        const summary = cachedResizeRegions
+          .map(r => `${r.edge}:(${r.rect.x},${r.rect.y},${r.rect.width}x${r.rect.height})`)
+          .join(' ');
+        diagLog(
+          'native-desktop',
+          `[7-D] resize regions updated: ${cachedResizeRegions.length} ${summary}`,
+        );
+      } else {
+        cachedResizeRegions = [];
+        diagLog(
+          'native-desktop',
+          `[7-D] resize regions cached but inactive (handles=${!!handles}, bounds=${!!cachedPhysicalBounds})`,
+        );
+      }
     },
 
     async healthCheck(window: BrowserWindow): Promise<DesktopWidgetModeStatus> {

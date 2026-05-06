@@ -158,6 +158,17 @@ interface ElectronAPI {
     excludeRects?: { x: number; y: number; width: number; height: number }[],
   ) => Promise<void>;
   /**
+   * Phase 7-D (native-desktop) — widget 8개 resize edge DIP rect 등록.
+   * mount/resize 시 호출. 빈 배열이면 resize 비활성화.
+   * 일반/topmost 모드에서는 noop manager가 받으므로 무영향(renderer는 모드 분기 없이 매번 호출 가능).
+   */
+  setWidgetResizeRegion?: (
+    regions: {
+      edge: 'top'|'bottom'|'left'|'right'|'top-left'|'top-right'|'bottom-left'|'bottom-right';
+      dipRect: { x: number; y: number; width: number; height: number };
+    }[],
+  ) => Promise<void>;
+  /**
    * 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~).
    * native attach 실패 시 main이 모드를 fallbackMode로 정정하며 이 콜백이 호출된다.
    * renderer는 토스트 표시 + settings store에 fallbackMode 반영을 책임진다.

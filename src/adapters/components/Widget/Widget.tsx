@@ -225,6 +225,39 @@ export function Widget() {
     return dispose;
   }, [setLayoutMode]);
 
+  // Phase 7-D — native-desktop 모드(WS_CHILD)에선 nc resize가 작동 안 하므로 main이 hook으로
+  // 처리. renderer는 8개 resize edge의 client DIP rect를 IPC로 등록만 하면 된다.
+  // 일반/topmost 모드에서는 noop manager가 받으므로 모드 분기 없이 매번 호출.
+  // edge 좌표/크기는 아래 resize handle DOM(line 450~)의 style과 정확히 일치해야 함.
+  useEffect(() => {
+    const setRegion = window.electronAPI?.setWidgetResizeRegion;
+    if (!setRegion) return;
+    const update = (): void => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      // 4 edge: 가장자리 변. 모서리 12px씩 비워(corner와 겹치지 않도록).
+      // 4 corner: 12×12 모서리.
+      const regions = [
+        { edge: 'top' as const,          dipRect: { x: 8,      y: 0,      width: w - 16, height: 6 } },
+        { edge: 'bottom' as const,       dipRect: { x: 8,      y: h - 6,  width: w - 16, height: 6 } },
+        { edge: 'left' as const,         dipRect: { x: 0,      y: 8,      width: 6,      height: h - 16 } },
+        { edge: 'right' as const,        dipRect: { x: w - 6,  y: 8,      width: 6,      height: h - 16 } },
+        { edge: 'top-left' as const,     dipRect: { x: 0,      y: 0,      width: 12,     height: 12 } },
+        { edge: 'top-right' as const,    dipRect: { x: w - 12, y: 0,      width: 12,     height: 12 } },
+        { edge: 'bottom-left' as const,  dipRect: { x: 0,      y: h - 12, width: 12,     height: 12 } },
+        { edge: 'bottom-right' as const, dipRect: { x: w - 12, y: h - 12, width: 12,     height: 12 } },
+      ];
+      void setRegion(regions);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      // unmount 시 빈 배열로 등록 해제 (manager의 cachedResizeRegions 정리).
+      void setRegion([]);
+    };
+  }, []);
+
   // 우클릭 컨텍스트 메뉴
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();

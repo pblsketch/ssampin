@@ -2325,6 +2325,30 @@ function registerIpcHandlers(): void {
    * native-desktop 모드가 아니거나 widget이 없으면 무시(IPC만 silent ignore).
    * dipRects는 widget client area 좌상단 기준 좌표.
    */
+  // Phase 7-D — widget 가장자리 8개 resize edge의 client DIP rect를 main에 등록.
+  // native-desktop 모드(WS_CHILD)에서 nc resize가 작동 안 하는 것을 hook으로 우회.
+  // renderer가 mount/resize 시마다 호출. 빈 배열이면 resize 비활성.
+  ipcMain.handle(
+    'widget:setResizeRegion',
+    (
+      _event,
+      regions: { edge: string; dipRect: { x: number; y: number; width: number; height: number } }[],
+    ): void => {
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      const validEdges: ReadonlyArray<string> = [
+        'top', 'bottom', 'left', 'right',
+        'top-left', 'top-right', 'bottom-left', 'bottom-right',
+      ];
+      const filtered = (regions ?? []).filter(r => validEdges.includes(r.edge));
+      // ResizeRegion 타입은 desktopWidgetTypes에서 import — main.ts는 string으로 받아 manager에 위임.
+      // edge는 매니저 내부에서 includes()로만 사용하므로 string 그대로 전달.
+      desktopWidgetManager.setResizeRegions(
+        filtered.map(r => ({ edge: r.edge as 'top'|'bottom'|'left'|'right'|'top-left'|'top-right'|'bottom-left'|'bottom-right', dipRect: r.dipRect })),
+        widgetWindow,
+      );
+    },
+  );
+
   ipcMain.handle(
     'widget:setHeaderRegion',
     (
