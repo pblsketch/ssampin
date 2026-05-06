@@ -81,6 +81,9 @@ export interface DesktopWidgetManager {
    * 등록한다. WH_MOUSE_LL hook callback이 LBUTTONDOWN을 받을 때 본 영역 안이면 drag mode
    * 진입.
    *
+   * Phase 7-C 회귀 fix: excludeDipRects는 drag 영역 내부에서 제외할 사각형(헤더 우측 버튼 그룹).
+   * dipRects 안 + excludeDipRects 안이면 drag 시작 안 함 → 버튼 LBUTTONDOWN이 정상 라우팅.
+   *
    * 호출 시점:
    *   - mount/resize/layout 변경 시마다 renderer가 갱신 호출.
    *   - 위젯 자체가 move/resize되면 manager가 cachedHeaderRegions를 자동 재계산하므로
@@ -90,8 +93,13 @@ export interface DesktopWidgetManager {
    *
    * @param dipRects widget client area 기준 DIP rect들 (보통 1개의 헤더 사각형)
    * @param window widget BrowserWindow — display.scaleFactor 추출용
+   * @param excludeDipRects drag 영역에서 제외할 사각형(버튼 그룹). 옵셔널(없으면 빈 배열).
    */
-  setHeaderRegions(dipRects: readonly DipRect[], window: BrowserWindow): void;
+  setHeaderRegions(
+    dipRects: readonly DipRect[],
+    window: BrowserWindow,
+    excludeDipRects?: readonly DipRect[],
+  ): void;
 }
 
 /**
@@ -173,7 +181,11 @@ function createNoopManager(reason: string): DesktopWidgetManager {
     shouldPassThroughToDesktop(_p: { x: number; y: number }): boolean {
       return false;
     },
-    setHeaderRegions(_dipRects: readonly DipRect[], _window: BrowserWindow): void {
+    setHeaderRegions(
+      _dipRects: readonly DipRect[],
+      _window: BrowserWindow,
+      _excludeDipRects?: readonly DipRect[],
+    ): void {
       // no-op manager는 hook이 없으므로 헤더 영역 정보가 의미 없음.
     },
   };
@@ -271,20 +283,28 @@ function createWin32Manager(
    * widget bounds가 갱신되거나 setHeaderRegions가 호출되면 재계산.
    */
   let cachedHeaderRegions: readonly PhysicalRect[] = [];
+  /**
+   * Phase 7-C 회귀 fix — drag 영역에서 제외해야 하는 DIP rect들(주로 헤더 우측 버튼 그룹).
+   * setHeaderRegions에서 채워지고, recalcHeaderRegionsPhysical에서 cachedHeaderExcludeRegions로 변환.
+   *
+   * cachedHeaderRegions 안 + cachedHeaderExcludeRegions 안이면 drag 안 시작 → 버튼 클릭 정상 라우팅.
+   */
+  let cachedHeaderExcludeRegionsDip: readonly DipRect[] = [];
+  /**
+   * cachedHeaderExcludeRegionsDip의 physical screen 좌표 캐시. hot path에서 isInsideAnyRect로 즉시 판정.
+   */
+  let cachedHeaderExcludeRegions: readonly PhysicalRect[] = [];
 
-  function recalcHeaderRegionsPhysical(window: BrowserWindow): void {
-    if (!cachedPhysicalBounds || cachedHeaderRegionsDip.length === 0) {
-      cachedHeaderRegions = [];
-      return;
-    }
-    if (window.isDestroyed()) {
-      cachedHeaderRegions = [];
-      return;
-    }
+  function dipRectsToPhysical(
+    dipRects: readonly DipRect[],
+    window: BrowserWindow,
+  ): readonly PhysicalRect[] {
+    if (!cachedPhysicalBounds || dipRects.length === 0) return [];
+    if (window.isDestroyed()) return [];
     const display = screen.getDisplayMatching(window.getBounds());
     const sf = display.scaleFactor || 1;
     const base = cachedPhysicalBounds;
-    cachedHeaderRegions = cachedHeaderRegionsDip.map((r) => {
+    return dipRects.map((r) => {
       // r은 widget client area DIP 기준 → screen physical로 변환:
       //   physicalX = widgetOriginX + round(rDip.x * sf)
       const x = base.x + Math.round(r.x * sf);
@@ -300,8 +320,31 @@ function createWin32Manager(
     });
   }
 
-  function isInHeaderRegion(p: { x: number; y: number }): boolean {
-    return isInsideAnyRect(p, cachedHeaderRegions);
+  function recalcHeaderRegionsPhysical(window: BrowserWindow): void {
+    if (!cachedPhysicalBounds || cachedHeaderRegionsDip.length === 0) {
+      cachedHeaderRegions = [];
+      cachedHeaderExcludeRegions = [];
+      return;
+    }
+    if (window.isDestroyed()) {
+      cachedHeaderRegions = [];
+      cachedHeaderExcludeRegions = [];
+      return;
+    }
+    cachedHeaderRegions = dipRectsToPhysical(cachedHeaderRegionsDip, window);
+    cachedHeaderExcludeRegions = dipRectsToPhysical(cachedHeaderExcludeRegionsDip, window);
+  }
+
+  /**
+   * Phase 7-C 회귀 fix — drag 시작 가능한 헤더 영역인지 판정.
+   *
+   * drag 영역 안 AND exclude 영역 밖일 때만 true.
+   * 헤더 안의 버튼 그룹 위에서 LBUTTONDOWN이 발생하면 false → drag 시작 안 함 → 버튼 클릭 정상 라우팅.
+   */
+  function isInDraggableHeaderRegion(p: { x: number; y: number }): boolean {
+    if (!isInsideAnyRect(p, cachedHeaderRegions)) return false;
+    if (isInsideAnyRect(p, cachedHeaderExcludeRegions)) return false;
+    return true;
   }
 
   function clearHook(): void {
@@ -348,6 +391,8 @@ function createWin32Manager(
     dragState = null;
     cachedHeaderRegionsDip = [];
     cachedHeaderRegions = [];
+    cachedHeaderExcludeRegionsDip = [];
+    cachedHeaderExcludeRegions = [];
   }
 
   // Phase 7 — hot path. shouldPassThroughToDesktop을 별도 명명 함수로 분리해 hook callback에서
@@ -606,7 +651,7 @@ function createWin32Manager(
           // 아이콘 위는 passThroughCheck로 Explorer가 처리하도록 양보 (아래 분기).
           // 헤더가 아닌 일반 위젯 영역의 LBUTTONDOWN은 정상 sendInputEvent로 흘러감.
           // 0x0201 = WM_LBUTTONDOWN
-          if (msgType === 0x0201 && cachedHeaderRegions.length > 0 && isInHeaderRegion(p)) {
+          if (msgType === 0x0201 && cachedHeaderRegions.length > 0 && isInDraggableHeaderRegion(p)) {
             // 아이콘 영역 체크 — 헤더는 보통 위젯 상단이라 아이콘과 안 겹치지만 안전 차단.
             if (!passThroughCheck(p) && cachedPhysicalBounds) {
               dragState = {
@@ -922,18 +967,27 @@ function createWin32Manager(
      *
      * 새로운 dipRects를 보존하고 즉시 physical 좌표 재계산. attach 안 된 상태에서도
      * dipRects는 보존(다음 enable 시 사용 가능).
+     *
+     * Phase 7-C 회귀 fix: excludeDipRects도 함께 보존(헤더 우측 버튼 그룹).
+     * isInDraggableHeaderRegion이 헤더 안 + exclude 밖일 때만 true 반환.
      */
-    setHeaderRegions(dipRects: readonly DipRect[], window: BrowserWindow): void {
+    setHeaderRegions(
+      dipRects: readonly DipRect[],
+      window: BrowserWindow,
+      excludeDipRects?: readonly DipRect[],
+    ): void {
       cachedHeaderRegionsDip = dipRects;
+      cachedHeaderExcludeRegionsDip = excludeDipRects ?? [];
       // attach 상태일 때만 physical 변환. 미attach면 빈 배열로 유지.
       if (handles && cachedPhysicalBounds && !window.isDestroyed()) {
         recalcHeaderRegionsPhysical(window);
         diagLog(
           'native-desktop',
-          `[7-C] header regions updated: ${cachedHeaderRegions.length} rect(s) (input: ${dipRects.length})`,
+          `[7-C] header regions updated: ${cachedHeaderRegions.length} rect(s) (input: ${dipRects.length}), excludes: ${cachedHeaderExcludeRegions.length} rect(s)`,
         );
       } else {
         cachedHeaderRegions = [];
+        cachedHeaderExcludeRegions = [];
         diagLog(
           'native-desktop',
           `[7-C] header regions cached but inactive (handles=${!!handles}, bounds=${!!cachedPhysicalBounds})`,

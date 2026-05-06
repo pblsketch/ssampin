@@ -37,11 +37,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * main에 등록한다. WH_MOUSE_LL hook이 LBUTTONDOWN을 헤더 안에서 받으면 widget을 마우스 따라
    * 이동시킨다. 일반 모드에서는 main이 caching만 하고 hook이 없으므로 무영향.
    *
+   * Phase 7-C 회귀 fix: excludeRects는 drag 영역 내부에서 제외할 사각형(버튼 그룹 등).
+   * 헤더 안의 no-drag 버튼 영역을 빼지 않으면 버튼 LBUTTONDOWN이 widget 이동으로 처리돼
+   * 클릭이 동작하지 않음.
+   *
    * mount/resize 시 갱신 호출. 빈 배열을 넘기면 drag 비활성화.
    */
   setWidgetHeaderRegion: (
     rects: { x: number; y: number; width: number; height: number }[],
-  ): Promise<void> => ipcRenderer.invoke('widget:setHeaderRegion', rects),
+    excludeRects?: { x: number; y: number; width: number; height: number }[],
+  ): Promise<void> => ipcRenderer.invoke('widget:setHeaderRegion', rects, excludeRects ?? []),
   /**
    * 바탕화면 아이콘 아래 모드 fallback 알림 수신 (v2.1.0~).
    *

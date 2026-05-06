@@ -98,3 +98,81 @@ describe('isInsideAnyRect (Phase 7-C 헤더 드래그 hit-test)', () => {
     expect(isInsideAnyRect({ x: -2000, y: 20 }, rects)).toBe(false);
   });
 });
+
+describe('Phase 7-C 회귀 fix — drag region + exclude region 조합 (isInDraggableHeaderRegion 동작 검증)', () => {
+  // manager 내부 함수 isInDraggableHeaderRegion은 export되지 않지만,
+  // 동일 로직(isInsideAnyRect(header) && !isInsideAnyRect(exclude))을 검증한다.
+
+  const headerRegions = [{ x: 0, y: 0, width: 800, height: 100 }];
+  // 헤더 우측 버튼 그룹 — 헤더 안의 4개 버튼 영역.
+  const excludeRegions = [{ x: 700, y: 10, width: 80, height: 30 }];
+
+  function isInDraggable(p: { x: number; y: number }): boolean {
+    if (!isInsideAnyRect(p, headerRegions)) return false;
+    if (isInsideAnyRect(p, excludeRegions)) return false;
+    return true;
+  }
+
+  it('헤더 안 + 버튼 안 → false (drag 시작 안 함, 버튼 클릭 정상 라우팅)', () => {
+    expect(isInDraggable({ x: 720, y: 20 })).toBe(false);
+    expect(isInDraggable({ x: 750, y: 25 })).toBe(false);
+  });
+
+  it('헤더 안 + 버튼 밖 → true (drag 시작 정상)', () => {
+    expect(isInDraggable({ x: 100, y: 50 })).toBe(true);
+    expect(isInDraggable({ x: 400, y: 30 })).toBe(true);
+  });
+
+  it('헤더 밖 → false (애초에 drag 시작 안 함)', () => {
+    expect(isInDraggable({ x: 100, y: 200 })).toBe(false);
+    expect(isInDraggable({ x: 900, y: 50 })).toBe(false);
+  });
+
+  it('exclude 영역이 빈 배열이면 헤더 안은 모두 drag 가능', () => {
+    function isInDraggableNoExclude(p: { x: number; y: number }): boolean {
+      if (!isInsideAnyRect(p, headerRegions)) return false;
+      if (isInsideAnyRect(p, [])) return false;
+      return true;
+    }
+    expect(isInDraggableNoExclude({ x: 720, y: 20 })).toBe(true);
+    expect(isInDraggableNoExclude({ x: 100, y: 50 })).toBe(true);
+  });
+});
+
+describe('Phase 7-C 회귀 fix — DIP rect → physical rect 변환 동작', () => {
+  // dipRectsToPhysical은 manager 내부 함수지만, dipToPhysical + base offset 패턴이
+  // recalcHeaderRegionsPhysical 안의 변환 식과 동일하다. 변환 식의 정확성을 별도 검증.
+
+  it('scaleFactor === 1, base offset 적용 정상', () => {
+    // base = widget physical bounds origin (200, 300), scaleFactor 1
+    // dip rect = (10, 20, 100, 50) → physical = (210, 320, 100, 50)
+    const base = { x: 200, y: 300, width: 1000, height: 600 };
+    const dip = { x: 10, y: 20, width: 100, height: 50 };
+    const sf = 1;
+    const x = base.x + Math.round(dip.x * sf);
+    const y = base.y + Math.round(dip.y * sf);
+    const right = base.x + Math.round((dip.x + dip.width) * sf);
+    const bottom = base.y + Math.round((dip.y + dip.height) * sf);
+    expect({ x, y, width: right - x, height: bottom - y }).toEqual({
+      x: 210, y: 320, width: 100, height: 50,
+    });
+  });
+
+  it('scaleFactor === 1.5 (150% DPI), base offset 정상 변환', () => {
+    // 4K 환경 위젯 (200,300) origin, 헤더 우측 버튼 dip rect (700,10,80,30)
+    const base = { x: 200, y: 300, width: 1200, height: 800 };
+    const dip = { x: 700, y: 10, width: 80, height: 30 };
+    const sf = 1.5;
+    const x = base.x + Math.round(dip.x * sf);
+    const y = base.y + Math.round(dip.y * sf);
+    const right = base.x + Math.round((dip.x + dip.width) * sf);
+    const bottom = base.y + Math.round((dip.y + dip.height) * sf);
+    // x = 200 + round(1050) = 1250
+    // right = 200 + round(1170) = 1370 → width = 120
+    // y = 300 + round(15) = 315
+    // bottom = 300 + round(60) = 360 → height = 45
+    expect({ x, y, width: right - x, height: bottom - y }).toEqual({
+      x: 1250, y: 315, width: 120, height: 45,
+    });
+  });
+});

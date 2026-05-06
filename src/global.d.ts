@@ -144,9 +144,12 @@ interface ElectronAPI {
   /**
    * Phase 7-C (native-desktop) — widget 헤더 드래그 영역 등록.
    * mount/resize 시 호출. 빈 배열이면 drag 비활성화.
+   *
+   * Phase 7-C 회귀 fix: excludeRects는 drag 영역 내부에서 제외할 사각형(헤더 우측 버튼 그룹 등).
    */
   setWidgetHeaderRegion?: (
     rects: { x: number; y: number; width: number; height: number }[],
+    excludeRects?: { x: number; y: number; width: number; height: number }[],
   ) => Promise<void>;
   /**
    * 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~).
