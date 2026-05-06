@@ -279,6 +279,23 @@ interface Win32Bindings {
   ) => number;
   ShowWindow: (hWnd: bigint | number, nCmdShow: number) => number;
   IsWindow: (hWnd: bigint | number) => number;
+  /**
+   * IsWindowVisible — OS가 보는 visible 비트 (WS_VISIBLE) 직접 조회.
+   *
+   * Electron BrowserWindow.isVisible()은 BrowserWindow 인스턴스가 캐싱한 hidden 상태를
+   * 반환할 뿐 실제 OS WS_VISIBLE 비트를 다시 묻지 않는다. 모드 전환 race로 isVisible()이
+   * true인데 실제 화면에 안 보이는 disconnect 의심 시 본 함수로 진단.
+   *
+   * @returns nonzero = OS가 visible로 인식, 0 = invisible (또는 invalid handle).
+   */
+  IsWindowVisible: (hWnd: bigint | number) => number;
+  /**
+   * GetWindowRect — physical screen 좌표계의 window rect (좌/상/우/하).
+   *
+   * 보조 모니터 진단(이슈 D) — WorkerW가 실제로 어느 영역을 cover하는지 확인하는 데 사용.
+   * 두 번째 인자 lpRect는 RECT 구조체(16 bytes: LONG l/t/r/b) out 포인터.
+   */
+  GetWindowRect: (hWnd: bigint | number, lpRect: unknown) => number;
 
   // user32 — sibling/child traversal (Strategy 2/3 보조)
   GetWindow: (hWnd: bigint | number, uCmd: number) => bigint | null;
@@ -488,6 +505,14 @@ function loadWin32Bindings(): Win32Bindings {
       'int __stdcall IsWindow(void*)',
     ) as Win32Bindings['IsWindow'];
 
+    const IsWindowVisible = user32.func(
+      'int __stdcall IsWindowVisible(void*)',
+    ) as Win32Bindings['IsWindowVisible'];
+
+    const GetWindowRect = user32.func(
+      'int __stdcall GetWindowRect(void*, void *)',
+    ) as Win32Bindings['GetWindowRect'];
+
     const GetWindow = user32.func(
       'void* __stdcall GetWindow(void*, uint32)',
     ) as Win32Bindings['GetWindow'];
@@ -584,6 +609,8 @@ function loadWin32Bindings(): Win32Bindings {
       SetWindowPos,
       ShowWindow,
       IsWindow,
+      IsWindowVisible,
+      GetWindowRect,
       GetWindow,
       WindowFromPoint,
       GetAncestor,
@@ -1947,4 +1974,180 @@ export function decodeWheelDelta(mouseData: number): number {
   const high = (u32 >>> 16) & 0xffff;
   // signed short: 0x8000 이상이면 음수
   return high >= 0x8000 ? high - 0x10000 : high;
+}
+
+// ────────────────────────────────────────────────────────────
+// Diagnostic helpers (이슈 B/D 진단 라운드 — 2026-05-06)
+// ────────────────────────────────────────────────────────────
+//
+// 이슈 B (모드 전환 race로 위젯 사라짐): transitionWidgetMode 단계별로 widget의 native state를
+//   dump해 BrowserWindow API 상태와 OS 상태가 disconnect되는 race 패턴을 가시화.
+// 이슈 D (보조 모니터 조작 불가): 디스플레이 레이아웃, WorkerW 후보별 cover 영역, hook
+//   callback 좌표를 같은 프레임에서 비교해 좌표계 불일치를 진단.
+//
+// 모든 함수는 best-effort — 어느 단계 실패해도 부분 결과 반환. throw 금지.
+
+/**
+ * 위젯 native HWND의 Win32 상태 스냅샷 — 이슈 B 진단.
+ *
+ * 캡처 항목:
+ *   - GWL_STYLE: WS_POPUP/WS_CHILD/WS_VISIBLE 등 비트 — attach/detach 시 정확히 복원됐는지 확인
+ *   - GWL_EXSTYLE: WS_EX_LAYERED 등 — opacity와 직결
+ *   - GetParent: native parent (top-level이면 0n)
+ *   - GetAncestor(GA_ROOT): top-level root (top-level이면 자기 자신)
+ *   - IsWindow / IsWindowVisible: OS가 보는 visible 비트
+ *
+ * BrowserWindow.isVisible()이 true인데 IsWindowVisible이 0이면 disconnect 확정.
+ * GWL_STYLE의 WS_CHILD(0x40000000) 비트가 detach 후에도 남아있으면 style 복원 실패.
+ *
+ * @returns 16진수 문자열 dump. koffi load 실패 시 'unavailable'.
+ */
+export function snapshotWidgetWin32State(widgetHwnd: bigint): string {
+  if (isNullHandle(widgetHwnd)) return 'null-hwnd';
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return 'koffi-unavailable';
+  }
+  const parts: string[] = [];
+  try {
+    parts.push(`hwnd=0x${widgetHwnd.toString(16)}`);
+  } catch { /* ignore */ }
+  try {
+    parts.push(`isWindow=${b.IsWindow(widgetHwnd)}`);
+  } catch { /* ignore */ }
+  try {
+    parts.push(`isWindowVisible=${b.IsWindowVisible(widgetHwnd)}`);
+  } catch { /* ignore */ }
+  try {
+    const styleRaw = b.GetWindowLongPtrW(widgetHwnd, GWL_STYLE);
+    const style = typeof styleRaw === 'bigint' ? styleRaw : BigInt(styleRaw);
+    parts.push(`style=0x${style.toString(16)}`);
+    parts.push(`WS_POPUP=${(style & WS_POPUP) === WS_POPUP ? '1' : '0'}`);
+    parts.push(`WS_CHILD=${(style & WS_CHILD) === WS_CHILD ? '1' : '0'}`);
+    // WS_VISIBLE = 0x10000000
+    const WS_VISIBLE = 0x10000000n;
+    parts.push(`WS_VISIBLE=${(style & WS_VISIBLE) === WS_VISIBLE ? '1' : '0'}`);
+  } catch { /* ignore */ }
+  try {
+    const exStyleRaw = b.GetWindowLongPtrW(widgetHwnd, GWL_EXSTYLE);
+    const exStyle = typeof exStyleRaw === 'bigint' ? exStyleRaw : BigInt(exStyleRaw);
+    parts.push(`exStyle=0x${exStyle.toString(16)}`);
+    // WS_EX_LAYERED = 0x00080000
+    const WS_EX_LAYERED = 0x80000n;
+    parts.push(`WS_EX_LAYERED=${(exStyle & WS_EX_LAYERED) === WS_EX_LAYERED ? '1' : '0'}`);
+  } catch { /* ignore */ }
+  try {
+    const parent = toBigInt(b.GetParent(widgetHwnd));
+    parts.push(`parent=0x${parent.toString(16)}`);
+  } catch { /* ignore */ }
+  try {
+    const root = toBigInt(b.GetAncestor(widgetHwnd, GA_ROOT));
+    parts.push(`gaRoot=0x${root.toString(16)}`);
+    parts.push(`isTopLevel=${root === widgetHwnd ? '1' : '0'}`);
+  } catch { /* ignore */ }
+  // GetWindowRect — physical screen 좌표
+  try {
+    const rectBuf = Buffer.alloc(16);
+    const rectOk = b.GetWindowRect(widgetHwnd, rectBuf);
+    if (rectOk !== 0) {
+      const left = rectBuf.readInt32LE(0);
+      const top = rectBuf.readInt32LE(4);
+      const right = rectBuf.readInt32LE(8);
+      const bottom = rectBuf.readInt32LE(12);
+      parts.push(`rect=(${left},${top},${right - left}x${bottom - top})`);
+    } else {
+      parts.push('rect=GetWindowRect-failed');
+    }
+  } catch { /* ignore */ }
+  return parts.join(' ');
+}
+
+/**
+ * WorkerW + 디스플레이 레이아웃 진단 — 이슈 D (보조 모니터 조작 불가).
+ *
+ * 절차:
+ *   1. collectDesktopAttachCandidates로 모든 표준 WorkerW + sibling + shellDefView 수집
+ *   2. 각 후보의 GetWindowRect로 physical screen 영역 확인
+ *   3. WorkerW가 단일 윈도우로 virtual screen 전체를 cover하는지, 아니면 per-monitor
+ *      별도 WorkerW가 있는지 가시화
+ *
+ * 정상 케이스: WorkerW 1~3개, 그 중 하나의 rect가 모든 모니터를 합친 virtual screen 영역을 cover.
+ * 비정상 케이스(이슈 D 추정): WorkerW가 primary monitor만 cover. → 보조 모니터의 마우스 이벤트는
+ *   primary WorkerW에 attach된 widget의 cachedPhysicalBounds와 비교는 되지만, 사용자 위젯이
+ *   실제로 그 영역에 그려지지도 못함 (WorkerW 자체가 그 영역을 cover하지 않으므로).
+ *
+ * @returns 사람이 읽을 dump 문자열. throw 안 함.
+ */
+export function dumpWorkerWLayout(): string {
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return 'koffi-unavailable';
+  }
+
+  const lines: string[] = [];
+  const dumpRect = (h: bigint): string => {
+    if (isNullHandle(h)) return 'null';
+    try {
+      const rectBuf = Buffer.alloc(16);
+      const ok = b.GetWindowRect(h, rectBuf);
+      if (ok === 0) return 'GetWindowRect-failed';
+      const left = rectBuf.readInt32LE(0);
+      const top = rectBuf.readInt32LE(4);
+      const right = rectBuf.readInt32LE(8);
+      const bottom = rectBuf.readInt32LE(12);
+      return `(${left},${top},${right - left}x${bottom - top})`;
+    } catch (e) {
+      return `error:${e instanceof Error ? e.message : 'unknown'}`;
+    }
+  };
+
+  let cands: DesktopAttachCandidates;
+  try {
+    cands = collectDesktopAttachCandidates();
+  } catch (e) {
+    return `collect-failed: ${e instanceof Error ? e.message : 'unknown'}`;
+  }
+
+  lines.push(`Progman=0x${cands.progman.toString(16)} rect=${dumpRect(cands.progman)}`);
+  lines.push(`shellDefView=0x${cands.shellDefView.toString(16)} rect=${dumpRect(cands.shellDefView)}`);
+  lines.push(
+    `shellDefViewSiblingWorkerW=0x${cands.shellDefViewSiblingWorkerW.toString(16)} ` +
+    `rect=${dumpRect(cands.shellDefViewSiblingWorkerW)}`,
+  );
+  lines.push(`standardWorkerWs.count=${cands.standardWorkerWs.length}`);
+  cands.standardWorkerWs.forEach((w, i) => {
+    lines.push(`  WorkerW#${i}=0x${w.toString(16)} rect=${dumpRect(w)}`);
+  });
+
+  return lines.join(' | ');
+}
+
+/**
+ * 추가 진단 헬퍼 — 임의 HWND의 GetWindowRect만 단순 dump.
+ * dragstate / mouse hook callback 등 hot path에서 호출 안전 (단순 한 번 호출).
+ */
+export function getWindowRect(hwnd: bigint): { x: number; y: number; width: number; height: number } | null {
+  if (isNullHandle(hwnd)) return null;
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return null;
+  }
+  try {
+    const rectBuf = Buffer.alloc(16);
+    const ok = b.GetWindowRect(hwnd, rectBuf);
+    if (ok === 0) return null;
+    const left = rectBuf.readInt32LE(0);
+    const top = rectBuf.readInt32LE(4);
+    const right = rectBuf.readInt32LE(8);
+    const bottom = rectBuf.readInt32LE(12);
+    return { x: left, y: top, width: right - left, height: bottom - top };
+  } catch {
+    return null;
+  }
 }

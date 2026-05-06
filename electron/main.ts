@@ -166,18 +166,36 @@ async function transitionWidgetMode(
   reason: string,
 ): Promise<{ appliedMode: WidgetDesktopMode; fallbackEvent: DesktopModeFallbackEvent | null }> {
   const fromMode = currentDesktopMode;
+
+  // ─── 진단 라운드 (이슈 B) — STAGE 0: enter 시점 native state 스냅샷 ───
+  // BrowserWindow API 결과(visible/opacity/alwaysOnTop)와 OS 결과(IsWindowVisible/style 비트)
+  // 가 disconnect되는 race를 가시화. 매 단계 호출마다 새 dump를 찍어 직전 단계 효과 확인.
+  const stage0 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
   diagLog(
     'widget',
-    `[transitionMode] enter from=${fromMode} → newMode=${newMode} reason=${reason} ` +
+    `[transitionMode][stage0-enter] from=${fromMode} → newMode=${newMode} reason=${reason} ` +
       `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
+      `opacity=${widgetWindow.getOpacity()} ` +
+      `bounds=${JSON.stringify(widgetWindow.getBounds())} ` +
       `manager.isEnabled=${desktopWidgetManager.isEnabled()}`,
   );
+  diagLog('widget', `[transitionMode][stage0-enter] win32=${stage0.widgetWin32}`);
 
   // 1. 이전 모드 정리: native-desktop이었거나 manager가 살아있으면 disable.
   //    'idempotent' — disable이 이미 풀린 상태면 no-op.
   if (fromMode === 'native-desktop' || desktopWidgetManager.isEnabled()) {
-    diagLog('widget', '[transitionMode] disable() 호출 (이전 native-desktop 정리)');
+    diagLog('widget', '[transitionMode][stage1-pre-disable] disable() 호출 (이전 native-desktop 정리)');
     desktopWidgetManager.disable();
+
+    // ─── 진단 (이슈 B) — STAGE 1: disable 직후 native state ───
+    // GWL_STYLE의 WS_CHILD 비트가 이 시점에 떨어졌는지 확인. 여전히 WS_CHILD면 detach 실패.
+    const stage1 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+    diagLog(
+      'widget',
+      `[transitionMode][stage1-post-disable] visible=${widgetWindow.isVisible()} ` +
+        `opacity=${widgetWindow.getOpacity()} win32=${stage1.widgetWin32}`,
+    );
+
     // 2. 안정화 대기 — DWM이 SetParent/GWL_STYLE 복원 + ShowWindow 처리 시간.
     //    50ms는 Win11/Win10 양쪽에서 vsync 1~3프레임 안에 흡수되는 경험치.
     //    너무 짧으면(<30ms) 일부 케이스에서 visibility 미반영, 너무 길면(>100ms)
@@ -187,6 +205,14 @@ async function transitionWidgetMode(
       diagWarn('widget', '[transitionMode] 안정화 대기 중 widget destroyed — abort');
       return { appliedMode: fromMode, fallbackEvent: null };
     }
+
+    // ─── 진단 (이슈 B) — STAGE 2: 50ms 안정화 후 native state ───
+    const stage2 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+    diagLog(
+      'widget',
+      `[transitionMode][stage2-after-50ms] visible=${widgetWindow.isVisible()} ` +
+        `opacity=${widgetWindow.getOpacity()} win32=${stage2.widgetWin32}`,
+    );
   }
 
   // 3. 새 모드 적용
@@ -194,11 +220,11 @@ async function transitionWidgetMode(
   let fallbackEvent: DesktopModeFallbackEvent | null = null;
 
   if (newMode === 'native-desktop') {
-    diagLog('widget', '[transitionMode] enable() 호출');
+    diagLog('widget', '[transitionMode][stage3-pre-enable] enable() 호출');
     const result = await desktopWidgetManager.enable(widgetWindow);
     diagLog(
       'widget',
-      `[transitionMode] enable() returned: ok=${result.ok}, ` +
+      `[transitionMode][stage3-post-enable] enable() returned: ok=${result.ok}, ` +
         `${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`,
     );
     if (widgetWindow.isDestroyed()) {
@@ -221,29 +247,51 @@ async function transitionWidgetMode(
   // 4. 명시적 표시 보장 (이중 안전망 — detach 내부 ShowWindow가 있어도 BrowserWindow
   //    visible state와 OS HWND visibility가 어긋날 수 있음)
   if (!widgetWindow.isVisible()) {
-    diagLog('widget', '[transitionMode] !visible — show() 호출');
+    diagLog('widget', '[transitionMode][stage4-show] !visible — show() 호출');
     widgetWindow.show();
   } else {
-    diagLog('widget', '[transitionMode] visible=true — show() skip');
+    diagLog('widget', '[transitionMode][stage4-show] visible=true — show() skip');
   }
 
+  // ─── 진단 (이슈 B) — STAGE 4: 새 모드 적용 + show() 직후 native state ───
+  // 이 시점에 IsWindowVisible=0이면 WS_VISIBLE 비트가 OS에 반영되지 않음 → 사라짐 race 핵심 단서.
+  const stage4 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
   diagLog(
     'widget',
-    `[transitionMode] sync complete appliedMode=${appliedMode} ` +
-      `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()}`,
+    `[transitionMode][stage4-sync-complete] appliedMode=${appliedMode} ` +
+      `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
+      `opacity=${widgetWindow.getOpacity()} bounds=${JSON.stringify(widgetWindow.getBounds())} ` +
+      `win32=${stage4.widgetWin32}`,
   );
 
   // 5. 비동기 추가 안전망 — 100ms 후 visible 재확인.
   //    DWM 합성이 늦게 반영되는 케이스에서 ShowWindow가 무시됐을 가능성 대응.
   //    hide+show 토글은 Electron의 알려진 visibility 회복 패턴.
   setTimeout(() => {
-    if (!widgetWindow.isDestroyed() && !widgetWindow.isVisible()) {
-      diagWarn(
+    if (!widgetWindow.isDestroyed()) {
+      // ─── 진단 (이슈 B) — STAGE 5: 100ms 후 native state (지연 회복 가시화) ───
+      const stage5 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+      diagLog(
         'widget',
-        `[transitionMode] 100ms 후에도 hidden — hide+show 토글 강제 (mode=${appliedMode})`,
+        `[transitionMode][stage5-100ms-check] mode=${appliedMode} ` +
+          `visible=${widgetWindow.isVisible()} opacity=${widgetWindow.getOpacity()} ` +
+          `win32=${stage5.widgetWin32}`,
       );
-      widgetWindow.hide();
-      widgetWindow.show();
+      if (!widgetWindow.isVisible()) {
+        diagWarn(
+          'widget',
+          `[transitionMode][stage5-100ms-check] hidden 감지 — hide+show 토글 강제 (mode=${appliedMode})`,
+        );
+        widgetWindow.hide();
+        widgetWindow.show();
+        // STAGE 6: 토글 직후 추가 진단
+        const stage6 = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+        diagLog(
+          'widget',
+          `[transitionMode][stage6-after-toggle] visible=${widgetWindow.isVisible()} ` +
+            `opacity=${widgetWindow.getOpacity()} win32=${stage6.widgetWin32}`,
+        );
+      }
     }
   }, 100);
 
@@ -2299,6 +2347,107 @@ function registerIpcHandlers(): void {
   ipcMain.handle('icon:diag', (_event, payload: { event: string; data?: unknown }): void => {
     if (!payload || typeof payload.event !== 'string') return;
     diagLog('icon', `[renderer] ${payload.event}`, payload.data);
+  });
+
+  /**
+   * 진단 라운드 (2026-05-06) — 이슈 B/D 분석용 종합 dump.
+   *
+   * 사용자가 시나리오 재현 직후 이 IPC를 호출하면 다음 정보를 한 번에 로그에 기록:
+   *   1. screen.getAllDisplays() 상세 — 모든 모니터의 bounds(DIP)/scaleFactor/internal 등
+   *   2. screen.getPrimaryDisplay() — primary 식별
+   *   3. widget의 BrowserWindow.getBounds() (DIP) + screen.getDisplayMatching 결과
+   *   4. WorkerW + Progman + SHELLDLL_DefView 후보별 GetWindowRect (physical screen)
+   *   5. widget native HWND의 Win32 state snapshot
+   *   6. routingStats — 마지막 호출 이후 누적 카운터
+   *   7. cachedPhysicalBounds (manager가 보는 widget physical 영역)
+   *
+   * 모든 정보가 native-desktop-diag.log에 기록되므로 사용자는 메모장으로 파일을 열어
+   * Claude에게 그대로 붙여넣기만 하면 됨. UI 변화는 없음.
+   *
+   * 보조 모니터 진단 사용법(이슈 D):
+   *   1. native-desktop 활성 상태에서 widget을 보조 모니터로 옮긴다.
+   *   2. 보조 모니터 위에서 widget 위 빈 영역을 클릭/스크롤 5~10회.
+   *   3. 이 IPC를 호출 (현재는 IPC만 있음; 다음 라운드에서 위젯 디버그 메뉴에 노출 예정).
+   *      당장은 DevTools 콘솔에서 `electronAPI.widgetDiagDump('after-secondary-clicks')` 호출.
+   */
+  ipcMain.handle('widget:diagDump', (_event, label: string): void => {
+    const safeLabel = typeof label === 'string' ? label : 'unlabeled';
+    diagLog('widget', `[diagDump:${safeLabel}] === BEGIN ===`);
+    try {
+      // 1. 모든 디스플레이 정보 (DIP)
+      const displays = screen.getAllDisplays();
+      const primary = screen.getPrimaryDisplay();
+      diagLog(
+        'widget',
+        `[diagDump:${safeLabel}] displays.count=${displays.length} primary.id=${primary.id}`,
+      );
+      displays.forEach((d, i) => {
+        diagLog(
+          'widget',
+          `[diagDump:${safeLabel}] display#${i} id=${d.id} ` +
+            `bounds=${JSON.stringify(d.bounds)} workArea=${JSON.stringify(d.workArea)} ` +
+            `scaleFactor=${d.scaleFactor} rotation=${d.rotation} internal=${d.internal} ` +
+            `${d.id === primary.id ? '[PRIMARY]' : ''}`,
+        );
+      });
+
+      // 2. widget 정보 (DIP + 매칭 디스플레이)
+      if (widgetWindow && !widgetWindow.isDestroyed()) {
+        const wDip = widgetWindow.getBounds();
+        const matched = screen.getDisplayMatching(wDip);
+        diagLog(
+          'widget',
+          `[diagDump:${safeLabel}] widget.dipBounds=${JSON.stringify(wDip)} ` +
+            `visible=${widgetWindow.isVisible()} opacity=${widgetWindow.getOpacity()} ` +
+            `alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
+            `matchedDisplay.id=${matched.id} matchedDisplay.scaleFactor=${matched.scaleFactor} ` +
+            `matchedDisplay.bounds=${JSON.stringify(matched.bounds)}`,
+        );
+        // dipToScreenRect 결과(physical) — widget이 OS 좌표계에서 어디로 매핑되는지
+        try {
+          const physical = screen.dipToScreenRect(widgetWindow, wDip);
+          diagLog(
+            'widget',
+            `[diagDump:${safeLabel}] widget.dipToScreenRect=${JSON.stringify(physical)}`,
+          );
+        } catch (e) {
+          diagWarn(
+            'widget',
+            `[diagDump:${safeLabel}] dipToScreenRect 실패: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+
+        // 3. desktopWidgetManager 캐시 + Win32 state
+        const snap = desktopWidgetManager.diagnosticSnapshot(widgetWindow);
+        diagLog(
+          'widget',
+          `[diagDump:${safeLabel}] manager.isEnabled=${desktopWidgetManager.isEnabled()} ` +
+            `cachedPhysicalBounds=${JSON.stringify(desktopWidgetManager.getCachedPhysicalBounds())}`,
+        );
+        diagLog('widget', `[diagDump:${safeLabel}] widget.win32=${snap.widgetWin32}`);
+        diagLog('widget', `[diagDump:${safeLabel}] workerW.layout=${snap.workerWLayout}`);
+
+        // 4. 라우팅 통계
+        diagLog(
+          'widget',
+          `[diagDump:${safeLabel}] routingStats=${JSON.stringify(desktopWidgetManager.getRoutingStats())}`,
+        );
+      } else {
+        diagLog('widget', `[diagDump:${safeLabel}] widgetWindow=null/destroyed`);
+      }
+
+      // 5. 현재 모드 상태
+      diagLog(
+        'widget',
+        `[diagDump:${safeLabel}] currentDesktopMode=${currentDesktopMode}`,
+      );
+    } catch (e) {
+      diagWarn(
+        'widget',
+        `[diagDump:${safeLabel}] dump 도중 예외: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    diagLog('widget', `[diagDump:${safeLabel}] === END ===`);
   });
 
   // export:showSaveDialog — 파일 저장 대화상자
