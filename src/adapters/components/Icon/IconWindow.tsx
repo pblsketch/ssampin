@@ -21,7 +21,7 @@ import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
 import { IconTooltip } from './IconTooltip';
 import { IconContextMenu } from './IconContextMenu';
 import { CoachMark } from './CoachMark';
-import { PinDisc } from './PinDisc';
+import { SsampinIconSvg, type IconState } from './SsampinIconSvg';
 
 const DOUBLE_CLICK_THRESHOLD_MS = 250;
 const HOVER_TOOLTIP_DELAY_MS = 100;
@@ -185,6 +185,22 @@ export function IconWindow() {
   const hasAlert =
     events.some((e) => isUpcomingWithinMinutes(e.date, now, 5)) ||
     todos.some((t) => !t.completed && t.dueDate && isPast(t.dueDate, now));
+
+  // 아이콘 마스코트 상태: alert > active(수업 중) > sleep(방과후) > idle
+  const iconState: IconState = (() => {
+    if (hasAlert) return 'alert';
+    if (periodInfo?.current) return 'active';
+    const lastPeriod = settings.periodTimes?.[settings.periodTimes.length - 1];
+    if (lastPeriod) {
+      const [h, m] = lastPeriod.end.split(':').map(Number);
+      if (h !== undefined && m !== undefined) {
+        const endMinutes = h * 60 + m;
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        if (nowMinutes > endMinutes) return 'sleep';
+      }
+    }
+    return 'idle';
+  })();
 
   // 클릭 vs 드래그 판정 임계
   const CLICK_MAX_DURATION_MS = 250;
@@ -422,7 +438,11 @@ export function IconWindow() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <PinDisc hasAlert={hasAlert} hovered={hovered} />
+        <SsampinIconSvg
+          state={iconState}
+          size={56}
+          className="select-none pointer-events-none"
+        />
       </div>
       {hovered && periodInfo && (
         <IconTooltip current={periodInfo.current} next={periodInfo.next} />
