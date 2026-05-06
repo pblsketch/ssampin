@@ -359,6 +359,7 @@ function createWin32Manager(
   }
 
   function clearHandles(): void {
+    diagLog('native-desktop', `[clearHandles] enter handles=${!!handles} hook=${!!mouseHook}`);
     // hook을 먼저 정리해야 callback이 살아있는 동안 detach 발생을 피할 수 있음.
     clearHook();
     if (handles) {
@@ -368,6 +369,8 @@ function createWin32Manager(
         // detach는 best-effort — 실패해도 무시
         console.warn('[desktopWidgetManager] detach 중 예외 (무시):', e);
       }
+    } else {
+      diagWarn('native-desktop', '[clearHandles] handles null — detach skip');
     }
     handles = null;
     cachedPhysicalBounds = null;
