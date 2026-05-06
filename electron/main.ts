@@ -120,6 +120,23 @@ function normalizeDesktopMode(
   return 'normal';
 }
 
+/**
+ * 위젯 BrowserWindow 투명도(`setOpacity` 인자) 정규화 — main process 사이드.
+ *
+ * 발견 경로(2026-05-06): 사용자 settings에 `widget.opacity = 0`이 저장된 채 native-desktop
+ * attach가 성공해 위젯이 OS 레벨 100% 투명 → 화면에서 사라진 것처럼 보이는 회귀.
+ *
+ * 정책: 숫자 아니면 1, < 0.05면 0.05, > 1이면 1로 클램핑. 슬라이더 UI minimum도 5%로 제한해
+ * 양쪽에서 사용자를 영구 invisible 상태로부터 보호. 동일 동작이 src/domain/entities/Settings.ts에도
+ * 정의되어 있다 (electron main에서 src/ import 회피 패턴).
+ */
+function normalizeWidgetOpacity(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 1;
+  if (value < 0.05) return 0.05;
+  if (value > 1) return 1;
+  return value;
+}
+
 let currentDesktopMode: WidgetDesktopMode = 'normal';
 
 /**
@@ -2173,8 +2190,9 @@ function registerIpcHandlers(): void {
   ): Promise<void> => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
-    // 투명도 직접 적용
-    widgetWindow.setOpacity(Math.max(0, Math.min(1, widget.opacity)));
+    // 투명도 직접 적용 — opacity=0 함정 방지(2026-05-06): 사용자가 슬라이더로 영구 invisible
+    // 상태에 빠지지 않도록 minimum 0.05 보장 + NaN/undefined도 1.0으로 fallback.
+    widgetWindow.setOpacity(normalizeWidgetOpacity(widget.opacity));
 
     // 데스크톱 모드 변경 (정규화 helper 통과 — 'native-desktop' silent drop 방지)
     const requestedMode = normalizeDesktopMode(widget.desktopMode, process.platform === 'win32');
@@ -2208,10 +2226,11 @@ function registerIpcHandlers(): void {
     }
   });
 
-  // window:setOpacity — 위젯 투명도 설정
+  // window:setOpacity — 위젯 투명도 설정 (renderer 컨텍스트 메뉴 등에서 호출).
+  // opacity=0 함정 방지: 같은 normalizeWidgetOpacity 가드 적용 — 영구 invisible 차단.
   ipcMain.handle('window:setOpacity', (_event, value: number): void => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
-      widgetWindow.setOpacity(Math.max(0, Math.min(1, value)));
+      widgetWindow.setOpacity(normalizeWidgetOpacity(value));
     }
   });
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Settings, WidgetSettings, WidgetDesktopMode } from '@domain/entities/Settings';
+import { normalizeWidgetOpacity } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
 import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
@@ -56,14 +57,19 @@ export function WidgetTab({ draft, patch }: Props) {
         <div className="space-y-3">
           <div className="flex justify-between">
             <span className="text-sm font-medium text-sp-text">기본 투명도</span>
-            <span className="text-sm font-bold text-sp-accent">{Math.round(draft.widget.opacity * 100)}%</span>
+            <span className="text-sm font-bold text-sp-accent">{Math.round(normalizeWidgetOpacity(draft.widget.opacity) * 100)}%</span>
           </div>
+          {/*
+            opacity=0 함정 방지(2026-05-06): minimum 5% 강제. settings에 0이 저장된 기존
+            사용자도 normalizeWidgetOpacity가 0.05로 표시 + 슬라이더가 5% 미만으로 못 내려가
+            영구 invisible 회귀를 양쪽에서 차단.
+          */}
           <input
             type="range"
-            min={0}
+            min={5}
             max={100}
-            value={Math.round(draft.widget.opacity * 100)}
-            onChange={(e) => patchWidget({ opacity: Number(e.target.value) / 100 })}
+            value={Math.round(normalizeWidgetOpacity(draft.widget.opacity) * 100)}
+            onChange={(e) => patchWidget({ opacity: normalizeWidgetOpacity(Number(e.target.value) / 100) })}
             className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
           />
         </div>

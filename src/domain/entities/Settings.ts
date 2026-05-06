@@ -152,6 +152,30 @@ export function normalizeDesktopMode(
   return 'normal';
 }
 
+/**
+ * 위젯 BrowserWindow 투명도(`setOpacity` 인자) 정규화.
+ *
+ * 발견 경로(2026-05-06): 사용자 settings에 `widget.opacity = 0`이 저장되어 있어
+ * native-desktop attach가 성공해도 BrowserWindow가 OS 레벨 100% 투명 → 화면에서
+ * 사라진 것처럼 보이는 회귀. 슬라이더 minimum이 0%였던 게 원흉.
+ *
+ * 정책:
+ *   - 숫자 아닌 값(NaN/undefined/null/문자열) → 1 (완전 불투명, 안전 기본값)
+ *   - 0.05 미만 → 0.05 (최소 5% 가시성 — 사용자가 위젯을 "잃어버릴" 위험 차단)
+ *   - 1 초과 → 1
+ *   - 그 외 정상 범위 [0.05, 1]은 그대로 보존
+ *
+ * UI 슬라이더 minimum도 5%로 같이 제한해야 사용자가 영구 0%를 입력하는 경로를 차단한다.
+ */
+export function normalizeWidgetOpacity(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 1;
+  }
+  if (value < 0.05) return 0.05;
+  if (value > 1) return 1;
+  return value;
+}
+
 export interface WidgetVisibleSections {
   readonly dateTime: boolean;
   readonly weather: boolean;
