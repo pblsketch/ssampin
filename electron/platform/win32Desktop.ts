@@ -175,6 +175,21 @@ const WM_RBUTTONDOWN = 0x0204;
 const WM_RBUTTONUP = 0x0205;
 const WM_MBUTTONDOWN = 0x0207;
 const WM_MBUTTONUP = 0x0208;
+/**
+ * Phase 7-B — 휠 메시지 상수.
+ *
+ * WM_MOUSEWHEEL: 수직 휠. MSLLHOOKSTRUCT.mouseData의 HIWORD에 wheel delta(signed short).
+ * WM_MOUSEHWHEEL: 수평 휠(틸트). 동일 위치에 horizontal delta.
+ *
+ * Win32 wheel delta convention: WHEEL_DELTA = ±120 per click.
+ *   양수 = 위/오른쪽으로 회전 (멀리 미는 동작)
+ *   음수 = 아래/왼쪽으로 회전 (가까이 당기는 동작)
+ *
+ * Chromium deltaY convention: 양수 = 아래로 스크롤 (페이지가 위로 이동).
+ *   따라서 WM_MOUSEWHEEL의 양수 delta는 Chromium deltaY 음수에 해당 → 부호 반전 필요.
+ */
+const WM_MOUSEWHEEL = 0x020a;
+const WM_MOUSEHWHEEL = 0x020e;
 
 // ────────────────────────────────────────────────────────────
 // Bindings
@@ -280,7 +295,8 @@ interface Win32Bindings {
   // user32 — Phase 7: low-level mouse hook
   SetWindowsHookExW: (idHook: number, lpfn: unknown, hmod: bigint | number | null, dwThreadId: number) => bigint | null;
   UnhookWindowsHookEx: (hhk: bigint | number) => number;
-  CallNextHookEx: (hhk: bigint | number | null, nCode: number, wParam: bigint | number, lParam: bigint | number) => bigint | number;
+  // Phase 7-B: lParam은 proto에서 'void*'이므로 koffi가 External pointer object | BigInt | number 가능 → unknown.
+  CallNextHookEx: (hhk: bigint | number | null, nCode: number, wParam: bigint | number, lParam: unknown) => bigint | number;
 
   // kernel32 — Phase 7: 모듈 핸들 (hook callback이 모듈에 속해야 함)
   GetModuleHandleW: (lpModuleName: string | null) => bigint | null;
@@ -294,6 +310,8 @@ let cachedKoffi: typeof import('koffi') | null = null;
 // koffi.proto는 같은 type 이름을 두 번 등록하면 'Duplicate type name' throw → module-level 캐시.
 // hook을 설치/해제/재설치할 때마다 새로 만들면 안 됨. 단 하나의 proto를 평생 재사용.
 let cachedLowLevelMouseProc: unknown = null;
+// Phase 7-B 진단: OutputDebugStringW 캐시 — DebugView로 hook callback 가시화.
+let cachedOutputDebugStringW: ((msg: string) => void) | null = null;
 
 function loadKoffi(): typeof import('koffi') {
   if (cachedKoffi) return cachedKoffi;
@@ -313,6 +331,19 @@ function loadWin32Bindings(): Win32Bindings {
   if (cachedBindings) return cachedBindings;
 
   const koffi = loadKoffi();
+
+  // Phase 7-B: SetWindowsHookExW의 두번째 인자를 typed function pointer로 선언하기 위해
+  // proto를 bindings 로드 직전에 미리 등록한다. 이전 구현은 SetWindowsHookExW 시그니처를
+  // 'void *'(untyped)로 두었는데, 동일 환경(Win11 24H2)에서 동작하는 School Board v1.1.5
+  // 분석 결과 typed `LLHookProc*`가 결정적 차이로 식별됨. koffi가 callback ABI를 인식하려면
+  // SetWindowsHookExW 시그니처에서 두번째 인자를 함수 포인터 타입으로 명시해야 한다.
+  //
+  // proto는 module-level 캐시에 보관 — 'Duplicate type name' 회피.
+  if (cachedLowLevelMouseProc === null) {
+    cachedLowLevelMouseProc = koffi.proto(
+      'intptr_t __stdcall LowLevelMouseProc(int nCode, uintptr_t wParam, void *lParam)',
+    );
+  }
 
   let kernel32: ReturnType<typeof koffi.load>;
   let user32: ReturnType<typeof koffi.load>;
@@ -433,21 +464,37 @@ function loadWin32Bindings(): Win32Bindings {
     ) as Win32Bindings['ReadProcessMemory'];
 
     // Phase 7
+    // Phase 7-B FIX: 두번째 인자를 LowLevelMouseProc* (typed function pointer)로 변경.
+    // School Board 1.1.5의 결정적 차이 — koffi가 callback dispatcher를 올바르게 thunk하려면
+    // 함수 포인터 타입을 sig에 명시해야 한다. void*는 raw pointer로 처리되어 OS가 callback을
+    // dispatch해도 JS 함수까지 전파되지 않는 것으로 추정 (Electron 40 + koffi 2.16 환경에서).
     const SetWindowsHookExW = user32.func(
-      'void* __stdcall SetWindowsHookExW(int, void *, void*, uint32)',
+      'void* __stdcall SetWindowsHookExW(int, LowLevelMouseProc *, void*, uint32)',
     ) as Win32Bindings['SetWindowsHookExW'];
 
     const UnhookWindowsHookEx = user32.func(
       'int __stdcall UnhookWindowsHookEx(void*)',
     ) as Win32Bindings['UnhookWindowsHookEx'];
 
+    // Phase 7-B FIX: lParam을 'void*'로 변경 — koffi.decode를 더 자연스럽게 사용 + School Board와 정합.
     const CallNextHookEx = user32.func(
-      'intptr_t __stdcall CallNextHookEx(void*, int, intptr_t, intptr_t)',
+      'intptr_t __stdcall CallNextHookEx(void*, int, uintptr_t, void *)',
     ) as Win32Bindings['CallNextHookEx'];
 
     const GetModuleHandleW = kernel32.func(
       'void* __stdcall GetModuleHandleW(str16)',
     ) as Win32Bindings['GetModuleHandleW'];
+
+    // Phase 7-B 진단: hook callback 진입을 OutputDebugStringW로 시그널 — 파일 IO보다 가볍고
+    // DebugView 등 외부 도구로 가시화 가능. file fanout이 silent fail하는 경우 대비.
+    try {
+      const OutputDebugStringW = kernel32.func(
+        'void __stdcall OutputDebugStringW(str16)',
+      ) as (msg: string) => void;
+      cachedOutputDebugStringW = OutputDebugStringW;
+    } catch {
+      cachedOutputDebugStringW = null;
+    }
 
     cachedBindings = {
       GetCurrentProcessId,
@@ -1229,37 +1276,50 @@ export function installLowLevelMouseHook(
 ): MouseHookHandle {
   const b = loadWin32Bindings();
 
-  // 1. callback proto/register
-  // LowLevelMouseProc: LRESULT CALLBACK Proc(int nCode, WPARAM wParam, LPARAM lParam)
-  // x64에서 LRESULT/WPARAM/LPARAM 모두 64-bit → intptr_t.
-  // ⚠️ koffi.proto는 같은 type 이름을 두 번 등록하면 'Duplicate type name' throw (Win11 24H2에서 hook 재설치 시 발견됨).
-  // module-level 캐시로 평생 1회만 등록. 재설치 시에는 캐시된 proto를 재사용.
-  if (cachedLowLevelMouseProc === null) {
-    cachedLowLevelMouseProc = b.koffi.proto('intptr_t __stdcall LowLevelMouseProc(int, intptr_t, intptr_t)');
-  }
+  // 1. proto는 loadWin32Bindings()에서 이미 등록됨 (SetWindowsHookExW 시그니처가 `LowLevelMouseProc *`를
+  //    참조하기 때문). 여기선 cached 값만 사용.
   const proto = cachedLowLevelMouseProc;
+  if (proto === null) {
+    throw new HookInstallError('LowLevelMouseProc proto가 bindings 로드 시 등록되지 않음');
+  }
+
+  // Phase 7-B 진단 카운터 — register 후 첫 호출까지 reachability 검증.
+  let firstCallbackEntry = false;
 
   // koffi 콜백 — JS 함수를 함수 포인터로 변환. 등록된 callback은 unregister할 때까지 GC 불가.
-  const callback = (nCode: number, wParam: bigint | number, lParamRaw: bigint | number): bigint | number => {
+  // Phase 7-B FIX: lParam 타입을 proto에서 `void*`로 선언했으므로 koffi가 raw pointer로 마샬링.
+  // typeof lParam === 'object' (External) 또는 BigInt 가능 — koffi.decode는 두 형태 모두 수용.
+  const callback = (nCode: number, wParamRaw: bigint | number, lParamRaw: unknown): bigint | number => {
+    // Phase 7-B 진단: 첫 진입 시 OutputDebugString으로 시그널.
+    if (!firstCallbackEntry) {
+      firstCallbackEntry = true;
+      try {
+        if (cachedOutputDebugStringW) {
+          cachedOutputDebugStringW(`[ssampin-hook] FIRST callback nCode=${nCode}\n`);
+        }
+        diagLog('phase7-hook-first-callback', { nCode });
+      } catch {
+        /* never throw from hook */
+      }
+    }
+
     // Win32 contract: nCode < 0이면 즉시 CallNextHookEx 호출
     if (nCode < 0) {
-      return b.CallNextHookEx(null, nCode, wParam, lParamRaw);
+      return b.CallNextHookEx(null, nCode, wParamRaw, lParamRaw as bigint | number);
     }
 
     try {
-      // lParam은 MSLLHOOKSTRUCT*. pt(8 bytes) + mouseData(4 bytes) = 12 bytes만 읽으면 충분.
-      // koffi.decode(pointer, type, count): pointer 시작에서 type을 count 만큼 읽는다.
-      // int32 3개 = 12 bytes로 pt.x, pt.y, mouseData를 한 번에 디코드.
-      const lparamBig = typeof lParamRaw === 'bigint' ? lParamRaw : BigInt(lParamRaw);
-      if (lparamBig !== 0n) {
-        const decoded = b.koffi.decode(lparamBig, 'int32', 3) as number[] | Int32Array;
-        const x = Array.isArray(decoded) ? decoded[0] : decoded[0];
-        const y = Array.isArray(decoded) ? decoded[1] : decoded[1];
-        const mouseDataRaw = Array.isArray(decoded) ? decoded[2] : decoded[2];
-        // wParam = mouse 메시지 타입 (WM_LBUTTONDOWN 등). 64-bit이지만 메시지 타입은 16-bit이내라 안전 변환.
-        const msgType = typeof wParam === 'bigint' ? Number(BigInt.asUintN(32, wParam)) : (wParam >>> 0);
+      if (lParamRaw !== null && lParamRaw !== undefined && lParamRaw !== 0 && lParamRaw !== 0n) {
+        // koffi.decode 3-인자 형태: (pointer, type, count) = pt.x, pt.y, mouseData를 한 번에.
+        // lParam은 koffi가 'void*' 시그니처에 맞춰 External pointer object 또는 BigInt로 전달.
+        const decoded = b.koffi.decode(lParamRaw, 'int32', 3) as number[] | Int32Array;
+        const x = decoded[0] ?? 0;
+        const y = decoded[1] ?? 0;
+        const mouseDataRaw = decoded[2] ?? 0;
+        // wParam = mouse 메시지 타입 (WM_LBUTTONDOWN 등).
+        const msgType = typeof wParamRaw === 'bigint' ? Number(BigInt.asUintN(32, wParamRaw)) : (wParamRaw >>> 0);
         try {
-          onMouseEvent({ x: x ?? 0, y: y ?? 0 }, msgType, mouseDataRaw ?? 0);
+          onMouseEvent({ x, y }, msgType, mouseDataRaw);
         } catch {
           /* callback 안에서 throw 금지 */
         }
@@ -1269,17 +1329,16 @@ export function installLowLevelMouseHook(
     }
 
     // 항상 다음 hook으로 패스 — 차단 없음
-    return b.CallNextHookEx(null, nCode, wParam, lParamRaw);
+    return b.CallNextHookEx(null, nCode, wParamRaw, lParamRaw as bigint | number);
   };
 
   const registered = b.koffi.register(callback, b.koffi.pointer(proto));
 
-  // 2. 모듈 핸들. WH_MOUSE_LL은 dwThreadId=0(global), hMod 인자는 어떤 모듈에 hook이
-  //    속하는지 식별. 일반적으로 GetModuleHandle(NULL) (현재 EXE)을 넘긴다.
-  const hModule = toBigInt(b.GetModuleHandleW(null));
-
-  // 3. SetWindowsHookExW
-  const hhk = toBigInt(b.SetWindowsHookExW(WH_MOUSE_LL, registered, hModule === 0n ? null : hModule, 0));
+  // 2. Phase 7-B FIX: hMod=NULL로 변경. WH_MOUSE_LL은 dwThreadId=0(global)일 때 hMod=NULL이 합법.
+  //    School Board v1.1.5 (Win11 24H2 동작 확인)는 hMod=0을 직접 넘긴다. GetModuleHandle(NULL)이
+  //    반환하는 EXE 모듈 핸들을 넘기면 koffi+Electron 40 환경에서 callback dispatch가 누락되는
+  //    것으로 진단됨 (hook은 설치되지만 totalCallbacks=0).
+  const hhk = toBigInt(b.SetWindowsHookExW(WH_MOUSE_LL, registered, null, 0));
 
   if (isNullHandle(hhk)) {
     // 등록된 callback도 정리
@@ -1289,6 +1348,15 @@ export function installLowLevelMouseHook(
       /* ignore */
     }
     throw new HookInstallError('SetWindowsHookExW(WH_MOUSE_LL) 실패 — 보안 정책 차단 추정');
+  }
+
+  // Phase 7-B 진단: hook 설치 직후 OutputDebugString 시그널 — DebugView로 install confirm 가능.
+  try {
+    if (cachedOutputDebugStringW) {
+      cachedOutputDebugStringW(`[ssampin-hook] INSTALLED hhk=0x${hhk.toString(16)}\n`);
+    }
+  } catch {
+    /* ignore */
   }
 
   return {
@@ -1327,16 +1395,17 @@ export function uninstallLowLevelMouseHook(h: MouseHookHandle): void {
 // ────────────────────────────────────────────────────────────
 
 /**
- * Phase 7-A에서 widget HWND로 라우팅할 마우스 메시지 식별.
+ * Phase 7-A/B에서 widget HWND로 라우팅할 마우스 메시지 식별.
  *
  * 포함:
  *   - WM_MOUSEMOVE (0x0200) — hover 효과, mouseenter/leave 트래킹
  *   - WM_LBUTTONDOWN/UP/DBLCLK (0x0201/2/3) — 좌클릭, 더블클릭
  *   - WM_RBUTTONDOWN/UP (0x0204/5) — 우클릭(컨텍스트 메뉴)
  *   - WM_MBUTTONDOWN/UP (0x0207/8) — 휠 클릭
+ *   - WM_MOUSEWHEEL (0x020A) — 수직 휠 (Phase 7-B)
+ *   - WM_MOUSEHWHEEL (0x020E) — 수평 휠/틸트 (Phase 7-B)
  *
  * 제외 (다음 Phase로 분리):
- *   - WM_MOUSEWHEEL/HWHEEL — Phase 7-B (휠 스크롤)
  *   - WM_NCLBUTTONDOWN — Phase 7-C (헤더 드래그로 위젯 이동)
  *   - WM_NCHITTEST 기반 cursor 처리 — Phase 7-D (테두리 resize)
  *
@@ -1352,6 +1421,8 @@ export function isMouseMessageOfInterest(msgType: number): boolean {
     || msgType === WM_MBUTTONUP
     || msgType === WM_LBUTTONDBLCLK
     || msgType === WM_MOUSEMOVE
+    || msgType === WM_MOUSEWHEEL
+    || msgType === WM_MOUSEHWHEEL
   );
 }
 
@@ -1469,7 +1540,8 @@ export type ElectronMouseEventType =
   | 'mouseUp'
   | 'mouseMove'
   | 'mouseEnter'
-  | 'mouseLeave';
+  | 'mouseLeave'
+  | 'mouseWheel';
 
 /**
  * Electron `sendInputEvent` mouse button.
@@ -1502,6 +1574,9 @@ export function mapWin32MsgToElectronEvent(msg: number): ElectronMouseEventType 
       return 'mouseUp';
     case WM_MOUSEMOVE:
       return 'mouseMove';
+    case WM_MOUSEWHEEL:
+    case WM_MOUSEHWHEEL:
+      return 'mouseWheel';
     default:
       return null;
   }
@@ -1534,4 +1609,54 @@ export function mapWin32MsgToButton(msg: number): ElectronMouseButton {
  */
 export function mapWin32MsgToClickCount(msg: number): number {
   return msg === WM_LBUTTONDBLCLK ? 2 : 1;
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-B — Wheel routing helpers
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Phase 7-B 휠 축 식별.
+ *
+ * - WM_MOUSEWHEEL → 'vertical' (수직 휠, 일반적인 마우스 휠 회전)
+ * - WM_MOUSEHWHEEL → 'horizontal' (수평/틸트 휠 또는 터치패드 가로 스크롤)
+ * - 그 외 → null
+ *
+ * hot path에서 분기에 사용.
+ */
+export type WheelAxis = 'vertical' | 'horizontal';
+
+export function mapWin32MsgToWheelAxis(msg: number): WheelAxis | null {
+  if (msg === WM_MOUSEWHEEL) return 'vertical';
+  if (msg === WM_MOUSEHWHEEL) return 'horizontal';
+  return null;
+}
+
+/**
+ * Phase 7-B — MSLLHOOKSTRUCT.mouseData에서 wheel delta 추출.
+ *
+ * mouseData는 32-bit DWORD. wheel delta는 HIWORD에 packing된 signed short(16-bit).
+ *   - bits 0..15 (LOWORD): 미사용 (XBUTTON 식별 등 다른 용도)
+ *   - bits 16..31 (HIWORD): wheel delta
+ *
+ * Win32 wheel delta convention:
+ *   - WHEEL_DELTA = ±120 per click (표준 마우스 휠 한 칸)
+ *   - 양수: 위쪽 / 오른쪽으로 회전 (멀리 미는 동작)
+ *   - 음수: 아래쪽 / 왼쪽으로 회전
+ *   - 정밀 휠/터치패드는 ±120 미만 값도 가능
+ *
+ * 16-bit signed 변환: HIWORD가 0x8000 이상이면 음수.
+ *
+ * 본 함수는 axis와 무관하게 단순 HIWORD signed 추출만 수행. axis 매핑은
+ * mapWin32MsgToWheelAxis가 별도 책임.
+ *
+ * @param mouseData MSLLHOOKSTRUCT.mouseData (32-bit unsigned 가정)
+ * @returns wheel delta (signed short, 보통 ±120 단위)
+ */
+export function decodeWheelDelta(mouseData: number): number {
+  // mouseData가 음수 int32로 들어올 수 있음 (`>>> 0`로 unsigned 변환).
+  const u32 = mouseData >>> 0;
+  const high = (u32 >>> 16) & 0xffff;
+  // signed short: 0x8000 이상이면 음수
+  return high >= 0x8000 ? high - 0x10000 : high;
 }

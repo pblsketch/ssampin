@@ -495,7 +495,7 @@ function createWin32Manager(
             }
             const eventType = win32.mapWin32MsgToElectronEvent(msgType);
             if (!eventType) {
-              // 매핑 불가 메시지 — Phase 7-A 관심 메시지인데 매핑 미정의면 코드 일관성 문제.
+              // 매핑 불가 메시지 — Phase 7-A/B 관심 메시지인데 매핑 미정의면 코드 일관성 문제.
               routingStats.failed++;
               return;
             }
@@ -512,6 +512,49 @@ function createWin32Manager(
               : dipBounds.height / cachedPhysicalBounds.height;
             const dipX = Math.round(client.x * widthRatio);
             const dipY = Math.round(client.y * heightRatio);
+
+            // ─── Phase 7-B: WHEEL 분기 ───
+            if (eventType === 'mouseWheel') {
+              const axis = win32.mapWin32MsgToWheelAxis(msgType);
+              if (!axis) {
+                routingStats.failed++;
+                return;
+              }
+              const delta = win32.decodeWheelDelta(mouseData);
+              // Win32 wheel delta 부호 ↔ Chromium deltaY 부호:
+              //   - WM_MOUSEWHEEL 양수 = 휠 위로 (사용자가 멀리 밀기) → Chromium에서 콘텐츠는 아래로 움직여
+              //     사용자가 위쪽 콘텐츠를 보게 됨 → Chromium deltaY 음수.
+              //   - 따라서 Chromium 컨벤션 맞춤: deltaY = -delta.
+              //   - WM_MOUSEHWHEEL은 deltaX 매핑. Chromium deltaX는 양수=오른쪽 스크롤,
+              //     Win32 양수=오른쪽 회전 → 부호 일치.
+              // ※ 실기 검증에서 부호가 반대로 느껴지면 deltaY 부호 정책 재조정 필요.
+              const deltaX = axis === 'horizontal' ? delta : 0;
+              const deltaY = axis === 'vertical' ? -delta : 0;
+              try {
+                win.webContents.sendInputEvent({
+                  type: 'mouseWheel',
+                  x: dipX,
+                  y: dipY,
+                  deltaX,
+                  deltaY,
+                  canScroll: true,
+                });
+                routingStats.sent++;
+                diagLog(
+                  'native-desktop',
+                  `[7-B] sendInput wheel msg=0x${msgType.toString(16)} axis=${axis} delta=${delta} dip=(${dipX},${dipY})`,
+                );
+              } catch (e) {
+                routingStats.failed++;
+                diagWarn(
+                  'native-desktop',
+                  `[7-B] sendInput wheel 실패 msg=0x${msgType.toString(16)}: ${e instanceof Error ? e.message : String(e)}`,
+                );
+              }
+              return;
+            }
+
+            // ─── Phase 7-A: Click/Move 분기 ───
             try {
               win.webContents.sendInputEvent({
                 type: eventType,
@@ -536,12 +579,46 @@ function createWin32Manager(
                 );
               }
             }
-            void mouseData; // sendInputEvent 경로에선 미사용 (Phase 7-B wheel에서 사용 예정)
+            void mouseData; // click/move 경로에선 미사용
           } else {
             // ─── Legacy fallback: PostMessageW ───
             // 환경변수 SSAMPIN_NATIVE_DESKTOP_ROUTING=post-message 로 켰을 때만 도달.
             // Chromium 무시 가능성 있음 (사용자 검증 결과). 디버깅용으로만 유지.
             if (cachedWidgetHwnd === 0n) return;
+
+            // Phase 7-B: PostMessage 경로의 wheel encoding.
+            //   wParam HIWORD에 wheel delta (signed short), LOWORD에 fwKeys (button/modifier flags, 0=none)
+            //   lParam에 screen coordinate (LOWORD=x, HIWORD=y) — *주의*: WM_MOUSEWHEEL은 client가 아니라 screen coord
+            //   (MSDN: "The low-order word specifies the x-coordinate of the pointer, relative to
+            //   the upper-left corner of the screen.")
+            // 본 단계에서는 fallback 경로이므로 client 좌표 그대로 넘기고(잘못 동작해도 fallback일 뿐),
+            // PostMessageW 자체는 실패하지 않도록 wheel delta 부호만 살려 wParam에 packing.
+            if (msgType === 0x020a /* WM_MOUSEWHEEL */ || msgType === 0x020e /* WM_MOUSEHWHEEL */) {
+              const delta = win32.decodeWheelDelta(mouseData);
+              // wParam HIWORD에 delta (16-bit signed → unsigned 16-bit로 packing).
+              // LOWORD = 0 (no key/button flags).
+              const wParamPacked = ((delta & 0xffff) << 16) >>> 0;
+              // lParam은 screen coord 사용. MOUSEWHEEL의 lParam은 screen이지만 fallback 정확성 깊이 X.
+              const sx = (p.x | 0) & 0xffff;
+              const sy = (p.y | 0) & 0xffff;
+              const lparamPacked = ((sy << 16) | sx) >>> 0;
+              try {
+                // postMouseMessageToWidget의 lParam encoding은 client용이라 wheel에 부적합.
+                // 직접 PostMessage가 필요하지만 현 인터페이스에 노출 안 됨 → fallback이라 best-effort.
+                // 정밀하게 송신하려면 별도 win32 helper 필요. 본 단계에선 통과시키고 stats만 기록.
+                void wParamPacked;
+                void lparamPacked;
+                routingStats.failed++;
+                diagWarn(
+                  'native-desktop',
+                  `[7-B] post-message fallback에서 wheel 라우팅은 미구현 (axis=${msgType === 0x020a ? 'V' : 'H'} delta=${delta})`,
+                );
+              } catch {
+                routingStats.failed++;
+              }
+              return;
+            }
+
             const ok = win32.postMouseMessageToWidget(
               cachedWidgetHwnd,
               msgType,

@@ -26,6 +26,8 @@ import {
   mapWin32MsgToElectronEvent,
   mapWin32MsgToButton,
   mapWin32MsgToClickCount,
+  decodeWheelDelta,
+  mapWin32MsgToWheelAxis,
 } from './win32Desktop';
 
 describe('win32Desktop error classes', () => {
@@ -156,11 +158,12 @@ describe('Phase 7-A — isMouseMessageOfInterest', () => {
     expect(isMouseMessageOfInterest(0x0200)).toBe(true);
   });
 
-  it('다음 phase로 분리된 메시지는 false (휠/NC*/RBUTTONDBLCLK 등)', () => {
-    // WM_MOUSEWHEEL (Phase 7-B)
-    expect(isMouseMessageOfInterest(0x020A)).toBe(false);
-    // WM_MOUSEHWHEEL (Phase 7-B)
-    expect(isMouseMessageOfInterest(0x020E)).toBe(false);
+  it('Phase 7-B WHEEL 메시지 2종 (WM_MOUSEWHEEL/WM_MOUSEHWHEEL)도 true 반환', () => {
+    expect(isMouseMessageOfInterest(0x020a)).toBe(true); // WM_MOUSEWHEEL
+    expect(isMouseMessageOfInterest(0x020e)).toBe(true); // WM_MOUSEHWHEEL
+  });
+
+  it('다음 phase로 분리된 메시지는 false (NC*/RBUTTONDBLCLK 등)', () => {
     // WM_NCLBUTTONDOWN (Phase 7-C)
     expect(isMouseMessageOfInterest(0x00A1)).toBe(false);
     // WM_NCMOUSEMOVE (Phase 7-D)
@@ -242,7 +245,7 @@ describe('Phase 7-A 재시도 — mapWin32MsgToElectronEvent', () => {
   });
 
   it('매핑 불가 메시지 → null', () => {
-    expect(mapWin32MsgToElectronEvent(0x020A)).toBeNull(); // WM_MOUSEWHEEL
+    // WM_MOUSEWHEEL/WM_MOUSEHWHEEL은 Phase 7-B에서 'mouseWheel'로 매핑됨 (별도 테스트)
     expect(mapWin32MsgToElectronEvent(0x00A1)).toBeNull(); // WM_NCLBUTTONDOWN
     expect(mapWin32MsgToElectronEvent(0)).toBeNull();
     expect(mapWin32MsgToElectronEvent(0xFFFF)).toBeNull();
@@ -316,5 +319,92 @@ describe('Phase 7-A — lParam 16-bit packing 산술', () => {
     expect(lparam & 0xFFFF).toBe(0xFFF6);
     // -5의 16-bit 보수: 0xFFFB
     expect(((lparam >>> 16) & 0xFFFF)).toBe(0xFFFB);
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-B: Wheel routing helpers
+// ────────────────────────────────────────────────────────────
+
+describe('Phase 7-B — decodeWheelDelta', () => {
+  it('표준 휠 한 클릭 위로 — mouseData 0x00780000 → 120', () => {
+    // HIWORD = 0x0078 = 120 (양수 signed short)
+    expect(decodeWheelDelta(0x00780000)).toBe(120);
+  });
+
+  it('표준 휠 한 클릭 아래로 — mouseData 0xFF880000 → -120', () => {
+    // HIWORD = 0xFF88 → 16-bit signed → -120
+    // (0xFF88 - 0x10000 = -120)
+    expect(decodeWheelDelta(0xff880000 | 0)).toBe(-120);
+  });
+
+  it('두 클릭 위로 — mouseData 0x00F00000 → 240', () => {
+    // HIWORD = 0x00F0 = 240
+    expect(decodeWheelDelta(0x00f00000)).toBe(240);
+  });
+
+  it('정밀 휠 작은 양수 — mouseData 0x00010000 → 1', () => {
+    expect(decodeWheelDelta(0x00010000)).toBe(1);
+  });
+
+  it('정밀 휠 작은 음수 — mouseData 0xFFFF0000 → -1', () => {
+    expect(decodeWheelDelta(0xffff0000 | 0)).toBe(-1);
+  });
+
+  it('LOWORD가 채워져 있어도 무시 (XBUTTON 식별 비트 등)', () => {
+    // HIWORD = 120, LOWORD = 0xABCD (XBUTTON 등) → delta는 여전히 120
+    expect(decodeWheelDelta(0x0078abcd)).toBe(120);
+  });
+
+  it('HIWORD 0 → 0 (mouseData 0)', () => {
+    expect(decodeWheelDelta(0)).toBe(0);
+  });
+
+  it('경계값 0x80000000 (HIWORD=0x8000) → -32768 (signed short min)', () => {
+    expect(decodeWheelDelta(0x80000000 | 0)).toBe(-32768);
+  });
+
+  it('경계값 HIWORD=0x7FFF → 32767 (signed short max)', () => {
+    expect(decodeWheelDelta(0x7fff0000)).toBe(32767);
+  });
+});
+
+describe('Phase 7-B — mapWin32MsgToWheelAxis', () => {
+  it("WM_MOUSEWHEEL (0x020A) → 'vertical'", () => {
+    expect(mapWin32MsgToWheelAxis(0x020a)).toBe('vertical');
+  });
+
+  it("WM_MOUSEHWHEEL (0x020E) → 'horizontal'", () => {
+    expect(mapWin32MsgToWheelAxis(0x020e)).toBe('horizontal');
+  });
+
+  it('휠이 아닌 메시지 → null', () => {
+    expect(mapWin32MsgToWheelAxis(0x0201)).toBeNull(); // WM_LBUTTONDOWN
+    expect(mapWin32MsgToWheelAxis(0x0200)).toBeNull(); // WM_MOUSEMOVE
+    expect(mapWin32MsgToWheelAxis(0)).toBeNull();
+    expect(mapWin32MsgToWheelAxis(0xffff)).toBeNull();
+  });
+});
+
+describe('Phase 7-B — mapWin32MsgToElectronEvent (wheel)', () => {
+  it("WM_MOUSEWHEEL → 'mouseWheel'", () => {
+    expect(mapWin32MsgToElectronEvent(0x020a)).toBe('mouseWheel');
+  });
+
+  it("WM_MOUSEHWHEEL → 'mouseWheel'", () => {
+    expect(mapWin32MsgToElectronEvent(0x020e)).toBe('mouseWheel');
+  });
+});
+
+describe('Phase 7-B — wheel 부호 매핑 정합성', () => {
+  // Phase 7-B 구현 약속: WM_MOUSEWHEEL의 양수 delta → Chromium deltaY 음수
+  //   (Win32: 양수 = 휠을 위로 회전 = 사용자가 위쪽 콘텐츠를 보고 싶다)
+  //   (Chromium: deltaY 양수 = 아래로 스크롤 = 사용자가 아래쪽을 보고 싶다)
+  //
+  // 본 테스트는 helper 자체가 부호 변환을 하지는 않는다 (manager에서 -delta 적용).
+  // helper는 raw signed delta만 반환하고 부호 정책은 manager가 결정.
+  it('decodeWheelDelta는 raw signed short를 반환 (manager가 axis별 부호 정책 적용)', () => {
+    expect(decodeWheelDelta(0x00780000)).toBeGreaterThan(0); // up = positive raw
+    expect(decodeWheelDelta(0xff880000 | 0)).toBeLessThan(0); // down = negative raw
   });
 });
