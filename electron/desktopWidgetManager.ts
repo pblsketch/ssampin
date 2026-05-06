@@ -220,7 +220,9 @@ function createWin32Manager(
    *
    * Phase 7-A 재시도: 'posted' → 'sent'로 명명 통일 (sendInputEvent와 PostMessage 둘 다 포함).
    */
-  let routingStats = { sent: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0 };
+  let routingStats = { sent: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0, totalCallbacks: 0 };
+  let firstCallbackLogged = false;
+  let statsTimer: NodeJS.Timeout | null = null;
 
   // 16ms TTL 캐시 (Phase 6/7 — mouse hook hot path 성능)
   // 동일 좌표로 짧은 시간 안에 여러 번 호출되는 경우(드래그 중)에 유리.
@@ -264,7 +266,12 @@ function createWin32Manager(
     lastHitResult = false;
     lastHitUntil = 0;
     // Phase 7-A 통계 초기화 (다음 enable에서 깨끗하게 시작)
-    routingStats = { sent: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0 };
+    routingStats = { sent: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0, totalCallbacks: 0 };
+    firstCallbackLogged = false;
+    if (statsTimer) {
+      clearInterval(statsTimer);
+      statsTimer = null;
+    }
   }
 
   // Phase 7 — hot path. shouldPassThroughToDesktop을 별도 명명 함수로 분리해 hook callback에서
@@ -455,6 +462,13 @@ function createWin32Manager(
           //   - WM_MOUSEMOVE는 너무 자주 호출되므로 로그 안 찍음 (file/IPC fanout으로 디스크 사망).
           //   - 클릭/우클릭/휠클릭/더블클릭은 모두 진단 로그 (사용자 검증 시 명확히 가시).
           // ───────────────────────────────────────────────────────────────
+          // ⚠️ Win11 24H2 진단: hook callback 첫 진입 1회 즉시 로그.
+          // callback이 0건이면 → WH_MOUSE_LL이 OS 정책에 차단된 것 확정.
+          routingStats.totalCallbacks++;
+          if (!firstCallbackLogged) {
+            firstCallbackLogged = true;
+            diagLog('native-desktop', `[7-A] hook 첫 callback 호출됨 — msgType=0x${msgType.toString(16)} screen=(${p.x},${p.y})`);
+          }
           if (!win32.isMouseMessageOfInterest(msgType)) return;
           if (!isInsideCachedBoundsLocal(p)) {
             routingStats.skippedOutOfBounds++;
@@ -555,6 +569,16 @@ function createWin32Manager(
           }
         });
         diagLog('native-desktop', `Phase 7-A: mouse hook 설치 완료 — routing 활성 (method='${routingMethod}')`);
+        // ⚠️ Win11 24H2 진단: 5초마다 통계 dump.
+        // totalCallbacks=0이면 hook이 OS에 차단된 것. 정상적인 환경에선 사용자 mouse 움직임만으로도
+        // 초당 수백 callback이 와야 함.
+        if (statsTimer) clearInterval(statsTimer);
+        statsTimer = setInterval(() => {
+          diagLog(
+            'native-desktop',
+            `[7-A] stats: totalCallbacks=${routingStats.totalCallbacks} skipOOB=${routingStats.skippedOutOfBounds} skipIcon=${routingStats.skippedIcon} sent=${routingStats.sent} failed=${routingStats.failed}`,
+          );
+        }, 5000);
       } catch (e) {
         // hook 설치 실패는 치명적이지 않다 (라우팅은 Z-order만으로도 일부 동작 — 아이콘 위만).
         // 위젯 위 빈 공간 클릭은 안 되겠지만 attach 자체는 유지.
