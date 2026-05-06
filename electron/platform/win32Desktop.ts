@@ -1056,6 +1056,19 @@ export function detachFromWorkerW(h: Win32DesktopHandles): void {
   } catch {
     /* best-effort */
   }
+
+  // 5. ShowWindow(SW_SHOWNOACTIVATE) — top-level 복귀 후 명시적 표시 보장.
+  //    attach 시 SW_SHOWNOACTIVATE를 호출했으므로 detach에서도 명시적으로 다시 보여줘야 함.
+  //    누락 시 mode 전환(native-desktop → normal/topmost) 후 widget이 hidden 상태로 남는
+  //    회귀가 발생함 (사용자 보고 — Phase 7-C 검증). transparent BrowserWindow에 SetParent
+  //    복원만으로는 visibility가 자동 복구되지 않는다.
+  //    BrowserWindow 자체 visible state는 main.ts의 widgetWindow.show() 호출이 보장하지만,
+  //    여기서 한 번 더 native ShowWindow를 호출해 단일 책임의 안전망을 마련.
+  try {
+    b.ShowWindow(h.widgetHwnd, SW_SHOWNOACTIVATE);
+  } catch {
+    /* best-effort */
+  }
 }
 
 /**
