@@ -127,8 +127,129 @@ let currentDesktopMode: WidgetDesktopMode = 'normal';
  *
  * 비Win32 또는 native module 미설치 환경에서는 no-op manager를 반환하므로
  * 호출자는 플랫폼 분기 없이 동일한 API로 사용할 수 있다.
+ *
+ * `transitionWidgetMode`는 위 manager 인스턴스를 참조하므로 createDesktopWidgetManager()
+ * 호출 직후에 정의된다 (아래 참조).
  */
 const desktopWidgetManager: DesktopWidgetManager = createDesktopWidgetManager();
+
+// ──────────────────────────────────────────────────────────────────────
+// 위젯 모드 전환 단일 흐름 — race 안정화 (PR-2 안정화 라운드)
+// ──────────────────────────────────────────────────────────────────────
+//
+// 배경: native-desktop ↔ topmost/normal 전환 시 가끔 위젯이 사라지는 회귀가
+// 보고됨 ("어쩔 땐 일반 모드 전환, 어쩔 땐 창이 그냥 사라짐").
+//
+// 모드 전환 진입점은 4곳에 분산되어 있었음:
+//   1. createWidgetWindow.attachAndShow (시동 시 settings 복원)
+//   2. ipcMain 'window:applyWidgetSettings' (사용자 라디오 클릭)
+//   3. powerMonitor 'resume' healthCheck (절전 복귀 후 fallback)
+//   4. powerMonitor 'unlock-screen' healthCheck (잠금 해제 후 fallback)
+//
+// 각 분기가 독립적으로 disable→setAlwaysOnTop→show 시퀀스를 갖다 보니
+// 다음 race 중 하나가 발생할 수 있었음:
+//   A. desktopWidgetManager.disable()의 SetParent + GWL_STYLE 복원 + ShowWindow는
+//      sync 호출이지만 DWM 합성은 비동기 → 직후 widgetWindow.show()가 visible
+//      bit 안 켜는 케이스
+//   B. fallback 분기에서 setAlwaysOnTop만 호출하고 show() 누락 (powerMonitor 경로)
+//   C. enable() 도중에 사용자가 라디오를 다시 누르면 Promise 결과 도착 시점과
+//      currentDesktopMode 갱신 시점이 어긋남
+//
+// 해법: 모드 전환을 단일 helper로 통합 + 50ms detach 안정화 대기 + show() 명시적
+// 재호출 + 100ms 후 visibility 검증(이중 안전망).
+//
+// 진단: 각 단계별 visible/isAlwaysOnTop 상태를 diagLog로 기록해 race 패턴 재발
+// 시 로그만으로 식별 가능.
+async function transitionWidgetMode(
+  widgetWindow: BrowserWindow,
+  newMode: WidgetDesktopMode,
+  reason: string,
+): Promise<{ appliedMode: WidgetDesktopMode; fallbackEvent: DesktopModeFallbackEvent | null }> {
+  const fromMode = currentDesktopMode;
+  diagLog(
+    'widget',
+    `[transitionMode] enter from=${fromMode} → newMode=${newMode} reason=${reason} ` +
+      `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()} ` +
+      `manager.isEnabled=${desktopWidgetManager.isEnabled()}`,
+  );
+
+  // 1. 이전 모드 정리: native-desktop이었거나 manager가 살아있으면 disable.
+  //    'idempotent' — disable이 이미 풀린 상태면 no-op.
+  if (fromMode === 'native-desktop' || desktopWidgetManager.isEnabled()) {
+    diagLog('widget', '[transitionMode] disable() 호출 (이전 native-desktop 정리)');
+    desktopWidgetManager.disable();
+    // 2. 안정화 대기 — DWM이 SetParent/GWL_STYLE 복원 + ShowWindow 처리 시간.
+    //    50ms는 Win11/Win10 양쪽에서 vsync 1~3프레임 안에 흡수되는 경험치.
+    //    너무 짧으면(<30ms) 일부 케이스에서 visibility 미반영, 너무 길면(>100ms)
+    //    사용자 체감 지연 → 50ms 채택.
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    if (widgetWindow.isDestroyed()) {
+      diagWarn('widget', '[transitionMode] 안정화 대기 중 widget destroyed — abort');
+      return { appliedMode: fromMode, fallbackEvent: null };
+    }
+  }
+
+  // 3. 새 모드 적용
+  let appliedMode: WidgetDesktopMode = newMode;
+  let fallbackEvent: DesktopModeFallbackEvent | null = null;
+
+  if (newMode === 'native-desktop') {
+    diagLog('widget', '[transitionMode] enable() 호출');
+    const result = await desktopWidgetManager.enable(widgetWindow);
+    diagLog(
+      'widget',
+      `[transitionMode] enable() returned: ok=${result.ok}, ` +
+        `${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`,
+    );
+    if (widgetWindow.isDestroyed()) {
+      diagWarn('widget', '[transitionMode] enable() 후 widget destroyed — abort');
+      return { appliedMode: fromMode, fallbackEvent: null };
+    }
+    if (result.ok) {
+      appliedMode = 'native-desktop';
+      widgetWindow.setAlwaysOnTop(false);
+    } else {
+      appliedMode = result.fallbackMode;
+      fallbackEvent = { reason: result.reason, fallbackMode: result.fallbackMode };
+      widgetWindow.setAlwaysOnTop(result.fallbackMode === 'topmost', 'normal');
+    }
+  } else {
+    // normal | topmost
+    widgetWindow.setAlwaysOnTop(newMode === 'topmost', 'normal');
+  }
+
+  // 4. 명시적 표시 보장 (이중 안전망 — detach 내부 ShowWindow가 있어도 BrowserWindow
+  //    visible state와 OS HWND visibility가 어긋날 수 있음)
+  if (!widgetWindow.isVisible()) {
+    diagLog('widget', '[transitionMode] !visible — show() 호출');
+    widgetWindow.show();
+  } else {
+    diagLog('widget', '[transitionMode] visible=true — show() skip');
+  }
+
+  diagLog(
+    'widget',
+    `[transitionMode] sync complete appliedMode=${appliedMode} ` +
+      `visible=${widgetWindow.isVisible()} alwaysOnTop=${widgetWindow.isAlwaysOnTop()}`,
+  );
+
+  // 5. 비동기 추가 안전망 — 100ms 후 visible 재확인.
+  //    DWM 합성이 늦게 반영되는 케이스에서 ShowWindow가 무시됐을 가능성 대응.
+  //    hide+show 토글은 Electron의 알려진 visibility 회복 패턴.
+  setTimeout(() => {
+    if (!widgetWindow.isDestroyed() && !widgetWindow.isVisible()) {
+      diagWarn(
+        'widget',
+        `[transitionMode] 100ms 후에도 hidden — hide+show 토글 강제 (mode=${appliedMode})`,
+      );
+      widgetWindow.hide();
+      widgetWindow.show();
+    }
+  }, 100);
+
+  currentDesktopMode = appliedMode;
+  return { appliedMode, fallbackEvent };
+}
 
 let winDRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 let winDRecoveryDedup = false;  // minimize 핸들러와 폴링 중복 방지
@@ -1540,61 +1661,24 @@ function createWidgetWindow(
       const desktopMode = normalizeDesktopMode(options.desktopMode, true);
       diagLog('widget', `attachAndShow start — requested desktopMode=${desktopMode} (raw=${String(options.desktopMode)})`);
 
-      switch (desktopMode) {
-        case 'topmost':
-          // ── 항상 위에 모드 ──
-          currentDesktopMode = 'topmost';
-          widgetWindow.setAlwaysOnTop(true);
-          widgetWindow.show();
-          console.log('[widget] 항상 위에 모드');
-          break;
-        case 'native-desktop': {
-          // ── 바탕화면 아이콘 아래 모드 — manager.enable() 시도 ──
-          // attachAndShow가 ready-to-show 콜백이라 originally non-async였음.
-          // fix: async로 승격하고 enable을 await. show()는 enable 결과와 무관하게 보장.
-          //   - WorkerW attach 성공: setAlwaysOnTop(false) + show() (manager가 SetParent + Z-order만 처리)
-          //   - 실패(no-op manager 포함): fallbackMode 적용 + IPC 송신 + 안내 토스트
-          widgetWindow.show(); // 표시 자체는 항상 보장 (실패 시에도 사용자가 위젯을 볼 수 있도록)
+      // 시동 시점은 currentDesktopMode='normal' 초기값이라 transitionWidgetMode의
+      // disable() 분기는 자연스럽게 skip된다. enable + visibility 보장 흐름은
+      // 라디오 클릭과 동일하게 적용 — 단일 책임 유지.
+      // 단, 첫 frame을 빠르게 사용자에게 보여주려고 transition 호출 전에 show() 호출.
+      widgetWindow.show();
 
-          let appliedMode: WidgetDesktopMode = 'native-desktop';
-          let fallbackEvent: DesktopModeFallbackEvent | null = null;
-          try {
-            diagLog('widget', 'desktopWidgetManager.enable() 호출 (createWidgetWindow path)');
-            const result = await desktopWidgetManager.enable(widgetWindow);
-            diagLog('widget', `enable() returned: ok=${result.ok}, ${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`);
-            if (result.ok) {
-              widgetWindow.setAlwaysOnTop(false);
-              console.log('[widget] 바탕화면 아이콘 아래 모드 (WorkerW attach 성공)');
-            } else {
-              appliedMode = result.fallbackMode;
-              fallbackEvent = { reason: result.reason, fallbackMode: result.fallbackMode };
-              widgetWindow.setAlwaysOnTop(result.fallbackMode === 'topmost');
-              console.log(`[widget] native-desktop 실패: ${result.reason} → ${result.fallbackMode} fallback (createWidgetWindow path)`);
-            }
-          } catch (err) {
-            // manager.enable은 throw하지 않도록 설계됐지만, 안전망.
-            diagWarn('widget', 'enable() 예상 외 throw — normal fallback', err);
-            appliedMode = 'normal';
-            fallbackEvent = { reason: 'enable-threw', fallbackMode: 'normal' };
-            widgetWindow.setAlwaysOnTop(false);
-          }
-          currentDesktopMode = appliedMode;
+      const { appliedMode, fallbackEvent } = await transitionWidgetMode(
+        widgetWindow,
+        desktopMode,
+        'createWidgetWindow.attachAndShow',
+      );
 
-          if (fallbackEvent) {
-            // renderer 토스트 — App.tsx의 useDesktopModeFallback hook이 수신.
-            // setImmediate로 묶어 listenerRegister + IPC 타이밍 보호.
-            setImmediate(() => broadcastToAllWindows('desktopMode:fallback', fallbackEvent));
-          }
-          break;
-        }
-        case 'normal':
-        default:
-          // ── 일반 모드 (normal): 다른 창에 가려질 수 있음 ──
-          currentDesktopMode = 'normal';
-          widgetWindow.setAlwaysOnTop(false);
-          widgetWindow.show();
-          console.log('[widget] 일반 모드');
-          break;
+      console.log(`[widget] 시동 모드 적용: ${appliedMode}`);
+      if (fallbackEvent) {
+        // renderer 토스트 — App.tsx의 useDesktopModeFallback hook이 수신.
+        // setImmediate로 묶어 listenerRegister + IPC 타이밍 보호.
+        const captured = fallbackEvent;
+        setImmediate(() => broadcastToAllWindows('desktopMode:fallback', captured));
       }
 
       // 모든 모드에서 Win+D 복원 활성화
@@ -2061,45 +2145,13 @@ function registerIpcHandlers(): void {
 
     console.log(`[widget] 설정 변경 요청: ${currentDesktopMode} → ${requestedMode} (manager.isEnabled=${desktopWidgetManager.isEnabled()})`);
 
-    // ── 기존 모드가 native-desktop이면 먼저 disable() ──
-    if (currentDesktopMode === 'native-desktop') {
-      desktopWidgetManager.disable();
-    }
-
-    // ── 새 모드 적용 ──
-    let appliedMode: WidgetDesktopMode = requestedMode;
-    let fallbackEvent: DesktopModeFallbackEvent | null = null;
-
-    if (requestedMode === 'native-desktop') {
-      // manager.enable()을 시도. 실패 시 fallback.
-      diagLog('widget', 'desktopWidgetManager.enable() 호출 (applyWidgetSettings path)');
-      const result = await desktopWidgetManager.enable(widgetWindow);
-      diagLog('widget', `enable() returned: ok=${result.ok}, ${result.ok ? `mode=${result.mode}` : `reason=${result.reason}, fallback=${result.fallbackMode}`}`);
-      if (result.ok) {
-        appliedMode = 'native-desktop';
-        // attach가 alwaysOnTop과 충돌할 수 있어 명시적으로 false
-        widgetWindow.setAlwaysOnTop(false);
-      } else {
-        appliedMode = result.fallbackMode;
-        fallbackEvent = { reason: result.reason, fallbackMode: result.fallbackMode };
-        console.log(`[widget] native-desktop 실패: ${result.reason} → ${result.fallbackMode} fallback`);
-        // fallback 모드의 alwaysOnTop 적용
-        widgetWindow.setAlwaysOnTop(result.fallbackMode === 'topmost');
-      }
-    } else if (requestedMode === 'topmost') {
-      widgetWindow.setAlwaysOnTop(true);
-      // Phase 7-C 회귀 fix: native-desktop → topmost 전환 시 widget이 hidden 상태로 남는 문제.
-      // detachFromWorkerW의 ShowWindow가 native 차원의 안전망이지만, BrowserWindow 자체의
-      // visible state도 명시적으로 show()로 복구해 IPC 일관성 보장.
-      widgetWindow.show();
-    } else {
-      // normal
-      widgetWindow.setAlwaysOnTop(false);
-      // Phase 7-C 회귀 fix: native-desktop → normal 전환 시 위젯 표시 보장(상동).
-      widgetWindow.show();
-    }
-
-    currentDesktopMode = appliedMode;
+    // 모드 전환 단일 흐름 — disable + 안정화 대기 + 새 모드 적용 + visibility 보장
+    // (transitionWidgetMode 내부에서 currentDesktopMode 갱신 + 100ms 후 visibility 재검증).
+    const { appliedMode, fallbackEvent } = await transitionWidgetMode(
+      widgetWindow,
+      requestedMode,
+      'applyWidgetSettings',
+    );
     console.log(`[widget] 적용 완료: ${appliedMode}`);
 
     // ── fallback 발생 시 renderer에 토스트 알림 ──
@@ -3868,15 +3920,17 @@ if (!gotTheLock) {
       if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
         setTimeout(() => {
           if (!widgetWindow || widgetWindow.isDestroyed()) return;
-          desktopWidgetManager.healthCheck(widgetWindow).then((result) => {
+          const win = widgetWindow;
+          desktopWidgetManager.healthCheck(win).then(async (result) => {
             if (!result.ok) {
               console.log(`[widget] resume 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`);
-              currentDesktopMode = result.fallbackMode;
-              widgetWindow?.setAlwaysOnTop(result.fallbackMode === 'topmost');
-              broadcastToAllWindows('desktopMode:fallback', {
+              // transitionWidgetMode 통해 visibility 보장 — fallback 모드에서 widget이
+              // hidden 상태로 남는 이전 회귀 차단.
+              const { fallbackEvent } = await transitionWidgetMode(win, result.fallbackMode, 'resume-healthCheck-fallback');
+              broadcastToAllWindows('desktopMode:fallback', (fallbackEvent ?? {
                 reason: result.reason,
                 fallbackMode: result.fallbackMode,
-              } satisfies DesktopModeFallbackEvent);
+              }) satisfies DesktopModeFallbackEvent);
             }
           }).catch((e) => console.warn('[widget] resume healthCheck 예외:', e));
         }, 1500);
@@ -3898,15 +3952,16 @@ if (!gotTheLock) {
       if (currentDesktopMode === 'native-desktop' && widgetWindow && !widgetWindow.isDestroyed()) {
         setTimeout(() => {
           if (!widgetWindow || widgetWindow.isDestroyed()) return;
-          desktopWidgetManager.healthCheck(widgetWindow).then((result) => {
+          const win = widgetWindow;
+          desktopWidgetManager.healthCheck(win).then(async (result) => {
             if (!result.ok) {
               console.log(`[widget] unlock 후 healthCheck 실패: ${result.reason} → ${result.fallbackMode} fallback`);
-              currentDesktopMode = result.fallbackMode;
-              widgetWindow?.setAlwaysOnTop(result.fallbackMode === 'topmost');
-              broadcastToAllWindows('desktopMode:fallback', {
+              // resume 분기와 동일 — transitionWidgetMode로 visibility 보장.
+              const { fallbackEvent } = await transitionWidgetMode(win, result.fallbackMode, 'unlock-healthCheck-fallback');
+              broadcastToAllWindows('desktopMode:fallback', (fallbackEvent ?? {
                 reason: result.reason,
                 fallbackMode: result.fallbackMode,
-              } satisfies DesktopModeFallbackEvent);
+              }) satisfies DesktopModeFallbackEvent);
             }
           }).catch((e) => console.warn('[widget] unlock healthCheck 예외:', e));
         }, 1000);
