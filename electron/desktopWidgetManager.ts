@@ -571,7 +571,8 @@ function createWin32Manager(
               } catch {
                 /* drag hot path — silent swallow */
               }
-              return; // drag 동안 sendInputEvent 금지
+              // ★ Explorer rubber band 차단: OS 메시지 흐름에서 MOUSEMOVE 흡수.
+              return true;
             }
             // 0x0202 = WM_LBUTTONUP
             if (msgType === 0x0202) {
@@ -588,10 +589,11 @@ function createWin32Manager(
                 cachedPhysicalBounds = recalcPhysicalBounds(cachedWidgetWindow);
                 recalcHeaderRegionsPhysical(cachedWidgetWindow);
               }
-              return; // LBUTTONUP도 widget으로 보내지 않음 (drag 자체로 흡수됨)
+              // ★ Explorer rubber band 종료 차단: BUTTONUP도 흡수.
+              return true;
             }
-            // 다른 버튼/메시지가 drag 중에 들어오면 일단 무시 (drag 우선)
-            return;
+            // 다른 버튼/메시지가 drag 중에 들어오면 일단 무시 (drag 우선) + 차단.
+            return true;
           }
 
           if (!isInsideCachedBoundsLocal(p)) {
@@ -617,7 +619,8 @@ function createWin32Manager(
                 'native-desktop',
                 `[7-C] drag start mouse=(${p.x},${p.y}) widget=(${cachedPhysicalBounds.x},${cachedPhysicalBounds.y}) size=(${cachedPhysicalBounds.width}x${cachedPhysicalBounds.height})`,
               );
-              return; // drag 우선 — widget으로 LBUTTONDOWN 전달 안 함
+              // ★ Explorer rubber band 시작 차단: BUTTONDOWN을 OS에 흘리지 않음.
+              return true; // drag 우선 — widget으로 LBUTTONDOWN 전달 안 함
             }
           }
           if (passThroughCheck(p)) {

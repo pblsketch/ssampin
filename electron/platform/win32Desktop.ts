@@ -1256,11 +1256,19 @@ export interface MouseHookHandle {
  * @param msgType wParam에 들어온 Win32 mouse 메시지 타입 (WM_LBUTTONDOWN 등)
  * @param mouseData MSLLHOOKSTRUCT.mouseData (wheel delta, XBUTTON 식별 등). 클릭/이동에선 0.
  */
+/**
+ * @returns true = OS 메시지 흐름 차단 (CallNextHookEx 안 호출, return 1).
+ *          false / undefined = 정상 패스 (CallNextHookEx 호출).
+ *
+ * 차단 사례 (Phase 7-C drag mode):
+ *   drag 중 LBUTTONDOWN/MOUSEMOVE/LBUTTONUP을 OS에 흘려보내면 Explorer SHELLDLL_DefView가
+ *   받아 multi-select rubber band(파란 사각형)를 그린다. 차단해서 widget만 처리.
+ */
 export type MouseHookCallback = (
   physicalPoint: { x: number; y: number },
   msgType: number,
   mouseData: number,
-) => void;
+) => boolean | void;
 
 /**
  * WH_MOUSE_LL low-level mouse hook 설치.
@@ -1321,6 +1329,7 @@ export function installLowLevelMouseHook(
       return b.CallNextHookEx(null, nCode, wParamRaw, lParamRaw as bigint | number);
     }
 
+    let shouldBlock = false;
     try {
       if (lParamRaw !== null && lParamRaw !== undefined && lParamRaw !== 0 && lParamRaw !== 0n) {
         // koffi.decode 3-인자 형태: (pointer, type, count) = pt.x, pt.y, mouseData를 한 번에.
@@ -1332,7 +1341,8 @@ export function installLowLevelMouseHook(
         // wParam = mouse 메시지 타입 (WM_LBUTTONDOWN 등).
         const msgType = typeof wParamRaw === 'bigint' ? Number(BigInt.asUintN(32, wParamRaw)) : (wParamRaw >>> 0);
         try {
-          onMouseEvent({ x, y }, msgType, mouseDataRaw);
+          // callback이 truthy 반환 시 OS 메시지 흐름 차단 (drag mode 등).
+          shouldBlock = onMouseEvent({ x, y }, msgType, mouseDataRaw) === true;
         } catch {
           /* callback 안에서 throw 금지 */
         }
@@ -1341,7 +1351,9 @@ export function installLowLevelMouseHook(
       /* hook은 매우 자주 호출되므로 어떤 에러도 silent하게 swallow */
     }
 
-    // 항상 다음 hook으로 패스 — 차단 없음
+    // shouldBlock=true면 CallNextHookEx 호출 안 하고 nonzero 반환 → 시스템 메시지 흐름 차단.
+    // 그 외엔 정상 패스. WH_MOUSE_LL 차단 효과: Explorer가 LBUTTONDOWN을 못 받아 selection box 안 그림.
+    if (shouldBlock) return 1n;
     return b.CallNextHookEx(null, nCode, wParamRaw, lParamRaw as bigint | number);
   };
 
