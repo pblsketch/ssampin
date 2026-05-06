@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Settings, WidgetSettings, WidgetDesktopMode } from '@domain/entities/Settings';
-import { normalizeWidgetOpacity } from '@domain/entities/Settings';
 import { SettingsSection } from '../shared/SettingsSection';
 import { Toggle } from '../shared/Toggle';
 import { isWindows } from '@adapters/hooks/shortcut/keyNormalize';
@@ -56,20 +55,25 @@ export function WidgetTab({ draft, patch }: Props) {
       <div className="space-y-6">
         <div className="space-y-3">
           <div className="flex justify-between">
-            <span className="text-sm font-medium text-sp-text">기본 투명도</span>
-            <span className="text-sm font-bold text-sp-accent">{Math.round(normalizeWidgetOpacity(draft.widget.opacity) * 100)}%</span>
+            <span className="text-sm font-medium text-sp-text">배경 투명도</span>
+            <span className="text-sm font-bold text-sp-accent">{Math.round(Math.max(0.2, draft.widget.opacity ?? 1) * 100)}%</span>
           </div>
           {/*
-            opacity=0 함정 방지(2026-05-06): minimum 5% 강제. settings에 0이 저장된 기존
-            사용자도 normalizeWidgetOpacity가 0.05로 표시 + 슬라이더가 5% 미만으로 못 내려가
-            영구 invisible 회귀를 양쪽에서 차단.
+            결정(2026-05-06): widget.opacity는 위젯 카드 배경의 CSS rgba alpha로만 사용한다.
+            OS BrowserWindow.setOpacity 호출은 영구 차단됨(electron/main.ts) — native-desktop ↔
+            일반 모드 전환 시 부조화 차단. 따라서 슬라이더 값은 모든 모드에서 일관되게
+            "배경 투명도"로 동작한다 (텍스트는 항상 100% 가시).
+
+            minimum 20%: 사용자가 0%로 내려 settings에 잘못 저장되더라도 슬라이더 표시는
+            20%부터 시작하고 입력도 20% 미만 불가 — 어제 보고된 'opacity=0 함정' 영구 봉쇄.
+            WidgetContextMenu의 인라인 슬라이더(min={20})와도 일관.
           */}
           <input
             type="range"
-            min={5}
+            min={20}
             max={100}
-            value={Math.round(normalizeWidgetOpacity(draft.widget.opacity) * 100)}
-            onChange={(e) => patchWidget({ opacity: normalizeWidgetOpacity(Number(e.target.value) / 100) })}
+            value={Math.round(Math.max(0.2, draft.widget.opacity ?? 1) * 100)}
+            onChange={(e) => patchWidget({ opacity: Math.max(0.2, Number(e.target.value) / 100) })}
             className="w-full h-2 bg-sp-border rounded-full appearance-none cursor-pointer accent-sp-accent"
           />
         </div>

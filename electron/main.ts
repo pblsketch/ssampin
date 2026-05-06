@@ -120,23 +120,6 @@ function normalizeDesktopMode(
   return 'normal';
 }
 
-/**
- * 위젯 BrowserWindow 투명도(`setOpacity` 인자) 정규화 — main process 사이드.
- *
- * 발견 경로(2026-05-06): 사용자 settings에 `widget.opacity = 0`이 저장된 채 native-desktop
- * attach가 성공해 위젯이 OS 레벨 100% 투명 → 화면에서 사라진 것처럼 보이는 회귀.
- *
- * 정책: 숫자 아니면 1, < 0.05면 0.05, > 1이면 1로 클램핑. 슬라이더 UI minimum도 5%로 제한해
- * 양쪽에서 사용자를 영구 invisible 상태로부터 보호. 동일 동작이 src/domain/entities/Settings.ts에도
- * 정의되어 있다 (electron main에서 src/ import 회피 패턴).
- */
-function normalizeWidgetOpacity(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 1;
-  if (value < 0.05) return 0.05;
-  if (value > 1) return 1;
-  return value;
-}
-
 let currentDesktopMode: WidgetDesktopMode = 'normal';
 
 /**
@@ -2190,9 +2173,14 @@ function registerIpcHandlers(): void {
   ): Promise<void> => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
 
-    // 투명도 직접 적용 — opacity=0 함정 방지(2026-05-06): 사용자가 슬라이더로 영구 invisible
-    // 상태에 빠지지 않도록 minimum 0.05 보장 + NaN/undefined도 1.0으로 fallback.
-    widgetWindow.setOpacity(normalizeWidgetOpacity(widget.opacity));
+    // OS BrowserWindow.setOpacity는 native-desktop(WS_CHILD) 모드에서 OS가 무시하기 때문에
+    // 모드별로 위젯 가시성이 부조화하게 보이는 회귀를 일으킨다(사용자 보고: native-desktop에서
+    // 일반/항상 위로 전환할 때 갑자기 어두워짐).
+    //
+    // 결정(2026-05-06): widget.opacity는 **CSS 배경 투명도(Widget.tsx의 rgba)** 로만 사용한다.
+    // OS 알파 호출은 영구 차단해 모든 모드에서 일관되게 동작.
+    // payload의 opacity는 settings store가 이미 갱신했고 renderer가 CSS rgba에 적용 중이므로
+    // main process는 무시한다.
 
     // 데스크톱 모드 변경 (정규화 helper 통과 — 'native-desktop' silent drop 방지)
     const requestedMode = normalizeDesktopMode(widget.desktopMode, process.platform === 'win32');
@@ -2226,12 +2214,13 @@ function registerIpcHandlers(): void {
     }
   });
 
-  // window:setOpacity — 위젯 투명도 설정 (renderer 컨텍스트 메뉴 등에서 호출).
-  // opacity=0 함정 방지: 같은 normalizeWidgetOpacity 가드 적용 — 영구 invisible 차단.
-  ipcMain.handle('window:setOpacity', (_event, value: number): void => {
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-      widgetWindow.setOpacity(normalizeWidgetOpacity(value));
-    }
+  // window:setOpacity — 호환성 유지를 위한 no-op IPC.
+  // 결정(2026-05-06): widget.opacity는 CSS 배경 투명도(Widget.tsx rgba)로만 사용하고
+  // OS BrowserWindow.setOpacity는 영구 차단(native-desktop ↔ 일반 모드 부조화 차단).
+  // renderer는 이 IPC를 호출하더라도 main은 OS alpha를 변경하지 않는다.
+  // payload value는 settings store가 이미 반영했으므로 main이 추가로 할 일 없음.
+  ipcMain.handle('window:setOpacity', (_event, _value: number): void => {
+    // intentionally no-op — see comment above.
   });
 
   // window:resizeWidget — 위젯 JS 리사이즈 (thickFrame: false 대응)
