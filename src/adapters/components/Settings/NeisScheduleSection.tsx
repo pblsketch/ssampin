@@ -305,23 +305,34 @@ export function NeisScheduleSection() {
                 </div>
               )}
 
-              {/* 잔존 정리 안내 — 매핑 없는데 push된 흔적이 있는 경우 */}
-              {orphanedGoogleEventCount > 0 && googleConnected && (
+              {/* 잔존 정리 안내 — 매핑 없으면서 NEIS 학사일정이 있을 때 노출.
+                  메타 흔적이 있으면 직접 삭제, 없으면 자동 우회(재 push → 즉시 삭제) */}
+              {!hasNeisGoogleMapping && totalNeis > 0 && googleConnected && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
                   <div className="flex items-start gap-2">
                     <span className="material-symbols-outlined text-amber-400 text-icon-md mt-0.5">info</span>
                     <p className="text-detail text-amber-200/90 flex-1">
-                      이전에 구글 캘린더로 보낸 학사일정 <span className="font-bold">{orphanedGoogleEventCount}건</span>이 정리되지 않은 채 남아있어요. 구글 캘린더에서 한 번에 삭제할 수 있어요.
+                      {orphanedGoogleEventCount > 0 ? (
+                        <>이전에 구글 캘린더로 보낸 학사일정 <span className="font-bold">{orphanedGoogleEventCount}건</span>이 정리되지 않은 채 남아있어요. 한 번에 삭제할 수 있어요.</>
+                      ) : (
+                        <>이미 연동을 해제했는데 구글 캘린더에 학사일정이 남아있나요? <span className="font-bold">자동 정리</span>는 임시로 매핑을 만들어 push한 뒤 즉시 모두 삭제합니다.</>
+                      )}
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!googleConnected) {
                         showToast('먼저 구글 캘린더를 연결해주세요.', 'error');
                         return;
                       }
-                      void disconnectNeisFromGoogle(true);
+                      if (orphanedGoogleEventCount > 0) {
+                        await disconnectNeisFromGoogle(true);
+                      } else {
+                        // 자동 우회: 매핑 임시 생성 + push로 메타 채움 → 즉시 모두 삭제
+                        await acceptNeisSyncSuggestion();
+                        await disconnectNeisFromGoogle(true);
+                      }
                     }}
                     disabled={neisSyncInProgress}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 text-sm font-medium transition-all disabled:opacity-50"
@@ -335,7 +346,9 @@ export function NeisScheduleSection() {
                       ? neisSyncProgress.total > 0
                         ? `정리 중... ${neisSyncProgress.current}/${neisSyncProgress.total}`
                         : '정리 중...'
-                      : `구글 캘린더 잔존 학사일정 ${orphanedGoogleEventCount}건 정리하기`}
+                      : orphanedGoogleEventCount > 0
+                        ? `구글 캘린더 잔존 학사일정 ${orphanedGoogleEventCount}건 정리하기`
+                        : `구글 캘린더 자동 정리 (push → 즉시 삭제, 약 ${totalOn}건)`}
                   </button>
                 </div>
               )}
