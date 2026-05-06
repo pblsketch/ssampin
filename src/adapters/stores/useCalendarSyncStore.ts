@@ -805,13 +805,45 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         (e) => e.category === 'neis-schedule' && e.googleEventId,
       );
 
+      // calendarId fallback — 매핑 또는 events 자체에서 가장 신선한 calendarId 추출.
+      // SyncToGoogle.deleteEvent는 ev.googleCalendarId가 없으면 silent return하므로
+      // calendarId가 누락된 옛 이벤트를 위해 fallback이 필수다.
+      const neisMapping = get().mappings.find((m) => m.categoryId === 'neis-schedule');
+      const fallbackCalId =
+        neisMapping?.googleCalendarId
+        ?? allEvents.find((e) => e.category === 'neis-schedule' && e.googleCalendarId)?.googleCalendarId;
+      let skippedNoCalId = 0;
+
+      console.log(
+        '[NeisSync] disconnect plan:',
+        'totalWithGoogleId=', neisWithGoogleId.length,
+        'withCalId=', neisWithGoogleId.filter((e) => e.googleCalendarId).length,
+        'needFallback=', neisWithGoogleId.filter((e) => !e.googleCalendarId).length,
+        'fallbackCalId=', fallbackCalId ?? '(none)',
+      );
+
       // 1) 옵션: 구글 캘린더에서도 NEIS 이벤트 삭제
       if (deleteRemoteEvents && neisWithGoogleId.length > 0) {
         console.log('[NeisSync] deleting from Google, count:', neisWithGoogleId.length);
         set({ neisSyncProgress: { current: 0, total: neisWithGoogleId.length } });
 
         for (let i = 0; i < neisWithGoogleId.length; i++) {
-          const ev = neisWithGoogleId[i]!;
+          const original = neisWithGoogleId[i]!;
+          // calendarId 보강 — ev에 없으면 fallback 적용
+          const ev = original.googleCalendarId
+            ? original
+            : (fallbackCalId
+              ? { ...original, googleCalendarId: fallbackCalId }
+              : original);
+
+          if (!ev.googleCalendarId) {
+            // 캘린더 ID를 어디에서도 못 구하면 skip — 메타만 정리(STEP 2)
+            skippedNoCalId += 1;
+            console.warn('[NeisSync] skip delete (no calendarId):', original.id, original.title);
+            set({ neisSyncProgress: { current: i + 1, total: neisWithGoogleId.length } });
+            continue;
+          }
+
           try {
             await syncToGoogle.deleteEvent(ev);
             deletedCount += 1;
@@ -841,7 +873,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
           }
           set({ neisSyncProgress: { current: i + 1, total: neisWithGoogleId.length } });
           if ((i + 1) % 10 === 0 || i === neisWithGoogleId.length - 1) {
-            console.log(`[NeisSync] delete progress ${i + 1}/${neisWithGoogleId.length} (deleted=${deletedCount}, failed=${failedCount})`);
+            console.log(`[NeisSync] delete progress ${i + 1}/${neisWithGoogleId.length} (deleted=${deletedCount}, failed=${failedCount}, skipNoCal=${skippedNoCalId})`);
           }
           if (i < neisWithGoogleId.length - 1) {
             await new Promise((resolve) => setTimeout(resolve, 50));
@@ -875,26 +907,29 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
 
       // 4) 토스트
       const { useToastStore } = await import('@adapters/components/common/Toast');
+      const skippedNote = skippedNoCalId > 0
+        ? ` (캘린더 정보 누락 ${skippedNoCalId}건은 구글에서 삭제 못 했어요 — 로컬 메타만 정리)`
+        : '';
       if (abortReason === 'rate_limit') {
-        const remaining = neisWithGoogleId.length - deletedCount - failedCount;
+        const remaining = neisWithGoogleId.length - deletedCount - failedCount - skippedNoCalId;
         useToastStore.getState().show(
-          `구글 캘린더 일일 사용량 한도가 초과돼 일정 삭제가 중단됐어요. (${deletedCount}건 삭제, ${remaining}건 미처리) 연동은 해제됐어요.`,
+          `구글 캘린더 일일 사용량 한도가 초과돼 일정 삭제가 중단됐어요. (${deletedCount}건 삭제, ${remaining}건 미처리)${skippedNote} 연동은 해제됐어요.`,
           'error',
         );
       } else if (abortReason === 'auth') {
         useToastStore.getState().show(
-          '구글 인증이 만료돼 일정 삭제가 중단됐어요. 연동은 해제됐어요.',
+          `구글 인증이 만료돼 일정 삭제가 중단됐어요.${skippedNote} 연동은 해제됐어요.`,
           'error',
         );
       } else if (deleteRemoteEvents) {
-        if (failedCount === 0) {
+        if (failedCount === 0 && skippedNoCalId === 0) {
           useToastStore.getState().show(
             `구글 캘린더 연동을 해제했어요. 학사일정 ${deletedCount}건이 구글 캘린더에서 삭제됐어요.`,
             'success',
           );
         } else {
           useToastStore.getState().show(
-            `연동 해제 — ${deletedCount}건 삭제, ${failedCount}건 실패${firstError ? `: ${firstError}` : ''}`,
+            `연동 해제 — ${deletedCount}건 삭제, ${failedCount}건 실패${skippedNote}${firstError ? `: ${firstError}` : ''}`,
             'info',
           );
         }

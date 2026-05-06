@@ -465,18 +465,7 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                   처리 중... {neisSyncProgress.current}/{neisSyncProgress.total}
                 </p>
               )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={neisSyncInProgress}
-                  onClick={async () => {
-                    await disconnectNeisFromGoogle(false);
-                    setShowDisconnectConfirm(false);
-                  }}
-                  className="flex-1 rounded-lg border border-sp-border px-3 py-2 text-sm font-medium text-sp-muted hover:bg-sp-surface transition-all disabled:opacity-50"
-                >
-                  유지하기
-                </button>
+              <div className="flex flex-col gap-2">
                 <button
                   type="button"
                   disabled={neisSyncInProgress}
@@ -484,14 +473,30 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                     await disconnectNeisFromGoogle(true);
                     setShowDisconnectConfirm(false);
                   }}
-                  className="flex-1 rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                  className="w-full rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
                 >
-                  모두 삭제
+                  구글 캘린더 일정도 모두 삭제
+                </button>
+                <button
+                  type="button"
+                  disabled={neisSyncInProgress}
+                  onClick={async () => {
+                    await disconnectNeisFromGoogle(false);
+                    setShowDisconnectConfirm(false);
+                  }}
+                  className="w-full rounded-lg border border-sp-border px-3 py-2.5 text-sm font-medium text-sp-muted hover:bg-sp-surface transition-all disabled:opacity-50"
+                >
+                  매핑만 해제 (구글 일정은 그대로 둠)
+                </button>
+                <button
+                  type="button"
+                  disabled={neisSyncInProgress}
+                  onClick={() => setShowDisconnectConfirm(false)}
+                  className="w-full rounded-lg px-3 py-2 text-detail text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all disabled:opacity-50"
+                >
+                  취소
                 </button>
               </div>
-              <p className="text-caption text-sp-muted mt-3 text-center">
-                {`"유지하기"는 매핑만 끊고 구글 캘린더의 학사일정은 그대로 둡니다.`}
-              </p>
             </div>
           </div>
         </>
