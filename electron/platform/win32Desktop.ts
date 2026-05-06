@@ -291,6 +291,9 @@ interface Win32Bindings {
 
 let cachedBindings: Win32Bindings | null = null;
 let cachedKoffi: typeof import('koffi') | null = null;
+// koffi.proto는 같은 type 이름을 두 번 등록하면 'Duplicate type name' throw → module-level 캐시.
+// hook을 설치/해제/재설치할 때마다 새로 만들면 안 됨. 단 하나의 proto를 평생 재사용.
+let cachedLowLevelMouseProc: unknown = null;
 
 function loadKoffi(): typeof import('koffi') {
   if (cachedKoffi) return cachedKoffi;
@@ -1229,7 +1232,12 @@ export function installLowLevelMouseHook(
   // 1. callback proto/register
   // LowLevelMouseProc: LRESULT CALLBACK Proc(int nCode, WPARAM wParam, LPARAM lParam)
   // x64에서 LRESULT/WPARAM/LPARAM 모두 64-bit → intptr_t.
-  const proto = b.koffi.proto('intptr_t __stdcall LowLevelMouseProc(int, intptr_t, intptr_t)');
+  // ⚠️ koffi.proto는 같은 type 이름을 두 번 등록하면 'Duplicate type name' throw (Win11 24H2에서 hook 재설치 시 발견됨).
+  // module-level 캐시로 평생 1회만 등록. 재설치 시에는 캐시된 proto를 재사용.
+  if (cachedLowLevelMouseProc === null) {
+    cachedLowLevelMouseProc = b.koffi.proto('intptr_t __stdcall LowLevelMouseProc(int, intptr_t, intptr_t)');
+  }
+  const proto = cachedLowLevelMouseProc;
 
   // koffi 콜백 — JS 함수를 함수 포인터로 변환. 등록된 callback은 unregister할 때까지 GC 불가.
   const callback = (nCode: number, wParam: bigint | number, lParamRaw: bigint | number): bigint | number => {
