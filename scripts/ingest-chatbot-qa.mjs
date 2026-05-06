@@ -16,6 +16,92 @@ if (!SUPABASE_URL || !EMBED_AUTH_TOKEN) {
 // ── Q&A 문서 ─────────────────────────────────────────────────────────────────
 
 const QA_DOCUMENTS = [
+  // ── 바탕화면 아이콘 아래 모드 (v2.0.3 신규) ───────────────────────────────
+  {
+    content: `Q: '바탕화면 아이콘 아래 모드'가 뭔가요?\nA: v2.0.3에 새로 추가된 위젯 표시 방식이에요. 위젯이 일반 창이 아니라 '진짜 바탕화면 작업판'처럼 깔리게 됩니다. 윈도우키+D로 모든 창을 내려도 위젯은 계속 보이고, 바탕화면 아이콘 위에 올린 클릭은 그대로 통과해 평소처럼 폴더가 열립니다. 위젯의 빈 공간 위에서는 클릭·휠·드래그가 모두 위젯으로 라우팅돼요. (Windows 11 24H2 검증 완료, macOS·리눅스에서는 비활성)`,
+    metadata: { source: 'system-qa', category: 'native-desktop', title: 'Q: 바탕화면 아이콘 아래 모드란' },
+  },
+  {
+    content: `Q: 바탕화면 아이콘 아래 모드를 어떻게 켜나요?\nA: 설정 → 위젯 → [바탕화면 아이콘 아래 모드] 토글을 켜세요. Windows 11/10에서만 활성화되며, 처음 켤 때 일부 백신/AV가 OS 레벨 후킹을 탐지할 수 있다는 사전 안내 토스트가 떠요. 기능 자체는 안전하지만 환경에 따라 차단될 수 있으니 안내를 한 번 읽어주세요.`,
+    metadata: { source: 'system-qa', category: 'native-desktop', title: 'Q: 바탕화면 아이콘 아래 모드 켜는 법' },
+  },
+  {
+    content: `Q: 바탕화면 모드에서 위젯 위에 마우스를 올려도 클릭이 안 되거나, 반대로 빈 바탕화면이 클릭이 안 돼요.\nA: 위젯의 '빈 공간'에 마우스가 올라가면 클릭이 위젯으로, '아이콘'에 올라가면 OS로 라우팅되도록 설계돼 있어요. 만약 라우팅이 어긋나 보이면 (1) 위젯 가장자리에서 살짝 드래그해 위치를 새로 잡거나, (2) 모드 토글을 한 번 껐다 다시 켜서 WorkerW에 재부착하면 회복됩니다. (3) 그래도 안 되면 트레이에서 쌤핀을 종료한 뒤 재시작해 주세요.`,
+    metadata: { source: 'system-qa', category: 'native-desktop', title: 'Q: 바탕화면 모드 클릭 라우팅' },
+  },
+  {
+    content: `Q: 바탕화면 모드에서 위젯 크기를 조절하거나 위치를 옮길 수 있나요?\nA: 네, 가장자리 8방향(상하좌우 + 네 모서리)에서 자유롭게 크기를 조절할 수 있어요. 위치는 헤더 영역을 잡고 드래그하면 옮길 수 있습니다. 마우스 커서가 가장자리에 가까워지면 자동으로 리사이즈 커서로 바뀌고, 드래그 중에는 Explorer의 'rubber band 영역 선택'이 끼어들지 않도록 가드되어 있어요.`,
+    metadata: { source: 'system-qa', category: 'native-desktop', title: 'Q: 바탕화면 모드 크기·위치 조절' },
+  },
+  {
+    content: `Q: 바탕화면 모드에서 레이아웃을 빠르게 바꾸고 싶어요.\nA: 위젯 위에 마우스를 올린 동안 Ctrl+1~4 단축키로 4가지 레이아웃을 즉석 전환할 수 있어요. 위젯 밖으로 마우스가 나가면 단축키는 자동으로 비활성화되어 다른 프로그램과 충돌하지 않습니다. (hover-scoped global shortcut 방식)`,
+    metadata: { source: 'system-qa', category: 'native-desktop', title: 'Q: 바탕화면 모드 Ctrl+1~4 단축키' },
+  },
+  {
+    content: `Q: 바탕화면 모드를 켰는데 백신이 의심한다는 알림을 띄웠어요. 안전한가요?\nA: 네, 쌤핀 외에 다른 프로그램과 통신하지 않고, OS 표준 API(SetParent, WH_MOUSE_LL, SendInput)만 사용해요. 다만 일부 V3·Avast·노턴 등은 '저레벨 마우스 후킹'을 의심 패턴으로 분류할 수 있어요. 사전 안내 토스트의 [차단되면 어떻게 해요?] 안내를 따라 예외 등록해 주세요. 코드는 공개되어 있어 직접 확인하실 수 있습니다 (github.com/pblsketch/ssampin).`,
+    metadata: { source: 'system-qa', category: 'native-desktop', title: 'Q: 바탕화면 모드 AV 안내' },
+  },
+
+  // ── NEIS → Google Calendar 자동 동기화 제안 (v2.0.3 신규) ──────────────────
+  {
+    content: `Q: NEIS 학사일정을 구글 캘린더에도 보내고 싶어요.\nA: v2.0.3부터 자동 동기화 제안 배너가 일정 페이지·설정·캘린더 동기화 카드 등 4곳에 표시됩니다. [동기화 시작]을 누르면 그룹 단위 토글(예: 시험·휴업일·행사) 또는 개별 항목 체크로 골라 구글 캘린더에 전송할 수 있어요. 배너가 자꾸 떠서 거슬리면 [다시 보지 않기]로 영구 dismiss할 수 있습니다.`,
+    metadata: { source: 'system-qa', category: 'schedule', title: 'Q: NEIS → Google Calendar 동기화 제안' },
+  },
+  {
+    content: `Q: NEIS 동기화를 끄면 구글 캘린더의 일정도 자동으로 정리되나요?\nA: 네, v2.0.3부터 매핑을 해제하면 [구글 캘린더에 올라간 NEIS 일정도 함께 정리할까요?] 다이얼로그가 뜹니다. [정리]를 선택하면 쌤핀이 구글 캘린더에서 해당 일정을 일괄 삭제해요. 만약 이전 버전에서 매핑을 해제해 잔존 일정이 남아있다면, 일정 → 설정에서 [잔존 정리] 박스를 통해 한 번에 정리할 수 있고, 자동 우회 옵션도 추가돼서 매핑이 깨진 상태에서도 정리가 가능해요.`,
+    metadata: { source: 'system-qa', category: 'schedule', title: 'Q: NEIS 매핑 해제 시 잔존 일정 정리' },
+  },
+  {
+    content: `Q: 옛날 버전에서 만든 NEIS 일정이 새 시스템에서 인식이 안 돼요.\nA: v2.0.3에 자동 마이그레이션 로직이 추가됐어요. NEIS 메타데이터가 없는 옛 학사일정도 source 정보 없이 자동 식별·중복 제거되어 새 동기화 시스템에서 정상 인식됩니다. 한 번 동기화하면 이후엔 새 일정처럼 동작하고, 진단 로그가 남아 마이그레이션 결과를 확인할 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'schedule', title: 'Q: 옛 NEIS 일정 자동 마이그레이션' },
+  },
+
+  // ── 데이터 백업·복원·데이터 위치 센터 (v2.0.3 신규) ───────────────────────
+  {
+    content: `Q: 다른 PC로 옮길 때 데이터를 한꺼번에 옮기고 싶어요.\nA: v2.0.3에 [데이터 관리] 센터가 추가됐어요. 설정 → [데이터 관리]에서 [전체 백업]을 누르면 시간표·자리·일정·학생기록·메모·할일·즐겨찾기·노트·설정까지 모든 사용자 데이터를 ZIP 파일 하나로 묶어 저장합니다. 다른 PC에서 [복원]을 누르고 그 ZIP을 선택하면 한 번에 그대로 옮겨와요. 학교 PC 교체나 노트북 변경 시 1분이면 끝납니다.`,
+    metadata: { source: 'system-qa', category: 'backup', title: 'Q: 전체 백업/복원' },
+  },
+  {
+    content: `Q: 쌤핀 데이터가 실제로 어디에 저장되는지 보고 싶어요.\nA: v2.0.3 데이터 관리 센터에 [데이터 폴더 열기] 버튼이 있어요. 누르면 OS 파일 탐색기로 실제 저장 경로(Windows: %APPDATA%/ssampin/data, macOS: ~/Library/Application Support/ssampin/data)가 즉시 열립니다. 직접 백업하거나, 학교 IT 담당자에게 위치를 안내할 때 유용해요.`,
+    metadata: { source: 'system-qa', category: 'backup', title: 'Q: 데이터 저장 폴더 위치' },
+  },
+  {
+    content: `Q: Google Drive 동기화와 백업 센터의 차이가 뭔가요?\nA: 두 가지가 보완적이에요. **Google Drive 동기화**는 항상 켜놓으면 PC 간/모바일 간 자동 양방향 sync로 평소 동기 상태를 유지해줘요. **백업 센터**는 특정 시점의 스냅샷을 ZIP 한 파일로 만들어 USB·클라우드·이메일 등 어디든 저장할 수 있어, 학기말 정리·중요한 변경 전 안전망으로 적합합니다. 학기·연도 단위로 백업해두면 나중에 기록을 거슬러 볼 수도 있어요.`,
+    metadata: { source: 'system-qa', category: 'backup', title: 'Q: Drive 동기화 vs 백업 센터' },
+  },
+
+  // ── 바탕화면 정리 위젯 (v2.0.3 신규) ──────────────────────────────────────
+  {
+    content: `Q: '바탕화면 정리' 위젯이 뭔가요?\nA: v2.0.3에 추가된 위젯 카드입니다. 바탕화면 위에 흩어진 폴더·파일을 카테고리별 그리드로 모아 보여줘요. 예: '수업자료'·'학생제출'·'서식' 같은 카테고리를 만들고 바탕화면 아이콘을 드래그앤드롭으로 분류하면 위젯 안에 카테고리별 그리드로 정리됩니다. 바탕화면 아이콘 아래 모드와 함께 쓰면 진짜 작업판 느낌으로 사용할 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'native-desktop', title: 'Q: 바탕화면 정리 위젯' },
+  },
+  {
+    content: `Q: 바탕화면 정리 위젯에 카테고리를 어떻게 만드나요?\nA: 위젯 카드 우상단의 [+ 카테고리] 버튼을 누르고 이름을 입력하세요. 만든 카테고리는 그리드 형태로 표시되고, 바탕화면 아이콘이나 쌤핀의 다른 즐겨찾기·파일을 드래그앤드롭으로 넣으면 자동 분류됩니다. 학기 시작·종료처럼 자료가 한꺼번에 쌓이는 시점에 한눈에 정리하기 좋아요.`,
+    metadata: { source: 'system-qa', category: 'native-desktop', title: 'Q: 바탕화면 정리 카테고리 만들기' },
+  },
+
+  // ── Tasks 일일 쿼터 백오프 (v2.0.3 핫픽스) ───────────────────────────────
+  {
+    content: `Q: Google Tasks 동기화가 갑자기 멈추거나, '쿼터 초과'라는 메시지가 떠요.\nA: v2.0.3에서 일일 쿼터(50,000건/일) 폭주 사고를 영구 차단했어요. 동기화 사이클 중 429(Quota Exceeded)가 발생하면 (1) Retry-After + 지수 백오프로 일시적 429를 흡수하고, (2) 일일 쿼터 한도까지 갔다고 판단되면 다음날 새벽 4시까지 모든 동기화 트리거를 silent skip 합니다. 자동 동기화 주기도 5분 하한이 강제 적용돼서 절대 폭주하지 않아요. 이전 v2.0.2 환경에서 쿼터를 소진하셨다면 자정~새벽 4시 이후 자동으로 정상화됩니다.`,
+    metadata: { source: 'system-qa', category: 'sync', title: 'Q: Google Tasks 일일 쿼터 백오프' },
+  },
+
+  // ── 위젯 외곽선 + opacity 안정화 (v2.0.3) ─────────────────────────────────
+  {
+    content: `Q: 위젯 모드에서 창 경계가 너무 흐려서 어디까지가 위젯인지 안 보여요.\nA: v2.0.3에 [위젯 외곽선 표시] 토글이 추가됐어요. 설정 → 위젯에서 켜면 위젯 가장자리에 가는 외곽선이 표시되어 다른 창과 명확히 구분됩니다. 또 가장자리에 마우스를 올렸을 때만 스크롤바가 살짝 나타나도록 개선해, 평상시 깔끔한 외관과 필요할 때 가시성을 모두 잡았어요.`,
+    metadata: { source: 'system-qa', category: 'widget', title: 'Q: 위젯 외곽선 토글' },
+  },
+  {
+    content: `Q: 이전에 위젯 투명도를 0%까지 내려서 안 보이게 됐었어요.\nA: v2.0.3에서 영구 봉쇄됐습니다. 배경 투명도 슬라이더 4곳을 모두 min=0%(절대 invisible 불가)로 정합화했고, 투명도는 OS alpha가 아닌 CSS 배경 rgba 단일 경로로만 적용되도록 통일했어요. 슬라이더가 여러 곳에 흩어져 있어 일부는 0까지 내려갔던 회귀가 영구 차단됩니다. 혹시 이전 버전에서 invisible 상태로 시작된다면 트레이 우클릭 → [위젯 표시]로 복구할 수 있어요.`,
+    metadata: { source: 'system-qa', category: 'widget', title: 'Q: 위젯 투명도 0% 함정 차단' },
+  },
+
+  // ── macOS Tahoe 지원 (v2.0.3) ─────────────────────────────────────────────
+  {
+    content: `Q: 맥 Tahoe(macOS 26.x)에서 쌤핀이 잘 안 돌아갔어요.\nA: v2.0.3에서 Electron 런타임을 32 → 40.9.3 LTS로 메이저 업그레이드해 macOS Tahoe(26.x)를 정식 지원합니다. 한글 입력 깨짐·창 transparency·Always on Top 동작이 모두 정식 지원되며, Windows 11 24H2 호환성도 함께 강화됐어요. arm64(M1/M2/M3)와 x64(Intel) DMG가 모두 제공됩니다.`,
+    metadata: { source: 'system-qa', category: 'platform', title: 'Q: macOS Tahoe 26 지원' },
+  },
+
   // ── 아이콘 모드 (v2.0.2~) ────────────────────────────────────────────────
   {
     content: `Q: 아이콘 모드가 뭔가요?\nA: v2.0.2에 새로 추가된 기능이에요. 프로그램을 끄면 화면 위에 작은 핀 캐릭터(64×64)만 떠 있는 모드입니다. PPT 슬라이드쇼·YouTube 풀스크린 위에서도 그대로 보여서, 수업 중에도 다음 교시 알림을 놓치지 않을 수 있어요. 위젯 모드보다 화면을 훨씬 적게 차지해 거추장스럽지 않아요.`,
@@ -904,6 +990,30 @@ const FEATURE_DOCUMENTS = [
   {
     content: `☁️ Google Drive 동기화 인프라 통합 (v2.0.0): 분산되어 있던 16개 도메인 동기화 매핑이 syncRegistry 단일 소스로 통합. 새 도메인 추가 시 한 곳만 수정하면 4곳 회귀가 구조적으로 차단됨(메타테스트 6개로 안전망). 노트도 클라우드 동기화 대상에 정식 포함 — note-* 파일이 다른 컴퓨터·모바일에 자동 전파. 신규 기기에서 Drive 백업이 발견되면 [클라우드 데이터로 시작·로컬 우선·새로 시작] 3선택 모달이 떠서 데이터 덮어쓰기 사고 차단. SyncFromCloud에 storage.read !== null 안전망 추가로 노트 첫 활성화 시 silent 덮어쓰기 위험 해소.`,
     metadata: { source: 'feature-summary', category: 'sync', title: 'Google Drive 동기화 인프라 통합 기능 요약 (v2.0.0)' },
+  },
+  {
+    content: `🖥️ 바탕화면 아이콘 아래 모드 (v2.0.3 신규, Windows 전용): 위젯이 일반 창이 아니라 '진짜 바탕화면 작업판'처럼 깔리는 모드. 윈도우키+D로 모든 창을 내려도 위젯은 계속 보이고, 바탕화면 아이콘 위 클릭은 그대로 통과해 폴더가 열림. 빈 공간 위에서는 클릭·휠·드래그가 모두 위젯으로 라우팅. 가장자리 8방향 자유 리사이즈, 헤더 드래그로 위치 이동, hover 시 Ctrl+1~4로 레이아웃 즉석 전환. WorkerW attach + WH_MOUSE_LL hook + LVM_HITTEST 기반 (Windows 11 24H2 검증 완료). 일부 백신/AV가 OS 후킹을 의심할 수 있어 사전 안내 토스트 제공.`,
+    metadata: { source: 'feature-summary', category: 'native-desktop', title: '바탕화면 아이콘 아래 모드 기능 요약 (v2.0.3)' },
+  },
+  {
+    content: `📅 NEIS → Google Calendar 자동 동기화 제안 (v2.0.3 신규): NEIS에서 가져온 학사일정을 구글 캘린더에도 비추는 기능. 일정 페이지·설정·캘린더 동기화 카드 등 4곳에서 자동 동기화 제안 배너 노출. [동기화 시작]을 누르면 그룹 단위 토글(시험·휴업일·행사) 또는 개별 항목 체크로 골라 보내기 가능. 영구 dismiss [다시 보지 않기] 지원. 매핑 해제 시 구글 캘린더의 잔존 일정도 자동 정리. 옛 NEIS 일정(메타데이터 없음)도 자동 마이그레이션·중복 제거.`,
+    metadata: { source: 'feature-summary', category: 'schedule', title: 'NEIS Google Calendar 자동 동기화 제안 기능 요약 (v2.0.3)' },
+  },
+  {
+    content: `💾 데이터 백업·복원·데이터 위치 센터 (v2.0.3 신규): 설정 → [데이터 관리]에 신설. [전체 백업]으로 시간표·자리·일정·학생기록·메모·할일·즐겨찾기·노트·설정까지 모든 사용자 데이터를 ZIP 한 파일로 묶어 저장. 다른 PC에서 [복원]으로 한 번에 그대로 옮겨오기 가능. [데이터 폴더 열기]로 실제 저장 경로(Windows: %APPDATA%/ssampin/data, macOS: ~/Library/Application Support/ssampin/data)를 OS 파일 탐색기로 즉시 열기. Drive 동기화의 보완재 — Drive는 평소 자동 sync, 백업 센터는 학기말·중요 변경 전 스냅샷.`,
+    metadata: { source: 'feature-summary', category: 'backup', title: '데이터 백업/복원 센터 기능 요약 (v2.0.3)' },
+  },
+  {
+    content: `🧹 바탕화면 정리 위젯 (v2.0.3 신규): 바탕화면 아이콘 아래 모드와 함께 쓰는 위젯 카드. 흩어진 폴더·파일을 카테고리별 그리드로 모아 보여주고, 드래그앤드롭으로 분류. 학기 시작·종료처럼 자료가 한꺼번에 쌓이는 시점에 한눈에 정리하기 좋음. 위젯 우상단 [+ 카테고리]로 카테고리 추가.`,
+    metadata: { source: 'feature-summary', category: 'native-desktop', title: '바탕화면 정리 위젯 기능 요약 (v2.0.3)' },
+  },
+  {
+    content: `⚡ Tasks 일일 쿼터 백오프 (v2.0.3 핫픽스): Google Tasks API 일일 쿼터(50,000건/일) 폭주 사고를 영구 차단. (1) 429 응답 시 Retry-After + 지수 백오프로 일시적 429 흡수, (2) 일일 쿼터 한도 감지 시 dailyQuotaExceeded 플래그를 세워 다음날 새벽 4시까지 모든 동기화 트리거 silent skip + 1회성 토스트. 자동 동기화 주기 5분 하한 강제 적용. 4트리거(앱 시작·로그인·할일 변경·주기) 모두 가드.`,
+    metadata: { source: 'feature-summary', category: 'sync', title: 'Tasks 일일 쿼터 백오프 기능 요약 (v2.0.3)' },
+  },
+  {
+    content: `🍎 macOS Tahoe(26.x) 정식 지원 (v2.0.3): Electron 런타임 32 → 40.9.3 LTS 메이저 업그레이드. macOS Tahoe(26.x) 한글 입력 깨짐·창 transparency·Always on Top 정식 지원. Windows 11 24H2 호환성 강화 동반. arm64(Apple Silicon)·x64(Intel) DMG 모두 제공.`,
+    metadata: { source: 'feature-summary', category: 'platform', title: 'macOS Tahoe 26 지원 기능 요약 (v2.0.3)' },
   },
 ];
 
