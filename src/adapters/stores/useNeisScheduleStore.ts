@@ -22,6 +22,7 @@ function migrateSettings(stored: Partial<NeisScheduleSettings> | null | undefine
     },
     googleSyncExcludedIds: stored?.googleSyncExcludedIds ?? [],
     googleSyncIncludedIds: stored?.googleSyncIncludedIds ?? [],
+    googleSyncSuggestionDismissed: stored?.googleSyncSuggestionDismissed ?? false,
   };
 }
 

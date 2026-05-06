@@ -100,6 +100,7 @@ interface CalendarSyncState {
   // NEIS → 구글 캘린더 동기화 제안 액션
   checkNeisSyncSuggestion: () => Promise<void>;
   dismissNeisSyncSuggestion: () => void;
+  dismissNeisSyncSuggestionPermanent: () => Promise<void>;
   acceptNeisSyncSuggestion: () => Promise<void>;
   disconnectNeisFromGoogle: (deleteRemoteEvents: boolean) => Promise<void>;
 }
@@ -504,6 +505,18 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     // 매핑이 어떤 형태로든 있으면(syncEnabled=false 포함) 띄우지 않음 — 사용자 의도 존중
     if (state.mappings.some((m) => m.categoryId === 'neis-schedule')) return;
 
+    // 영구 dismiss 가드 — 사용자가 "다시 보지 않기"를 누른 적 있으면 안 띄움
+    const { useNeisScheduleStore } = await import('./useNeisScheduleStore');
+    const neisState = useNeisScheduleStore.getState();
+    // settings 로드 보장
+    if (neisState.settings === useNeisScheduleStore.getState().settings) {
+      // loaded 여부 추적이 없으니 항상 한 번 load 호출 (idempotent)
+      await neisState.loadSettings();
+    }
+    if (useNeisScheduleStore.getState().settings.googleSyncSuggestionDismissed) {
+      return;
+    }
+
     // events 스토어가 아직 로드되지 않았을 가능성 → 안전하게 dynamic import + 로드 보장
     const { useEventsStore } = await import('./useEventsStore');
     const eventsState = useEventsStore.getState();
@@ -519,7 +532,22 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   },
 
   dismissNeisSyncSuggestion: () => {
+    // 임시 dismiss — 메모리만. 앱 재시작하면 다시 체크.
     set({ showNeisSyncSuggestion: false, neisSyncSuggestionDismissed: true });
+  },
+
+  dismissNeisSyncSuggestionPermanent: async () => {
+    // 영구 dismiss — settings에 저장해 다음 세션에도 안 뜸.
+    set({ showNeisSyncSuggestion: false, neisSyncSuggestionDismissed: true });
+    try {
+      const { useNeisScheduleStore } = await import('./useNeisScheduleStore');
+      await useNeisScheduleStore.getState().updateSettings({
+        googleSyncSuggestionDismissed: true,
+      });
+      console.log('[NeisSync] suggestion permanently dismissed');
+    } catch (err) {
+      console.error('[NeisSync] permanent dismiss failed:', err);
+    }
   },
 
   acceptNeisSyncSuggestion: async () => {

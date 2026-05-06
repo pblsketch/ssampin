@@ -74,6 +74,13 @@ export interface NeisScheduleSettings {
   readonly googleSyncGroups: Readonly<Record<NeisGroup, boolean>>;
   readonly googleSyncExcludedIds: readonly string[];  // 그룹은 ON이지만 개별 제외
   readonly googleSyncIncludedIds: readonly string[];  // 그룹은 OFF이지만 개별 포함
+
+  /**
+   * 구글 캘린더 동기화 제안 배너를 영구 dismiss했는지.
+   * 사용자가 "다시 보지 않기"를 누르면 true. 이후엔 배너 안 뜸.
+   * 동기화하려면 설정 → NEIS 카드의 "구글 캘린더로 동기화" 버튼 직접 사용.
+   */
+  readonly googleSyncSuggestionDismissed: boolean;
 }
 
 /** 기본 NEIS 학사일정 설정 */
@@ -96,6 +103,7 @@ export const DEFAULT_NEIS_SCHEDULE_SETTINGS: NeisScheduleSettings = {
   },
   googleSyncExcludedIds: [],
   googleSyncIncludedIds: [],
+  googleSyncSuggestionDismissed: false,
 };
 
 /** NEIS 학사일정 카테고리 (자동 생성용) */

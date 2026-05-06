@@ -17,6 +17,7 @@ export function NeisSyncSuggestionBanner() {
   const inProgress = useCalendarSyncStore((s) => s.neisSyncInProgress);
   const progress = useCalendarSyncStore((s) => s.neisSyncProgress);
   const dismiss = useCalendarSyncStore((s) => s.dismissNeisSyncSuggestion);
+  const dismissPermanent = useCalendarSyncStore((s) => s.dismissNeisSyncSuggestionPermanent);
   const accept = useCalendarSyncStore((s) => s.acceptNeisSyncSuggestion);
 
   if (!show) return null;
@@ -66,6 +67,15 @@ export function NeisSyncSuggestionBanner() {
               {inProgress ? '백그라운드로' : '나중에'}
             </button>
           </div>
+          {!inProgress && (
+            <button
+              type="button"
+              onClick={() => void dismissPermanent()}
+              className="mt-2 text-detail text-sp-muted hover:text-sp-text underline-offset-2 hover:underline transition-colors"
+            >
+              다시 보지 않기
+            </button>
+          )}
         </div>
         <button
           type="button"
