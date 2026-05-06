@@ -6,7 +6,7 @@
 > **실행**: Claude Code (executor)
 > **상태**: Day 1~4 완료, Day 5 (bundle 측정 / 문서 rename / tsc 공식검증) 완료
 > **Match Rate**: **94%** (bkit gap-detector, 2026-04-21)
-> **배경 문서**: [위노트 경쟁 분석](./위노트_경쟁분석_노트서식.md), [서식 관리 계획서](./계획_서식-관리.md)
+> **배경 문서**: [외부 노트 앱 경쟁 분석](./외부노트앱_경쟁분석_노트서식.md), [서식 관리 계획서](./계획_서식-관리.md)
 
 ---
 
@@ -163,7 +163,7 @@
 
 > **작성일**: 2026-04-20
 > **작성 주체**: Prometheus (Strategic Planning Consultant)
-> **배경 문서**: [위노트 경쟁 분석](./위노트_경쟁분석_노트서식.md), [서식 관리 계획서](./계획_서식-관리.md)
+> **배경 문서**: [외부 노트 앱 경쟁 분석](./외부노트앱_경쟁분석_노트서식.md), [서식 관리 계획서](./계획_서식-관리.md)
 > **범위**: PDF 엔진 재작성 + `Export.tsx` 리팩터링 (내장 서식 10종 제작은 서식 관리 Phase 2에서 처리, 본 계획 **범위 외**)
 > **기간**: 5영업일
 
@@ -173,7 +173,7 @@
 
 ### 1-1. 왜 지금 재작성하는가
 
-쌤핀 PDF 출력은 현재 실질적으로 동작하지 않는 **8줄 스텁** 상태다 ([`src/infrastructure/export/PdfExporter.ts`](../src/infrastructure/export/PdfExporter.ts)). 서식 관리 기능(위노트 경쟁 분석에서 차별화 포인트로 식별됨)의 전제 조건인 PDF 생성 능력을 **세 가지 용도 모두** 충족하도록 재작성한다.
+쌤핀 PDF 출력은 현재 실질적으로 동작하지 않는 **8줄 스텁** 상태다 ([`src/infrastructure/export/PdfExporter.ts`](../src/infrastructure/export/PdfExporter.ts)). 서식 관리 기능(외부 노트 앱 경쟁 분석에서 차별화 포인트로 식별됨)의 전제 조건인 PDF 생성 능력을 **세 가지 용도 모두** 충족하도록 재작성한다.
 
 ### 1-2. 목표 3가지
 
@@ -682,7 +682,7 @@ pdfme가 커스텀 폰트 API를 제공한다는 사실은 확인되었으나, *
 - [`src/adapters/components/Export/Export.tsx`](../src/adapters/components/Export/Export.tsx) (206행 리팩터링 대상)
 - [`src/global.d.ts`](../src/global.d.ts) (35행)
 - [CLAUDE.md](../CLAUDE.md) (아키텍처 규칙)
-- [위노트 경쟁 분석](./위노트_경쟁분석_노트서식.md)
+- [외부 노트 앱 경쟁 분석](./외부노트앱_경쟁분석_노트서식.md)
 - [서식 관리 계획서](./계획_서식-관리.md)
 
 ---

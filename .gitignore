@@ -43,8 +43,8 @@ mac-artifacts/
 promo-images-output/
 promo-styles-output/
 
-# 개인 작업 캡쳐
-위노트 캡쳐/
+# 개인 작업 캡쳐 (경쟁사 UI 캡쳐 등 외부 자료)
+외부노트앱_캡쳐/
 
 # 빌드 산출물 (학생 entry SPA)
 dist-student/

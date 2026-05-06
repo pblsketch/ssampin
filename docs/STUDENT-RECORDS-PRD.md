@@ -2,7 +2,7 @@
 
 > 작성일: 2026-03-06
 > 기준: github.com/pblsketch/ssampin main 브랜치
-> 참고: weenote.kr (위노트) 벤치마크, AI 기능 제외
+> 참고: 외부 노트 앱 벤치마크, AI 기능 제외
 
 ---
 
