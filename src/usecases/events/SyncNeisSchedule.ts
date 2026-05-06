@@ -9,6 +9,7 @@ import {
   filterExcludedNeisEvents,
   getAcademicYearRange,
   NEIS_SCHEDULE_CATEGORY,
+  computeNeisEventId,
 } from '@domain/entities/NeisSchedule';
 import type { NeisScheduleEvent } from '@domain/entities/NeisSchedule';
 import { generateUUID } from '@infrastructure/utils/uuid';
@@ -169,6 +170,21 @@ export class SyncNeisSchedule {
     for (const ev of existingEvents) {
       if (ev.source === 'neis' && ev.neis?.eventId) {
         neisMap.set(ev.neis.eventId, ev);
+      } else if (ev.category === NEIS_SCHEDULE_CATEGORY.id && !ev.neis) {
+        // 마이그레이션: 옛 버전에서 neis 메타 없이 저장된 학사일정.
+        // (date, title)로 eventId 재계산해 매핑. 이번 동기화에서 API 데이터와 매칭되면
+        // updateNeisEvent로 메타가 자동 채워진다.
+        const reconstructedId = computeNeisEventId(ev.date, ev.title);
+        // 동일 eventId의 신/구 이벤트가 둘 다 있으면 신(메타 있음)이 우선 — 이미 neisMap에 있으면 덮어쓰지 않음
+        if (!neisMap.has(reconstructedId)) {
+          neisMap.set(reconstructedId, ev);
+        } else {
+          // 신 이벤트가 이미 있으니 옛 이벤트는 버림 (중복 정리)
+          // → 단, 사용자가 옛 이벤트에 직접 isModified를 걸어둔 케이스라면 보존
+          if (ev.isModified || ev.isHidden) {
+            nonNeisEvents.push(ev);
+          }
+        }
       } else {
         nonNeisEvents.push(ev);
       }
@@ -241,8 +257,12 @@ export class SyncNeisSchedule {
   ): SchoolEvent {
     return {
       ...existing,
+      // 옛 마이그레이션 케이스 보강: source가 빠져 있을 수 있음 → 'neis'로 고정
+      source: 'neis',
       title: apiEv.title,
       date: apiEv.date,
+      // 옛 마이그레이션 케이스에서 카테고리가 다른 ID로 잘못 들어가 있어도 정상 NEIS 카테고리로 회복
+      category: NEIS_SCHEDULE_CATEGORY.id,
       neis: {
         eventId: apiEv.eventId,
         eventName: apiEv.title,
