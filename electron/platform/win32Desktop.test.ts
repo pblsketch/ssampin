@@ -29,6 +29,7 @@ import {
   decodeWheelDelta,
   mapWin32MsgToWheelAxis,
   moveWidget,
+  isWidgetOrAncestor,
 } from './win32Desktop';
 
 describe('win32Desktop error classes', () => {
@@ -411,6 +412,45 @@ describe('Phase 7-C — moveWidget null/safety', () => {
     // 비Win32 환경에서는 koffi 로드 실패 → false 반환. 어떤 환경이든 throw 금지.
     expect(typeof moveWidget).toBe('function');
     expect(() => moveWidget(0n, 100, 100, 800, 600)).not.toThrow();
+  });
+});
+
+describe('Phase 7-stable — isWidgetOrAncestor (z-order 검증)', () => {
+  // 임의의 합리적인 HWND 값 (실제 OS HWND가 아니므로 단순 비교만)
+  const WIDGET = 0x12340000n;
+  const WORKERW = 0x12350000n;
+  const PROGMAN = 0x12360000n;
+  const OTHER = 0x99990000n;
+
+  it('top === widgetHwnd → true (위젯 자체가 위에 있음)', () => {
+    expect(isWidgetOrAncestor(WIDGET, WIDGET, WORKERW, PROGMAN)).toBe(true);
+  });
+
+  it('top === workerW → true (위젯의 부모 WorkerW가 root)', () => {
+    expect(isWidgetOrAncestor(WORKERW, WIDGET, WORKERW, PROGMAN)).toBe(true);
+  });
+
+  it('top === progman → true (STRATEGY 3에서 root가 Progman)', () => {
+    expect(isWidgetOrAncestor(PROGMAN, WIDGET, WORKERW, PROGMAN)).toBe(true);
+  });
+
+  it('top이 무관한 다른 윈도우 HWND → false (다른 창이 위에 있음 — 라우팅 skip)', () => {
+    expect(isWidgetOrAncestor(OTHER, WIDGET, WORKERW, PROGMAN)).toBe(false);
+  });
+
+  it('top === 0n → false (WindowFromPoint 실패 시 안전 차단)', () => {
+    expect(isWidgetOrAncestor(0n, WIDGET, WORKERW, PROGMAN)).toBe(false);
+  });
+
+  it('progman이 0n이면 (캐시 미설정) progman 비교 분기는 무시되고 false', () => {
+    // progman이 알려지지 않은 경우 — STRATEGY 3 미사용 + Progman 추적 실패 케이스.
+    expect(isWidgetOrAncestor(PROGMAN, WIDGET, WORKERW, 0n)).toBe(false);
+  });
+
+  it('workerW가 0n이면 workerW 비교 분기 무시', () => {
+    expect(isWidgetOrAncestor(WORKERW, WIDGET, 0n, PROGMAN)).toBe(false);
+    // 하지만 widget 자체는 여전히 매치
+    expect(isWidgetOrAncestor(WIDGET, WIDGET, 0n, PROGMAN)).toBe(true);
   });
 });
 
