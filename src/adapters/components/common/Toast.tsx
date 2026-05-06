@@ -63,23 +63,46 @@ export function ToastContainer() {
 }
 
 function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => void }) {
+  // info 토스트는 사용자 환경 테마(따뜻한 베이지 등)에서 본문이 노란 톤으로 흐려져 가독성이
+  // 떨어지는 보고가 있어 명시 라이트 카드 + 검정 계열 텍스트로 fix(사용자 환경 무관 일관).
+  // success/error 토스트는 기존 dark 디자인 그대로 유지.
+  const isInfo = toast.type === 'info';
   return (
-    <div role="alert" aria-live="polite" className='animate-slide-in-right flex items-center gap-3 bg-sp-card border border-sp-border rounded-xl px-4 py-3 shadow-xl min-w-[320px] max-w-[400px]'>
+    <div
+      role="alert"
+      aria-live="polite"
+      className={`animate-slide-in-right flex items-center gap-3 border rounded-xl px-4 py-3 shadow-xl min-w-[320px] max-w-[400px] ${
+        isInfo
+          ? 'bg-slate-50 border-slate-300'
+          : 'bg-sp-card border-sp-border'
+      }`}
+    >
       <span
         className={`material-symbols-outlined ${COLOR_MAP[toast.type]} text-white p-1 rounded-lg text-sm`}
       >
         {ICON_MAP[toast.type]}
       </span>
-      <span className='text-sp-text text-sm flex-1'>{toast.message}</span>
+      <span className={`text-sm flex-1 ${isInfo ? 'text-slate-900' : 'text-sp-text'}`}>
+        {toast.message}
+      </span>
       {toast.action && (
         <button
           onClick={toast.action.onClick}
-          className='text-sp-accent text-sm font-medium hover:underline shrink-0'
+          className={`text-sm font-medium hover:underline shrink-0 ${
+            isInfo ? 'text-blue-700' : 'text-sp-accent'
+          }`}
         >
           {toast.action.label}
         </button>
       )}
-      <button onClick={onDismiss} className='text-sp-muted hover:text-sp-text transition-colors'>
+      <button
+        onClick={onDismiss}
+        className={`transition-colors ${
+          isInfo
+            ? 'text-slate-500 hover:text-slate-900'
+            : 'text-sp-muted hover:text-sp-text'
+        }`}
+      >
         <span className='material-symbols-outlined text-base'>close</span>
       </button>
     </div>

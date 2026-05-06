@@ -33,7 +33,7 @@ export function useNativeDesktopAvWarning(): void {
     if (seen) return;
 
     showToast(
-      '바탕화면 아이콘 아래 모드를 활성화했습니다. 일부 보안 프로그램이 마우스 hook을 차단할 수 있으며, 차단되면 자동으로 일반 모드로 돌아갑니다.',
+      '이 모드는 바탕화면 아이콘과 함께 동작하기 위해 Windows 바탕화면 창 계층과 마우스 이벤트를 제어합니다. 일부 보안 프로그램에서 민감하게 볼 수 있으며, 문제가 있으면 일반 모드로 되돌릴 수 있습니다.',
       'info',
     );
 

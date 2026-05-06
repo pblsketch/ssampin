@@ -426,8 +426,8 @@ function loadWin32Bindings(): Win32Bindings {
 
   // Phase 7-B: SetWindowsHookExW의 두번째 인자를 typed function pointer로 선언하기 위해
   // proto를 bindings 로드 직전에 미리 등록한다. 이전 구현은 SetWindowsHookExW 시그니처를
-  // 'void *'(untyped)로 두었는데, 동일 환경(Win11 24H2)에서 동작하는 외부 데스크톱 위젯 v1.1.5
-  // 분석 결과 typed `LLHookProc*`가 결정적 차이로 식별됨. koffi가 callback ABI를 인식하려면
+  // 'void *'(untyped)로 두었는데, 같은 Win11 24H2 환경에서 작동하는 다른 데스크톱 widget
+  // 도구 분석 결과 typed `LLHookProc*`가 결정적 차이로 식별됨. koffi가 callback ABI를 인식하려면
   // SetWindowsHookExW 시그니처에서 두번째 인자를 함수 포인터 타입으로 명시해야 한다.
   //
   // proto는 module-level 캐시에 보관 — 'Duplicate type name' 회피.
@@ -598,7 +598,7 @@ function loadWin32Bindings(): Win32Bindings {
 
     // Phase 7
     // Phase 7-B FIX: 두번째 인자를 LowLevelMouseProc* (typed function pointer)로 변경.
-    // 외부 데스크톱 위젯 1.1.5의 결정적 차이 — koffi가 callback dispatcher를 올바르게 thunk하려면
+    // 외부 위젯 도구 분석에서 도출된 결정적 차이 — koffi가 callback dispatcher를 올바르게 thunk하려면
     // 함수 포인터 타입을 sig에 명시해야 한다. void*는 raw pointer로 처리되어 OS가 callback을
     // dispatch해도 JS 함수까지 전파되지 않는 것으로 추정 (Electron 40 + koffi 2.16 환경에서).
     const SetWindowsHookExW = user32.func(
@@ -609,7 +609,7 @@ function loadWin32Bindings(): Win32Bindings {
       'int __stdcall UnhookWindowsHookEx(void*)',
     ) as Win32Bindings['UnhookWindowsHookEx'];
 
-    // Phase 7-B FIX: lParam을 'void*'로 변경 — koffi.decode를 더 자연스럽게 사용 + 외부 데스크톱 위젯와 정합.
+    // Phase 7-B FIX: lParam을 'void*'로 변경 — koffi.decode를 더 자연스럽게 사용.
     const CallNextHookEx = user32.func(
       'intptr_t __stdcall CallNextHookEx(void*, int, uintptr_t, void *)',
     ) as Win32Bindings['CallNextHookEx'];
@@ -1633,9 +1633,9 @@ export function installLowLevelMouseHook(
   const registered = b.koffi.register(callback, b.koffi.pointer(proto));
 
   // 2. Phase 7-B FIX: hMod=NULL로 변경. WH_MOUSE_LL은 dwThreadId=0(global)일 때 hMod=NULL이 합법.
-  //    외부 데스크톱 위젯 v1.1.5 (Win11 24H2 동작 확인)는 hMod=0을 직접 넘긴다. GetModuleHandle(NULL)이
-  //    반환하는 EXE 모듈 핸들을 넘기면 koffi+Electron 40 환경에서 callback dispatch가 누락되는
-  //    것으로 진단됨 (hook은 설치되지만 totalCallbacks=0).
+  //    Win11 24H2에서 작동하는 외부 데스크톱 widget 도구들도 hMod=0을 직접 넘기는 패턴 일관 확인.
+  //    GetModuleHandle(NULL)이 반환하는 EXE 모듈 핸들을 넘기면 koffi+Electron 40 환경에서 callback
+  //    dispatch가 누락되는 것으로 진단됨 (hook은 설치되지만 totalCallbacks=0).
   const hhk = toBigInt(b.SetWindowsHookExW(WH_MOUSE_LL, registered, null, 0));
 
   if (isNullHandle(hhk)) {
