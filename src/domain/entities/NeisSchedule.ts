@@ -42,6 +42,22 @@ export interface NeisScheduleEvent {
   readonly loadDate: string;        // LOAD_DTM
 }
 
+/**
+ * NEIS 학사일정 → 구글 캘린더 동기화 그룹 분류.
+ *
+ * 100~300건의 학사일정 중 사용자가 일일이 체크하지 않고
+ * 그룹 단위로 ON/OFF + 그룹내 개별 미세조정을 할 수 있게 한다.
+ */
+export type NeisGroup = 'holiday' | 'exam' | 'vacation' | 'event' | 'etc';
+
+export const NEIS_GROUP_LABELS: Readonly<Record<NeisGroup, string>> = {
+  holiday: '공휴일',
+  exam: '시험·평가',
+  vacation: '방학·휴업일',
+  event: '학교 행사',
+  etc: '기타',
+};
+
 /** NEIS 학사일정 설정 */
 export interface NeisScheduleSettings {
   readonly enabled: boolean;
@@ -53,6 +69,11 @@ export interface NeisScheduleSettings {
   readonly gradeFilter: readonly number[]; // 빈 배열 = 전체
   readonly showHolidays: boolean;       // 공휴일 표시 (기본 true)
   readonly syncedCount: number;         // 동기화된 일정 건수
+
+  // 구글 캘린더 동기화 — 그룹/개별 선택 (영구 저장)
+  readonly googleSyncGroups: Readonly<Record<NeisGroup, boolean>>;
+  readonly googleSyncExcludedIds: readonly string[];  // 그룹은 ON이지만 개별 제외
+  readonly googleSyncIncludedIds: readonly string[];  // 그룹은 OFF이지만 개별 포함
 }
 
 /** 기본 NEIS 학사일정 설정 */
@@ -66,6 +87,15 @@ export const DEFAULT_NEIS_SCHEDULE_SETTINGS: NeisScheduleSettings = {
   gradeFilter: [],
   showHolidays: true,
   syncedCount: 0,
+  googleSyncGroups: {
+    holiday: true,
+    exam: true,
+    vacation: true,
+    event: true,
+    etc: false,
+  },
+  googleSyncExcludedIds: [],
+  googleSyncIncludedIds: [],
 };
 
 /** NEIS 학사일정 카테고리 (자동 생성용) */
@@ -187,6 +217,42 @@ export function sanitizeGradeFilter(
 ): number[] {
   const maxGrade = MAX_GRADE_BY_LEVEL[schoolLevel];
   return filter.filter((g) => g <= maxGrade);
+}
+
+/**
+ * NEIS 학사일정을 5개 그룹으로 분류한다 — 도메인 순수 함수.
+ *
+ * 분류 우선순위:
+ *  1. 공휴일 — `subtractDayType === '공휴일'`
+ *  2. 시험·평가 — title에 `시험`/`평가`/`고사`
+ *  3. 방학·휴업일 — title에 `방학`/`재량휴업`/`개교기념`
+ *  4. 학교 행사 — title에 `체험학습`/`수학여행`/`소풍`/`발표회`/`운동회`/`입학식`/`졸업식`/`행사`
+ *  5. 기타 — 위에 매칭 안 되는 모든 것
+ */
+export function classifyNeisEvent(ev: Pick<NeisScheduleEvent, 'title' | 'subtractDayType'>): NeisGroup {
+  if (ev.subtractDayType === '공휴일') return 'holiday';
+  const t = ev.title;
+  if (/시험|평가|고사/.test(t)) return 'exam';
+  if (/방학|재량휴업|개교기념/.test(t)) return 'vacation';
+  if (/체험학습|수학여행|소풍|발표회|운동회|입학식|졸업식|행사/.test(t)) return 'event';
+  return 'etc';
+}
+
+/**
+ * 본 NEIS 이벤트가 구글 캘린더에 동기화 대상인지 판정 — 도메인 순수 함수.
+ *
+ * 우선순위:
+ *  1. `googleSyncIncludedIds`에 있으면 무조건 ON
+ *  2. `googleSyncExcludedIds`에 있으면 무조건 OFF
+ *  3. 그 외엔 분류된 그룹의 토글 상태에 따름
+ */
+export function shouldSyncToGoogle(
+  ev: Pick<NeisScheduleEvent, 'eventId' | 'title' | 'subtractDayType'>,
+  settings: Pick<NeisScheduleSettings, 'googleSyncGroups' | 'googleSyncExcludedIds' | 'googleSyncIncludedIds'>,
+): boolean {
+  if (settings.googleSyncIncludedIds.includes(ev.eventId)) return true;
+  if (settings.googleSyncExcludedIds.includes(ev.eventId)) return false;
+  return settings.googleSyncGroups[classifyNeisEvent(ev)];
 }
 
 /** 학년 배지 텍스트 생성 */

@@ -1,12 +1,29 @@
 import { create } from 'zustand';
 import { NEIS_API_KEY } from '@domain/entities/Meal';
 import { DEFAULT_NEIS_SCHEDULE_SETTINGS, NEIS_SCHEDULE_CATEGORY } from '@domain/entities/NeisSchedule';
-import type { NeisScheduleSettings } from '@domain/entities/NeisSchedule';
+import type { NeisScheduleSettings, NeisGroup } from '@domain/entities/NeisSchedule';
 import type { SyncResult } from '@usecases/events/SyncNeisSchedule';
 import { SyncNeisSchedule } from '@usecases/events/SyncNeisSchedule';
 import { neisPort, eventsRepository, settingsRepository } from '@adapters/di/container';
 import { useEventsStore } from './useEventsStore';
 import { useSettingsStore } from './useSettingsStore';
+
+/**
+ * v2.0.3 이전 사용자가 저장한 NeisScheduleSettings는 새 google-sync 필드가 없을 수 있다.
+ * 마이그레이션: 누락된 필드만 DEFAULT로 채워 일관 상태 보장.
+ */
+function migrateSettings(stored: Partial<NeisScheduleSettings> | null | undefined): NeisScheduleSettings {
+  return {
+    ...DEFAULT_NEIS_SCHEDULE_SETTINGS,
+    ...(stored ?? {}),
+    googleSyncGroups: {
+      ...DEFAULT_NEIS_SCHEDULE_SETTINGS.googleSyncGroups,
+      ...(stored?.googleSyncGroups ?? {}),
+    },
+    googleSyncExcludedIds: stored?.googleSyncExcludedIds ?? [],
+    googleSyncIncludedIds: stored?.googleSyncIncludedIds ?? [],
+  };
+}
 
 export type NeisSyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -26,6 +43,11 @@ interface NeisScheduleState {
   syncIfNeeded: () => Promise<SyncResult | null>;
   toggleEnabled: (enabled: boolean) => Promise<void>;
   removeAllNeisEvents: () => Promise<number>;
+
+  // 구글 캘린더 동기화 — 그룹/개별 선택 액션
+  setGoogleSyncGroup: (group: NeisGroup, enabled: boolean) => Promise<void>;
+  toggleEventInclusion: (eventId: string, included: boolean) => Promise<void>;
+  resetGroupSelection: () => Promise<void>;
 }
 
 const syncUseCase = new SyncNeisSchedule(neisPort, eventsRepository, settingsRepository);
@@ -41,7 +63,8 @@ export const useNeisScheduleStore = create<NeisScheduleState>((set, get) => ({
     if (!settingsState.loaded) await settingsState.load();
 
     const fullSettings = useSettingsStore.getState().settings;
-    const neisSchedule = fullSettings.neisSchedule ?? { ...DEFAULT_NEIS_SCHEDULE_SETTINGS };
+    // 마이그레이션: 새 google-sync 필드 누락 시 DEFAULT로 채움
+    const neisSchedule = migrateSettings(fullSettings.neisSchedule);
     set({ settings: neisSchedule });
   },
 
@@ -157,5 +180,37 @@ export const useNeisScheduleStore = create<NeisScheduleState>((set, get) => ({
     }
 
     return removed;
+  },
+
+  setGoogleSyncGroup: async (group, enabled) => {
+    const current = get().settings;
+    await get().updateSettings({
+      googleSyncGroups: { ...current.googleSyncGroups, [group]: enabled },
+    });
+  },
+
+  toggleEventInclusion: async (eventId, included) => {
+    // 우선순위: includedIds > excludedIds > 그룹 토글
+    // included=true 누르면: includedIds에 추가, excludedIds에서 제거
+    // included=false 누르면: excludedIds에 추가, includedIds에서 제거
+    const s = get().settings;
+    const newIncluded = included
+      ? Array.from(new Set([...s.googleSyncIncludedIds, eventId]))
+      : s.googleSyncIncludedIds.filter((id) => id !== eventId);
+    const newExcluded = !included
+      ? Array.from(new Set([...s.googleSyncExcludedIds, eventId]))
+      : s.googleSyncExcludedIds.filter((id) => id !== eventId);
+    await get().updateSettings({
+      googleSyncIncludedIds: newIncluded,
+      googleSyncExcludedIds: newExcluded,
+    });
+  },
+
+  resetGroupSelection: async () => {
+    await get().updateSettings({
+      googleSyncGroups: { ...DEFAULT_NEIS_SCHEDULE_SETTINGS.googleSyncGroups },
+      googleSyncExcludedIds: [],
+      googleSyncIncludedIds: [],
+    });
   },
 }));
