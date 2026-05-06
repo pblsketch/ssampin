@@ -123,6 +123,20 @@ function simpleHash(str: string): string {
   return Math.abs(hash).toString(36);
 }
 
+/**
+ * NEIS 이벤트 ID를 (날짜, 제목)에서 재계산.
+ *
+ * `date`는 'YYYY-MM-DD' 또는 'YYYYMMDD' 둘 다 허용. 내부적으로 'YYYYMMDD'로 정규화.
+ * 기존 `parseNeisScheduleRow`가 만들어내는 eventId 포맷(`${YYYYMMDD}_${hash}`)과 동일.
+ *
+ * 용도: events 스토어에 저장된 옛 NEIS 이벤트 중 `neis.eventId` 메타가 없는 것들을
+ *       다음 동기화 사이클에서 자동 매칭하기 위해 재계산.
+ */
+export function computeNeisEventId(date: string, title: string): string {
+  const ymd = date.replace(/-/g, '');
+  return `${ymd}_${simpleHash(title.trim())}`;
+}
+
 /** NEIS API 행 → NeisScheduleEvent 변환 */
 export function parseNeisScheduleRow(row: NeisScheduleRow): NeisScheduleEvent {
   const date = formatNeisDate(row.AA_YMD);
