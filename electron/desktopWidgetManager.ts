@@ -18,8 +18,8 @@
 
 import { screen } from 'electron';
 import type { BrowserWindow } from 'electron';
-import type { DesktopWidgetModeStatus, PhysicalRect } from './desktopWidgetTypes';
-import { dipToPhysical } from './desktopWidgetTypes';
+import type { DesktopWidgetModeStatus, DipRect, DragState, PhysicalRect } from './desktopWidgetTypes';
+import { dipToPhysical, isInsideAnyRect } from './desktopWidgetTypes';
 import { diagLog, diagWarn } from './nativeDesktopDiag';
 
 export interface DesktopWidgetManager {
@@ -75,6 +75,23 @@ export interface DesktopWidgetManager {
    * 실패 시(ACCESS_DENIED 등) false 반환 + 1회 토큰을 떨궈 manager가 후속 disable 결정.
    */
   shouldPassThroughToDesktop(physicalPoint: { x: number; y: number }): boolean;
+
+  /**
+   * Phase 7-C — renderer가 widget 헤더(`-webkit-app-region: drag`) 영역의 client DIP rect를
+   * 등록한다. WH_MOUSE_LL hook callback이 LBUTTONDOWN을 받을 때 본 영역 안이면 drag mode
+   * 진입.
+   *
+   * 호출 시점:
+   *   - mount/resize/layout 변경 시마다 renderer가 갱신 호출.
+   *   - 위젯 자체가 move/resize되면 manager가 cachedHeaderRegions를 자동 재계산하므로
+   *     renderer는 dipRects 자체가 바뀌지 않으면 재호출 불필요.
+   *
+   * 빈 배열을 넘기면 drag 비활성화 (hook이 헤더 영역을 인식 못 함).
+   *
+   * @param dipRects widget client area 기준 DIP rect들 (보통 1개의 헤더 사각형)
+   * @param window widget BrowserWindow — display.scaleFactor 추출용
+   */
+  setHeaderRegions(dipRects: readonly DipRect[], window: BrowserWindow): void;
 }
 
 /**
@@ -156,6 +173,9 @@ function createNoopManager(reason: string): DesktopWidgetManager {
     shouldPassThroughToDesktop(_p: { x: number; y: number }): boolean {
       return false;
     },
+    setHeaderRegions(_dipRects: readonly DipRect[], _window: BrowserWindow): void {
+      // no-op manager는 hook이 없으므로 헤더 영역 정보가 의미 없음.
+    },
   };
 }
 
@@ -232,6 +252,58 @@ function createWin32Manager(
   let lastHitResult = false;
   let lastHitUntil = 0;
 
+  // ─── Phase 7-C — Header drag 상태 ───────────────────────────
+  /**
+   * 활성 drag state. null이면 drag 중 아님 (정상 라우팅).
+   * LBUTTONDOWN이 헤더 영역에서 발생하면 채워지고, LBUTTONUP에서 null로 리셋.
+   * disable() / clearHandles에서도 정리.
+   */
+  let dragState: DragState | null = null;
+  /**
+   * renderer가 IPC로 등록한 헤더 영역 — widget client area 기준 DIP rect.
+   * widget이 move/resize될 때마다 cachedHeaderRegions(physical screen)를 재계산하기 위해
+   * 원본 DIP rect는 별도로 보관한다.
+   */
+  let cachedHeaderRegionsDip: readonly DipRect[] = [];
+  /**
+   * cachedHeaderRegionsDip를 현재 cachedPhysicalBounds + display scaleFactor로 변환한
+   * physical screen rect. hook callback hot path에서 isInsideAnyRect로 즉시 판정.
+   * widget bounds가 갱신되거나 setHeaderRegions가 호출되면 재계산.
+   */
+  let cachedHeaderRegions: readonly PhysicalRect[] = [];
+
+  function recalcHeaderRegionsPhysical(window: BrowserWindow): void {
+    if (!cachedPhysicalBounds || cachedHeaderRegionsDip.length === 0) {
+      cachedHeaderRegions = [];
+      return;
+    }
+    if (window.isDestroyed()) {
+      cachedHeaderRegions = [];
+      return;
+    }
+    const display = screen.getDisplayMatching(window.getBounds());
+    const sf = display.scaleFactor || 1;
+    const base = cachedPhysicalBounds;
+    cachedHeaderRegions = cachedHeaderRegionsDip.map((r) => {
+      // r은 widget client area DIP 기준 → screen physical로 변환:
+      //   physicalX = widgetOriginX + round(rDip.x * sf)
+      const x = base.x + Math.round(r.x * sf);
+      const y = base.y + Math.round(r.y * sf);
+      const right = base.x + Math.round((r.x + r.width) * sf);
+      const bottom = base.y + Math.round((r.y + r.height) * sf);
+      return {
+        x,
+        y,
+        width: right - x,
+        height: bottom - y,
+      };
+    });
+  }
+
+  function isInHeaderRegion(p: { x: number; y: number }): boolean {
+    return isInsideAnyRect(p, cachedHeaderRegions);
+  }
+
   function clearHook(): void {
     if (mouseHook) {
       try {
@@ -272,6 +344,10 @@ function createWin32Manager(
       clearInterval(statsTimer);
       statsTimer = null;
     }
+    // Phase 7-C: drag state + header regions 정리
+    dragState = null;
+    cachedHeaderRegionsDip = [];
+    cachedHeaderRegions = [];
   }
 
   // Phase 7 — hot path. shouldPassThroughToDesktop을 별도 명명 함수로 분리해 hook callback에서
@@ -428,7 +504,10 @@ function createWin32Manager(
       // Phase 7-A 재시도 — sendInputEvent 호출용 BrowserWindow 캐시.
       // hook callback에서 isDestroyed 가드 후 webContents.sendInputEvent 호출.
       cachedWidgetWindow = window;
-      diagLog('native-desktop', `Phase 7-A: routingMethod='${routingMethod}', BrowserWindow 캐시 완료`);
+      // Phase 7-C: 이전에 setHeaderRegions로 등록된 dipRects가 있으면 즉시 physical 재계산.
+      // (renderer가 enable 이전에 IPC로 등록한 경우 대비.)
+      recalcHeaderRegionsPhysical(window);
+      diagLog('native-desktop', `Phase 7-A: routingMethod='${routingMethod}', BrowserWindow 캐시 완료, headerRegions=${cachedHeaderRegions.length}`);
 
       // 5. Phase 6: ListView 탐색 (실패해도 attach 자체는 유지 — 모든 hit이 Electron으로 처리됨)
       try {
@@ -470,9 +549,76 @@ function createWin32Manager(
             diagLog('native-desktop', `[7-A] hook 첫 callback 호출됨 — msgType=0x${msgType.toString(16)} screen=(${p.x},${p.y})`);
           }
           if (!win32.isMouseMessageOfInterest(msgType)) return;
+
+          // ─── Phase 7-C — Header drag 처리 ───
+          // drag 활성 중에는 click/wheel 라우팅 모두 차단. drag 종료 후에야 정상 라우팅 재개.
+          // 순서: MOUSEMOVE 시 drag면 widget 이동 → return / LBUTTONUP이면 drag 종료.
+          if (dragState && dragState.active) {
+            // 0x0200 = WM_MOUSEMOVE
+            if (msgType === 0x0200) {
+              const dx = p.x - dragState.startMouse.x;
+              const dy = p.y - dragState.startMouse.y;
+              const newX = dragState.startWidget.x + dx;
+              const newY = dragState.startWidget.y + dy;
+              try {
+                win32.moveWidget(
+                  cachedWidgetHwnd,
+                  newX,
+                  newY,
+                  dragState.startBounds.width,
+                  dragState.startBounds.height,
+                );
+              } catch {
+                /* drag hot path — silent swallow */
+              }
+              return; // drag 동안 sendInputEvent 금지
+            }
+            // 0x0202 = WM_LBUTTONUP
+            if (msgType === 0x0202) {
+              const finalDx = p.x - dragState.startMouse.x;
+              const finalDy = p.y - dragState.startMouse.y;
+              diagLog(
+                'native-desktop',
+                `[7-C] drag end mouse=(${p.x},${p.y}) totalDelta=(${finalDx},${finalDy})`,
+              );
+              dragState = null;
+              // BrowserWindow.getBounds()는 SetWindowPos 후 즉시 반영되므로 cachedPhysicalBounds도
+              // 갱신해야 다음 click 라우팅이 새 위치 기준으로 정확히 동작.
+              if (cachedWidgetWindow && !cachedWidgetWindow.isDestroyed()) {
+                cachedPhysicalBounds = recalcPhysicalBounds(cachedWidgetWindow);
+                recalcHeaderRegionsPhysical(cachedWidgetWindow);
+              }
+              return; // LBUTTONUP도 widget으로 보내지 않음 (drag 자체로 흡수됨)
+            }
+            // 다른 버튼/메시지가 drag 중에 들어오면 일단 무시 (drag 우선)
+            return;
+          }
+
           if (!isInsideCachedBoundsLocal(p)) {
             routingStats.skippedOutOfBounds++;
             return;
+          }
+
+          // ─── Phase 7-C — Header LBUTTONDOWN으로 drag 시작 ───
+          // 우선순위: bounds 안 + 헤더 영역 안 + 아이콘 위 아님 → drag 시작.
+          // 아이콘 위는 passThroughCheck로 Explorer가 처리하도록 양보 (아래 분기).
+          // 헤더가 아닌 일반 위젯 영역의 LBUTTONDOWN은 정상 sendInputEvent로 흘러감.
+          // 0x0201 = WM_LBUTTONDOWN
+          if (msgType === 0x0201 && cachedHeaderRegions.length > 0 && isInHeaderRegion(p)) {
+            // 아이콘 영역 체크 — 헤더는 보통 위젯 상단이라 아이콘과 안 겹치지만 안전 차단.
+            if (!passThroughCheck(p) && cachedPhysicalBounds) {
+              dragState = {
+                active: true,
+                startMouse: { x: p.x, y: p.y },
+                startWidget: { x: cachedPhysicalBounds.x, y: cachedPhysicalBounds.y },
+                startBounds: cachedPhysicalBounds,
+              };
+              diagLog(
+                'native-desktop',
+                `[7-C] drag start mouse=(${p.x},${p.y}) widget=(${cachedPhysicalBounds.x},${cachedPhysicalBounds.y}) size=(${cachedPhysicalBounds.width}x${cachedPhysicalBounds.height})`,
+              );
+              return; // drag 우선 — widget으로 LBUTTONDOWN 전달 안 함
+            }
           }
           if (passThroughCheck(p)) {
             // 아이콘 위 — Explorer가 처리하도록 OS의 자연 라우팅에 맡김.
@@ -675,6 +821,8 @@ function createWin32Manager(
       // attach 상태가 아니면 캐시 갱신할 의미 없음.
       if (!handles) return;
       cachedPhysicalBounds = recalcPhysicalBounds(window);
+      // Phase 7-C: widget이 이동/리사이즈되면 헤더 영역도 따라 이동 — 재계산.
+      recalcHeaderRegionsPhysical(window);
     },
 
     async healthCheck(window: BrowserWindow): Promise<DesktopWidgetModeStatus> {
@@ -764,6 +912,30 @@ function createWin32Manager(
      */
     shouldPassThroughToDesktop(p: { x: number; y: number }): boolean {
       return passThroughCheck(p);
+    },
+
+    /**
+     * Phase 7-C — renderer에서 헤더(`-webkit-app-region: drag`) DIP rect 등록.
+     *
+     * 새로운 dipRects를 보존하고 즉시 physical 좌표 재계산. attach 안 된 상태에서도
+     * dipRects는 보존(다음 enable 시 사용 가능).
+     */
+    setHeaderRegions(dipRects: readonly DipRect[], window: BrowserWindow): void {
+      cachedHeaderRegionsDip = dipRects;
+      // attach 상태일 때만 physical 변환. 미attach면 빈 배열로 유지.
+      if (handles && cachedPhysicalBounds && !window.isDestroyed()) {
+        recalcHeaderRegionsPhysical(window);
+        diagLog(
+          'native-desktop',
+          `[7-C] header regions updated: ${cachedHeaderRegions.length} rect(s) (input: ${dipRects.length})`,
+        );
+      } else {
+        cachedHeaderRegions = [];
+        diagLog(
+          'native-desktop',
+          `[7-C] header regions cached but inactive (handles=${!!handles}, bounds=${!!cachedPhysicalBounds})`,
+        );
+      }
     },
   };
 }

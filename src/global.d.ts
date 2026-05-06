@@ -142,6 +142,13 @@ interface ElectronAPI {
     desktopMode: string;
   }) => Promise<void>;
   /**
+   * Phase 7-C (native-desktop) — widget 헤더 드래그 영역 등록.
+   * mount/resize 시 호출. 빈 배열이면 drag 비활성화.
+   */
+  setWidgetHeaderRegion?: (
+    rects: { x: number; y: number; width: number; height: number }[],
+  ) => Promise<void>;
+  /**
    * 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~).
    * native attach 실패 시 main이 모드를 fallbackMode로 정정하며 이 콜백이 호출된다.
    * renderer는 토스트 표시 + settings store에 fallbackMode 반영을 책임진다.

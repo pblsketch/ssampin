@@ -33,6 +33,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     desktopMode: string;
   }): Promise<void> => ipcRenderer.invoke('window:applyWidgetSettings', widget),
   /**
+   * Phase 7-C (native-desktop) — widget 헤더(`-webkit-app-region: drag`) 영역의 client DIP rect를
+   * main에 등록한다. WH_MOUSE_LL hook이 LBUTTONDOWN을 헤더 안에서 받으면 widget을 마우스 따라
+   * 이동시킨다. 일반 모드에서는 main이 caching만 하고 hook이 없으므로 무영향.
+   *
+   * mount/resize 시 갱신 호출. 빈 배열을 넘기면 drag 비활성화.
+   */
+  setWidgetHeaderRegion: (
+    rects: { x: number; y: number; width: number; height: number }[],
+  ): Promise<void> => ipcRenderer.invoke('widget:setHeaderRegion', rects),
+  /**
    * 바탕화면 아이콘 아래 모드 fallback 알림 수신 (v2.1.0~).
    *
    * native attach 실패 시 main process가 settings의 desktopMode를 fallbackMode로

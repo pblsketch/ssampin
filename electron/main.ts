@@ -2133,6 +2133,37 @@ function registerIpcHandlers(): void {
     app.quit();
   });
 
+  /**
+   * Phase 7-C — widget 헤더 드래그 영역 등록.
+   *
+   * widget renderer가 mount/resize 시 자기 헤더(`-webkit-app-region: drag`) 영역의
+   * client DIP rect를 보내면, desktopWidgetManager가 physical screen으로 변환해 caching.
+   * native-desktop 모드의 WH_MOUSE_LL hook callback이 LBUTTONDOWN을 받을 때 이 영역
+   * 안이면 widget을 마우스 따라 이동시킨다 (WS_CHILD가 된 widget은 nc drag 작동 안 하므로).
+   *
+   * native-desktop 모드가 아니거나 widget이 없으면 무시(IPC만 silent ignore).
+   * dipRects는 widget client area 좌상단 기준 좌표.
+   */
+  ipcMain.handle(
+    'widget:setHeaderRegion',
+    (_event, rects: { x: number; y: number; width: number; height: number }[]): void => {
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      // 안전 변환 — renderer가 보낸 객체에서 명시적으로 값 추출.
+      const sanitized = (Array.isArray(rects) ? rects : []).map((r) => ({
+        x: Number(r?.x) || 0,
+        y: Number(r?.y) || 0,
+        width: Math.max(0, Number(r?.width) || 0),
+        height: Math.max(0, Number(r?.height) || 0),
+      }));
+      try {
+        desktopWidgetManager.setHeaderRegions(sanitized, widgetWindow);
+      } catch (e) {
+        // setHeaderRegions는 manager 내부에서 throw하지 않지만 안전망.
+        diagLog('widget', `setHeaderRegions 예외 (무시): ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+  );
+
   // ─── 아이콘 모드 IPC 핸들러 (v2.0.2~) ─────────────────────────────────
   ipcMain.handle('icon:show', async (): Promise<void> => {
     await executeWindowTransition('icon');
