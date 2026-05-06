@@ -97,6 +97,7 @@ import { useDesktopModeFallback } from '@adapters/hooks/useDesktopModeFallback';
 import { useNativeDesktopDiagListener } from '@adapters/hooks/useNativeDesktopDiagListener';
 import { useAnalytics, useAnalyticsLifecycle } from '@adapters/hooks/useAnalytics';
 import { MobileAnnouncementBanner } from '@adapters/components/MobileAnnouncementBanner';
+import { NeisSyncSuggestionBanner } from '@adapters/components/Calendar/NeisSyncSuggestionBanner';
 import { ShareModal } from '@adapters/components/Share/ShareModal';
 import { SharePromptOverlay } from '@adapters/components/Share/SharePromptOverlay';
 import { recordActiveDay } from '@adapters/stores/useShareStore';
@@ -1009,6 +1010,7 @@ function MainApp() {
       <HelpChatPanel />
       <CloseActionDialog />
       <OAuthModalsProvider />
+      <NeisSyncSuggestionBanner />
       <CommandPalette onNavigate={setCurrentPage} />
       <QuickAddModal />
       </div>

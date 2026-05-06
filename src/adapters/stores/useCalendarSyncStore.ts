@@ -64,6 +64,12 @@ interface CalendarSyncState {
   // 캘린더 선택 모달 표시 (최초 연결 후)
   showCalendarPicker: boolean;
 
+  // NEIS 학사일정 → 구글 캘린더 동기화 제안 (배너 + 진행률)
+  showNeisSyncSuggestion: boolean;
+  neisSyncSuggestionDismissed: boolean;
+  neisSyncInProgress: boolean;
+  neisSyncProgress: { current: number; total: number };
+
   // 액션
   initialize: () => Promise<void>;
   startAuth: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
@@ -90,6 +96,12 @@ interface CalendarSyncState {
   startPeriodicSync: () => () => void;
   addConflict: (local: SchoolEvent, remote: GoogleCalendarEvent) => void;
   resolveConflict: (index: number, resolution: 'local' | 'remote') => Promise<void>;
+
+  // NEIS → 구글 캘린더 동기화 제안 액션
+  checkNeisSyncSuggestion: () => Promise<void>;
+  dismissNeisSyncSuggestion: () => void;
+  acceptNeisSyncSuggestion: () => Promise<void>;
+  disconnectNeisFromGoogle: (deleteRemoteEvents: boolean) => Promise<void>;
 }
 
 // syncNow 동시 실행 방지 뮤텍스
@@ -117,6 +129,10 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   syncOnFocus: true,
   autoResolveConflicts: true,
   showCalendarPicker: false,
+  showNeisSyncSuggestion: false,
+  neisSyncSuggestionDismissed: false,
+  neisSyncInProgress: false,
+  neisSyncProgress: { current: 0, total: 0 },
 
   initialize: async () => {
     try {
@@ -478,6 +494,346 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       }));
     } catch (err) {
       console.error('[CalendarSync] resolveConflict error:', err);
+    }
+  },
+
+  checkNeisSyncSuggestion: async () => {
+    const state = get();
+    if (state.neisSyncSuggestionDismissed) return;
+    if (!state.isConnected) return;
+    // 매핑이 어떤 형태로든 있으면(syncEnabled=false 포함) 띄우지 않음 — 사용자 의도 존중
+    if (state.mappings.some((m) => m.categoryId === 'neis-schedule')) return;
+
+    // events 스토어가 아직 로드되지 않았을 가능성 → 안전하게 dynamic import + 로드 보장
+    const { useEventsStore } = await import('./useEventsStore');
+    const eventsState = useEventsStore.getState();
+    if (!eventsState.loaded) {
+      await eventsState.load();
+    }
+    const hasNeisEvents = useEventsStore.getState().events.some(
+      (e) => e.category === 'neis-schedule',
+    );
+    if (!hasNeisEvents) return;
+
+    set({ showNeisSyncSuggestion: true });
+  },
+
+  dismissNeisSyncSuggestion: () => {
+    set({ showNeisSyncSuggestion: false, neisSyncSuggestionDismissed: true });
+  },
+
+  acceptNeisSyncSuggestion: async () => {
+    if (get().neisSyncInProgress) return;
+    if (!get().isConnected) {
+      const { useToastStore } = await import('@adapters/components/common/Toast');
+      useToastStore.getState().show('먼저 구글 캘린더를 연결해주세요.', 'error');
+      return;
+    }
+    set({ neisSyncInProgress: true, neisSyncProgress: { current: 0, total: 0 } });
+    console.log('[NeisSync] accept start');
+
+    try {
+      const { NEIS_SCHEDULE_CATEGORY } = await import('@domain/entities/NeisSchedule');
+
+      // 1) 기존 매핑 확인 — 멱등 처리. 이미 있으면 syncEnabled를 켜기만 하고 그대로 사용.
+      const existingMapping = get().mappings.find((m) => m.categoryId === NEIS_SCHEDULE_CATEGORY.id);
+
+      if (existingMapping && existingMapping.googleCalendarId) {
+        console.log('[NeisSync] reusing existing mapping:', existingMapping.googleCalendarId);
+        if (!existingMapping.syncEnabled) {
+          const updated = get().mappings.map((m) =>
+            m.categoryId === NEIS_SCHEDULE_CATEGORY.id ? { ...m, syncEnabled: true } : m,
+          );
+          await get().updateMappings(updated);
+          console.log('[NeisSync] re-enabled existing mapping');
+        }
+      } else {
+        // googleCalendars 비어있으면 먼저 채우기 (앱 재시작 후 첫 수락 케이스)
+        if (get().googleCalendars.length === 0) {
+          console.log('[NeisSync] fetching googleCalendars (empty)');
+          await get().fetchGoogleCalendars();
+          console.log('[NeisSync] googleCalendars fetched, count:', get().googleCalendars.length);
+        }
+        const calendars = get().googleCalendars;
+        const primary = calendars.find((c) => c.primary === true) ?? calendars[0];
+        if (!primary) {
+          throw new Error('구글 캘린더 목록을 불러올 수 없습니다. 잠시 후 다시 시도해주세요.');
+        }
+        console.log('[NeisSync] primary calendar:', primary.id, primary.summary);
+
+        const newMapping: CalendarMapping = {
+          categoryId: NEIS_SCHEDULE_CATEGORY.id,
+          categoryName: NEIS_SCHEDULE_CATEGORY.name,
+          syncEnabled: true,
+          googleCalendarId: primary.id,
+          googleCalendarName: primary.summary,
+          syncDirection: 'toGoogle',
+        };
+        console.log('[NeisSync] saving new mapping...');
+        await get().updateMappings([...get().mappings, newMapping]);
+        console.log('[NeisSync] mapping saved');
+      }
+
+      // 2) NEIS 이벤트 일괄 푸시
+      const { useEventsStore } = await import('./useEventsStore');
+      const { eventsRepository, syncToGoogle } = await import('@adapters/di/container');
+      const neisEvents = useEventsStore.getState().events.filter(
+        (e) => e.category === 'neis-schedule',
+      );
+      console.log('[NeisSync] start pushing events, total:', neisEvents.length);
+
+      if (neisEvents.length === 0) {
+        const { useToastStore } = await import('@adapters/components/common/Toast');
+        useToastStore.getState().show(
+          'NEIS 학사일정이 없어요. 먼저 설정에서 학사일정 동기화를 켜고 일정을 가져와주세요.',
+          'info',
+        );
+        set({ showNeisSyncSuggestion: false });
+        return;
+      }
+      set({ neisSyncProgress: { current: 0, total: neisEvents.length } });
+
+      let successCount = 0;
+      let failCount = 0;
+      let firstError: string | null = null;
+      let abortReason: 'rate_limit' | 'auth' | null = null;
+      const updatedEvents: SchoolEvent[] = [];
+
+      for (let i = 0; i < neisEvents.length; i++) {
+        const ev = neisEvents[i]!;
+        try {
+          const synced = await syncToGoogle.syncEvent(ev);
+          if (synced.googleEventId) {
+            updatedEvents.push(synced);
+            successCount += 1;
+          } else {
+            console.warn('[NeisSync] event returned without googleEventId (mapping miss?):', ev.id, ev.title);
+          }
+        } catch (err) {
+          failCount += 1;
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          if (!firstError) firstError = msg;
+          console.error('[NeisSync] syncEvent failed:', ev.id, ev.title, err);
+
+          if (
+            msg.includes('429') ||
+            msg.includes('Quota exceeded') ||
+            /rate ?limit/i.test(msg) ||
+            msg.includes('RESOURCE_EXHAUSTED')
+          ) {
+            abortReason = 'rate_limit';
+            console.warn('[NeisSync] aborting loop: rate limit / quota exceeded');
+            break;
+          }
+          if (
+            msg.includes('401') ||
+            msg.includes('invalid_grant') ||
+            msg.includes('UNAUTHENTICATED')
+          ) {
+            abortReason = 'auth';
+            console.warn('[NeisSync] aborting loop: auth error');
+            break;
+          }
+        }
+        set({ neisSyncProgress: { current: i + 1, total: neisEvents.length } });
+        if ((i + 1) % 10 === 0 || i === neisEvents.length - 1) {
+          console.log(`[NeisSync] progress ${i + 1}/${neisEvents.length} (success=${successCount}, fail=${failCount})`);
+        }
+        if (i < neisEvents.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+      console.log('[NeisSync] all events processed, success:', successCount, 'fail:', failCount, 'abort:', abortReason);
+
+      // 3) 성공한 이벤트의 메타데이터(googleEventId/etag 등)를 events 저장소에 일괄 반영
+      if (updatedEvents.length > 0) {
+        const allEvents = useEventsStore.getState().events;
+        const updateMap = new Map(updatedEvents.map((e) => [e.id, e]));
+        const merged = allEvents.map((e) => updateMap.get(e.id) ?? e);
+        const evData = await eventsRepository.getEvents();
+        await eventsRepository.saveEvents({
+          events: merged,
+          categories: evData?.categories,
+        });
+        useEventsStore.setState({ events: merged });
+      }
+
+      // 4) 토스트
+      const { useToastStore } = await import('@adapters/components/common/Toast');
+      if (abortReason === 'rate_limit') {
+        useToastStore.getState().show(
+          `구글 캘린더 일일 사용량 한도가 초과돼 동기화가 중단됐어요. (${successCount}건 동기화됨) 내일 다시 시도해주세요.`,
+          'error',
+        );
+      } else if (abortReason === 'auth') {
+        useToastStore.getState().show(
+          '구글 인증이 만료됐어요. 설정 → 구글 계정에서 다시 로그인해주세요.',
+          'error',
+        );
+      } else if (failCount === 0) {
+        useToastStore.getState().show(
+          `학사일정 ${successCount}건이 구글 캘린더로 동기화됐어요.`,
+          'success',
+        );
+      } else {
+        useToastStore.getState().show(
+          `학사일정 ${successCount}건 동기화 완료, ${failCount}건 실패${firstError ? `: ${firstError}` : ''}`,
+          failCount === neisEvents.length ? 'error' : 'info',
+        );
+      }
+
+      // 5) 본 호출에서 *새로* 만든 매핑이고 0건 성공 + rate_limit/auth 중단인 경우 매핑 롤백.
+      //    (사용자가 사전에 만든 매핑은 보존)
+      const createdNewMapping = !existingMapping;
+      if (abortReason && successCount === 0 && createdNewMapping) {
+        const rolledBack = get().mappings.filter((m) => m.categoryId !== 'neis-schedule');
+        await get().updateMappings(rolledBack);
+        console.log('[NeisSync] rolled back newly-created NEIS mapping (no events synced)');
+      }
+
+      set({ showNeisSyncSuggestion: false });
+    } catch (err) {
+      console.error('[NeisSync] accept aborted:', err);
+      const { useToastStore } = await import('@adapters/components/common/Toast');
+      useToastStore.getState().show(
+        `구글 캘린더 동기화 시작 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`,
+        'error',
+      );
+    } finally {
+      set({ neisSyncInProgress: false, neisSyncProgress: { current: 0, total: 0 } });
+      console.log('[NeisSync] accept end');
+    }
+  },
+
+  disconnectNeisFromGoogle: async (deleteRemoteEvents) => {
+    if (get().neisSyncInProgress) return;
+    set({ neisSyncInProgress: true, neisSyncProgress: { current: 0, total: 0 } });
+    console.log('[NeisSync] disconnect start, deleteRemote:', deleteRemoteEvents);
+
+    try {
+      const { useEventsStore } = await import('./useEventsStore');
+      const { eventsRepository, syncToGoogle } = await import('@adapters/di/container');
+
+      let deletedCount = 0;
+      let failedCount = 0;
+      let firstError: string | null = null;
+      let abortReason: 'rate_limit' | 'auth' | null = null;
+
+      const allEvents = useEventsStore.getState().events;
+      const neisWithGoogleId = allEvents.filter(
+        (e) => e.category === 'neis-schedule' && e.googleEventId,
+      );
+
+      // 1) 옵션: 구글 캘린더에서도 NEIS 이벤트 삭제
+      if (deleteRemoteEvents && neisWithGoogleId.length > 0) {
+        console.log('[NeisSync] deleting from Google, count:', neisWithGoogleId.length);
+        set({ neisSyncProgress: { current: 0, total: neisWithGoogleId.length } });
+
+        for (let i = 0; i < neisWithGoogleId.length; i++) {
+          const ev = neisWithGoogleId[i]!;
+          try {
+            await syncToGoogle.deleteEvent(ev);
+            deletedCount += 1;
+          } catch (err) {
+            failedCount += 1;
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            if (!firstError) firstError = msg;
+            console.error('[NeisSync] deleteEvent failed:', ev.id, ev.title, err);
+
+            if (
+              msg.includes('429') ||
+              msg.includes('Quota exceeded') ||
+              /rate ?limit/i.test(msg) ||
+              msg.includes('RESOURCE_EXHAUSTED')
+            ) {
+              abortReason = 'rate_limit';
+              break;
+            }
+            if (
+              msg.includes('401') ||
+              msg.includes('invalid_grant') ||
+              msg.includes('UNAUTHENTICATED')
+            ) {
+              abortReason = 'auth';
+              break;
+            }
+          }
+          set({ neisSyncProgress: { current: i + 1, total: neisWithGoogleId.length } });
+          if ((i + 1) % 10 === 0 || i === neisWithGoogleId.length - 1) {
+            console.log(`[NeisSync] delete progress ${i + 1}/${neisWithGoogleId.length} (deleted=${deletedCount}, failed=${failedCount})`);
+          }
+          if (i < neisWithGoogleId.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+        }
+      }
+
+      // 2) NEIS 이벤트의 google 메타데이터 제거 — deleteRemote 여부와 무관하게 정리
+      const cleaned = allEvents.map((e) => {
+        if (e.category !== 'neis-schedule') return e;
+        const {
+          googleEventId: _gid,
+          googleCalendarId: _gcid,
+          etag: _etag,
+          googleUpdatedAt: _gupd,
+          lastSyncedAt: _lsa,
+          syncStatus: _sst,
+          source: _src,
+          ...rest
+        } = e;
+        void _gid; void _gcid; void _etag; void _gupd; void _lsa; void _sst; void _src;
+        return rest;
+      });
+      const evData = await eventsRepository.getEvents();
+      await eventsRepository.saveEvents({ events: cleaned, categories: evData?.categories });
+      useEventsStore.setState({ events: cleaned });
+
+      // 3) NEIS 매핑 제거
+      const filteredMappings = get().mappings.filter((m) => m.categoryId !== 'neis-schedule');
+      await get().updateMappings(filteredMappings);
+
+      // 4) 토스트
+      const { useToastStore } = await import('@adapters/components/common/Toast');
+      if (abortReason === 'rate_limit') {
+        const remaining = neisWithGoogleId.length - deletedCount - failedCount;
+        useToastStore.getState().show(
+          `구글 캘린더 일일 사용량 한도가 초과돼 일정 삭제가 중단됐어요. (${deletedCount}건 삭제, ${remaining}건 미처리) 연동은 해제됐어요.`,
+          'error',
+        );
+      } else if (abortReason === 'auth') {
+        useToastStore.getState().show(
+          '구글 인증이 만료돼 일정 삭제가 중단됐어요. 연동은 해제됐어요.',
+          'error',
+        );
+      } else if (deleteRemoteEvents) {
+        if (failedCount === 0) {
+          useToastStore.getState().show(
+            `구글 캘린더 연동을 해제했어요. 학사일정 ${deletedCount}건이 구글 캘린더에서 삭제됐어요.`,
+            'success',
+          );
+        } else {
+          useToastStore.getState().show(
+            `연동 해제 — ${deletedCount}건 삭제, ${failedCount}건 실패${firstError ? `: ${firstError}` : ''}`,
+            'info',
+          );
+        }
+      } else {
+        useToastStore.getState().show(
+          '구글 캘린더 연동을 해제했어요. 구글 캘린더의 학사일정은 그대로 유지됩니다.',
+          'success',
+        );
+      }
+
+      console.log('[NeisSync] disconnect done');
+    } catch (err) {
+      console.error('[NeisSync] disconnect error:', err);
+      const { useToastStore } = await import('@adapters/components/common/Toast');
+      useToastStore.getState().show(
+        `연동 해제 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`,
+        'error',
+      );
+    } finally {
+      set({ neisSyncInProgress: false, neisSyncProgress: { current: 0, total: 0 } });
     }
   },
 }));
