@@ -96,6 +96,11 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
   const totalNeis = groupCounts.holiday.total + groupCounts.exam.total + groupCounts.vacation.total + groupCounts.event.total + groupCounts.etc.total;
   const totalOn = groupCounts.holiday.on + groupCounts.exam.on + groupCounts.vacation.on + groupCounts.event.on + groupCounts.etc.on;
 
+  // 매핑은 없는데 events에 googleEventId 흔적이 남은 잔존 NEIS 이벤트 카운트
+  const orphanedGoogleEventCount = !hasNeisGoogleMapping
+    ? allEvents.filter((e) => e.category === 'neis-schedule' && e.googleEventId).length
+    : 0;
+
   const hasSchoolInfo = Boolean(appSettings.neis.atptCode && appSettings.neis.schoolCode);
   const schoolName = appSettings.neis.schoolName ?? '';
 
@@ -327,6 +332,41 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                     >
                       <span className="material-symbols-outlined text-icon">tune</span>
                       세부 선택
+                    </button>
+                  </div>
+                )}
+
+                {/* 잔존 정리 안내 — 매핑 없는데 push된 흔적이 있는 경우 */}
+                {orphanedGoogleEventCount > 0 && googleConnected && (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <span className="material-symbols-outlined text-amber-400 text-icon mt-0.5">info</span>
+                      <p className="text-detail text-amber-200/90 flex-1">
+                        이전에 구글 캘린더로 보낸 학사일정 <span className="font-bold">{orphanedGoogleEventCount}건</span>이 정리되지 않은 채 남아있어요.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!googleConnected) {
+                          showToast('먼저 구글 캘린더를 연결해주세요.', 'error');
+                          return;
+                        }
+                        void disconnectNeisFromGoogle(true);
+                      }}
+                      disabled={neisSyncInProgress}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 text-sm font-medium transition-all disabled:opacity-50"
+                    >
+                      {neisSyncInProgress ? (
+                        <div className="w-4 h-4 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <span className="material-symbols-outlined text-icon">cleaning_services</span>
+                      )}
+                      {neisSyncInProgress
+                        ? neisSyncProgress.total > 0
+                          ? `정리 중... ${neisSyncProgress.current}/${neisSyncProgress.total}`
+                          : '정리 중...'
+                        : `잔존 학사일정 ${orphanedGoogleEventCount}건 정리`}
                     </button>
                   </div>
                 )}

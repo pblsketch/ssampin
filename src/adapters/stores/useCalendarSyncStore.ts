@@ -909,25 +909,29 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         }
       }
 
-      // 2) NEIS 이벤트의 google 메타데이터 제거 — deleteRemote 여부와 무관하게 정리
-      const cleaned = allEvents.map((e) => {
-        if (e.category !== 'neis-schedule') return e;
-        const {
-          googleEventId: _gid,
-          googleCalendarId: _gcid,
-          etag: _etag,
-          googleUpdatedAt: _gupd,
-          lastSyncedAt: _lsa,
-          syncStatus: _sst,
-          source: _src,
-          ...rest
-        } = e;
-        void _gid; void _gcid; void _etag; void _gupd; void _lsa; void _sst; void _src;
-        return rest;
-      });
-      const evData = await eventsRepository.getEvents();
-      await eventsRepository.saveEvents({ events: cleaned, categories: evData?.categories });
-      useEventsStore.setState({ events: cleaned });
+      // 2) NEIS 이벤트의 google 메타데이터 제거 — deleteRemoteEvents=true일 때만.
+      //    deleteRemoteEvents=false면 메타 보존: 사용자가 마음 바뀌어 나중에 정리하려 할 때
+      //    googleEventId 흔적이 있어야 잔존 학사일정을 식별 + 삭제 가능.
+      if (deleteRemoteEvents) {
+        const cleaned = allEvents.map((e) => {
+          if (e.category !== 'neis-schedule') return e;
+          const {
+            googleEventId: _gid,
+            googleCalendarId: _gcid,
+            etag: _etag,
+            googleUpdatedAt: _gupd,
+            lastSyncedAt: _lsa,
+            syncStatus: _sst,
+            source: _src,
+            ...rest
+          } = e;
+          void _gid; void _gcid; void _etag; void _gupd; void _lsa; void _sst; void _src;
+          return rest;
+        });
+        const evData = await eventsRepository.getEvents();
+        await eventsRepository.saveEvents({ events: cleaned, categories: evData?.categories });
+        useEventsStore.setState({ events: cleaned });
+      }
 
       // 3) NEIS 매핑 제거
       const filteredMappings = get().mappings.filter((m) => m.categoryId !== 'neis-schedule');
