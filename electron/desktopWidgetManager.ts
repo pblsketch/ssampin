@@ -605,19 +605,30 @@ function createWin32Manager(
               const dy = p.y - dragState.startMouse.y;
               const newX = dragState.startWidget.x + dx;
               const newY = dragState.startWidget.y + dy;
+              dragState.moveCount = (dragState.moveCount ?? 0) + 1;
               try {
-                win32.moveWidget(
+                const moveOk = win32.moveWidget(
                   cachedWidgetHwnd,
                   newX,
                   newY,
                   dragState.startBounds.width,
                   dragState.startBounds.height,
                 );
-              } catch {
-                /* drag hot path — silent swallow */
+                // 진단: 매 30번째 MOUSEMOVE마다 진행 상황 dump (전체 누적이 아닌 sampling).
+                if (dragState.moveCount % 30 === 1) {
+                  diagLog(
+                    'native-desktop',
+                    `[7-C] drag move #${dragState.moveCount} mouse=(${p.x},${p.y}) delta=(${dx},${dy}) newPos=(${newX},${newY}) moveOk=${moveOk} hwnd=0x${cachedWidgetHwnd.toString(16)}`,
+                  );
+                }
+              } catch (e) {
+                diagWarn('native-desktop', `[7-C] drag move 실패: ${e instanceof Error ? e.message : String(e)}`);
               }
-              // ★ Explorer rubber band 차단: OS 메시지 흐름에서 MOUSEMOVE 흡수.
-              return true;
+              // ★ MOUSEMOVE는 차단하지 않음 (CallNextHookEx 정상 패스).
+              //   Win11 24H2에서 BUTTONDOWN을 차단하면 Explorer가 selection 시작 못 하므로
+              //   MOUSEMOVE 시점에도 rubber band 안 그려짐. 차단하면 hook이 다음 MOUSEMOVE를
+              //   받지 못할 가능성 있음 (사용자 검증 시 totalDelta=0,0 회귀).
+              return false;
             }
             // 0x0202 = WM_LBUTTONUP
             if (msgType === 0x0202) {

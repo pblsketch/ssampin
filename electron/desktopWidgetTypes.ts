@@ -73,6 +73,8 @@ export interface DragState {
   readonly startWidget: { readonly x: number; readonly y: number };
   /** drag 시작 시점의 widget physical bounds. width/height 변경 없이 위치만 이동 */
   readonly startBounds: PhysicalRect;
+  /** drag 진행 중 MOUSEMOVE 진입 카운트 (진단용 sampling). hot path mutate. */
+  moveCount?: number;
 }
 
 /**
