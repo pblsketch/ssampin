@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNeisScheduleStore } from '@adapters/stores/useNeisScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useCalendarSyncStore } from '@adapters/stores/useCalendarSyncStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { getGradeList } from '@domain/entities/NeisSchedule';
 
@@ -38,8 +39,17 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
     toggleEnabled,
   } = useNeisScheduleStore();
   const appSettings = useSettingsStore((s) => s.settings);
+  const googleConnected = useCalendarSyncStore((s) => s.isConnected);
+  const neisSyncInProgress = useCalendarSyncStore((s) => s.neisSyncInProgress);
+  const neisSyncProgress = useCalendarSyncStore((s) => s.neisSyncProgress);
+  const acceptNeisSyncSuggestion = useCalendarSyncStore((s) => s.acceptNeisSyncSuggestion);
+  const disconnectNeisFromGoogle = useCalendarSyncStore((s) => s.disconnectNeisFromGoogle);
+  const hasNeisGoogleMapping = useCalendarSyncStore((s) =>
+    s.mappings.some((m) => m.categoryId === 'neis-schedule'),
+  );
   const { show: showToast } = useToastStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   const hasSchoolInfo = Boolean(appSettings.neis.atptCode && appSettings.neis.schoolCode);
   const schoolName = appSettings.neis.schoolName ?? '';
@@ -226,6 +236,47 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                   )}
                   {syncStatus === 'syncing' ? '동기화 중...' : '지금 동기화'}
                 </button>
+
+                {/* 구글 캘린더로 동기화 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!googleConnected) {
+                      showToast('먼저 구글 캘린더를 연결해주세요. (일정 페이지 헤더 → "구글 캘린더 연결")', 'error');
+                      return;
+                    }
+                    void acceptNeisSyncSuggestion();
+                  }}
+                  disabled={neisSyncInProgress}
+                  title={googleConnected ? '학사일정을 구글 캘린더로 보냅니다' : '구글 캘린더 연결이 필요해요'}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 text-sm font-medium transition-all disabled:opacity-50"
+                >
+                  {neisSyncInProgress ? (
+                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span className="material-symbols-outlined text-icon-md">event_available</span>
+                  )}
+                  {neisSyncInProgress
+                    ? neisSyncProgress.total > 0
+                      ? `구글 캘린더로 동기화 중... ${neisSyncProgress.current}/${neisSyncProgress.total}`
+                      : '구글 캘린더로 동기화 중...'
+                    : hasNeisGoogleMapping
+                      ? '구글 캘린더로 다시 동기화'
+                      : '구글 캘린더로 동기화'}
+                </button>
+
+                {/* 구글 캘린더 연동 해제 버튼 (매핑 있을 때만 표시) */}
+                {hasNeisGoogleMapping && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDisconnectConfirm(true)}
+                    disabled={neisSyncInProgress}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-sp-border text-sp-muted hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/5 text-detail font-medium transition-all disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-icon">link_off</span>
+                    구글 캘린더 연동 해제
+                  </button>
+                )}
               </div>
 
               {/* 표시 설정 */}
@@ -297,6 +348,56 @@ export function NeisSchedulePanel({ open, onClose }: Props) {
                   일정 삭제
                 </button>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 구글 캘린더 연동 해제 확인 다이얼로그 */}
+      {showDisconnectConfirm && (
+        <>
+          <div
+            className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm"
+            onClick={() => !neisSyncInProgress && setShowDisconnectConfirm(false)}
+          />
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-sp-card rounded-xl border border-sp-border shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+              <h4 className="text-base font-bold text-sp-text mb-2">구글 캘린더 연동 해제</h4>
+              <p className="text-sm text-sp-muted mb-5">
+                구글 캘린더에 이미 보낸 학사일정을 어떻게 처리할까요?
+              </p>
+              {neisSyncInProgress && neisSyncProgress.total > 0 && (
+                <p className="text-xs text-sp-muted mb-3">
+                  처리 중... {neisSyncProgress.current}/{neisSyncProgress.total}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={neisSyncInProgress}
+                  onClick={async () => {
+                    await disconnectNeisFromGoogle(false);
+                    setShowDisconnectConfirm(false);
+                  }}
+                  className="flex-1 rounded-lg border border-sp-border px-3 py-2 text-sm font-medium text-sp-muted hover:bg-sp-surface transition-all disabled:opacity-50"
+                >
+                  유지하기
+                </button>
+                <button
+                  type="button"
+                  disabled={neisSyncInProgress}
+                  onClick={async () => {
+                    await disconnectNeisFromGoogle(true);
+                    setShowDisconnectConfirm(false);
+                  }}
+                  className="flex-1 rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                >
+                  모두 삭제
+                </button>
+              </div>
+              <p className="text-caption text-sp-muted mt-3 text-center">
+                {`"유지하기"는 매핑만 끊고 구글 캘린더의 학사일정은 그대로 둡니다.`}
+              </p>
             </div>
           </div>
         </>

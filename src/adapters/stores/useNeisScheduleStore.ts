@@ -86,6 +86,14 @@ export const useNeisScheduleStore = create<NeisScheduleState>((set, get) => ({
         lastSyncResult: result,
       });
 
+      // NEIS 동기화 완료 후 구글 캘린더 동기화 제안 체크 (dynamic import로 순환 참조 방지)
+      try {
+        const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
+        void useCalendarSyncStore.getState().checkNeisSyncSuggestion();
+      } catch {
+        // 무시 — 제안 체크 실패가 NEIS 동기화 결과에 영향을 주지 않게
+      }
+
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.';

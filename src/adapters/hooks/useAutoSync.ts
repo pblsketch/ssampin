@@ -10,11 +10,19 @@ export function useAutoSync() {
   const startPeriodicSync = useCalendarSyncStore((s) => s.startPeriodicSync);
   const cleanupRef = useRef<(() => void) | null>(null);
 
-  // 앱 시작 시 동기화
+  // 앱 시작 시 동기화 + NEIS 동기화 제안 체크
   useEffect(() => {
     if (isConnected && syncOnStart) {
       void syncNow();
     }
+    if (isConnected) {
+      // syncNow가 events 스토어를 갱신할 수 있으니 약간 지연 후 체크
+      const t = window.setTimeout(() => {
+        void useCalendarSyncStore.getState().checkNeisSyncSuggestion();
+      }, 300);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
   }, [isConnected, syncOnStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 주기적 동기화
