@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { dipToPhysical } from './desktopWidgetTypes';
+import { dipToPhysical, isInsideAnyRect } from './desktopWidgetTypes';
 
 describe('dipToPhysical', () => {
   it('scaleFactor === 1 → 항등 변환', () => {
@@ -55,5 +55,46 @@ describe('dipToPhysical', () => {
     const result = dipToPhysical({ x: 0, y: 0, width: 1000, height: 1000 }, 1.75);
     expect(result.width).toBe(1750);
     expect(result.height).toBe(1750);
+  });
+});
+
+describe('isInsideAnyRect (Phase 7-C 헤더 드래그 hit-test)', () => {
+  it('빈 배열은 항상 false', () => {
+    expect(isInsideAnyRect({ x: 100, y: 100 }, [])).toBe(false);
+  });
+
+  it('단일 사각형 내부 좌표는 true', () => {
+    const rects = [{ x: 100, y: 100, width: 200, height: 50 }];
+    expect(isInsideAnyRect({ x: 150, y: 120 }, rects)).toBe(true);
+    expect(isInsideAnyRect({ x: 100, y: 100 }, rects)).toBe(true); // 좌상단 포함
+  });
+
+  it('우/하단 경계는 exclusive (right/bottom edge 자체는 miss)', () => {
+    const rects = [{ x: 100, y: 100, width: 200, height: 50 }];
+    // x = 100 + 200 = 300 → exclusive
+    expect(isInsideAnyRect({ x: 300, y: 120 }, rects)).toBe(false);
+    expect(isInsideAnyRect({ x: 150, y: 150 }, rects)).toBe(false);
+  });
+
+  it('다중 사각형 중 하나라도 포함하면 true', () => {
+    const rects = [
+      { x: 0, y: 0, width: 100, height: 100 },
+      { x: 500, y: 500, width: 100, height: 100 },
+    ];
+    expect(isInsideAnyRect({ x: 50, y: 50 }, rects)).toBe(true);
+    expect(isInsideAnyRect({ x: 550, y: 550 }, rects)).toBe(true);
+    expect(isInsideAnyRect({ x: 250, y: 250 }, rects)).toBe(false);
+  });
+
+  it('어느 사각형에도 포함 안 되면 false', () => {
+    const rects = [{ x: 100, y: 100, width: 200, height: 50 }];
+    expect(isInsideAnyRect({ x: 0, y: 0 }, rects)).toBe(false);
+    expect(isInsideAnyRect({ x: 400, y: 200 }, rects)).toBe(false);
+  });
+
+  it('음수 좌표 및 사각형(멀티모니터 좌측) 정상 처리', () => {
+    const rects = [{ x: -1920, y: 0, width: 100, height: 50 }];
+    expect(isInsideAnyRect({ x: -1900, y: 20 }, rects)).toBe(true);
+    expect(isInsideAnyRect({ x: -2000, y: 20 }, rects)).toBe(false);
   });
 });

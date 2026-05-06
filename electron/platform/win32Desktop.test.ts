@@ -28,6 +28,7 @@ import {
   mapWin32MsgToClickCount,
   decodeWheelDelta,
   mapWin32MsgToWheelAxis,
+  moveWidget,
 } from './win32Desktop';
 
 describe('win32Desktop error classes', () => {
@@ -393,6 +394,23 @@ describe('Phase 7-B — mapWin32MsgToElectronEvent (wheel)', () => {
 
   it("WM_MOUSEHWHEEL → 'mouseWheel'", () => {
     expect(mapWin32MsgToElectronEvent(0x020e)).toBe('mouseWheel');
+  });
+});
+
+describe('Phase 7-C — moveWidget null/safety', () => {
+  it('null handle(0n)이면 즉시 false (SetWindowPos 호출 안 함)', () => {
+    expect(moveWidget(0n, 0, 0, 100, 50)).toBe(false);
+  });
+
+  it('null handle은 좌표/크기와 무관하게 false', () => {
+    expect(moveWidget(0n, 1234, 5678, 800, 600)).toBe(false);
+    expect(moveWidget(0n, -1920, 0, 1, 1)).toBe(false);
+  });
+
+  it('함수가 export되어 있고 호출 시 throw하지 않는다', () => {
+    // 비Win32 환경에서는 koffi 로드 실패 → false 반환. 어떤 환경이든 throw 금지.
+    expect(typeof moveWidget).toBe('function');
+    expect(() => moveWidget(0n, 100, 100, 800, 600)).not.toThrow();
   });
 });
 

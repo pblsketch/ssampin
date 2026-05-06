@@ -121,6 +121,19 @@ const SWP_NOACTIVATE = 0x0010;
 const SWP_NOSIZE = 0x0001;
 const SWP_NOMOVE = 0x0002;
 const SWP_FRAMECHANGED = 0x0020;
+/**
+ * Phase 7-C — drag hot path 추가 플래그.
+ *
+ * SWP_NOZORDER: hWndInsertAfter 무시 + 현재 Z-order 유지. drag 중 widget이 임의로 위로
+ *   올라오는 부작용 방지 (HWND_BOTTOM 사용 안 함 → 부모 안에서 매 프레임 Z 변경 시
+ *   message pump 흔들림 발생).
+ * SWP_ASYNCWINDOWPOS: 호출자가 OS의 ZOrder thread에 작업을 큐잉한 뒤 즉시 반환. drag
+ *   중 매 MOUSEMOVE에 동기 호출하면 hook callback hot path에서 다른 thread의 SetWindowPos
+ *   결과를 기다리는 동안 mouse callback이 누적 → 성능 저하. 비동기로 던지면 끊김 없는
+ *   drag가 가능하다.
+ */
+const SWP_NOZORDER = 0x0004;
+const SWP_ASYNCWINDOWPOS = 0x4000;
 
 /** ShowWindow nCmdShow */
 const SW_SHOWNOACTIVATE = 4;
@@ -1507,6 +1520,60 @@ export function postMouseMessageToWidget(
 
   try {
     const result = b.PostMessageW(widgetHwnd, msgType, wParam, lparam);
+    return result !== 0;
+  } catch {
+    return false;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-C — Header drag (위젯 위치 이동)
+// ────────────────────────────────────────────────────────────
+
+/**
+ * 위젯을 physical screen 좌표로 즉시 이동.
+ *
+ * 용도 (Phase 7-C 헤더 드래그):
+ *   WS_CHILD가 된 widget은 nc message가 부모(WorkerW)로 가서 BrowserWindow의 -webkit-app-region:
+ *   drag가 작동하지 않는다. WH_MOUSE_LL hook callback이 drag 시작/이동/종료를 감지하고 본
+ *   함수로 widget을 마우스 따라 이동시킨다.
+ *
+ * 좌표계:
+ *   - x, y: physical screen pixel (WorkerW 부모 좌표가 아니라 desktop 절대 좌표).
+ *     SetWindowPos는 child window일 때 부모 client 좌표를 기대하지만 WorkerW는 desktop을
+ *     full-cover하므로 (0,0) origin이라 screen 좌표가 그대로 통한다. 멀티모니터 환경에서도
+ *     WorkerW는 virtual screen 전체를 cover하므로 음수 좌표(좌측 모니터)도 그대로 OK.
+ *
+ * 플래그:
+ *   - SWP_NOZORDER: Z-order 변경 안 함. drag 중 widget이 위로 튀는 현상 차단.
+ *   - SWP_NOACTIVATE: 포커스 빼앗기지 않음 (drag 중 active window 유지).
+ *   - SWP_ASYNCWINDOWPOS: 비동기 — drag hot path에서 OS thread 동기 대기 회피.
+ *
+ * @param widgetHwnd 위젯 native HWND (Phase 4-2 attach 후의 hwnd 그대로)
+ * @param x physical screen X
+ * @param y physical screen Y
+ * @param width physical pixel 폭 (변경 없으면 startBounds.width 그대로)
+ * @param height physical pixel 높이
+ * @returns true = SetWindowPos 호출 성공 (비동기 큐잉 OK), false = 실패/null handle
+ */
+export function moveWidget(
+  widgetHwnd: bigint,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): boolean {
+  if (isNullHandle(widgetHwnd)) return false;
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return false;
+  }
+  try {
+    const flags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS;
+    // hWndInsertAfter는 SWP_NOZORDER로 무시되지만 0(NULL)을 안전 기본값으로.
+    const result = b.SetWindowPos(widgetHwnd, 0, x, y, width, height, flags);
     return result !== 0;
   } catch {
     return false;

@@ -45,6 +45,9 @@ export function Widget() {
   const [showLayoutSelector, setShowLayoutSelector] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const layoutBtnRef = useRef<HTMLButtonElement>(null);
+  // Phase 7-C — 헤더 드래그 영역 좌표를 main에 등록 (native-desktop 모드 헤더 드래그용).
+  // WS_CHILD가 된 위젯은 -webkit-app-region:drag가 작동 안 하므로, hook이 직접 widget을 이동시킨다.
+  const headerRef = useRef<HTMLDivElement>(null);
 
   const layoutMode = settings.widget.layoutMode ?? 'full';
 
@@ -77,6 +80,41 @@ export function Widget() {
     return () => {
       document.documentElement.style.backgroundColor = '';
       document.body.style.backgroundColor = '';
+    };
+  }, []);
+
+  // Phase 7-C — 헤더 영역 좌표를 main에 등록.
+  // native-desktop 모드: WH_MOUSE_LL hook이 헤더 안에서 LBUTTONDOWN 받으면 widget 이동.
+  // 이 effect는 환경 무관하게 IPC를 보내며(main이 native-desktop 비활성이면 단순 caching),
+  // mount/resize 시 헤더 client rect를 갱신한다.
+  useEffect(() => {
+    const node = headerRef.current;
+    if (!node) return;
+    if (typeof window.electronAPI?.setWidgetHeaderRegion !== 'function') return;
+
+    const update = () => {
+      const r = node.getBoundingClientRect();
+      // getBoundingClientRect는 viewport(=widget client area) 기준 DIP 좌표.
+      // 음수/NaN 방지.
+      void window.electronAPI?.setWidgetHeaderRegion?.([
+        {
+          x: Math.max(0, r.left),
+          y: Math.max(0, r.top),
+          width: Math.max(0, r.width),
+          height: Math.max(0, r.height),
+        },
+      ]);
+    };
+    update();
+
+    // ResizeObserver로 헤더 자체 크기 변화(날씨바 toggle 등) 감지.
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(node);
+    // 위젯 창 resize는 헤더의 width를 바꾸므로 window resize도 듣는다.
+    window.addEventListener('resize', update);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', update);
     };
   }, []);
 
@@ -188,6 +226,7 @@ export function Widget() {
       >
         {/* ── 헤더 (드래그 영역) ── */}
         <div
+          ref={headerRef}
           className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
           style={{ WebkitAppRegion: 'drag', zoom: settings.dashboardFontScale ?? 1 } as React.CSSProperties}
           onDoubleClick={handleHeaderDoubleClick}
@@ -299,12 +338,12 @@ export function Widget() {
               </div>
             ) : isEditMode ? (
               /* 편집 모드: WidgetGrid (DnD 지원) */
-              <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+              <div className="h-full overflow-y-auto scrollbar-hover-only">
                 <WidgetGrid isEditMode onNavigate={handleWidgetNavigate} />
               </div>
             ) : (
               /* 전체/분할 공통: 3열 그리드 + 단일 스크롤 + scale 축소 */
-              <div className="h-full overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+              <div className="h-full overflow-y-auto scrollbar-hover-only">
                 {/* 탭 바 */}
                 {visibleWidgets.length > 4 && (
                   <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />

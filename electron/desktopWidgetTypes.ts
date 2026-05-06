@@ -50,6 +50,56 @@ export interface PhysicalRect {
 }
 
 /**
+ * Phase 7-C — 헤더 드래그 진행 상태.
+ *
+ * WS_CHILD가 된 widget은 nc drag가 부모(WorkerW)로 흘러 작동 안 함. WH_MOUSE_LL hook
+ * callback이 LBUTTONDOWN을 헤더 영역에서 감지하면 본 state를 활성화하고 MOUSEMOVE마다
+ * delta를 계산해 SetWindowPos로 widget을 이동시킨다. LBUTTONUP에서 해제.
+ *
+ * 좌표계:
+ *   - startMouse: drag 시작 시점의 physical screen mouse position
+ *   - startWidget: drag 시작 시점의 physical screen widget origin
+ *   - startBounds: drag 시작 시점의 physical bounds (width/height 보존용)
+ *
+ * drag 중에는 hook callback이 click 라우팅을 차단해야 함 — sendInputEvent로 가지 않게
+ * manager가 분기 처리.
+ */
+export interface DragState {
+  /** drag 활성화 플래그 — false면 모든 drag 분기 skip */
+  readonly active: boolean;
+  /** drag 시작 시점의 physical screen mouse position */
+  readonly startMouse: { readonly x: number; readonly y: number };
+  /** drag 시작 시점의 physical screen widget origin (좌상단) */
+  readonly startWidget: { readonly x: number; readonly y: number };
+  /** drag 시작 시점의 widget physical bounds. width/height 변경 없이 위치만 이동 */
+  readonly startBounds: PhysicalRect;
+}
+
+/**
+ * Phase 7-C — DipRect 좌표가 widget client 안의 어느 사각형 안에 있는지 판정.
+ *
+ * physical screen coordinate p가 PhysicalRect들 중 하나라도 포함하면 true.
+ * 빈 배열이면 false. 본 함수는 hot path(MOUSEMOVE)에서 호출되므로 단순 for 루프 inline.
+ */
+export function isInsideAnyRect(
+  p: { readonly x: number; readonly y: number },
+  rects: readonly PhysicalRect[],
+): boolean {
+  for (let i = 0; i < rects.length; i++) {
+    const r = rects[i]!;
+    if (
+      p.x >= r.x
+      && p.x < r.x + r.width
+      && p.y >= r.y
+      && p.y < r.y + r.height
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * DipRect를 PhysicalRect로 변환한다.
  *
  * - scaleFactor === 1 일 때는 항등 변환.
