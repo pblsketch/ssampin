@@ -774,6 +774,7 @@ function ensureIconOnScreen(): void {
 
 function buildIconWindow(): void {
   const bounds = readIconBoundsOrDefault();
+  diagLog('icon', `buildIconWindow start bounds=${JSON.stringify(bounds)}`);
 
   iconWindow = new BrowserWindow({
     width: bounds.width,
@@ -812,8 +813,6 @@ function buildIconWindow(): void {
 
   if (process.env['VITE_DEV_SERVER_URL']) {
     void iconWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=icon`);
-    // dev 모드에서만 DevTools 자동 오픈 — 진단 로그(`[icon-renderer]`) 확인용.
-    // 디태치드(Detached)로 띄워야 64×64 작은 윈도우 영역과 겹치지 않는다.
     iconWindow.webContents.once('did-finish-load', () => {
       iconWindow?.webContents.openDevTools({ mode: 'detach' });
     });
@@ -822,6 +821,22 @@ function buildIconWindow(): void {
       query: { mode: 'icon' },
     });
   }
+
+  iconWindow.webContents.once('did-finish-load', () => {
+    diagLog('icon', `iconWindow did-finish-load (URL=${iconWindow?.webContents.getURL()})`);
+  });
+  iconWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    diagWarn('icon', `iconWindow did-fail-load code=${code} desc=${desc} url=${url}`);
+  });
+  iconWindow.webContents.on('render-process-gone', (_e, details) => {
+    diagWarn('icon', `iconWindow render-process-gone reason=${details.reason} exitCode=${details.exitCode}`);
+  });
+  iconWindow.on('show', () => {
+    diagLog('icon', `iconWindow event:show bounds=${JSON.stringify(iconWindow?.getBounds())}`);
+  });
+  iconWindow.on('hide', () => {
+    diagLog('icon', `iconWindow event:hide`);
+  });
 
   // 사용자 드래그 후 위치 저장 (디바운스 500ms)
   iconWindow.on('move', () => {
@@ -930,26 +945,29 @@ type WindowMode = 'icon' | 'widget' | 'main';
 let windowTransitionInProgress: Promise<void> = Promise.resolve();
 
 function executeWindowTransition(target: WindowMode): Promise<void> {
+  diagLog('icon', `executeWindowTransition queued target=${target}`);
   windowTransitionInProgress = windowTransitionInProgress.then(async () => {
     const opts = readSettingsWidgetOptions();
-    console.log(`[icon] transition → ${target}`);
+    diagLog('icon', `executeWindowTransition running target=${target} currentWindowMode=${currentWindowMode}`);
 
     switch (target) {
       case 'icon': {
-        // lastUserMode는 'widget'/'main' 진입 시 이미 동기화됨. icon 진입 시는 건드리지 않음.
-        // (이전 race: case 'icon'에서 lastUserMode를 다시 결정하다 currentWindowMode와
-        //  실제 윈도우 visible 상태가 어긋나는 케이스 발견 → 단순화)
-        console.log(`[icon] lastUserMode = ${lastUserMode} (preserved from previous transition)`);
-
-        // 2) currentWindowMode를 먼저 'icon'으로 — Win+D 폴링이 위젯을 다시 띄우는 것 차단
+        diagLog('icon', `case icon: lastUserMode=${lastUserMode} (preserved)`);
         currentWindowMode = 'icon';
 
         // 3) 아이콘 윈도우 보장 + fade-in
-        if (!iconWindow || iconWindow.isDestroyed()) buildIconWindow();
+        const needsBuild = !iconWindow || iconWindow.isDestroyed();
+        diagLog('icon', `case icon: needsBuild=${needsBuild} iconWindow=${!!iconWindow} destroyed=${iconWindow?.isDestroyed()}`);
+        if (needsBuild) buildIconWindow();
         if (iconWindow && !iconWindow.isDestroyed()) {
-          if (!iconWindow.isVisible()) iconWindow.setOpacity(0);
+          const wasVisible = iconWindow.isVisible();
+          diagLog('icon', `case icon: pre-fadeIn isVisible=${wasVisible}`);
+          if (!wasVisible) iconWindow.setOpacity(0);
           await fadeInIconWindow(220);
           ensureIconOnScreen();
+          diagLog('icon', `case icon: post-fadeIn bounds=${JSON.stringify(iconWindow.getBounds())} isVisible=${iconWindow.isVisible()}`);
+        } else {
+          diagWarn('icon', 'case icon: iconWindow null/destroyed AFTER buildIconWindow attempt');
         }
 
         // 4) 다른 윈도우 숨김
@@ -959,6 +977,7 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
         if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
           widgetWindow.hide();
         }
+        diagLog('icon', 'case icon: complete');
         break;
       }
 
@@ -1102,15 +1121,14 @@ function createWindow(): void {
     if (!isQuitting) {
       e.preventDefault();
       const opts = readSettingsWidgetOptions();
+      diagLog('icon', `mainWindow.close fired closeAction=${opts.closeAction}`);
 
       if (opts.closeAction === 'ask') {
-        // 매번 물어보기 — 렌더러에 다이얼로그 요청
         mainWindow?.webContents.send('close-action:ask');
         return;
       }
 
       if (opts.closeAction === 'icon') {
-        // X 버튼 → 아이콘 모드로 접기 (v2.0.2~)
         void executeWindowTransition('icon');
         return;
       }
@@ -1744,6 +1762,7 @@ function setupAutoUpdater(): void {
 function registerIpcHandlers(): void {
   // 닫기 동작 선택 (매번 물어보기 모드)
   ipcMain.on('close-action:respond', (_event, action: string) => {
+    diagLog('icon', `close-action:respond received action=${action}`);
     if (action === 'widget') {
       void executeWindowTransition('widget');
     } else if (action === 'icon') {

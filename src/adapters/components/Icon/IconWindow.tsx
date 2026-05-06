@@ -87,13 +87,23 @@ export function IconWindow() {
     void window.electronAPI?.iconDiag({ event: `#${seq} ${event}`, data });
   };
 
-  // 초기 로드
+  // 초기 로드 — 그리고 mount 사실 자체를 main 에 보고 (icon mode 진입 가시화)
   useEffect(() => {
+    void window.electronAPI?.iconDiag({
+      event: 'IconWindow:mount',
+      data: { url: window.location.href, ts: Date.now() },
+    });
     void loadSettings();
     void loadSchedule();
     void loadEvents();
     void loadTodos();
     void loadMemos();
+    return () => {
+      void window.electronAPI?.iconDiag({
+        event: 'IconWindow:unmount',
+        data: { ts: Date.now() },
+      });
+    };
   }, [loadSettings, loadSchedule, loadEvents, loadTodos, loadMemos]);
 
   // body/html/#root에 transparent 강제 적용 — light 테마의 흰 배경(--sp-bg #ffffff) 무력화
