@@ -217,6 +217,14 @@ function createWin32Manager(
    */
   let cachedWidgetHwnd: bigint = 0n;
   /**
+   * Phase 7-stable: hook callback의 z-order 검증에서 비교할 Progman HWND 캐시.
+   *
+   * STRATEGY 3(SHELLDLL_DefView 직접 attach)에선 widget의 root가 Progman이 될 수 있어
+   * isWidgetOrAncestor의 비교 대상에 포함시킨다. enable() 단계에서 collectDesktopAttachCandidates의
+   * progman 필드를 가져와 캐시. clearHandles에서 0n 리셋.
+   */
+  let cachedProgmanHwnd: bigint = 0n;
+  /**
    * Phase 7-A (재시도): hook callback이 webContents.sendInputEvent 호출 대상으로 사용할
    * BrowserWindow 인스턴스 캐시.
    *
@@ -251,8 +259,18 @@ function createWin32Manager(
    * sent/skipped(아이콘)/skipped(영역밖)/failed 4분류.
    *
    * Phase 7-A 재시도: 'posted' → 'sent'로 명명 통일 (sendInputEvent와 PostMessage 둘 다 포함).
+   *
+   * Phase 7-stable: skippedAbove 추가 — 다른 윈도우(브라우저/탐색기 등)가 z-order로 위에 있어
+   *   라우팅을 의도적으로 skip한 카운트. 정상 동작에서는 위젯 위에서만 0이 아니어야 함.
    */
-  let routingStats = { sent: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0, totalCallbacks: 0 };
+  let routingStats = {
+    sent: 0,
+    skippedIcon: 0,
+    skippedOutOfBounds: 0,
+    skippedAbove: 0,
+    failed: 0,
+    totalCallbacks: 0,
+  };
   let firstCallbackLogged = false;
   let statsTimer: NodeJS.Timeout | null = null;
 
@@ -376,6 +394,7 @@ function createWin32Manager(
     cachedPhysicalBounds = null;
     cachedListView = null;
     cachedWidgetHwnd = 0n;
+    cachedProgmanHwnd = 0n;
     // BrowserWindow 자체는 main.ts가 관리하므로 우리는 reference만 떨어뜨린다.
     cachedWidgetWindow = null;
     // hit cache 초기화
@@ -384,7 +403,14 @@ function createWin32Manager(
     lastHitResult = false;
     lastHitUntil = 0;
     // Phase 7-A 통계 초기화 (다음 enable에서 깨끗하게 시작)
-    routingStats = { sent: 0, skippedIcon: 0, skippedOutOfBounds: 0, failed: 0, totalCallbacks: 0 };
+    routingStats = {
+      sent: 0,
+      skippedIcon: 0,
+      skippedOutOfBounds: 0,
+      skippedAbove: 0,
+      failed: 0,
+      totalCallbacks: 0,
+    };
     firstCallbackLogged = false;
     if (statsTimer) {
       clearInterval(statsTimer);
@@ -549,6 +575,9 @@ function createWin32Manager(
       // 4. 초기 physical bounds 캐시 (Phase 5) + Phase 7-A widget HWND/BrowserWindow 캐시
       cachedPhysicalBounds = recalcPhysicalBounds(window);
       cachedWidgetHwnd = handles.widgetHwnd;
+      // Phase 7-stable: z-order 검증용 Progman 캐시. STRATEGY 3 환경에서 widget root가
+      // Progman이 될 수 있어 isWidgetOrAncestor 판정에 필요.
+      cachedProgmanHwnd = candidates.progman;
       // Phase 7-A 재시도 — sendInputEvent 호출용 BrowserWindow 캐시.
       // hook callback에서 isDestroyed 가드 후 webContents.sendInputEvent 호출.
       cachedWidgetWindow = window;
@@ -658,6 +687,38 @@ function createWin32Manager(
           if (!isInsideCachedBoundsLocal(p)) {
             routingStats.skippedOutOfBounds++;
             return;
+          }
+
+          // ─── Phase 7-stable — z-order 검증 (다른 윈도우가 위젯 위에 깔려있는지) ───
+          // 사용자 보고 회귀(2026-05-05): 위젯 위에 띄운 브라우저/탐색기 창의 종료 버튼이나
+          // 타이틀바 클릭이 가끔 위젯으로 흘러가서 그 창을 조작 못 하는 race가 발생.
+          // 원인: WH_MOUSE_LL hook은 system-wide라 widget bounds 안 좌표면 z-order 위에 다른
+          // 창이 있어도 우리는 widget으로 sendInputEvent를 보냈고, OS는 자연 라우팅으로 위 창에도
+          // 클릭을 보냄 → 둘 다 받게 됨.
+          // 해결: WindowFromPoint으로 그 좌표 top-most window를 조회 → widget(또는 ancestor)이
+          // 아니면 sendInputEvent 호출 안 함. CallNextHookEx는 정상 패스(return false)하므로 OS는
+          // 자연 라우팅으로 위에 있는 창에 클릭을 정상 전달.
+          //
+          // 단, drag 진행 중에는 본 검증 skip — 이미 위 dragState 분기에서 처리됨(여기 도달 X).
+          // LBUTTONUP 직후 Explorer rubber band 시작 race 등은 drag 분기가 흡수.
+          {
+            const top = win32.windowFromPoint(p);
+            const isWidgetTop = win32.isWidgetOrAncestor(
+              top,
+              cachedWidgetHwnd,
+              handles ? handles.workerW : 0n,
+              cachedProgmanHwnd,
+            );
+            if (!isWidgetTop) {
+              routingStats.skippedAbove++;
+              if (msgType !== 0x0200) {
+                diagLog(
+                  'native-desktop',
+                  `[7-stable] skipped — top window is not widget (top=0x${top.toString(16)}, widget=0x${cachedWidgetHwnd.toString(16)}, msg=0x${msgType.toString(16)})`,
+                );
+              }
+              return; // OS 자연 라우팅에 맡김 (위에 있는 창이 정상 처리)
+            }
           }
 
           // ─── Phase 7-C — Header LBUTTONDOWN으로 drag 시작 ───
@@ -872,7 +933,7 @@ function createWin32Manager(
         statsTimer = setInterval(() => {
           diagLog(
             'native-desktop',
-            `[7-A] stats: totalCallbacks=${routingStats.totalCallbacks} skipOOB=${routingStats.skippedOutOfBounds} skipIcon=${routingStats.skippedIcon} sent=${routingStats.sent} failed=${routingStats.failed}`,
+            `[7-A] stats: totalCallbacks=${routingStats.totalCallbacks} skipOOB=${routingStats.skippedOutOfBounds} skipIcon=${routingStats.skippedIcon} skipAbove=${routingStats.skippedAbove} sent=${routingStats.sent} failed=${routingStats.failed}`,
           );
         }, 5000);
       } catch (e) {

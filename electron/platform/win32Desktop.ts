@@ -167,6 +167,19 @@ const GW_HWNDNEXT = 2;
 const GW_HWNDPREV = 3;
 
 /**
+ * GetAncestor gaFlags.
+ *
+ * GA_PARENT(1)  : 직계 부모.
+ * GA_ROOT(2)    : 시각적으로 가장 위의 ancestor (top-level 윈도우 root).
+ * GA_ROOTOWNER(3): owned chain의 root.
+ *
+ * 본 사용에선 GA_ROOT 사용 — WS_CHILD가 된 widget의 root는 WorkerW (자식의 chain을 따라가
+ * top-level까지 도달). z-order 검증 시 WindowFromPoint이 widget 자체가 아닌 그 자식 element를
+ * 반환할 수 있어 GetAncestor(GA_ROOT)로 정규화한다.
+ */
+const GA_ROOT = 2;
+
+/**
  * Phase 7-A — Win32 mouse 메시지 상수.
  *
  * WH_MOUSE_LL hook callback은 wParam에 본 메시지 타입을 받는다 (MSDN: lowlevelmouseproc).
@@ -270,6 +283,29 @@ interface Win32Bindings {
   // user32 — sibling/child traversal (Strategy 2/3 보조)
   GetWindow: (hWnd: bigint | number, uCmd: number) => bigint | null;
 
+  // user32 — Phase 7-stable: z-order 검증 (다른 창이 위에 있는지 확인)
+  /**
+   * WindowFromPoint: physical screen 좌표 위에 있는 top-most(가장 위) 윈도우의 HWND를 반환.
+   *
+   * 제 3자 윈도우(브라우저, 탐색기 등)가 위젯 위에 깔린 경우 그 좌표를 hit-test하면
+   * 그 윈도우 HWND를 반환 — 위젯 HWND가 아님. WS_CHILD 위젯도 그 영역에서 다른 top-level
+   * 창이 가리지 않으면 widget의 자식까지 내려가서 반환할 수 있다 (그래서 GetAncestor(GA_ROOT)로
+   * 정규화 필요).
+   *
+   * koffi struct by-value 인자: POINT { LONG x, LONG y } = 8 bytes. koffi 2.x의 struct 지원으로
+   * by-value 전달 가능.
+   */
+  WindowFromPoint: (point: { x: number; y: number }) => bigint | null;
+  /**
+   * GetAncestor: 주어진 윈도우의 ancestor를 gaFlags(GA_ROOT 등)에 따라 반환.
+   *
+   * z-order 검증에서 WindowFromPoint 결과를 정규화할 때 사용:
+   *   - widget의 임의 자식(렌더러 wrapper 등)이 반환되어도 GA_ROOT는 widget의 top-level root를 반환.
+   *   - WS_CHILD인 widget은 root가 부모(WorkerW)이므로, WorkerW 자체가 반환될 수도 있어
+   *     검증 로직에서 widget HWND뿐 아니라 WorkerW도 같이 비교한다.
+   */
+  GetAncestor: (hWnd: bigint | number, gaFlags: number) => bigint | null;
+
   // user32 — Phase 6: 좌표/스레드/프로세스
   GetWindowThreadProcessId: (hWnd: bigint | number, lpdwProcessId: unknown) => number;
   ScreenToClient: (hWnd: bigint | number, lpPoint: unknown) => number;
@@ -323,6 +359,9 @@ let cachedKoffi: typeof import('koffi') | null = null;
 // koffi.proto는 같은 type 이름을 두 번 등록하면 'Duplicate type name' throw → module-level 캐시.
 // hook을 설치/해제/재설치할 때마다 새로 만들면 안 됨. 단 하나의 proto를 평생 재사용.
 let cachedLowLevelMouseProc: unknown = null;
+// Phase 7-stable: POINT 구조체 등록 — WindowFromPoint이 by-value POINT를 받음.
+//   'Duplicate type name' 회피를 위해 module-level 캐시 (loadWin32Bindings 첫 호출에서 등록).
+let cachedPointStruct: unknown = null;
 // Phase 7-B 진단: OutputDebugStringW 캐시 — DebugView로 hook callback 가시화.
 let cachedOutputDebugStringW: ((msg: string) => void) | null = null;
 
@@ -356,6 +395,16 @@ function loadWin32Bindings(): Win32Bindings {
     cachedLowLevelMouseProc = koffi.proto(
       'intptr_t __stdcall LowLevelMouseProc(int nCode, uintptr_t wParam, void *lParam)',
     );
+  }
+
+  // Phase 7-stable: POINT 구조체 등록.
+  // WindowFromPoint은 POINT를 by-value로 받음. x64 calling convention에서 POINT(8 bytes)는
+  // 64-bit register(RCX) 한 개에 packing되어 전달된다 — koffi 2.x가 struct by-value를 지원.
+  if (cachedPointStruct === null) {
+    cachedPointStruct = koffi.struct('POINT', {
+      x: 'long',
+      y: 'long',
+    });
   }
 
   let kernel32: ReturnType<typeof koffi.load>;
@@ -443,6 +492,17 @@ function loadWin32Bindings(): Win32Bindings {
       'void* __stdcall GetWindow(void*, uint32)',
     ) as Win32Bindings['GetWindow'];
 
+    // Phase 7-stable: WindowFromPoint — POINT by-value 인자.
+    //   koffi의 'POINT' 타입은 위에서 cachedPointStruct로 등록됨. 같은 이름 'POINT'를
+    //   func 시그니처에서 참조하면 koffi가 by-value 마샬링을 적용한다.
+    const WindowFromPoint = user32.func(
+      'void* __stdcall WindowFromPoint(POINT)',
+    ) as Win32Bindings['WindowFromPoint'];
+
+    const GetAncestor = user32.func(
+      'void* __stdcall GetAncestor(void*, uint32)',
+    ) as Win32Bindings['GetAncestor'];
+
     // Phase 6 추가 바인딩
     const GetWindowThreadProcessId = user32.func(
       'uint32 __stdcall GetWindowThreadProcessId(void*, uint32 *)',
@@ -525,6 +585,8 @@ function loadWin32Bindings(): Win32Bindings {
       ShowWindow,
       IsWindow,
       GetWindow,
+      WindowFromPoint,
+      GetAncestor,
       GetWindowThreadProcessId,
       ScreenToClient,
       OpenProcess,
@@ -1097,6 +1159,95 @@ export function isWindowAlive(handle: bigint): boolean {
   } catch {
     return false;
   }
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase 7-stable — z-order 검증 (다른 창이 위에 있는지)
+// ────────────────────────────────────────────────────────────
+
+/**
+ * 화면 좌표(physical pixel) 위에 있는 top-most 윈도우의 HWND를 반환.
+ *
+ * 용도: WH_MOUSE_LL hook callback에서 위젯 위에 다른 윈도우(브라우저, 탐색기, ...)가
+ * z-order로 가려진 상태인지 검증. 본 함수가 widget 또는 그 ancestor를 반환하면 클릭이
+ * widget으로 정상 라우팅 가능. 다른 윈도우 HWND를 반환하면 그 창이 위에 있어 라우팅 skip.
+ *
+ * Win32 WindowFromPoint은 매우 빠른 API (수 µs) — hook hot path에서 호출 안전.
+ *
+ * @param physicalPoint screen 절대 좌표 (DPI 무관 device pixel)
+ * @returns 해당 좌표의 top-most window HWND (없으면 0n).
+ *   koffi load 실패 시에도 0n 반환 (throw 금지).
+ */
+export function windowFromPoint(physicalPoint: { x: number; y: number }): bigint {
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return 0n;
+  }
+  try {
+    // koffi.struct로 등록된 POINT는 plain object로 by-value 전달.
+    const result = b.WindowFromPoint({ x: physicalPoint.x | 0, y: physicalPoint.y | 0 });
+    return toBigInt(result);
+  } catch {
+    return 0n;
+  }
+}
+
+/**
+ * GetAncestor(hWnd, gaFlags) wrapper — gaFlags=GA_ROOT으로 top-level root 추출.
+ *
+ * WindowFromPoint이 widget의 자식(렌더러 wrapper, 자식 control 등)을 반환했을 때 widget
+ * top-level까지 정규화한다. WS_CHILD가 된 widget이면 root는 부모(WorkerW)가 된다.
+ *
+ * @returns ancestor HWND (실패/null이면 0n).
+ */
+export function getWindowAncestor(hWnd: bigint, gaFlags: number = GA_ROOT): bigint {
+  if (isNullHandle(hWnd)) return 0n;
+  let b: Win32Bindings;
+  try {
+    b = loadWin32Bindings();
+  } catch {
+    return 0n;
+  }
+  try {
+    return toBigInt(b.GetAncestor(hWnd, gaFlags));
+  } catch {
+    return 0n;
+  }
+}
+
+/**
+ * z-order 검증: 주어진 top-most HWND가 widget 또는 그 attach 대상 ancestor인지 판정.
+ *
+ * 케이스 분석:
+ *   1. top === widgetHwnd → widget 자체. true.
+ *   2. top === workerW → widget의 부모(WS_CHILD attach 후의 root). true.
+ *   3. top === progman → STRATEGY 3에서 SHELLDLL_DefView 직접 attach인 경우 root가 Progman. true.
+ *   4. top === 0n → WindowFromPoint 실패. false (안전 차단).
+ *   5. 그 외 → 다른 top-level 윈도우(브라우저, 탐색기 등)가 위에 있음. false.
+ *
+ * **drag 진행 중에는 호출하지 말 것**: drag 시작 직후 mouse가 빠르게 움직이면 다른 윈도우가
+ * 일시적으로 위에 올라올 수 있어도 drag는 계속해야 한다 (caller 책임).
+ *
+ * 본 함수는 매우 가벼운 비교만 — hook hot path에서 호출 가능.
+ *
+ * @param top WindowFromPoint이 반환한 HWND
+ * @param widgetHwnd 위젯 native HWND
+ * @param workerW attach 대상(보통 WorkerW)
+ * @param progman Progman HWND (있으면 — 없으면 0n)
+ */
+export function isWidgetOrAncestor(
+  top: bigint,
+  widgetHwnd: bigint,
+  workerW: bigint,
+  progman: bigint,
+): boolean {
+  if (top === 0n) return false;
+  if (top === widgetHwnd) return true;
+  if (workerW !== 0n && top === workerW) return true;
+  if (progman !== 0n && top === progman) return true;
+  return false;
 }
 
 // ────────────────────────────────────────────────────────────
