@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { DescriptionRenderer } from '@adapters/components/common/DescriptionRenderer';
 
 function DeveloperModal({ onClose }: { onClose: () => void }) {
   const [imgError, setImgError] = useState(false);
@@ -290,8 +291,11 @@ export function AppInfoSection() {
               fetchAllReleaseNotes().then((notes) => {
                 if (notes) {
                   setAllNotes(notes);
-                  // 현재 버전은 기본 펼침
-                  setExpandedVersions(new Set([__APP_VERSION__]));
+                  // 현재 버전이 목록에 있을 때만 기본 펼침 (방어 로직)
+                  const hasCurrentVersion = notes.some((n) => n.version === __APP_VERSION__);
+                  setExpandedVersions(
+                    new Set(hasCurrentVersion ? [__APP_VERSION__] : []),
+                  );
                 }
                 setChangelogLoading(false);
               });
@@ -305,8 +309,12 @@ export function AppInfoSection() {
             업데이트 내역
           </span>
           <span
-            className="material-symbols-outlined text-icon-md text-sp-muted transition-transform duration-200"
-            style={{ transform: showChangelog ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            className={[
+              'material-symbols-outlined text-icon-md text-sp-muted',
+              'transition-transform duration-200',
+              showChangelog ? 'rotate-180' : 'rotate-0',
+            ].join(' ')}
+            aria-hidden="true"
           >
             expand_more
           </span>
@@ -341,8 +349,12 @@ export function AppInfoSection() {
                         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-sp-card/50 transition-colors text-left"
                       >
                         <span
-                          className="material-symbols-outlined text-icon-sm text-sp-muted transition-transform duration-200"
-                          style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                          className={[
+                            'material-symbols-outlined text-icon-sm text-sp-muted',
+                            'transition-transform duration-200',
+                            isExpanded ? 'rotate-90' : 'rotate-0',
+                          ].join(' ')}
+                          aria-hidden="true"
                         >
                           chevron_right
                         </span>
@@ -359,6 +371,12 @@ export function AppInfoSection() {
 
                       {isExpanded && (
                         <div className="px-3 pb-3 space-y-1.5">
+                          {/* 현재 버전 강조 헤더 (Design §2.4-b) */}
+                          {isCurrent && normalizeHighlights(ver.highlights).length > 0 && (
+                            <p className="text-sp-muted text-[10px] font-semibold uppercase tracking-wide mb-1 pl-5 pt-1">
+                              이번 버전에서 달라진 점
+                            </p>
+                          )}
                           {normalizeHighlights(ver.highlights).length > 0 && (
                             <ul className="list-none space-y-0.5 mb-2 pl-5">
                               {normalizeHighlights(ver.highlights).map((h, i) => (
@@ -375,14 +393,14 @@ export function AppInfoSection() {
                               <div key={i} className="flex items-start gap-2 pl-5">
                                 {cfg && (
                                   <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-caption font-medium ${cfg.badge} shrink-0`}>
-                                    <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>{cfg.icon}</span>
+                                    <span className="material-symbols-outlined" style={{ fontSize: '11px' }} aria-hidden="true">{cfg.icon}</span>
                                     {cfg.label}
                                   </span>
                                 )}
                                 <div className="min-w-0">
                                   <span className="text-sp-text text-xs leading-relaxed">{c.title}</span>
                                   {c.description && (
-                                    <p className="text-sp-muted text-detail leading-relaxed mt-0.5">{c.description}</p>
+                                    <DescriptionRenderer description={c.description} />
                                   )}
                                 </div>
                               </div>
@@ -400,7 +418,7 @@ export function AppInfoSection() {
                     onClick={() => setShowAllVersions(true)}
                     className="w-full text-center py-2 text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
                   >
-                    이전 버전 {allNotes.length - INITIAL_SHOW_COUNT}개 더 보기
+                    이전 버전 기록 보기 ({allNotes.length - INITIAL_SHOW_COUNT}개 더)
                   </button>
                 )}
                 {showAllVersions && allNotes.length > INITIAL_SHOW_COUNT && (
