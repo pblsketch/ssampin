@@ -660,19 +660,6 @@ export function Schedule() {
       </div>
 
       {/* 모달들 */}
-      {showEventModal && (
-        <EventFormModal
-          categories={categories}
-          editEvent={editingEvent}
-          initialDate={initialDate}
-          onSubmit={handleEventSubmit}
-          onClose={() => {
-            setShowEventModal(false);
-            setEditingEvent(null);
-          }}
-        />
-      )}
-
       {showCategoryModal && (
         <CategoryManagementModal
           onClose={() => setShowCategoryModal(false)}
@@ -712,6 +699,20 @@ export function Schedule() {
           onEditEvent={handleEditEvent}
           onDeleteEvent={handleDeleteEvent}
           onSkipDate={handleSkipDate}
+        />
+      )}
+
+      {/* DayScheduleModal에서 열리는 자식 모달 — DOM 순서상 항상 뒤에 두어 z-stacking 보장 */}
+      {showEventModal && (
+        <EventFormModal
+          categories={categories}
+          editEvent={editingEvent}
+          initialDate={initialDate}
+          onSubmit={handleEventSubmit}
+          onClose={() => {
+            setShowEventModal(false);
+            setEditingEvent(null);
+          }}
         />
       )}
 
