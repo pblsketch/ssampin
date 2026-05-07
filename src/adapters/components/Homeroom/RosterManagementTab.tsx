@@ -11,6 +11,7 @@ import { exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/expor
 /* eslint-enable no-restricted-imports */
 import { FormatHint } from '../common/FormatHint';
 import { ConflictResolveModal } from './RosterImport/ConflictResolveModal';
+import { StudentCountReduceConfirmModal } from './RosterImport/StudentCountReduceConfirmModal';
 import {
   parseClipboardText,
   validateRows,
@@ -35,7 +36,8 @@ export function RosterManagementTab() {
     loaded,
     load: loadStudents,
     updateStudents,
-    setStudentCount,
+    planStudentCountChange,
+    commitStudentCountChange,
     updateStudentField,
     changeStatus,
   } = useStudentStore();
@@ -63,6 +65,12 @@ export function RosterManagementTab() {
   // Phase 3 — import 시 (이름+학번) 부분 매칭 발생하면 사용자 결정 모달 노출
   const [conflictPlan, setConflictPlan] = useState<PlanResult | null>(null);
   const [conflictImported, setConflictImported] = useState<readonly ImportReadyStudent[] | null>(null);
+  // Phase 4 — [-] 버튼으로 활성 학생 삭제 시 명시적 confirm 모달
+  const [pendingReducePlan, setPendingReducePlan] = useState<{
+    committed: readonly Student[];
+    activeRemoved: readonly Student[];
+    inactiveRemoved: readonly Student[];
+  } | null>(null);
   const settings = useSettingsStore((s) => s.settings);
   const showToast = useToastStore((s) => s.show);
 
@@ -168,6 +176,51 @@ export function RosterManagementTab() {
   const handleConflictCancel = useCallback(() => {
     setConflictPlan(null);
     setConflictImported(null);
+  }, []);
+
+  /**
+   * Phase 4 — [-]/[+] 버튼 통합 핸들러.
+   *  - 증가/안전 감소(비활성만 삭제) → 즉시 적용
+   *  - 활성 학생 삭제 필요 → confirm 모달 노출
+   */
+  const handleStudentCountChange = useCallback(
+    async (count: number) => {
+      const plan = planStudentCountChange(count);
+      if (!plan) return; // 변화 없음
+      if (plan.kind === 'safe') {
+        await commitStudentCountChange(plan.newStudents);
+        if (plan.removedInactive.length > 0) {
+          showToast(
+            `비활성 학생 ${plan.removedInactive.length}명을 자동 정리했습니다`,
+            'info',
+          );
+        }
+        return;
+      }
+      // requiresConfirm — 활성 학생 영구 삭제 필요
+      setPendingReducePlan({
+        committed: plan.committed,
+        activeRemoved: plan.removedActive,
+        inactiveRemoved: plan.removedInactive,
+      });
+    },
+    [planStudentCountChange, commitStudentCountChange, showToast],
+  );
+
+  const handleReduceConfirm = useCallback(async () => {
+    if (!pendingReducePlan) return;
+    const { committed, activeRemoved, inactiveRemoved } = pendingReducePlan;
+    await commitStudentCountChange(committed);
+    setPendingReducePlan(null);
+    const total = activeRemoved.length + inactiveRemoved.length;
+    showToast(
+      `${total}명을 영구 삭제했습니다 (활성 ${activeRemoved.length}, 비활성 ${inactiveRemoved.length})`,
+      'success',
+    );
+  }, [pendingReducePlan, commitStudentCountChange, showToast]);
+
+  const handleReduceCancel = useCallback(() => {
+    setPendingReducePlan(null);
   }, []);
 
   const handleBulkImport = useCallback(async () => {
@@ -318,15 +371,16 @@ export function RosterManagementTab() {
           {/* 인원 수 조절 */}
           <div className="flex items-center gap-1 px-3 py-2 rounded-lg border border-sp-border bg-sp-card text-sm text-sp-text">
             <button
-              onClick={() => void setStudentCount(students.length - 1)}
+              onClick={() => void handleStudentCountChange(students.length - 1)}
               disabled={students.length <= 1}
               className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="학생 수 줄이기 (비활성 학생부터 자동 정리, 활성 학생 삭제 시 확인 필요)"
             >
               <span className="material-symbols-outlined text-icon-sm">remove</span>
             </button>
             <span className="w-8 text-center font-mono font-bold">{students.length}</span>
             <button
-              onClick={() => void setStudentCount(students.length + 1)}
+              onClick={() => void handleStudentCountChange(students.length + 1)}
               disabled={students.length >= 50}
               className="w-6 h-6 flex items-center justify-center rounded border border-sp-border bg-sp-bg hover:bg-sp-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
@@ -1131,6 +1185,17 @@ export function RosterManagementTab() {
           newCount={conflictPlan.newOnly.length}
           onApply={(resolutions) => void handleConflictApply(resolutions)}
           onCancel={handleConflictCancel}
+        />
+      )}
+
+      {/* Phase 4 — 활성 학생 삭제 확인 모달 */}
+      {pendingReducePlan && (
+        <StudentCountReduceConfirmModal
+          isOpen
+          onCancel={handleReduceCancel}
+          onConfirm={() => void handleReduceConfirm()}
+          studentsToDelete={pendingReducePlan.activeRemoved}
+          inactiveAutoRemoved={pendingReducePlan.inactiveRemoved}
         />
       )}
     </div>
