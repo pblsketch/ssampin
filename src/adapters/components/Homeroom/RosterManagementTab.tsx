@@ -10,6 +10,7 @@ import type { Student } from '@domain/entities/Student';
 import { exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
 import { FormatHint } from '../common/FormatHint';
+import { ConflictResolveModal } from './RosterImport/ConflictResolveModal';
 import {
   parseClipboardText,
   validateRows,
@@ -21,7 +22,12 @@ import type {
   ColumnMapping,
   ColumnType,
   ValidationSummary,
+  ImportReadyStudent,
 } from '@domain/rules/rosterImportRules';
+import { planImport } from '@domain/rules/rosterImportPlan';
+import type { ImportAction, PlanResult } from '@domain/rules/rosterImportPlan';
+import { applyImportPlan } from '@usecases/roster/applyImportPlan';
+import { generateUUID } from '@infrastructure/utils/uuid';
 
 export function RosterManagementTab() {
   const {
@@ -54,6 +60,9 @@ export function RosterManagementTab() {
     status: StudentStatus;
   } | null>(null);
   const [statusNote, setStatusNote] = useState('');
+  // Phase 3 — import 시 (이름+학번) 부분 매칭 발생하면 사용자 결정 모달 노출
+  const [conflictPlan, setConflictPlan] = useState<PlanResult | null>(null);
+  const [conflictImported, setConflictImported] = useState<readonly ImportReadyStudent[] | null>(null);
   const settings = useSettingsStore((s) => s.settings);
   const showToast = useToastStore((s) => s.show);
 
@@ -93,6 +102,74 @@ export function RosterManagementTab() {
     setValidationResult(null);
   }, []);
 
+  /**
+   * Phase 3 — 가져오기 적용 통합 함수.
+   * planImport + applyImportPlan으로 외부 참조(student.id)를 최대한 보존.
+   * resolutions = 빈 Map이면 conflicts는 모두 'skip'으로 처리됨.
+   */
+  const applyImportToStore = useCallback(
+    async (
+      importedReady: readonly ImportReadyStudent[],
+      plan: PlanResult,
+      resolutions: ReadonlyMap<string, ImportAction>,
+    ) => {
+      const newStudents = applyImportPlan(students, plan, resolutions, generateUUID);
+      prevStudentsRef.current = students;
+      await updateStudents(newStudents);
+      const summary = `${importedReady.length}명 처리 (보존 ${plan.matched.length} · 신규 ${plan.newOnly.length}${
+        plan.conflicts.length > 0 ? ` · 결정 ${plan.conflicts.length}` : ''
+      })`;
+      showToast(summary, 'success', {
+        label: '실행 취소',
+        onClick: () => void updateStudents([...prevStudentsRef.current]),
+      });
+    },
+    [students, updateStudents, showToast],
+  );
+
+  /**
+   * Phase 3 — import 진입점.
+   * conflict 0건이면 자동 적용, 1건 이상이면 ConflictResolveModal 노출.
+   * onAutoApplied는 자동 적용 성공 시 호출 (모달 닫기 등 후속 정리).
+   */
+  const tryImport = useCallback(
+    async (
+      importedReady: readonly ImportReadyStudent[],
+      onAutoApplied: () => void,
+    ) => {
+      const plan = planImport(students, importedReady);
+      if (plan.conflicts.length === 0) {
+        await applyImportToStore(importedReady, plan, new Map());
+        onAutoApplied();
+        return;
+      }
+      // 충돌 모달 노출
+      setConflictPlan(plan);
+      setConflictImported(importedReady);
+    },
+    [students, applyImportToStore],
+  );
+
+  /** ConflictResolveModal의 onApply — 사용자 결정 반영 후 적용 */
+  const handleConflictApply = useCallback(
+    async (resolutions: Map<string, ImportAction>) => {
+      if (!conflictPlan || !conflictImported) return;
+      await applyImportToStore(conflictImported, conflictPlan, resolutions);
+      setConflictPlan(null);
+      setConflictImported(null);
+      // 후속 정리 — 마법사·미리보기 모달 닫기
+      resetBulkImport();
+      setShowBulkImport(false);
+      setPreviewStudents(null);
+    },
+    [conflictPlan, conflictImported, applyImportToStore, resetBulkImport],
+  );
+
+  const handleConflictCancel = useCallback(() => {
+    setConflictPlan(null);
+    setConflictImported(null);
+  }, []);
+
   const handleBulkImport = useCallback(async () => {
     if (!bulkText.trim()) return;
 
@@ -103,24 +180,24 @@ export function RosterManagementTab() {
 
     if (names.length === 0) return;
 
-    const newStudents = names.map((name, idx) => ({
-      id: `s${Date.now()}_${idx}`,
+    // Phase 3 — 단일 열(이름만) 모드도 planImport 거쳐 외부 참조 보호
+    const importedReady: ImportReadyStudent[] = names.map((name, idx) => ({
       name,
       studentNumber: idx + 1,
       phone: '',
       parentPhone: '',
+      parentPhoneLabel: '',
+      parentPhone2: '',
+      parentPhone2Label: '',
+      birthDate: '',
       isVacant: false,
     }));
 
-    prevStudentsRef.current = students;
-    await updateStudents(newStudents);
-    resetBulkImport();
-    setShowBulkImport(false);
-    showToast(`${names.length}명의 학생을 등록했습니다`, 'success', {
-      label: '실행 취소',
-      onClick: () => void updateStudents([...prevStudentsRef.current]),
+    await tryImport(importedReady, () => {
+      resetBulkImport();
+      setShowBulkImport(false);
     });
-  }, [bulkText, updateStudents, showToast, students, resetBulkImport]);
+  }, [bulkText, tryImport, resetBulkImport]);
 
   /** Step 1 → Step 2: 텍스트 파싱 후 분기 */
   const handleBulkNext = useCallback(() => {
@@ -173,28 +250,12 @@ export function RosterManagementTab() {
     if (!parseResult) return;
     const imported = toImportStudents(parseResult.rows, columnMappings);
 
-    const newStudents = imported.map((p, idx) => ({
-      id: `s${Date.now()}_${idx}`,
-      name: p.name,
-      studentNumber: p.studentNumber,
-      phone: p.phone,
-      parentPhone: p.parentPhone,
-      parentPhoneLabel: p.parentPhoneLabel,
-      parentPhone2: p.parentPhone2,
-      parentPhone2Label: p.parentPhone2Label,
-      birthDate: p.birthDate,
-      isVacant: p.isVacant,
-    }));
-
-    prevStudentsRef.current = students;
-    await updateStudents(newStudents);
-    resetBulkImport();
-    setShowBulkImport(false);
-    showToast(`${newStudents.length}명의 학생을 등록했습니다`, 'success', {
-      label: '실행 취소',
-      onClick: () => void updateStudents([...prevStudentsRef.current]),
+    // Phase 3 — planImport 거쳐 외부 참조(student.id) 보존
+    await tryImport(imported, () => {
+      resetBulkImport();
+      setShowBulkImport(false);
     });
-  }, [parseResult, useFirstRowAsHeader, columnMappings, students, updateStudents, resetBulkImport, showToast]);
+  }, [parseResult, columnMappings, tryImport, resetBulkImport]);
 
   const handleExportRoster = useCallback(async () => {
     try {
@@ -688,8 +749,8 @@ export function RosterManagementTab() {
                 </button>
                 <button
                   onClick={async () => {
-                    const newStudents = previewStudents.map((p, idx) => ({
-                      id: `s${Date.now()}_${idx}`,
+                    // Phase 3 — planImport 거쳐 외부 참조(student.id) 보존
+                    const importedReady: ImportReadyStudent[] = previewStudents.map((p) => ({
                       name: p.name,
                       studentNumber: p.studentNumber,
                       phone: p.phone,
@@ -700,9 +761,9 @@ export function RosterManagementTab() {
                       birthDate: p.birthDate ?? '',
                       isVacant: p.isVacant,
                     }));
-                    await updateStudents(newStudents);
-                    showToast(`${previewStudents.length}명의 학생을 가져왔습니다`, 'success');
-                    setPreviewStudents(null);
+                    await tryImport(importedReady, () => {
+                      setPreviewStudents(null);
+                    });
                   }}
                   className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
                 >
@@ -1059,6 +1120,18 @@ export function RosterManagementTab() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Phase 3 — Import 충돌 해결 모달 */}
+      {conflictPlan && conflictImported && (
+        <ConflictResolveModal
+          isOpen
+          conflicts={conflictPlan.conflicts}
+          matchedCount={conflictPlan.matched.length}
+          newCount={conflictPlan.newOnly.length}
+          onApply={(resolutions) => void handleConflictApply(resolutions)}
+          onCancel={handleConflictCancel}
+        />
       )}
     </div>
   );

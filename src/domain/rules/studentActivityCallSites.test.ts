@@ -49,6 +49,11 @@ const ALLOWED_FILES: ReadonlySet<string> = new Set([
   // 4. 데이터 패스스루 (`isVacant: src.isVacant`) + 결번 라벨 표시
   'src/adapters/components/ClassManagement/ClassSurveyTab.tsx',
   'src/infrastructure/export/ExcelExporter.ts',
+
+  // 5. Phase 3 — import 적용 시 ImportReadyStudent.isVacant → Student.isVacant 패스스루
+  'src/usecases/roster/applyImportPlan.ts',
+  // 6. Phase 3 — 충돌 모달의 status 미설정 학생 표시 라벨 ("결번" vs "재학") 폴백
+  'src/adapters/components/Homeroom/RosterImport/ConflictResolveModal.tsx',
 ]);
 
 /** Windows 백슬래시 → 슬래시 정규화 */
