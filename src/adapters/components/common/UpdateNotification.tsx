@@ -19,7 +19,7 @@ interface ChangeItem {
 interface VersionNote {
   version: string;
   date: string;
-  highlights: string;
+  highlights: string[];
   changes: ChangeItem[];
 }
 
@@ -214,11 +214,16 @@ export function UpdateNotification() {
                 </button>
               </div>
 
-              {/* Highlights */}
-              {releaseNotes[0]?.highlights && (
-                <p className="text-sp-text/80 text-sm leading-relaxed">
-                  {releaseNotes[0].highlights}
-                </p>
+              {/* Highlights — 4슬롯 가이드(v2.0.4)에 맞춰 배열 풀 노출 */}
+              {releaseNotes[0]?.highlights && releaseNotes[0].highlights.length > 0 && (
+                <ul className="list-none space-y-1 mt-3" aria-label="주요 변경사항">
+                  {releaseNotes[0].highlights.map((h, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-sp-text/80">
+                      <span className="text-sp-accent mt-0.5 shrink-0" aria-hidden="true">·</span>
+                      <span className="leading-relaxed">{h}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
 
@@ -238,8 +243,8 @@ export function UpdateNotification() {
                       <div className={`flex items-center gap-2 ${vi > 0 ? 'mt-4 pt-3 border-t border-sp-border/30' : ''} mb-2.5`}>
                         <span className="text-sp-accent text-xs font-bold">v{note.version}</span>
                         <span className="text-sp-muted text-caption">{note.date}</span>
-                        {vi > 0 && note.highlights && (
-                          <span className="text-sp-muted text-caption truncate flex-1">— {note.highlights}</span>
+                        {vi > 0 && note.highlights?.[0] && (
+                          <span className="text-sp-muted text-caption truncate flex-1">— {note.highlights[0]}</span>
                         )}
                       </div>
                     )}

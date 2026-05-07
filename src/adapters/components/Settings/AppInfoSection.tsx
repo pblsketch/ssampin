@@ -114,8 +114,18 @@ interface ChangeItem {
 interface VersionNote {
   version: string;
   date: string;
-  highlights: string;
+  highlights: string[];
   changes: ChangeItem[];
+}
+
+/**
+ * release-notes.json 역호환 헬퍼.
+ * v2.0.0+는 string[] 배열이지만 구버전 데이터·캐시·타입 에러 대비 normalize.
+ */
+function normalizeHighlights(highlights: string | string[] | undefined | null): string[] {
+  if (Array.isArray(highlights)) return highlights;
+  if (typeof highlights === 'string' && highlights.trim() !== '') return [highlights];
+  return [];
 }
 
 interface ReleaseNotesData {
@@ -349,8 +359,15 @@ export function AppInfoSection() {
 
                       {isExpanded && (
                         <div className="px-3 pb-3 space-y-1.5">
-                          {ver.highlights && (
-                            <p className="text-sp-text/80 text-xs leading-relaxed mb-1 pl-5">{ver.highlights}</p>
+                          {normalizeHighlights(ver.highlights).length > 0 && (
+                            <ul className="list-none space-y-0.5 mb-2 pl-5">
+                              {normalizeHighlights(ver.highlights).map((h, i) => (
+                                <li key={i} className="flex items-start gap-1.5 text-xs text-sp-text/80">
+                                  <span className="text-sp-accent/70 shrink-0 mt-0.5" aria-hidden="true">·</span>
+                                  <span className="leading-relaxed">{h}</span>
+                                </li>
+                              ))}
+                            </ul>
                           )}
                           {ver.changes.map((c, i) => {
                             const cfg = CHANGE_TYPE_CONFIG[c.type];
