@@ -193,6 +193,16 @@ export function ClassRosterSelector({
   // --- Main UI ---
   return (
     <div>
+      {/* Phase 5 — 도구 전용 명렬 안내 배너 (담임반·수업반과 별개임을 명시) */}
+      <div className="flex items-start gap-2 px-3 py-2 mb-3 rounded-lg border border-sp-accent/30 bg-sp-accent/10 text-xs text-sp-muted">
+        <span className="material-symbols-outlined text-sp-accent text-icon-sm shrink-0 mt-0.5">info</span>
+        <p className="leading-relaxed">
+          여기서 만든 학급 명렬은 <span className="text-sp-text font-medium">도구 전용</span>입니다.
+          담임반·수업반 명렬과는 별도로 저장됩니다.
+          담임반 명렬을 그대로 쓰려면 <span className="text-sp-text">설정 → 학교/학급</span>에서 수업반으로 복사하거나, 위 드롭다운에서 수업반을 선택하세요.
+        </p>
+      </div>
+
       {/* Header: dropdown + action buttons */}
       <div className="flex items-center gap-2 mb-3">
         {/* Roster Dropdown */}

@@ -3,6 +3,7 @@ import type { Settings, NeisSettings, MealSchoolSettings } from '@domain/entitie
 import type { SchoolSearchResult } from '@domain/entities/Meal';
 import { useMealStore } from '@adapters/stores/useMealStore';
 import { SettingsSection } from '../shared/SettingsSection';
+import { RosterCopyAction } from '../RosterCopyAction';
 
 interface Props {
   draft: Settings;
@@ -93,6 +94,7 @@ export function SchoolTab({ draft, patch }: Props) {
   }, [patch]);
 
   return (
+    <>
     <SettingsSection
       icon="school"
       iconColor="bg-blue-500/10 text-blue-400"
@@ -335,5 +337,16 @@ export function SchoolTab({ draft, patch }: Props) {
         </details>
       )}
     </SettingsSection>
+
+    {/* Phase 5 — 명렬 데이터 도구 */}
+    <SettingsSection
+      icon="groups"
+      iconColor="bg-teal-500/10 text-teal-400"
+      title="명렬 데이터 도구"
+      description="담임반과 수업반 명렬을 통합 관리합니다"
+    >
+      <RosterCopyAction />
+    </SettingsSection>
+    </>
   );
 }
