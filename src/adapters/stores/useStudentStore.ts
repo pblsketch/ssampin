@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Student, StudentStatus } from '@domain/entities/Student';
+import { normalizeStudentList } from '@domain/rules/studentActivity';
 import { studentRepository } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -74,11 +75,20 @@ export const useStudentStore = create<StudentState>((set, get) => ({
     if (get().loaded) return;
     try {
       const data = await studentRepository.getStudents();
-      const students = data ?? SAMPLE_STUDENTS;
       if (!data) {
         await studentRepository.saveStudents(SAMPLE_STUDENTS);
+        set({ students: SAMPLE_STUDENTS, loaded: true });
+        return;
       }
-      set({ students, loaded: true });
+
+      // status ↔ isVacant 양방향 정규화 (마이그레이션).
+      // changeStatus가 정상 경로에서 두 필드를 동기화하지만, 외부 sync·legacy 데이터·field 직접 변경 등으로
+      // 불일치가 들어올 수 있으므로 load 시 한 번 강제 동기화한다.
+      const normalized = normalizeStudentList(data);
+      if (normalized !== data) {
+        await studentRepository.saveStudents(normalized);
+      }
+      set({ students: normalized, loaded: true });
     } catch {
       set({ loaded: true });
     }
