@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { TeachingClass, TeachingClassStudent, TeachingClassSeating } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { StudentStatus } from '@domain/entities/Student';
+import { normalizeStudentStatus } from '@domain/rules/studentActivity';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import type { AttendanceRecord, AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
@@ -11,13 +12,12 @@ import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurric
 import { ManageAttendance } from '@usecases/classManagement/ManageAttendance';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
-/** 로드 시 기존 isVacant 데이터를 status 기반으로 마이그레이션 */
+/**
+ * 로드 시 status ↔ isVacant 양방향 마이그레이션.
+ * 이전 단방향(isVacant=true → status='withdrawn') 외에 status 있고 isVacant 누락된 케이스도 동기화.
+ */
 function migrateStudentStatus(student: TeachingClassStudent): TeachingClassStudent {
-  if (student.status) return student; // 이미 status 있으면 그대로
-  if (student.isVacant) {
-    return { ...student, status: 'withdrawn' as StudentStatus };
-  }
-  return student;
+  return normalizeStudentStatus(student);
 }
 
 /** targetId가 가리키는 클래스를 포함하여 같은 groupId를 가진 모든 클래스 id 목록. groupId 없으면 단일. */
@@ -131,12 +131,27 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
           manageProgress.getAll(),
           manageAttendance.getAll(),
         ]);
-        // isVacant → status 마이그레이션
+
+        // status ↔ isVacant 양방향 마이그레이션. 변경된 클래스만 저장소에 반영.
+        const migratedDirtyClasses: TeachingClass[] = [];
         const migrated = classes.map((cls) => {
-          const migratedStudents = cls.students.map(migrateStudentStatus);
-          if (migratedStudents === cls.students) return cls;
-          return { ...cls, students: migratedStudents };
+          let dirty = false;
+          const migratedStudents = cls.students.map((s) => {
+            const norm = migrateStudentStatus(s);
+            if (norm !== s) dirty = true;
+            return norm;
+          });
+          if (!dirty) return cls;
+          const next: TeachingClass = { ...cls, students: migratedStudents };
+          migratedDirtyClasses.push(next);
+          return next;
         });
+
+        // 마이그레이션 결과를 저장소에 영속화 (이전에는 누락되어 매 로드마다 동일 작업 반복)
+        for (const cls of migratedDirtyClasses) {
+          await manageClasses.update(cls);
+        }
+
         // order 기준 정렬 (order 없으면 생성순)
         const sorted = [...migrated].sort((a, b) => {
           const orderA = a.order ?? Infinity;
