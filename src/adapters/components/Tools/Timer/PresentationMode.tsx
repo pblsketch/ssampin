@@ -3,6 +3,7 @@ import { formatTime, getPresentationWarningLevel } from '@domain/rules/timerRule
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 import {
   playAlarmSound,
@@ -103,7 +104,7 @@ export function PresentationMode() {
   // ─── 명단 불러오기 ────────────────────────────
   const loadStudents = useCallback(() => {
     const allStudents = useStudentStore.getState().students;
-    const valid = allStudents.filter((s) => !s.isVacant && s.name.trim() !== '');
+    const valid = allStudents.filter((s) => isStudentActive(s) && s.name.trim() !== '');
     if (valid.length > 0) {
       setPresenters(
         valid.map((s) => {
@@ -119,7 +120,7 @@ export function PresentationMode() {
     if (tcClasses.length === 0) return;
     if (tcClasses.length === 1) {
       const cls = tcClasses[0]!;
-      const valid = cls.students.filter((s) => !s.isVacant);
+      const valid = cls.students.filter(isStudentActive);
       if (valid.length > 0) {
         setPresenters(
           valid.map((s, i) => ({
@@ -138,7 +139,7 @@ export function PresentationMode() {
   const loadTeachingClass = useCallback((classId: string) => {
     const cls = tcClasses.find((c) => c.id === classId);
     if (!cls) return;
-    const valid = cls.students.filter((s) => !s.isVacant);
+    const valid = cls.students.filter(isStudentActive);
     if (valid.length > 0) {
       setPresenters(
         valid.map((s, i) => ({

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { sortByDateDesc } from '@domain/rules/studentRecordRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 function todayString(): string {
   const d = new Date();
@@ -82,7 +83,7 @@ export function DashboardStudentRecords() {
   // Attendance stats for attendance tab
   const attendanceStats = useMemo(() => {
     if (activeTab !== 'attendance') return null;
-    const activeStudents = students.filter((s) => !s.isVacant);
+    const activeStudents = students.filter(isStudentActive);
     const todayAttendance = todayRecords.filter((r) => r.category === 'attendance');
 
     // Students who have attendance records today

@@ -1,5 +1,6 @@
 import type { Student } from '../entities/Student';
 import type { SchoolEvent, CategoryItem } from '../entities/SchoolEvent';
+import { isStudentActive } from './studentActivity';
 
 /** 생일 전용 카테고리 */
 export const BIRTHDAY_CATEGORY: CategoryItem = {
@@ -31,7 +32,7 @@ export function generateBirthdayEvents(
   students: readonly Student[],
 ): SchoolEvent[] {
   return students
-    .filter((s) => s.birthDate && !s.isVacant)
+    .filter((s) => s.birthDate && isStudentActive(s))
     .map((s) => ({
       id: birthdayEventId(s.id),
       title: `🎂 ${s.name} 생일`,

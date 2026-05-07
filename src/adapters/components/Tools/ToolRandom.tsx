@@ -7,6 +7,7 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { shuffleArray, pickRandom } from '@domain/rules/randomRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
 
@@ -95,7 +96,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const getPool = useCallback((): string[] => {
     switch (dataSource) {
       case 'students': {
-        const activeStudents = students.filter((s) => !s.isVacant && !excludedIds.has(s.id));
+        const activeStudents = students.filter((s) => isStudentActive(s) && !excludedIds.has(s.id));
         return activeStudents.map((s) => s.name || `${s.studentNumber ?? 0}번`);
       }
       case 'range': {
@@ -120,7 +121,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
           const tc = teachingClasses.find((c) => c.id === tcId);
           if (!tc) return [];
           return tc.students
-            .filter((s) => !s.isVacant)
+            .filter(isStudentActive)
             .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
             .filter((name) => !rosterExcludedNames.has(name));
         }
@@ -447,7 +448,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
               ) : (
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
                   {students
-                    .filter((s) => !s.isVacant)
+                    .filter(isStudentActive)
                     .map((student) => {
                       const isExcluded = excludedIds.has(student.id);
                       const studentName = student.name || `${student.studentNumber ?? 0}번`;
@@ -472,7 +473,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
               )}
               {students.length > 0 && (
                 <div className="mt-2 text-xs text-sp-muted text-center">
-                  클릭하여 제외/포함 ({students.filter((s) => !s.isVacant).length - excludedIds.size}명 참여)
+                  클릭하여 제외/포함 ({students.filter(isStudentActive).length - excludedIds.size}명 참여)
                 </div>
               )}
             </div>

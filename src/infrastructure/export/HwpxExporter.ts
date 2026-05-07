@@ -13,6 +13,7 @@ import {
   filterByCategory,
 } from '@domain/rules/studentRecordRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
 
@@ -469,7 +470,7 @@ export async function exportSeatingToHwpx(
 
   // ── Sorted roster ──
   const rosterStudents = [...students]
-    .filter((s) => !s.isVacant)
+    .filter(isStudentActive)
     .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
   // ── Title — tables are anchored to this paragraph ──
@@ -996,7 +997,7 @@ export async function exportStudentRecordsToHwpx(
 
   // ── Pages 2+: Student-by-student records ──
   const activeStudents = [...students]
-    .filter((s) => !s.isVacant)
+    .filter(isStudentActive)
     .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
   const RECORD_COLS = 5; // 날짜 | 구분 | 내용 | 상담방법 | 후속조치

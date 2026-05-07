@@ -7,6 +7,7 @@ import { StudentGrid } from '@adapters/components/Homeroom/shared/StudentGrid';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import type { ReadonlyModeProps } from '@adapters/components/Homeroom/shared/StudentGrid';
 import type { Survey, SurveyResponse, StudentPinMap } from '@domain/entities/Survey';
+import { isStudentActive, isStudentInactive } from '@domain/rules/studentActivity';
 import { hashPin } from '@infrastructure/crypto/pinHash';
 import { getStudentResponseProgress } from '@domain/rules/surveyRules';
 import type { SurveySupabaseClient, SurveyResponsePublic } from '@infrastructure/supabase/SurveySupabaseClient';
@@ -42,7 +43,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
   const stopPollingRef = useRef<(() => void) | null>(null);
 
   const totalStudents = useMemo(
-    () => students.filter((s) => !s.isVacant).length,
+    () => students.filter(isStudentActive).length,
     [students],
   );
 
@@ -131,7 +132,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
     const respondedNumbers = new Set(responses.map((r) => r.studentNumber));
 
     students.forEach((s, idx) => {
-      if (s.isVacant) return;
+      if (isStudentInactive(s)) return;
       const num = s.number ?? idx + 1;
       map.set(s.id, respondedNumbers.has(num) ? 'responded' : '');
     });
@@ -142,7 +143,7 @@ export function SurveyStudentDetail({ survey, onBack, supabaseClient, students: 
   const exportData = useMemo(() => {
     const nonVacant = students
       .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
-      .filter((s) => !s.isVacant);
+      .filter(isStudentActive);
     const columns = [
       { key: 'number', label: '번호' },
       { key: 'name', label: '이름' },
@@ -374,7 +375,7 @@ function PinListModal({
 }) {
   const nonVacant = students
     .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
-    .filter((s) => !s.isVacant);
+    .filter(isStudentActive);
 
   const handlePrint = () => {
     window.print();

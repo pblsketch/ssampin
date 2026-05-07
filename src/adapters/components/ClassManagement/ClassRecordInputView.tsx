@@ -7,6 +7,7 @@ import { studentKey } from '@domain/entities/TeachingClass';
 import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 import { ObservationForm } from './ObservationForm';
@@ -70,7 +71,7 @@ export function ClassRecordInputView({ classId }: ClassRecordInputViewProps) {
   const students = useMemo(() => {
     if (!cls) return [];
     return [...cls.students]
-      .filter((s) => !s.isVacant && (!s.status || s.status === 'active'))
+      .filter(isStudentActive)
       .sort((a, b) => a.number - b.number);
   }, [cls]);
 

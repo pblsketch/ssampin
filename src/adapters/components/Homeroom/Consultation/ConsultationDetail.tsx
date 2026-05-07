@@ -8,6 +8,7 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import { consultationSupabaseClient } from '@adapters/di/container';
 import { decrypt } from '@domain/rules/cryptoUtils';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   buildConsultationEventTitle,
   buildConsultationEventDescription,
@@ -176,7 +177,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   const [expandedSlotIds, setExpandedSlotIds] = useState<Set<string>>(new Set());
   const stopPollingRef = useRef<(() => void) | null>(null);
 
-  const nonVacant = useMemo(() => students.filter((s) => !s.isVacant), [students]);
+  const nonVacant = useMemo(() => students.filter(isStudentActive), [students]);
 
   /* ── 온라인 상태 감시 ── */
   useEffect(() => {

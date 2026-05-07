@@ -10,6 +10,7 @@ import {
   getStudentResponseProgress,
 } from '@domain/rules/surveyRules';
 import type { Survey } from '@domain/entities/Survey';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { SurveyCreateModal } from '@adapters/components/Homeroom/Survey/SurveyCreateModal';
 import { SurveyDetail } from '@adapters/components/Homeroom/Survey/SurveyDetail';
 import { SurveyStudentDetail } from '@adapters/components/Homeroom/Survey/SurveyStudentDetail';
@@ -192,7 +193,7 @@ function SurveyCopyModal({ survey, currentClassId, onClose }: SurveyCopyModalPro
             <div className="flex flex-col gap-2">
               {targets.map((c) => {
                 const activeCount = c.students.filter(
-                  (st) => !st.isVacant && (st.status ?? 'active') === 'active',
+                  isStudentActive,
                 ).length;
                 const isCopying = copyingId === c.id;
                 return (
@@ -374,7 +375,7 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
   const studentLikes = useMemo(
     () =>
       classStudents
-        .filter((s) => !s.isVacant && (s.status ?? 'active') === 'active')
+        .filter(isStudentActive)
         .map((s) => ({
           id: studentKey(s),
           name: s.name,

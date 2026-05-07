@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { TeachingClass, TeachingClassStudent, TeachingClassSeating } from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { StudentStatus } from '@domain/entities/Student';
-import { normalizeStudentStatus } from '@domain/rules/studentActivity';
+import { isStudentActive, normalizeStudentStatus } from '@domain/rules/studentActivity';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import type { AttendanceRecord, AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
@@ -382,7 +382,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const cls = get().classes.find((c) => c.id === classId);
       if (!cls) return;
 
-      const activeStudents = cls.students.filter((s) => !s.isVacant && (!s.status || s.status === 'active'));
+      const activeStudents = cls.students.filter(isStudentActive);
       const keys = activeStudents.map((s) => studentKey(s));
 
       if (mode === 'random') {

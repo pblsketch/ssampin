@@ -3,6 +3,7 @@ import type { SeatGroup } from '@domain/entities/Seating';
 import { GROUP_COLORS } from '@domain/entities/Seating';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 /* ──────────────────────── 이름 글자 크기 매핑 ──────────────────────── */
 
@@ -270,7 +271,7 @@ interface GroupSeatingViewProps {
 
 export function GroupSeatingView({ groups, isEditing, onUpdateGroups, onShuffleGroups }: GroupSeatingViewProps) {
   const students = useStudentStore((s) => s.students);
-  const allActiveStudentIds = students.filter((s) => !s.isVacant).map((s) => s.id);
+  const allActiveStudentIds = students.filter(isStudentActive).map((s) => s.id);
 
   const handleUpdateGroup = useCallback(
     (updated: SeatGroup) => {

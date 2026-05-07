@@ -4,6 +4,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { isStudentActive, isStudentInactive } from '@domain/rules/studentActivity';
 import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
@@ -195,14 +196,14 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
       }
       // 새로 추가된 학생은 present
       for (const s of cls.students) {
-        if (!s.isVacant) {
+        if (isStudentActive(s)) {
           const k = studentKey(s);
           if (!map.has(k)) map.set(k, 'present');
         }
       }
     } else {
       for (const s of cls.students) {
-        if (!s.isVacant) map.set(studentKey(s), 'present');
+        if (isStudentActive(s)) map.set(studentKey(s), 'present');
       }
     }
     setLocalAttendance(map);
@@ -273,7 +274,7 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
     if (!cls) return;
     setSaveStatus('saving');
     const studentAttendances: StudentAttendance[] = cls.students
-      .filter((s) => !s.isVacant)
+      .filter(isStudentActive)
       .map((s) => {
         const k = studentKey(s);
         return {
@@ -323,7 +324,7 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
     if (!cls) return new Map<string, TeachingClassStudent>();
     const map = new Map<string, TeachingClassStudent>();
     for (const s of cls.students) {
-      if (!s.isVacant) map.set(studentKey(s), s);
+      if (isStudentActive(s)) map.set(studentKey(s), s);
     }
     return map;
   }, [cls]);
@@ -333,20 +334,20 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
     if (!cls?.seating) return [];
     const placedKeys = new Set(cls.seating.seats.flat().filter((v): v is string => v !== null));
     return cls.students
-      .filter((s) => !s.isVacant && !placedKeys.has(studentKey(s)));
+      .filter((s) => isStudentActive(s) && !placedKeys.has(studentKey(s)));
   }, [cls]);
 
   // 좌석에 있지만 명렬표에 없는 학생 키 (동기화용)
   const orphanedKeys = useMemo(() => {
     if (!cls?.seating) return new Set<string>();
     const activeKeys = new Set(
-      cls.students.filter((s) => !s.isVacant).map((s) => studentKey(s)),
+      cls.students.filter(isStudentActive).map((s) => studentKey(s)),
     );
     const placedKeys = cls.seating.seats.flat().filter((v): v is string => v !== null);
     return new Set(placedKeys.filter((k) => !activeKeys.has(k)));
   }, [cls]);
 
-  const activeStudentCount = cls?.students.filter((s) => !s.isVacant).length ?? 0;
+  const activeStudentCount = cls?.students.filter(isStudentActive).length ?? 0;
 
   /* ────── 핸들러 ────── */
 
@@ -414,7 +415,7 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
     // studentKey → Student 매핑
     const keyToStudent = new Map<string, Student>();
     for (const s of cls.students) {
-      if (s.isVacant) continue;
+      if (isStudentInactive(s)) continue;
       const key = studentKey(s);
       keyToStudent.set(key, {
         id: key,

@@ -6,6 +6,7 @@ import { useSeatPickerConfigStore } from '@adapters/stores/useSeatPickerConfigSt
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { SeatPickerScope } from '@domain/entities/SeatPickerConfig';
 import type { Student } from '@domain/entities/Student';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 /**
  * 설정 > 도구 > 자리 뽑기
@@ -43,11 +44,11 @@ export function SeatPickerToolSettings() {
 
   const activeStudents = useMemo<Student[]>(() => {
     if (scope === 'homeroom') {
-      return students.filter((s) => !s.isVacant);
+      return students.filter(isStudentActive);
     }
     if (!selectedTc) return [];
     return selectedTc.students
-      .filter((s) => !s.isVacant)
+      .filter(isStudentActive)
       .map((s) => ({
         id: `tc-${selectedTc.id}-${s.number}`,
         studentNumber: s.number,
@@ -132,7 +133,7 @@ export function SeatPickerToolSettings() {
           />
           {teachingClasses.map((tc) => {
             const id: SeatPickerScope = `tc-${tc.id}`;
-            const count = (tc.students ?? []).filter((s) => !s.isVacant).length;
+            const count = (tc.students ?? []).filter(isStudentActive).length;
             return (
               <ScopeChip
                 key={tc.id}

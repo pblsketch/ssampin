@@ -6,6 +6,7 @@ import type {
   SurveyResponse,
 } from '@domain/entities/Survey';
 import type { Student } from '@domain/entities/Student';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 /* ──────────────── 진행률 ──────────────── */
 
@@ -95,7 +96,7 @@ export function formatSurveyForClipboard(
       const yes = qEntries.filter((e) => e.value === 'yes');
       const no = qEntries.filter((e) => e.value === 'no');
       const answered = new Set(qEntries.map((e) => e.studentId));
-      const unanswered = students.filter((s) => !s.isVacant && !answered.has(s.id));
+      const unanswered = students.filter((s) => isStudentActive(s) && !answered.has(s.id));
 
       const formatNames = (ids: readonly { studentId: string }[]) =>
         ids.map((e) => {
@@ -130,9 +131,9 @@ export function formatSurveyForClipboard(
 
   if (studentMemos) {
     const memoLines = students
-      .filter((s) => !s.isVacant && studentMemos[s.id])
+      .filter((s) => isStudentActive(s) && studentMemos[s.id])
       .map((s, _i) => {
-        const idx = students.filter((st) => !st.isVacant).indexOf(s);
+        const idx = students.filter(isStudentActive).indexOf(s);
         return `${idx + 1}${s.name}: ${studentMemos[s.id]}`;
       });
     if (memoLines.length > 0) {
@@ -163,7 +164,7 @@ export function formatSurveyForCSV(
   ];
 
   const rows = students
-    .filter((s) => !s.isVacant)
+    .filter(isStudentActive)
     .map((s, idx) => {
       const row: Record<string, string> = {
         number: String(idx + 1),

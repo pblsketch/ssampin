@@ -5,6 +5,7 @@ import { ClassRosterSelector } from './ClassRosterSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import {
   assignGroups,
@@ -138,7 +139,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
 
     if (dataSource === 'students') {
       return students
-        .filter((s) => !s.isVacant && !excludedNames.has(s.name || `${s.studentNumber ?? 0}번`))
+        .filter((s) => isStudentActive(s) && !excludedNames.has(s.name || `${s.studentNumber ?? 0}번`))
         .map((s) => addTags({
           name: s.name || `${s.studentNumber ?? 0}번`,
           number: s.studentNumber ?? undefined,
@@ -149,7 +150,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
       const tc = teachingClasses.find((c) => c.id === tcId);
       if (!tc) return [];
       return tc.students
-        .filter((s) => !s.isVacant && !excludedNames.has(s.name?.trim() ? s.name : `${s.number}번`))
+        .filter((s) => isStudentActive(s) && !excludedNames.has(s.name?.trim() ? s.name : `${s.number}번`))
         .map((s) => addTags({
           name: s.name?.trim() ? s.name : `${s.number}번`,
           number: s.number,
@@ -459,11 +460,11 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
   // All student names for tagging UI
   const allStudentNames = useMemo(() => {
     if (dataSource === 'students') {
-      return students.filter((s) => !s.isVacant).map((s) => s.name || `${s.studentNumber ?? 0}번`);
+      return students.filter(isStudentActive).map((s) => s.name || `${s.studentNumber ?? 0}번`);
     }
     if (selectedRosterId?.startsWith('tc:')) {
       const tc = teachingClasses.find((c) => c.id === selectedRosterId.slice(3));
-      return tc?.students.filter((s) => !s.isVacant).map((s) => s.name?.trim() ? s.name : `${s.number}번`) ?? [];
+      return tc?.students.filter(isStudentActive).map((s) => s.name?.trim() ? s.name : `${s.number}번`) ?? [];
     }
     const roster = rosters.find((r) => r.id === selectedRosterId);
     return roster?.studentNames.filter((n) => n.trim()) ?? [];
@@ -518,7 +519,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
 
                 {dataSource === 'students' && (
                   <div>
-                    {students.filter((s) => !s.isVacant).length === 0 ? (
+                    {students.filter(isStudentActive).length === 0 ? (
                       <div className="flex flex-col items-center gap-3 py-6 text-center">
                         <span className="text-3xl">🏫</span>
                         <p className="text-sm text-sp-muted">학급 자리 배치 메뉴에서 학생을 등록하면<br/>자동으로 불러와집니다</p>
@@ -526,7 +527,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                     ) : (
                       <>
                         <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
-                          {students.filter((s) => !s.isVacant).map((student) => {
+                          {students.filter(isStudentActive).map((student) => {
                             const studentName = student.name || `${student.studentNumber ?? 0}번`;
                             const isExcluded = excludedNames.has(studentName);
                             return (

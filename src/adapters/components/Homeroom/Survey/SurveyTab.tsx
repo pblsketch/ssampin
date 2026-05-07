@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { surveySupabaseClient, shortLinkClient } from '@adapters/di/container';
 import {
   getActiveSurveys,
@@ -267,7 +268,7 @@ export function SurveyTab() {
   );
 
   const totalStudents = useMemo(
-    () => students.filter((s) => !s.isVacant).length,
+    () => students.filter(isStudentActive).length,
     [students],
   );
 

@@ -4,6 +4,7 @@ import type { KeyboardShortcut } from './types';
 import { PresetSelector } from './PresetSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
 
@@ -92,7 +93,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   }, [showTcDropdown]);
 
   const loadStudents = useCallback(() => {
-    const students = useStudentStore.getState().students.filter((s) => !s.isVacant);
+    const students = useStudentStore.getState().students.filter(isStudentActive);
     const names = students.map((s) => s.name).filter((n) => n.trim() !== '');
     if (names.length >= 2) {
       setItems(names.slice(0, 20));
@@ -109,7 +110,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
       // Only one class, load it directly
       const cls = tcClasses[0]!;
       const names = cls.students
-        .filter((s) => !s.isVacant)
+        .filter(isStudentActive)
         .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
         .filter((n) => n.trim() !== '');
       if (names.length >= 2) {
@@ -128,7 +129,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     const cls = tcClasses.find((c) => c.id === classId);
     if (!cls) return;
     const names = cls.students
-      .filter((s) => !s.isVacant)
+      .filter(isStudentActive)
       .map((s) => s.name?.trim() ? s.name : `${s.number}번`)
       .filter((n) => n.trim() !== '');
     if (names.length >= 2) {
@@ -289,7 +290,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
                 {showTcDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-48 overflow-y-auto">
                     {tcClasses.map((tc) => {
-                      const activeCount = tc.students.filter((s) => !s.isVacant).length;
+                      const activeCount = tc.students.filter(isStudentActive).length;
                       return (
                         <button
                           key={tc.id}

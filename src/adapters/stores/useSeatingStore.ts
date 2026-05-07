@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { SeatingLayout, SeatGroup } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { countStudents, countEmptySeats, shuffleGroups, assignGroupsInOrder } from '@domain/rules/seatRules';
 import type { ShuffleResult } from '@domain/rules/seatRules';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
@@ -23,7 +24,7 @@ function calcGridSize(activeCount: number): { rows: number; cols: number } {
 
 /** 학생 목록 기반 좌석 자동 생성 (결번 제외, 동적 크기) */
 function createSeatingFromStudents(students: readonly Student[]): SeatingData {
-  const activeIds = students.filter((s) => !s.isVacant).map((s) => s.id);
+  const activeIds = students.filter(isStudentActive).map((s) => s.id);
   const { rows, cols } = calcGridSize(activeIds.length);
   const seats: (string | null)[][] = [];
   let idx = 0;
@@ -44,7 +45,7 @@ function sanitizeSeating(
   students: readonly Student[],
 ): SeatingData {
   const activeIds = new Set(
-    students.filter((s) => !s.isVacant).map((s) => s.id),
+    students.filter(isStudentActive).map((s) => s.id),
   );
 
   // 1단계: 비활성/결번 학생 제거

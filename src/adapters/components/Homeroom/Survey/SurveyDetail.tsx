@@ -6,6 +6,7 @@ import { StudentGrid } from '@adapters/components/Homeroom/shared/StudentGrid';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import type { CycleModeProps } from '@adapters/components/Homeroom/shared/StudentGrid';
 import type { Survey, SurveyQuestion } from '@domain/entities/Survey';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   aggregateAnswers,
   formatSurveyForCSV,
@@ -52,7 +53,7 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
 
   const localData = useSurveyStore((s) => s.getLocalData(survey.id));
   const totalStudents = useMemo(
-    () => students.filter((s) => !s.isVacant).length,
+    () => students.filter(isStudentActive).length,
     [students],
   );
   const progress = getTeacherCheckProgress(survey, localData, totalStudents);
@@ -242,7 +243,7 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
           <div className="mt-2 bg-sp-surface rounded-lg border border-sp-border p-2 flex flex-col gap-1.5">
             {students
               .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
-              .filter((s) => !s.isVacant)
+              .filter(isStudentActive)
               .map((s) => (
               <div key={s.id} className="flex items-center gap-2">
                 <span className="text-xs text-sp-muted w-14 shrink-0">
@@ -368,7 +369,7 @@ function TextQuestionList({ survey, question, students, localData }: TextQuestio
   const nonVacant = useMemo(() =>
     students
       .map((s, idx) => ({ ...s, displayNum: s.number ?? idx + 1 }))
-      .filter((s) => !s.isVacant),
+      .filter(isStudentActive),
     [students],
   );
 

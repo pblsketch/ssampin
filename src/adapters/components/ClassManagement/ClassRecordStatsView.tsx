@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
 
@@ -69,7 +70,7 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
   const students = useMemo(() => {
     if (!cls) return [];
     return [...cls.students]
-      .filter((s) => !s.isVacant && (!s.status || s.status === 'active'))
+      .filter(isStudentActive)
       .sort((a, b) => a.number - b.number);
   }, [cls]);
 

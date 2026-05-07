@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
 import type { StudentInfo } from '@domain/entities/Assignment';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
@@ -34,7 +35,7 @@ export function useStudentLists(): StudentListOption[] {
 
     // 1. 담임반 (기존 로직)
     if (className) {
-      const activeStudents = students.filter((s) => !s.isVacant);
+      const activeStudents = students.filter(isStudentActive);
       if (activeStudents.length > 0) {
         lists.push({
           type: 'class',
@@ -50,7 +51,7 @@ export function useStudentLists(): StudentListOption[] {
 
     // 2. 수업반 (수업 관리에서 등록한 반)
     for (const tc of teachingClasses) {
-      const activeStudentsInClass = tc.students.filter((s) => !s.isVacant);
+      const activeStudentsInClass = tc.students.filter(isStudentActive);
       if (activeStudentsInClass.length > 0) {
         lists.push({
           type: 'teaching',

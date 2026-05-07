@@ -12,6 +12,7 @@ import { useSeatConstraintsStore } from '@adapters/stores/useSeatConstraintsStor
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useSeatPickerConfigStore } from '@adapters/stores/useSeatPickerConfigStore';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import type { SeatPickerScope } from '@domain/entities/SeatPickerConfig';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
@@ -148,7 +149,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const tcStudentsAsStudents = useMemo((): Student[] => {
     if (!selectedTc) return [];
     return selectedTc.students
-      .filter((s) => !s.isVacant)
+      .filter(isStudentActive)
       .map((s) => ({
         id: `tc-${selectedTc.id}-${s.number}`,
         studentNumber: s.number,
@@ -161,7 +162,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
   const tcSeatingCols = selectedTc?.seating?.cols ?? 0;
 
   const activeStudents = seatDataSource === 'homeroom'
-    ? students.filter((s) => !s.isVacant)
+    ? students.filter(isStudentActive)
     : tcStudentsAsStudents;
   const effectiveRows = seatDataSource === 'homeroom' ? seating.rows : tcSeatingRows;
   const effectiveCols = seatDataSource === 'homeroom' ? seating.cols : tcSeatingCols;
@@ -575,7 +576,7 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {teachingClasses.map((tc) => {
-                        const activeCount = tc.students.filter((s) => !s.isVacant).length;
+                        const activeCount = tc.students.filter(isStudentActive).length;
                         return (
                           <button
                             key={tc.id}

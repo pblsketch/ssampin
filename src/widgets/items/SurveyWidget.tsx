@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { getActiveSurveys, getTeacherCheckProgress } from '@domain/rules/surveyRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 const COLOR_DOT: Record<string, string> = {
   blue: 'bg-blue-400', green: 'bg-green-400', yellow: 'bg-yellow-400',
@@ -26,7 +27,7 @@ export function SurveyWidget() {
 
   const activeSurveys = useMemo(() => getActiveSurveys(surveys), [surveys]);
   const totalStudents = useMemo(
-    () => students.filter((s) => !s.isVacant).length,
+    () => students.filter(isStudentActive).length,
     [students],
   );
 
