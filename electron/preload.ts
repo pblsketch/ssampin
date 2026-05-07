@@ -1,4 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { installDropGuard } from './security-guards';
+
+// 가장 먼저 등록 — BrowserWindow의 어떤 dragover/drop 이벤트보다 일찍 가드.
+// 모든 5개 BrowserWindow(main, widget, icon, quickAdd, stickerPicker)가 동일
+// preload.js를 공유하므로 본 호출 1회로 전체 보호.
+// Design §3.1, security-guards.ts 참조.
+installDropGuard();
 
 /** 단일/복수 선택 집계 */
 type AggregatedSingleMulti = { counts: Record<string, number>; total: number };

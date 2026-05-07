@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDesktopOrganizeStore } from '@adapters/stores/useDesktopOrganizeStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { GridResizePlan } from '@usecases/desktopOrganize/computeGridResizePlan';
 import { DesktopOrganizeBox } from './DesktopOrganizeBox';
 import { DesktopOrganizeGridSettings } from './DesktopOrganizeGridSettings';
@@ -28,6 +29,12 @@ export function DesktopOrganize() {
   const setBoxTransparent = useDesktopOrganizeStore((s) => s.setBoxTransparent);
   const undo = useDesktopOrganizeStore((s) => s.undo);
   const isWindows = useIsWindows();
+
+  // 안내 배너 노출 조건 — Windows + native-desktop 아닐 때만.
+  // 위젯 본 동작은 native-desktop 모드에서만 일어나므로 normal/topmost 모드에서는
+  // 사용자에게 모드 전환을 권유한다. (Design §3.3.2)
+  const desktopMode = useSettingsStore((s) => s.settings.widget.desktopMode);
+  const isNativeDesktopMode = desktopMode === 'native-desktop';
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [showGridSettings, setShowGridSettings] = useState(false);
@@ -187,6 +194,31 @@ export function DesktopOrganize() {
         </div>
       )}
 
+      {/* 모드 전환 안내 배너 — Windows + native-desktop 아닐 때만.
+          Design §3.3.2 — 위젯 모드/대시보드에서는 박스 그리드만 보이고 실제 분류
+          동작은 native-desktop 모드에서만 일어나므로 사용자에게 모드 전환을 권유. */}
+      {isWindows && !isNativeDesktopMode && (
+        <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-sp-card/60 border border-sp-border shrink-0 flex items-center gap-2">
+          <p className="text-xs text-sp-muted leading-snug flex-1">
+            💡 박스 위로 바탕화면 아이콘을 직접 분류하려면{' '}
+            <span className="text-sp-text font-bold">바탕화면 아이콘 아래 모드</span>가 필요해요. 설정에서 켤 수 있어요.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              // 'settings#widget' fragment로 위젯 탭 직접 진입.
+              // App.tsx의 onNavigateToPage 핸들러가 fragment를 파싱해 SettingsPage를
+              // 'widget' 탭으로 mount한다.
+              void window.electronAPI?.navigateToPage?.('settings#widget');
+            }}
+            className="text-xs text-sp-accent hover:text-sp-accent/80 font-bold whitespace-nowrap transition-colors motion-reduce:transition-none"
+            aria-label="설정 열기"
+          >
+            설정 열기 →
+          </button>
+        </div>
+      )}
+
       {/* 그리드 본문 */}
       <div
         className="flex-1 min-h-0 grid gap-2"
@@ -217,7 +249,8 @@ export function DesktopOrganize() {
           className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[90%] px-3 py-2 rounded-lg bg-sp-bg/95 border border-sp-accent/40 shadow-2xl z-10 motion-reduce:transition-none"
         >
           <p className="text-xs text-sp-text leading-snug mb-1.5">
-            박스 위에 바탕화면 아이콘을 직접 드래그해 정리하세요. 자동 정렬은 하지 않아요.
+            박스 위에 바탕화면 아이콘을 올려놓아 분류할 수 있어요.<br />
+            파일을 끌어다 놓는 기능은 지원하지 않아요.
           </p>
           <button
             type="button"
