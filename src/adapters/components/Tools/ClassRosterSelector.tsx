@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 interface ClassRosterSelectorProps {
   selectedRosterId: string | null;
@@ -73,7 +74,7 @@ export function ClassRosterSelector({
   const tcStudentNames = useMemo(() => {
     if (!selectedTeachingClass) return [];
     return selectedTeachingClass.students
-      .filter((s) => !s.isVacant)
+      .filter(isStudentActive)
       .map((s) => s.name?.trim() ? s.name : `${s.number}번`);
   }, [selectedTeachingClass]);
 
@@ -227,7 +228,7 @@ export function ClassRosterSelector({
                         </div>
                       )}
                       {teachingClasses.map((tc) => {
-                        const activeCount = tc.students.filter((s) => !s.isVacant).length;
+                        const activeCount = tc.students.filter(isStudentActive).length;
                         const tcRosterId = `${TC_PREFIX}${tc.id}`;
                         return (
                           <button

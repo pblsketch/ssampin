@@ -7,6 +7,7 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { consultationSupabaseClient, shortLinkClient } from '@adapters/di/container';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import type { ConsultationType, ConsultationMethod } from '@domain/entities/Consultation';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
@@ -610,7 +611,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
             return [{ date, startTime, endTime }];
           }),
         targetClassName: '',
-        targetStudents: students.filter((s) => !s.isVacant).map((s) => ({ number: s.studentNumber ?? 0 })),
+        targetStudents: students.filter(isStudentActive).map((s) => ({ number: s.studentNumber ?? 0 })),
         message: message.trim() || undefined,
         customLinkCode: customLinkCode.trim() || undefined,
       });

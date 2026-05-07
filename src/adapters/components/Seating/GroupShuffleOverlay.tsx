@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Student } from '@domain/entities/Student';
 import type { SeatGroup } from '@domain/entities/Seating';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 interface GroupShuffleOverlayProps {
   groups: readonly SeatGroup[];
@@ -20,7 +21,7 @@ export function GroupShuffleOverlay({
   }, [students]);
 
   const studentNames = useMemo(
-    () => students.filter((s) => !s.isVacant).map((s) => s.name),
+    () => students.filter(isStudentActive).map((s) => s.name),
     [students],
   );
 

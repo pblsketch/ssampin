@@ -3,6 +3,7 @@ import type { StudentAttendance } from '@domain/entities/Attendance';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { getDayOfWeek } from '@domain/rules/periodRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { AttendanceMatrixCore } from './shared/AttendanceMatrixCore';
 
 export interface AttendanceMatrixViewProps {
@@ -24,7 +25,7 @@ export function AttendanceMatrixView({ classId, date, onDateChange }: Attendance
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
 
   const sortedStudents = useMemo(() => {
-    const raw = (cls?.students ?? []).filter((s) => !s.isVacant);
+    const raw = (cls?.students ?? []).filter(isStudentActive);
     const hasGrade = raw.some((s) => s.grade != null || s.classNum != null);
     if (!hasGrade) return raw;
     return [...raw].sort((a, b) => {

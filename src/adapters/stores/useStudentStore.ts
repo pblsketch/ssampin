@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Student, StudentStatus } from '@domain/entities/Student';
-import { normalizeStudentList } from '@domain/rules/studentActivity';
+import { isStudentActive, normalizeStudentList } from '@domain/rules/studentActivity';
 import { studentRepository } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -214,9 +214,5 @@ export const useStudentStore = create<StudentState>((set, get) => ({
   },
 
   getStudent: (id) => (id !== null ? get().students.find((s) => s.id === id) : undefined),
-  activeStudents: () => get().students.filter((s) => {
-    // 하위 호환: status 있으면 status 기준, 없으면 isVacant로 판단
-    if (s.status) return s.status === 'active';
-    return !s.isVacant;
-  }),
+  activeStudents: () => get().students.filter(isStudentActive),
 }));

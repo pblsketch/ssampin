@@ -7,6 +7,7 @@ import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStor
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 interface Props {
   classId: string;
@@ -76,7 +77,7 @@ export function AttendanceCheckPage({ classId, className, period, type, onBack, 
     if (!classesLoaded) return;
 
     const teachingClass = getClass(classId);
-    const studentList = teachingClass?.students.filter((s) => !s.isVacant) ?? [];
+    const studentList = teachingClass?.students.filter(isStudentActive) ?? [];
     setStudents(studentList);
 
     // 기존 기록이 있으면 로드

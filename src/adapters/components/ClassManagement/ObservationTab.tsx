@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { ObservationPanel } from './ObservationPanel';
 import { UnifiedExportModal } from './UnifiedExportModal';
 
@@ -41,7 +42,7 @@ export function ObservationTab({ classId }: ObservationTabProps) {
   const students = useMemo(() => {
     if (!cls) return [];
     return [...cls.students]
-      .filter((s) => !s.isVacant && (!s.status || s.status === 'active'))
+      .filter(isStudentActive)
       .sort((a, b) => a.number - b.number);
   }, [cls]);
 

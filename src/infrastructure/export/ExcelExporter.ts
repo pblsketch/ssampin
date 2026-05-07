@@ -8,6 +8,7 @@ import type { StudentRecord, AttendanceStats } from '@domain/entities/StudentRec
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { getAttendanceStats, filterByStudent, filterByCategory, sortByDateDesc } from '@domain/rules/studentRecordRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectArgb, getClassroomArgb } from '@domain/valueObjects/SubjectColor';
 import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
@@ -553,7 +554,7 @@ export async function exportSeatingToExcel(
 
   // 명렬표 (오른쪽)
   const sorted = [...students]
-    .filter((s) => !s.isVacant)
+    .filter(isStudentActive)
     .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
   // 명렬표 헤더
@@ -1019,7 +1020,7 @@ export async function exportStudentRecordsToExcel(
   ws2.getColumn(7).width = 8;
 
   const activeStudents = [...students]
-    .filter((s) => !s.isVacant)
+    .filter(isStudentActive)
     .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
   let totalAbsent = 0;
@@ -1191,7 +1192,7 @@ export async function exportRecordsForSchoolReport(
   const categoryMap = new Map<string, string>(categories.map((c) => [c.id, c.name]));
 
   const activeStudents = [...students]
-    .filter((s) => !s.isVacant)
+    .filter(isStudentActive)
     .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
   for (const student of activeStudents) {
@@ -1330,7 +1331,7 @@ export async function exportAttendanceToExcel(
   const dates = [...new Set(filtered.map((r) => r.date))].sort();
 
   const activeStudents = [...students]
-    .filter((s) => !s.isVacant)
+    .filter(isStudentActive)
     .sort((a, b) => {
       if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
       if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);

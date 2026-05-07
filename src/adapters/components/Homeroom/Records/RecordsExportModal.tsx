@@ -7,6 +7,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import { isStudentActive } from '@domain/rules/studentActivity';
 /* eslint-disable no-restricted-imports */
 import { exportStudentRecordsToExcel, exportRecordsForSchoolReport } from '@infrastructure/export/ExcelExporter';
 import { exportStudentRecordsToHwpx } from '@infrastructure/export/HwpxExporter';
@@ -306,7 +307,7 @@ export function RecordsExportModal({ records, students, categories, onClose }: R
             >
               <option value="">전체 학생</option>
               {students
-                .filter((s) => !s.isVacant)
+                .filter(isStudentActive)
                 .map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.studentNumber}번 {s.name}

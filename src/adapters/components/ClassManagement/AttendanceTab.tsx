@@ -5,6 +5,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
 import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodShort } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { exportAttendanceToExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -137,7 +138,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const allStudents = cls?.students ?? [];
-  const students = useMemo(() => allStudents.filter((s) => !s.isVacant), [allStudents]);
+  const students = useMemo(() => allStudents.filter(isStudentActive), [allStudents]);
 
   const groupSiblingCount = useMemo(
     () =>

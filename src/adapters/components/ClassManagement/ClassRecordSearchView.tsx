@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
 
@@ -66,7 +67,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const students = useMemo(() => {
     if (!cls) return [];
-    return [...cls.students].filter((s) => !s.isVacant).sort((a, b) => a.number - b.number);
+    return [...cls.students].filter(isStudentActive).sort((a, b) => a.number - b.number);
   }, [cls]);
 
   const studentNameMap = useMemo(() => {

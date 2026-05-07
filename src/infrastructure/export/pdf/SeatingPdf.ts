@@ -3,6 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { buildPairGroups } from '@domain/rules/seatingLayoutRules';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { loadKoreanFontBuffers } from './FontRegistry';
 
 /**
@@ -176,7 +177,7 @@ export async function exportSeatingToPdf(
   });
 
   const sorted = [...students]
-    .filter((s) => !s.isVacant)
+    .filter(isStudentActive)
     .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
 
   const rosterRowH = 16;

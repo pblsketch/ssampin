@@ -8,6 +8,7 @@ import {
   getWarningStudents,
 } from '@domain/rules/studentRecordRules';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { SummaryCard, StatBadge } from './RecordStatCards';
 import { type ModeProps, getWeekRange, getMonthRange, METHOD_OPTIONS, formatDateKR } from './recordUtils';
 
@@ -78,12 +79,12 @@ function ProgressMode({ students, records, categories }: ModeProps) {
 
   // Feature 1: No-record student count
   const noRecordStudentCount = useMemo(() => {
-    return students.filter(s => !s.isVacant && !filteredRecords.some(r => r.studentId === s.id)).length;
+    return students.filter(s => isStudentActive(s) && !filteredRecords.some(r => r.studentId === s.id)).length;
   }, [students, filteredRecords]);
 
   // Feature 1: Average records per active student
   const avgRecords = useMemo(() => {
-    const activeStudentCount = students.filter(s => !s.isVacant).length;
+    const activeStudentCount = students.filter(isStudentActive).length;
     return activeStudentCount > 0 ? filteredRecords.length / activeStudentCount : 0;
   }, [students, filteredRecords]);
 
@@ -152,7 +153,7 @@ function ProgressMode({ students, records, categories }: ModeProps) {
 
   // Feature 5: Alert categories
   const alertData = useMemo(() => {
-    const activeStudents = students.filter(s => !s.isVacant);
+    const activeStudents = students.filter(isStudentActive);
 
     const noRecords = activeStudents.filter(s => !filteredRecords.some(r => r.studentId === s.id));
 
