@@ -156,6 +156,11 @@ function useCallbackForDualEntry(
 interface RenderPageContext {
   readonly onRequestDualMode: () => void;
   readonly lastSingleTool: DualToolId | null;
+  /**
+   * 설정 페이지 진입 시 활성화할 탭 id. navigateToPage('settings#widget') 같은
+   * 형식으로 위젯에서 특정 탭을 직접 열 때 사용. 한 번 사용 후 자동 초기화.
+   */
+  readonly settingsInitialTab?: import('@adapters/components/Settings/SettingsPage').SettingsTabId | null;
 }
 
 function renderPage(
@@ -204,7 +209,7 @@ function renderPage(
     return <PinGuard feature="classManagement"><ClassManagementPage /></PinGuard>;
   }
   if (page === 'settings') {
-    return <SettingsPage />;
+    return <SettingsPage initialTab={ctx.settingsInitialTab ?? null} />;
   }
   if (page === 'export') {
     return <Export />;
@@ -543,6 +548,12 @@ function MainApp() {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  // 설정 페이지 진입 시 활성화할 탭 (위젯에서 'settings#widget' 등으로 진입한 경우만 셋팅).
+  // 한 번 SettingsPage에 전달되면 즉시 null로 리셋하여 사용자가 탭을 바꾼 뒤
+  // 페이지를 떠났다가 돌아와도 강제로 같은 탭으로 되돌아가지 않도록 한다.
+  const [settingsInitialTab, setSettingsInitialTab] = useState<
+    import('@adapters/components/Settings/SettingsPage').SettingsTabId | null
+  >(null);
 
   // 바탕화면 아이콘 아래 모드 fallback 수신 (v2.1.0~)
   useDesktopModeFallback();
@@ -720,6 +731,20 @@ function MainApp() {
     if (!api?.onNavigateToPage) return;
 
     const unsubscribe = api.onNavigateToPage((page: string) => {
+      // 'settings#widget' 같은 fragment 형식 지원 — 설정 페이지 특정 탭 직접 진입.
+      // (DesktopOrganize 안내 배너 '설정 열기' 버튼 등에서 사용)
+      const hashIdx = page.indexOf('#');
+      if (hashIdx >= 0) {
+        const base = page.slice(0, hashIdx);
+        const fragment = page.slice(hashIdx + 1);
+        if (base === 'settings' && fragment.length > 0) {
+          setSettingsInitialTab(
+            fragment as import('@adapters/components/Settings/SettingsPage').SettingsTabId,
+          );
+          setCurrentPage('settings');
+          return;
+        }
+      }
       setCurrentPage(page as PageId);
     });
 
@@ -989,6 +1014,7 @@ function MainApp() {
         {renderPage(currentPage, setCurrentPage, isFullscreen, {
           onRequestDualMode: handleRequestDualMode,
           lastSingleTool,
+          settingsInitialTab,
         })}
       </main>
       <UpdateNotification />

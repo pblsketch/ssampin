@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { autoUpdater } from 'electron-updater';
+import { installNavigationGuard } from './security-guards';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerPKCEFallbackHandlers } from './ipc/oauthPKCEFallback';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
@@ -441,6 +442,9 @@ function buildQuickAddWindow(initialKind: string, prewarm: boolean): void {
     },
   });
 
+  // file:// drop navigate 차단 (defense in depth) — security-guards.ts §3.2 참조
+  installNavigationGuard(quickAddWindow);
+
   quickAddWindow.setAlwaysOnTop(true, 'screen-saver');
   quickAddWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
@@ -582,6 +586,9 @@ function buildStickerPickerWindow(prewarm: boolean): void {
       backgroundThrottling: false,
     },
   });
+
+  // file:// drop navigate 차단 (defense in depth) — security-guards.ts §3.2 참조
+  installNavigationGuard(stickerPickerWindow);
 
   stickerPickerWindow.setAlwaysOnTop(true, 'screen-saver');
   stickerPickerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -1043,6 +1050,9 @@ function buildIconWindow(): void {
     },
   });
 
+  // file:// drop navigate 차단 (defense in depth) — security-guards.ts §3.2 참조
+  installNavigationGuard(iconWindow);
+
   // PoC #1 검증된 옵션 — PPT/F11/YouTube 풀스크린 위에 표시 보장
   iconWindow.setAlwaysOnTop(true, 'screen-saver');
   iconWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -1341,6 +1351,9 @@ function createWindow(): void {
     backgroundColor: '#0a0e17',
     show: false,
   });
+
+  // file:// drop navigate 차단 (defense in depth) — security-guards.ts §3.2 참조
+  installNavigationGuard(mainWindow);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
@@ -1740,6 +1753,9 @@ function createWidgetWindow(
       backgroundThrottling: true,
     },
   });
+
+  // file:// drop navigate 차단 (defense in depth) — security-guards.ts §3.2 참조
+  installNavigationGuard(widgetWindow);
 
   if (process.env['VITE_DEV_SERVER_URL']) {
     widgetWindow.loadURL(`${process.env['VITE_DEV_SERVER_URL']}?mode=widget`);
@@ -2153,11 +2169,35 @@ function registerIpcHandlers(): void {
 
   // window:navigateToPage — 메인 창으로 포커스 이동 + 페이지 이동 + 위젯 닫기
   ipcMain.handle('window:navigateToPage', (_event, page: string) => {
-    // 메모리 절약 모드에서 메인창이 destroy된 상태일 수 있으므로 재생성 후 페이지 이동
+    // 메모리 절약 모드(default true)에서는 위젯 진입 시 main이 destroy됨.
+    // 설정 열기 → ensureMainWindow가 createWindow를 새로 호출하지만 loadURL은 async.
+    // send를 즉시 호출하면 렌더러 mount 전이라 IPC 메시지가 소실되어 사용자가
+    // 의도한 페이지가 아닌 dashboard 기본 상태로 진입하는 회귀가 있었다 (2026-05-07 사용자 신고).
+    // → 새로 생성됐거나 아직 로드 중이면 did-finish-load 후 React useEffect 등록 시간을
+    //   확보하기 위해 짧은 지연을 두고 송신한다.
+    const wasFreshlyCreated = !mainWindow || mainWindow.isDestroyed();
     ensureMainWindow();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('navigate:to-page', page);
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      // ensureMainWindow가 실패한 비정상 경로 — 안전 종료
+      return;
     }
+
+    const sendNavigation = (): void => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('navigate:to-page', page);
+      }
+    };
+
+    if (wasFreshlyCreated || mainWindow.webContents.isLoading()) {
+      // did-finish-load 후 50ms 대기 — React 첫 commit + useEffect 등록 시간 확보.
+      // (50ms는 packaged 빌드에서도 충분한 여유. 더 늘리면 사용자 체감 지연 발생)
+      mainWindow.webContents.once('did-finish-load', () => {
+        setTimeout(sendNavigation, 50);
+      });
+    } else {
+      sendNavigation();
+    }
+
     // Close widget window
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       widgetWindow.close();

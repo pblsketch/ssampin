@@ -10,7 +10,16 @@ export type SettingsTabId =
   | 'google' | 'school' | 'period' | 'widget' | 'seat' | 'security'
   | 'calendar' | 'weather' | 'display' | 'sidebar' | 'todo' | 'tools' | 'shortcuts' | 'system' | 'backup' | 'about';
 
-export function SettingsPage() {
+interface SettingsPageProps {
+  /**
+   * 진입 시 활성화할 탭 id. navigateToPage('settings#widget') 같은 형식으로
+   * 위젯에서 특정 탭으로 직접 진입한 경우 사용. null/undefined면 기본 'school'.
+   * prop이 도중에 바뀌면 따라가도록 useEffect로 sync한다.
+   */
+  readonly initialTab?: SettingsTabId | null;
+}
+
+export function SettingsPage({ initialTab }: SettingsPageProps = {}) {
   const { track } = useAnalytics();
   const { settings, loaded, load, update } = useSettingsStore();
   const { load: loadEvents } = useEventsStore();
@@ -18,7 +27,14 @@ export function SettingsPage() {
   const [draft, setDraft] = useState<Settings>(settings);
   const [saving, setSaving] = useState(false);
   const [showReset, setShowReset] = useState(false);
-  const [activeTab, setActiveTab] = useState<SettingsTabId>('school');
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab ?? 'school');
+
+  // initialTab prop이 도중에 바뀌면 (cross-window navigate 등) 활성 탭 동기화.
+  // 같은 SettingsPage 인스턴스가 살아있는 동안 useState 초기값은 한 번만 적용되므로
+  // 동적 동기화는 effect에서 수행한다.
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   useEffect(() => { load(); loadEvents(); }, [load, loadEvents]);
   useEffect(() => { if (loaded) setDraft(settings); }, [loaded, settings]);
