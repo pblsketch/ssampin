@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { Student, StudentStatus } from '@domain/entities/Student';
 import { isStudentActive, normalizeStudentList } from '@domain/rules/studentActivity';
+import { planStudentCountReduce } from '@domain/rules/studentCountRules';
+import type { ReduceCountPlan } from '@domain/rules/studentCountRules';
 import { studentRepository } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -60,7 +62,17 @@ interface StudentState {
   ) => Promise<void>;
   toggleVacant: (studentId: string) => Promise<void>;
   changeStatus: (studentId: string, status: StudentStatus, note?: string) => Promise<void>;
-  setStudentCount: (count: number) => Promise<void>;
+  /**
+   * Phase 4 — 학생 수 변경 계획 수립 (실제 저장 X).
+   *
+   * 증가 → 안전 case (committed에 추가된 학생 포함)
+   * 감소 → planStudentCountReduce 결과:
+   *   - safe: 비활성 학생만 제거 → 호출자가 commitStudentCountChange로 즉시 적용
+   *   - requiresConfirm: 활성 학생 제거 필요 → 호출자가 confirm 모달 노출 후 commit
+   */
+  planStudentCountChange: (count: number) => ReduceCountPlan | null;
+  /** Phase 4 — planStudentCountChange로 받은 newStudents를 디스크에 영속화 */
+  commitStudentCountChange: (newStudents: readonly Student[]) => Promise<void>;
 
   /** 파생 값 */
   getStudent: (id: string | null) => Student | undefined;
@@ -179,13 +191,25 @@ export const useStudentStore = create<StudentState>((set, get) => ({
     }
   },
 
-  setStudentCount: async (count) => {
+  /**
+   * Phase 4 — 학생 수 변경 계획 수립 (저장 X).
+   *
+   * - 증가 → safe + 새 학생 포함된 newStudents
+   * - 감소 → planStudentCountReduce 위임 (비활성 우선 제거, 활성 제거 시 confirm 필요)
+   * - count 변화 없음 → null 반환
+   */
+  planStudentCountChange: (count) => {
     const clamped = Math.max(1, Math.min(50, count));
     const { students } = get();
 
-    let newStudents: Student[];
+    if (clamped === students.length) return null;
+
     if (clamped > students.length) {
-      const maxNum = students.reduce((max, s) => Math.max(max, s.studentNumber ?? 0), 0);
+      // 증가 — 항상 안전. 새 학번은 max+1부터.
+      const maxNum = students.reduce(
+        (max, s) => Math.max(max, s.studentNumber ?? 0),
+        0,
+      );
       const additions: Student[] = [];
       for (let i = 0; i < clamped - students.length; i++) {
         additions.push({
@@ -197,14 +221,18 @@ export const useStudentStore = create<StudentState>((set, get) => ({
           isVacant: false,
         });
       }
-      newStudents = [...students, ...additions];
-    } else if (clamped < students.length) {
-      const sorted = [...students].sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
-      newStudents = sorted.slice(0, clamped);
-    } else {
-      return;
+      return {
+        kind: 'safe',
+        newStudents: [...students, ...additions],
+        removedInactive: [],
+      };
     }
 
+    // 감소 — 도메인 규칙으로 위임 (비활성 우선 제거 + 활성 제거 시 confirm 필요)
+    return planStudentCountReduce(students, clamped);
+  },
+
+  commitStudentCountChange: async (newStudents) => {
     try {
       await studentRepository.saveStudents(newStudents);
       set({ students: newStudents });
