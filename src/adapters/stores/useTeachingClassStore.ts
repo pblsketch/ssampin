@@ -212,6 +212,8 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const updatedList: TeachingClass[] = [];
       const nextClasses = classes.map((c) => {
         if (c.groupId !== groupId) return c;
+        // Phase 6 — independent 모드 클래스는 그룹 동기화 제외 (자체 명단 유지)
+        if (c.studentSyncMode === 'independent') return c;
         // 비활성 학생 좌석 제거 (각 클래스 seating 고려)
         const activeKeys = new Set(
           students.filter((s) => !s.status || s.status === 'active').map((s) => studentKey(s)),

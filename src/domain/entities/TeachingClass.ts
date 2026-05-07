@@ -48,6 +48,14 @@ export interface TeachingClass {
   readonly students: readonly TeachingClassStudent[];
   readonly seating?: TeachingClassSeating;
   readonly order?: number;
+  /**
+   * Phase 6 — 그룹 내 명단 동기화 모드 (groupId 있을 때만 의미).
+   *
+   * - 'shared'(기본/undefined): 같은 groupId 클래스끼리 students 자동 동기화
+   * - 'independent': 이 과목은 다른 명단 사용. 그룹 동기화 무시.
+   *   사용 케이스: 영어 수준별 분반, 음악 선택반 등.
+   */
+  readonly studentSyncMode?: 'shared' | 'independent';
   readonly createdAt: string;
   readonly updatedAt: string;
 }

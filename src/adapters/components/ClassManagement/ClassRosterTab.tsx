@@ -75,7 +75,8 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
 
   const saveEdit = useCallback(async () => {
     if (!cls) return;
-    if (cls.groupId) {
+    // Phase 6 — independent 모드 클래스는 그룹 동기화 우회하고 단일 저장
+    if (cls.groupId && cls.studentSyncMode !== 'independent') {
       await syncGroupStudents(cls.groupId, editStudents);
     } else {
       await updateClass({
@@ -381,12 +382,39 @@ export function ClassRosterTab({ classId }: ClassRosterTabProps) {
     ? classes.filter((c) => c.groupId === cls.groupId).length
     : 0;
 
+  const isIndependent = cls.studentSyncMode === 'independent';
+  const handleSyncModeToggle = useCallback(async () => {
+    if (!cls) return;
+    const next = isIndependent ? 'shared' : 'independent';
+    await updateClass({ ...cls, studentSyncMode: next });
+  }, [cls, isIndependent, updateClass]);
+
   return (
     <div className="space-y-4">
       {cls.groupId && groupSiblingCount > 1 && (
-        <div className="bg-sp-accent/10 border border-sp-accent/30 px-3 py-2 rounded-lg text-xs text-sp-muted">
-          이 학급은 <span className="text-sp-text font-medium">{cls.name}</span> 그룹에 속합니다.
-          변경사항은 <span className="text-sp-accent font-medium">{groupSiblingCount}</span>개 과목에 공유됩니다.
+        <div className="bg-sp-accent/10 border border-sp-accent/30 px-3 py-2 rounded-lg text-xs text-sp-muted flex items-center justify-between gap-3">
+          <div>
+            이 학급은 <span className="text-sp-text font-medium">{cls.name}</span> 그룹에 속합니다.{' '}
+            {isIndependent ? (
+              <>
+                <span className="text-amber-400 font-medium">이 과목은 다른 명단</span>을 사용합니다 (그룹 동기화 미적용).
+              </>
+            ) : (
+              <>
+                변경사항은 <span className="text-sp-accent font-medium">{groupSiblingCount}</span>개 과목에 공유됩니다.
+              </>
+            )}
+          </div>
+          {/* Phase 6 — studentSyncMode 토글 */}
+          <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+            <input
+              type="checkbox"
+              checked={isIndependent}
+              onChange={() => void handleSyncModeToggle()}
+              className="w-3.5 h-3.5 accent-sp-accent"
+            />
+            <span className="text-xs text-sp-muted">다른 명단 사용</span>
+          </label>
         </div>
       )}
       {/* ── 헤더: 학생 수 + 편집 버튼 ── */}
