@@ -19,6 +19,8 @@ interface ChangeItem {
   type: ChangeType;
   title: string;
   description?: string;
+  /** 옵션: 노션 가이드 deep link. 있을 때 [📖 자세히 보기 ↗] 인라인 링크 노출. */
+  notionUrl?: string;
 }
 
 interface VersionNote {
@@ -280,6 +282,18 @@ export function UpdateNotification() {
                           <p className="text-sp-text text-sm leading-snug">{c.title}</p>
                           {c.description && (
                             <DescriptionRenderer description={c.description} />
+                          )}
+                          {c.notionUrl && c.notionUrl.startsWith('https://') && (
+                            <a
+                              href={c.notionUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => track('release_notes_notion_link_clicked', { version: note.version, title: c.title })}
+                              className="inline-flex items-center gap-1 mt-1.5 text-detail text-sp-accent hover:underline"
+                            >
+                              📖 자세히 보기
+                              <span className="material-symbols-outlined text-[11px]" aria-hidden="true">arrow_outward</span>
+                            </a>
                           )}
                         </div>
                       </div>

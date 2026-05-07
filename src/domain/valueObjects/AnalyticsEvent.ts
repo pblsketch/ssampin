@@ -41,7 +41,8 @@ export type AnalyticsEventName =
   | 'share_modal_open'
   | 'share_click'
   | 'share_prompt_shown'
-  | 'share_prompt_action';
+  | 'share_prompt_action'
+  | 'release_notes_notion_link_clicked';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -110,4 +111,5 @@ export interface AnalyticsEventProperties {
   share_click: { method: 'kakao' | 'clipboard' | 'qr' };
   share_prompt_shown: Record<string, never>;
   share_prompt_action: { action: 'share' | 'later' | 'never' };
+  release_notes_notion_link_clicked: { version: string; title: string };
 }
