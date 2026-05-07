@@ -134,10 +134,10 @@ interface ReleaseNotesData {
 }
 
 const CHANGE_TYPE_CONFIG: Record<ChangeType, { icon: string; label: string; badge: string }> = {
-  new:     { icon: 'lightbulb',    label: '새 기능',   badge: 'bg-blue-500/20 text-blue-400' },
-  fix:     { icon: 'build',        label: '버그 수정', badge: 'bg-green-500/20 text-green-400' },
-  improve: { icon: 'auto_awesome', label: '개선',      badge: 'bg-purple-500/20 text-purple-400' },
-  change:  { icon: 'sync',         label: '변경',      badge: 'bg-amber-500/20 text-amber-400' },
+  new:     { icon: 'lightbulb',    label: '새 기능',   badge: 'bg-sp-accent/20 text-sp-accent' },
+  fix:     { icon: 'build',        label: '버그 수정', badge: 'bg-emerald-500/15 text-emerald-400' },
+  improve: { icon: 'auto_awesome', label: '개선',      badge: 'bg-purple-500/15 text-purple-400' },
+  change:  { icon: 'sync',         label: '변경',      badge: 'bg-sp-highlight/15 text-sp-highlight' },
 };
 
 async function fetchReleaseNotes(version: string): Promise<VersionNote | null> {
