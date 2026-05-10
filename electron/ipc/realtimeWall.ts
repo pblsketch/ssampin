@@ -2,9 +2,13 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import { WebSocket, WebSocketServer } from 'ws';
+import { WebSocket } from 'ws';
 import { z } from 'zod';
 import { generateRealtimeWallHTML } from './realtimeWallHTML';
+import {
+  startSessionedWebSocketServer,
+  type SessionedWebSocketServerHandle,
+} from './sessionedWebSocketServer';
 import { closeTunnel, installTunnel, isTunnelAvailable, openTunnel } from './tunnel';
 import {
   addStudentComment,
@@ -344,35 +348,23 @@ const RATE_LIMITS: Record<ClientMessage['type'], number> = {
   'submit-move': 60,
 };
 
-const rateLimitBuckets = new Map<string, number[]>();
-
 function rateLimitKey(sessionToken: string, type: ClientMessage['type']): string {
   return `${sessionToken}:${type}`;
 }
 
 function isRateLimited(sessionToken: string, type: ClientMessage['type'], now: number): boolean {
+  if (!session) return false;
   const key = rateLimitKey(sessionToken, type);
   const limit = RATE_LIMITS[type];
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const existing = rateLimitBuckets.get(key) ?? [];
-  // window 밖 timestamp 제거
-  const fresh = existing.filter((t) => t >= windowStart);
-  if (fresh.length >= limit) {
-    rateLimitBuckets.set(key, fresh);
-    return true;
-  }
-  fresh.push(now);
-  rateLimitBuckets.set(key, fresh);
-  return false;
+  return session.handle.isRateLimited(key, limit, now, RATE_LIMIT_WINDOW_MS);
 }
 
 interface RealtimeWallSession {
-  server: http.Server;
-  wss: WebSocketServer;
+  /** HTTP+WS 서버 베이스 핸들 (clients/broadcast/sendError/rate-limit 통합 제공) */
+  handle: SessionedWebSocketServerHandle<BroadcastableServerMessage>;
   title: string;
   maxTextLength: number;
   submissions: Map<string, RealtimeWallSubmission>;
-  clients: Set<WebSocket>;
   /**
    * 마지막 'wall-state' broadcast 스냅샷. 신규 join 시 즉시 송신해
    * 학생이 current 보드 상태로 렌더 가능하도록 한다.
@@ -794,50 +786,27 @@ async function persistStudentPdfFromDataUrl(
 
 function closeSession(): void {
   if (!session) return;
-
   closeTunnel();
-
-  for (const client of session.clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      try {
-        client.send(JSON.stringify({ type: 'closed' }));
-      } catch {
-        // noop
-      }
-      client.close();
-    }
-  }
-
-  session.wss.close();
-  session.server.close();
+  // 베이스가 'closed' broadcast + WS/HTTP 서버 close + rate-limit reset 모두 처리.
+  // 비동기지만 closeSession은 fire-and-forget — 다음 start가 새 핸들로 시작하도록 즉시 null 처리.
+  void session.handle.close();
   session = null;
-  // rate-limit 버킷도 세션 단위로 초기화 — 다음 세션에 토큰 누적 영향 X
-  rateLimitBuckets.clear();
 }
 
 function emitConnectionCount(mainWindow: BrowserWindow, current: RealtimeWallSession): void {
   if (mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('realtime-wall:connection-count', {
-    count: current.clients.size,
+    count: current.handle.clientCount(),
   });
 }
 
 /**
  * 모든 연결된 학생 클라이언트에 메시지 송신.
- * 개별 client 실패는 swallow — 한 명 때문에 broadcast가 멈추지 않게.
+ * 베이스가 sentAt 자동 첨부 + 개별 client 실패 swallow.
  */
 function broadcastToStudents(msg: BroadcastableServerMessage): void {
   if (!session) return;
-  const payload = JSON.stringify({ ...msg, sentAt: Date.now() });
-  for (const client of session.clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      try {
-        client.send(payload);
-      } catch {
-        // noop
-      }
-    }
-  }
+  session.handle.broadcast(msg);
 }
 
 /**
@@ -901,6 +870,12 @@ function rebuildPostsCacheFromWallState(msg: BroadcastableServerMessage): void {
 }
 
 function sendError(ws: WebSocket, message: string): void {
+  // 베이스의 sendError는 readyState 체크 + try/catch 내장.
+  // session이 없을 때(closeSession 후 잔여 핸들러)는 직접 송신.
+  if (session) {
+    session.handle.sendError(ws, message);
+    return;
+  }
   if (ws.readyState !== WebSocket.OPEN) return;
   try {
     ws.send(JSON.stringify({ type: 'error', message }));
@@ -916,163 +891,129 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
       _event,
       args: { title: string; maxTextLength: number },
     ): Promise<{ port: number; localIPs: string[] }> => {
-      return new Promise<{ port: number; localIPs: string[] }>((resolve, reject) => {
+      try {
         closeSession();
 
         const title = args.title.trim() || '실시간 담벼락';
         const maxTextLength = Math.max(80, Math.min(args.maxTextLength, 1000));
         const html = generateRealtimeWallHTML(title, maxTextLength);
 
-        const server = http.createServer((req, res) => {
-          const pathname = req.url?.split('?')[0] ?? '/';
-
-          if (pathname === '/health') {
-            res.writeHead(200);
-            res.end('OK');
-            return;
-          }
-
-          // v2.1 student-ux 회귀 fix (Bug 3): /pdf/<uuid-filename> 학생 PDF 서빙.
-          //
-          // 보안:
-          //   - decodeURIComponent로 한글 파일명 복원
-          //   - path.basename으로 디렉토리 traversal 차단 ("../" 모두 제거됨)
-          //   - 임시 디렉토리 (`<userTemp>/ssampin-realtime-wall-pdf/`) 외부는 접근 불가
-          //   - Content-Type을 application/pdf로 고정해 학생 브라우저가
-          //     `<a download>` 또는 인라인 뷰어로 안전하게 처리
-          //   - 파일이 없으면 404 (path traversal 시도 시 동일하게 404)
-          if (pathname.startsWith(PDF_HTTP_PATH_PREFIX)) {
-            try {
-              const requestedNameRaw = pathname.slice(PDF_HTTP_PATH_PREFIX.length);
-              if (requestedNameRaw.length === 0) {
-                res.writeHead(404);
-                res.end('Not Found');
-                return;
-              }
-              let decoded: string;
-              try {
-                decoded = decodeURIComponent(requestedNameRaw);
-              } catch {
-                res.writeHead(400);
-                res.end('Bad Request');
-                return;
-              }
-              // path traversal 방지: basename으로 디렉토리 부분을 모두 제거.
-              const safeBasename = path.basename(decoded);
-              if (
-                safeBasename.length === 0 ||
-                safeBasename === '.' ||
-                safeBasename === '..' ||
-                safeBasename !== decoded
-              ) {
-                res.writeHead(404);
-                res.end('Not Found');
-                return;
-              }
-              const tempDir = path.join(app.getPath('temp'), 'ssampin-realtime-wall-pdf');
-              const target = path.join(tempDir, safeBasename);
-              // 추가 방어 — resolve 후 prefix 검사
-              const resolved = path.resolve(target);
-              const resolvedDir = path.resolve(tempDir);
-              if (!resolved.startsWith(resolvedDir + path.sep) && resolved !== resolvedDir) {
-                res.writeHead(404);
-                res.end('Not Found');
-                return;
-              }
-              if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
-                res.writeHead(404);
-                res.end('Not Found');
-                return;
-              }
-              const data = fs.readFileSync(resolved);
-              // RFC 5987 — 한글 등 비ASCII filename 안전 표기
-              const utf8Filename = encodeURIComponent(safeBasename);
-              res.writeHead(200, {
-                'Content-Type': 'application/pdf',
-                'Content-Length': String(data.length),
-                'Content-Disposition': `inline; filename*=UTF-8''${utf8Filename}`,
-                'Cache-Control': 'no-store',
-                'X-Content-Type-Options': 'nosniff',
-              });
-              res.end(data);
-            } catch {
-              res.writeHead(500);
-              res.end('Internal Server Error');
-            }
-            return;
-          }
-
-          // v1.14 P1: 학생 SPA dist-student/index.html 우선 서빙.
-          // prod 번들에 dist-student가 포함되면 이 경로가 활성화되고,
-          // dev/fallback 환경에서는 기존 legacy HTML로 내려간다.
-          if (pathname === '/' || pathname === '/index.html') {
-            if (serveStudentIndexHtml(res)) return;
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(html);
-            return;
-          }
-
-          // SPA 정적 자산 (/assets/*.js, /assets/*.css 등)
-          if (pathname.startsWith('/assets/')) {
-            if (serveStudentAsset(pathname, res)) return;
-          }
-
-          // favicon/ico 등 루트 직계 파일도 dist-student에서 시도
-          if (pathname.startsWith('/')) {
-            if (serveStudentAsset(pathname, res)) return;
-          }
-
-          res.writeHead(404);
-          res.end('Not Found');
-        });
-
         // v2.1 student-ux 회귀 fix (2026-04-24): maxPayload 20MB.
-        // 이미지 합계 15MB(raw) → base64 ~20MB + 메타. ws의 기본 maxPayload(100MiB)도
-        // 이론상 통과하나 명시 설정으로 의도 고정 + 너무 큰 첨부는 즉시 거부.
-        const wss = new WebSocketServer({
-          server,
-          maxPayload: 20 * 1024 * 1024,
-        });
+        // 이미지 합계 15MB(raw) → base64 ~20MB + 메타.
+        const handle = await startSessionedWebSocketServer<ClientMessage, BroadcastableServerMessage>({
+          port: 0,
+          maxPayloadBytes: 20 * 1024 * 1024,
+          clientMessageSchema: ClientMessageSchema,
+          debugTag: '[realtime-wall]',
+          handleHttpRequest: (req, res) => {
+            const pathname = req.url?.split('?')[0] ?? '/';
 
-        session = {
-          server,
-          wss,
-          title,
-          maxTextLength,
-          submissions: new Map(),
-          clients: new Set(),
-          lastWallState: null,
-          postsCache: new Map(),
-          studentFormLocked: false,
-        };
+            if (pathname === '/health') {
+              res.writeHead(200);
+              res.end('OK');
+              return true;
+            }
 
-        wss.on('connection', (ws: WebSocket) => {
-          if (!session) {
-            ws.close();
-            return;
-          }
+            // v2.1 student-ux 회귀 fix (Bug 3): /pdf/<uuid-filename> 학생 PDF 서빙.
+            //
+            // 보안:
+            //   - decodeURIComponent로 한글 파일명 복원
+            //   - path.basename으로 디렉토리 traversal 차단 ("../" 모두 제거됨)
+            //   - 임시 디렉토리 (`<userTemp>/ssampin-realtime-wall-pdf/`) 외부는 접근 불가
+            //   - Content-Type을 application/pdf로 고정해 학생 브라우저가
+            //     `<a download>` 또는 인라인 뷰어로 안전하게 처리
+            //   - 파일이 없으면 404 (path traversal 시도 시 동일하게 404)
+            if (pathname.startsWith(PDF_HTTP_PATH_PREFIX)) {
+              try {
+                const requestedNameRaw = pathname.slice(PDF_HTTP_PATH_PREFIX.length);
+                if (requestedNameRaw.length === 0) {
+                  res.writeHead(404);
+                  res.end('Not Found');
+                  return true;
+                }
+                let decoded: string;
+                try {
+                  decoded = decodeURIComponent(requestedNameRaw);
+                } catch {
+                  res.writeHead(400);
+                  res.end('Bad Request');
+                  return true;
+                }
+                // path traversal 방지: basename으로 디렉토리 부분을 모두 제거.
+                const safeBasename = path.basename(decoded);
+                if (
+                  safeBasename.length === 0 ||
+                  safeBasename === '.' ||
+                  safeBasename === '..' ||
+                  safeBasename !== decoded
+                ) {
+                  res.writeHead(404);
+                  res.end('Not Found');
+                  return true;
+                }
+                const tempDir = path.join(app.getPath('temp'), 'ssampin-realtime-wall-pdf');
+                const target = path.join(tempDir, safeBasename);
+                // 추가 방어 — resolve 후 prefix 검사
+                const resolved = path.resolve(target);
+                const resolvedDir = path.resolve(tempDir);
+                if (!resolved.startsWith(resolvedDir + path.sep) && resolved !== resolvedDir) {
+                  res.writeHead(404);
+                  res.end('Not Found');
+                  return true;
+                }
+                if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+                  res.writeHead(404);
+                  res.end('Not Found');
+                  return true;
+                }
+                const data = fs.readFileSync(resolved);
+                // RFC 5987 — 한글 등 비ASCII filename 안전 표기
+                const utf8Filename = encodeURIComponent(safeBasename);
+                res.writeHead(200, {
+                  'Content-Type': 'application/pdf',
+                  'Content-Length': String(data.length),
+                  'Content-Disposition': `inline; filename*=UTF-8''${utf8Filename}`,
+                  'Cache-Control': 'no-store',
+                  'X-Content-Type-Options': 'nosniff',
+                });
+                res.end(data);
+              } catch {
+                res.writeHead(500);
+                res.end('Internal Server Error');
+              }
+              return true;
+            }
 
-          session.clients.add(ws);
-          emitConnectionCount(mainWindow, session);
+            // v1.14 P1: 학생 SPA dist-student/index.html 우선 서빙.
+            // prod 번들에 dist-student가 포함되면 이 경로가 활성화되고,
+            // dev/fallback 환경에서는 기존 legacy HTML로 내려간다.
+            if (pathname === '/' || pathname === '/index.html') {
+              if (serveStudentIndexHtml(res)) return true;
+              res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+              res.end(html);
+              return true;
+            }
 
-          ws.on('message', async (data: Buffer | ArrayBuffer | Buffer[]) => {
+            // SPA 정적 자산 (/assets/*.js, /assets/*.css 등)
+            if (pathname.startsWith('/assets/')) {
+              if (serveStudentAsset(pathname, res)) return true;
+            }
+
+            // favicon/ico 등 루트 직계 파일도 dist-student에서 시도
+            if (pathname.startsWith('/')) {
+              if (serveStudentAsset(pathname, res)) return true;
+            }
+
+            return false; // 베이스가 404로 처리
+          },
+          onClientConnect: () => {
+            if (session) emitConnectionCount(mainWindow, session);
+          },
+          onClientDisconnect: () => {
+            if (session) emitConnectionCount(mainWindow, session);
+          },
+          onClientMessage: async (ws, msg) => {
             if (!session) return;
-
-            let parsed: unknown;
-            try {
-              const raw = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
-              parsed = JSON.parse(raw);
-            } catch {
-              return;
-            }
-
-            // Zod 검증 — 외부 입력 신뢰 불가 (Design §9.2/§9.6).
-            const result = ClientMessageSchema.safeParse(parsed);
-            if (!result.success) {
-              sendError(ws, '잘못된 요청입니다.');
-              return;
-            }
-            const msg = result.data;
             const now = Date.now();
 
             // Rate limit (Design §9.3)
@@ -1888,32 +1829,28 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
                 return;
               }
             }
-          });
-
-          ws.on('close', () => {
-            if (!session) return;
-            session.clients.delete(ws);
-            emitConnectionCount(mainWindow, session);
-          });
+          },
         });
 
-        try {
-          server.listen(0, '0.0.0.0', () => {
-            const address = server.address();
-            if (!address || typeof address === 'string') {
-              reject(new Error('Failed to get server address'));
-              return;
-            }
+        session = {
+          handle,
+          title,
+          maxTextLength,
+          submissions: new Map(),
+          lastWallState: null,
+          postsCache: new Map(),
+          studentFormLocked: false,
+        };
 
-            resolve({
-              port: address.port,
-              localIPs: [],
-            });
-          });
-        } catch (error) {
-          reject(error);
+        return { port: handle.port, localIPs: [] };
+      } catch (error) {
+        try {
+          closeSession();
+        } catch {
+          /* noop */
         }
-      });
+        throw error;
+      }
     },
   );
 
@@ -2062,7 +1999,7 @@ export function registerRealtimeWallHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('realtime-wall:tunnel-start', async (): Promise<{ tunnelUrl: string }> => {
     if (!session) throw new Error('실시간 담벼락 세션이 없습니다');
-    const address = session.server.address();
+    const address = session.handle.httpServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('서버가 준비되지 않았습니다');
     }
