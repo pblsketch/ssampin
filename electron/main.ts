@@ -12,6 +12,7 @@ import { registerLiveSurveyHandlers } from './ipc/liveSurvey';
 import { registerLiveWordCloudHandlers } from './ipc/liveWordCloud';
 import { registerLiveMultiSurveyHandlers } from './ipc/liveMultiSurvey';
 import { registerLiveDiscussionHandlers } from './ipc/liveDiscussion';
+import { registerInteractiveSlidesHandlers } from './ipc/interactiveSlides';
 import { registerRealtimeWallHandlers } from './ipc/realtimeWall';
 import { registerRealtimeWallLinkPreviewHandler } from './ipc/realtimeWallLinkPreview';
 import { registerRealtimeWallPdfHandlers } from './ipc/realtimeWallPdf';
@@ -4122,6 +4123,7 @@ if (!gotTheLock) {
     registerLiveMultiSurveyHandlers(mainWindow!);
     registerLiveDiscussionHandlers(mainWindow!);
     registerRealtimeWallHandlers(mainWindow!);
+    registerInteractiveSlidesHandlers(mainWindow!);
     registerRealtimeWallLinkPreviewHandler();
     registerRealtimeWallPdfHandlers();
     registerBoardHandlers(mainWindow!);
