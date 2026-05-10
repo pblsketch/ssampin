@@ -79,10 +79,10 @@ interface SlidesSessionState {
   }) => Promise<void>;
   /**
    * lobby → active 전이 (학생 화면 슬라이드 표시 시작).
-   * 본 store는 메인의 SessionStatus를 신뢰하므로 advance/activate 등이 status='active'를 요구.
-   * **주의**: Phase 1 현재 메인 측에 별도 begin IPC 미구현 → 향후 확장 자리.
+   * `slides-session:begin-presentation` IPC 호출 → 메인이 도메인 transition + 첫 슬라이드 broadcast.
+   * 클라이언트는 IPC 응답 후 즉시 상태 진입 (실패해도 다음 advance에서 재동기화).
    */
-  beginPresentation: () => void;
+  beginPresentation: () => Promise<void>;
   stopSession: () => Promise<void>;
   advanceSlide: (targetIndex: number) => Promise<void>;
   activateOverlay: (overlayId: OverlayId) => Promise<void>;
@@ -228,14 +228,18 @@ export const useSlidesSessionStore = create<SlidesSessionState>((set, get) => {
       }
     },
 
-    beginPresentation: () => {
-      // Phase 1: lobby → active 전이는 첫 advanceSlide 호출 시점이 아닌
-      // 명시적 액션. 메인 측 IPC 없이 클라이언트 상태만 갱신.
-      // 메인은 status='active'를 직접 검증할 수 있도록 향후 begin IPC를 추가할 수 있음.
+    beginPresentation: async () => {
       const cur = get();
-      if (cur.status === 'lobby') {
-        set({ status: 'active', connectionState: 'active' });
+      if (cur.status !== 'lobby' || !cur.sessionId) return;
+      const api = window.electronAPI?.interactiveSlides;
+      if (api?.beginPresentation) {
+        try {
+          await api.beginPresentation({ sessionId: cur.sessionId });
+        } catch {
+          // 실패해도 클라이언트 측 상태는 진입 — 다음 advance에서 백엔드가 재동기화
+        }
       }
+      set({ status: 'active', connectionState: 'active' });
     },
 
     stopSession: async () => {

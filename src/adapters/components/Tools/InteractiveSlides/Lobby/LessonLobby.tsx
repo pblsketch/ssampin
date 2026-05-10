@@ -62,8 +62,8 @@ export function LessonLobby({
     }
   };
 
-  const handleBegin = (): void => {
-    beginPresentation();
+  const handleBegin = async (): Promise<void> => {
+    await beginPresentation();
     onBeginPresentation();
   };
 
@@ -96,7 +96,7 @@ export function LessonLobby({
         {isStarted && (
           <button
             type="button"
-            onClick={handleBegin}
+            onClick={() => void handleBegin()}
             className="px-5 py-2 bg-sp-highlight text-sp-bg font-bold rounded-lg text-sm hover:bg-sp-highlight/90"
           >
             진행 시작 →
@@ -275,6 +275,12 @@ function SessionLiveCard({
   const [selectedIp, setSelectedIp] = useState<string>('');
   const [ipLoadError, setIpLoadError] = useState<string | null>(null);
 
+  // 터널 모드 (Plan §11.3) — accessMode='tunnel'일 때만 시도.
+  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
+  const [tunnelStatus, setTunnelStatus] =
+    useState<'idle' | 'starting' | 'ready' | 'error' | 'unavailable'>('idle');
+  const [tunnelError, setTunnelError] = useState<string | null>(null);
+
   useEffect(() => {
     const api = window.electronAPI?.interactiveSlides;
     if (!api?.getLocalIpCandidates) {
@@ -291,14 +297,55 @@ function SessionLiveCard({
     });
   }, []);
 
+  // accessMode='tunnel' + port 준비 시 터널 자동 시작 (Plan §11.3).
+  useEffect(() => {
+    if (accessMode !== 'tunnel' || !port) return;
+    const api = window.electronAPI?.interactiveSlides;
+    if (!api?.tunnelAvailable || !api.tunnelStart) {
+      setTunnelStatus('unavailable');
+      setTunnelError('Electron API 미지원');
+      return;
+    }
+    let canceled = false;
+    setTunnelStatus('starting');
+    setTunnelError(null);
+    void (async () => {
+      try {
+        const available = await api.tunnelAvailable();
+        if (canceled) return;
+        if (!available) {
+          setTunnelStatus('unavailable');
+          setTunnelError('cloudflared가 설치되어 있지 않아요');
+          return;
+        }
+        const res = await api.tunnelStart();
+        if (canceled) return;
+        setTunnelUrl(res.tunnelUrl);
+        setTunnelStatus('ready');
+      } catch (err) {
+        if (canceled) return;
+        setTunnelStatus('error');
+        setTunnelError(
+          err instanceof Error ? err.message : '터널 시작 실패',
+        );
+      }
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, [accessMode, port]);
+
   const lanUrl = useMemo(() => {
     if (!port) return '';
     if (selectedIp.length === 0) return `http://localhost:${port}`;
     return `http://${selectedIp}:${port}`;
   }, [port, selectedIp]);
 
+  // 학생 접속용 기본 URL — tunnel 모드면 터널 URL, 아니면 LAN URL.
+  const primaryUrl = accessMode === 'tunnel' && tunnelUrl ? tunnelUrl : lanUrl;
+
   // QR target — 학생이 직접 입장하는 URL. shortCode를 query로 포함.
-  const qrTarget = port ? `${lanUrl}?code=${shortCode ?? ''}` : '';
+  const qrTarget = primaryUrl ? `${primaryUrl}?code=${shortCode ?? ''}` : '';
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-6">
@@ -311,6 +358,9 @@ function SessionLiveCard({
         selectedIp={selectedIp}
         onSelectIp={setSelectedIp}
         ipLoadError={ipLoadError}
+        tunnelUrl={tunnelUrl}
+        tunnelStatus={tunnelStatus}
+        tunnelError={tunnelError}
       />
       <StudentRosterCard
         sessionName={sessionName}
@@ -334,6 +384,9 @@ interface SessionCodeDisplayProps {
   readonly selectedIp: string;
   readonly onSelectIp: (ip: string) => void;
   readonly ipLoadError: string | null;
+  readonly tunnelUrl: string | null;
+  readonly tunnelStatus: 'idle' | 'starting' | 'ready' | 'error' | 'unavailable';
+  readonly tunnelError: string | null;
 }
 
 function SessionCodeDisplay({
@@ -345,9 +398,16 @@ function SessionCodeDisplay({
   selectedIp,
   onSelectIp,
   ipLoadError,
+  tunnelUrl,
+  tunnelStatus,
+  tunnelError,
 }: SessionCodeDisplayProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+
+  // 학생에게 보여줄 1차 URL (tunnel 모드면 터널 URL, 아니면 LAN URL)
+  const primaryUrl = accessMode === 'tunnel' && tunnelUrl ? tunnelUrl : lanUrl;
+  const primaryReady = primaryUrl.length > 0;
 
   useEffect(() => {
     if (!canvasRef.current || !qrTarget) return;
@@ -359,9 +419,9 @@ function SessionCodeDisplay({
   }, [qrTarget]);
 
   const handleCopyUrl = async (): Promise<void> => {
-    if (!lanUrl) return;
+    if (!primaryReady) return;
     try {
-      await navigator.clipboard.writeText(lanUrl);
+      await navigator.clipboard.writeText(primaryUrl);
       setCopyMessage('URL을 복사했어요');
       setTimeout(() => setCopyMessage(null), 1500);
     } catch {
@@ -384,19 +444,32 @@ function SessionCodeDisplay({
       <div className="w-full space-y-2">
         <div className="flex items-center gap-2">
           <code className="flex-1 px-3 py-2 bg-sp-bg border border-sp-border rounded-lg text-xs text-sp-text font-mono truncate">
-            {lanUrl || '준비 중…'}
+            {primaryReady
+              ? primaryUrl
+              : accessMode === 'tunnel' && tunnelStatus === 'starting'
+                ? '터널 준비 중…'
+                : '준비 중…'}
           </code>
           <button
             type="button"
             onClick={() => void handleCopyUrl()}
-            className="px-3 py-2 bg-sp-bg border border-sp-border rounded-lg text-xs hover:border-sp-accent"
+            disabled={!primaryReady}
+            className="px-3 py-2 bg-sp-bg border border-sp-border rounded-lg text-xs hover:border-sp-accent disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {copyMessage ?? '복사'}
           </button>
         </div>
 
+        {/* tunnel 모드 — LAN URL은 백업 표시 */}
+        {accessMode === 'tunnel' && tunnelStatus === 'ready' && lanUrl && (
+          <div className="px-3 py-2 bg-sp-bg border border-sp-border rounded-lg text-xs text-sp-muted">
+            교내 Wi-Fi 백업 URL:&nbsp;
+            <code className="font-mono text-sp-text">{lanUrl}</code>
+          </div>
+        )}
+
         {/* 다중 NIC 선택 — Plan §11.7 (VPN 활성 등 후보 ≥2개일 때만 노출) */}
-        {ipCandidates.length >= 2 && (
+        {accessMode === 'lan' && ipCandidates.length >= 2 && (
           <div className="px-3 py-2 bg-sp-bg border border-sp-border rounded-lg space-y-1">
             <div className="text-xs text-sp-muted">
               네트워크가 여러 개예요. 학생 폰이 같은 Wi-Fi에 있는 IP를 선택하세요:
@@ -420,16 +493,30 @@ function SessionCodeDisplay({
           </div>
         )}
 
-        {ipLoadError && (
+        {accessMode === 'lan' && ipLoadError && (
           <div className="px-3 py-2 bg-red-500/10 border border-red-400/30 rounded-lg text-xs text-red-200">
             {ipLoadError}
           </div>
         )}
 
         {accessMode === 'tunnel' && (
-          <div className="px-3 py-2 bg-amber-400/10 border border-amber-400/30 rounded-lg text-xs text-amber-200">
-            🌐 외부 인터넷 노출 모드 — 학생 PII가 인터넷 경유
-          </div>
+          <>
+            {tunnelStatus === 'starting' && (
+              <div className="px-3 py-2 bg-sp-bg border border-sp-border rounded-lg text-xs text-sp-muted">
+                ⏳ 외부 인터넷 터널 시작 중…
+              </div>
+            )}
+            {(tunnelStatus === 'unavailable' || tunnelStatus === 'error') && (
+              <div className="px-3 py-2 bg-red-500/10 border border-red-400/30 rounded-lg text-xs text-red-200">
+                ⚠ 터널 시작 실패 — {tunnelError ?? '알 수 없는 오류'}
+                <br />
+                LAN 모드로 전환하거나 cloudflared 설치를 확인하세요.
+              </div>
+            )}
+            <div className="px-3 py-2 bg-amber-400/10 border border-amber-400/30 rounded-lg text-xs text-amber-200">
+              🌐 외부 인터넷 노출 모드 — 학생 PII가 인터넷 경유
+            </div>
+          </>
         )}
       </div>
     </div>

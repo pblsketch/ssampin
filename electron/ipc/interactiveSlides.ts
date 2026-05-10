@@ -20,6 +20,7 @@ import {
   startSessionedWebSocketServer,
   type SessionedWebSocketServerHandle,
 } from './sessionedWebSocketServer';
+import { closeTunnel, isTunnelAvailable, openTunnel } from './tunnel';
 
 import {
   ClientToServerMsgSchema,
@@ -52,6 +53,7 @@ import type {
 import { MemoryLiveResponseStore } from '../../src/adapters/repositories/MemoryLiveResponseStore';
 import { JsonInteractiveLessonRepository } from '../../src/infrastructure/storage/JsonInteractiveLessonRepository';
 
+import { transitionSessionToActive } from '../../src/domain/rules/overlayRules';
 import { ActivateOverlay } from '../../src/usecases/interactiveSlides/ActivateOverlay';
 import { AdvanceSlide } from '../../src/usecases/interactiveSlides/AdvanceSlide';
 import { DeactivateOverlay } from '../../src/usecases/interactiveSlides/DeactivateOverlay';
@@ -511,6 +513,8 @@ function handleClientDisconnect(ws: WebSocket, broadcaster: IRealtimeBroadcaster
 
 async function closeActiveSession(): Promise<void> {
   if (!active) return;
+  stopTeacherWatchdog();
+  closeTunnel(); // 터널 정리 (모듈 단일 인스턴스 — 멱등)
   const handle = active.handle;
   active = null;
   await handle.close();
@@ -522,6 +526,71 @@ async function closeActiveSession(): Promise<void> {
 
 // 단위 테스트에서 setInterval 모킹 가능하도록 export.
 let pipaSweepTimer: ReturnType<typeof setInterval> | null = null;
+
+// ─────────────────────────────────────────────────────────────
+// Teacher heartbeat — 렌더러 → 메인 5초 ping. 10초 누락 시 disconnected broadcast.
+// 60초 grace 만료 시 자동 end-lesson (Plan §7.4 + Design §10).
+// ─────────────────────────────────────────────────────────────
+
+const HEARTBEAT_TIMEOUT_MS = 10_000; // 마지막 ping 후 10초 무응답 → disconnected
+const TEACHER_GRACE_MS = 60_000; // disconnected 후 60초 → auto-end
+
+let lastTeacherHeartbeat = 0;
+let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+let graceTimer: ReturnType<typeof setTimeout> | null = null;
+let isTeacherDisconnected = false;
+
+function startTeacherWatchdog(broadcaster: IRealtimeBroadcaster): void {
+  if (watchdogTimer != null) return;
+  watchdogTimer = setInterval(() => {
+    if (!active) return;
+    const elapsed = Date.now() - lastTeacherHeartbeat;
+    if (elapsed > HEARTBEAT_TIMEOUT_MS && !isTeacherDisconnected) {
+      isTeacherDisconnected = true;
+      broadcaster.broadcastToStudents(active.sessionId, {
+        type: 'teacher-disconnected',
+        gracePeriodMs: TEACHER_GRACE_MS,
+      });
+      // 60초 grace 후에도 미회복 → auto-end
+      graceTimer = setTimeout(() => {
+        if (!active || !isTeacherDisconnected) return;
+        void EndLessonSession(
+          { sessionRepo, liveStore, broadcaster, clock: () => Date.now() },
+          { sessionId: active.sessionId, lesson: active.lesson, reason: 'teacher-timeout' },
+        ).then(() => closeActiveSession());
+      }, TEACHER_GRACE_MS);
+    }
+  }, 2_000);
+}
+
+function stopTeacherWatchdog(): void {
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
+  }
+  if (graceTimer) {
+    clearTimeout(graceTimer);
+    graceTimer = null;
+  }
+  isTeacherDisconnected = false;
+  lastTeacherHeartbeat = 0;
+}
+
+function recordTeacherHeartbeat(broadcaster: IRealtimeBroadcaster): void {
+  if (!active) return;
+  lastTeacherHeartbeat = Date.now();
+  if (isTeacherDisconnected) {
+    // grace 안에 ping 복귀 → reconnected
+    isTeacherDisconnected = false;
+    if (graceTimer) {
+      clearTimeout(graceTimer);
+      graceTimer = null;
+    }
+    broadcaster.broadcastToStudents(active.sessionId, {
+      type: 'teacher-reconnected',
+    });
+  }
+}
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -563,6 +632,28 @@ export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): vo
     'slides-session:get-local-ip',
     (): Promise<{ candidates: readonly string[] }> => {
       return Promise.resolve({ candidates: detectLocalIpCandidates() });
+    },
+  );
+
+  // ─── 교사 heartbeat (Plan §7.4) — 렌더러가 5초마다 호출 ───
+  ipcMain.handle('slides-session:teacher-heartbeat', (): void => {
+    recordTeacherHeartbeat(broadcaster);
+  });
+
+  // ─── 터널 모드 (Plan §11.3) ───
+  ipcMain.handle('slides-session:tunnel-available', (): boolean => {
+    return isTunnelAvailable();
+  });
+  ipcMain.handle(
+    'slides-session:tunnel-start',
+    async (): Promise<{ tunnelUrl: string }> => {
+      if (!active) throw new Error('진행 중인 세션이 없습니다');
+      const address = active.handle.httpServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('서버가 준비되지 않았습니다');
+      }
+      const tunnelUrl = await openTunnel(address.port);
+      return { tunnelUrl };
     },
   );
 
@@ -640,6 +731,37 @@ export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): vo
         }
         throw err;
       }
+    },
+  );
+
+  /**
+   * lobby → active 전이 (Plan §2-1 ② → ③ "진행 시작" CTA).
+   * `transitionSessionToActive` 도메인 규칙 호출 + 메인 측 status 갱신 +
+   * 첫 슬라이드 broadcast. 이 호출 후에야 advance/activate 등이 정상 동작.
+   */
+  ipcMain.handle(
+    'slides-session:begin-presentation',
+    async (_event, args: { sessionId: SessionId }): Promise<void> => {
+      if (!active || (active.sessionId as string) !== (args.sessionId as string)) return;
+      const session = await sessionRepo.loadSession(args.sessionId);
+      if (!session) return;
+      const transition = transitionSessionToActive(session);
+      if (!transition.ok) return; // lobby가 아니면 noop (idempotent)
+      await sessionRepo.saveSession(transition.session);
+
+      // 첫 슬라이드를 학생들에게 broadcast (학생 SPA의 lobby → slide 전환 트리거)
+      const firstSlide = active.lesson.slides[0];
+      if (firstSlide) {
+        broadcaster.broadcastToStudents(args.sessionId, {
+          type: 'slide-changed',
+          slideIndex: 0,
+          slide: firstSlide,
+        });
+      }
+
+      // 교사 heartbeat watchdog 시작 (Plan §7.4)
+      lastTeacherHeartbeat = Date.now();
+      startTeacherWatchdog(broadcaster);
     },
   );
 

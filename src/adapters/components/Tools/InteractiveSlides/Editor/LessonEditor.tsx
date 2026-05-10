@@ -10,7 +10,7 @@
  * Plan §3 + Design §8.4 매핑.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   InteractiveLesson,
   OverlayConfig,
@@ -200,6 +200,8 @@ function Toolbar({
   const [titleDraft, setTitleDraft] = useState(lesson.title);
   const [url, setUrl] = useState('');
   const [isFetching, setIsFetching] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
+  const pdfFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setTitleDraft(lesson.title), [lesson.title]);
 
@@ -228,6 +230,41 @@ function Toolbar({
       alert(msg);
     } finally {
       setIsFetching(false);
+    }
+  };
+
+  const handlePdfClick = (): void => {
+    if (
+      lesson.slides.length > 0 &&
+      !confirm(
+        '기존 슬라이드와 활동 배치가 새 슬라이드로 교체됩니다. 계속할까요?',
+      )
+    ) {
+      return;
+    }
+    pdfFileInputRef.current?.click();
+  };
+
+  const handlePdfChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 같은 파일 재선택 가능
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      alert('PDF 파일만 선택할 수 있어요.');
+      return;
+    }
+    setIsFetching(true);
+    setPdfProgress({ current: 0, total: 1 });
+    try {
+      await store.connectPdf(lesson.id, file, (p) => setPdfProgress(p));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'PDF 가져오기 실패';
+      alert(msg);
+    } finally {
+      setIsFetching(false);
+      setPdfProgress(null);
     }
   };
 
@@ -271,16 +308,26 @@ function Toolbar({
           disabled={isFetching || url.trim().length === 0}
           className="px-3 py-1.5 bg-sp-accent text-white rounded-lg text-sm hover:bg-sp-accent/90 disabled:bg-sp-border disabled:text-sp-muted disabled:cursor-not-allowed"
         >
-          {isFetching ? '불러오는 중…' : '불러오기'}
+          {isFetching && pdfProgress === null ? '불러오는 중…' : '불러오기'}
         </button>
         <button
           type="button"
-          disabled
-          className="px-3 py-1.5 bg-sp-bg border border-sp-border rounded-lg text-sm text-sp-muted cursor-not-allowed"
-          title="PDF 업로드는 곧 지원됩니다"
+          onClick={handlePdfClick}
+          disabled={isFetching}
+          className="px-3 py-1.5 bg-sp-bg border border-sp-border rounded-lg text-sm text-sp-text hover:border-sp-accent disabled:opacity-50 disabled:cursor-not-allowed"
+          title="PDF 파일을 슬라이드로 사용"
         >
-          PDF · 곧
+          {pdfProgress
+            ? `PDF ${pdfProgress.current}/${pdfProgress.total}`
+            : 'PDF 업로드'}
         </button>
+        <input
+          ref={pdfFileInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={(e) => void handlePdfChange(e)}
+        />
       </div>
 
       <button

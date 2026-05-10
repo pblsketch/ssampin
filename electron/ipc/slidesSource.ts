@@ -66,6 +66,21 @@ export interface FetchFromGoogleResult {
   }[];
 }
 
+/** PDF 렌더 결과 (Google Slides와 동일 shape — UI 일관성) */
+export interface RenderPdfResult {
+  readonly revisionId: string;
+  readonly slides: readonly {
+    readonly pageId: string;
+    readonly pageNumber: number;
+    readonly imagePath: string;
+  }[];
+}
+
+/** PDF 페이지 caps (Plan §3) */
+const PDF_MAX_PAGES = 100;
+const PDF_MAX_PAGE_BYTES = 5 * 1024 * 1024; // 페이지당 5MB
+const PDF_MAX_TOTAL_BYTES = 50 * 1024 * 1024; // 전체 50MB
+
 // ─────────────────────────────────────────────────────────────
 // 사용자 친화적 에러 메시지 매핑
 // ─────────────────────────────────────────────────────────────
@@ -185,6 +200,81 @@ function extractPageId(filePath: string): string | null {
 }
 
 // ─────────────────────────────────────────────────────────────
+// PDF 페이지 저장 (renderer가 렌더한 PNG를 캐시에 영구 저장)
+// ─────────────────────────────────────────────────────────────
+
+const PDF_CONTENT_HASH_RE = /^[A-Za-z0-9_-]+$/;
+
+interface RenderPdfArgs {
+  /** SHA-256 hex 앞부분 (renderer 측에서 산출, 16~64자 권장) */
+  readonly contentHash: string;
+  /** PDF 메타 — UI 표시용 (저장 X) */
+  readonly originalFileName: string;
+  readonly originalSize: number;
+  /** 렌더된 페이지들 (1-indexed pageNumber 순서대로) */
+  readonly pages: readonly {
+    readonly pageId: string;
+    readonly pngBytes: Uint8Array;
+  }[];
+}
+
+export async function renderPdfWithCache(
+  cache: LocalImageCacheRepository,
+  args: RenderPdfArgs,
+): Promise<RenderPdfResult> {
+  if (!PDF_CONTENT_HASH_RE.test(args.contentHash)) {
+    throw new Error('잘못된 PDF contentHash 입니다.');
+  }
+  if (args.pages.length === 0) {
+    throw new Error('PDF에 페이지가 없습니다.');
+  }
+  if (args.pages.length > PDF_MAX_PAGES) {
+    throw new Error(
+      `PDF 페이지가 너무 많습니다 (${args.pages.length}장). 최대 ${PDF_MAX_PAGES}장까지 지원됩니다.`,
+    );
+  }
+
+  let totalBytes = 0;
+  for (const p of args.pages) {
+    if (p.pngBytes.byteLength > PDF_MAX_PAGE_BYTES) {
+      throw new Error(
+        `${p.pageId} 페이지가 너무 큽니다 (페이지당 5MB 제한).`,
+      );
+    }
+    totalBytes += p.pngBytes.byteLength;
+  }
+  if (totalBytes > PDF_MAX_TOTAL_BYTES) {
+    throw new Error(
+      `전체 PDF 이미지가 너무 큽니다 (${(totalBytes / 1024 / 1024).toFixed(1)}MB). 최대 50MB.`,
+    );
+  }
+
+  // 동일 contentHash 기존 캐시는 유효 (PDF는 내용 불변) — 재저장은 멱등.
+  // 다른 contentHash 폴더는 정리(여기서는 같은 presentationId=contentHash 사용 → invalidate 불필요)
+
+  const slides: { pageId: string; pageNumber: number; imagePath: string }[] = [];
+  for (let i = 0; i < args.pages.length; i++) {
+    const p = args.pages[i]!;
+    if (!PDF_CONTENT_HASH_RE.test(p.pageId)) {
+      throw new Error(`잘못된 pageId: ${p.pageId}`);
+    }
+    const imagePath = await cache.store(
+      args.contentHash,
+      args.contentHash,
+      p.pageId,
+      p.pngBytes,
+    );
+    slides.push({
+      pageId: p.pageId,
+      pageNumber: i + 1,
+      imagePath,
+    });
+  }
+
+  return { revisionId: args.contentHash, slides };
+}
+
+// ─────────────────────────────────────────────────────────────
 // IPC 등록
 // ─────────────────────────────────────────────────────────────
 
@@ -193,6 +283,13 @@ export function registerSlidesSourceHandlers(): void {
     'slides-source:fetch-from-google',
     async (_event, args: { url: string }): Promise<FetchFromGoogleResult> => {
       return fetchFromGoogle(args.url);
+    },
+  );
+
+  ipcMain.handle(
+    'slides-source:render-pdf',
+    async (_event, args: RenderPdfArgs): Promise<RenderPdfResult> => {
+      return renderPdfWithCache(getCache(), args);
     },
   );
 }

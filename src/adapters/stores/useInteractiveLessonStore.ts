@@ -44,6 +44,18 @@ interface InteractiveLessonState {
    */
   connectGoogleSlides: (lessonId: LessonId, url: string) => Promise<void>;
 
+  /**
+   * PDF 파일 → 모든 페이지 PNG 렌더 → 이미지 캐시 → 수업의 slides 배열 갱신.
+   * - renderer 측 pdfjs-dist로 렌더, IPC로 PNG bytes만 메인에 전달.
+   * - 캡: 50MB / 100 페이지 (Plan §3).
+   * - 기존 활동 배치는 잃음.
+   */
+  connectPdf: (
+    lessonId: LessonId,
+    file: File,
+    onProgress?: (p: { current: number; total: number }) => void,
+  ) => Promise<void>;
+
   // Overlay 조작
   addOverlay: (
     lessonId: LessonId,
@@ -146,6 +158,47 @@ export const useInteractiveLessonStore = create<InteractiveLessonState>(
           await reload();
         } catch (err) {
           const msg = err instanceof Error ? err.message : '슬라이드 가져오기 실패';
+          set({ fetchError: msg });
+          throw err;
+        }
+      },
+
+      connectPdf: async (lessonId, file, onProgress) => {
+        const api = window.electronAPI?.interactiveSlides;
+        if (!api?.renderPdf) {
+          set({ fetchError: 'Electron API를 사용할 수 없습니다.' });
+          throw new Error('electronAPI.interactiveSlides.renderPdf 없음');
+        }
+        set({ fetchError: null });
+        try {
+          // 1. 파일 → ArrayBuffer
+          const ab = await file.arrayBuffer();
+          const bytes = new Uint8Array(ab);
+          // 2. renderer에서 pdfjs로 모든 페이지 렌더 (코드 스플릿 동적 import)
+          const { renderPdfToPngPages } = await import(
+            '@adapters/components/Tools/InteractiveSlides/Editor/pdfRenderer'
+          );
+          const rendered = await renderPdfToPngPages(bytes, onProgress);
+          // 3. IPC로 PNG bytes를 메인에 전달 → 캐시 저장
+          const result = await api.renderPdf({
+            contentHash: rendered.contentHash,
+            originalFileName: file.name,
+            originalSize: file.size,
+            pages: rendered.pages,
+          });
+          // 4. 도메인에 source + slides 반영
+          await manage.replaceSlides(
+            lessonId,
+            {
+              type: 'pdf',
+              originalFileName: file.name,
+              originalSize: file.size,
+            },
+            result.slides,
+          );
+          await reload();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'PDF 가져오기 실패';
           set({ fetchError: msg });
           throw err;
         }

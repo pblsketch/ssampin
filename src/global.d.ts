@@ -578,6 +578,27 @@ interface InteractiveSlidesFetchResult {
   }[];
 }
 
+/** slides-source:render-pdf 입력 (renderer가 pdfjs로 미리 렌더한 PNG들) */
+interface InteractiveSlidesRenderPdfArgs {
+  readonly contentHash: string;
+  readonly originalFileName: string;
+  readonly originalSize: number;
+  readonly pages: readonly {
+    readonly pageId: string;
+    readonly pngBytes: Uint8Array;
+  }[];
+}
+
+/** slides-source:render-pdf 응답 */
+interface InteractiveSlidesRenderPdfResult {
+  readonly revisionId: string;
+  readonly slides: readonly {
+    readonly pageId: string;
+    readonly pageNumber: number;
+    readonly imagePath: string;
+  }[];
+}
+
 /** slides-session:start 응답 */
 interface InteractiveSlidesStartResult {
   readonly port: number;
@@ -594,6 +615,13 @@ type InteractiveSlidesTeacherEvent = {
 interface InteractiveSlidesElectronAPI {
   // Source
   fetchFromGoogle: (args: { url: string }) => Promise<InteractiveSlidesFetchResult>;
+  /**
+   * PDF 페이지 PNG들을 캐시에 저장 (renderer가 pdfjs-dist로 미리 렌더).
+   * 응답은 Google Slides와 동일한 shape — UI 일관성 유지.
+   */
+  renderPdf: (
+    args: InteractiveSlidesRenderPdfArgs,
+  ) => Promise<InteractiveSlidesRenderPdfResult>;
   /** 로컬 IPv4 후보 (Plan §11.7 — VPN/다중 NIC 처리). 학생 폰 접속 URL 표시용. */
   getLocalIpCandidates: () => Promise<{ candidates: readonly string[] }>;
 
@@ -604,6 +632,9 @@ interface InteractiveSlidesElectronAPI {
     accessMode: import('./domain/entities/InteractiveSlides').SessionAccessMode;
     resultsVisibility?: import('./domain/entities/InteractiveSlides').ResultsVisibility;
   }) => Promise<InteractiveSlidesStartResult>;
+  beginPresentation: (args: {
+    sessionId: import('./domain/valueObjects/InteractiveSlidesIds').SessionId;
+  }) => Promise<void>;
   stopSession: () => Promise<void>;
   advanceSlide: (args: {
     sessionId: import('./domain/valueObjects/InteractiveSlidesIds').SessionId;
@@ -621,6 +652,15 @@ interface InteractiveSlidesElectronAPI {
   endLesson: (args: {
     sessionId: import('./domain/valueObjects/InteractiveSlidesIds').SessionId;
   }) => Promise<void>;
+  /** 교사 heartbeat (5초 주기). 10초 누락 시 학생에게 teacher-disconnected. */
+  teacherHeartbeat: () => Promise<void>;
+
+  /**
+   * 터널 모드 (Plan §11.3) — 외부 인터넷 노출.
+   * cloudflared(또는 동급)가 사용 가능한지 체크 + 터널 시작 후 외부 URL 반환.
+   */
+  tunnelAvailable: () => Promise<boolean>;
+  tunnelStart: () => Promise<{ tunnelUrl: string }>;
 
   // Subscribe (renderer cleanup 위해 unsubscribe 함수 반환)
   onTeacherEvent: (callback: (event: InteractiveSlidesTeacherEvent) => void) => () => void;

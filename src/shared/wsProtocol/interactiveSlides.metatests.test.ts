@@ -55,6 +55,23 @@ describe('MT-3: PROTOCOL_VERSION 단일 소스', () => {
   });
 });
 
+describe('MT-2: aggregateResponses switch coverage (모든 OverlayType variant 포함)', () => {
+  it('overlayRules.ts의 aggregateResponses가 5개 OverlayType variant 모두 case로 처리', () => {
+    const overlayRulesPath = path.join(repoRoot, 'src/domain/rules/overlayRules.ts');
+    const content = fs.readFileSync(overlayRulesPath, 'utf-8');
+
+    // aggregateResponses 함수 본문만 추출 — 다른 함수의 case는 카운트에서 제외
+    const aggregateBody = extractFunctionBody(content, 'aggregateResponses');
+    expect(aggregateBody).not.toBeNull();
+
+    const required = ['poll', 'text', 'wordcloud', 'draw', 'draggable'] as const;
+    for (const variant of required) {
+      const pattern = new RegExp(`case\\s+['"]${variant}['"]`);
+      expect(aggregateBody).toMatch(pattern);
+    }
+  });
+});
+
 describe('MT-7: interactive-slides PII 격리 (PIPA §11.1)', () => {
   it('syncRegistry.ts에 interactive-slides 키가 없음', () => {
     // 실제 위치는 src/usecases/sync/syncRegistry.ts (Plan §11.1 메모리 정합)
@@ -88,4 +105,26 @@ function readVite(name: string): string {
 function extractOutDir(content: string): string | null {
   const match = content.match(/outDir:\s*['"]([^'"]+)['"]/);
   return match ? match[1]! : null;
+}
+
+/**
+ * 단순 함수 본문 추출 — `function name(...)` 다음 첫 `{` 부터 짝맞는 `}` 까지.
+ * 정밀 파서가 아니라 grep 수준의 텍스트 매칭. 본 테스트 목적상 충분.
+ */
+function extractFunctionBody(content: string, fnName: string): string | null {
+  const sigMatch = new RegExp(`function\\s+${fnName}\\s*\\(`).exec(content);
+  if (!sigMatch) return null;
+  const sigEnd = sigMatch.index + sigMatch[0].length;
+  const openIdx = content.indexOf('{', sigEnd);
+  if (openIdx < 0) return null;
+  let depth = 0;
+  for (let i = openIdx; i < content.length; i++) {
+    const ch = content[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return content.substring(openIdx, i + 1);
+    }
+  }
+  return null;
 }

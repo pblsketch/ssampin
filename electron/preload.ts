@@ -1019,6 +1019,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     fetchFromGoogle: (args: { url: string }) =>
       ipcRenderer.invoke('slides-source:fetch-from-google', args),
 
+    // Source — PDF (renderer 측에서 pdfjs-dist로 렌더 후 PNG 바이트 전달)
+    renderPdf: (args: unknown) =>
+      ipcRenderer.invoke('slides-source:render-pdf', args),
+
     // 로컬 IPv4 후보 (Plan §11.7 — VPN/다중 NIC 환경에서 학생 폰 접속 URL 결정)
     getLocalIpCandidates: () =>
       ipcRenderer.invoke('slides-session:get-local-ip') as Promise<{
@@ -1028,6 +1032,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Session lifecycle (교사 액션)
     startSession: (args: unknown) =>
       ipcRenderer.invoke('slides-session:start', args),
+    beginPresentation: (args: unknown) =>
+      ipcRenderer.invoke('slides-session:begin-presentation', args),
     stopSession: () => ipcRenderer.invoke('slides-session:stop'),
     advanceSlide: (args: unknown) =>
       ipcRenderer.invoke('slides-session:advance-slide', args),
@@ -1037,6 +1043,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('slides-session:deactivate-overlay', args),
     endLesson: (args: unknown) =>
       ipcRenderer.invoke('slides-session:end-lesson', args),
+    /** 교사 heartbeat — 5초마다 호출. 10초 누락 시 학생에게 teacher-disconnected broadcast */
+    teacherHeartbeat: () =>
+      ipcRenderer.invoke('slides-session:teacher-heartbeat') as Promise<void>,
+
+    // 터널 모드 (Plan §11.3)
+    tunnelAvailable: () =>
+      ipcRenderer.invoke('slides-session:tunnel-available') as Promise<boolean>,
+    tunnelStart: () =>
+      ipcRenderer.invoke('slides-session:tunnel-start') as Promise<{ tunnelUrl: string }>,
 
     // Server → Teacher 이벤트 구독 (cleanup unsubscribe 반환)
     onTeacherEvent: (callback: (event: unknown) => void): (() => void) => {

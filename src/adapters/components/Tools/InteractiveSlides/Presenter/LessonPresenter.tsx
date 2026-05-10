@@ -8,7 +8,7 @@
  * - 외부 인터넷 노출 시 빨간 배지
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   AggregatedResultData,
   InteractiveLesson,
@@ -57,6 +57,15 @@ export function LessonPresenter({
   const [pendingDeactivate, setPendingDeactivate] = useState<OverlayId | null>(null);
   const [pendingEnd, setPendingEnd] = useState(false);
   const [showRoster, setShowRoster] = useState(true);
+
+  // 교사 heartbeat 5초 주기 (Plan §7.4) — 10초 누락 시 학생에게 disconnected broadcast
+  useEffect(() => {
+    const api = window.electronAPI?.interactiveSlides;
+    if (!api?.teacherHeartbeat) return;
+    void api.teacherHeartbeat(); // 즉시 1회
+    const id = setInterval(() => void api.teacherHeartbeat(), 5_000);
+    return () => clearInterval(id);
+  }, []);
 
   const currentSlide: Slide | undefined = lesson.slides[currentSlideIndex];
 
