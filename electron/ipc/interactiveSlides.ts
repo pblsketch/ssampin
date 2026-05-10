@@ -12,6 +12,8 @@
  */
 
 import { app, BrowserWindow, ipcMain } from 'electron';
+import fs from 'fs';
+import path from 'path';
 import { WebSocket } from 'ws';
 import {
   startSessionedWebSocketServer,
@@ -113,19 +115,189 @@ function buildBroadcaster(
     broadcastToStudents(_sessionId, message) {
       const cur = getActive();
       if (!cur) return;
-      cur.handle.broadcast(message);
+      cur.handle.broadcast(rewriteMessageForStudents(message));
     },
     sendToStudent(_sessionId, token, message) {
       const cur = getActive();
       if (!cur) return;
       const ws = cur.wsByToken.get(token);
-      if (ws) cur.handle.sendTo(ws, message);
+      if (ws) cur.handle.sendTo(ws, rewriteMessageForStudents(message));
     },
     sendToTeacher(sessionId, message: ServerToTeacherMessage) {
       // 교사는 WS가 아니라 main → renderer IPC로 받음
       safeMain(mainWindow, 'slides-session:teacher-event', { sessionId, message });
     },
   };
+}
+
+/**
+ * 학생에게 보내는 메시지의 file:// 슬라이드 이미지 경로를 HTTP 상대경로로 변환.
+ *
+ * 학생 브라우저는 file:// 접근 불가 → /slide-image/{presId}/{revId}/{pageId}.png 경로로 변환.
+ * 같은 HTTP 서버가 캐시 폴더에서 PNG를 읽어 응답.
+ */
+function rewriteMessageForStudents<T extends ServerToStudentMessage>(message: T): T {
+  if (message.type === 'slide-changed') {
+    return {
+      ...message,
+      slide: {
+        ...message.slide,
+        imagePath: fileUrlToHttpPath(message.slide.imagePath),
+      },
+    } as T;
+  }
+  if (message.type === 'late-join-state') {
+    // late-join-state.state.activeOverlays / closedOverlays는 imagePath를 직접 가지지 않음.
+    // 학생은 slide-changed로 전체 슬라이드를 받기 전까지는 아무 이미지도 표시 X.
+    return message;
+  }
+  return message;
+}
+
+/** file:///{userData}/cache/slides/{p}/{r}/{page}.png → /slide-image/{p}/{r}/{page}.png */
+export function fileUrlToHttpPath(fileUrl: string): string {
+  const idx = fileUrl.indexOf('/cache/slides/');
+  if (idx < 0) return fileUrl; // 변환 못 하면 그대로 (fail-safe)
+  return '/slide-image' + fileUrl.substring(idx + '/cache/slides'.length);
+}
+
+// ─────────────────────────────────────────────────────────────
+// HTTP 라우팅: 학생 SPA 정적 파일 + 슬라이드 이미지 서빙
+// ─────────────────────────────────────────────────────────────
+
+const SLIDES_STUDENT_DIST_NAME = 'dist-slides-student';
+const SLIDE_IMAGE_PATH_PREFIX = '/slide-image/';
+
+function getSlidesStudentDistRoot(): string {
+  return path.join(app.getAppPath(), SLIDES_STUDENT_DIST_NAME);
+}
+
+function getSlidesCacheRoot(): string {
+  return path.join(app.getPath('userData'), 'cache', 'slides');
+}
+
+function contentTypeFor(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case '.js':
+    case '.mjs':
+      return 'application/javascript; charset=utf-8';
+    case '.css':
+      return 'text/css; charset=utf-8';
+    case '.html':
+      return 'text/html; charset=utf-8';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.json':
+      return 'application/json; charset=utf-8';
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.ico':
+      return 'image/x-icon';
+    case '.woff':
+      return 'font/woff';
+    case '.woff2':
+      return 'font/woff2';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+function serveFileIfExists(
+  absPath: string,
+  res: import('http').ServerResponse,
+  cacheControl: string = 'public, max-age=300',
+): boolean {
+  if (!fs.existsSync(absPath) || !fs.statSync(absPath).isFile()) return false;
+  try {
+    const data = fs.readFileSync(absPath);
+    res.writeHead(200, {
+      'Content-Type': contentTypeFor(absPath),
+      'Cache-Control': cacheControl,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(data);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function handleSlidesStudentHttp(
+  req: import('http').IncomingMessage,
+  res: import('http').ServerResponse,
+): boolean {
+  const pathname = req.url?.split('?')[0] ?? '/';
+
+  if (pathname === '/health') {
+    res.writeHead(200);
+    res.end('OK');
+    return true;
+  }
+
+  // 슬라이드 이미지 — userData/cache/slides/<rest>
+  if (pathname.startsWith(SLIDE_IMAGE_PATH_PREFIX)) {
+    const rest = pathname.substring(SLIDE_IMAGE_PATH_PREFIX.length);
+    // path traversal 방지: 디렉토리 부분은 정상 분리, 각 segment는 영숫자/_-만 허용
+    const segments = rest.split('/').filter((s) => s.length > 0);
+    const segmentRegex = /^[A-Za-z0-9_.-]+$/;
+    if (
+      segments.length === 0 ||
+      segments.some((s) => !segmentRegex.test(s) || s === '..' || s === '.')
+    ) {
+      res.writeHead(404);
+      res.end('Not Found');
+      return true;
+    }
+    const cacheRoot = getSlidesCacheRoot();
+    const target = path.join(cacheRoot, ...segments);
+    const resolved = path.resolve(target);
+    if (!resolved.startsWith(path.resolve(cacheRoot) + path.sep)) {
+      res.writeHead(404);
+      res.end('Not Found');
+      return true;
+    }
+    if (serveFileIfExists(resolved, res, 'public, max-age=86400')) return true;
+    res.writeHead(404);
+    res.end('Not Found');
+    return true;
+  }
+
+  // 학생 SPA 정적 파일 — dist-slides-student
+  const distRoot = getSlidesStudentDistRoot();
+  if (!fs.existsSync(distRoot)) {
+    // dev 환경: dist 미존재 — fallback 안내 페이지
+    if (pathname === '/' || pathname === '/index.html') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(
+        '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>인터랙티브 슬라이드</title></head>' +
+          '<body style="background:#0a0e17;color:#e2e8f0;font-family:sans-serif;padding:40px;text-align:center;">' +
+          '<h1>학생 화면 준비 중</h1>' +
+          '<p>학생 SPA가 아직 빌드되지 않았어요. 개발 환경에서는 별도 dev 서버를 사용하세요.</p>' +
+          '</body></html>',
+      );
+      return true;
+    }
+    return false;
+  }
+
+  if (pathname === '/' || pathname === '/index.html') {
+    return serveFileIfExists(path.join(distRoot, 'index.html'), res);
+  }
+
+  // 정적 자산: 디렉토리 탈출 방지
+  const requested = path.normalize(pathname).replace(/^[\\/]+/, '');
+  const target = path.resolve(distRoot, requested);
+  if (!target.startsWith(path.resolve(distRoot))) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return true;
+  }
+  if (serveFileIfExists(target, res)) return true;
+  return false; // 베이스가 404
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -356,6 +528,7 @@ export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): vo
         maxPayloadBytes: 2 * 1024 * 1024, // Plan §3 페이로드 한도
         clientMessageSchema: ClientToServerMsgSchema,
         debugTag: '[interactive-slides]',
+        handleHttpRequest: handleSlidesStudentHttp,
         onClientMessage: async (ws, msg) => {
           await handleClientMessage(ws, msg, mainWindow, broadcaster);
         },
