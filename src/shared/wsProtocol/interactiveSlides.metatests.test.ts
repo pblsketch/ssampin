@@ -57,8 +57,13 @@ describe('MT-3: PROTOCOL_VERSION 단일 소스', () => {
 
 describe('MT-7: interactive-slides PII 격리 (PIPA §11.1)', () => {
   it('syncRegistry.ts에 interactive-slides 키가 없음', () => {
-    const syncRegistryPath = path.join(repoRoot, 'src/adapters/sync/syncRegistry.ts');
-    if (!fs.existsSync(syncRegistryPath)) return; // 미존재 시 통과
+    // 실제 위치는 src/usecases/sync/syncRegistry.ts (Plan §11.1 메모리 정합)
+    const syncRegistryPath = path.join(
+      repoRoot,
+      'src/usecases/sync/syncRegistry.ts',
+    );
+    // 본 검사는 실제 파일이 있어야 의미 있음 — 없으면 fail (silent skip 차단)
+    expect(fs.existsSync(syncRegistryPath)).toBe(true);
     const content = fs.readFileSync(syncRegistryPath, 'utf-8');
     expect(content).not.toMatch(/interactiveSlidesLessons/);
     expect(content).not.toMatch(/lessonSession/);
@@ -66,6 +71,7 @@ describe('MT-7: interactive-slides PII 격리 (PIPA §11.1)', () => {
 
   it('챗봇 KB ingest 스크립트에 interactive-slides 응답 데이터 미포함', () => {
     const ingestPath = path.join(repoRoot, 'scripts/ingest-chatbot-qa.mjs');
+    // 스크립트는 dev 환경에만 있을 수 있으므로 미존재 시 통과 (CI 환경 고려)
     if (!fs.existsSync(ingestPath)) return;
     const content = fs.readFileSync(ingestPath, 'utf-8');
     // 의도적으로 학습 대상에서 제외 — Plan §11.1 + §7

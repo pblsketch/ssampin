@@ -22,6 +22,8 @@ type ViewMode = 'list' | 'editor' | 'lobby' | 'presenter';
 
 export interface ToolInteractiveSlidesProps {
   readonly onBack: () => void;
+  /** 듀얼 모드 호환 — 본 도구는 전체 영역을 사용 */
+  readonly isFullscreen?: boolean;
 }
 
 export function ToolInteractiveSlides({

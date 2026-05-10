@@ -45,6 +45,8 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-sticker', emoji: '😎', name: '내 이모티콘', description: '단축키 한 번으로 어디든 붙여넣는 나만의 이모티콘', badge: 'NEW' },
   // 실시간 담벼락: 다음 릴리즈 출시 예정 — BETA로 공개.
   { id: 'tool-realtime-wall', emoji: '🗂️', name: '실시간 담벼락', description: '학생 글을 실시간으로 모아 칸반형·자유 배치형으로 정리', badge: 'BETA' },
+  // 인터랙티브 슬라이드: Pear Deck 스타일. v2.2.x 출시 예정 — BETA.
+  { id: 'tool-interactive-slides', emoji: '🎞️', name: '인터랙티브 슬라이드', description: 'Google Slides·PDF 위에 투표·텍스트·워드클라우드를 띄워 실시간 응답', badge: 'BETA' },
   { id: 'tool-forms', emoji: '📄', name: '서식', description: 'HWPX · PDF · Excel 서식 모아보기' },
   { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진', externalUrl: 'https://supsori.com' },
   { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구', externalUrl: 'https://pblsketch.xyz' },

@@ -8,7 +8,7 @@
  * - "진행 시작" → presenter
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import type {
   InteractiveLesson,
@@ -270,7 +270,33 @@ function SessionLiveCard({
   canEdit: _canEdit,
   onStop,
 }: SessionLiveCardProps): JSX.Element {
-  const lanUrl = port ? `http://${getLocalIpHint()}:${port}` : '';
+  // 로컬 IPv4 후보 (Plan §11.7) — VPN/다중 NIC 환경에서 사용자 선택 가능
+  const [ipCandidates, setIpCandidates] = useState<readonly string[]>([]);
+  const [selectedIp, setSelectedIp] = useState<string>('');
+  const [ipLoadError, setIpLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const api = window.electronAPI?.interactiveSlides;
+    if (!api?.getLocalIpCandidates) {
+      setIpLoadError('Electron API를 사용할 수 없습니다');
+      return;
+    }
+    void api.getLocalIpCandidates().then((res) => {
+      setIpCandidates(res.candidates);
+      // 첫 후보를 자동 선택 (1개일 때 = 사용자 선택 모달 불필요)
+      setSelectedIp(res.candidates[0] ?? '');
+      if (res.candidates.length === 0) {
+        setIpLoadError('네트워크 연결을 확인해 주세요');
+      }
+    });
+  }, []);
+
+  const lanUrl = useMemo(() => {
+    if (!port) return '';
+    if (selectedIp.length === 0) return `http://localhost:${port}`;
+    return `http://${selectedIp}:${port}`;
+  }, [port, selectedIp]);
+
   // QR target — 학생이 직접 입장하는 URL. shortCode를 query로 포함.
   const qrTarget = port ? `${lanUrl}?code=${shortCode ?? ''}` : '';
 
@@ -281,6 +307,10 @@ function SessionLiveCard({
         qrTarget={qrTarget}
         lanUrl={lanUrl}
         accessMode={accessMode}
+        ipCandidates={ipCandidates}
+        selectedIp={selectedIp}
+        onSelectIp={setSelectedIp}
+        ipLoadError={ipLoadError}
       />
       <StudentRosterCard
         sessionName={sessionName}
@@ -300,6 +330,10 @@ interface SessionCodeDisplayProps {
   readonly qrTarget: string;
   readonly lanUrl: string;
   readonly accessMode: SessionAccessMode;
+  readonly ipCandidates: readonly string[];
+  readonly selectedIp: string;
+  readonly onSelectIp: (ip: string) => void;
+  readonly ipLoadError: string | null;
 }
 
 function SessionCodeDisplay({
@@ -307,6 +341,10 @@ function SessionCodeDisplay({
   qrTarget,
   lanUrl,
   accessMode,
+  ipCandidates,
+  selectedIp,
+  onSelectIp,
+  ipLoadError,
 }: SessionCodeDisplayProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -356,6 +394,38 @@ function SessionCodeDisplay({
             {copyMessage ?? '복사'}
           </button>
         </div>
+
+        {/* 다중 NIC 선택 — Plan §11.7 (VPN 활성 등 후보 ≥2개일 때만 노출) */}
+        {ipCandidates.length >= 2 && (
+          <div className="px-3 py-2 bg-sp-bg border border-sp-border rounded-lg space-y-1">
+            <div className="text-xs text-sp-muted">
+              네트워크가 여러 개예요. 학생 폰이 같은 Wi-Fi에 있는 IP를 선택하세요:
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {ipCandidates.map((ip) => (
+                <button
+                  key={ip}
+                  type="button"
+                  onClick={() => onSelectIp(ip)}
+                  className={`px-2 py-1 rounded text-xs font-mono ${
+                    ip === selectedIp
+                      ? 'bg-sp-accent text-white'
+                      : 'bg-sp-card text-sp-text hover:bg-sp-card/80'
+                  }`}
+                >
+                  {ip}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {ipLoadError && (
+          <div className="px-3 py-2 bg-red-500/10 border border-red-400/30 rounded-lg text-xs text-red-200">
+            {ipLoadError}
+          </div>
+        )}
+
         {accessMode === 'tunnel' && (
           <div className="px-3 py-2 bg-amber-400/10 border border-amber-400/30 rounded-lg text-xs text-amber-200">
             🌐 외부 인터넷 노출 모드 — 학생 PII가 인터넷 경유
@@ -433,11 +503,3 @@ function StudentRosterCard({
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// 로컬 IP 힌트 (메인 프로세스에서 향후 IPC 추가 예정 — 임시 placeholder)
-// ─────────────────────────────────────────────────────────────
-function getLocalIpHint(): string {
-  // 향후 'slides-session:get-local-ip' IPC 추가 시 교체.
-  // 현재는 사용자가 직접 IP를 알아내거나 `localhost`로 fallback.
-  return 'localhost';
-}

@@ -1019,6 +1019,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     fetchFromGoogle: (args: { url: string }) =>
       ipcRenderer.invoke('slides-source:fetch-from-google', args),
 
+    // 로컬 IPv4 후보 (Plan §11.7 — VPN/다중 NIC 환경에서 학생 폰 접속 URL 결정)
+    getLocalIpCandidates: () =>
+      ipcRenderer.invoke('slides-session:get-local-ip') as Promise<{
+        candidates: readonly string[];
+      }>,
+
     // Session lifecycle (교사 액션)
     startSession: (args: unknown) =>
       ipcRenderer.invoke('slides-session:start', args),

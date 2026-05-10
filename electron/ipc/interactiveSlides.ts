@@ -13,6 +13,7 @@
 
 import { app, BrowserWindow, ipcMain } from 'electron';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { WebSocket } from 'ws';
 import {
@@ -55,6 +56,7 @@ import { ActivateOverlay } from '../../src/usecases/interactiveSlides/ActivateOv
 import { AdvanceSlide } from '../../src/usecases/interactiveSlides/AdvanceSlide';
 import { DeactivateOverlay } from '../../src/usecases/interactiveSlides/DeactivateOverlay';
 import { EndLessonSession } from '../../src/usecases/interactiveSlides/EndLessonSession';
+import { PurgeExpiredSessions } from '../../src/usecases/interactiveSlides/PurgeExpiredSessions';
 import { RestoreLateJoinState } from '../../src/usecases/interactiveSlides/RestoreLateJoinState';
 import {
   ShortCodeCollisionError,
@@ -101,6 +103,29 @@ function safeMain(mainWindow: BrowserWindow, channel: string, payload: unknown):
   } catch {
     /* noop */
   }
+}
+
+/**
+ * 로컬 IPv4 주소 후보 목록 (Plan §11.7 다중 NIC 처리).
+ *
+ * - internal=true (loopback) 제외
+ * - IPv6 제외 (학생 폰 호환성 우선)
+ * - VPN 활성 시 후보 ≥2개일 수 있음 → 호출자(UI)가 선택 모달 표시
+ *
+ * @returns IPv4 주소 배열 (우선순위 없음 — UI에서 사용자 선택)
+ */
+export function detectLocalIpCandidates(): readonly string[] {
+  const ifaces = os.networkInterfaces();
+  const out: string[] = [];
+  for (const list of Object.values(ifaces)) {
+    if (!list) continue;
+    for (const info of list) {
+      if (info.family === 'IPv4' && !info.internal) {
+        out.push(info.address);
+      }
+    }
+  }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -495,13 +520,51 @@ async function closeActiveSession(): Promise<void> {
 // IPC 등록
 // ─────────────────────────────────────────────────────────────
 
+// 단위 테스트에서 setInterval 모킹 가능하도록 export.
+let pipaSweepTimer: ReturnType<typeof setInterval> | null = null;
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * PIPA 180일 sweep 스케줄러 (Plan §11.1).
+ *
+ * - 등록 직후 1회 즉시 실행 (앱 시작 시 누적된 만료 세션 정리)
+ * - 이후 24시간마다 반복
+ * - 멱등 — 이미 등록되어 있으면 noop
+ */
+function ensurePipaSweepScheduler(): void {
+  if (pipaSweepTimer != null) return;
+  const runSweep = (): void => {
+    void PurgeExpiredSessions(
+      { sessionRepo, clock: () => Date.now() },
+      {},
+    ).catch(() => {
+      /* swallow — 다음 회차에 재시도 */
+    });
+  };
+  // 첫 실행 (앱 시작 시점)
+  runSweep();
+  pipaSweepTimer = setInterval(runSweep, ONE_DAY_MS);
+}
+
 export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): void {
   // app.whenReady() 이후 호출이 보장되므로 여기서 1회 초기화 안전.
   if (!sessionRepo) {
     sessionRepo = new JsonInteractiveLessonRepository(app.getPath('userData'));
   }
 
+  // PIPA sweep 스케줄러 시작 (Plan §11.1 P0 법적 요건)
+  ensurePipaSweepScheduler();
+
   const broadcaster = buildBroadcaster(mainWindow, () => active);
+
+  // ─── 메인 IPC: 로컬 IPv4 후보 (Plan §11.7 다중 NIC 처리) ───
+  ipcMain.handle(
+    'slides-session:get-local-ip',
+    (): Promise<{ candidates: readonly string[] }> => {
+      return Promise.resolve({ candidates: detectLocalIpCandidates() });
+    },
+  );
 
   ipcMain.handle(
     'slides-session:start',

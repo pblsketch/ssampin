@@ -594,6 +594,8 @@ type InteractiveSlidesTeacherEvent = {
 interface InteractiveSlidesElectronAPI {
   // Source
   fetchFromGoogle: (args: { url: string }) => Promise<InteractiveSlidesFetchResult>;
+  /** 로컬 IPv4 후보 (Plan §11.7 — VPN/다중 NIC 처리). 학생 폰 접속 URL 표시용. */
+  getLocalIpCandidates: () => Promise<{ candidates: readonly string[] }>;
 
   // Session lifecycle
   startSession: (args: {
