@@ -89,6 +89,8 @@ import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTempl
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
 import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRepository';
 import { JsonStickerRepository } from '@adapters/repositories/JsonStickerRepository';
+import { JsonInteractiveLessonsRepository } from '@adapters/repositories/JsonInteractiveLessonsRepository';
+import type { IInteractiveLessonRepository } from '@domain/repositories/IInteractiveLessonRepository';
 import { PdfJsThumbnailer } from '@infrastructure/forms/PdfJsThumbnailer';
 import { HwpxExcelPreviewExtractor } from '@infrastructure/forms/HwpxExcelPreviewExtractor';
 import { ElectronPrinterAdapter } from '@infrastructure/print/ElectronPrinterAdapter';
@@ -162,6 +164,9 @@ export const desktopOrganizeRepository: IDesktopOrganizeRepository =
 
 export const ddayRepository: IDDayRepository =
   new JsonDDayRepository(storage);
+
+export const interactiveLessonRepository: IInteractiveLessonRepository =
+  new JsonInteractiveLessonsRepository(storage);
 
 export const manualMealRepository: IManualMealRepository =
   new JsonManualMealRepository(storage);

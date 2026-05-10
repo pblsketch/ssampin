@@ -1010,4 +1010,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
     cancelSheetSession: (sessionId: string): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke('sticker:cancel-sheet-session', { sessionId }),
   },
+
+  // ─────────────────────────────────────────────────────────────
+  // Interactive Slides (Pear Deck 스타일, v2.2.x+)
+  // ─────────────────────────────────────────────────────────────
+  interactiveSlides: {
+    // Source — Google Slides URL → 이미지 캐시 (메인 프로세스 API 키 격리)
+    fetchFromGoogle: (args: { url: string }) =>
+      ipcRenderer.invoke('slides-source:fetch-from-google', args),
+
+    // Session lifecycle (교사 액션)
+    startSession: (args: unknown) =>
+      ipcRenderer.invoke('slides-session:start', args),
+    stopSession: () => ipcRenderer.invoke('slides-session:stop'),
+    advanceSlide: (args: unknown) =>
+      ipcRenderer.invoke('slides-session:advance-slide', args),
+    activateOverlay: (args: unknown) =>
+      ipcRenderer.invoke('slides-session:activate-overlay', args),
+    deactivateOverlay: (args: unknown) =>
+      ipcRenderer.invoke('slides-session:deactivate-overlay', args),
+    endLesson: (args: unknown) =>
+      ipcRenderer.invoke('slides-session:end-lesson', args),
+
+    // Server → Teacher 이벤트 구독 (cleanup unsubscribe 반환)
+    onTeacherEvent: (callback: (event: unknown) => void): (() => void) => {
+      const handler = (_event: unknown, data: unknown): void => callback(data);
+      ipcRenderer.on('slides-session:teacher-event', handler);
+      return (): void => {
+        ipcRenderer.removeListener('slides-session:teacher-event', handler);
+      };
+    },
+  },
 });

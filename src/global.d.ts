@@ -558,6 +558,70 @@ interface ElectronAPI {
   // === 백업·복원·데이터 위치 센터 (v2.0.3+) ===
   // 외부 서버 전송 없음 — main 프로세스 fs/dialog/shell만 사용.
   backup?: BackupElectronAPI;
+
+  // === Interactive Slides (Pear Deck 스타일, v2.2.x+) ===
+  // Plan §3 + Design §5 매핑.
+  interactiveSlides?: InteractiveSlidesElectronAPI;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Interactive Slides API surface
+// ─────────────────────────────────────────────────────────────
+
+/** slides-source:fetch-from-google 응답 */
+interface InteractiveSlidesFetchResult {
+  readonly revisionId: string;
+  readonly slides: readonly {
+    readonly pageId: string;
+    readonly pageNumber: number;
+    readonly imagePath: string;
+  }[];
+}
+
+/** slides-session:start 응답 */
+interface InteractiveSlidesStartResult {
+  readonly port: number;
+  readonly sessionId: string;
+  readonly shortCode: string;
+}
+
+/** Server → Teacher 메시지 (slides-session:teacher-event) */
+type InteractiveSlidesTeacherEvent = {
+  readonly sessionId: string;
+  readonly message: import('./domain/ports/IRealtimeBroadcaster').ServerToTeacherMessage;
+};
+
+interface InteractiveSlidesElectronAPI {
+  // Source
+  fetchFromGoogle: (args: { url: string }) => Promise<InteractiveSlidesFetchResult>;
+
+  // Session lifecycle
+  startSession: (args: {
+    lesson: import('./domain/entities/InteractiveSlides').InteractiveLesson;
+    sessionName: string;
+    accessMode: import('./domain/entities/InteractiveSlides').SessionAccessMode;
+    resultsVisibility?: import('./domain/entities/InteractiveSlides').ResultsVisibility;
+  }) => Promise<InteractiveSlidesStartResult>;
+  stopSession: () => Promise<void>;
+  advanceSlide: (args: {
+    sessionId: import('./domain/valueObjects/InteractiveSlidesIds').SessionId;
+    targetIndex: number;
+  }) => Promise<void>;
+  activateOverlay: (args: {
+    sessionId: import('./domain/valueObjects/InteractiveSlidesIds').SessionId;
+    overlayId: import('./domain/valueObjects/InteractiveSlidesIds').OverlayId;
+  }) => Promise<void>;
+  deactivateOverlay: (args: {
+    sessionId: import('./domain/valueObjects/InteractiveSlidesIds').SessionId;
+    overlayId: import('./domain/valueObjects/InteractiveSlidesIds').OverlayId;
+    visibility?: import('./domain/entities/InteractiveSlides').ResultsVisibility;
+  }) => Promise<void>;
+  endLesson: (args: {
+    sessionId: import('./domain/valueObjects/InteractiveSlidesIds').SessionId;
+  }) => Promise<void>;
+
+  // Subscribe (renderer cleanup 위해 unsubscribe 함수 반환)
+  onTeacherEvent: (callback: (event: InteractiveSlidesTeacherEvent) => void) => () => void;
 }
 
 /** 백업 파일 metadata — 버전 정보 표시용 */
