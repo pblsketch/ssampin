@@ -11,7 +11,7 @@
  *         학생 SPA, 도메인 영속화(JSON)는 별도 PR.
  */
 
-import { BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { WebSocket } from 'ws';
 import {
   startSessionedWebSocketServer,
@@ -47,7 +47,7 @@ import type {
 } from '../../src/domain/ports/IRealtimeBroadcaster';
 
 import { MemoryLiveResponseStore } from '../../src/adapters/repositories/MemoryLiveResponseStore';
-import { MemorySessionRepository } from '../../src/adapters/repositories/MemorySessionRepository';
+import { JsonInteractiveLessonRepository } from '../../src/infrastructure/storage/JsonInteractiveLessonRepository';
 
 import { ActivateOverlay } from '../../src/usecases/interactiveSlides/ActivateOverlay';
 import { AdvanceSlide } from '../../src/usecases/interactiveSlides/AdvanceSlide';
@@ -75,7 +75,14 @@ interface ActiveSession {
 
 let active: ActiveSession | null = null;
 const liveStore = new MemoryLiveResponseStore();
-const sessionRepo = new MemorySessionRepository();
+
+/**
+ * 영속 세션 repository.
+ * `app.getPath('userData')`는 ready 이벤트 이후에만 호출 가능 — 모듈 top-level에서
+ * 평가 못 함. `registerInteractiveSlidesHandlers`(=app.whenReady 후 호출) 내부에서
+ * 1회 초기화한다.
+ */
+let sessionRepo!: JsonInteractiveLessonRepository;
 
 // ─────────────────────────────────────────────────────────────
 // 유틸
@@ -317,6 +324,11 @@ async function closeActiveSession(): Promise<void> {
 // ─────────────────────────────────────────────────────────────
 
 export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): void {
+  // app.whenReady() 이후 호출이 보장되므로 여기서 1회 초기화 안전.
+  if (!sessionRepo) {
+    sessionRepo = new JsonInteractiveLessonRepository(app.getPath('userData'));
+  }
+
   const broadcaster = buildBroadcaster(mainWindow, () => active);
 
   ipcMain.handle(
@@ -479,7 +491,7 @@ export function registerInteractiveSlidesHandlers(mainWindow: BrowserWindow): vo
 // 테스트/디버그용 export — 라이프사이클 외부 검증
 export const __test__ = {
   liveStore,
-  sessionRepo,
+  getSessionRepo: (): JsonInteractiveLessonRepository => sessionRepo,
   getActive: (): ActiveSession | null => active,
   closeActiveSession,
 };
