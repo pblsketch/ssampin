@@ -26,13 +26,12 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      # package-lock.json 은 npm 11(개발 환경)로 생성됨 — Node 24 기본 npm 10 과
-      # 의존성 트리 해석이 달라 `npm ci` 가 lockfile mismatch 로 실패하므로 npm 을 11 로 맞춤.
-      - name: Pin npm to v11 (lockfile compat)
-        run: npm install -g npm@11
-
+      # NOTE: 현재 package-lock.json 은 Windows(개발 환경)에서 생성돼 일부 CSS 파서
+      # 의존성(@csstools/css-tokenizer 등) 엔트리가 누락 → Linux 에서 `npm ci` 가
+      # lockfile mismatch 로 실패한다. lockfile 을 깨끗이 재생성하기 전까지는 `npm install`
+      # 로 설치한다(트리 자동 보정). lockfile 정리 후 `npm ci` 로 되돌릴 것.
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       # 1. 타입 검사 — TypeScript strict 에러 0개
       - name: Typecheck
