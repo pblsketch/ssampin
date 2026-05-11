@@ -16,6 +16,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky",
     "embed": "tsx scripts/embed-docs.ts --all",
     "embed:dry": "tsx scripts/embed-docs.ts --all --dry-run",
     "embed:file": "tsx scripts/embed-docs.ts --file",
@@ -86,7 +89,10 @@
     "esbuild": "^0.27.3",
     "eslint": "^10.0.2",
     "gh-pages": "^6.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.4",
     "postcss": "^8.5.1",
+    "prettier": "3.8.3",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.0",
@@ -100,5 +106,14 @@
   },
   "engines": {
     "node": ">=24.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{js,jsx,mjs,cjs,json,jsonc,css,md,mdx,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

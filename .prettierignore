@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-electron
+dist-slides-student
+release
+coverage
+mac-artifacts
+card-news-output
+_workspace
+landing/.next
+landing/node_modules
+*.tsbuildinfo
+package-lock.json
+public/release-notes.json
