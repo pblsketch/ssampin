@@ -26,12 +26,8 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      # NOTE: 현재 package-lock.json 은 Windows(개발 환경)에서 생성돼 일부 CSS 파서
-      # 의존성(@csstools/css-tokenizer 등) 엔트리가 누락 → Linux 에서 `npm ci` 가
-      # lockfile mismatch 로 실패한다. lockfile 을 깨끗이 재생성하기 전까지는 `npm install`
-      # 로 설치한다(트리 자동 보정). lockfile 정리 후 `npm ci` 로 되돌릴 것.
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci
 
       # === 하드 게이트 (실패 시 CI 실패) ===
 
