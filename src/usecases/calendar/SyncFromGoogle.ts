@@ -2,7 +2,11 @@ import type { IGoogleCalendarPort } from '@domain/ports/IGoogleCalendarPort';
 import type { ICalendarSyncRepository } from '@domain/repositories/ICalendarSyncRepository';
 import type { IEventsRepository } from '@domain/repositories/IEventsRepository';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
-import { fromGoogleEvent, detectConflict, resolveConflictByLatest } from '@domain/rules/calendarSyncRules';
+import {
+  fromGoogleEvent,
+  detectConflict,
+  resolveConflictByLatest,
+} from '@domain/rules/calendarSyncRules';
 
 /** 구글 → 쌤핀 역방향 동기화 유스케이스 */
 export class SyncFromGoogle {
@@ -16,7 +20,7 @@ export class SyncFromGoogle {
   /** 활성화된 모든 매핑 캘린더를 동기화 */
   async execute(): Promise<void> {
     const mappings = await this.syncRepo.getMappings();
-    const enabledMappings = mappings.filter(m => m.syncEnabled && m.googleCalendarId);
+    const enabledMappings = mappings.filter((m) => m.syncEnabled && m.googleCalendarId);
 
     const errors: string[] = [];
     for (const mapping of enabledMappings) {
@@ -56,16 +60,23 @@ export class SyncFromGoogle {
         (e) => e.googleCalendarId === calendarId,
       );
       if (!hasEventsForCalendar) {
-        console.warn(`[SyncFromGoogle] syncToken exists but no local events for ${calendarId}, forcing full sync`);
+        console.warn(
+          `[SyncFromGoogle] syncToken exists but no local events for ${calendarId}, forcing full sync`,
+        );
         existingSyncToken = undefined;
       }
     }
 
+    // eslint-disable-next-line no-useless-catch -- execute() 가 캘린더별 에러를 수집하므로 의도적 re-throw 래퍼
     try {
       let result;
       if (existingSyncToken) {
         try {
-          result = await this.calendarPort.incrementalSync(accessToken, calendarId, existingSyncToken);
+          result = await this.calendarPort.incrementalSync(
+            accessToken,
+            calendarId,
+            existingSyncToken,
+          );
         } catch (err) {
           const code = (err as Error & { code?: number }).code;
           if (code === 410) {
@@ -99,14 +110,14 @@ export class SyncFromGoogle {
 
       // 삭제 처리
       for (const deletedId of result.deletedEventIds) {
-        const idx = events.findIndex(e => e.googleEventId === deletedId);
+        const idx = events.findIndex((e) => e.googleEventId === deletedId);
         if (idx !== -1) events.splice(idx, 1);
       }
 
       // 생성/업데이트 처리
       for (const gEvent of result.events) {
         if (gEvent.status === 'cancelled') continue;
-        const existingIdx = events.findIndex(e => e.googleEventId === gEvent.id);
+        const existingIdx = events.findIndex((e) => e.googleEventId === gEvent.id);
         const newEvent = fromGoogleEvent(gEvent, calendarId, categoryId);
 
         if (existingIdx !== -1) {

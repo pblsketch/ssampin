@@ -40,7 +40,9 @@ export function CalendarTab({ draft, patch }: Props) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-sp-text">일정 표시 기간</p>
-              <p className="text-xs text-sp-muted">대시보드 &quot;다가오는 일정&quot;에 표시할 범위</p>
+              <p className="text-xs text-sp-muted">
+                대시보드 &quot;다가오는 일정&quot;에 표시할 범위
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -75,7 +77,9 @@ export function CalendarTab({ draft, patch }: Props) {
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-sm font-medium text-sp-text">카테고리 라벨 표시</span>
-              <span className="text-xs text-sp-muted">일정 오른쪽에 학사일정/교직원회의 등 카테고리 이름 표시</span>
+              <span className="text-xs text-sp-muted">
+                일정 오른쪽에 학사일정/교직원회의 등 카테고리 이름 표시
+              </span>
             </div>
             <Toggle
               checked={draft.eventWidgetShowCategoryLabel !== false}
@@ -94,7 +98,9 @@ export function CalendarTab({ draft, patch }: Props) {
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-sm font-medium text-sp-text">행사 알림 팝업</span>
-            <span className="text-xs text-sp-muted">앱 실행 시 오늘/다가오는 행사를 알림으로 표시합니다.</span>
+            <span className="text-xs text-sp-muted">
+              앱 실행 시 오늘/다가오는 행사를 알림으로 표시합니다.
+            </span>
           </div>
           <Toggle
             checked={draft.eventAlertEnabled !== false}
@@ -137,8 +143,9 @@ export function CalendarTab({ draft, patch }: Props) {
                     key={c}
                     type="button"
                     onClick={() => setNewCatColor(c)}
-                    className={`w-5 h-5 rounded-full ${COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${newCatColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card' : ''
-                      }`}
+                    className={`w-5 h-5 rounded-full ${COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${
+                      newCatColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card' : ''
+                    }`}
                   />
                 ))}
               </div>
@@ -160,7 +167,10 @@ export function CalendarTab({ draft, patch }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowCatForm(false); setNewCatName(''); }}
+                onClick={() => {
+                  setShowCatForm(false);
+                  setNewCatName('');
+                }}
                 className="text-sp-muted hover:text-sp-text text-xs"
               >
                 취소
@@ -171,14 +181,14 @@ export function CalendarTab({ draft, patch }: Props) {
       </SettingsSection>
 
       {/* 외부 연동 */}
-      {(draft.schoolLevel !== 'custom' || true) && (
-        <div className="mt-2 mb-2">
-          <div className="flex items-center gap-3 mb-4 pt-4 border-t border-sp-border">
-            <span className="material-symbols-outlined text-sp-muted text-base">link</span>
-            <span className="text-xs font-semibold text-sp-muted tracking-widest uppercase">외부 연동</span>
-          </div>
+      <div className="mt-2 mb-2">
+        <div className="flex items-center gap-3 mb-4 pt-4 border-t border-sp-border">
+          <span className="material-symbols-outlined text-sp-muted text-base">link</span>
+          <span className="text-xs font-semibold text-sp-muted tracking-widest uppercase">
+            외부 연동
+          </span>
         </div>
-      )}
+      </div>
 
       {/* NEIS 학사일정 + 시간표 — custom(직접 설정)일 때 숨김 */}
       {draft.schoolLevel !== 'custom' && (
@@ -195,7 +205,8 @@ export function CalendarTab({ draft, patch }: Props) {
         title="구글 캘린더 연동"
       >
         <p className="text-sm text-sp-muted">
-          구글 캘린더 양방향 동기화는 <span className="text-sp-text font-medium">설정 › Google 연동</span> 탭에서 관리합니다.
+          구글 캘린더 양방향 동기화는{' '}
+          <span className="text-sp-text font-medium">설정 › Google 연동</span> 탭에서 관리합니다.
         </p>
       </SettingsSection>
     </div>
@@ -217,7 +228,9 @@ function CategoryRow({
         <div className={colorDot(category.color)} />
         <span className="text-sm font-medium text-sp-text">{category.name}</span>
         {isDefault && (
-          <span className="text-caption text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">기본</span>
+          <span className="text-caption text-sp-muted bg-sp-border/30 px-1.5 py-0.5 rounded">
+            기본
+          </span>
         )}
       </div>
       {!isDefault && (

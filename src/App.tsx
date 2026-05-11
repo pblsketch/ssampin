@@ -23,7 +23,10 @@ const NotePage = React.lazy(() =>
 import { ToolsGrid } from '@adapters/components/Tools/ToolsGrid';
 import { BookmarksPage } from '@adapters/components/Tools/BookmarksPage';
 import { DualToolContainer } from '@adapters/components/Tools/DualToolContainer';
-import { ToolServicesContext, type ToolServicesValue } from '@adapters/components/Tools/ToolServicesContext';
+import {
+  ToolServicesContext,
+  type ToolServicesValue,
+} from '@adapters/components/Tools/ToolServicesContext';
 import { isDualToolId, type DualToolId } from '@adapters/components/Tools/toolRegistry';
 import { ToolTimer } from '@adapters/components/Tools/Timer';
 import { ToolRandom } from '@adapters/components/Tools/ToolRandom';
@@ -129,13 +132,7 @@ function isIconMode(): boolean {
 function getQuickAddKindFromUrl(): QuickAddKind {
   const params = new URLSearchParams(window.location.search);
   const raw = params.get('kind');
-  if (
-    raw === 'todo' ||
-    raw === 'event' ||
-    raw === 'memo' ||
-    raw === 'note' ||
-    raw === 'bookmark'
-  ) {
+  if (raw === 'todo' || raw === 'event' || raw === 'memo' || raw === 'note' || raw === 'bookmark') {
     return raw;
   }
   return 'todo';
@@ -146,9 +143,7 @@ function isPrewarmMode(): boolean {
   return params.get('prewarm') === '1';
 }
 
-function useCallbackForDualEntry(
-  setCurrentPage: (page: PageId) => void,
-): () => void {
+function useCallbackForDualEntry(setCurrentPage: (page: PageId) => void): () => void {
   return useCallback(() => {
     setCurrentPage('dual-tool-view');
   }, [setCurrentPage]);
@@ -161,7 +156,9 @@ interface RenderPageContext {
    * 설정 페이지 진입 시 활성화할 탭 id. navigateToPage('settings#widget') 같은
    * 형식으로 위젯에서 특정 탭을 직접 열 때 사용. 한 번 사용 후 자동 초기화.
    */
-  readonly settingsInitialTab?: import('@adapters/components/Settings/SettingsPage').SettingsTabId | null;
+  readonly settingsInitialTab?:
+    | import('@adapters/components/Settings/SettingsPage').SettingsTabId
+    | null;
 }
 
 function renderPage(
@@ -174,40 +171,82 @@ function renderPage(
     return <Dashboard onNavigate={(page) => onNavigate(page as PageId)} />;
   }
   if (page === 'seating') {
-    return <PinGuard feature="seating"><Seating /></PinGuard>;
+    return (
+      <PinGuard feature="seating">
+        <Seating />
+      </PinGuard>
+    );
   }
   if (page === 'timetable') {
-    return <PinGuard feature="timetable"><TimetablePage /></PinGuard>;
+    return (
+      <PinGuard feature="timetable">
+        <TimetablePage />
+      </PinGuard>
+    );
   }
   if (page === 'homeroom') {
-    return <PinGuard feature="studentRecords"><HomeroomPage /></PinGuard>;
+    return (
+      <PinGuard feature="studentRecords">
+        <HomeroomPage />
+      </PinGuard>
+    );
   }
   if (page === 'student-records') {
-    return <PinGuard feature="studentRecords"><HomeroomPage /></PinGuard>;
+    return (
+      <PinGuard feature="studentRecords">
+        <HomeroomPage />
+      </PinGuard>
+    );
   }
   if (page === 'schedule') {
-    return <PinGuard feature="schedule"><Schedule /></PinGuard>;
+    return (
+      <PinGuard feature="schedule">
+        <Schedule />
+      </PinGuard>
+    );
   }
   if (page === 'todo') {
-    return <PinGuard feature="todo"><Todo /></PinGuard>;
+    return (
+      <PinGuard feature="todo">
+        <Todo />
+      </PinGuard>
+    );
   }
   if (page === 'meal') {
-    return <PinGuard feature="meal"><MealPage /></PinGuard>;
+    return (
+      <PinGuard feature="meal">
+        <MealPage />
+      </PinGuard>
+    );
   }
   if (page === 'memo') {
-    return <PinGuard feature="memo"><MemoPage /></PinGuard>;
+    return (
+      <PinGuard feature="memo">
+        <MemoPage />
+      </PinGuard>
+    );
   }
   if (page === 'note') {
     return (
       <PinGuard feature="note">
-        <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sp-muted text-lg">쌤핀 노트를 준비하는 중...</p></div>}>
+        <Suspense
+          fallback={
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sp-muted text-lg">쌤핀 노트를 준비하는 중...</p>
+            </div>
+          }
+        >
           <NotePage />
         </Suspense>
       </PinGuard>
     );
   }
   if (page === 'class-management') {
-    return <PinGuard feature="classManagement"><ClassManagementPage /></PinGuard>;
+    return (
+      <PinGuard feature="classManagement">
+        <ClassManagementPage />
+      </PinGuard>
+    );
   }
   if (page === 'settings') {
     return <SettingsPage initialTab={ctx.settingsInitialTab ?? null} />;
@@ -217,13 +256,23 @@ function renderPage(
   }
   if (page === 'tool-forms') {
     return (
-      <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sp-muted text-lg">서식 불러오는 중...</p></div>}>
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center">
+            <p className="text-sp-muted text-lg">서식 불러오는 중...</p>
+          </div>
+        }
+      >
         <FormsPage onBack={() => onNavigate('tools')} />
       </Suspense>
     );
   }
   if (page === 'bookmarks') {
-    return <PinGuard feature="bookmarks"><BookmarksPage /></PinGuard>;
+    return (
+      <PinGuard feature="bookmarks">
+        <BookmarksPage />
+      </PinGuard>
+    );
   }
   if (page === 'tools') {
     return <ToolsGrid onNavigate={onNavigate} />;
@@ -252,7 +301,9 @@ function renderPage(
     return wrap(<ToolRandom onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-traffic-light') {
-    return wrap(<ToolTrafficLight onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+    return wrap(
+      <ToolTrafficLight onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
+    );
   }
   if (page === 'tool-scoreboard') {
     return wrap(<ToolScoreboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
@@ -282,10 +333,14 @@ function renderPage(
     return wrap(<ToolMultiSurvey onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-realtime-wall') {
-    return wrap(<ToolRealtimeWall onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+    return wrap(
+      <ToolRealtimeWall onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
+    );
   }
   if (page === 'tool-interactive-slides') {
-    return wrap(<ToolInteractiveSlides onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+    return wrap(
+      <ToolInteractiveSlides onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
+    );
   }
   if (page === 'tool-wordcloud') {
     return wrap(<ToolWordCloud onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
@@ -301,7 +356,9 @@ function renderPage(
     return wrap(<ToolValueLine onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
   if (page === 'tool-traffic-discussion') {
-    return wrap(<ToolTrafficLightDiscussion onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+    return wrap(
+      <ToolTrafficLightDiscussion onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />,
+    );
   }
   if (page === 'tool-chalkboard') {
     return wrap(<ToolChalkboard onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
@@ -343,13 +400,19 @@ function WidgetUpdateBanner() {
     if (!api) return;
 
     const cleanups: (() => void)[] = [];
-    cleanups.push(api.onUpdateDownloaded(() => {
-      setStatus('downloaded');
-    }));
-    cleanups.push(api.onUpdateAvailable((info) => {
-      setVersion(info.version);
-    }));
-    return () => { cleanups.forEach((fn) => fn()); };
+    cleanups.push(
+      api.onUpdateDownloaded(() => {
+        setStatus('downloaded');
+      }),
+    );
+    cleanups.push(
+      api.onUpdateAvailable((info) => {
+        setVersion(info.version);
+      }),
+    );
+    return () => {
+      cleanups.forEach((fn) => fn());
+    };
   }, []);
 
   if (status !== 'downloaded') return null;
@@ -584,11 +647,13 @@ function MainApp() {
     if (localStorage.getItem(SHOWN_KEY) === 'true') return;
     const timer = window.setTimeout(() => {
       void import('@adapters/components/common/Toast').then(({ useToastStore }) => {
-        useToastStore.getState().show(
-          '✨ 새 기능: "아이콘 모드"가 추가됐어요! 설정 → 위젯 → 창 닫기 동작에서 켤 수 있어요.',
-          'info',
-          { label: '설정 열기', onClick: () => setCurrentPage('settings') },
-        );
+        useToastStore
+          .getState()
+          .show(
+            '✨ 새 기능: "아이콘 모드"가 추가됐어요! 설정 → 위젯 → 창 닫기 동작에서 켤 수 있어요.',
+            'info',
+            { label: '설정 열기', onClick: () => setCurrentPage('settings') },
+          );
         localStorage.setItem(SHOWN_KEY, 'true');
       });
     }, 3000);
@@ -613,7 +678,9 @@ function MainApp() {
     };
     const handleRejection = (e: PromiseRejectionEvent) => {
       track('error', {
-        message: String((e.reason as { message?: string })?.message || e.reason || 'Unhandled rejection'),
+        message: String(
+          (e.reason as { message?: string })?.message || e.reason || 'Unhandled rejection',
+        ),
         component: 'global',
         stack: String((e.reason as { stack?: string })?.stack || '').substring(0, 500),
       });
@@ -634,7 +701,7 @@ function MainApp() {
 
   // 챗봇에 현재 페이지 전달
   useEffect(() => {
-    (window as any).__ssampin_current_page = currentPage;
+    (window as Window & { __ssampin_current_page?: string }).__ssampin_current_page = currentPage;
   }, [currentPage]);
 
   // 전체화면 상태 감지
@@ -655,7 +722,8 @@ function MainApp() {
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
         target.isContentEditable
-      ) return;
+      )
+        return;
       e.preventDefault();
       const current = useSettingsStore.getState().settings.sidebarCollapsed ?? false;
       void useSettingsStore.getState().update({ sidebarCollapsed: !current });
@@ -674,10 +742,9 @@ function MainApp() {
     const subscribe = window.electronAPI?.sticker?.onFallbackPasteNeeded;
     if (!subscribe) return;
     const unsubscribe = subscribe(() => {
-      useToastStore.getState().show(
-        '이모티콘이 클립보드에 복사됐어요. 채팅창에서 Ctrl+V로 붙여넣어 주세요.',
-        'info',
-      );
+      useToastStore
+        .getState()
+        .show('이모티콘이 클립보드에 복사됐어요. 채팅창에서 Ctrl+V로 붙여넣어 주세요.', 'info');
     });
     return unsubscribe;
   }, []);
@@ -696,10 +763,10 @@ function MainApp() {
         } catch {
           serialized = String(payload.data);
         }
-        // eslint-disable-next-line no-console
+         
         console.log(payload.message, serialized);
       } else {
-        // eslint-disable-next-line no-console
+         
         console.log(payload.message);
       }
     });
@@ -818,9 +885,11 @@ function MainApp() {
       await syncToCloud();
     };
     // 2초 딜레이 (캘린더 초기화 완료 대기)
-    const timer = setTimeout(() => { void initDriveSync(); }, 2000);
+    const timer = setTimeout(() => {
+      void initDriveSync();
+    }, 2000);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   // Google Drive 주기적 동기화
@@ -842,7 +911,7 @@ function MainApp() {
     }, intervalMs);
 
     return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [settings.sync?.autoSyncIntervalMin, settings.sync?.enabled]);
 
   // autoSyncOnSave: 스토어 변경 시 자동 업로드
@@ -864,27 +933,27 @@ function MainApp() {
     // subscribeExcluded:true 도메인(settings, teacher-schedule, timetable-overrides,
     // curriculum-progress, attendance)은 본 맵에서 제외 — 동일 store 중복 구독 방지.
     const STORE_SUBSCRIBE_MAP: Record<string, (cb: () => void) => () => void> = {
-      'class-schedule':   (cb) => useScheduleStore.subscribe(cb),
-      'students':         (cb) => useStudentStore.subscribe(cb),
-      'seating':          (cb) => useSeatingStore.subscribe(cb),
-      'events':           (cb) => useEventsStore.subscribe(cb),
-      'memos':            (cb) => useMemoStore.subscribe(cb),
-      'todos':            (cb) => useTodoStore.subscribe(cb),
-      'student-records':  (cb) => useStudentRecordsStore.subscribe(cb),
-      'bookmarks':        (cb) => useBookmarkStore.subscribe(cb),
-      'surveys':          (cb) => useSurveyStore.subscribe(cb),
-      'assignments':      (cb) => useAssignmentStore.subscribe(cb),
+      'class-schedule': (cb) => useScheduleStore.subscribe(cb),
+      students: (cb) => useStudentStore.subscribe(cb),
+      seating: (cb) => useSeatingStore.subscribe(cb),
+      events: (cb) => useEventsStore.subscribe(cb),
+      memos: (cb) => useMemoStore.subscribe(cb),
+      todos: (cb) => useTodoStore.subscribe(cb),
+      'student-records': (cb) => useStudentRecordsStore.subscribe(cb),
+      bookmarks: (cb) => useBookmarkStore.subscribe(cb),
+      surveys: (cb) => useSurveyStore.subscribe(cb),
+      assignments: (cb) => useAssignmentStore.subscribe(cb),
       'seat-constraints': (cb) => useSeatConstraintsStore.subscribe(cb),
       'teaching-classes': (cb) => useTeachingClassStore.subscribe(cb),
-      'dday':             (cb) => useDDayStore.subscribe(cb),
-      'consultations':    (cb) => useConsultationStore.subscribe(cb),
-      'manual-meals':     (cb) => useMealStore.subscribe(cb),
+      dday: (cb) => useDDayStore.subscribe(cb),
+      consultations: (cb) => useConsultationStore.subscribe(cb),
+      'manual-meals': (cb) => useMealStore.subscribe(cb),
       // note-cloud-sync PDCA: 노트북 메타가 useNoteStore의 대표 키.
       // note-sections / note-pages-meta / note-body는 동일 store이므로
       // syncRegistry에서 subscribeExcluded:true로 처리되어 본 맵에서 제외됨.
-      'note-notebooks':   (cb) => useNoteStore.subscribe(cb),
+      'note-notebooks': (cb) => useNoteStore.subscribe(cb),
       // 내 이모티콘 — stickers-meta.json 단일 키.
-      'stickers':         (cb) => useStickerStore.subscribe(cb),
+      stickers: (cb) => useStickerStore.subscribe(cb),
     };
 
     const unsubscribers: Array<() => void> = [];
@@ -898,7 +967,7 @@ function MainApp() {
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [settings.sync?.enabled, settings.sync?.autoSyncOnSave]);
 
   // Google Drive: 창 포커스 복귀 시 syncFromCloud → syncToCloud
@@ -931,7 +1000,9 @@ function MainApp() {
       }
     };
 
-    const onWindowFocus = () => { void onFocus(); };
+    const onWindowFocus = () => {
+      void onFocus();
+    };
 
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('focus', onWindowFocus);
@@ -940,7 +1011,7 @@ function MainApp() {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', onWindowFocus);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [settings.sync?.enabled]);
 
   // Google Drive 충돌 상태 구독
@@ -968,14 +1039,11 @@ function MainApp() {
       const isSemesterStart = (month === 3 || month === 9) && day <= 15;
 
       if (isSemesterStart && neisSettings.enabled && !neisSettings.lastSyncAt) {
-        showToast(
-          '새 학기가 시작되었습니다! 설정에서 NEIS 학사일정을 동기화해보세요.',
-          'info',
-        );
+        showToast('새 학기가 시작되었습니다! 설정에서 NEIS 학사일정을 동기화해보세요.', 'info');
       }
     };
     void initNeisSync();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 테마 CSS 변수 주입 (useLayoutEffect)
@@ -1011,43 +1079,47 @@ function MainApp() {
     <div className="flex flex-col h-screen bg-sp-bg">
       <MobileAnnouncementBanner />
       <div className="flex flex-1 min-h-0">
-      {!isFullscreen && (
-        <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} onFeedback={() => setShowFeedback(true)} />
-      )}
-      <main className={`flex-1 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
-        {renderPage(currentPage, setCurrentPage, isFullscreen, {
-          onRequestDualMode: handleRequestDualMode,
-          lastSingleTool,
-          settingsInitialTab,
-        })}
-      </main>
-      <UpdateNotification />
-      <EventPopup />
-      <ToastContainer />
-      <Onboarding />
-      {driveConflicts.length > 0 && (
-        <DriveSyncConflictModal
-          conflicts={driveConflicts}
-          onResolve={async (conflict, resolution) => {
-            await useDriveSyncStore.getState().resolveConflict(conflict, resolution);
-            // 'remote' 해결 시 스토어 리로드
-            if (resolution === 'remote') {
-              await reloadStores([conflict.filename]);
-            }
-          }}
-          onClose={() => useDriveSyncStore.getState().resetStatus()}
-        />
-      )}
-      <FirstSyncConfirmModalContainer />
-      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
-      <ShareModal />
-      <SharePromptOverlay />
-      <HelpChatPanel />
-      <CloseActionDialog />
-      <OAuthModalsProvider />
-      <NeisSyncSuggestionBanner />
-      <CommandPalette onNavigate={setCurrentPage} />
-      <QuickAddModal />
+        {!isFullscreen && (
+          <Sidebar
+            currentPage={currentPage}
+            onNavigate={setCurrentPage}
+            onFeedback={() => setShowFeedback(true)}
+          />
+        )}
+        <main className={`flex-1 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
+          {renderPage(currentPage, setCurrentPage, isFullscreen, {
+            onRequestDualMode: handleRequestDualMode,
+            lastSingleTool,
+            settingsInitialTab,
+          })}
+        </main>
+        <UpdateNotification />
+        <EventPopup />
+        <ToastContainer />
+        <Onboarding />
+        {driveConflicts.length > 0 && (
+          <DriveSyncConflictModal
+            conflicts={driveConflicts}
+            onResolve={async (conflict, resolution) => {
+              await useDriveSyncStore.getState().resolveConflict(conflict, resolution);
+              // 'remote' 해결 시 스토어 리로드
+              if (resolution === 'remote') {
+                await reloadStores([conflict.filename]);
+              }
+            }}
+            onClose={() => useDriveSyncStore.getState().resetStatus()}
+          />
+        )}
+        <FirstSyncConfirmModalContainer />
+        {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+        <ShareModal />
+        <SharePromptOverlay />
+        <HelpChatPanel />
+        <CloseActionDialog />
+        <OAuthModalsProvider />
+        <NeisSyncSuggestionBanner />
+        <CommandPalette onNavigate={setCurrentPage} />
+        <QuickAddModal />
       </div>
     </div>
   );
@@ -1079,10 +1151,9 @@ function FirstSyncConfirmModalContainer() {
       }}
       onDefer={async () => {
         await chooseFirstSync('defer');
-        useToastStore.getState().show(
-          '동기화를 나중에 설정해요. 설정 > 구글 드라이브에서 결정할 수 있어요.',
-          'info',
-        );
+        useToastStore
+          .getState()
+          .show('동기화를 나중에 설정해요. 설정 > 구글 드라이브에서 결정할 수 있어요.', 'info');
       }}
     />
   );

@@ -44,7 +44,8 @@ function getAppContext(): { summary: string; currentPage: string } {
   const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
   const platform = navigator.platform;
   const screen = `${window.screen.width}x${window.screen.height}`;
-  const currentPage = (window as any).__ssampin_current_page as string | undefined;
+  const currentPage = (window as Window & { __ssampin_current_page?: string })
+    .__ssampin_current_page;
   const pageName = currentPage ? (PAGE_NAMES[currentPage] ?? currentPage) : '알 수 없음';
   return {
     summary: `[앱 v${version}, ${platform}, ${screen}, 현재 페이지: ${pageName}]`,
@@ -62,16 +63,16 @@ const WELCOME_MESSAGE: HelpChatMessage = {
 
 /** 주제별 후속 질문 추천 매핑 */
 const FOLLOW_UP_MAP: Record<string, string[]> = {
-  '시간표': ['NEIS 시간표가 안 나와요', '과목 색상 바꾸기', '교사 시간표 설정'],
-  '위젯': ['위젯 항상 위에 고정', '위젯에 보이는 정보 변경', '위젯 모드 종료'],
-  '설정': ['테마 바꾸기', '폰트 변경', 'PIN 잠금 설정'],
-  '자리': ['랜덤 배치 조건 설정', '짝꿍 모드 사용법', '자리배치 내보내기'],
-  '일정': ['D-Day 추가하기', 'Google 캘린더 연동', 'NEIS 학사일정 연동'],
-  '동기화': ['모바일 앱 연결 방법', 'Google Drive 백업', '데이터 복원'],
-  '메모': ['메모 색상 변경', '메모 크기 조절', '위젯에서 메모 보기'],
-  '급식': ['급식 알레르기 정보', '급식이 안 나와요'],
-  '할일': ['우선순위 설정', '반복 할일 만들기', '할일 보관함'],
-  '내보내기': ['엑셀로 내보내기', '한글(HWPX) 내보내기', 'PDF 내보내기'],
+  시간표: ['NEIS 시간표가 안 나와요', '과목 색상 바꾸기', '교사 시간표 설정'],
+  위젯: ['위젯 항상 위에 고정', '위젯에 보이는 정보 변경', '위젯 모드 종료'],
+  설정: ['테마 바꾸기', '폰트 변경', 'PIN 잠금 설정'],
+  자리: ['랜덤 배치 조건 설정', '짝꿍 모드 사용법', '자리배치 내보내기'],
+  일정: ['D-Day 추가하기', 'Google 캘린더 연동', 'NEIS 학사일정 연동'],
+  동기화: ['모바일 앱 연결 방법', 'Google Drive 백업', '데이터 복원'],
+  메모: ['메모 색상 변경', '메모 크기 조절', '위젯에서 메모 보기'],
+  급식: ['급식 알레르기 정보', '급식이 안 나와요'],
+  할일: ['우선순위 설정', '반복 할일 만들기', '할일 보관함'],
+  내보내기: ['엑셀로 내보내기', '한글(HWPX) 내보내기', 'PDF 내보내기'],
 };
 
 function getSuggestedQuestions(question: string, answer: string): string[] {
@@ -167,21 +168,25 @@ export function useHelpChat() {
   }, [messages, isOnline]);
 
   /** 오프라인 FAQ 응답 */
-  const handleOfflineResponse = useCallback((query: string) => {
-    const matches = searchOfflineFaq(query);
-    if (matches.length > 0) {
-      const content = matches
-        .map((m) => `**Q: ${m.question}**\n${m.answer}`)
-        .join('\n\n');
-      const suggested = getSuggestedQuestions(query, content);
-      addAssistantMessage(content, { isOffline: true, suggestedQuestions: suggested.length > 0 ? suggested : undefined });
-    } else {
-      addAssistantMessage(
-        '현재 오프라인 상태예요. 인터넷에 연결하면 더 정확한 답변을 받으실 수 있어요!\n\n기본 FAQ에서 답을 찾지 못했어요.',
-        { isOffline: true },
-      );
-    }
-  }, [addAssistantMessage]);
+  const handleOfflineResponse = useCallback(
+    (query: string) => {
+      const matches = searchOfflineFaq(query);
+      if (matches.length > 0) {
+        const content = matches.map((m) => `**Q: ${m.question}**\n${m.answer}`).join('\n\n');
+        const suggested = getSuggestedQuestions(query, content);
+        addAssistantMessage(content, {
+          isOffline: true,
+          suggestedQuestions: suggested.length > 0 ? suggested : undefined,
+        });
+      } else {
+        addAssistantMessage(
+          '현재 오프라인 상태예요. 인터넷에 연결하면 더 정확한 답변을 받으실 수 있어요!\n\n기본 FAQ에서 답을 찾지 못했어요.',
+          { isOffline: true },
+        );
+      }
+    },
+    [addAssistantMessage],
+  );
 
   /** File[] → ChatImage[] 변환 */
   const convertFilesToChatImages = useCallback(async (files: File[]): Promise<ChatImage[]> => {
@@ -201,193 +206,208 @@ export function useHelpChat() {
   }, []);
 
   /** 메시지 전송 */
-  const sendMessage = useCallback(async (text: string, imageFiles?: File[]) => {
-    const trimmed = text.trim();
-    if (!trimmed && (!imageFiles || imageFiles.length === 0)) return;
-    if (status === 'loading') return;
+  const sendMessage = useCallback(
+    async (text: string, imageFiles?: File[]) => {
+      const trimmed = text.trim();
+      if (!trimmed && (!imageFiles || imageFiles.length === 0)) return;
+      if (status === 'loading') return;
 
-    // 이미지 변환
-    let chatImages: ChatImage[] | undefined;
-    if (imageFiles && imageFiles.length > 0) {
-      try {
-        chatImages = await convertFilesToChatImages(imageFiles);
-      } catch {
-        // 이미지 변환 실패 시 텍스트만 전송
-      }
-    }
-
-    // 이전 pending 피드백 숨기기
-    hideAllPendingFeedback();
-
-    // 유저 메시지 추가
-    const userMsg: HelpChatMessage = {
-      id: generateId(),
-      role: 'user',
-      content: trimmed,
-      timestamp: Date.now(),
-      ...(chatImages && chatImages.length > 0 ? { images: chatImages } : {}),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setStatus('loading');
-    setEscalationType(null);
-
-    // 오프라인이거나 API 미설정 → 로컬 FAQ
-    if (!isOnline || !CHAT_ENDPOINT || !SUPABASE_ANON_KEY) {
-      handleOfflineResponse(trimmed);
-      setStatus('idle');
-      return;
-    }
-
-    // FAQ-first 하이브리드: 고신뢰 FAQ 매칭 시 즉시 답변 표시
-    const faqResults = searchOfflineFaqWithScore(trimmed);
-    const topFaq = faqResults[0];
-    if (topFaq !== undefined && topFaq.score >= 4) {
-      const faqContent = faqResults
-        .map((r) => `**Q: ${r.faq.question}**\n${r.faq.answer}`)
-        .join('\n\n');
-      const faqSuggested = getSuggestedQuestions(trimmed, faqContent);
-      addAssistantMessage(`💡 빠른 답변이에요:\n\n${faqContent}`, {
-        isOffline: false,
-        suggestedQuestions: faqSuggested.length > 0 ? faqSuggested : undefined,
-      });
-      // 고신뢰 FAQ로 충분히 답변 가능 — API 호출 생략으로 응답 속도 향상
-      if (topFaq.score >= 6) {
-        setStatus('idle');
-        return;
-      }
-      // 중간 신뢰도(4-5)면 API도 호출하여 더 정확한 답변 보강
-    }
-
-    try {
-      const history = messages
-        .filter((m) => m.id !== 'welcome')
-        .slice(-6)
-        .map((m) => ({ role: m.role, content: m.content }));
-
-      // API용 이미지 데이터 (base64 순수 데이터만 전송)
-      const apiImages = chatImages?.map((img) => ({
-        mimeType: img.mimeType,
-        data: img.dataUrl.replace(/^data:image\/\w+;base64,/, ''),
-      }));
-
-      const res = await fetch(CHAT_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          message: trimmed,
-          sessionId: sessionIdRef.current,
-          history,
-          source: 'app',
-          appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
-          isTest: !!import.meta.env.DEV,
-          appContext: getAppContext().currentPage,
-          ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
-        }),
-      });
-
-      if (res.status === 429) {
-        addAssistantMessage('⏳ 잠시 후 다시 시도해 주세요. 요청이 너무 많아요.');
-        setStatus('idle');
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const data = (await res.json()) as ChatApiResponse;
-
-      if (data.type === 'escalation') {
-        addAssistantMessage(data.message, {
-          responseType: 'escalation',
-          escalationType: data.escalationType,
-        });
-        setEscalationType(data.escalationType ?? 'other');
-        setStatus('escalation');
-      } else {
-        const suggested = data.suggestedQuestions ?? getSuggestedQuestions(trimmed, data.message);
-        addAssistantMessage(data.message, {
-          sources: data.sources,
-          confidence: data.confidence,
-          responseType: 'answer',
-          suggestedQuestions: suggested.length > 0 ? suggested : undefined,
-        });
-        setStatus('idle');
-      }
-    } catch {
-      // 네트워크 에러 → 오프라인 폴백
-      const matches = searchOfflineFaq(trimmed);
-      if (matches.length > 0) {
-        const content = `⚡ 네트워크 연결이 불안정해요. 로컬 FAQ에서 찾은 답변이에요:\n\n${matches.map((m) => `**Q: ${m.question}**\n${m.answer}`).join('\n\n')}`;
-        addAssistantMessage(content, { isOffline: true });
-      } else {
-        addAssistantMessage(
-          '네트워크 연결이 불안정해요. 인터넷 연결을 확인해 주세요!',
-          { isOffline: true },
-        );
-      }
-      setStatus('error');
-    }
-  }, [messages, status, isOnline, handleOfflineResponse, addAssistantMessage, convertFilesToChatImages, hideAllPendingFeedback]);
-
-  /** 에스컬레이션 제출 */
-  const submitEscalation = useCallback(async (data: EscalationPayload, imageFiles?: File[]) => {
-    setStatus('loading');
-
-    if (!isOnline || !ESCALATE_ENDPOINT || !SUPABASE_ANON_KEY) {
-      addAssistantMessage(
-        '오프라인 상태에서는 전달이 어려워요. 인터넷에 연결한 후 다시 시도해 주세요.',
-        { isOffline: true },
-      );
-      setEscalationType(null);
-      setStatus('idle');
-      return;
-    }
-
-    try {
-      // 스크린샷 이미지 변환
-      let apiImages: { mimeType: string; data: string }[] | undefined;
+      // 이미지 변환
+      let chatImages: ChatImage[] | undefined;
       if (imageFiles && imageFiles.length > 0) {
-        const chatImages = await convertFilesToChatImages(imageFiles);
-        apiImages = chatImages.map((img) => ({
+        try {
+          chatImages = await convertFilesToChatImages(imageFiles);
+        } catch {
+          // 이미지 변환 실패 시 텍스트만 전송
+        }
+      }
+
+      // 이전 pending 피드백 숨기기
+      hideAllPendingFeedback();
+
+      // 유저 메시지 추가
+      const userMsg: HelpChatMessage = {
+        id: generateId(),
+        role: 'user',
+        content: trimmed,
+        timestamp: Date.now(),
+        ...(chatImages && chatImages.length > 0 ? { images: chatImages } : {}),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+      setStatus('loading');
+      setEscalationType(null);
+
+      // 오프라인이거나 API 미설정 → 로컬 FAQ
+      if (!isOnline || !CHAT_ENDPOINT || !SUPABASE_ANON_KEY) {
+        handleOfflineResponse(trimmed);
+        setStatus('idle');
+        return;
+      }
+
+      // FAQ-first 하이브리드: 고신뢰 FAQ 매칭 시 즉시 답변 표시
+      const faqResults = searchOfflineFaqWithScore(trimmed);
+      const topFaq = faqResults[0];
+      if (topFaq !== undefined && topFaq.score >= 4) {
+        const faqContent = faqResults
+          .map((r) => `**Q: ${r.faq.question}**\n${r.faq.answer}`)
+          .join('\n\n');
+        const faqSuggested = getSuggestedQuestions(trimmed, faqContent);
+        addAssistantMessage(`💡 빠른 답변이에요:\n\n${faqContent}`, {
+          isOffline: false,
+          suggestedQuestions: faqSuggested.length > 0 ? faqSuggested : undefined,
+        });
+        // 고신뢰 FAQ로 충분히 답변 가능 — API 호출 생략으로 응답 속도 향상
+        if (topFaq.score >= 6) {
+          setStatus('idle');
+          return;
+        }
+        // 중간 신뢰도(4-5)면 API도 호출하여 더 정확한 답변 보강
+      }
+
+      try {
+        const history = messages
+          .filter((m) => m.id !== 'welcome')
+          .slice(-6)
+          .map((m) => ({ role: m.role, content: m.content }));
+
+        // API용 이미지 데이터 (base64 순수 데이터만 전송)
+        const apiImages = chatImages?.map((img) => ({
           mimeType: img.mimeType,
           data: img.dataUrl.replace(/^data:image\/\w+;base64,/, ''),
         }));
+
+        const res = await fetch(CHAT_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            message: trimmed,
+            sessionId: sessionIdRef.current,
+            history,
+            source: 'app',
+            appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
+            isTest: !!import.meta.env.DEV,
+            appContext: getAppContext().currentPage,
+            ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
+          }),
+        });
+
+        if (res.status === 429) {
+          addAssistantMessage('⏳ 잠시 후 다시 시도해 주세요. 요청이 너무 많아요.');
+          setStatus('idle');
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = (await res.json()) as ChatApiResponse;
+
+        if (data.type === 'escalation') {
+          addAssistantMessage(data.message, {
+            responseType: 'escalation',
+            escalationType: data.escalationType,
+          });
+          setEscalationType(data.escalationType ?? 'other');
+          setStatus('escalation');
+        } else {
+          const suggested = data.suggestedQuestions ?? getSuggestedQuestions(trimmed, data.message);
+          addAssistantMessage(data.message, {
+            sources: data.sources,
+            confidence: data.confidence,
+            responseType: 'answer',
+            suggestedQuestions: suggested.length > 0 ? suggested : undefined,
+          });
+          setStatus('idle');
+        }
+      } catch {
+        // 네트워크 에러 → 오프라인 폴백
+        const matches = searchOfflineFaq(trimmed);
+        if (matches.length > 0) {
+          const content = `⚡ 네트워크 연결이 불안정해요. 로컬 FAQ에서 찾은 답변이에요:\n\n${matches.map((m) => `**Q: ${m.question}**\n${m.answer}`).join('\n\n')}`;
+          addAssistantMessage(content, { isOffline: true });
+        } else {
+          addAssistantMessage('네트워크 연결이 불안정해요. 인터넷 연결을 확인해 주세요!', {
+            isOffline: true,
+          });
+        }
+        setStatus('error');
+      }
+    },
+    [
+      messages,
+      status,
+      isOnline,
+      handleOfflineResponse,
+      addAssistantMessage,
+      convertFilesToChatImages,
+      hideAllPendingFeedback,
+    ],
+  );
+
+  /** 에스컬레이션 제출 */
+  const submitEscalation = useCallback(
+    async (data: EscalationPayload, imageFiles?: File[]) => {
+      setStatus('loading');
+
+      if (!isOnline || !ESCALATE_ENDPOINT || !SUPABASE_ANON_KEY) {
+        addAssistantMessage(
+          '오프라인 상태에서는 전달이 어려워요. 인터넷에 연결한 후 다시 시도해 주세요.',
+          { isOffline: true },
+        );
+        setEscalationType(null);
+        setStatus('idle');
+        return;
       }
 
-      const res = await fetch(ESCALATE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          ...data,
-          sessionId: sessionIdRef.current,
-          appVersion: data.appVersion ?? (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined),
-          appSettings: getAppContext().summary,
-          ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
-        }),
-      });
+      try {
+        // 스크린샷 이미지 변환
+        let apiImages: { mimeType: string; data: string }[] | undefined;
+        if (imageFiles && imageFiles.length > 0) {
+          const chatImages = await convertFilesToChatImages(imageFiles);
+          apiImages = chatImages.map((img) => ({
+            mimeType: img.mimeType,
+            data: img.dataUrl.replace(/^data:image\/\w+;base64,/, ''),
+          }));
+        }
 
-      const result = (await res.json()) as EscalationApiResponse;
-      addAssistantMessage(
-        result.ok
-          ? '✅ 전달 완료! 빠르게 확인하겠습니다. 다른 질문이 있으면 편하게 물어보세요!'
-          : '전달 중 문제가 발생했어요. 나중에 다시 시도해 주세요.',
-      );
-      setEscalationType(null);
-      setStatus('idle');
-    } catch {
-      addAssistantMessage('전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.');
-      setStatus('error');
-    }
-  }, [isOnline, addAssistantMessage, convertFilesToChatImages]);
+        const res = await fetch(ESCALATE_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            ...data,
+            sessionId: sessionIdRef.current,
+            appVersion:
+              data.appVersion ??
+              (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined),
+            appSettings: getAppContext().summary,
+            ...(apiImages && apiImages.length > 0 ? { images: apiImages } : {}),
+          }),
+        });
+
+        const result = (await res.json()) as EscalationApiResponse;
+        addAssistantMessage(
+          result.ok
+            ? '✅ 전달 완료! 빠르게 확인하겠습니다. 다른 질문이 있으면 편하게 물어보세요!'
+            : '전달 중 문제가 발생했어요. 나중에 다시 시도해 주세요.',
+        );
+        setEscalationType(null);
+        setStatus('idle');
+      } catch {
+        addAssistantMessage('전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.');
+        setStatus('error');
+      }
+    },
+    [isOnline, addAssistantMessage, convertFilesToChatImages],
+  );
 
   /** 에스컬레이션 취소 */
   const cancelEscalation = useCallback(() => {

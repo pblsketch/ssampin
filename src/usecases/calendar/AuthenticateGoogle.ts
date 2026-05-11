@@ -10,12 +10,20 @@ export class AuthenticateGoogle {
   ) {}
 
   /** OAuth 인증 URL 생성 */
-  getAuthUrl(redirectUri: string, forceAccountSelect?: boolean, additionalScopes?: readonly string[]): string {
+  getAuthUrl(
+    redirectUri: string,
+    forceAccountSelect?: boolean,
+    additionalScopes?: readonly string[],
+  ): string {
     return this.authPort.getAuthUrl(redirectUri, undefined, forceAccountSelect, additionalScopes);
   }
 
   /** 인증 코드를 토큰으로 교환하고 저장 */
-  async authenticate(code: string, redirectUri: string, codeVerifier?: string): Promise<GoogleAuthTokens> {
+  async authenticate(
+    code: string,
+    redirectUri: string,
+    codeVerifier?: string,
+  ): Promise<GoogleAuthTokens> {
     const tokens = await this.authPort.exchangeCode(code, redirectUri, codeVerifier);
     await this.syncRepo.saveAuthTokens(tokens);
     return tokens;
@@ -48,7 +56,10 @@ export class AuthenticateGoogle {
         // invalid_grant: 다른 기기에서 재인증하여 토큰이 무효화된 경우
         if (err instanceof Error && err.message.includes('INVALID_GRANT')) {
           await this.syncRepo.deleteAuthTokens();
-          throw new Error('INVALID_GRANT: Google 인증이 만료되었습니다. 설정에서 다시 연결해주세요.');
+          throw new Error(
+            'INVALID_GRANT: Google 인증이 만료되었습니다. 설정에서 다시 연결해주세요.',
+            { cause: err },
+          );
         }
         throw err;
       }

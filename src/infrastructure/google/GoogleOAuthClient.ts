@@ -15,14 +15,20 @@ const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
 const FETCH_TIMEOUT_MS = 30_000;
 
 /** AbortController 기반 fetch wrapper. 일정 시간 응답이 없으면 abort. */
-async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit = {},
+  timeoutMs = FETCH_TIMEOUT_MS,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`Google API 응답 시간 초과 (${timeoutMs / 1000}초): ${input}`);
+      throw new Error(`Google API 응답 시간 초과 (${timeoutMs / 1000}초): ${input}`, {
+        cause: err,
+      });
     }
     throw err;
   } finally {
@@ -73,7 +79,12 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
    * @param redirectUri 리다이렉트 URI (로컬 서버 콜백)
    * @param codeChallenge PKCE code challenge (S256)
    */
-  getAuthUrl(redirectUri: string, codeChallenge?: string, forceAccountSelect?: boolean, additionalScopes?: readonly string[]): string {
+  getAuthUrl(
+    redirectUri: string,
+    codeChallenge?: string,
+    forceAccountSelect?: boolean,
+    additionalScopes?: readonly string[],
+  ): string {
     const allScopes = additionalScopes
       ? [...GoogleOAuthClient.SCOPES, ...additionalScopes]
       : GoogleOAuthClient.SCOPES;
@@ -123,7 +134,10 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
       body['code_verifier'] = codeVerifier;
     }
 
-    console.log('[GoogleOAuth] exchangeCode start', { redirectUri, hasVerifier: Boolean(codeVerifier) });
+    console.log('[GoogleOAuth] exchangeCode start', {
+      redirectUri,
+      hasVerifier: Boolean(codeVerifier),
+    });
     const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -132,7 +146,9 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`Token exchange failed: ${res.status} ${err} [redirect_uri=${redirectUri}, client_id=${this.clientId.substring(0, 10)}...]`);
+      throw new Error(
+        `Token exchange failed: ${res.status} ${err} [redirect_uri=${redirectUri}, client_id=${this.clientId.substring(0, 10)}...]`,
+      );
     }
 
     const data = (await res.json()) as TokenResponse;

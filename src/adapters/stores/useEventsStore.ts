@@ -23,7 +23,11 @@ import type {
 } from '@domain/entities/EventsShareFile';
 import type { ExternalCalendarSource } from '@domain/entities/ExternalCalendar';
 import { SyncExternalCalendar } from '@usecases/events/SyncExternalCalendar';
-import { eventsRepository, settingsRepository, externalCalendarRepository } from '@adapters/di/container';
+import {
+  eventsRepository,
+  settingsRepository,
+  externalCalendarRepository,
+} from '@adapters/di/container';
 import type { Student } from '@domain/entities/Student';
 import {
   generateBirthdayEvents,
@@ -73,7 +77,10 @@ interface EventsState {
   // 카테고리 액션
   addCategory: (name: string, color: string) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
-  updateCategory: (id: string, partial: Partial<Pick<CategoryItem, 'name' | 'color'>>) => Promise<void>;
+  updateCategory: (
+    id: string,
+    partial: Partial<Pick<CategoryItem, 'name' | 'color'>>,
+  ) => Promise<void>;
   reorderCategories: (orderedIds: string[]) => Promise<void>;
 
   // 일괄 삭제 액션
@@ -113,7 +120,9 @@ interface EventsState {
   loadExternalSources: () => Promise<void>;
   addExternalSource: (name: string, url: string, categoryId: string) => Promise<void>;
   removeExternalSource: (id: string) => Promise<void>;
-  syncExternalSource: (id: string) => Promise<{ added: number; updated: number; removed: number } | null>;
+  syncExternalSource: (
+    id: string,
+  ) => Promise<{ added: number; updated: number; removed: number } | null>;
   toggleExternalSource: (id: string) => Promise<void>;
 }
 
@@ -137,9 +146,7 @@ function isSnoozed(): boolean {
 
 async function excelBufferToShareFile(buffer: ArrayBuffer): Promise<EventsShareFile | null> {
   try {
-    const { parseEventsFromExcel } = await import(
-      '@infrastructure/export/ExcelExporter'
-    );
+    const { parseEventsFromExcel } = await import('@infrastructure/export/ExcelExporter');
     const { events: parsedEvents, categoryNames } = await parseEventsFromExcel(buffer);
 
     if (parsedEvents.length === 0) return null;
@@ -151,9 +158,7 @@ async function excelBufferToShareFile(buffer: ArrayBuffer): Promise<EventsShareF
       { id: 'treeSchool', name: '나무학교', color: 'purple' },
       { id: 'etc', name: '기타', color: 'gray' },
     ];
-    const availableColors = [
-      'blue', 'green', 'yellow', 'purple', 'red', 'pink', 'indigo', 'teal',
-    ];
+    const availableColors = ['blue', 'green', 'yellow', 'purple', 'red', 'pink', 'indigo', 'teal'];
     let colorIdx = 0;
 
     const catMap = new Map<string, { id: string; name: string; color: string }>();
@@ -339,7 +344,9 @@ export const useEventsStore = create<EventsState>((set) => {
     },
 
     deleteEventsByCategory: async (categoryId) => {
-      const eventsToDelete = useEventsStore.getState().events.filter((e) => e.category === categoryId);
+      const eventsToDelete = useEventsStore
+        .getState()
+        .events.filter((e) => e.category === categoryId);
 
       const count = await manageEvents.deleteByCategory(categoryId);
 
@@ -354,15 +361,15 @@ export const useEventsStore = create<EventsState>((set) => {
     },
 
     deleteEventsByDateRange: async (startDate, endDate) => {
-      const eventsToDelete = useEventsStore.getState().events.filter(
-        (e) => e.date >= startDate && e.date <= endDate,
-      );
+      const eventsToDelete = useEventsStore
+        .getState()
+        .events.filter((e) => e.date >= startDate && e.date <= endDate);
 
       const count = await manageEvents.deleteByDateRange(startDate, endDate);
 
-      const remaining = useEventsStore.getState().events.filter(
-        (e) => e.date < startDate || e.date > endDate,
-      );
+      const remaining = useEventsStore
+        .getState()
+        .events.filter((e) => e.date < startDate || e.date > endDate);
       set({ events: remaining });
 
       for (const event of eventsToDelete) {
@@ -383,8 +390,7 @@ export const useEventsStore = create<EventsState>((set) => {
       const today = new Date();
       const result = await checkEventAlerts.execute(today);
 
-      const shouldShow =
-        result.hasAlerts && !isDismissedToday() && !isSnoozed();
+      const shouldShow = result.hasAlerts && !isDismissedToday() && !isSnoozed();
 
       set({ alertResult: result, showPopup: shouldShow });
     },
@@ -420,9 +426,7 @@ export const useEventsStore = create<EventsState>((set) => {
     updateCategory: async (id, partial) => {
       await manageEvents.updateCategory(id, partial);
       set((state) => ({
-        categories: state.categories.map((c) =>
-          c.id === id ? { ...c, ...partial } : c,
-        ),
+        categories: state.categories.map((c) => (c.id === id ? { ...c, ...partial } : c)),
       }));
     },
 
@@ -488,51 +492,62 @@ export const useEventsStore = create<EventsState>((set) => {
             buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
           }
           const excelResult = excelBufferToShareFile(buf);
-          if (!excelResult) throw new Error('엑셀 파일을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.');
+          if (!excelResult)
+            throw new Error('엑셀 파일을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.');
           return excelResult;
         }
 
         try {
           const parsed: unknown = JSON.parse(result.content as string);
           const validated = validateShareFile(parsed);
-          if (!validated) throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.');
+          if (!validated)
+            throw new Error(
+              '올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.',
+            );
           return validated;
         } catch (e) {
           if (e instanceof Error && e.message.includes('올바른')) throw e;
-          throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.');
+          throw new Error(
+            '올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.',
+            { cause: e },
+          );
         }
       }
 
       // Browser fallback — supports both .ssampin and .xlsx
-      const fileResult = await new Promise<
-        { content: string | ArrayBuffer; name: string } | null
-      >((resolve) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.ssampin,.xlsx';
-        input.onchange = () => {
-          const file = input.files?.[0];
-          if (!file) { resolve(null); return; }
-          const isExcel = file.name.endsWith('.xlsx');
-          const reader = new FileReader();
-          reader.onload = () =>
-            resolve({ content: reader.result as string | ArrayBuffer, name: file.name });
-          reader.onerror = () => resolve(null);
-          if (isExcel) {
-            reader.readAsArrayBuffer(file);
-          } else {
-            reader.readAsText(file);
-          }
-        };
-        input.click();
-      });
+      const fileResult = await new Promise<{ content: string | ArrayBuffer; name: string } | null>(
+        (resolve) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.ssampin,.xlsx';
+          input.onchange = () => {
+            const file = input.files?.[0];
+            if (!file) {
+              resolve(null);
+              return;
+            }
+            const isExcel = file.name.endsWith('.xlsx');
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve({ content: reader.result as string | ArrayBuffer, name: file.name });
+            reader.onerror = () => resolve(null);
+            if (isExcel) {
+              reader.readAsArrayBuffer(file);
+            } else {
+              reader.readAsText(file);
+            }
+          };
+          input.click();
+        },
+      );
 
       if (!fileResult) return null;
 
       // .xlsx file → parse Excel and convert to EventsShareFile
       if (fileResult.name.endsWith('.xlsx')) {
         const excelResult = excelBufferToShareFile(fileResult.content as ArrayBuffer);
-        if (!excelResult) throw new Error('엑셀 파일을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.');
+        if (!excelResult)
+          throw new Error('엑셀 파일을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.');
         return excelResult;
       }
 
@@ -540,11 +555,16 @@ export const useEventsStore = create<EventsState>((set) => {
       try {
         const parsed: unknown = JSON.parse(fileResult.content as string);
         const validated = validateShareFile(parsed);
-        if (!validated) throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.');
+        if (!validated)
+          throw new Error(
+            '올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.',
+          );
         return validated;
       } catch (e) {
         if (e instanceof Error && e.message.includes('올바른')) throw e;
-        throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.');
+        throw new Error('올바른 형식의 파일이 아닙니다. .ssampin 또는 .xlsx 파일을 선택해주세요.', {
+          cause: e,
+        });
       }
     },
 
@@ -563,9 +583,7 @@ export const useEventsStore = create<EventsState>((set) => {
     setShareFile: (file) => set({ shareFile: file }),
 
     downloadTemplate: async () => {
-      const { generateEventsTemplateExcel } = await import(
-        '@infrastructure/export/ExcelExporter'
-      );
+      const { generateEventsTemplateExcel } = await import('@infrastructure/export/ExcelExporter');
       const buffer = await generateEventsTemplateExcel();
       const fileName = '일정_가져오기_양식.xlsx';
       const api = window.electronAPI;

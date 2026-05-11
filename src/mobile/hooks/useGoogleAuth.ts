@@ -31,41 +31,40 @@ export function useGoogleAuth(): GoogleAuthState {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const startLogin = useCallback(async (forceAccountSelect?: boolean) => {
-    // 인앱 브라우저 감지 → 로그인 차단 + 안내
-    const { isInApp, appName } = detectInAppBrowser();
-    if (isInApp) {
-      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-      const guide = isIOS
-        ? '하단의 "Safari로 열기" 버튼을 눌러 Safari에서 다시 접속해주세요.'
-        : '우측 상단 ⋮ 메뉴에서 "브라우저에서 열기"를 눌러 Chrome에서 다시 접속해주세요.';
+  const startLogin = useCallback(
+    async (forceAccountSelect?: boolean) => {
+      // 인앱 브라우저 감지 → 로그인 차단 + 안내
+      const { isInApp, appName } = detectInAppBrowser();
+      if (isInApp) {
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+        const guide = isIOS
+          ? '하단의 "Safari로 열기" 버튼을 눌러 Safari에서 다시 접속해주세요.'
+          : '우측 상단 ⋮ 메뉴에서 "브라우저에서 열기"를 눌러 Chrome에서 다시 접속해주세요.';
 
-      alert(
-        `${appName ?? '앱 내'} 브라우저에서는 Google 로그인이 차단돼요.\n\n${guide}\n\n또는 주소창의 URL을 복사해서 크롬/사파리에 붙여넣기 해주세요.`,
-      );
-      return;
-    }
+        alert(
+          `${appName ?? '앱 내'} 브라우저에서는 Google 로그인이 차단돼요.\n\n${guide}\n\n또는 주소창의 URL을 복사해서 크롬/사파리에 붙여넣기 해주세요.`,
+        );
+        return;
+      }
 
-    // 첫 연결(토큰 없음) 또는 명시적 요청 시 계정 선택 화면 표시
-    const shouldSelectAccount = forceAccountSelect ?? !tokens;
+      // 첫 연결(토큰 없음) 또는 명시적 요청 시 계정 선택 화면 표시
+      const shouldSelectAccount = forceAccountSelect ?? !tokens;
 
-    const verifier = generateCodeVerifier();
-    const challenge = await generateCodeChallenge(verifier);
-    await writeAuth(VERIFIER_KEY, verifier);
+      const verifier = generateCodeVerifier();
+      const challenge = await generateCodeChallenge(verifier);
+      await writeAuth(VERIFIER_KEY, verifier);
 
-    const redirectUri = window.location.origin + '/';
-    const url = googleAuthPort.getAuthUrl(redirectUri, challenge, shouldSelectAccount);
-    window.location.href = url;
-  }, [tokens]);
+      const redirectUri = window.location.origin + '/';
+      const url = googleAuthPort.getAuthUrl(redirectUri, challenge, shouldSelectAccount);
+      window.location.href = url;
+    },
+    [tokens],
+  );
 
   const handleCallback = useCallback(async (code: string) => {
     const verifier = await readAuth<string>(VERIFIER_KEY);
     const redirectUri = window.location.origin + '/';
-    const newTokens = await googleAuthPort.exchangeCode(
-      code,
-      redirectUri,
-      verifier ?? undefined,
-    );
+    const newTokens = await googleAuthPort.exchangeCode(code, redirectUri, verifier ?? undefined);
     await writeAuth(AUTH_KEY, newTokens);
     await deleteAuth(VERIFIER_KEY);
     setTokens(newTokens);
@@ -86,7 +85,9 @@ export function useGoogleAuth(): GoogleAuthState {
         if (err instanceof Error && err.message.includes('INVALID_GRANT')) {
           await deleteAuth(AUTH_KEY);
           setTokens(null);
-          throw new Error('INVALID_GRANT: Google 인증이 만료되었습니다. 다시 로그인해주세요.');
+          throw new Error('INVALID_GRANT: Google 인증이 만료되었습니다. 다시 로그인해주세요.', {
+            cause: err,
+          });
         }
         throw err;
       }
@@ -98,7 +99,9 @@ export function useGoogleAuth(): GoogleAuthState {
     if (tokens) {
       try {
         await googleAuthPort.revokeTokens(tokens.accessToken);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     await deleteAuth(AUTH_KEY);
     setTokens(null);

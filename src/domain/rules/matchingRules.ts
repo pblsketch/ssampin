@@ -38,10 +38,9 @@ export function findMatchingClass(
 
   // 4순위: 과목 매칭
   if (subject) {
-    const subjectMatches = classes.filter((cls) =>
-      cls.subject === subject ||
-      cls.subject.includes(subject) ||
-      subject.includes(cls.subject),
+    const subjectMatches = classes.filter(
+      (cls) =>
+        cls.subject === subject || cls.subject.includes(subject) || subject.includes(cls.subject),
     );
     if (subjectMatches.length === 1) return subjectMatches[0]!;
   }
@@ -63,7 +62,11 @@ export function isSubjectMatch(scheduleSubject: string, classSubject: string): b
   if (scheduleSubject.includes(classSubject) || classSubject.includes(scheduleSubject)) return true;
 
   // 괄호/숫자 제거 후 비교
-  const normalize = (s: string) => s.replace(/[(\[（【].+?[)\]）】]/g, '').replace(/[0-9]/g, '').trim();
+  const normalize = (s: string) =>
+    s
+      .replace(/[([（【].+?[)\]）】]/g, '')
+      .replace(/[0-9]/g, '')
+      .trim();
   if (normalize(scheduleSubject) === normalize(classSubject)) return true;
 
   return false;

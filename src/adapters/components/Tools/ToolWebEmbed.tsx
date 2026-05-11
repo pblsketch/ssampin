@@ -15,6 +15,7 @@ interface WebviewElement extends HTMLElement {
 }
 
 declare module 'react' {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- JSX 네임스페이스 모듈 보강은 namespace 문법 필수
   namespace JSX {
     interface IntrinsicElements {
       webview: {
@@ -132,7 +133,10 @@ export function ToolWebEmbed({ url, title, onBack, isFullscreen }: ToolWebEmbedP
         </div>
 
         {/* Main web area */}
-        <div className="flex-1 relative rounded-xl overflow-hidden" style={{ minHeight: 'calc(100vh - 240px)' }}>
+        <div
+          className="flex-1 relative rounded-xl overflow-hidden"
+          style={{ minHeight: 'calc(100vh - 240px)' }}
+        >
           {isLoading && !hasError && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-sp-card rounded-xl">
               <div className="animate-spin rounded-full h-10 w-10 border-2 border-sp-border border-t-sp-accent" />

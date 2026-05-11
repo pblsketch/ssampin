@@ -30,31 +30,22 @@ export function validateBookmark(url: string, type: BookmarkType = 'url'): boole
 /**
  * order 기준 즐겨찾기 정렬
  */
-export function sortBookmarksByOrder(
-  bookmarks: readonly Bookmark[],
-): Bookmark[] {
+export function sortBookmarksByOrder(bookmarks: readonly Bookmark[]): Bookmark[] {
   return [...bookmarks].sort((a, b) => a.order - b.order);
 }
 
 /**
  * order 기준 그룹 정렬
  */
-export function sortGroupsByOrder(
-  groups: readonly BookmarkGroup[],
-): BookmarkGroup[] {
+export function sortGroupsByOrder(groups: readonly BookmarkGroup[]): BookmarkGroup[] {
   return [...groups].sort((a, b) => a.order - b.order);
 }
 
 /**
  * 특정 그룹의 즐겨찾기 필터
  */
-export function getBookmarksByGroup(
-  bookmarks: readonly Bookmark[],
-  groupId: string,
-): Bookmark[] {
-  return sortBookmarksByOrder(
-    bookmarks.filter((b) => b.groupId === groupId),
-  );
+export function getBookmarksByGroup(bookmarks: readonly Bookmark[], groupId: string): Bookmark[] {
+  return sortBookmarksByOrder(bookmarks.filter((b) => b.groupId === groupId));
 }
 
 /**
@@ -67,10 +58,7 @@ export function normalizeUrl(url: string): string {
 /**
  * URL 중복 체크
  */
-export function isDuplicateUrl(
-  bookmarks: readonly Bookmark[],
-  url: string,
-): boolean {
+export function isDuplicateUrl(bookmarks: readonly Bookmark[], url: string): boolean {
   const normalized = normalizeUrl(url);
   return bookmarks.some((b) => normalizeUrl(b.url) === normalized);
 }
@@ -102,18 +90,14 @@ export function filterVisibleBookmarks(
 /**
  * 활성(아카이브 안 된) 그룹만 반환
  */
-export function filterActiveGroups(
-  groups: readonly BookmarkGroup[],
-): BookmarkGroup[] {
+export function filterActiveGroups(groups: readonly BookmarkGroup[]): BookmarkGroup[] {
   return groups.filter((g) => !g.archived);
 }
 
 /**
  * 아카이브된 그룹만 반환
  */
-export function filterArchivedGroups(
-  groups: readonly BookmarkGroup[],
-): BookmarkGroup[] {
+export function filterArchivedGroups(groups: readonly BookmarkGroup[]): BookmarkGroup[] {
   return groups.filter((g) => g.archived);
 }
 
@@ -121,19 +105,11 @@ export function filterArchivedGroups(
  * 검색 쿼리로 북마크 필터링 (name + url + ogTitle + ogDescription)
  * 단순 lowercase includes 매칭
  */
-export function filterBookmarksBySearch(
-  bookmarks: readonly Bookmark[],
-  query: string,
-): Bookmark[] {
+export function filterBookmarksBySearch(bookmarks: readonly Bookmark[], query: string): Bookmark[] {
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) return [...bookmarks];
   return bookmarks.filter((b) => {
-    const haystack = [
-      b.name,
-      b.url,
-      b.ogTitle ?? '',
-      b.ogDescription ?? '',
-    ]
+    const haystack = [b.name, b.url, b.ogTitle ?? '', b.ogDescription ?? '']
       .join(' ')
       .toLowerCase();
     return haystack.includes(trimmed);
@@ -192,10 +168,7 @@ export const DOMAIN_GROUP_MAP: Readonly<Record<string, string>> = {
  * - 추천 그룹이 현재 존재하고 archived가 아니어야 반환
  * - 사용자 정의 그룹은 자동 추천 대상이 아님 (preset-* ID만)
  */
-export function recommendGroupId(
-  url: string,
-  groups: readonly BookmarkGroup[],
-): string | null {
+export function recommendGroupId(url: string, groups: readonly BookmarkGroup[]): string | null {
   const domain = extractDomain(url);
   if (!domain) return null;
 
@@ -231,11 +204,7 @@ export function findForgottenBookmarks(
   bookmarks: readonly Bookmark[],
   options: FindForgottenOptions = {},
 ): Bookmark[] {
-  const {
-    daysThreshold = DAYS_FORGOTTEN_THRESHOLD,
-    limit = 3,
-    now = new Date(),
-  } = options;
+  const { daysThreshold = DAYS_FORGOTTEN_THRESHOLD, limit = 3, now = new Date() } = options;
 
   const cutoffMs = now.getTime() - daysThreshold * 24 * 60 * 60 * 1000;
 
@@ -305,7 +274,7 @@ export function parseBrowserBookmarksHtml(html: string): {
 
   const tokenRe = /<H3[^>]*>([\s\S]*?)<\/H3>|<A\s+([^>]*?)>([\s\S]*?)<\/A>/gi;
   let groupIndex = 0;
-  let bookmarkOrderInGroup = new Map<string, number>();
+  const bookmarkOrderInGroup = new Map<string, number>();
   let currentGroupId: string | null = null;
 
   const ensureFallbackUsed = (): string => {
@@ -382,36 +351,227 @@ export function getDefaultPresets(): BookmarkData {
 
   const groups: BookmarkGroup[] = [
     { id: 'preset-work', name: '업무', emoji: '💼', order: 0, collapsed: false, createdAt: now },
-    { id: 'preset-prep', name: '수업 준비', emoji: '📚', order: 1, collapsed: false, createdAt: now },
-    { id: 'preset-tools', name: '수업 도구', emoji: '🛠️', order: 2, collapsed: false, createdAt: now },
-    { id: 'preset-ai', name: 'AI·에듀테크', emoji: '🤖', order: 3, collapsed: false, createdAt: now },
+    {
+      id: 'preset-prep',
+      name: '수업 준비',
+      emoji: '📚',
+      order: 1,
+      collapsed: false,
+      createdAt: now,
+    },
+    {
+      id: 'preset-tools',
+      name: '수업 도구',
+      emoji: '🛠️',
+      order: 2,
+      collapsed: false,
+      createdAt: now,
+    },
+    {
+      id: 'preset-ai',
+      name: 'AI·에듀테크',
+      emoji: '🤖',
+      order: 3,
+      collapsed: false,
+      createdAt: now,
+    },
   ];
 
   const bookmarks: Bookmark[] = [
     // 💼 업무
-    { id: 'preset-b-1', name: '대국민 나이스', url: 'https://www.neis.go.kr', iconType: 'emoji', iconValue: '🏛️', groupId: 'preset-work', order: 0, createdAt: now, updatedAt: now },
-    { id: 'preset-b-4', name: '정부24', url: 'https://plus.gov.kr', iconType: 'emoji', iconValue: '🇰🇷', groupId: 'preset-work', order: 1, createdAt: now, updatedAt: now },
+    {
+      id: 'preset-b-1',
+      name: '대국민 나이스',
+      url: 'https://www.neis.go.kr',
+      iconType: 'emoji',
+      iconValue: '🏛️',
+      groupId: 'preset-work',
+      order: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-4',
+      name: '정부24',
+      url: 'https://plus.gov.kr',
+      iconType: 'emoji',
+      iconValue: '🇰🇷',
+      groupId: 'preset-work',
+      order: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
 
     // 📚 수업 준비
-    { id: 'preset-b-5', name: '에듀넷', url: 'https://www.edunet.net', iconType: 'emoji', iconValue: '📖', groupId: 'preset-prep', order: 0, createdAt: now, updatedAt: now },
-    { id: 'preset-b-6', name: 'EBS', url: 'https://www.ebs.co.kr', iconType: 'emoji', iconValue: '📺', groupId: 'preset-prep', order: 1, createdAt: now, updatedAt: now },
-    { id: 'preset-b-8', name: '한국교육과정평가원', url: 'https://www.kice.re.kr', iconType: 'emoji', iconValue: '📊', groupId: 'preset-prep', order: 2, createdAt: now, updatedAt: now },
-    { id: 'preset-b-9', name: '학교알리미', url: 'https://www.schoolinfo.go.kr', iconType: 'emoji', iconValue: '🔔', groupId: 'preset-prep', order: 3, createdAt: now, updatedAt: now },
-    { id: 'preset-b-18', name: 'PBL스케치', url: 'https://pblsketch.xyz', iconType: 'emoji', iconValue: '🎯', groupId: 'preset-prep', order: 4, createdAt: now, updatedAt: now },
+    {
+      id: 'preset-b-5',
+      name: '에듀넷',
+      url: 'https://www.edunet.net',
+      iconType: 'emoji',
+      iconValue: '📖',
+      groupId: 'preset-prep',
+      order: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-6',
+      name: 'EBS',
+      url: 'https://www.ebs.co.kr',
+      iconType: 'emoji',
+      iconValue: '📺',
+      groupId: 'preset-prep',
+      order: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-8',
+      name: '한국교육과정평가원',
+      url: 'https://www.kice.re.kr',
+      iconType: 'emoji',
+      iconValue: '📊',
+      groupId: 'preset-prep',
+      order: 2,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-9',
+      name: '학교알리미',
+      url: 'https://www.schoolinfo.go.kr',
+      iconType: 'emoji',
+      iconValue: '🔔',
+      groupId: 'preset-prep',
+      order: 3,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-18',
+      name: 'PBL스케치',
+      url: 'https://pblsketch.xyz',
+      iconType: 'emoji',
+      iconValue: '🎯',
+      groupId: 'preset-prep',
+      order: 4,
+      createdAt: now,
+      updatedAt: now,
+    },
 
     // 🛠️ 수업 도구
-    { id: 'preset-b-10', name: '멘티미터', url: 'https://www.mentimeter.com', iconType: 'emoji', iconValue: '📊', groupId: 'preset-tools', order: 0, createdAt: now, updatedAt: now },
-    { id: 'preset-b-11', name: '패들렛', url: 'https://padlet.com', iconType: 'emoji', iconValue: '📌', groupId: 'preset-tools', order: 1, createdAt: now, updatedAt: now },
-    { id: 'preset-b-12', name: '띵커벨', url: 'https://www.tkbell.co.kr', iconType: 'emoji', iconValue: '🔔', groupId: 'preset-tools', order: 2, createdAt: now, updatedAt: now },
-    { id: 'preset-b-13', name: '캔바', url: 'https://www.canva.com', iconType: 'emoji', iconValue: '🎨', groupId: 'preset-tools', order: 3, createdAt: now, updatedAt: now },
-    { id: 'preset-b-14', name: '미리캔버스', url: 'https://www.miricanvas.com', iconType: 'emoji', iconValue: '🖼️', groupId: 'preset-tools', order: 4, createdAt: now, updatedAt: now },
-    { id: 'preset-b-21', name: '킹수학', url: 'https://xn--9p4bn1ysod.com/', iconType: 'emoji', iconValue: '👑', groupId: 'preset-tools', order: 5, createdAt: now, updatedAt: now },
+    {
+      id: 'preset-b-10',
+      name: '멘티미터',
+      url: 'https://www.mentimeter.com',
+      iconType: 'emoji',
+      iconValue: '📊',
+      groupId: 'preset-tools',
+      order: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-11',
+      name: '패들렛',
+      url: 'https://padlet.com',
+      iconType: 'emoji',
+      iconValue: '📌',
+      groupId: 'preset-tools',
+      order: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-12',
+      name: '띵커벨',
+      url: 'https://www.tkbell.co.kr',
+      iconType: 'emoji',
+      iconValue: '🔔',
+      groupId: 'preset-tools',
+      order: 2,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-13',
+      name: '캔바',
+      url: 'https://www.canva.com',
+      iconType: 'emoji',
+      iconValue: '🎨',
+      groupId: 'preset-tools',
+      order: 3,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-14',
+      name: '미리캔버스',
+      url: 'https://www.miricanvas.com',
+      iconType: 'emoji',
+      iconValue: '🖼️',
+      groupId: 'preset-tools',
+      order: 4,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-21',
+      name: '킹수학',
+      url: 'https://xn--9p4bn1ysod.com/',
+      iconType: 'emoji',
+      iconValue: '👑',
+      groupId: 'preset-tools',
+      order: 5,
+      createdAt: now,
+      updatedAt: now,
+    },
 
     // 🤖 AI·에듀테크
-    { id: 'preset-b-15', name: '뤼튼', url: 'https://wrtn.ai', iconType: 'emoji', iconValue: '✨', groupId: 'preset-ai', order: 0, createdAt: now, updatedAt: now },
-    { id: 'preset-b-16', name: 'ChatGPT', url: 'https://chat.openai.com', iconType: 'emoji', iconValue: '🤖', groupId: 'preset-ai', order: 1, createdAt: now, updatedAt: now },
-    { id: 'preset-b-19', name: 'Gemini', url: 'https://gemini.google.com', iconType: 'emoji', iconValue: '💎', groupId: 'preset-ai', order: 2, createdAt: now, updatedAt: now },
-    { id: 'preset-b-20', name: 'Claude', url: 'https://claude.ai', iconType: 'emoji', iconValue: '🧠', groupId: 'preset-ai', order: 3, createdAt: now, updatedAt: now },
+    {
+      id: 'preset-b-15',
+      name: '뤼튼',
+      url: 'https://wrtn.ai',
+      iconType: 'emoji',
+      iconValue: '✨',
+      groupId: 'preset-ai',
+      order: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-16',
+      name: 'ChatGPT',
+      url: 'https://chat.openai.com',
+      iconType: 'emoji',
+      iconValue: '🤖',
+      groupId: 'preset-ai',
+      order: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-19',
+      name: 'Gemini',
+      url: 'https://gemini.google.com',
+      iconType: 'emoji',
+      iconValue: '💎',
+      groupId: 'preset-ai',
+      order: 2,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'preset-b-20',
+      name: 'Claude',
+      url: 'https://claude.ai',
+      iconType: 'emoji',
+      iconValue: '🧠',
+      groupId: 'preset-ai',
+      order: 3,
+      createdAt: now,
+      updatedAt: now,
+    },
   ];
 
   return { groups, bookmarks };

@@ -36,10 +36,7 @@ export function useStudentPdfUpload(): UseStudentPdfUploadResult {
     async (file: File): Promise<{ pdfDataUrl: string; pdfFilename: string }> => {
       setError(null);
 
-      if (
-        file.type !== 'application/pdf' &&
-        !file.name.toLowerCase().endsWith('.pdf')
-      ) {
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
         const msg = 'PDF 파일만 첨부할 수 있어요.';
         setError(msg);
         throw new Error(msg);
@@ -71,7 +68,7 @@ export function useStudentPdfUpload(): UseStudentPdfUploadResult {
         if (e instanceof Error) throw e;
         const msg = 'PDF 처리에 실패했어요.';
         setError(msg);
-        throw new Error(msg);
+        throw new Error(msg, { cause: e });
       } finally {
         setIsReading(false);
       }

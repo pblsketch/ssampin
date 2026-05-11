@@ -93,10 +93,7 @@ export async function exportSeatingToPdf(
   const gridAreaWidth = gridAreaRight - gridAreaLeft;
   const seatW = gridAreaWidth / totalUnits;
   const gapW = seatW * 0.25;
-  const cellH = Math.min(
-    32,
-    (gridAreaTop - gridAreaBottom) / Math.max(seating.rows, 1),
-  );
+  const cellH = Math.min(32, (gridAreaTop - gridAreaBottom) / Math.max(seating.rows, 1));
   const gridH = cellH * seating.rows;
   const gridStartY = gridAreaTop;
 
@@ -185,11 +182,29 @@ export async function exportSeatingToPdf(
   const nameColW = rosterWidth - numColW;
 
   // 헤더
-  drawRosterCell(page, fonts.bold, '번호', rosterX, rosterTop - rosterRowH, numColW, rosterRowH, true);
-  drawRosterCell(page, fonts.bold, '이름', rosterX + numColW, rosterTop - rosterRowH, nameColW, rosterRowH, true);
+  drawRosterCell(
+    page,
+    fonts.bold,
+    '번호',
+    rosterX,
+    rosterTop - rosterRowH,
+    numColW,
+    rosterRowH,
+    true,
+  );
+  drawRosterCell(
+    page,
+    fonts.bold,
+    '이름',
+    rosterX + numColW,
+    rosterTop - rosterRowH,
+    nameColW,
+    rosterRowH,
+    true,
+  );
 
   // 데이터
-  let availableRosterRows = Math.floor((rosterTop - rosterRowH - margin) / rosterRowH);
+  const availableRosterRows = Math.floor((rosterTop - rosterRowH - margin) / rosterRowH);
   for (let i = 0; i < sorted.length && i < availableRosterRows; i++) {
     const s = sorted[i]!;
     const y = rosterTop - rosterRowH * (i + 2);

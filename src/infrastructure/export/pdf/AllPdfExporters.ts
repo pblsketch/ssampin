@@ -53,9 +53,7 @@ function drawHeader(page: PDFPage, ctx: PdfContext, title: string): number {
 }
 
 // =================== 학교 일정 ===================
-export async function exportEventsToPdf(
-  events: readonly SchoolEvent[],
-): Promise<ArrayBuffer> {
+export async function exportEventsToPdf(events: readonly SchoolEvent[]): Promise<ArrayBuffer> {
   const ctx = await createPdfContext();
   setMetadata(ctx.doc, '학교 일정');
   const sorted = [...events]
@@ -154,7 +152,7 @@ export async function exportClassScheduleToPdf(
   const ctx = await createPdfContext();
   setMetadata(ctx.doc, '학급 시간표');
   const page = ctx.doc.addPage(A4_PORTRAIT);
-  let yTop = drawHeader(page, ctx, '학급 시간표');
+  const yTop = drawHeader(page, ctx, '학급 시간표');
 
   return drawScheduleGrid(ctx, page, yTop, maxPeriods, (day, p) => {
     const pd = (schedule[day] ?? [])[p];
@@ -171,7 +169,7 @@ export async function exportTeacherScheduleToPdf(
   const ctx = await createPdfContext();
   setMetadata(ctx.doc, '교사 시간표');
   const page = ctx.doc.addPage(A4_PORTRAIT);
-  let yTop = drawHeader(page, ctx, '교사 시간표');
+  const yTop = drawHeader(page, ctx, '교사 시간표');
 
   return drawScheduleGrid(ctx, page, yTop, maxPeriods, (day, p) => {
     const pd = (schedule[day] ?? [])[p];

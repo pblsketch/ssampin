@@ -15,10 +15,7 @@ import type {
 import { CURRENT_BACKUP_SCHEMA_VERSION } from '@domain/entities/Backup';
 
 /** 백업에서 무조건 제외할 파일명(확장자 제외). 환경/임시/내부 파일. */
-const EXCLUDED_FILENAMES: ReadonlySet<string> = new Set([
-  'widget-bounds',
-  'icon-bounds',
-]);
+const EXCLUDED_FILENAMES: ReadonlySet<string> = new Set(['widget-bounds', 'icon-bounds']);
 
 /** 파일명 패턴 화이트리스트 — 허용 문자: 영숫자, 하이픈, 언더스코어, 점.
  *  경로 인젝션 방어 + atomic write 잔재(.tmp.json, .backup.json) 차단. */
@@ -33,9 +30,7 @@ const VALID_FILENAME_RE = /^[A-Za-z0-9_.-]+$/;
  *
  * 입력은 정제 전 파일 이름(예: `settings.json`, `events.backup.json`).
  */
-export function selectBackupCandidates(
-  rawFilenames: readonly string[],
-): readonly string[] {
+export function selectBackupCandidates(rawFilenames: readonly string[]): readonly string[] {
   const seen = new Set<string>();
   const result: string[] = [];
 
@@ -68,9 +63,7 @@ export interface BuildBackupMetadataInput {
 }
 
 /** BackupMetadata 생성 — 호출 측은 ISO 시각만 주입하면 된다. */
-export function buildBackupMetadata(
-  input: BuildBackupMetadataInput,
-): BackupMetadata {
+export function buildBackupMetadata(input: BuildBackupMetadataInput): BackupMetadata {
   return {
     schemaVersion: CURRENT_BACKUP_SCHEMA_VERSION,
     appVersion: input.appVersion,
@@ -101,11 +94,7 @@ export function validateBackupFile(
 
   // metadata 검사
   const metaUnknown = obj['metadata'];
-  if (
-    metaUnknown === null ||
-    typeof metaUnknown !== 'object' ||
-    Array.isArray(metaUnknown)
-  ) {
+  if (metaUnknown === null || typeof metaUnknown !== 'object' || Array.isArray(metaUnknown)) {
     return {
       ok: false,
       error: {
@@ -150,11 +139,7 @@ export function validateBackupFile(
 
   // data 검사 — { [filename]: object } 형태인지
   const dataUnknown = obj['data'];
-  if (
-    dataUnknown === null ||
-    typeof dataUnknown !== 'object' ||
-    Array.isArray(dataUnknown)
-  ) {
+  if (dataUnknown === null || typeof dataUnknown !== 'object' || Array.isArray(dataUnknown)) {
     return {
       ok: false,
       error: {
@@ -213,9 +198,7 @@ function normalizePlatform(p: string): BackupPlatform {
  * 현재 환경에서 동작 중인 widget-bounds / icon-bounds 같은 파일이 백업에 섞여 들어왔어도
  * 무시하여 사용자의 화면 위치가 망가지지 않게 한다.
  */
-export function selectRestoreCandidates(
-  backupFilenames: readonly string[],
-): readonly string[] {
+export function selectRestoreCandidates(backupFilenames: readonly string[]): readonly string[] {
   return selectBackupCandidates(backupFilenames.map((n) => `${n}.json`));
 }
 
@@ -226,7 +209,7 @@ export function buildDefaultBackupFilename(nowIso: string): string {
   const compact = nowIso
     .replace(/\.\d+Z$/, '')
     .replace(/Z$/, '')
-    .replace(/[:\-]/g, '')
+    .replace(/[:-]/g, '')
     .replace('T', '-');
   return `ssampin-backup-${compact}.ssampin-backup.json`;
 }

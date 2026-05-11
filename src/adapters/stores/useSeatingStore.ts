@@ -3,7 +3,12 @@ import type { SeatingData } from '@domain/entities/Seating';
 import type { SeatingLayout, SeatGroup } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { isStudentActive } from '@domain/rules/studentActivity';
-import { countStudents, countEmptySeats, shuffleGroups, assignGroupsInOrder } from '@domain/rules/seatRules';
+import {
+  countStudents,
+  countEmptySeats,
+  shuffleGroups,
+  assignGroupsInOrder,
+} from '@domain/rules/seatRules';
 import type { ShuffleResult } from '@domain/rules/seatRules';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import { seatingRepository, seatConstraintsRepository } from '@adapters/di/container';
@@ -40,13 +45,8 @@ function createSeatingFromStudents(students: readonly Student[]): SeatingData {
 }
 
 /** 좌석에서 명렬표에 없거나 결번인 학생 ID를 제거하고, 새로 추가된 학생을 빈 자리에 배치 */
-function sanitizeSeating(
-  seating: SeatingData,
-  students: readonly Student[],
-): SeatingData {
-  const activeIds = new Set(
-    students.filter(isStudentActive).map((s) => s.id),
-  );
+function sanitizeSeating(seating: SeatingData, students: readonly Student[]): SeatingData {
+  const activeIds = new Set(students.filter(isStudentActive).map((s) => s.id));
 
   // 1단계: 비활성/결번 학생 제거
   let changed = false;
@@ -69,7 +69,7 @@ function sanitizeSeating(
   }
 
   changed = true;
-  let queue = [...unplaced];
+  const queue = [...unplaced];
 
   // 3단계: 기존 빈 자리(null)에 미배치 학생 채우기
   seats = seats.map((row) =>
@@ -87,7 +87,7 @@ function sanitizeSeating(
     while (queue.length > 0) {
       const newRow: (string | null)[] = [];
       for (let c = 0; c < cols; c++) {
-        newRow.push(queue.length > 0 ? (queue.shift()!) : null);
+        newRow.push(queue.length > 0 ? queue.shift()! : null);
       }
       seats.push(newRow);
     }
@@ -304,10 +304,12 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         try {
           await seatingRepository.saveSeating(updated);
           set({ seating: updated });
-        } catch { /* 무시 */ }
+        } catch {
+          /* 무시 */
+        }
       } else if (sync && layout === 'grid' && seating.layout === 'group') {
         // 연동 모드 + group → grid: 모둠 학생을 격자에 재배치
-        const allStudentIds = (seating.groups ?? []).flatMap(g => [...g.studentIds]);
+        const allStudentIds = (seating.groups ?? []).flatMap((g) => [...g.studentIds]);
         const cols = seating.cols;
         const rows = Math.max(seating.rows, Math.ceil(allStudentIds.length / cols));
         const seats: (string | null)[][] = [];
@@ -323,14 +325,18 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         try {
           await seatingRepository.saveSeating(updated);
           set({ seating: updated });
-        } catch { /* 무시 */ }
+        } catch {
+          /* 무시 */
+        }
       } else {
         // 비연동 모드 또는 이미 모둠이 존재: 레이아웃만 전환
         const updated: SeatingData = { ...seating, layout };
         try {
           await seatingRepository.saveSeating(updated);
           set({ seating: updated });
-        } catch { /* 무시 */ }
+        } catch {
+          /* 무시 */
+        }
       }
     },
 
@@ -341,7 +347,9 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       try {
         await seatingRepository.saveSeating(updated);
         set({ seating: updated });
-      } catch { /* 무시 */ }
+      } catch {
+        /* 무시 */
+      }
     },
 
     shuffleGroupSeating: async (groupCount, maxSize) => {
@@ -350,16 +358,24 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       // 모든 학생 ID 수집 (격자 + 모둠)
       let allStudentIds: string[];
       if (seating.groups && seating.groups.length > 0) {
-        allStudentIds = seating.groups.flatMap(g => [...g.studentIds]);
+        allStudentIds = seating.groups.flatMap((g) => [...g.studentIds]);
       } else {
         allStudentIds = seating.seats.flat().filter((id): id is string => id !== null);
       }
-      const groups = shuffleGroups(allStudentIds, groupCount, maxSize, seating.groups ?? [], Math.random);
+      const groups = shuffleGroups(
+        allStudentIds,
+        groupCount,
+        maxSize,
+        seating.groups ?? [],
+        Math.random,
+      );
       const updated: SeatingData = { ...seating, layout: 'group' as SeatingLayout, groups };
       try {
         await seatingRepository.saveSeating(updated);
         set({ seating: updated });
-      } catch { /* 무시 */ }
+      } catch {
+        /* 무시 */
+      }
     },
 
     toggleGroupGridSync: async () => {
@@ -368,7 +384,9 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       try {
         await seatingRepository.saveSeating(updated);
         set({ seating: updated });
-      } catch { /* 무시 */ }
+      } catch {
+        /* 무시 */
+      }
     },
 
     resizeGrid: async (newRows, newCols) => {
@@ -384,13 +402,20 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         const existingRow = r < seating.seats.length ? seating.seats[r] : [];
         const newRow: (string | null)[] = [];
         for (let c = 0; c < clampedCols; c++) {
-          const existingCell = existingRow && c < existingRow.length ? (existingRow[c] ?? null) : null;
+          const existingCell =
+            existingRow && c < existingRow.length ? (existingRow[c] ?? null) : null;
           newRow.push(existingCell);
         }
         newSeats.push(newRow);
       }
 
-      let updated: SeatingData = { rows: clampedRows, cols: clampedCols, seats: newSeats, pairMode: seating.pairMode, oddColumnMode: seating.oddColumnMode };
+      let updated: SeatingData = {
+        rows: clampedRows,
+        cols: clampedCols,
+        seats: newSeats,
+        pairMode: seating.pairMode,
+        oddColumnMode: seating.oddColumnMode,
+      };
 
       // 잘려나간 영역의 학생을 빈 자리에 재배치
       const students = useStudentStore.getState().students;
@@ -399,7 +424,9 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       try {
         await seatingRepository.saveSeating(updated);
         set({ seating: updated });
-        await useSettingsStore.getState().update({ seatingRows: updated.rows, seatingCols: updated.cols });
+        await useSettingsStore
+          .getState()
+          .update({ seatingRows: updated.rows, seatingCols: updated.cols });
       } catch {
         // 무시
       }

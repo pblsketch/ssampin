@@ -36,9 +36,9 @@ export class ElectronPrinterAdapter implements IPrinterAdapter {
     try {
       await api.forms.writeBinary(relPath, ab as ArrayBuffer);
     } catch (err) {
-      throw new Error(
-        `임시 파일 저장 실패: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      throw new Error(`임시 파일 저장 실패: ${err instanceof Error ? err.message : String(err)}`, {
+        cause: err,
+      });
     }
 
     if (format === 'pdf') {
@@ -47,7 +47,7 @@ export class ElectronPrinterAdapter implements IPrinterAdapter {
         await api.forms.printPdf!(relPath);
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
-        throw new Error(`PDF 인쇄 대화상자를 열지 못했습니다. (상세: ${detail})`);
+        throw new Error(`PDF 인쇄 대화상자를 열지 못했습니다. (상세: ${detail})`, { cause: err });
       }
       return;
     }
@@ -61,14 +61,16 @@ export class ElectronPrinterAdapter implements IPrinterAdapter {
       if (format === 'hwpx') {
         throw new Error(
           `HWPX 파일을 열 수 없습니다. 한글(HWP) 또는 한글뷰어가 설치되어 있는지 확인하세요. (상세: ${detail})`,
+          { cause: err },
         );
       }
       if (format === 'excel') {
         throw new Error(
           `Excel 파일을 열 수 없습니다. Microsoft Excel 또는 호환 프로그램 설치를 확인하세요. (상세: ${detail})`,
+          { cause: err },
         );
       }
-      throw new Error(`파일을 열 수 없습니다. (상세: ${detail})`);
+      throw new Error(`파일을 열 수 없습니다. (상세: ${detail})`, { cause: err });
     }
   }
 }
