@@ -45,9 +45,21 @@ const presenceChecks = [
     name: 'REGRESSION #3b: RealtimeWallCard teacherActions/teacherDragHandle naming',
   },
   {
+    // REGRESSION #5 (rev. 2026-05-11) — v2.1 리팩토링으로 rate-limit 상태가
+    // 모듈 레벨 `rateLimitBuckets` Map → `session.handle` 내부로 이동했다.
+    // 세션 종료 시 `session.handle.close()` 가 'closed' broadcast + WS/HTTP close +
+    // rate-limit reset 을 모두 처리하므로, "closeSession() 이 handle 을 닫는다" 를
+    // 검증하면 "세션 간 rate-limit 상태 누수 방지" 불변식이 그대로 유지된다.
     file: 'electron/ipc/realtimeWall.ts',
-    pattern: /rateLimitBuckets[\s\S]{0,800}\.clear\s*\(\s*\)/,
-    name: 'REGRESSION #5: closeSession rateLimitBuckets.clear()',
+    pattern: /function\s+closeSession\s*\([\s\S]{0,500}?session\.handle\.close\s*\(\s*\)/,
+    name: 'REGRESSION #5: closeSession() → session.handle.close() (rate-limit/서버 정리, v2.1 리팩토링 반영)',
+  },
+  {
+    // REGRESSION #5b — rate limiting 이 session.handle 의 rate limiter 로 위임되는지 확인.
+    // 이 배선이 끊기면 closeSession 의 reset 도 의미가 없어진다.
+    file: 'electron/ipc/realtimeWall.ts',
+    pattern: /isRateLimited[\s\S]{0,400}?session\.handle\.isRateLimited\s*\(/,
+    name: 'REGRESSION #5b: isRateLimited()가 session.handle.isRateLimited()로 위임',
   },
 ];
 
@@ -58,7 +70,7 @@ const presenceChecks = [
 const absenceChecks = [
   {
     // 회귀 #6 — `C` 단축키 코드 부재 (학생 entry 한정)
-    name: "REGRESSION #6: `C` keyboard shortcut must NOT exist (학생 entry)",
+    name: 'REGRESSION #6: `C` keyboard shortcut must NOT exist (학생 entry)',
     roots: ['src/student'],
     extensions: ['.ts', '.tsx'],
     patterns: [
@@ -72,40 +84,25 @@ const absenceChecks = [
     // 회귀 #7 — dangerouslySetInnerHTML 사용 부재 (학생 entry + RealtimeWall 컴포넌트)
     // jsx 속성 또는 객체 키 형태만 검사 (주석/문자열 안의 단순 언급은 허용 — Design 문서 인용 가능)
     name: 'REGRESSION #7: dangerouslySetInnerHTML must NOT exist (학생 entry + RealtimeWall)',
-    roots: [
-      'src/student',
-      'src/adapters/components/Tools/RealtimeWall',
-    ],
+    roots: ['src/student', 'src/adapters/components/Tools/RealtimeWall'],
     extensions: ['.ts', '.tsx'],
     // jsx attribute (`dangerouslySetInnerHTML={...}`) 또는 props 객체 key (`dangerouslySetInnerHTML:`)
-    patterns: [
-      /dangerouslySetInnerHTML\s*=\s*\{/,
-      /\bdangerouslySetInnerHTML\s*:/,
-    ],
+    patterns: [/dangerouslySetInnerHTML\s*=\s*\{/, /\bdangerouslySetInnerHTML\s*:/],
   },
   {
     // 회귀 #8 — hard delete 패턴 부재
     name: 'REGRESSION #8: hard delete pattern must NOT exist (use soft delete)',
-    roots: [
-      'electron/ipc',
-      'src/adapters/stores',
-      'src/domain/rules',
-    ],
+    roots: ['electron/ipc', 'src/adapters/stores', 'src/domain/rules'],
     extensions: ['.ts'],
     // posts.filter(x => x.id !== <var>) 패턴
     patterns: [/posts\.filter\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.id\s*!==\s*\w+\s*\)/],
     // realtimeWall 도메인에 한정 — 일반 배열 filter는 무관
-    fileFilter: (path) =>
-      /realtimeWall/i.test(path) ||
-      /WallBoard/i.test(path),
+    fileFilter: (path) => /realtimeWall/i.test(path) || /WallBoard/i.test(path),
   },
   {
     // 회귀 #9 — PIN 평문 필드 부재 (Zod 스키마 / 메시지 핸들러)
     name: 'REGRESSION #9: PIN plaintext field must NOT exist in Zod schema (only pinHash allowed)',
-    roots: [
-      'electron/ipc',
-      'src/domain/rules',
-    ],
+    roots: ['electron/ipc', 'src/domain/rules'],
     extensions: ['.ts'],
     // submit-pin-* 핸들러나 스키마에서 `pin: z.string()` 같은 평문 PIN 필드 등장
     // pinHash는 허용하지만 pin은 거부
@@ -135,7 +132,12 @@ function walk(dir, exts, acc = []) {
     const full = join(dir, ent.name);
     if (ent.isDirectory()) {
       // node_modules / dist 등 무시
-      if (ent.name === 'node_modules' || ent.name === 'dist' || ent.name === 'dist-electron' || ent.name === 'release') {
+      if (
+        ent.name === 'node_modules' ||
+        ent.name === 'dist' ||
+        ent.name === 'dist-electron' ||
+        ent.name === 'release'
+      ) {
         continue;
       }
       walk(full, exts, acc);
