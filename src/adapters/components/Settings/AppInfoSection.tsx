@@ -152,16 +152,15 @@ async function fetchReleaseNotes(version: string): Promise<VersionNote | null> {
 
 async function fetchAllReleaseNotes(): Promise<VersionNote[] | null> {
   try {
-    const res = await fetch(
-      'https://raw.githubusercontent.com/pblsketch/ssampin/main/public/release-notes.json',
-      { signal: AbortSignal.timeout(5000) },
-    );
+    const res = await fetch('https://ssampin.com/release-notes.json', {
+      signal: AbortSignal.timeout(5000),
+    });
     if (res.ok) {
       const data: ReleaseNotesData = await res.json();
       return data.versions;
     }
   } catch {
-    // GitHub fetch failed
+    // remote fetch failed
   }
 
   try {

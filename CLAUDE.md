@@ -278,3 +278,13 @@ npx tsc --noEmit         # 타입 체크 (에러 0개 유지)
 4. **모든 UI 텍스트는 한국어**로 작성
 5. 파일 저장/로드 시 반드시 **DI 컨테이너 → Repository → IStoragePort** 경로를 따른다
 6. `any` 타입 사용 금지, TypeScript 에러 0개 유지
+
+---
+
+## 📦 배포 / 릴리즈
+
+- **소스 저장소** `pblsketch/ssampin` — **프라이빗**. 릴리즈 객체를 만들지 않고 버전 태그(`git tag`)만 보관.
+- **배포 저장소** `pblsketch/ssampin-releases` — **퍼블릭**. 인스톨러(`ssampin-Setup.exe`)·DMG·자동업데이트 메타파일(`latest.yml`/`latest-mac.yml`)을 여기에 게시한다. (`docs/02-design/features/repo-privatization.design.md` 참고)
+- 자동 업데이트 feed: [`electron/main.ts`](electron/main.ts) `autoUpdater.setFeedURL` → `github.com/pblsketch/ssampin-releases/releases/latest/download`.
+- 랜딩 다운로드 URL: [`landing/src/config.ts`](landing/src/config.ts). 릴리즈 노트: `https://ssampin.com/release-notes.json` (= [`landing/public/release-notes.json`](landing/public/release-notes.json), `public/release-notes.json` 의 사본 — 릴리즈 시 둘 다 갱신).
+- 릴리즈 절차(8단계)는 프로젝트 메모리의 "Release Workflow" 섹션 참조.
