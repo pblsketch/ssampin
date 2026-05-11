@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 같은 브랜치/PR에서 새 푸시가 오면 진행 중인 실행을 취소
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck · lint · test · regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 1. 타입 검사 — TypeScript strict 에러 0개
+      - name: Typecheck
+        run: npm run typecheck
+
+      # 2. 린트 — ESLint
+      - name: Lint
+        run: npm run lint
+
+      # 3. 단위/통합 테스트 — Vitest
+      - name: Test
+        run: npm run test
+
+      # 4. 회귀 grep 어서션 — scripts/regression-grep-check.mjs
+      - name: Regression check
+        run: npm run regression-check
