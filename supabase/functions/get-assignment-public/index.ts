@@ -4,7 +4,12 @@
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import {
+  corsHeaders,
+  jsonResponse,
+  errorResponse,
+  internalErrorResponse,
+} from '../_shared/cors.ts';
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -47,11 +52,16 @@ serve(async (req: Request) => {
       allowResubmit: assignment.allow_resubmit,
       identifyByName: assignment.identify_by_name ?? false,
       // student_list에서 number, name, grade, classNum 반환 (id 제외)
-      students: (assignment.student_list as Array<{ number: number; name: string; grade?: number; classNum?: number }>).map(
-        (s) => ({ number: s.number, name: s.name, grade: s.grade, classNum: s.classNum }),
-      ),
+      students: (
+        assignment.student_list as Array<{
+          number: number;
+          name: string;
+          grade?: number;
+          classNum?: number;
+        }>
+      ).map((s) => ({ number: s.number, name: s.name, grade: s.grade, classNum: s.classNum })),
     });
   } catch (err) {
-    return errorResponse(`서버 오류: ${(err as Error).message}`, 500);
+    return internalErrorResponse('get-assignment-public', err);
   }
 });

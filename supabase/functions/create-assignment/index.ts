@@ -3,7 +3,12 @@
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import {
+  corsHeaders,
+  jsonResponse,
+  errorResponse,
+  internalErrorResponse,
+} from '../_shared/cors.ts';
 
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
 
@@ -94,11 +99,11 @@ serve(async (req: Request) => {
       .single();
 
     if (error) {
-      return errorResponse(`과제 생성 실패: ${error.message}`, 500);
+      return internalErrorResponse('create-assignment', error, '과제 생성 중 오류가 발생했습니다');
     }
 
     return jsonResponse({ id: assignment.id, adminKey });
   } catch (err) {
-    return errorResponse(`서버 오류: ${(err as Error).message}`, 500);
+    return internalErrorResponse('create-assignment', err);
   }
 });

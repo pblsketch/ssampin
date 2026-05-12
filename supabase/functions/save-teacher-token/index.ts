@@ -4,7 +4,12 @@
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import {
+  corsHeaders,
+  jsonResponse,
+  errorResponse,
+  internalErrorResponse,
+} from '../_shared/cors.ts';
 import { encrypt } from '../_shared/crypto.ts';
 
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
@@ -48,29 +53,27 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const { error } = await supabase
-      .from('teacher_tokens')
-      .upsert(
-        {
-          teacher_id: teacherId,
-          encrypted_access_token: encAccess.ciphertext,
-          access_iv: encAccess.iv,
-          access_tag: encAccess.tag,
-          encrypted_refresh_token: encRefresh.ciphertext,
-          refresh_iv: encRefresh.iv,
-          refresh_tag: encRefresh.tag,
-          expires_at: expiresAt,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'teacher_id' },
-      );
+    const { error } = await supabase.from('teacher_tokens').upsert(
+      {
+        teacher_id: teacherId,
+        encrypted_access_token: encAccess.ciphertext,
+        access_iv: encAccess.iv,
+        access_tag: encAccess.tag,
+        encrypted_refresh_token: encRefresh.ciphertext,
+        refresh_iv: encRefresh.iv,
+        refresh_tag: encRefresh.tag,
+        expires_at: expiresAt,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'teacher_id' },
+    );
 
     if (error) {
-      return errorResponse(`토큰 저장 실패: ${error.message}`, 500);
+      return internalErrorResponse('save-teacher-token', error, '토큰 저장 중 오류가 발생했습니다');
     }
 
     return jsonResponse({ message: '토큰 저장 완료', teacherId });
   } catch (err) {
-    return errorResponse(`서버 오류: ${(err as Error).message}`, 500);
+    return internalErrorResponse('save-teacher-token', err);
   }
 });
