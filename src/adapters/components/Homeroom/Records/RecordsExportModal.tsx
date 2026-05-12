@@ -145,17 +145,17 @@ export function RecordsExportModal({ records, students, categories, onClose }: R
       if (window.electronAPI) {
         const ext = format === 'hwpx' ? 'hwpx' : 'xlsx';
         const filterName = format === 'hwpx' ? '한글 문서' : 'Excel 파일';
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '내보내기',
           defaultPath: defaultFileName,
           filters: [{ name: filterName, extensions: [ext] }],
         });
 
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, normalized);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, normalized);
           showToast('파일이 저장되었습니다', 'success', {
             label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(filePath),
+            onClick: () => window.electronAPI?.openFile(saved.handle),
           });
           onClose();
         }

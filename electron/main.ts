@@ -40,6 +40,13 @@ import {
 } from './desktopWidgetManager';
 import type { DesktopModeFallbackEvent } from './desktopWidgetTypes';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
+import {
+  issueWriteHandle,
+  issueOpenHandle,
+  consumeWritePath,
+  peekOpenPath,
+} from './security/dialogHandles';
+import { safeFetchText } from './security/safeFetch';
 
 declare const __dirname: string;
 
@@ -2591,7 +2598,10 @@ function registerIpcHandlers(): void {
     diagLog('widget', `[diagDump:${safeLabel}] === END ===`);
   });
 
-  // export:showSaveDialog — 파일 저장 대화상자
+  // export:showSaveDialog — 파일 저장 대화상자.
+  // 보안: 경로 문자열을 렌더러에 돌려주지 않는다. 메인이 dialog 로 받은 경로를 1회용
+  // 핸들(crypto.randomUUID, TTL 5분)에 등록하고, 렌더러는 핸들 + 표시용 파일명만 받는다.
+  // 후속 export:writeFile / export:openFile 는 핸들만 받음.
   ipcMain.handle(
     'export:showSaveDialog',
     async (
@@ -2601,7 +2611,7 @@ function registerIpcHandlers(): void {
         defaultPath: string;
         filters: { name: string; extensions: string[] }[];
       },
-    ): Promise<string | null> => {
+    ): Promise<{ handle: string; fileName: string } | null> => {
       if (!mainWindow) return null;
       const result = await dialog.showSaveDialog(mainWindow, {
         title: options.title,
@@ -2609,14 +2619,29 @@ function registerIpcHandlers(): void {
         filters: options.filters,
       });
       if (result.canceled || !result.filePath) return null;
-      return result.filePath;
+      return {
+        handle: issueWriteHandle(result.filePath),
+        fileName: path.basename(result.filePath),
+      };
     },
   );
 
-  // export:writeFile — 바이너리/텍스트 파일 쓰기
+  // export:writeFile — 바이너리/텍스트 파일 쓰기 (핸들 기반).
+  // 옛 시그니처(filePath 문자열) 호출은 명확히 throw — 같은 PR 에서 호출부를 전부 핸들 기반으로 변경.
   ipcMain.handle(
     'export:writeFile',
-    (_event, filePath: string, data: ArrayBuffer | string): void => {
+    (_event, args: { handle: string; data: ArrayBuffer | string }): void => {
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        typeof (args as { handle?: unknown }).handle !== 'string'
+      ) {
+        throw new Error(
+          'export:writeFile 시그니처가 변경되었습니다. { handle, data } 형태로 호출하세요 (export:showSaveDialog 가 발급한 handle).',
+        );
+      }
+      const filePath = consumeWritePath(args.handle);
+      const data = args.data;
       try {
         if (typeof data === 'string') {
           fs.writeFileSync(filePath, data, 'utf-8');
@@ -2668,22 +2693,98 @@ function registerIpcHandlers(): void {
     },
   );
 
-  // export:openFile — 생성된 파일 열기
+  // export:openFile — 방금 저장한 파일 열기 (핸들 기반). 핸들은 소비하지 않음(여러 번 열 수 있음).
   ipcMain.handle(
     'export:openFile',
-    (_event, filePath: string): void => {
-      shell.openPath(filePath);
+    async (_event, args: { handle: string }): Promise<void> => {
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        typeof (args as { handle?: unknown }).handle !== 'string'
+      ) {
+        throw new Error(
+          'export:openFile 시그니처가 변경되었습니다. { handle } 형태로 호출하세요 (export:showSaveDialog 가 발급한 handle).',
+        );
+      }
+      const filePath = peekOpenPath(args.handle);
+      const err = await shell.openPath(filePath);
+      if (err) throw new Error(`파일 열기에 실패했습니다 — ${err}`);
     },
   );
 
-  // shell:openExternal — 기본 브라우저에서 URL 열기
-  ipcMain.handle('shell:openExternal', (_event, url: string): void => {
-    shell.openExternal(url);
+  // shell:openExternal — 기본 브라우저에서 URL 열기. 프로토콜 화이트리스트(https/http/mailto)만.
+  // file:/javascript:/vbscript:/smb:/커스텀 스킴 전부 차단 — 침해된 렌더러가 OS 핸들러를 통해
+  // 임의 실행 파일/스킴 핸들러를 트리거하는 것을 방지.
+  const OPEN_EXTERNAL_ALLOWED = new Set(['https:', 'http:', 'mailto:']);
+  ipcMain.handle('shell:openExternal', async (_event, url: string): Promise<void> => {
+    let u: URL;
+    try {
+      u = new URL(url);
+    } catch {
+      throw new Error('잘못된 URL 입니다.');
+    }
+    if (!OPEN_EXTERNAL_ALLOWED.has(u.protocol)) {
+      throw new Error(`허용되지 않은 프로토콜입니다: ${u.protocol}`);
+    }
+    await shell.openExternal(u.toString());
   });
 
-  // shell:openPath — 탐색기에서 폴더 열기
-  ipcMain.handle('shell:openPath', async (_event, folderPath: string): Promise<string> => {
-    return shell.openPath(folderPath);
+  // shell:openPath — 탐색기/연결 프로그램으로 경로 열기. 허용 조건:
+  //   (a) dialogHandles 가 발급한 핸들 (메인이 사용자 dialog 에서 직접 받은 경로),
+  //   (b) app.getPath('userData'|'downloads'|'documents'|'desktop'|'home'|'temp') 또는 그 하위,
+  //   (c) 디스크상 존재하는 디렉토리 (PC 폴더 즐겨찾기 — 사용자가 디렉토리 선택 dialog 로 직접 고른 폴더.
+  //       폴더를 탐색기로 여는 것은 코드 실행이 아니며, 임의 *파일* 실행(.exe 등)은 (c) 가 막는다).
+  // 그 외 절대경로 파일은 거부.
+  const OPEN_PATH_ALLOWED_ROOTS: Array<'userData' | 'downloads' | 'documents' | 'desktop' | 'home' | 'temp'> = [
+    'userData', 'downloads', 'documents', 'desktop', 'home', 'temp',
+  ];
+  function isUnderAllowedRoot(target: string): boolean {
+    const resolved = path.resolve(target);
+    for (const name of OPEN_PATH_ALLOWED_ROOTS) {
+      let root: string;
+      try {
+        root = path.resolve(app.getPath(name));
+      } catch {
+        continue;
+      }
+      if (resolved === root) return true;
+      const rel = path.relative(root, resolved);
+      if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return true;
+    }
+    return false;
+  }
+  ipcMain.handle('shell:openPath', async (_event, target: string): Promise<string> => {
+    if (typeof target !== 'string' || target.length === 0) {
+      throw new Error('잘못된 경로입니다.');
+    }
+    // (a) 핸들?
+    let resolvedPath: string | null = null;
+    try {
+      resolvedPath = peekOpenPath(target);
+    } catch {
+      resolvedPath = null;
+    }
+    if (resolvedPath === null) {
+      // (b) 화이트리스트 루트 하위?
+      if (isUnderAllowedRoot(target)) {
+        resolvedPath = path.resolve(target);
+      } else {
+        // (c) 존재하는 디렉토리?
+        let stat: fs.Stats | null = null;
+        try {
+          stat = fs.statSync(target);
+        } catch {
+          stat = null;
+        }
+        if (stat && stat.isDirectory()) {
+          resolvedPath = path.resolve(target);
+        }
+      }
+    }
+    if (resolvedPath === null) {
+      throw new Error('허용되지 않은 경로입니다.');
+    }
+    return shell.openPath(resolvedPath);
   });
 
   // dialog:showOpen — 폴더/파일 선택 다이얼로그
@@ -2846,31 +2947,28 @@ function registerIpcHandlers(): void {
     },
   );
 
-  // calendar:fetch-url — 외부 캘린더 URL 페치 (CORS 우회)
+  // calendar:fetch-url — 외부 캘린더(ICS) URL 페치 (CORS 우회).
+  // SSRF/DNS rebinding/리다이렉트/크기 방어는 realtimeWallLinkPreview 와 동일한
+  // security/safeFetch 모듈을 공유한다. ICS 는 크므로 5MiB cap. 실패 시 기존처럼 null.
   ipcMain.handle(
     'calendar:fetch-url',
     async (_event: unknown, url: string): Promise<string | null> => {
       try {
-        const mod = await import(url.startsWith('https') ? 'https' : 'http');
-        return new Promise<string | null>((resolve) => {
-          const req = mod.get(url, { timeout: 30000 }, (res: { statusCode?: number; headers: Record<string, string | undefined>; on: (event: string, cb: (chunk: string) => void) => void }) => {
-            // 리다이렉트 처리
-            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-              const redirectMod = res.headers.location.startsWith('https')
-                ? mod : (url.startsWith('https') ? mod : mod);
-              const redirectReq = redirectMod.get(res.headers.location, { timeout: 30000 }, (res2: { on: (event: string, cb: (chunk: string) => void) => void }) => {
-                let data = '';
-                res2.on('data', (chunk: string) => { data += chunk; });
-                res2.on('end', () => resolve(data));
-              });
-              redirectReq.on('error', () => resolve(null));
-              return;
-            }
-            let data = '';
-            res.on('data', (chunk: string) => { data += chunk; });
-            res.on('end', () => resolve(data));
-          });
-          req.on('error', () => resolve(null));
+        // webcal:// 는 사실상 https:// 로 가져온다 (브라우저·캘린더 클라이언트 관행).
+        const normalized =
+          typeof url === 'string' && /^webcal:\/\//i.test(url)
+            ? url.replace(/^webcal:\/\//i, 'https://')
+            : url;
+        return await safeFetchText(normalized, {
+          maxBytes: 5 * 1024 * 1024,
+          allowedContentTypes: [
+            'text/calendar',
+            'text/plain',
+            'application/octet-stream',
+            'application/ics',
+            'text/x-vcalendar',
+            'application/calendar',
+          ],
         });
       } catch {
         return null;

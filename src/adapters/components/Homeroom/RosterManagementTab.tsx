@@ -316,16 +316,16 @@ export function RosterManagementTab() {
       const defaultFileName = '명렬표.xlsx';
 
       if (window.electronAPI) {
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '명렬표 내보내기',
           defaultPath: defaultFileName,
           filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
         });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, data);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, data);
           showToast('명렬표가 저장되었습니다', 'success', {
             label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(filePath),
+            onClick: () => window.electronAPI?.openFile(saved.handle),
           });
         }
       } else {

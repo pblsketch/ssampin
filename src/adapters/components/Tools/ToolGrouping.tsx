@@ -394,13 +394,13 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
       const buffer = await exportGroupingToExcel(result);
 
       if (window.electronAPI?.showSaveDialog && window.electronAPI?.writeFile) {
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '모둠 편성 결과 저장',
           defaultPath: `모둠편성_${new Date().toISOString().slice(0, 10)}.xlsx`,
           filters: [{ name: 'Excel', extensions: ['xlsx'] }],
         });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, buffer);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, buffer);
         }
       } else {
         // 브라우저 환경: Blob 다운로드
@@ -427,13 +427,13 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
       const buffer = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
 
       if (window.electronAPI?.showSaveDialog && window.electronAPI?.writeFile) {
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '모둠 편성 결과 한글 파일 저장',
           defaultPath: `모둠편성_${new Date().toISOString().slice(0, 10)}.hwpx`,
           filters: [{ name: '한글 문서', extensions: ['hwpx'] }],
         });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, buffer);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, buffer);
         }
       } else {
         const blob = new Blob([buffer], { type: 'application/hwp+zip' });

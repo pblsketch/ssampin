@@ -99,16 +99,16 @@ export function ObservationExportModal({ classId, onClose }: ObservationExportMo
       const defaultFileName = `${className}_관찰기록.xlsx`;
 
       if (window.electronAPI) {
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '관찰 기록 내보내기',
           defaultPath: defaultFileName,
           filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
         });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, buffer);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, buffer);
           showToast('파일이 저장되었습니다', 'success', {
             label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(filePath),
+            onClick: () => window.electronAPI?.openFile(saved.handle),
           });
           onClose();
         }
