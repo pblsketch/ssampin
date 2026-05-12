@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useMobileHomeLayoutStore, type HomeCardId } from '@mobile/stores/useMobileHomeLayoutStore';
+import { Toggle } from '@mobile/components/common/Toggle';
 import { SyncStatus } from '@mobile/components/More/SyncStatus';
 
 interface Props {
@@ -34,10 +36,18 @@ const themeOptions: { value: ThemeValue; label: string; icon: string }[] = [
   { value: 'dark', label: '다크', icon: 'dark_mode' },
 ];
 
+const HOME_CARD_OPTIONS: { id: HomeCardId; label: string; icon: string }[] = [
+  { id: 'currentClass', label: '현재 교시', icon: 'schedule' },
+  { id: 'homeroomAttendance', label: '담임 출결 요약', icon: 'groups' },
+  { id: 'classAttendance', label: '수업 출결 요약', icon: 'co_present' },
+  { id: 'weather', label: '날씨', icon: 'partly_cloudy_day' },
+  { id: 'meal', label: '급식 정보', icon: 'restaurant' },
+];
+
 export function SettingsPage({ onBack }: Props) {
   const { settings, loaded, load } = useMobileSettingsStore();
   const [theme, setTheme] = useState<ThemeValue>(
-    () => (localStorage.getItem('ssampin-mobile-theme') as ThemeValue | null) ?? 'system'
+    () => (localStorage.getItem('ssampin-mobile-theme') as ThemeValue | null) ?? 'system',
   );
 
   useEffect(() => {
@@ -50,14 +60,14 @@ export function SettingsPage({ onBack }: Props) {
     window.dispatchEvent(new Event('theme-changed'));
   };
 
+  const hiddenCards = useMobileHomeLayoutStore((s) => s.hiddenCards);
+  const setHidden = useMobileHomeLayoutStore((s) => s.setHidden);
+
   return (
     <div className="flex flex-col h-full">
       {/* 헤더 */}
       <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
-        <button
-          onClick={onBack}
-          className="flex items-center justify-center w-10 h-10"
-        >
+        <button onClick={onBack} className="flex items-center justify-center w-10 h-10">
           <span className="material-symbols-outlined text-sp-text">arrow_back</span>
         </button>
         <h2 className="flex-1 text-sp-text font-bold text-base">설정</h2>
@@ -79,21 +89,9 @@ export function SettingsPage({ onBack }: Props) {
               </div>
             ) : (
               <>
-                <InfoRow
-                  label="학교"
-                  value={settings.schoolName}
-                  icon="school"
-                />
-                <InfoRow
-                  label="교사"
-                  value={settings.teacherName}
-                  icon="person"
-                />
-                <InfoRow
-                  label="학급"
-                  value={settings.className}
-                  icon="class"
-                />
+                <InfoRow label="학교" value={settings.schoolName} icon="school" />
+                <InfoRow label="교사" value={settings.teacherName} icon="person" />
+                <InfoRow label="학급" value={settings.className} icon="class" />
               </>
             )}
           </div>
@@ -124,6 +122,34 @@ export function SettingsPage({ onBack }: Props) {
                 );
               })}
             </div>
+          </div>
+        </section>
+
+        {/* 홈 화면 카드 표시 */}
+        <section>
+          <h3 className="text-sp-muted text-xs font-semibold uppercase tracking-wider mb-2 px-1">
+            홈 화면 카드 표시
+          </h3>
+          <div className="glass-card px-4">
+            {HOME_CARD_OPTIONS.map((card) => {
+              const visible = hiddenCards[card.id] !== true;
+              return (
+                <div
+                  key={card.id}
+                  className="flex items-center gap-3 py-3 border-b border-black/5 dark:border-white/5 last:border-b-0"
+                >
+                  <span className="material-symbols-outlined text-sp-muted text-icon-lg shrink-0">
+                    {card.icon}
+                  </span>
+                  <span className="flex-1 text-sp-text text-sm">{card.label}</span>
+                  <Toggle
+                    checked={visible}
+                    onChange={(next) => setHidden(card.id, !next)}
+                    label={`${card.label} 표시`}
+                  />
+                </div>
+              );
+            })}
           </div>
         </section>
 
