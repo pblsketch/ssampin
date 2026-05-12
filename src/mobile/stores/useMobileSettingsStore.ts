@@ -50,8 +50,15 @@ function readAutoSyncInterval(): number {
 function writeAutoSyncInterval(interval: number): void {
   try {
     localStorage.setItem(AUTO_SYNC_KEY, String(interval));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
+
+/** updateSettings 로 모바일에서 편집 가능한 필드. (sync.deviceId 등은 보존된다) */
+type EditableSettings = Partial<
+  Pick<MobileSettings, 'schoolName' | 'teacherName' | 'className' | 'periodTimes'>
+>;
 
 interface MobileSettingsState {
   settings: MobileSettings;
@@ -59,6 +66,8 @@ interface MobileSettingsState {
   load: () => Promise<void>;
   reload: () => Promise<void>;
   setAutoSyncInterval: (interval: number) => Promise<void>;
+  /** 모바일에서 설정 일부를 편집·저장. 로컬(IndexedDB) 반영 + Drive 동기화 트리거(인증 시). mobile- 접두사 deviceId 보존. */
+  updateSettings: (patch: EditableSettings) => Promise<void>;
 }
 
 export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => ({
@@ -75,10 +84,20 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
         // 모바일은 항상 mobile- 접두사 deviceId를 사용 (PC settings 다운로드로 인한 오염 방지)
         if (!syncDeviceId || !syncDeviceId.startsWith('mobile-')) {
           syncDeviceId = `mobile-${generateUUID()}`;
-          const patched = { ...s, sync: { ...(s as unknown as { sync?: Record<string, unknown> }).sync, deviceId: syncDeviceId } };
+          const patched = {
+            ...s,
+            sync: {
+              ...(s as unknown as { sync?: Record<string, unknown> }).sync,
+              deviceId: syncDeviceId,
+            },
+          };
           await settingsRepository.saveSettings(patched as Settings);
         }
-        const rawMealSchool = (s as unknown as { mealSchool?: { schoolCode?: string; atptCode?: string; schoolName?: string } }).mealSchool;
+        const rawMealSchool = (
+          s as unknown as {
+            mealSchool?: { schoolCode?: string; atptCode?: string; schoolName?: string };
+          }
+        ).mealSchool;
         set({
           settings: {
             schoolName: s.schoolName ?? '',
@@ -90,11 +109,13 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
               atptCode: (s.neis as { atptCode?: string })?.atptCode ?? '',
               schoolCode: (s.neis as { schoolCode?: string })?.schoolCode ?? '',
             },
-            mealSchool: rawMealSchool?.schoolCode ? {
-              schoolCode: rawMealSchool.schoolCode,
-              atptCode: rawMealSchool.atptCode ?? '',
-              schoolName: rawMealSchool.schoolName ?? '',
-            } : undefined,
+            mealSchool: rawMealSchool?.schoolCode
+              ? {
+                  schoolCode: rawMealSchool.schoolCode,
+                  atptCode: rawMealSchool.atptCode ?? '',
+                  schoolName: rawMealSchool.schoolName ?? '',
+                }
+              : undefined,
             sync: {
               deviceId: syncDeviceId,
               autoSyncInterval: readAutoSyncInterval(),
@@ -123,5 +144,25 @@ export const useMobileSettingsStore = create<MobileSettingsState>((set, get) => 
     };
     set({ settings: updated });
     writeAutoSyncInterval(interval);
+  },
+
+  updateSettings: async (patch: EditableSettings) => {
+    const current = get().settings;
+    set({ settings: { ...current, ...patch } });
+    // IndexedDB 반영 — 기존 Settings 를 읽어 patch 만 덮어쓴다(sync.deviceId 등 모델 안 한 필드 보존)
+    try {
+      const existing = ((await settingsRepository.getSettings()) ?? {}) as Settings;
+      await settingsRepository.saveSettings({ ...existing, ...patch } as Settings);
+    } catch {
+      /* ignore */
+    }
+    // Drive 동기화 트리거 (인증된 경우만 동작; 기존 충돌 해결 메커니즘이 그대로 적용된다)
+    try {
+      const { useMobileDriveSyncStore } = await import('./useMobileDriveSyncStore');
+      const trigger = useMobileDriveSyncStore.getState().triggerSaveSync;
+      if (typeof trigger === 'function') trigger();
+    } catch {
+      /* ignore */
+    }
   },
 }));
