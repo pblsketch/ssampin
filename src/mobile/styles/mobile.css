@@ -170,3 +170,18 @@ input[type='datetime-local'] {
 .pt-safe {
   padding-top: env(safe-area-inset-top);
 }
+
+/* ── 스와이프 빠른 기록: "되돌리기" 토스트 잔여 시간 진행바 ── */
+@keyframes swipe-undo-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.swipe-undo-progress-bar {
+  transform-origin: left;
+  animation: swipe-undo-progress 5s linear forwards;
+}
