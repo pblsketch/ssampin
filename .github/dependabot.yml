@@ -1,0 +1,35 @@
+# Dependabot 설정 — security-hardening P1-3 (감사 M-11)
+# 참고: docs/03-analysis/security-audit.analysis.md §8 / docs/02-design/features/security-hardening.design.md §3
+#
+# 주간 단위로 npm(루트 + landing) 및 GitHub Actions 의존성 업데이트 PR 을 생성한다.
+# (모바일 PWA 는 src/mobile 디렉토리로 루트 package.json 을 공유하므로 별도 항목 불필요.)
+version: 2
+updates:
+  # 메인 Electron + React 앱 (루트 package.json)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+
+  # 랜딩 페이지 (Next.js — landing/package.json)
+  - package-ecosystem: "npm"
+    directory: "/landing"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(landing)"
+      prefix-development: "deps-dev(landing)"
+
+  # GitHub Actions 워크플로 (.github/workflows/*.yml)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
