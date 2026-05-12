@@ -10,6 +10,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 
 // ── 타입 정의 ──────────────────────────────────────────────
 
@@ -169,9 +170,10 @@ function validateRequest(body: ChatRequest): string | null {
 
 /** 대화 맥락 인식 쿼리 재구성 */
 function reformulateQuery(message: string, history: ChatHistoryItem[]): string {
-  const ambiguousPatterns = /^(그거|이거|그건|거기|어떻게|왜|뭐가|그럼|그래서|그러면|저거|이건|그게|뭔가요|그건요).{0,15}$/;
+  const ambiguousPatterns =
+    /^(그거|이거|그건|거기|어떻게|왜|뭐가|그럼|그래서|그러면|저거|이건|그게|뭔가요|그건요).{0,15}$/;
   if (ambiguousPatterns.test(message.trim()) && history.length >= 2) {
-    const lastUserMsg = [...history].reverse().find(h => h.role === 'user');
+    const lastUserMsg = [...history].reverse().find((h) => h.role === 'user');
     if (lastUserMsg) return `${lastUserMsg.content} ${message}`;
   }
   return message;
@@ -207,10 +209,23 @@ async function generateHypotheticalAnswer(query: string, apiKey: string): Promis
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: `쌤핀(SsamPin) 교사용 데스크톱 앱 도움말에서 다음 질문에 대한 답변을 2-3문장으로 작성하세요. 추측이어도 괜찮습니다: ${query}` }] }],
-          generationConfig: { temperature: 1.0, maxOutputTokens: 200, thinkingConfig: { thinkingLevel: 'minimal' } },
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `쌤핀(SsamPin) 교사용 데스크톱 앱 도움말에서 다음 질문에 대한 답변을 2-3문장으로 작성하세요. 추측이어도 괜찮습니다: ${query}`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 1.0,
+            maxOutputTokens: 200,
+            thinkingConfig: { thinkingLevel: 'minimal' },
+          },
         }),
-      }
+      },
     );
     if (!response.ok) return query; // 실패 시 원본 쿼리 반환
     const data = (await response.json()) as GeminiGenerateResponse;
@@ -220,50 +235,8 @@ async function generateHypotheticalAnswer(query: string, apiKey: string): Promis
   }
 }
 
-/** Rate limiting 체크 */
-async function checkRateLimit(
-  supabase: ReturnType<typeof createClient>,
-  clientIP: string,
-  sessionId: string
-): Promise<boolean> {
-  const now = new Date();
-  const oneMinuteAgo = new Date(now.getTime() - 60_000);
-  const oneDayAgo = new Date(now.getTime() - 86_400_000);
-
-  // IP 기준: 분당 10회
-  const { count: ipCount } = await supabase
-    .from('ssampin_rate_limits')
-    .select('*', { count: 'exact', head: true })
-    .eq('identifier', clientIP)
-    .eq('endpoint', 'chat')
-    .gte('requested_at', oneMinuteAgo.toISOString());
-
-  if ((ipCount ?? 0) >= 10) return true;
-
-  // 세션 기준: 일 50회
-  const { count: sessionCount } = await supabase
-    .from('ssampin_rate_limits')
-    .select('*', { count: 'exact', head: true })
-    .eq('identifier', sessionId)
-    .eq('endpoint', 'chat')
-    .gte('requested_at', oneDayAgo.toISOString());
-
-  if ((sessionCount ?? 0) >= 50) return true;
-
-  // 요청 기록
-  await supabase.from('ssampin_rate_limits').insert([
-    { identifier: clientIP, endpoint: 'chat' },
-    { identifier: sessionId, endpoint: 'chat' },
-  ]);
-
-  return false;
-}
-
 /** 질문 임베딩 생성 (gemini-embedding-001, 768차원) */
-async function generateQueryEmbedding(
-  query: string,
-  apiKey: string
-): Promise<number[]> {
+async function generateQueryEmbedding(query: string, apiKey: string): Promise<number[]> {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
     {
@@ -275,7 +248,7 @@ async function generateQueryEmbedding(
         taskType: 'RETRIEVAL_QUERY',
         outputDimensionality: 768,
       }),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -291,12 +264,10 @@ async function searchDocuments(
   supabase: ReturnType<typeof createClient>,
   queryEmbedding: number[],
   queryText: string,
-  category: string | null
+  category: string | null,
 ): Promise<MatchedDocument[]> {
   // 카테고리가 있으면 필터 검색, 없으면 일반 hybrid 검색
-  const rpcName = category
-    ? 'hybrid_search_ssampin_docs_filtered'
-    : 'hybrid_search_ssampin_docs';
+  const rpcName = category ? 'hybrid_search_ssampin_docs_filtered' : 'hybrid_search_ssampin_docs';
 
   const params: Record<string, unknown> = {
     query_text: queryText,
@@ -328,7 +299,7 @@ async function searchDocuments(
 async function rerankDocuments(
   query: string,
   documents: MatchedDocument[],
-  apiKey: string
+  apiKey: string,
 ): Promise<MatchedDocument[]> {
   if (documents.length <= 3) return documents; // 문서가 적으면 리랭킹 불필요
 
@@ -340,20 +311,34 @@ async function rerankDocuments(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [{ text: `질문: "${query}"\n\n아래 문서들의 관련성을 평가하고, 가장 관련 있는 문서 인덱스를 관련도 순으로 쉼표 구분하여 반환하세요. 숫자만 반환:\n${docList}` }],
-          }],
-          generationConfig: { temperature: 1.0, maxOutputTokens: 50, thinkingConfig: { thinkingLevel: 'minimal' } },
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `질문: "${query}"\n\n아래 문서들의 관련성을 평가하고, 가장 관련 있는 문서 인덱스를 관련도 순으로 쉼표 구분하여 반환하세요. 숫자만 반환:\n${docList}`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 1.0,
+            maxOutputTokens: 50,
+            thinkingConfig: { thinkingLevel: 'minimal' },
+          },
         }),
-      }
+      },
     );
 
     if (!response.ok) return documents.slice(0, 5);
 
     const data = (await response.json()) as GeminiGenerateResponse;
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    const indices = text.match(/\d+/g)?.map(Number).filter(i => i >= 0 && i < documents.length) ?? [];
+    const indices =
+      text
+        .match(/\d+/g)
+        ?.map(Number)
+        .filter((i) => i >= 0 && i < documents.length) ?? [];
 
     if (indices.length === 0) return documents.slice(0, 5);
 
@@ -379,12 +364,13 @@ async function generateAnswer(
   history: ChatHistoryItem[],
   apiKey: string,
   topSimilarity: number,
-  appContext?: string
+  appContext?: string,
 ): Promise<string> {
   // 컨텍스트가 부족한 경우 힌트 추가
-  const contextNote = topSimilarity < 0.7
-    ? '\n\n[참고: 관련 문서가 충분하지 않을 수 있습니다. 확신이 없으면 에스컬레이션하세요.]'
-    : '';
+  const contextNote =
+    topSimilarity < 0.7
+      ? '\n\n[참고: 관련 문서가 충분하지 않을 수 있습니다. 확신이 없으면 에스컬레이션하세요.]'
+      : '';
 
   const systemPrompt = SYSTEM_PROMPT + contextNote;
 
@@ -400,7 +386,11 @@ async function generateAnswer(
       ...geminiHistory,
       {
         role: 'user',
-        parts: [{ text: `${appContext ? `[사용자 현재 상태]\n현재 페이지: ${appContext}\n\n` : ''}[관련 문서]\n${context || '(관련 문서 없음)'}\n\n[질문]\n${question}` }],
+        parts: [
+          {
+            text: `${appContext ? `[사용자 현재 상태]\n현재 페이지: ${appContext}\n\n` : ''}[관련 문서]\n${context || '(관련 문서 없음)'}\n\n[질문]\n${question}`,
+          },
+        ],
       },
     ],
     generationConfig: {
@@ -418,7 +408,7 @@ async function generateAnswer(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -431,7 +421,7 @@ async function generateAnswer(
 
 /** 에스컬레이션 JSON 파싱 */
 function parseEscalation(
-  response: string
+  response: string,
 ): { type: 'bug' | 'feature' | 'other'; summary: string } | null {
   const jsonMatch = response.match(/\{[\s\S]*"escalation"\s*:\s*true[\s\S]*\}/);
   if (!jsonMatch) return null;
@@ -445,7 +435,7 @@ function parseEscalation(
 
     if (parsed.escalation && parsed.type && parsed.summary) {
       const validTypes = ['bug', 'feature', 'other'] as const;
-      const type = validTypes.includes(parsed.type as typeof validTypes[number])
+      const type = validTypes.includes(parsed.type as (typeof validTypes)[number])
         ? (parsed.type as 'bug' | 'feature' | 'other')
         : 'other';
       return { type, summary: parsed.summary };
@@ -461,7 +451,8 @@ function parseEscalation(
 function getEscalationMessage(type: 'bug' | 'feature' | 'other'): string {
   const messages: Record<typeof type, string> = {
     bug: '🐛 이 문제는 개발자에게 직접 전달해 드릴게요.\n아래에서 상세 내용을 작성해 주시면 더 빠르게 해결할 수 있어요!',
-    feature: '💡 좋은 아이디어네요! 개발자에게 전달해 드릴게요.\n아래에서 원하시는 기능을 자세히 설명해 주세요!',
+    feature:
+      '💡 좋은 아이디어네요! 개발자에게 전달해 드릴게요.\n아래에서 원하시는 기능을 자세히 설명해 주세요!',
     other: '💬 이 부분은 제가 아직 잘 모르는 영역이에요.\n개발자에게 직접 전달해 드릴게요!',
   };
   return messages[type];
@@ -474,11 +465,17 @@ async function saveConversation(
   userMessage: string,
   assistantMessage: string,
   sources: string[] = [],
-  isTest: boolean = false
+  isTest: boolean = false,
 ): Promise<void> {
   await supabase.from('ssampin_conversations').insert([
     { session_id: sessionId, role: 'user', content: userMessage, is_test: isTest },
-    { session_id: sessionId, role: 'assistant', content: assistantMessage, sources, is_test: isTest },
+    {
+      session_id: sessionId,
+      role: 'assistant',
+      content: assistantMessage,
+      sources,
+      is_test: isTest,
+    },
   ]);
 }
 
@@ -501,18 +498,24 @@ serve(async (req: Request): Promise<Response> => {
     // 2. Rate limiting 체크
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-    const isLimited = await checkRateLimit(supabase, clientIP, body.sessionId);
+    const clientIP = clientIpFrom(req);
+    const isLimited = await checkRateLimit(supabase, 'chat', [
+      { identifier: clientIP, windowMs: 60_000, max: 10 },
+      { identifier: body.sessionId, windowMs: 86_400_000, max: 50 },
+    ]);
     if (isLimited) {
-      return jsonResponse({
-        type: 'answer',
-        message: '⏳ 잠시 후 다시 시도해 주세요. 너무 많은 요청이 감지되었어요.',
-        sources: [],
-        confidence: 1,
-      } satisfies ChatResponseAnswer, 429);
+      return jsonResponse(
+        {
+          type: 'answer',
+          message: '⏳ 잠시 후 다시 시도해 주세요. 너무 많은 요청이 감지되었어요.',
+          sources: [],
+          confidence: 1,
+        } satisfies ChatResponseAnswer,
+        429,
+      );
     }
 
     // 3. 쿼리 전처리: 대화 맥락 인식 재구성
@@ -536,7 +539,12 @@ serve(async (req: Request): Promise<Response> => {
     const combinedEmbedding = queryEmbedding.map((v, i) => v * 0.4 + hydeEmbedding[i] * 0.6);
 
     // 6. Hybrid 검색 (벡터 + 전문 검색 + 카테고리 필터)
-    const rawDocs = await searchDocuments(supabase, combinedEmbedding, reformulatedQuery, queryCategory);
+    const rawDocs = await searchDocuments(
+      supabase,
+      combinedEmbedding,
+      reformulatedQuery,
+      queryCategory,
+    );
 
     // 7. LLM 리랭킹
     const matchedDocs = await rerankDocuments(reformulatedQuery, rawDocs, apiKey);
@@ -550,7 +558,7 @@ serve(async (req: Request): Promise<Response> => {
       history,
       apiKey,
       matchedDocs.length > 0 ? 0.7 : 0,
-      body.appContext
+      body.appContext,
     );
 
     // 6. 에스컬레이션 판단
@@ -567,7 +575,14 @@ serve(async (req: Request): Promise<Response> => {
       });
 
       // 대화 로그 저장
-      await saveConversation(supabase, body.sessionId, body.message, escalation.summary, [], body.isTest ?? false);
+      await saveConversation(
+        supabase,
+        body.sessionId,
+        body.message,
+        escalation.summary,
+        [],
+        body.isTest ?? false,
+      );
 
       return jsonResponse({
         type: 'escalation',
@@ -583,14 +598,22 @@ serve(async (req: Request): Promise<Response> => {
 
     // 답변에 hedging 표현이 있으면 confidence 하향 조정
     const hedgingPatterns = ['정보가 없', '모르', '확인이 어렵', '아직 지원하지', '잘 모르'];
-    const hasHedging = hedgingPatterns.some(p => llmResponse.includes(p));
+    const hasHedging = hedgingPatterns.some((p) => llmResponse.includes(p));
 
-    const confidence = matchedDocs.length > 0
-      ? Math.min(matchedDocs[0].similarity * (hasHedging ? 0.6 : 1), 1)
-      : 0.3;
+    const confidence =
+      matchedDocs.length > 0
+        ? Math.min(matchedDocs[0].similarity * (hasHedging ? 0.6 : 1), 1)
+        : 0.3;
 
     // 대화 로그 저장
-    await saveConversation(supabase, body.sessionId, body.message, llmResponse, sources, body.isTest ?? false);
+    await saveConversation(
+      supabase,
+      body.sessionId,
+      body.message,
+      llmResponse,
+      sources,
+      body.isTest ?? false,
+    );
 
     return jsonResponse({
       type: 'answer',
@@ -598,14 +621,16 @@ serve(async (req: Request): Promise<Response> => {
       sources: [...new Set(sources)],
       confidence,
     } satisfies ChatResponseAnswer);
-
   } catch (error) {
     console.error('Chat error:', error);
-    return jsonResponse({
-      type: 'answer',
-      message: '죄송해요, 일시적인 오류가 발생했어요. 잠시 후 다시 시도해 주세요! 🙏',
-      sources: [],
-      confidence: 0,
-    } satisfies ChatResponseAnswer, 500);
+    return jsonResponse(
+      {
+        type: 'answer',
+        message: '죄송해요, 일시적인 오류가 발생했어요. 잠시 후 다시 시도해 주세요! 🙏',
+        sources: [],
+        confidence: 0,
+      } satisfies ChatResponseAnswer,
+      500,
+    );
   }
 });

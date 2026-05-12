@@ -3,7 +3,12 @@
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import {
+  corsHeaders,
+  jsonResponse,
+  errorResponse,
+  internalErrorResponse,
+} from '../_shared/cors.ts';
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -47,11 +52,15 @@ serve(async (req: Request) => {
       .eq('id', assignmentId);
 
     if (deleteError) {
-      return errorResponse(`과제 삭제 실패: ${deleteError.message}`, 500);
+      return internalErrorResponse(
+        'delete-assignment',
+        deleteError,
+        '과제 삭제 중 오류가 발생했습니다',
+      );
     }
 
     return jsonResponse({ message: '과제가 삭제되었습니다' });
   } catch (err) {
-    return errorResponse(`서버 오류: ${(err as Error).message}`, 500);
+    return internalErrorResponse('delete-assignment', err);
   }
 });
