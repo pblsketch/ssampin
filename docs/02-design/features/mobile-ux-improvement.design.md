@@ -5,31 +5,31 @@ feature: mobile-ux-improvement
 date: 2026-05-12
 author: pblsketch
 project: ssampin
-version_target: Phase 1+2 → v2.1.x · Phase 3+4+5 → v2.2.x
+version_target: 전체(Phase 1~5) 완료 후 단일 릴리즈에 묶음 게시 (버전 미정, v2.x 마이너)
 depends_on: docs/01-plan/features/mobile-ux-improvement.plan.md
-status: Draft
+status: Draft (Phase 1+2 구현 완료 — 커밋 ddfa59f, 브랜치 feat/mobile-ux-improvement)
 ---
 
 # 쌤핀 모바일 UI/UX 개선 설계서
 
-> Plan 문서의 요구사항(F-1 ~ F-16)을 컴포넌트·상태·흐름·검증으로 변환한다.
-> **Phase 1+2(v2.1.x)는 상세 설계**, **Phase 3·4·5(v2.2.x)는 방향만 잡고 별도 design 패스에서 상세화**한다.
+> Plan 문서의 요구사항(F-1 ~ F-16)을 컴포넌트·상태·흐름·검증으로 변환한다. **Phase 1~5 모두 상세 설계.**
 > 모바일은 Clean Architecture의 adapters 상응 계층(`src/mobile/`) — 도메인 규칙은 `@domain/*` 재사용, 모바일 전용 store/UI만 추가.
 > UI 컴포넌트 신규/대규모 변경 시 `/pdca do` 단계에서 **`frontend-design` 스킬과 협업**(프로젝트 피드백 메모리). 아래 UI 권고는 `bkit:frontend-architect` 검토를 반영함.
+> 릴리즈는 사용자 지시(2026-05-12)대로 Phase 1~5 를 **모두 마친 뒤 한 번에** 게시. Phase 단위로 main 에 점진 머지·검증.
 
 ---
 
-## 0. Phase별 범위 / 릴리즈
+## 0. Phase별 범위 / 진행 상태
 
-| Phase | 내용                                                                       | 릴리즈 | 본 문서 |
-| ----- | -------------------------------------------------------------------------- | ------ | ------- |
-| 1     | F-1 출결 총원 실데이터 · F-2 교시 드롭다운 · F-3 일정 시간 필드            | v2.1.x | §2 상세 |
-| 2     | F-4 카드 접기 · F-5 카드 숨기기 · F-6 출결 버튼 라벨 가시성                | v2.1.x | §3 상세 |
-| 3     | F-7 4탭+FAB · F-8 전역 FAB · F-9 터치·safe-area                            | v2.2.x | §4 개요 |
-| 4     | F-10 스와이프-투-리빌 · F-11 햅틱 · F-12 코치마크                          | v2.2.x | §5 개요 |
-| 5     | F-13 교시 시간 편집 · F-14 학급 정보 편집 · F-15 설정 동기화 · F-16 온보딩 | v2.2.x | §6 개요 |
+| Phase | 내용                                                                       | 상태                             | 본 문서 |
+| ----- | -------------------------------------------------------------------------- | -------------------------------- | ------- |
+| 1     | F-1 출결 총원 실데이터 · F-2 교시 드롭다운 · F-3 일정 시간 필드            | ✅ 구현·검증 완료 (커밋 ddfa59f) | §2 상세 |
+| 2     | F-4 카드 접기(홈 4개 카드) · F-5 카드 숨기기 · F-6 출결 버튼 라벨 가시성   | ✅ 구현·검증 완료 (커밋 ddfa59f) | §3 상세 |
+| 3     | F-7 4탭+FAB · F-8 전역 FAB · F-9 터치·safe-area                            | 📋 설계 완료, 미착수             | §4 상세 |
+| 4     | F-10 스와이프-투-리빌 · F-11 햅틱 · F-12 코치마크                          | 📋 설계 완료, 미착수             | §5 상세 |
+| 5     | F-13 교시 시간 편집 · F-14 학급 정보 편집 · F-15 설정 동기화 · F-16 온보딩 | 📋 설계 완료, 미착수             | §6 상세 |
 
-> 권장 구현 순서(저위험·고효용 우선): **F-6 → F-3 → F-1 → F-2 → F-4 → F-5** → (이후 Phase 3~5).
+> 권장 구현 순서: Phase 1+2 완료 ✅ → **Phase 3 (네비 재편, 다른 화면들과 연쇄 변경)** → **Phase 5 (설정 동기화, 위험 크지만 독립적)** → **Phase 4 (스와이프, UX 폴리시 — frontend-design 협업 비중 큼)**. (각 Phase 내 F-13 → F-14 순서 등은 해당 §의 "범위·순서" 참조.)
 
 ---
 
@@ -300,39 +300,197 @@ F-3 종일 토글, F-4 카드 접기와 별개로 이 Toggle 은 설정 토글 �
 
 ---
 
-## 4. Phase 3 — 4탭 + FAB (개요, v2.2.x에서 상세화)
+## 4. Phase 3 — 4탭 + FAB (상세)
 
-- `App.tsx` `MobileTab` → `'home' | 'students' | 'schedule' | 'more'`. `'today'`→`'home'` 리네이밍.
-- '학생' 탭: 내부 세그먼트 컨트롤(담임 ↔ 수업) — 기존 `StudentsPage` 의 담임/수업 분기를 세그먼트로 노출. ClassDetailPage 경로 보존.
-- '일정' 탭: 내부 세그먼트(일정 ↔ 할일) — 기존 SchedulePage + TodoPage를 한 탭에. URL/네비 state 에 sub-tab 보존.
-- 전역 FAB: 탭바 위 우측, 탭 → 바텀시트 "출결 체크 / 메모 작성 / 할 일 추가 / 일정 추가". 화면별 컨텍스트 FAB(SchedulePage `bottom-20 right-4` 일정추가 FAB 등)는 제거하고 전역 FAB로 일원화 — 라우터 레벨에서 FAB 액션 목록을 현재 탭에 맞게 구성.
-- `env(safe-area-inset-bottom)` — 탭바·FAB·바텀시트 패딩. 현행 고정 `bottom-20` 류 재검토.
-- 마이그레이션 UX: 첫 진입 코치마크("담임·수업은 '학생' 탭으로, 추가는 + 버튼으로 옮겨졌어요"). 릴리즈 노트 명시.
-- **결정 필요(설계 패스에서)**: '더보기' 탭에 무엇을 남길지(설정·도구·동기화 등), 세그먼트 컨트롤의 시각 형태.
+### 4.0 현황
 
-## 5. Phase 4 — 스와이프 빠른 기록 (개요)
+`App.tsx` 의 `MobileTab` = `'today' | 'schedule' | 'todo' | 'students' | 'attendance' | 'more'` (6개). 렌더 분기(`App.tsx:327-382`): `today`→`TodayHub`, `schedule`→`SchedulePage`, `todo`→`TodoPage`, `students`→`StudentsPage`(담임반 + 수업반 명단/좌석, 자체 `selectedClass` 선택기 보유), `attendance`→`ClassListPage`(수업 목록 → `ClassDetailPage` 의 출결/진도 서브탭), `more`→`MorePage`(메모·쌤도구·설정·추천 메뉴). 화면별 컨텍스트 FAB: `SchedulePage` `bottom-20 right-4` "일정 추가"(aria-label), `TodoPage` "할 일 추가"(aria-label `:333`). `App.tsx` 에 이미 좌우 스와이프(`touchStartX/Y`)로 탭 전환하는 제스처가 있음.
 
-- `StudentsPage.tsx` 명단 뷰 카드: 포인터 이벤트 기반 좌/우 스와이프(무라이브러리 우선; 어려우면 경량 lib). 임계 거리 도달 → 카드가 밀리며 뒤에 액션 버튼 노출.
-  - 오른쪽 스와이프 → 초록 "칭찬 메모" 버튼 노출. 탭 → 칭찬 메모 작성 시트(기존 메모 작성 UI 재사용).
-  - 왼쪽 스와이프 → 노랑 "지각" + 빨강 "결석" 버튼 노출. 탭 → 즉시 기록 + Undo 토스트(5초).
-- **즉시 실행 금지** — 스와이프는 버튼 노출까지만. 다른 카드 스와이프하거나 탭 밖 클릭 시 닫힘.
-- 햅틱: 임계점 도달·실행 시 `if ('vibrate' in navigator) navigator.vibrate(10)` — iOS 무시(보조 피드백, 단독 의존 금지). `ClassProgressEntryItem` 패턴 재사용.
-- 시각 버튼 affordance 항상 유지(바텀시트의 기존 버튼들). 최초 1회 코치마크로 스와이프 힌트.
-- 대체 경로: 스와이프 불가 사용자는 학생 탭 → 바텀시트(기존)로 동일 작업 — a11y 보장.
-- **결정 필요(설계 패스에서)**: 칭찬 메모가 학생기록 어느 카테고리로 들어가는지, 결석 기록 시 교시(현재 교시? 담임 출결?), Undo 구현(낙관적 업데이트 롤백).
+### 4.1 Touchpoints
 
-## 6. Phase 5 — 모바일 독립 설정 (개요)
+| 레이어            | 파일                                                      | 변경                                                                                                                                            |
+| ----------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| mobile/App.tsx    | `src/mobile/App.tsx`                                      | `MobileTab` → `'home' \| 'students' \| 'schedule' \| 'more'`; 렌더 분기 재구성; 전역 FAB 마운트; 좌우 스와이프 탭목록 4개로 축소                |
+| mobile/components | `src/mobile/components/common/SegmentedControl.tsx`       | **신규** — 2~3개 옵션 세그먼트 토글 (담임↔수업, 일정↔할일 공용)                                                                                 |
+| mobile/components | `src/mobile/components/common/QuickAddFab.tsx`            | **신규** — 전역 FAB + 액션 바텀시트 (현재 탭에 따라 액션 목록 구성)                                                                             |
+| mobile/pages      | `src/mobile/pages/StudentsTab.tsx` (또는 App 내 인라인)   | **신규 컨테이너** — SegmentedControl(담임/수업) + 담임이면 `StudentsPage`(homeroom 고정), 수업이면 `ClassListPage`. `ClassDetailPage` 경로 보존 |
+| mobile/pages      | `src/mobile/pages/ScheduleTodoTab.tsx`                    | **신규 컨테이너** — SegmentedControl(일정/할일) + `SchedulePage` 또는 `TodoPage`                                                                |
+| mobile/pages      | `SchedulePage.tsx` / `TodoPage.tsx`                       | 자체 FAB 제거 (전역 FAB가 "일정 추가"/"할 일 추가" 액션 제공). 추가 모달 열기 함수는 ref/콜백으로 노출하거나 store 트리거                       |
+| mobile/pages      | `MorePage.tsx`                                            | (변경 최소) — '더보기' 탭 유지, 메모·쌤도구·설정·추천 그대로                                                                                    |
+| mobile/styles     | `mobile.css` / Tailwind                                   | 탭바·FAB·바텀시트에 `pb-[env(safe-area-inset-bottom)]`. 현행 `bottom-20` 고정값 → `bottom-[calc(5rem+env(safe-area-inset-bottom))]` 류          |
+| mobile/components | `src/mobile/components/Onboarding/MigrationCoachmark.tsx` | **신규** — 첫 진입 1회 ("담임·수업은 '학생' 탭으로, 추가는 + 버튼으로 옮겼어요"). dismiss 시 localStorage 플래그                                |
 
-- `SettingsPage.tsx`: 교시 시간(`periodTimes`) 편집 UI 추가 → `useMobileSettingsStore` 갱신. (F-13, 우선)
-- 학교명/교사명/담임 학급 `InfoRow`(읽기 전용) → 편집 입력. (F-14, 동기화 안정성 확인 후)
-- 설정 쓰기-백: 모바일 변경 → Drive 동기화로 데스크톱 반영. `syncRegistry` 단일 경로 사용. 쓰기 전 원격 `storage.read !== null` 안전망(note-cloud-sync 패턴). 충돌 시 사용자 확인 모달(first-sync-confirmation 패턴).
-- `OnboardingFlow.tsx` 에 학교/교시 시간 입력 스텝(이미 일부 있으면 확장) — PC 없이 첫 설정 완결.
-- **위험**: 데스크톱→모바일 단방향이던 설정을 양방향으로 여는 것 — 손상 시 영향 큼. F-13(교시 시간)만 먼저, 검증 후 F-14.
-- **결정 필요(설계 패스에서)**: 충돌 해상도 UX, periodTimes 편집 폼 형태, 데스크톱 측 동시 편집 가드.
+### 4.2 탭 구성 (사용자 결정 §8)
+
+| 탭         | label  | icon         | 내용                                                                                   |
+| ---------- | ------ | ------------ | -------------------------------------------------------------------------------------- |
+| `home`     | 홈     | `home`       | `TodayHub` (기존 `today` 리네이밍)                                                     |
+| `students` | 학생   | `groups`     | SegmentedControl `[담임] [수업]` → 담임=`StudentsPage`(homeroom), 수업=`ClassListPage` |
+| `schedule` | 일정   | `event_note` | SegmentedControl `[일정] [할 일]` → `SchedulePage` 또는 `TodoPage`                     |
+| `more`     | 더보기 | `more_horiz` | `MorePage` (메모·쌤도구·설정·추천)                                                     |
+
+전역 FAB(`QuickAddFab`) — 탭바 위 우측 `[+]`. 탭하면 `<MobileShareModal>` 류 바텀시트로 액션 리스트:
+
+| 탭 컨텍스트 | FAB 액션 목록                                            |
+| ----------- | -------------------------------------------------------- |
+| 홈          | 출결 체크 / 할 일 추가 / 메모 작성 / 일정 추가           |
+| 학생        | 출결 체크 / 메모 작성 / (담임 세그먼트면) 좌석 편집 진입 |
+| 일정        | 일정 추가 / 할 일 추가                                   |
+| 더보기      | FAB 숨김 (또는 메모 작성만)                              |
+
+"출결 체크" 액션은 현재 시각의 교시·담임반으로 `AttendanceCheckPage` 진입 (TodayHub 의 카드 onClick 과 동일 로직 재사용 — `App.tsx` 의 `setAttendanceNav` 호출).
+
+### 4.3 상태/흐름
+
+- `App.tsx`: `activeTab` 4값. 새 state `studentsSeg: 'homeroom' | 'teaching'`(기본 `'homeroom'`), `scheduleSeg: 'schedule' | 'todo'`(기본 `'schedule'`). 세그먼트 값은 세션 동안만 유지(persist 불필요, 단 마지막 값 기억은 nice-to-have → `useMobileHomeLayoutStore` 류에 옵션 저장 가능).
+- `ClassDetailPage` 진입: 학생 탭 > 수업 세그먼트 > `ClassListPage` > 클래스 선택 → `ClassDetailPage`. 뒤로가기로 `ClassListPage` → 학생 탭. (기존 `attendance` 탭 흐름과 동일, 컨테이너만 바뀜.)
+- 전역 FAB 가시성: `activeTab !== 'more'` 일 때만 표시. `ClassDetailPage`/`AttendanceCheckPage` 같은 서브 화면 진입 시에는 FAB 숨김(서브 화면이 자체 헤더/액션을 가짐) — `App.tsx` 에서 `attendanceNav != null || moreSub != null` 이면 FAB 미렌더.
+- `SchedulePage`/`TodoPage` 의 추가 모달: 현재는 컴포넌트 내부 `showAddModal` state. 전역 FAB 에서 열려면 — (a) 각 페이지를 forwardRef + imperative handle 로 `openAddModal()` 노출, 또는 (b) 가벼운 `useMobileUiTriggerStore`(zustand)에 `pendingAction: 'add-event' | 'add-todo' | null` 두고 페이지가 effect 로 소비. **(b) 권장** — 페이지 간 결합 없음.
+
+### 4.4 UI 권고 (frontend-design 협업 필수)
+
+- **탭바**: 4개 균등 분할 → 각 탭 ≥ 90px 폭(390px 기준) → 터치 타깃 넉넉. `pb-[env(safe-area-inset-bottom)]`.
+- **SegmentedControl**: iOS 식 pill 토글. `bg-sp-surface rounded-lg p-0.5`, 선택 항목 `bg-sp-card text-sp-text shadow-sp-sm`(또는 `bg-sp-accent/15 text-sp-accent`), 비선택 `text-sp-muted`. 페이지 상단(헤더 아래) sticky. 각 옵션 `role="tab"` + `aria-selected`, 컨테이너 `role="tablist"`.
+- **QuickAddFab**: `fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-sp-accent shadow-lg`. 액션 시트는 기존 `MobileShareModal` 패턴(`fixed inset-0 bg-black/40 ... items-end`) 재사용 — 각 액션 행 `min-h-[52px]` 아이콘+라벨.
+- **MigrationCoachmark**: 첫 실행 시 하단 탭바 위에 말풍선/스포트라이트 1회. dismiss → `localStorage['mobile-nav-v2-coachmark'] = '1'`.
+- 라운드 정책 준수(`rounded-xl`/`rounded-lg`만), 한국어.
+
+### 4.5 Test Plan (Phase 3)
+
+| ID    | 시나리오                                        | 기대                                                                   |
+| ----- | ----------------------------------------------- | ---------------------------------------------------------------------- |
+| T3-1  | 앱 진입                                         | 하단 탭 4개(홈/학생/일정/더보기), 우하단 [+] FAB                       |
+| T3-2  | 학생 탭 → [수업] 세그먼트                       | `ClassListPage` 표시 → 클래스 선택 → `ClassDetailPage`(출결/진도) 정상 |
+| T3-3  | 일정 탭 → [할 일] 세그먼트                      | `TodoPage` 표시. 세그먼트 다시 [일정] → 월간 캘린더 복귀               |
+| T3-4  | 일정 탭에서 [+] FAB → "일정 추가"               | 일정 추가 바텀시트(F-3 포함) 열림                                      |
+| T3-5  | 홈 탭에서 [+] FAB → "출결 체크"                 | 현재 교시·담임반 `AttendanceCheckPage` 진입                            |
+| T3-6  | `ClassDetailPage`/`AttendanceCheckPage` 진입 중 | 전역 FAB 숨김                                                          |
+| T3-7  | 더보기 탭                                       | FAB 숨김, MorePage(메모·쌤도구·설정·추천) 정상                         |
+| T3-8  | iOS PWA 실기기                                  | 탭바·FAB가 홈 인디케이터와 안 겹침(safe-area)                          |
+| T3-9  | 첫 실행                                         | 마이그레이션 코치마크 1회 → dismiss 후 재실행 시 안 뜸                 |
+| T3-10 | 좌우 스와이프(App.tsx 기존 제스처)              | 4개 탭 사이 순환, 세그먼트/서브화면과 충돌 없음                        |
+
+### 4.6 Open Questions (Phase 3 구현 전)
+
+1. `SchedulePage`/`TodoPage` 의 추가 모달 열기 — 트리거 store(b안) vs imperative ref(a안). (b안 권장하지만 코드 확인)
+2. 좌우 스와이프 탭 전환이 SegmentedControl 영역에서도 발동하면 혼란 — 세그먼트 영역에서는 스와이프 무시할지.
+3. `StudentsPage` 가 이미 가진 `selectedClass`(담임반/수업반 명단) 선택기와 새 세그먼트(담임/수업)의 관계 — 담임 세그먼트는 `StudentsPage` 를 `selectedClass='homeroom'` 고정으로 쓰고, 수업 세그먼트는 `ClassListPage` 로? 아니면 `StudentsPage` 의 selectedClass 를 그대로 활용? → 후자가 코드 변경 적음, 단 출결/진도 진입은 `ClassListPage` 경로라 분기 필요.
+4. 전역 FAB 의 "메모 작성" — `MemoPage` 의 추가 흐름 재사용 방법.
 
 ---
 
-## 7. Test Plan (Phase 1+2)
+## 5. Phase 4 — 스와이프 빠른 기록 (상세)
+
+### 5.0 현황
+
+`StudentsPage.tsx` 명단 뷰(`HomeroomListView`/`TeachingListView`, 대략 `:717-880`)는 학생 행 탭 → `StudentQuickActionSheet`(바텀시트, `:908-1003`, 출결/기록/연락처 탭). 스와이프 액션 없음. 햅틱은 `ClassProgressEntryItem.tsx:46-49` `if ('vibrate' in navigator) navigator.vibrate(10)` 만 존재. 칭찬/일반 메모는 `useMobileStudentRecordsStore` 의 `bridgeAttendanceRecord` 류 + 학생기록(memo) 경로.
+
+### 5.1 Touchpoints
+
+| 레이어            | 파일                                                                                | 변경                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| mobile/components | `src/mobile/components/common/SwipeRow.tsx`                                         | **신규** — 포인터 이벤트(`onPointerDown/Move/Up`) 기반 좌/우 스와이프-투-리빌 래퍼. 무라이브러리 |
+| mobile/components | `src/mobile/components/Class/StudentSwipeRow.tsx`                                   | **신규** — `SwipeRow` 위에 학생 행 + 좌(지각/결석)·우(칭찬 메모) 액션 버튼 구성                  |
+| mobile/pages      | `src/mobile/pages/StudentsPage.tsx`                                                 | 명단 뷰의 학생 행을 `StudentSwipeRow` 로 교체. 시각 버튼/바텀시트 경로 그대로 유지(대체 경로)    |
+| mobile/components | `src/mobile/components/Class/PraiseMemoSheet.tsx`                                   | **신규(또는 기존 메모 작성 시트 재사용)** — 칭찬 메모 빠른 입력                                  |
+| mobile/components | `src/mobile/components/common/Toast.tsx` (있으면 재사용/없으면 신규)                | Undo 토스트 (5초, "되돌리기" 버튼)                                                               |
+| mobile/stores     | `src/mobile/stores/useMobileStudentRecordsStore.ts` / `useMobileAttendanceStore.ts` | 지각/결석 빠른 기록 액션 + 직전 기록 스냅샷 보관(Undo 용)                                        |
+| mobile/components | `src/mobile/components/Onboarding/SwipeHintCoachmark.tsx`                           | **신규** — 명단 첫 진입 1회 ("좌/우로 밀어 빠르게 기록")                                         |
+| mobile/hooks      | (선택) `src/mobile/hooks/useHaptic.ts`                                              | `navigator.vibrate` 가드 래퍼 (`ClassProgressEntryItem` 도 마이그레이션)                         |
+
+### 5.2 인터랙션 설계
+
+- **SwipeRow**: `pointerdown` 에서 시작 X 기록 → `pointermove` 에서 `transform: translateX(dx)` (좌/우 최대 ±80px). 임계(`|dx| ≥ 56px`) 넘으면 해당 방향 액션 영역 노출 고정. `pointerup` 에서: 임계 미만이면 원위치 스냅, 이상이면 액션 영역 노출 상태 유지. 액션 영역의 버튼을 탭해야 실제 실행 — **스와이프 자체로는 아무 변경 없음**. 다른 행 스와이프/탭 밖 클릭 → 모든 행 닫힘. 세로 스크롤 우선(수직 이동이 수평보다 크면 스와이프 취소).
+- **오른쪽 스와이프** → 초록 영역 "칭찬 메모" 버튼 → 탭 시 `PraiseMemoSheet`(학생명 프리필, 1줄 입력) → 저장 시 학생기록에 카테고리 `칭찬` memo 추가.
+- **왼쪽 스와이프** → 노랑 "지각" + 빨강 "결석" 버튼 → 탭 시 즉시 기록(현재 교시 = `useCurrentPeriod`, 수업 시간 외면 담임 출결 `period=0`) + Undo 토스트 5초. 토스트 "되돌리기" → 직전 스냅샷 복원.
+- 햅틱: 임계 도달 시 + 액션 실행 시 `navigator.vibrate(10)` (지원 기기만; iOS 무시 — 단독 의존 금지). 시각 피드백(색·애니메이션) 항상 동반.
+- **affordance 항상 유지**: 학생 행 탭 → `StudentQuickActionSheet`(기존) 경로 그대로. 스와이프는 보너스. 첫 진입 1회 `SwipeHintCoachmark`.
+- a11y: 스와이프 못 하는 사용자는 기존 탭→바텀시트 경로로 동일 작업 가능. 액션 버튼에 `aria-label`.
+
+### 5.3 Test Plan (Phase 4)
+
+| ID   | 시나리오                          | 기대                                                             |
+| ---- | --------------------------------- | ---------------------------------------------------------------- |
+| T4-1 | 학생 행 오른쪽 스와이프           | 초록 "칭찬 메모" 버튼 노출. 스와이프만으로는 기록 변화 없음      |
+| T4-2 | "칭찬 메모" 탭 → 입력 → 저장      | 학생기록에 칭찬 메모 추가, 시트 닫힘                             |
+| T4-3 | 학생 행 왼쪽 스와이프 → "결석" 탭 | 현재 교시(또는 담임)에 결석 기록 + "되돌리기" 토스트 5초         |
+| T4-4 | "되돌리기" 탭                     | 결석 기록 취소(직전 상태 복원)                                   |
+| T4-5 | 다른 행 스와이프                  | 이전 행 자동 닫힘                                                |
+| T4-6 | 세로 스크롤 중 손가락 약간 좌우   | 스와이프 발동 안 함(스크롤 우선)                                 |
+| T4-7 | 시각 버튼/바텀시트 경로           | 기존대로 동작(스와이프와 무관하게 항상 가능)                     |
+| T4-8 | Android 기기                      | 임계·실행 시 미세 진동. iOS — 진동 없이 시각 피드백만, 정상 동작 |
+| T4-9 | 첫 진입                           | 스와이프 힌트 코치마크 1회 → dismiss 후 안 뜸                    |
+
+### 5.4 Open Questions (Phase 4 구현 전)
+
+1. 칭찬 메모가 들어갈 학생기록 카테고리/엔티티 필드 — `useMobileStudentRecordsStore` 의 기존 메모 추가 API 확인.
+2. 좌측 스와이프 "결석" 기록 대상 — 현재 교시 자동? 수업 시간 외엔 담임 출결? 사용자가 교시를 고를 수 있게 작은 선택지를 줄지.
+3. Undo 구현 — 낙관적 업데이트 + 스냅샷 롤백 (Drive 동기화 중이면 어떻게? 토스트 만료 후 push).
+4. `SwipeRow` 무라이브러리 구현 vs `framer-motion`/`react-swipeable` 도입 — 번들 크기 vs 구현 난이도.
+
+---
+
+## 6. Phase 5 — 모바일 독립 설정 (상세)
+
+### 6.0 현황
+
+`SettingsPage.tsx`: 학교/교사/학급 = `InfoRow`(읽기 전용), 테마만 변경, "데스크톱 앱에서 상세 설정을 변경할 수 있습니다" 안내. `useMobileSettingsStore` 는 `settingsRepository.getSettings()`(IndexedDB `settings` 키) 를 읽어 `settings` state 채움, `autoSyncInterval` 만 별도 localStorage. 동기화는 `useMobileDriveSyncStore` + `syncRegistry`(공유) 경로. 데스크톱→모바일 다운로드는 있으나 모바일→데스크톱 설정 업로드는 (autoSyncInterval 제외) 안 함. `OnboardingFlow.tsx` 는 환영 슬라이드 + "Google 계정으로 시작하기"만 (학교/교시 입력 스텝 없음).
+
+### 6.1 Touchpoints
+
+| 레이어            | 파일                                                            | 변경                                                                                                                                                              |
+| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| mobile/pages      | `src/mobile/pages/SettingsPage.tsx`                             | "기본 정보" 섹션을 읽기→편집 가능: 학교명·교사명·담임 학급 입력 + "교시 시간" 편집 진입(또는 인라인)                                                              |
+| mobile/components | `src/mobile/components/Settings/PeriodTimesEditor.tsx`          | **신규** — 1~N교시 시작/종료 시각(`<input type="time">`) 편집 + 행 추가/삭제                                                                                      |
+| mobile/stores     | `src/mobile/stores/useMobileSettingsStore.ts`                   | `updateSettings(patch)` 액션 추가 → `settingsRepository.saveSettings(merged)` + (옵션) 동기화 트리거. **mobile- 접두사 deviceId 보존**(기존 가드 유지)            |
+| mobile/stores     | `src/mobile/stores/useMobileDriveSyncStore.ts` / `syncRegistry` | `settings` 파일이 모바일에서 변경되면 push 대상에 포함되도록 — `syncRegistry` 단일 소스 활용                                                                      |
+| mobile/components | `src/mobile/components/Settings/SettingsSyncConflictModal.tsx`  | **신규** — push 직전 원격 `settings` 가 로컬보다 새로우면 사용자 선택("내 변경 유지" / "원격으로 덮어쓰기") — first-sync-confirmation 패턴                        |
+| mobile/components | `src/mobile/components/Onboarding/OnboardingFlow.tsx`           | 슬라이드에 "학교 정보"·"교시 시간" 입력 스텝 추가 (PC 없이 첫 설정 완결) — `design examples/onboarding_step_2_school_info`, `onboarding_step_3_period_times` 참조 |
+
+### 6.2 범위·순서 (사용자 결정 §8)
+
+1. **F-13 교시 시간 편집** 먼저 — `PeriodTimesEditor` + `updateSettings({ periodTimes })`. 동기화 안전망(6.3) 포함. 검증 완료 후:
+2. **F-14 학교/교사/학급 편집** — 같은 `updateSettings` 경로. (담임 학급 변경은 출결/명단 매핑에 영향 → 변경 시 경고 토스트.)
+3. **F-16 온보딩 보강** — F-13/14 의 편집 폼을 온보딩 스텝으로 재사용.
+
+### 6.3 동기화 안전망 (위험 大 — 데스크톱→모바일 단방향을 양방향으로)
+
+- `updateSettings` → 로컬 저장(`settingsRepository.saveSettings`) + `lastModifiedAt` 갱신.
+- 다음 동기화 push 전: 원격 `settings` 의 수정시각 vs 로컬 — 원격이 더 새로우면 `SettingsSyncConflictModal` 로 사용자 결정. 자동 덮어쓰기 금지.
+- push 전 원격 read 가 `null` 이 아님을 확인(note-cloud-sync 의 `storage.read !== null` 가드 패턴) — 빈 원격으로 인한 로컬 유실 방지.
+- `sync.deviceId` 의 `mobile-` 접두사 보존 로직(`useMobileSettingsStore.load` 기존) 유지 — 편집·동기화 후에도 모바일 deviceId 가 PC deviceId 로 오염되지 않게.
+- 데스크톱 측 동시 편집 가드는 범위 밖(데스크톱은 단일 사용자 가정) — 단 모바일에서 push 한 변경이 데스크톱 다음 sync 에 반영되는지 E2E 확인.
+
+### 6.4 UI 권고 (frontend-design 협업 필수)
+
+- "기본 정보" 섹션: `InfoRow` → `InfoEditRow`(label + `<input>` + 저장 시 debounce 또는 명시 "저장" 버튼). 학급 변경은 확인 다이얼로그.
+- `PeriodTimesEditor`: 행마다 `[N교시] [시작 ▾] [종료 ▾] [✕]` + "+ 교시 추가". 시작/종료 `<input type="time">`. 시작 ≥ 종료 등 검증 시 행 빨간 테두리 + 헬퍼. 저장 시 오름차순 정렬·번호 재부여.
+- `SettingsSyncConflictModal`: 두 선택지 + 각 측 "마지막 수정: …" 표시. `role="alertdialog"`.
+- 온보딩 스텝: `design examples/` 의 onboarding 목업 톤 따름.
+
+### 6.5 Test Plan (Phase 5)
+
+| ID   | 시나리오                                                | 기대                                                                       |
+| ---- | ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| T5-1 | 설정 > 교시 시간 편집 → 3교시 시작 10:35 로 변경 → 저장 | `settings.periodTimes` 갱신, 홈 탭 현재교시 판정·출결 드롭다운 시각에 반영 |
+| T5-2 | 설정 > 학교명 변경 → 저장                               | `settings.schoolName` 갱신, 홈 헤더 반영                                   |
+| T5-3 | 담임 학급 변경                                          | 확인 다이얼로그 → 변경 시 명단/출결 매핑 경고 토스트                       |
+| T5-4 | 모바일에서 설정 변경 → Drive 동기화 → 데스크톱 sync     | 데스크톱 설정에 모바일 변경 반영 (E2E)                                     |
+| T5-5 | 원격 `settings` 가 로컬보다 새로운 상태에서 모바일 편집 | `SettingsSyncConflictModal` 표시, 자동 덮어쓰기 안 함                      |
+| T5-6 | 원격 `settings` 가 비어있는(또는 read null) 상태        | 로컬 설정이 빈 원격으로 덮어써지지 않음                                    |
+| T5-7 | 신규 기기 — 온보딩에서 학교·교시 시간 입력              | PC 없이 첫 설정 완결, 이후 정상 사용                                       |
+| T5-8 | 동기화 후 deviceId                                      | 여전히 `mobile-` 접두사 (PC deviceId 로 오염 안 됨)                        |
+
+### 6.6 Open Questions (Phase 5 구현 전)
+
+1. `settingsRepository.saveSettings` 가 IndexedDB 에 쓴 뒤 모바일 동기화 push 가 `settings` 파일을 실제로 올리는지 — `syncRegistry` / `useMobileDriveSyncStore` 의 push 파일 목록 확인.
+2. 원격 `settings` 수정시각 비교 기준 — `settings` 객체 안에 `lastSyncedAt`/`updatedAt` 필드가 있나, 아니면 Drive 파일 메타데이터.
+3. F-14 우선 포함 여부 — 사용자 결정상 "교시 시간만 우선, 학급 정보는 후속". F-14 를 같은 릴리즈에 넣을지 별도로 뺄지.
+4. 온보딩 스텝 추가가 기존 OAuth 플로우 순서와 충돌하지 않는지(`useGoogleAuth` 흐름).
+
+---
+
+## 7. Test Plan (Phase 1+2) — ✅ 전부 통과 (Playwright E2E, 390px)
 
 | ID   | 시나리오                                      | 기대                                                        |
 | ---- | --------------------------------------------- | ----------------------------------------------------------- |
@@ -354,20 +512,24 @@ QA 방식: `npm run dev` 브라우저 + DevTools 모바일 에뮬레이션(360px
 
 ---
 
-## 8. Open Questions (구현 착수 전 코드 확인)
+## 8. Open Questions (해소됨 — Phase 1+2 구현 시 코드 확인 완료)
 
-1. `useMobileStudentStore` 의 담임 반 학생 목록 셀렉터 정확한 이름/시그니처 (F-1).
-2. `AttendanceCheckPage` 의 `getTodayRecord`/`saveRecord` 가 `period` 를 키의 일부로 쓰는 정확한 위치 (F-2 — `selectedPeriod` 로 일괄 치환 범위).
-3. `SchoolEvent` 엔티티에 `endTime?` 필드 존재 여부 (F-3 — 없으면 1단계 `time` 만, `endTime` 은 후속).
-4. `useMobileSettingsStore` persist merge 함수 존재 여부 (F-5 마이그레이션 — 없으면 추가).
-5. `ClassListPage`(구 AttendanceListPage)에서 `AttendanceCheckPage` 진입 경로의 `period` 전달 방식 (F-2 — `currentPeriod` 주입 추가 필요 지점).
+1. ✅ `useMobileStudentStore.students`(`readonly Student[]`) 가 담임 반 명단 — `isStudentActive` 필터로 활성 수 계산.
+2. ✅ `AttendanceCheckPage` 의 `getTodayRecord(classId, period)` / `saveRecord({period,...})` / 초기화 effect deps — 모두 `selectedPeriod` 로 치환 완료.
+3. ✅ `SchoolEvent` 에 `time?`("HH:mm" 또는 "HH:mm - HH:mm") + `startTime?`·`endTime?`("HH:mm") 모두 존재 — 셋 다 저장.
+4. ✅ `useMobileSettingsStore` 는 persist 미들웨어 미사용 — 홈 카드 prefs 는 별도 `useMobileHomeLayoutStore`(localStorage) 로 분리(autoSyncInterval 패턴). merge 불필요.
+5. ✅ `AttendanceCheckPage` 의 유일한 외부 호출처는 `App.tsx`(TodayHub 경유)와 `ClassAttendanceTab`(embedded). `ClassListPage`/`ClassDetailPage` 는 `AttendanceCheckPage` 를 직접 호출하지 않음. → `ClassAttendanceTab` 에서만 `currentPeriod` 주입.
+
+> Phase 3·4·5 의 구현 전 확인 항목은 각각 §4.6 / §5.4 / §6.6 참조.
 
 ---
 
 ## 9. Next Steps
 
-1. Open Questions(§8) 코드로 확인 → 본 문서 보정.
-2. `/pdca do mobile-ux-improvement` — 권장 순서 **F-6 → F-3 → F-1 → F-2 → F-4 → F-5**. UI 컴포넌트(`CollapsibleCard`/`Toggle`/교시 드롭다운/출결 버튼) 작업 시 **`frontend-design` 스킬 협업**.
-3. Phase 1+2 완료 → `/pdca analyze` → Gap < 90% 면 `/pdca iterate`.
-4. v2.1.x 릴리즈(Release Workflow 8단계 — 모바일 버전 텍스트 3곳 포함).
-5. 별도 design 패스로 Phase 3·4·5 상세화 (`mobile-ux-improvement.design.md` §4~6 확장 또는 분리 문서).
+1. **Phase 1+2: ✅ 완료** — 구현·코드리뷰 반영·Playwright E2E 검증·커밋(`ddfa59f`, 브랜치 `feat/mobile-ux-improvement`).
+2. **Phase 3 착수** — §4.6 Open Questions 코드 확인 → `/pdca do`. 네비 재편(`MobileTab` 4값, `SegmentedControl`/`QuickAddFab` 신규, `SchedulePage`/`TodoPage` 자체 FAB 제거). **UI 작업 `frontend-design` 스킬 협업 필수.** main 에 점진 머지.
+3. **Phase 5** — §6.6 확인 → `PeriodTimesEditor` + `updateSettings` + 동기화 안전망(§6.3). F-13 먼저, 검증 후 F-14, 그 다음 F-16(온보딩).
+4. **Phase 4** — §5.4 확인 → `SwipeRow`/`StudentSwipeRow` + Undo 토스트 + 코치마크. frontend-design 협업 비중 큼.
+5. 각 Phase 완료 시 `/pdca analyze` → Gap < 90% 면 `/pdca iterate`. **전체 완료 후 단일 릴리즈** (Release Workflow 8단계, 모바일 버전 텍스트 3곳 + release-notes 포함).
+6. v2.1.x 릴리즈(Release Workflow 8단계 — 모바일 버전 텍스트 3곳 포함).
+7. 별도 design 패스로 Phase 3·4·5 상세화 (`mobile-ux-improvement.design.md` §4~6 확장 또는 분리 문서).
