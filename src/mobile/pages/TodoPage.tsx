@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import { useMobileTodoStore } from '@mobile/stores/useMobileTodoStore';
+import { useMobileUiTriggerStore } from '@mobile/stores/useMobileUiTriggerStore';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 
 const PRIORITY_CONFIG: Record<TodoPriority, { label: string; emoji: string; color: string }> = {
@@ -159,7 +160,9 @@ function TodoItem({ todo, onToggle, onDelete, onToggleSubTask }: TodoItemProps) 
   const completedCount = subTasks.filter((st) => st.completed).length;
 
   return (
-    <li className={`border-b border-black/5 dark:border-white/5 transition-opacity ${todo.completed ? 'opacity-40' : ''}`}>
+    <li
+      className={`border-b border-black/5 dark:border-white/5 transition-opacity ${todo.completed ? 'opacity-40' : ''}`}
+    >
       <div className="flex items-center gap-3 px-4 py-3">
         {/* 체크박스 */}
         <button
@@ -208,17 +211,25 @@ function TodoItem({ todo, onToggle, onDelete, onToggleSubTask }: TodoItemProps) 
               </span>
             )}
             {/* D-Day 배지 */}
-            {dday && (
-              <span className={`text-xs font-medium ${dday.colorClass}`}>{dday.label}</span>
-            )}
+            {dday && <span className={`text-xs font-medium ${dday.colorClass}`}>{dday.label}</span>}
             {/* 하위 할일 배지 */}
             {hasSubTasks && (
               <button
-                onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded(!expanded);
+                }}
                 className="text-xs text-sp-muted hover:text-sp-accent flex items-center gap-0.5"
               >
-                <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <polyline points={expanded ? "3,5 6,8 9,5" : "5,3 8,6 5,9"} />
+                <svg
+                  className="w-3 h-3"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                >
+                  <polyline points={expanded ? '3,5 6,8 9,5' : '5,3 8,6 5,9'} />
                 </svg>
                 {completedCount}/{subTasks.length}
               </button>
@@ -262,15 +273,29 @@ function TodoItem({ todo, onToggle, onDelete, onToggleSubTask }: TodoItemProps) 
                   className="shrink-0 flex items-center justify-center"
                   style={{ minWidth: 32, minHeight: 32 }}
                 >
-                  <div className={`w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors ${st.completed ? 'bg-sp-accent/70 border-sp-accent/70' : 'border-sp-border hover:border-sp-accent'}`}>
+                  <div
+                    className={`w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors ${st.completed ? 'bg-sp-accent/70 border-sp-accent/70' : 'border-sp-border hover:border-sp-accent'}`}
+                  >
                     {st.completed && (
-                      <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        className="w-2.5 h-2.5 text-white"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <polyline points="2,6 5,9 10,3" />
                       </svg>
                     )}
                   </div>
                 </button>
-                <span className={`text-xs leading-snug ${st.completed ? 'line-through text-sp-muted' : 'text-sp-text/80'}`}>{st.text}</span>
+                <span
+                  className={`text-xs leading-snug ${st.completed ? 'line-through text-sp-muted' : 'text-sp-text/80'}`}
+                >
+                  {st.text}
+                </span>
               </li>
             ))}
           </ul>
@@ -294,6 +319,16 @@ export function TodoPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 전역 FAB → "할 일 추가" 트리거 소비
+  const pendingUiAction = useMobileUiTriggerStore((s) => s.pendingAction);
+  const consumeUiAction = useMobileUiTriggerStore((s) => s.consumeAction);
+  useEffect(() => {
+    if (pendingUiAction === 'add-todo') {
+      setShowAddModal(true);
+      consumeUiAction('add-todo');
+    }
+  }, [pendingUiAction, consumeUiAction]);
 
   const handleAdd = useCallback(
     async (todo: Todo) => {
@@ -324,17 +359,9 @@ export function TodoPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* 헤더 */}
-      <header className="glass-header flex items-center justify-between px-4 py-3 shrink-0">
+      {/* 헤더 (추가는 우하단 전역 [+] 버튼으로) */}
+      <header className="glass-header flex items-center px-4 py-3 shrink-0">
         <h1 className="text-sp-text font-bold text-lg">할 일</h1>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-sp-accent text-sp-accent-fg font-bold text-xl leading-none active:scale-95 transition-transform"
-          aria-label="할 일 추가"
-          style={{ minWidth: 44, minHeight: 44 }}
-        >
-          +
-        </button>
       </header>
 
       {/* 리스트 */}

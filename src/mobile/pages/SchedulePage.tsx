@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import { useMobileEventsStore } from '@mobile/stores/useMobileEventsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useMobileUiTriggerStore } from '@mobile/stores/useMobileUiTriggerStore';
 import { Toggle } from '@mobile/components/common/Toggle';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import {
@@ -165,6 +166,17 @@ export function SchedulePage() {
     setShowAddModal(true);
   };
 
+  // 전역 FAB → "일정 추가" 트리거 소비
+  const pendingUiAction = useMobileUiTriggerStore((s) => s.pendingAction);
+  const consumeUiAction = useMobileUiTriggerStore((s) => s.consumeAction);
+  useEffect(() => {
+    if (pendingUiAction === 'add-event') {
+      openAddModal();
+      consumeUiAction('add-event');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUiAction]);
+
   const handleAdd = async () => {
     if (!newTitle.trim() || !newDate) return;
     const start = isAllDay ? '' : newStartTime.trim();
@@ -323,15 +335,6 @@ export function SchedulePage() {
           </ul>
         )}
       </div>
-
-      {/* FAB */}
-      <button
-        onClick={openAddModal}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-sp-accent text-sp-accent-fg rounded-full shadow-lg flex items-center justify-center z-10 active:scale-95 transition-transform"
-        aria-label="일정 추가"
-      >
-        <span className="material-symbols-outlined text-2xl">add</span>
-      </button>
 
       {/* Add Event Modal */}
       {showAddModal && (
