@@ -1,5 +1,7 @@
 # repo-privatization 계획서
 
+> 🛑 **CANCELLED (2026-05-12)** — 사용자 결정으로 **비공개 전환을 철회하고 오픈소스 유지 + 보안 강화** 방향으로 선회. Phase A(머지됨, main `4d735d9`)는 롤백(URL 5종 원복 + `electron-builder.yml`·`CLAUDE.md` 원복 + `landing/public/release-notes.json` 삭제), 신규 repo `pblsketch/ssampin-releases` 도 삭제. 후속은 `security-hardening` PDCA 로 이어짐. 본 문서는 이력 보존용.
+>
 > **Summary**: 본 소스 저장소(`pblsketch/ssampin`)를 프라이빗으로 전환하되, 배포 자산(installer·`latest.yml`·release-notes)은 신규 퍼블릭 저장소 `pblsketch/ssampin-releases`로 이관해 자동 업데이트·웹 다운로드 무중단 유지.
 >
 > **Project**: 쌤핀 (SsamPin)

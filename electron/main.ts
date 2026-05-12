@@ -1942,7 +1942,7 @@ function setupAutoUpdater(): void {
   // generic provider는 CDN redirect URL을 직접 사용하므로 rate limit 없음
   autoUpdater.setFeedURL({
     provider: 'generic',
-    url: 'https://github.com/pblsketch/ssampin-releases/releases/latest/download',
+    url: 'https://github.com/pblsketch/ssampin/releases/latest/download',
   });
   autoUpdater.autoDownload = false;
 
@@ -3061,7 +3061,7 @@ function registerIpcHandlers(): void {
   // macOS: 코드서명 없이는 인앱 업데이트가 차단되므로 릴리즈 페이지로 안내
   ipcMain.handle('update:download', (): void => {
     if (process.platform === 'darwin') {
-      shell.openExternal('https://github.com/pblsketch/ssampin-releases/releases/latest');
+      shell.openExternal('https://github.com/pblsketch/ssampin/releases/latest');
       return;
     }
     autoUpdater.downloadUpdate().catch((err: Error) => {
