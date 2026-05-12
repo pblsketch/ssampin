@@ -1,5 +1,10 @@
 publish:
   provider: github
+  owner: pblsketch
+  # 배포 자산은 소스 저장소(pblsketch/ssampin, private)가 아니라 별도 퍼블릭 저장소에 게시한다.
+  # 현 릴리즈 흐름은 `--publish never` + 수동 `gh release` 이지만, 향후 `--publish always`
+  # 사용 시에도 올바른 저장소를 가리키도록 명시한다. (자동 업데이트 feed: electron/main.ts)
+  repo: ssampin-releases
 appId: com.ssampin.app
 productName: 쌤핀
 directories:

@@ -56,13 +56,12 @@ function ChangeBadge({ type }: { type: ChangeType }) {
 async function fetchReleaseNotesSince(currentVersion: string, targetVersion: string): Promise<VersionNote[]> {
   const fetchData = async (): Promise<ReleaseNotesData | null> => {
     try {
-      const res = await fetch(
-        'https://raw.githubusercontent.com/pblsketch/ssampin/main/public/release-notes.json',
-        { signal: AbortSignal.timeout(5000) },
-      );
+      const res = await fetch('https://ssampin.com/release-notes.json', {
+        signal: AbortSignal.timeout(5000),
+      });
       if (res.ok) return await res.json();
     } catch {
-      // GitHub fetch failed
+      // remote fetch failed
     }
     try {
       const res = await fetch('/release-notes.json');
