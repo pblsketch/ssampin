@@ -34,7 +34,7 @@
     "build:mac:dmg": "npm run build && electron-builder --mac dmg"
   },
   "dependencies": {
-    "@blocknote/ariakit": "~0.47.3",
+    "@blocknote/ariakit": "~0.50.0",
     "@blocknote/core": "~0.47.3",
     "@blocknote/react": "~0.47.3",
     "@dnd-kit/core": "^6.3.1",
