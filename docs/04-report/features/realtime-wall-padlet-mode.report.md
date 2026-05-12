@@ -434,7 +434,7 @@ product-manager → frontend-architect → security-architect → infra-architec
 ### 3. AI 챗봇 지식 베이스 갱신
 ```bash
 SUPABASE_URL=https://ddbkyaxvnpaxkbqbpijg.supabase.co \
-EMBED_AUTH_TOKEN=ssampin-admin-2024-secure \
+EMBED_AUTH_TOKEN=<ADMIN_API_KEY> \
 node scripts/ingest-chatbot-qa.mjs
 ```
 - 패들렛 모드 Q&A + 새 기능 요약 반영

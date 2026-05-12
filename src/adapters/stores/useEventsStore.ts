@@ -455,13 +455,13 @@ export const useEventsStore = create<EventsState>((set) => {
       const json = JSON.stringify(shareFile, null, 2);
       const api = window.electronAPI;
       if (api?.showSaveDialog && api.writeFile) {
-        const filePath = await api.showSaveDialog({
+        const saved = await api.showSaveDialog({
           title: '일정 내보내기',
           defaultPath: `일정공유_${toLocalDateString()}.ssampin`,
           filters: [{ name: '쌤핀 일정 파일', extensions: ['ssampin'] }],
         });
-        if (!filePath) return false;
-        await api.writeFile(filePath, json);
+        if (!saved) return false;
+        await api.writeFile(saved.handle, json);
         return true;
       }
       // Browser fallback
@@ -588,13 +588,13 @@ export const useEventsStore = create<EventsState>((set) => {
       const fileName = '일정_가져오기_양식.xlsx';
       const api = window.electronAPI;
       if (api?.showSaveDialog && api.writeFile) {
-        const filePath = await api.showSaveDialog({
+        const saved = await api.showSaveDialog({
           title: '양식 다운로드',
           defaultPath: fileName,
           filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
         });
-        if (!filePath) return;
-        await api.writeFile(filePath, buffer);
+        if (!saved) return;
+        await api.writeFile(saved.handle, buffer);
         return;
       }
       // 브라우저 폴백

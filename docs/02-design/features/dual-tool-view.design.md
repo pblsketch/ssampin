@@ -594,7 +594,7 @@ export function useToolKeydown(
     - **추가할 신규 Q&A**:
       - Q: "두 개의 쌤 도구를 동시에 사용할 수 있나요?" → A: "네, v1.11.0부터 병렬 모드를 지원합니다. 도구 헤더의 분할화면(splitscreen) 아이콘을 누르시면..."
       - Q: "화면이 좁은데 병렬 모드가 안 돼요" → A: "1280px 이상에서 지원됩니다..."
-    - 재임베딩 명령: `SUPABASE_URL=https://ddbkyaxvnpaxkbqbpijg.supabase.co EMBED_AUTH_TOKEN=ssampin-admin-2024-secure node scripts/ingest-chatbot-qa.mjs`
+    - 재임베딩 명령: `SUPABASE_URL=https://ddbkyaxvnpaxkbqbpijg.supabase.co EMBED_AUTH_TOKEN=<ADMIN_API_KEY> node scripts/ingest-chatbot-qa.mjs`
     - 릴리즈 직전 실행 + 로그로 재임베딩 성공(69+ 문서) 확인
 15. **회귀 테스트** — 모든 기존 도구 단일 모드 스모크 + §7 듀얼 이벤트 격리 테스트
 

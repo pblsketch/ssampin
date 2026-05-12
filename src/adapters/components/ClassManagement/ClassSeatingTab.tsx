@@ -459,16 +459,16 @@ export function ClassSeatingTab({ classId }: ClassSeatingTabProps) {
       if (window.electronAPI) {
         const ext = format === 'excel' ? 'xlsx' : 'hwpx';
         const filterName = format === 'excel' ? 'Excel 파일' : '한글 문서';
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '내보내기',
           defaultPath: defaultFileName,
           filters: [{ name: filterName, extensions: [ext] }],
         });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, normalized);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, normalized);
           showToast('파일이 저장되었습니다', 'success', {
             label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(filePath),
+            onClick: () => window.electronAPI?.openFile(saved.handle),
           });
           track('export', { format });
         }
