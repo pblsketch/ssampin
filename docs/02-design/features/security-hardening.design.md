@@ -177,11 +177,11 @@ ipcMain.handle('shell:openExternal', (_e, url: string): void => {
 - [x] B-9. `src/adapters/...` 15 파일 — 내보내기(시간표 HWPX·좌석/출결/명렬/관찰 Excel·일정 .ssampin·즐겨찾기/도구 그룹·담벼락 PDF 등) 호출부를 `const saved = await showSaveDialog(...)` → `writeFile(saved.handle, ...)` → `openFile(saved.handle)` 핸들 기반으로 수정. 브라우저 폴백(Blob 다운로드)은 그대로
 - [ ] B-10. `npm run typecheck && lint && test && regression-check` 그린 — CI 에서 확인 (worktree node_modules 상태에 따라 로컬은 best-effort)
 
-### Phase P0-C — GOOGLE_CLIENT_SECRET (PR)
-- [ ] C-1a (데스크톱, Case A): `vite.config.ts:33` 의 `GOOGLE_CLIENT_SECRET` define 제거 + 데스크톱 토큰 교환 코드에서 `client_secret` 파라미터 제거(PKCE `code_verifier` 만 — 이미 보내고 있으면 끝)
-- [ ] C-1b (모바일, Case B): Supabase Edge Function `oauth-exchange`(또는 모바일 전용) 신설 — `GOOGLE_CLIENT_SECRET`(서버 env)으로 `code`+`code_verifier`+`redirect_uri` → 토큰. 모바일 렌더러를 그 호출로 변경. `vite.mobile.config.ts:115,117` 의 `GOOGLE_CLIENT_SECRET`/`VITE_MOBILE_GOOGLE_CLIENT_SECRET` define 제거
-- [ ] C-2. secret 로테이션 — 데스크톱 client + 모바일 client 둘 다 (Google Console)
-- [ ] C-3. 빌드 후 `grep -rE "client_secret|GOCSPX" dist/ dist-mobile/` → 0건. OAuth 로그인(데스크톱 앱 + 모바일 PWA) 수동 RG
+### Phase P0-C — GOOGLE_CLIENT_SECRET (PR `feat/security-hardening-p0c-oauth-secret`) — ✅ 코드 구현 완료
+- [x] C-1a (데스크톱, Case A — PKCE only): `vite.config.ts` 의 `process.env.GOOGLE_CLIENT_SECRET` define 제거(`GOOGLE_CLIENT_ID` 유지). `GoogleOAuthClient.ts` 의 `clientSecret` 멤버·`exchangeCode`/`refreshTokens` 의 `client_secret` 파라미터 제거. 데스크톱 primary 흐름이 PKCE 를 안 쓰던 문제 해소 — `electron/ipc/oauth.ts` 의 `oauth:start` 가 PKCE `code_verifier`/`code_challenge`(S256) 를 생성, `authUrl` 에 `code_challenge` 주입, IPC 응답에 `codeVerifier` 동봉. `preload.ts`/`src/global.d.ts` 의 `startOAuth` 반환 타입에 `codeVerifier` 추가, `useGoogleAccountStore`/`useCalendarSyncStore` 의 `completeAuth` 가 verifier 를 `authenticate()` 로 전달. PKCE 폴백(`oauth:pkce-start`)은 기존대로(이미 secret 없이 동작)
+- [x] C-1b (모바일, Case B — Edge Function 교환): 신규 `supabase/functions/oauth-exchange/index.ts` — POST `{ grantType: 'authorization_code'|'refresh_token', code?, codeVerifier?, redirectUri?, refreshToken?, clientId? }` → 서버 env `GOOGLE_CLIENT_SECRET`+`GOOGLE_CLIENT_ID`(또는 body `clientId`) 로 `https://oauth2.googleapis.com/token` 호출 → 토큰 패스스루. CORS(`_shared/cors.ts`) · grantType 화이트리스트 · 필수 필드 검증 · IP 시간당 30회 rate limit(`_shared/rateLimit.ts`) · 에러 일반화(`internalErrorResponse`). Google `invalid_grant` 는 클라가 분기하도록 전달. `supabase/config.toml` 에 `[functions.oauth-exchange] verify_jwt = false` 추가. `GoogleOAuthBrowserClient.ts` — `clientSecret` 멤버·Google token endpoint 직접 호출 제거 → `${VITE_SUPABASE_URL}/functions/v1/oauth-exchange` 호출로 교체(`getAuthUrl` PKCE `code_challenge` 는 그대로). `vite.mobile.config.ts` 의 `process.env.GOOGLE_CLIENT_SECRET` / `import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_SECRET` define 둘 다 제거(`*_CLIENT_ID` 유지)
+- [ ] C-2. secret 로테이션 — **사용자/배포 작업**: 데스크톱 client(이제 안 쓰니 폐기 가능) + 모바일 client(새 값으로 로테이션 → Edge Function env `GOOGLE_CLIENT_SECRET` 갱신) (Google Console). ⚠️ **배포 순서**: (1) Supabase 에 `GOOGLE_CLIENT_SECRET`(모바일 client) Edge Function env 설정 → (2) `oauth-exchange` 함수 배포 → (3) PR 머지(Vercel 모바일 재배포). 순서 뒤집으면 그 사이 모바일 로그인 깨짐. 데스크톱은 새 빌드/릴리즈부터 적용되므로 순서 자유
+- [ ] C-3. 빌드 후 `grep -rE "client_secret|GOCSPX|GOOGLE_CLIENT_SECRET|VITE_MOBILE_GOOGLE_CLIENT_SECRET" dist/ dist-mobile/` → 0건 확인(PR 에서 검증). OAuth 로그인 수동 RG: 데스크톱 앱(신규 로그인 + 토큰 갱신), 모바일 PWA(신규 로그인 + 토큰 갱신), 캘린더·Tasks 동기화
 
 ### Phase P1 (별도 PR 들)
 - [ ] P1-1 코드 서명 + Win 빌드 CI / P1-2 CSP(Report-Only→enforce) / P1-3 npm audit+Dependabot+CodeQL+config.toml / P1-4 Edge Function rate limit·에러 일반화
@@ -242,3 +242,4 @@ ipcMain.handle('shell:openExternal', (_e, url: string): void => {
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 0.1 | 2026-05-12 | 초안 — P0 상세 설계(토큰 스크럽, GOOGLE_CLIENT_SECRET 제거, IPC 5종: dialogHandles 레지스트리 + safeFetch 추출 + 프로토콜 화이트리스트), P1 스케치, Phase P0-A/B/C 체크리스트, RG-01~15, 리스크, Open Q | pblsketch |
+| 0.2 | 2026-05-12 | Phase P0-C 코드 구현 완료 표기 (PR `feat/security-hardening-p0c-oauth-secret`): 데스크톱=PKCE only(`oauth:start` 에 PKCE 추가 + `GoogleOAuthClient` 의 `client_secret` 제거 + `vite.config.ts` define 제거), 모바일=신규 `oauth-exchange` Edge Function 으로 교환 이전(`GoogleOAuthBrowserClient` 가 함수 호출 + `vite.mobile.config.ts` 의 secret define 2개 제거 + `config.toml` 항목 추가). C-2(secret 로테이션)·C-3(빌드 grep + RG)는 배포/사용자 작업으로 남음 | Claude |

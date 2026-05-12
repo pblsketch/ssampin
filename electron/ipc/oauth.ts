@@ -7,11 +7,22 @@
 import { ipcMain, shell, BrowserWindow } from 'electron';
 import http from 'http';
 import url from 'url';
+import crypto from 'crypto';
 
 /** 현재 실행 중인 OAuth 로컬 서버 (하나만 허용) */
 let oauthServer: http.Server | null = null;
 /** 사용자 취소 시 pending Promise를 즉시 reject 하기 위한 핸들 */
 let pendingReject: ((err: Error) => void) | null = null;
+
+/** PKCE code verifier 생성 (43~128자 base64url) */
+function generateCodeVerifier(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+/** PKCE code challenge 생성 (S256) */
+function generateCodeChallenge(verifier: string): string {
+  return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
 
 /**
  * 포트 바인딩 가능 여부 사전 확인 (500ms 타임아웃)
@@ -52,19 +63,27 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
   /**
    * oauth:start — OAuth 인증 시작
    * 1) 로컬 HTTP 서버 시작 (임의 포트)
-   * 2) 시스템 브라우저에서 authUrl 열기
-   * 3) 리다이렉트로 code 수신 후 반환
+   * 2) PKCE code verifier/challenge 생성 + authUrl 에 code_challenge 주입
+   * 3) 시스템 브라우저에서 authUrl 열기
+   * 4) 리다이렉트로 code 수신 후 반환 (code_verifier 동봉 — 렌더러가 토큰 교환에 사용)
    *
-   * @param authUrl Google OAuth 인증 URL (redirect_uri 미포함)
-   * @returns 인증 코드(code) 문자열
+   * 데스크톱 앱은 Google "Desktop app"(installed) OAuth 클라이언트라 client_secret 없이
+   * PKCE 만으로 토큰을 교환한다. (security-hardening P0-C / 감사 F-2)
+   *
+   * @param authUrl Google OAuth 인증 URL (redirect_uri placeholder 포함)
+   * @returns { code, redirectUri, codeVerifier }
    */
-  ipcMain.handle('oauth:start', async (_event, authUrl: string): Promise<{ code: string; redirectUri: string }> => {
+  ipcMain.handle('oauth:start', async (_event, authUrl: string): Promise<{ code: string; redirectUri: string; codeVerifier: string }> => {
     console.log('[oauth] oauth:start invoked');
     // 이전 호출에서 남아있을 수 있는 pending Promise 정리
     if (pendingReject) {
       pendingReject(new Error('OAuth cancelled — superseded by new request'));
       pendingReject = null;
     }
+
+    // 이 인증 흐름에서 쓸 PKCE 페어 생성
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
 
     // 로컬 서버 바인딩 가능 여부 사전 확인
     const canBind = await canBindLocalhost();
@@ -80,7 +99,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
       // throw하지 않고 Promise를 유지 — PKCE 폴백이 처리하므로
       // 렌더러의 startAuth에서 fallbackCleanup이 이벤트를 수신하여 모달 표시
       // 10분 타임아웃 또는 oauth:cancel로 종료
-      return new Promise<{ code: string; redirectUri: string }>((_, reject) => {
+      return new Promise<{ code: string; redirectUri: string; codeVerifier: string }>((_, reject) => {
         pendingReject = reject;
         setTimeout(() => {
           if (pendingReject === reject) {
@@ -91,7 +110,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
       });
     }
 
-    return new Promise<{ code: string; redirectUri: string }>((resolve, reject) => {
+    return new Promise<{ code: string; redirectUri: string; codeVerifier: string }>((resolve, reject) => {
       let resolvedRedirectUri: string | null = null;
       pendingReject = reject;
       const wrappedResolve = (code: string) => {
@@ -101,7 +120,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
           return;
         }
         console.log('[oauth] IPC promise resolving', { hasCode: Boolean(code), redirectUri: resolvedRedirectUri });
-        resolve({ code, redirectUri: resolvedRedirectUri });
+        resolve({ code, redirectUri: resolvedRedirectUri, codeVerifier });
       };
       const wrappedReject = (err: Error) => {
         if (pendingReject === reject) pendingReject = null;
@@ -206,10 +225,18 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
         console.log('[oauth] server listening', { redirectUri });
 
         // authUrl의 placeholder redirect_uri를 실제 포트로 교체
-        const finalUrl = authUrl.replace(
+        let finalUrl = authUrl.replace(
           /redirect_uri=[^&]*/,
           `redirect_uri=${encodeURIComponent(redirectUri)}`,
         );
+
+        // PKCE code_challenge 주입 (getAuthUrl 은 codeChallenge 를 받지 않은 채 호출되므로
+        // 여기서 추가한다 — Desktop app 클라이언트는 client_secret 대신 PKCE 로 교환)
+        if (finalUrl.includes('code_challenge=')) {
+          finalUrl = finalUrl.replace(/code_challenge=[^&]*/, `code_challenge=${codeChallenge}`);
+        } else {
+          finalUrl += `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+        }
 
         // 시스템 브라우저에서 인증 URL 열기
         shell.openExternal(finalUrl);
