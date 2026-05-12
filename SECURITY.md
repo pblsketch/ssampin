@@ -48,7 +48,7 @@
 
 - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service-role 키
 - `ENCRYPTION_KEY` — 교사 OAuth 토큰 AES-256-GCM 암호화 키
-- `GOOGLE_CLIENT_SECRET` — Google OAuth 클라이언트 시크릿 (Edge Function 측 코드 교환용)
+- `GOOGLE_CLIENT_SECRET` — Google OAuth 클라이언트 시크릿. **모바일 PWA(Web application 타입 클라이언트)** 의 code↔token 교환에만 쓰이며, `oauth-exchange` Edge Function 의 환경 변수로만 존재합니다. 클라이언트(PWA 번들·데스크톱 렌더러)는 이 값을 절대 보지 않습니다. 데스크톱 앱은 Google "Desktop app"(installed) 클라이언트라 PKCE 만으로 동작 — client_secret 자체가 필요 없습니다.
 - `GOOGLE_API_KEY` / `GOOGLE_SLIDES_API_KEY` — Google API 키
 - `RESEND_API_KEY` — 메일 발송(에스컬레이션) API 키
 - `ADMIN_API_KEY` — 챗봇 지식베이스 관리 토큰 (`ssampin-embed`)
