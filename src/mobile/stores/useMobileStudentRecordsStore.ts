@@ -33,6 +33,7 @@ interface MobileStudentRecordsState {
   reload: () => Promise<void>;
   getRecordsByStudentId: (studentId: string, limit?: number) => readonly StudentRecord[];
   addRecord: (record: StudentRecord) => Promise<void>;
+  deleteRecord: (id: string) => Promise<void>;
   bridgeAttendanceRecord: (params: BridgeAttendanceParams) => Promise<void>;
   migrateExistingAttendance: () => Promise<number>;
 }
@@ -61,8 +62,8 @@ export const useMobileStudentRecordsStore = create<MobileStudentRecordsState>((s
   },
 
   getRecordsByStudentId: (studentId, limit = 3) => {
-    return get().records
-      .filter((r) => r.studentId === studentId)
+    return get()
+      .records.filter((r) => r.studentId === studentId)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, limit);
   },
@@ -70,6 +71,12 @@ export const useMobileStudentRecordsStore = create<MobileStudentRecordsState>((s
   addRecord: async (record) => {
     await manageRecords.add(record);
     set((s) => ({ records: [...s.records, record] }));
+    useMobileDriveSyncStore.getState().triggerSaveSync();
+  },
+
+  deleteRecord: async (id) => {
+    await manageRecords.delete(id);
+    set((s) => ({ records: s.records.filter((r) => r.id !== id) }));
     useMobileDriveSyncStore.getState().triggerSaveSync();
   },
 
