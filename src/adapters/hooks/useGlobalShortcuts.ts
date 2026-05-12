@@ -65,11 +65,11 @@ export function useGlobalShortcuts(): void {
         // input/textarea 가드: shift+alt를 동시에 누르지 않은 단순 modifier 조합만 가드
         // (Ctrl+Alt 조합은 타이핑 방해 안 하므로 가드 없음)
         const target = e.target as HTMLElement | null;
-        const isTyping = target && (
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          target.isContentEditable
-        );
+        const isTyping =
+          target &&
+          (target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement ||
+            target.isContentEditable);
         const hasAlt = e.altKey;
         if (isTyping && !hasAlt) continue; // Ctrl+T 같은 단순 조합은 타이핑 보호
 
@@ -80,7 +80,6 @@ export function useGlobalShortcuts(): void {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Electron main → renderer IPC
@@ -93,7 +92,6 @@ export function useGlobalShortcuts(): void {
       fire(kind);
     });
     return unsubscribe;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Electron main에 settings 동기화 신호 송신

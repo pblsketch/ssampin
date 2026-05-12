@@ -105,7 +105,7 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
   // 2026-04-26 결함 fix — 카드 더블클릭 상세 모달 상태 (Padlet 동일뷰 §0.1)
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const detailPost = useMemo(
-    () => (detailPostId ? posts.find((p) => p.id === detailPostId) ?? null : null),
+    () => (detailPostId ? (posts.find((p) => p.id === detailPostId) ?? null) : null),
     [detailPostId, posts],
   );
   const handleOpenCardDetail = useCallback((postId: string) => {
@@ -138,7 +138,7 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
       },
     ) => {
       // 디버그 로그(production 유지) — 학교 환경 진단용.
-      // eslint-disable-next-line no-console
+
       console.log('[StudentBoardView] handleOwnCardMove', {
         postId,
         kanban: position.kanban,
@@ -205,15 +205,18 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
     [studentFormLocked],
   );
 
-  const handleCloseSubmit = useCallback((opts?: { submitted?: boolean }) => {
-    setSubmitOpen(false);
-    setResumeRequested(false);
-    setPendingColumnId(null);
-    if (opts?.submitted) {
-      // 제출 성공 시 드래프트 삭제 (Plan FR-A6)
-      clearDraft();
-    }
-  }, [clearDraft]);
+  const handleCloseSubmit = useCallback(
+    (opts?: { submitted?: boolean }) => {
+      setSubmitOpen(false);
+      setResumeRequested(false);
+      setPendingColumnId(null);
+      if (opts?.submitted) {
+        // 제출 성공 시 드래프트 삭제 (Plan FR-A6)
+        clearDraft();
+      }
+    },
+    [clearDraft],
+  );
 
   // long-press / double-click 진입 (`C` 단축키 절대 X)
   const longPressHandlers = useStudentLongPress({
@@ -262,10 +265,7 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
           </div>
         )}
 
-        <RealtimeWallBoardThemeWrapper
-          theme={boardTheme}
-          className="rounded-xl"
-        >
+        <RealtimeWallBoardThemeWrapper theme={boardTheme} className="rounded-xl">
           <BoardRouter
             layoutMode={layoutMode}
             columns={columns}
@@ -287,15 +287,10 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
       </main>
 
       {/* P3 — 학생 카드 추가 FAB */}
-      <StudentAddFab
-        locked={studentFormLocked}
-        onClick={handleOpenSubmit}
-      />
+      <StudentAddFab locked={studentFormLocked} onClick={handleOpenSubmit} />
 
       {/* Phase A-A4 — 작성 중인 카드 칩 (모달 닫혀있을 때만) */}
-      {!submitOpen && (
-        <StudentDraftChip draft={draft} onResume={handleResumeFromChip} />
-      )}
+      {!submitOpen && <StudentDraftChip draft={draft} onResume={handleResumeFromChip} />}
 
       {/* P3 — 카드 추가 모달 */}
       <StudentSubmitForm
@@ -325,10 +320,7 @@ export function StudentBoardView({ board }: StudentBoardViewProps) {
       />
 
       {/* v2.1 Phase D — PIN 설정 모달 */}
-      <PinMenuButton
-        currentPinHash={currentPinHash}
-        onOpen={() => setPinSetupOpen(true)}
-      />
+      <PinMenuButton currentPinHash={currentPinHash} onOpen={() => setPinSetupOpen(true)} />
       <StudentPinSetupModalWithHook
         open={pinSetupOpen}
         onClose={() => setPinSetupOpen(false)}
@@ -447,9 +439,7 @@ function StudentBoardHeader({ title, postCount }: StudentBoardHeaderProps) {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-bold text-sp-text sm:text-lg">{title}</h1>
-          <p className="text-xs text-sp-muted">
-            카드 {postCount}장
-          </p>
+          <p className="text-xs text-sp-muted">카드 {postCount}장</p>
         </div>
       </div>
     </header>
@@ -470,9 +460,7 @@ interface StudentAddFabProps {
  * Design v2.1 §13 Phase A 수용 기준 #1.
  */
 function StudentAddFab({ locked, onClick }: StudentAddFabProps) {
-  const title = locked
-    ? '선생님이 카드 추가를 잠시 멈췄어요'
-    : '카드 추가';
+  const title = locked ? '선생님이 카드 추가를 잠시 멈췄어요' : '카드 추가';
 
   return (
     <button

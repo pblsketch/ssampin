@@ -81,7 +81,7 @@ export function IconWindow() {
       handler: !!globalUpHandlerRef.current,
       ...extra,
     };
-    // eslint-disable-next-line no-console
+
     console.log(`[icon-renderer] #${seq} ${event}`, data);
     // main 으로 forward — 파일 로그에 append. IPC 실패는 silently swallow.
     void window.electronAPI?.iconDiag({ event: `#${seq} ${event}`, data });
@@ -438,15 +438,9 @@ export function IconWindow() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <SsampinIconSvg
-          state={iconState}
-          size={56}
-          className="select-none pointer-events-none"
-        />
+        <SsampinIconSvg state={iconState} size={56} className="select-none pointer-events-none" />
       </div>
-      {hovered && periodInfo && (
-        <IconTooltip current={periodInfo.current} next={periodInfo.next} />
-      )}
+      {hovered && periodInfo && <IconTooltip current={periodInfo.current} next={periodInfo.next} />}
       {contextMenu && (
         <IconContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)} />
       )}

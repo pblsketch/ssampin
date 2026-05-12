@@ -4,7 +4,12 @@ import type { MultiSurveyQuestionType, MultiSurveySubmission } from '@domain/ent
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
-import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
+import {
+  TemplateSaveModal,
+  TemplateLoadDropdown,
+  ResultSaveButton,
+  PastResultsView,
+} from './TemplateManager';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
@@ -48,15 +53,15 @@ const MIN_OPTIONS = 2;
 const QUESTION_TYPE_LABELS: Record<MultiSurveyQuestionType, string> = {
   'single-choice': '단일선택',
   'multi-choice': '복수선택',
-  'text': '주관식',
-  'scale': '척도',
+  text: '주관식',
+  scale: '척도',
 };
 
 const QUESTION_TYPE_ICONS: Record<MultiSurveyQuestionType, string> = {
   'single-choice': '◉',
   'multi-choice': '☑',
-  'text': '✏️',
-  'scale': '📏',
+  text: '✏️',
+  scale: '📏',
 };
 
 const MAX_LENGTH_OPTIONS = [50, 100, 200, 500] as const;
@@ -110,28 +115,76 @@ interface Template {
 const TEMPLATES: Template[] = [
   {
     label: '찬성·반대',
-    questions: [{ type: 'single-choice', question: '이 주제에 찬성하나요?', options: ['찬성', '반대', '모르겠어요'], required: true }],
+    questions: [
+      {
+        type: 'single-choice',
+        question: '이 주제에 찬성하나요?',
+        options: ['찬성', '반대', '모르겠어요'],
+        required: true,
+      },
+    ],
   },
   {
     label: '이해도 확인',
     questions: [
-      { type: 'single-choice', question: '오늘 수업 내용을 얼마나 이해했나요?', options: ['완벽히 이해', '대부분 이해', '조금 어려움', '잘 모르겠음'], required: true },
+      {
+        type: 'single-choice',
+        question: '오늘 수업 내용을 얼마나 이해했나요?',
+        options: ['완벽히 이해', '대부분 이해', '조금 어려움', '잘 모르겠음'],
+        required: true,
+      },
       { type: 'text', question: '어떤 부분이 가장 어려웠나요?', required: false, maxLength: 200 },
     ],
   },
   {
     label: '출구조사',
     questions: [
-      { type: 'scale', question: '오늘 수업 만족도는?', scaleMin: 1, scaleMax: 5, scaleMinLabel: '매우 불만족', scaleMaxLabel: '매우 만족', required: true },
-      { type: 'text', question: '오늘 수업에서 배운 점을 한 줄로 써보세요.', required: true, maxLength: 100 },
+      {
+        type: 'scale',
+        question: '오늘 수업 만족도는?',
+        scaleMin: 1,
+        scaleMax: 5,
+        scaleMinLabel: '매우 불만족',
+        scaleMaxLabel: '매우 만족',
+        required: true,
+      },
+      {
+        type: 'text',
+        question: '오늘 수업에서 배운 점을 한 줄로 써보세요.',
+        required: true,
+        maxLength: 100,
+      },
     ],
   },
   {
     label: '수업 피드백',
     questions: [
-      { type: 'scale', question: '수업 난이도는 어떠했나요?', scaleMin: 1, scaleMax: 5, scaleMinLabel: '너무 쉬움', scaleMaxLabel: '너무 어려움', required: true },
-      { type: 'multi-choice', question: '수업에서 좋았던 점은? (복수 선택 가능)', options: ['설명이 명확했어요', '활동이 재미있었어요', '적절한 속도였어요', '실생활과 연결됐어요'], required: false },
-      { type: 'text', question: '다음 수업에 바라는 점이 있나요?', required: false, maxLength: 200 },
+      {
+        type: 'scale',
+        question: '수업 난이도는 어떠했나요?',
+        scaleMin: 1,
+        scaleMax: 5,
+        scaleMinLabel: '너무 쉬움',
+        scaleMaxLabel: '너무 어려움',
+        required: true,
+      },
+      {
+        type: 'multi-choice',
+        question: '수업에서 좋았던 점은? (복수 선택 가능)',
+        options: [
+          '설명이 명확했어요',
+          '활동이 재미있었어요',
+          '적절한 속도였어요',
+          '실생활과 연결됐어요',
+        ],
+        required: false,
+      },
+      {
+        type: 'text',
+        question: '다음 수업에 바라는 점이 있나요?',
+        required: false,
+        maxLength: 200,
+      },
     ],
   },
 ];
@@ -142,7 +195,9 @@ function templateToEditable(tq: TemplateQuestion): EditableQuestion {
     type: tq.type,
     question: tq.question,
     required: tq.required,
-    options: tq.options ? tq.options.map((t) => ({ id: uid(), text: t })) : [defaultOption(0), defaultOption(1)],
+    options: tq.options
+      ? tq.options.map((t) => ({ id: uid(), text: t }))
+      : [defaultOption(0), defaultOption(1)],
     maxLength: tq.maxLength ?? 200,
     scaleMin: tq.scaleMin ?? 1,
     scaleMax: tq.scaleMax ?? 5,
@@ -163,30 +218,47 @@ interface QuestionCardProps {
   onMoveDown: (id: string) => void;
 }
 
-function QuestionCard({ q, index, total, onChange, onDelete, onMoveUp, onMoveDown }: QuestionCardProps) {
-  const handleTypeChange = useCallback((type: MultiSurveyQuestionType) => {
-    const patch: Partial<EditableQuestion> = { type };
-    if ((type === 'single-choice' || type === 'multi-choice') && q.options.length < MIN_OPTIONS) {
-      patch.options = [defaultOption(0), defaultOption(1)];
-    }
-    onChange(q.id, patch);
-  }, [q.id, q.options.length, onChange]);
+function QuestionCard({
+  q,
+  index,
+  total,
+  onChange,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+}: QuestionCardProps) {
+  const handleTypeChange = useCallback(
+    (type: MultiSurveyQuestionType) => {
+      const patch: Partial<EditableQuestion> = { type };
+      if ((type === 'single-choice' || type === 'multi-choice') && q.options.length < MIN_OPTIONS) {
+        patch.options = [defaultOption(0), defaultOption(1)];
+      }
+      onChange(q.id, patch);
+    },
+    [q.id, q.options.length, onChange],
+  );
 
-  const handleOptionChange = useCallback((optId: string, text: string) => {
-    onChange(q.id, {
-      options: q.options.map((o) => (o.id === optId ? { ...o, text } : o)),
-    });
-  }, [q.id, q.options, onChange]);
+  const handleOptionChange = useCallback(
+    (optId: string, text: string) => {
+      onChange(q.id, {
+        options: q.options.map((o) => (o.id === optId ? { ...o, text } : o)),
+      });
+    },
+    [q.id, q.options, onChange],
+  );
 
   const handleAddOption = useCallback(() => {
     if (q.options.length >= MAX_OPTIONS) return;
     onChange(q.id, { options: [...q.options, { id: uid(), text: '' }] });
   }, [q.id, q.options, onChange]);
 
-  const handleRemoveOption = useCallback((optId: string) => {
-    if (q.options.length <= MIN_OPTIONS) return;
-    onChange(q.id, { options: q.options.filter((o) => o.id !== optId) });
-  }, [q.id, q.options, onChange]);
+  const handleRemoveOption = useCallback(
+    (optId: string) => {
+      if (q.options.length <= MIN_OPTIONS) return;
+      onChange(q.id, { options: q.options.filter((o) => o.id !== optId) });
+    },
+    [q.id, q.options, onChange],
+  );
 
   const isChoiceType = q.type === 'single-choice' || q.type === 'multi-choice';
 
@@ -226,19 +298,21 @@ function QuestionCard({ q, index, total, onChange, onDelete, onMoveUp, onMoveDow
 
       {/* Type selector */}
       <div className="flex gap-1.5">
-        {(['single-choice', 'multi-choice', 'text', 'scale'] as MultiSurveyQuestionType[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => handleTypeChange(t)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              q.type === t
-                ? 'bg-sp-accent/20 border border-sp-accent text-sp-accent'
-                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-            }`}
-          >
-            {QUESTION_TYPE_ICONS[t]} {QUESTION_TYPE_LABELS[t]}
-          </button>
-        ))}
+        {(['single-choice', 'multi-choice', 'text', 'scale'] as MultiSurveyQuestionType[]).map(
+          (t) => (
+            <button
+              key={t}
+              onClick={() => handleTypeChange(t)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                q.type === t
+                  ? 'bg-sp-accent/20 border border-sp-accent text-sp-accent'
+                  : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+              }`}
+            >
+              {QUESTION_TYPE_ICONS[t]} {QUESTION_TYPE_LABELS[t]}
+            </button>
+          ),
+        )}
       </div>
 
       {/* Question text */}
@@ -389,7 +463,27 @@ interface CreateViewProps {
   onTemplateApplied: () => void;
 }
 
-function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStopwords, onUseStopwordsChange, editingTemplateId: _editingTemplateId, onSetEditingTemplateId: _onSetEditingTemplateId, onLoadFromTemplate, showSaveModal, onOpenSaveModal, onCloseSaveModal, onSaveTemplate, showPastResults, onShowPastResults, onHidePastResults, externalTitle, externalQuestions, onTemplateApplied }: CreateViewProps) {
+function CreateView({
+  isFullscreen,
+  onStart,
+  stepMode,
+  onStepModeChange,
+  useStopwords,
+  onUseStopwordsChange,
+  editingTemplateId: _editingTemplateId,
+  onSetEditingTemplateId: _onSetEditingTemplateId,
+  onLoadFromTemplate,
+  showSaveModal,
+  onOpenSaveModal,
+  onCloseSaveModal,
+  onSaveTemplate,
+  showPastResults,
+  onShowPastResults,
+  onHidePastResults,
+  externalTitle,
+  externalQuestions,
+  onTemplateApplied,
+}: CreateViewProps) {
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState<EditableQuestion[]>([defaultQuestion()]);
 
@@ -405,7 +499,6 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
     if (externalQuestions !== null) {
       setQuestions(externalQuestions);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalQuestions]);
 
   const handleChange = useCallback((id: string, patch: Partial<EditableQuestion>) => {
@@ -452,37 +545,46 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
   const handleFeedbackPreset = useCallback((preset: FeedbackPreset) => {
     setTitle(preset.label);
     // FeedbackPreset.questions는 readonly/unknown 호환성을 위해 templateToEditable이 수용하도록 구조 동일
-    setQuestions(preset.questions.map((q) => templateToEditable({
-      type: q.type,
-      question: q.question,
-      required: q.required,
-      options: q.options ? [...q.options] : undefined,
-      maxLength: q.maxLength,
-      scaleMin: q.scaleMin,
-      scaleMax: q.scaleMax,
-      scaleMinLabel: q.scaleMinLabel,
-      scaleMaxLabel: q.scaleMaxLabel,
-    })));
+    setQuestions(
+      preset.questions.map((q) =>
+        templateToEditable({
+          type: q.type,
+          question: q.question,
+          required: q.required,
+          options: q.options ? [...q.options] : undefined,
+          maxLength: q.maxLength,
+          scaleMin: q.scaleMin,
+          scaleMax: q.scaleMax,
+          scaleMinLabel: q.scaleMinLabel,
+          scaleMaxLabel: q.scaleMaxLabel,
+        }),
+      ),
+    );
   }, []);
 
-  const handleLoadFromTemplate = useCallback((tmpl: ToolTemplate) => {
-    onLoadFromTemplate(tmpl);
-    if (tmpl.config.type !== 'multi-survey') return;
-    const cfg = tmpl.config;
-    setTitle(cfg.title);
-    setQuestions(cfg.questions.map((q) => ({
-      id: q.id,
-      type: q.type,
-      question: q.question,
-      required: q.required,
-      options: q.options.map((o) => ({ ...o })),
-      maxLength: q.maxLength,
-      scaleMin: q.scaleMin,
-      scaleMax: q.scaleMax,
-      scaleMinLabel: q.scaleMinLabel,
-      scaleMaxLabel: q.scaleMaxLabel,
-    })));
-  }, [onLoadFromTemplate]);
+  const handleLoadFromTemplate = useCallback(
+    (tmpl: ToolTemplate) => {
+      onLoadFromTemplate(tmpl);
+      if (tmpl.config.type !== 'multi-survey') return;
+      const cfg = tmpl.config;
+      setTitle(cfg.title);
+      setQuestions(
+        cfg.questions.map((q) => ({
+          id: q.id,
+          type: q.type,
+          question: q.question,
+          required: q.required,
+          options: q.options.map((o) => ({ ...o })),
+          maxLength: q.maxLength,
+          scaleMin: q.scaleMin,
+          scaleMax: q.scaleMax,
+          scaleMinLabel: q.scaleMinLabel,
+          scaleMaxLabel: q.scaleMaxLabel,
+        })),
+      );
+    },
+    [onLoadFromTemplate],
+  );
 
   const canStart = questions.every((q) => {
     if (!q.question.trim()) return false;
@@ -499,7 +601,9 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
   }, [canStart, title, questions, onStart]);
 
   return (
-    <div className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-3' : 'gap-4'}`}>
+    <div
+      className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-3' : 'gap-4'}`}
+    >
       {/* Title */}
       <input
         type="text"
@@ -624,10 +728,12 @@ function CreateView({ isFullscreen, onStart, stepMode, onStepModeChange, useStop
         📋 설문 시작
       </button>
 
-      <TemplateSaveModal open={showSaveModal} onClose={onCloseSaveModal} onSave={(name) => onSaveTemplate(name, title, questions)} />
-      {showPastResults && (
-        <PastResultsView toolType="multi-survey" onClose={onHidePastResults} />
-      )}
+      <TemplateSaveModal
+        open={showSaveModal}
+        onClose={onCloseSaveModal}
+        onSave={(name) => onSaveTemplate(name, title, questions)}
+      />
+      {showPastResults && <PastResultsView toolType="multi-survey" onClose={onHidePastResults} />}
     </div>
   );
 }
@@ -680,7 +786,9 @@ function LivePanel({
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl]);
 
@@ -691,7 +799,9 @@ function LivePanel({
         margin: 3,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl, showQRFullscreen]);
 
@@ -704,9 +814,7 @@ function LivePanel({
         <canvas ref={fullscreenCanvasRef} className="mb-6" />
         <p className="text-gray-800 text-xl font-bold mb-2">📋 설문 참여하기</p>
         <p className="text-gray-600 text-lg font-mono">{displayUrl}</p>
-        {tunnelUrl && (
-          <p className="text-blue-500 text-sm mt-1">인터넷 모드 (Wi-Fi 불필요)</p>
-        )}
+        {tunnelUrl && <p className="text-blue-500 text-sm mt-1">인터넷 모드 (Wi-Fi 불필요)</p>}
         <p className="text-gray-400 text-sm mt-4">화면을 클릭하면 돌아갑니다</p>
       </div>
     );
@@ -754,14 +862,24 @@ function LivePanel({
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
-                <button onClick={() => { void navigator.clipboard.writeText(tunnelUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                <button
+                  onClick={() => {
+                    void navigator.clipboard.writeText(tunnelUrl);
+                  }}
+                  className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
+                  title="주소 복사"
+                >
+                  <span className="material-symbols-outlined text-icon-sm">content_copy</span>
+                </button>
               </div>
               <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
           ) : tunnelError ? (
             <div className="flex flex-col gap-1">
               <p className="text-red-400 text-xs">{tunnelError}</p>
-              <p className="text-sp-muted text-xs">Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}</p>
+              <p className="text-sp-muted text-xs">
+                Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}
+              </p>
             </div>
           ) : null}
           {shortUrl && (
@@ -770,7 +888,15 @@ function LivePanel({
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
                 <div className="flex items-center gap-1.5">
                   <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
-                  <button onClick={() => { void navigator.clipboard.writeText(shortUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                  <button
+                    onClick={() => {
+                      void navigator.clipboard.writeText(shortUrl);
+                    }}
+                    className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
+                    title="주소 복사"
+                  >
+                    <span className="material-symbols-outlined text-icon-sm">content_copy</span>
+                  </button>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -778,7 +904,9 @@ function LivePanel({
                   type="text"
                   value={customCodeInput}
                   onChange={(e) => onCustomCodeChange(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') onSetCustomCode(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onSetCustomCode();
+                  }}
                   placeholder={shortCode ?? '커스텀 코드'}
                   maxLength={30}
                   className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
@@ -963,7 +1091,8 @@ function RunningView({
           {submissions.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <p className="text-sp-muted text-center">
-                아직 응답이 없습니다.<br />
+                아직 응답이 없습니다.
+                <br />
                 <span className="text-sm">학생들이 응답하면 여기에 표시됩니다.</span>
               </p>
             </div>
@@ -978,7 +1107,11 @@ function RunningView({
                 </span>
                 <span className="text-sp-text text-sm">학생 제출 완료</span>
                 <span className="text-sp-muted text-xs ml-auto">
-                  {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
                 </span>
               </div>
             ))
@@ -1053,7 +1186,9 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
 
   // Live mode state
   const [isLiveMode, setIsLiveMode] = useState(false);
-  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(null);
+  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(
+    null,
+  );
   const [connectedStudents, setConnectedStudents] = useState(0);
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -1071,7 +1206,9 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   const liveSessionClientRef = useRef(new LiveSessionClient());
 
   // Teacher control panel state (stepMode=true, isLiveMode=true)
-  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>('lobby');
+  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>(
+    'lobby',
+  );
   const [teacherQuestionIndex, setTeacherQuestionIndex] = useState(0);
   const [teacherTotalConnected, setTeacherTotalConnected] = useState(0);
   const [teacherTotalAnswered, setTeacherTotalAnswered] = useState(0);
@@ -1081,35 +1218,40 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
 
   // phase-changed 콜백에서 최신 questions 배열에 접근하기 위한 ref
   const questionsRef = useRef<EditableQuestion[]>([]);
-  useEffect(() => { questionsRef.current = questions; }, [questions]);
+  useEffect(() => {
+    questionsRef.current = questions;
+  }, [questions]);
 
-  const handleSaveTemplate = useCallback((name: string, t: string, qs: EditableQuestion[]) => {
-    const config = {
-      type: 'multi-survey' as const,
-      title: t,
-      questions: qs.map((q) => ({
-        id: q.id,
-        type: q.type,
-        question: q.question,
-        required: q.required,
-        options: q.options.map((o) => ({ id: o.id, text: o.text })),
-        maxLength: q.maxLength,
-        scaleMin: q.scaleMin,
-        scaleMax: q.scaleMax,
-        scaleMinLabel: q.scaleMinLabel,
-        scaleMaxLabel: q.scaleMaxLabel,
-      })),
-      stepMode,
-      useStopwords,
-    };
-    if (editingTemplateId) {
-      void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
-    } else {
-      void useToolTemplateStore.getState().addTemplate(name, 'multi-survey', config);
-    }
-    setShowSaveModal(false);
-    setEditingTemplateId(null);
-  }, [stepMode, useStopwords, editingTemplateId]);
+  const handleSaveTemplate = useCallback(
+    (name: string, t: string, qs: EditableQuestion[]) => {
+      const config = {
+        type: 'multi-survey' as const,
+        title: t,
+        questions: qs.map((q) => ({
+          id: q.id,
+          type: q.type,
+          question: q.question,
+          required: q.required,
+          options: q.options.map((o) => ({ id: o.id, text: o.text })),
+          maxLength: q.maxLength,
+          scaleMin: q.scaleMin,
+          scaleMax: q.scaleMax,
+          scaleMinLabel: q.scaleMinLabel,
+          scaleMaxLabel: q.scaleMaxLabel,
+        })),
+        stepMode,
+        useStopwords,
+      };
+      if (editingTemplateId) {
+        void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
+      } else {
+        void useToolTemplateStore.getState().addTemplate(name, 'multi-survey', config);
+      }
+      setShowSaveModal(false);
+      setEditingTemplateId(null);
+    },
+    [stepMode, useStopwords, editingTemplateId],
+  );
 
   const handleLoadTemplate = useCallback((template: ToolTemplate) => {
     if (template.config.type !== 'multi-survey') return;
@@ -1158,15 +1300,27 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
         question: q.question,
         required: q.required,
         ...(q.type === 'single-choice' || q.type === 'multi-choice'
-          ? { options: q.options.filter((o) => o.text.trim()).map((o) => ({ id: o.id, text: o.text.trim() })) }
+          ? {
+              options: q.options
+                .filter((o) => o.text.trim())
+                .map((o) => ({ id: o.id, text: o.text.trim() })),
+            }
           : {}),
         ...(q.type === 'text' ? { maxLength: q.maxLength } : {}),
         ...(q.type === 'scale'
-          ? { scaleMin: q.scaleMin, scaleMax: q.scaleMax, scaleMinLabel: q.scaleMinLabel, scaleMaxLabel: q.scaleMaxLabel }
+          ? {
+              scaleMin: q.scaleMin,
+              scaleMax: q.scaleMax,
+              scaleMinLabel: q.scaleMinLabel,
+              scaleMaxLabel: q.scaleMaxLabel,
+            }
           : {}),
       }));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const info = await (window.electronAPI.startLiveMultiSurvey as any)({ questions: surveyQuestions, stepMode });
+      const info = await (window.electronAPI.startLiveMultiSurvey as any)({
+        questions: surveyQuestions,
+        stepMode,
+      });
       if (info.localIPs.length === 0) {
         setLiveError('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
         return;
@@ -1206,7 +1360,10 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
     if (!tunnelUrl || !customCodeInput.trim()) return;
     setCustomCodeError(null);
     try {
-      const session = await liveSessionClientRef.current.setCustomCode(tunnelUrl, customCodeInput.trim());
+      const session = await liveSessionClientRef.current.setCustomCode(
+        tunnelUrl,
+        customCodeInput.trim(),
+      );
       setShortUrl(session.shortUrl);
       setShortCode(session.code);
       setCustomCodeInput('');
@@ -1260,18 +1417,25 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   useEffect(() => {
     if (!isLiveMode || !window.electronAPI) return;
 
-    const unsubSubmitted = window.electronAPI.onLiveMultiSurveyStudentSubmitted?.((data: { answers: { questionId: string; value: string | string[] | number }[]; submissionId: string }) => {
-      const submission: MultiSurveySubmission = {
-        id: data.submissionId,
-        answers: data.answers.map((a) => ({ questionId: a.questionId, value: a.value })),
-        submittedAt: Date.now(),
-      };
-      setSubmissions((prev) => [submission, ...prev]);
-    });
+    const unsubSubmitted = window.electronAPI.onLiveMultiSurveyStudentSubmitted?.(
+      (data: {
+        answers: { questionId: string; value: string | string[] | number }[];
+        submissionId: string;
+      }) => {
+        const submission: MultiSurveySubmission = {
+          id: data.submissionId,
+          answers: data.answers.map((a) => ({ questionId: a.questionId, value: a.value })),
+          submittedAt: Date.now(),
+        };
+        setSubmissions((prev) => [submission, ...prev]);
+      },
+    );
 
-    const unsubCount = window.electronAPI.onLiveMultiSurveyConnectionCount?.((data: { count: number }) => {
-      setConnectedStudents(data.count);
-    });
+    const unsubCount = window.electronAPI.onLiveMultiSurveyConnectionCount?.(
+      (data: { count: number }) => {
+        setConnectedStudents(data.count);
+      },
+    );
 
     return () => {
       unsubSubmitted?.();
@@ -1361,7 +1525,9 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           return (
             <Fragment key={step.key}>
               {i > 0 && <span className="text-sp-border">›</span>}
-              <span className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+              <span
+                className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}
+              >
                 {step.label}
               </span>
             </Fragment>
@@ -1380,7 +1546,10 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           onSetEditingTemplateId={setEditingTemplateId}
           onLoadFromTemplate={handleLoadTemplate}
           showSaveModal={showSaveModal}
-          onOpenSaveModal={() => { setEditingTemplateId(editingTemplateId); setShowSaveModal(true); }}
+          onOpenSaveModal={() => {
+            setEditingTemplateId(editingTemplateId);
+            setShowSaveModal(true);
+          }}
           onCloseSaveModal={() => setShowSaveModal(false)}
           onSaveTemplate={handleSaveTemplate}
           showPastResults={showPastResults}
@@ -1388,7 +1557,10 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
           onHidePastResults={() => setShowPastResults(false)}
           externalTitle={pendingTitle}
           externalQuestions={pendingQuestions}
-          onTemplateApplied={() => { setPendingTitle(null); setPendingQuestions(null); }}
+          onTemplateApplied={() => {
+            setPendingTitle(null);
+            setPendingQuestions(null);
+          }}
         />
       )}
       {phase === 'running' && showLiveBoard && (
@@ -1415,92 +1587,93 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
             </button>
           )}
           <RunningView
-          title={title}
-          questions={questions}
-          submissions={submissions}
-          isFullscreen={isFullscreen}
-          isLiveMode={isLiveMode}
-          liveServerInfo={liveServerInfo}
-          connectedStudents={connectedStudents}
-          onStartLive={handleStartLive}
-          onStopLive={handleStopLive}
-          showQRFullscreen={showQRFullscreen}
-          onToggleQRFullscreen={handleToggleQRFullscreen}
-          liveError={liveError}
-          onFinish={handleFinish}
-          onReset={handleReset}
-          tunnelUrl={tunnelUrl}
-          tunnelLoading={tunnelLoading}
-          tunnelError={tunnelError}
-          shortUrl={shortUrl}
-          shortCode={shortCode}
-          customCodeInput={customCodeInput}
-          customCodeError={customCodeError}
-          onCustomCodeChange={setCustomCodeInput}
-          onSetCustomCode={handleSetCustomCode}
-          stepMode={stepMode}
-          teacherPhase={teacherPhase}
-          teacherQuestionIndex={teacherQuestionIndex}
-          teacherTotalConnected={teacherTotalConnected}
-          teacherTotalAnswered={teacherTotalAnswered}
-          teacherAggregated={teacherAggregated}
-          teacherRoster={teacherRoster}
-          teacherTextDetail={teacherTextDetail}
-          onTeacherActivate={() => window.electronAPI?.liveMultiSurveyActivateSession?.()}
-          onTeacherReveal={() => window.electronAPI?.liveMultiSurveyReveal?.()}
-          onTeacherAdvance={() => window.electronAPI?.liveMultiSurveyAdvance?.()}
-          onTeacherPrev={() => window.electronAPI?.liveMultiSurveyPrev?.()}
-          onTeacherReopen={() => window.electronAPI?.liveMultiSurveyReopen?.()}
-          onTeacherEnd={() => {
-            void window.electronAPI?.liveMultiSurveyEndSession?.();
-            handleStopLive();
-          }}
+            title={title}
+            questions={questions}
+            submissions={submissions}
+            isFullscreen={isFullscreen}
+            isLiveMode={isLiveMode}
+            liveServerInfo={liveServerInfo}
+            connectedStudents={connectedStudents}
+            onStartLive={handleStartLive}
+            onStopLive={handleStopLive}
+            showQRFullscreen={showQRFullscreen}
+            onToggleQRFullscreen={handleToggleQRFullscreen}
+            liveError={liveError}
+            onFinish={handleFinish}
+            onReset={handleReset}
+            tunnelUrl={tunnelUrl}
+            tunnelLoading={tunnelLoading}
+            tunnelError={tunnelError}
+            shortUrl={shortUrl}
+            shortCode={shortCode}
+            customCodeInput={customCodeInput}
+            customCodeError={customCodeError}
+            onCustomCodeChange={setCustomCodeInput}
+            onSetCustomCode={handleSetCustomCode}
+            stepMode={stepMode}
+            teacherPhase={teacherPhase}
+            teacherQuestionIndex={teacherQuestionIndex}
+            teacherTotalConnected={teacherTotalConnected}
+            teacherTotalAnswered={teacherTotalAnswered}
+            teacherAggregated={teacherAggregated}
+            teacherRoster={teacherRoster}
+            teacherTextDetail={teacherTextDetail}
+            onTeacherActivate={() => window.electronAPI?.liveMultiSurveyActivateSession?.()}
+            onTeacherReveal={() => window.electronAPI?.liveMultiSurveyReveal?.()}
+            onTeacherAdvance={() => window.electronAPI?.liveMultiSurveyAdvance?.()}
+            onTeacherPrev={() => window.electronAPI?.liveMultiSurveyPrev?.()}
+            onTeacherReopen={() => window.electronAPI?.liveMultiSurveyReopen?.()}
+            onTeacherEnd={() => {
+              void window.electronAPI?.liveMultiSurveyEndSession?.();
+              handleStopLive();
+            }}
           />
         </div>
       )}
-      {phase === 'results' && (() => {
-        const spreadsheetData = {
-          type: 'multi-survey' as const,
-          title,
-          questions: questions.map((q) => ({
-            id: q.id,
-            type: q.type,
-            question: q.question,
-            required: q.required,
-            options: q.options.map((o) => ({ id: o.id, text: o.text })),
-            maxLength: q.maxLength,
-            scaleMin: q.scaleMin,
-            scaleMax: q.scaleMax,
-            scaleMinLabel: q.scaleMinLabel,
-            scaleMaxLabel: q.scaleMaxLabel,
-          })),
-          submissions: submissions.map((s) => ({
-            id: s.id,
-            answers: s.answers.map((a) => ({ questionId: a.questionId, value: a.value })),
-            submittedAt: s.submittedAt,
-          })),
-        };
-        return (
-          <SpreadsheetView
-            source={{ mode: 'inline', data: spreadsheetData }}
-            inlineFooter={
-              <>
-                <ResultSaveButton
-                  toolType="multi-survey"
-                  defaultName={title || '복합 설문'}
-                  resultData={spreadsheetData}
-                />
-                <button
-                  onClick={handleReset}
-                  className="rounded-xl bg-sp-accent px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-sp-accent/80"
-                >
-                  🆕 새 설문
-                </button>
-              </>
-            }
-          />
-        );
-      })()}
+      {phase === 'results' &&
+        (() => {
+          const spreadsheetData = {
+            type: 'multi-survey' as const,
+            title,
+            questions: questions.map((q) => ({
+              id: q.id,
+              type: q.type,
+              question: q.question,
+              required: q.required,
+              options: q.options.map((o) => ({ id: o.id, text: o.text })),
+              maxLength: q.maxLength,
+              scaleMin: q.scaleMin,
+              scaleMax: q.scaleMax,
+              scaleMinLabel: q.scaleMinLabel,
+              scaleMaxLabel: q.scaleMaxLabel,
+            })),
+            submissions: submissions.map((s) => ({
+              id: s.id,
+              answers: s.answers.map((a) => ({ questionId: a.questionId, value: a.value })),
+              submittedAt: s.submittedAt,
+            })),
+          };
+          return (
+            <SpreadsheetView
+              source={{ mode: 'inline', data: spreadsheetData }}
+              inlineFooter={
+                <>
+                  <ResultSaveButton
+                    toolType="multi-survey"
+                    defaultName={title || '복합 설문'}
+                    resultData={spreadsheetData}
+                  />
+                  <button
+                    onClick={handleReset}
+                    className="rounded-xl bg-sp-accent px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-sp-accent/80"
+                  >
+                    🆕 새 설문
+                  </button>
+                </>
+              }
+            />
+          );
+        })()}
     </ToolLayout>
   );
 }

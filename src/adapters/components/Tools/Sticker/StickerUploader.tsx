@@ -118,9 +118,7 @@ export function StickerUploader({
     const imageFiles = files.filter((f) => f.type.startsWith('image/'));
     const skipped = files.length - imageFiles.length;
     if (skipped > 0) {
-      useToastStore
-        .getState()
-        .show(`이미지가 아닌 파일 ${skipped}개는 제외했어요.`, 'error');
+      useToastStore.getState().show(`이미지가 아닌 파일 ${skipped}개는 제외했어요.`, 'error');
     }
     if (imageFiles.length === 0) return;
 
@@ -130,8 +128,7 @@ export function StickerUploader({
           const reader = new FileReader();
           reader.onload = () => {
             const url = typeof reader.result === 'string' ? reader.result : '';
-            const electronPath =
-              (file as File & { path?: string }).path ?? '';
+            const electronPath = (file as File & { path?: string }).path ?? '';
             resolve({
               uid: generateUUID(),
               previewUrl: url,
@@ -201,7 +198,6 @@ export function StickerUploader({
         return merged;
       });
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[StickerUploader] selectImage 실패:', err);
       useToastStore.getState().show('파일을 선택하지 못했어요.', 'error');
     }
@@ -238,9 +234,7 @@ export function StickerUploader({
 
   // 카드 인라인 이름 편집
   const updateCustomName = (uid: string, name: string) => {
-    setSelections((prev) =>
-      prev.map((s) => (s.uid === uid ? { ...s, customName: name } : s)),
-    );
+    setSelections((prev) => prev.map((s) => (s.uid === uid ? { ...s, customName: name } : s)));
   };
 
   // 새 팩 만들기
@@ -279,7 +273,6 @@ export function StickerUploader({
         try {
           importResult = await api.importImage(tempId, sel.filePath);
         } catch (err) {
-          // eslint-disable-next-line no-console
           console.error('[StickerUploader] importImage 실패:', err);
           useToastStore
             .getState()
@@ -311,9 +304,7 @@ export function StickerUploader({
           return;
         }
 
-        useToastStore
-          .getState()
-          .show(`"${sticker.name}" 이모티콘이 추가됐어요.`, 'success');
+        useToastStore.getState().show(`"${sticker.name}" 이모티콘이 추가됐어요.`, 'success');
         onClose();
         return;
       }
@@ -383,7 +374,6 @@ export function StickerUploader({
             const r = await api.importImage(tempId, sel.filePath);
             importedRows.push({ tempId, contentHash: r.contentHash, name: finalName });
           } catch (err) {
-            // eslint-disable-next-line no-console
             console.error('[StickerUploader] importImage 실패 (multi):', err);
             failedNames.push(finalName);
           }
@@ -432,9 +422,7 @@ export function StickerUploader({
                 skipped.length > 0 ? ` (중복 ${skipped.length}개 건너뜀)` : ''
               }${failedNames.length > 0 ? ` (실패 ${failedNames.length}개)` : ''}`;
 
-        useToastStore
-          .getState()
-          .show(successMsg, newOnes.length === 0 ? 'error' : 'success');
+        useToastStore.getState().show(successMsg, newOnes.length === 0 ? 'error' : 'success');
 
         if (newOnes.length > 0) {
           onClose();
@@ -459,9 +447,7 @@ export function StickerUploader({
         setProgress(null);
         return;
       }
-      useToastStore
-        .getState()
-        .show(`이모티콘 ${newOnes.length}개가 등록되었어요!`, 'success');
+      useToastStore.getState().show(`이모티콘 ${newOnes.length}개가 등록되었어요!`, 'success');
       onClose();
     } finally {
       // 정상 onClose 시 isOpen 변경 useEffect가 reset하므로 별도 처리 불필요
@@ -632,9 +618,7 @@ export function StickerUploader({
                     <span className="material-symbols-outlined icon-sm animate-spin">
                       progress_activity
                     </span>
-                    {progress
-                      ? `처리 중... ${progress.current}/${progress.total}`
-                      : '저장 중...'}
+                    {progress ? `처리 중... ${progress.current}/${progress.total}` : '저장 중...'}
                   </>
                 ) : (
                   <>
@@ -696,10 +680,7 @@ function EmptyDropZone({
             : 'border-sp-border bg-sp-bg/30 hover:border-sp-accent/40',
         ].join(' ')}
       >
-        <span
-          aria-hidden="true"
-          className="material-symbols-outlined text-icon-xl text-sp-muted"
-        >
+        <span aria-hidden="true" className="material-symbols-outlined text-icon-xl text-sp-muted">
           cloud_upload
         </span>
         <div>
@@ -776,10 +757,7 @@ function SingleEditPanel({
   packSelectId,
   disabled,
 }: SingleEditPanelProps): JSX.Element {
-  const sortedPacks = useMemo(
-    () => [...packs].sort((a, b) => a.order - b.order),
-    [packs],
-  );
+  const sortedPacks = useMemo(() => [...packs].sort((a, b) => a.order - b.order), [packs]);
 
   return (
     <div className="px-5 py-5 grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[65vh] overflow-y-auto">
@@ -852,11 +830,7 @@ function SingleEditPanel({
             className="w-full px-3 py-2.5 rounded-lg bg-sp-bg ring-1 ring-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent text-sm disabled:opacity-50"
           />
           <div className="flex items-center justify-between mt-1">
-            {nameError ? (
-              <p className="text-detail text-red-400">{nameError}</p>
-            ) : (
-              <span />
-            )}
+            {nameError ? <p className="text-detail text-red-400">{nameError}</p> : <span />}
             <p className="text-detail text-sp-muted">{name.length}/30</p>
           </div>
         </div>
@@ -867,9 +841,7 @@ function SingleEditPanel({
             className="block text-detail font-sp-semibold uppercase tracking-wider text-sp-muted mb-2"
           >
             태그{' '}
-            <span className="text-sp-muted/70 normal-case font-normal">
-              (쉼표·공백으로 구분)
-            </span>
+            <span className="text-sp-muted/70 normal-case font-normal">(쉼표·공백으로 구분)</span>
           </label>
           <TagChipsEditor
             id={tagsInputId}
@@ -985,10 +957,7 @@ function MultiEditPanel({
   tagsInputId,
   packSelectId,
 }: MultiEditPanelProps): JSX.Element {
-  const sortedPacks = useMemo(
-    () => [...packs].sort((a, b) => a.order - b.order),
-    [packs],
-  );
+  const sortedPacks = useMemo(() => [...packs].sort((a, b) => a.order - b.order), [packs]);
 
   return (
     <div className="px-5 py-5 grid grid-cols-1 lg:grid-cols-[1fr,320px] gap-5 max-h-[70vh] overflow-y-auto">
@@ -1045,9 +1014,7 @@ function MultiEditPanel({
               <div
                 className="h-full bg-sp-accent transition-all duration-sp-base"
                 style={{
-                  width: `${
-                    progress.total === 0 ? 0 : (progress.current / progress.total) * 100
-                  }%`,
+                  width: `${progress.total === 0 ? 0 : (progress.current / progress.total) * 100}%`,
                 }}
               />
             </div>
@@ -1075,14 +1042,8 @@ function MultiEditPanel({
             className="w-full px-3 py-2.5 rounded-lg bg-sp-bg ring-1 ring-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:ring-2 focus:ring-sp-accent text-sm disabled:opacity-50"
           />
           <p className="text-detail text-sp-muted mt-1 leading-relaxed">
-            자동으로{' '}
-            <strong className="text-sp-text">
-              {namePrefix.trim() || '이름'} 1
-            </strong>
-            ,{' '}
-            <strong className="text-sp-text">
-              {namePrefix.trim() || '이름'} 2
-            </strong>
+            자동으로 <strong className="text-sp-text">{namePrefix.trim() || '이름'} 1</strong>,{' '}
+            <strong className="text-sp-text">{namePrefix.trim() || '이름'} 2</strong>
             ... 형태로 매겨져요. 카드의 ✏️ 아이콘으로 개별 수정도 가능해요.
           </p>
         </div>
@@ -1092,8 +1053,7 @@ function MultiEditPanel({
             htmlFor={tagsInputId}
             className="block text-detail font-sp-semibold uppercase tracking-wider text-sp-muted mb-2"
           >
-            공통 태그{' '}
-            <span className="text-sp-muted/70 normal-case font-normal">(선택)</span>
+            공통 태그 <span className="text-sp-muted/70 normal-case font-normal">(선택)</span>
           </label>
           <TagChipsEditor
             id={tagsInputId}
@@ -1273,7 +1233,10 @@ function ThumbnailCard({
             <span className="text-[11px] text-sp-text font-sp-medium truncate flex-1">
               {previewName}
             </span>
-            <span className="material-symbols-outlined text-sp-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ fontSize: '14px' }}>
+            <span
+              className="material-symbols-outlined text-sp-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              style={{ fontSize: '14px' }}
+            >
               edit
             </span>
           </button>

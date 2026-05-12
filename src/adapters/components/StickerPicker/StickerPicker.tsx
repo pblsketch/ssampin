@@ -145,53 +145,48 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
           } else if (result.reason === 'accessibility-denied') {
             // macOS Phase 2 — 접근성 권한 미허용: 권한 허용하기 버튼이 있는 토스트 표시.
             // 사용자가 "권한 허용하기" 클릭 시 시스템 다이얼로그 + 보안 패널 자동 오픈.
-            useToastStore.getState().show(
-              'macOS 접근성 권한이 필요해요. 권한을 허용하면 자동 붙여넣기가 동작해요.',
-              'info',
-              {
-                label: '권한 허용하기',
-                onClick: () => {
-                  const requestPerm =
-                    window.electronAPI?.sticker?.requestAccessibilityPermission;
-                  if (typeof requestPerm !== 'function') {
-                    // 폴백 — 클립보드는 채워져 있으므로 수동 Cmd+V 안내
-                    useToastStore
-                      .getState()
-                      .show(
-                        '이모티콘이 복사됐어요. Cmd+V로 붙여넣어주세요.',
-                        'info',
-                      );
-                    return;
-                  }
-                  void requestPerm()
-                    .then((permResult) => {
-                      if (permResult.granted) {
-                        useToastStore
-                          .getState()
-                          .show(
-                            '권한이 허용되었어요! 다시 시도해 주세요.',
-                            'success',
-                          );
-                      } else {
-                        useToastStore
-                          .getState()
-                          .show(
-                            '시스템 환경설정 → 보안 및 개인정보 → 접근성에서 쌤핀을 추가해 주세요.',
-                            'info',
-                          );
-                      }
-                    })
-                    .catch(() => {
+            useToastStore
+              .getState()
+              .show(
+                'macOS 접근성 권한이 필요해요. 권한을 허용하면 자동 붙여넣기가 동작해요.',
+                'info',
+                {
+                  label: '권한 허용하기',
+                  onClick: () => {
+                    const requestPerm = window.electronAPI?.sticker?.requestAccessibilityPermission;
+                    if (typeof requestPerm !== 'function') {
+                      // 폴백 — 클립보드는 채워져 있으므로 수동 Cmd+V 안내
                       useToastStore
                         .getState()
-                        .show(
-                          '권한 요청 중 오류가 발생했어요. 시스템 환경설정에서 직접 허용해 주세요.',
-                          'error',
-                        );
-                    });
+                        .show('이모티콘이 복사됐어요. Cmd+V로 붙여넣어주세요.', 'info');
+                      return;
+                    }
+                    void requestPerm()
+                      .then((permResult) => {
+                        if (permResult.granted) {
+                          useToastStore
+                            .getState()
+                            .show('권한이 허용되었어요! 다시 시도해 주세요.', 'success');
+                        } else {
+                          useToastStore
+                            .getState()
+                            .show(
+                              '시스템 환경설정 → 보안 및 개인정보 → 접근성에서 쌤핀을 추가해 주세요.',
+                              'info',
+                            );
+                        }
+                      })
+                      .catch(() => {
+                        useToastStore
+                          .getState()
+                          .show(
+                            '권한 요청 중 오류가 발생했어요. 시스템 환경설정에서 직접 허용해 주세요.',
+                            'error',
+                          );
+                      });
+                  },
                 },
-              },
-            );
+              );
           } else if (result.reason === 'unsupported-platform') {
             useToastStore
               .getState()
@@ -205,10 +200,7 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
             // 정확히 모르므로 일반 표현 사용.
             useToastStore
               .getState()
-              .show(
-                '이모티콘이 복사됐어요. 붙여넣기(Ctrl+V / Cmd+V) 해주세요.',
-                'info',
-              );
+              .show('이모티콘이 복사됐어요. 붙여넣기(Ctrl+V / Cmd+V) 해주세요.', 'info');
           }
         } else {
           useToastStore
@@ -219,7 +211,6 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
             );
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[StickerPicker] paste 실패:', err);
         useToastStore.getState().show('이모티콘 붙여넣기 중 오류가 발생했어요.', 'error');
       } finally {
@@ -334,10 +325,12 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
 
   if (!isOpen) return null;
 
-  const setThumbRef = (id: string): RefCallback<HTMLButtonElement> => (el) => {
-    if (el) thumbRefs.current.set(id, el);
-    else thumbRefs.current.delete(id);
-  };
+  const setThumbRef =
+    (id: string): RefCallback<HTMLButtonElement> =>
+    (el) => {
+      if (el) thumbRefs.current.set(id, el);
+      else thumbRefs.current.delete(id);
+    };
 
   const trimmedQuery = debouncedQuery.trim();
   const isSearching = trimmedQuery.length > 0;
@@ -351,7 +344,9 @@ export function StickerPicker({ isOpen, onClose }: StickerPickerProps): JSX.Elem
         'h-screen w-screen flex flex-col bg-transparent',
         'animate-fade-in motion-reduce:animate-none',
         isClosing ? 'pointer-events-none opacity-0 transition-opacity duration-sp-base' : '',
-      ].filter(Boolean).join(' ')}
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <div
         ref={panelRef}
@@ -485,10 +480,7 @@ function PickerSection({
           'text-detail font-sp-semibold uppercase tracking-wider text-sp-muted select-none',
         ].join(' ')}
       >
-        <span
-          aria-hidden="true"
-          className="material-symbols-outlined icon-sm text-sp-muted"
-        >
+        <span aria-hidden="true" className="material-symbols-outlined icon-sm text-sp-muted">
           {section.icon}
         </span>
         <span>{section.title}</span>
@@ -496,10 +488,7 @@ function PickerSection({
           {section.stickers.length}개
         </span>
       </header>
-      <div
-        role="row"
-        className="grid grid-cols-5 gap-2 p-3"
-      >
+      <div role="row" className="grid grid-cols-5 gap-2 p-3">
         {section.stickers.map((sticker, i) => {
           const flatIdx = flatStartIndex + i;
           return (
@@ -527,7 +516,8 @@ function PickerEmptyState({ onClose }: { onClose: () => void }): JSX.Element {
       <div>
         <p className="text-sm font-sp-semibold text-sp-text">아직 이모티콘이 없어요!</p>
         <p className="text-detail text-sp-muted mt-1.5 leading-relaxed">
-          쌤도구 → 내 이모티콘에서<br />
+          쌤도구 → 내 이모티콘에서
+          <br />
           나만의 이모티콘을 만들어볼까요?
         </p>
       </div>

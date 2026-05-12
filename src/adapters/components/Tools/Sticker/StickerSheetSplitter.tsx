@@ -133,9 +133,7 @@ export function StickerSheetSplitter({
   const handleSelectFile = async () => {
     const api = electronApi;
     if (!api?.selectImage) {
-      useToastStore
-        .getState()
-        .show('파일 선택은 데스크톱 앱에서만 동작해요.', 'error');
+      useToastStore.getState().show('파일 선택은 데스크톱 앱에서만 동작해요.', 'error');
       return;
     }
     try {
@@ -156,15 +154,12 @@ export function StickerSheetSplitter({
             setValidationError(v.reason ?? '시트 검증에 실패했어요.');
           }
         } catch (err) {
-          setValidationError(
-            err instanceof Error ? err.message : '시트를 검증하지 못했어요.',
-          );
+          setValidationError(err instanceof Error ? err.message : '시트를 검증하지 못했어요.');
         } finally {
           setValidating(false);
         }
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[StickerSheetSplitter] selectImage 실패:', err);
       useToastStore.getState().show('파일을 선택하지 못했어요.', 'error');
     }
@@ -176,9 +171,7 @@ export function StickerSheetSplitter({
     if (validationError) return;
     const api = electronApi;
     if (!api?.splitSheet) {
-      useToastStore
-        .getState()
-        .show('시트 분할은 데스크톱 앱에서만 동작해요.', 'error');
+      useToastStore.getState().show('시트 분할은 데스크톱 앱에서만 동작해요.', 'error');
       return;
     }
     setValidating(true);
@@ -189,8 +182,7 @@ export function StickerSheetSplitter({
       setSplitResult(result);
       setStep('preview');
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : '분할에 실패했어요.';
+      const msg = err instanceof Error ? err.message : '분할에 실패했어요.';
       useToastStore.getState().show(msg, 'error');
     } finally {
       setValidating(false);
@@ -236,9 +228,7 @@ export function StickerSheetSplitter({
   const handleCommit = async () => {
     const api = electronApi;
     if (!api?.commitSheetCells) {
-      useToastStore
-        .getState()
-        .show('이모티콘 등록은 데스크톱 앱에서만 동작해요.', 'error');
+      useToastStore.getState().show('이모티콘 등록은 데스크톱 앱에서만 동작해요.', 'error');
       return;
     }
     if (!splitResult || !sessionIdRef.current) return;
@@ -274,10 +264,7 @@ export function StickerSheetSplitter({
       const res = await api.commitSheetCells(sessionIdRef.current, idAssignments);
       committed = res.committed;
     } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : '이모티콘 PNG를 저장하지 못했어요.';
+      const msg = err instanceof Error ? err.message : '이모티콘 PNG를 저장하지 못했어요.';
       useToastStore.getState().show(msg, 'error');
       setStep('preview');
       return;
@@ -355,9 +342,7 @@ export function StickerSheetSplitter({
 
   // 선택된/유효한 카운트
   const validCount = splitResult
-    ? splitResult.cells.filter(
-        (c) => !c.isEmpty && !existingHashes.has(c.contentHash),
-      ).length
+    ? splitResult.cells.filter((c) => !c.isEmpty && !existingHashes.has(c.contentHash)).length
     : 0;
   const totalCount = splitResult?.cells.length ?? 0;
 
@@ -469,11 +454,7 @@ export function StickerSheetSplitter({
               <button
                 type="button"
                 onClick={() => void handleAnalyze()}
-                disabled={
-                  !selection ||
-                  validating ||
-                  validationError !== null
-                }
+                disabled={!selection || validating || validationError !== null}
                 className="px-4 py-2 rounded-lg bg-sp-accent text-sp-accent-fg text-sm font-sp-semibold hover:bg-sp-accent/90 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center gap-1.5"
               >
                 {validating ? (
@@ -506,9 +487,7 @@ export function StickerSheetSplitter({
                 type="button"
                 onClick={() => void handleCommit()}
                 disabled={
-                  isCommitting ||
-                  selectedIndices.size === 0 ||
-                  namePrefix.trim().length === 0
+                  isCommitting || selectedIndices.size === 0 || namePrefix.trim().length === 0
                 }
                 className="px-4 py-2 rounded-lg bg-sp-accent text-sp-accent-fg text-sm font-sp-semibold hover:bg-sp-accent/90 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center gap-1.5"
               >
@@ -583,9 +562,7 @@ function SelectStep({
                 </p>
               )}
               {validationError && (
-                <p className="text-detail text-red-400 mt-2 leading-relaxed">
-                  {validationError}
-                </p>
+                <p className="text-detail text-red-400 mt-2 leading-relaxed">{validationError}</p>
               )}
               {!validating && !validationError && (
                 <p className="text-detail text-emerald-400 mt-2 inline-flex items-center gap-1">
@@ -611,9 +588,7 @@ function SelectStep({
               grid_view
             </span>
             <div>
-              <p className="text-sm font-sp-semibold text-sp-text">
-                4×4 등 정사각형 시트 이미지
-              </p>
+              <p className="text-sm font-sp-semibold text-sp-text">4×4 등 정사각형 시트 이미지</p>
               <p className="text-detail text-sp-muted mt-1 leading-relaxed">
                 ChatGPT 등에서 받은 1000px 이상의
                 <br />
@@ -654,10 +629,7 @@ function SelectStep({
                   ].join(' ')}
                 >
                   <p
-                    className={[
-                      'text-base font-sp-bold',
-                      active ? 'text-sp-accent' : '',
-                    ].join(' ')}
+                    className={['text-base font-sp-bold', active ? 'text-sp-accent' : ''].join(' ')}
                   >
                     {opt.label}
                   </p>
@@ -743,10 +715,7 @@ function PreviewStep({
   packSelectId,
   disabled,
 }: PreviewStepProps): JSX.Element {
-  const sortedPacks = useMemo(
-    () => [...packs].sort((a, b) => a.order - b.order),
-    [packs],
-  );
+  const sortedPacks = useMemo(() => [...packs].sort((a, b) => a.order - b.order), [packs]);
 
   return (
     <div className="px-5 py-5 grid grid-cols-1 lg:grid-cols-[1fr,320px] gap-5 max-h-[70vh] overflow-y-auto">
@@ -821,9 +790,7 @@ function PreviewStep({
           />
           <p className="text-detail text-sp-muted mt-1 leading-relaxed">
             자동으로 <strong className="text-sp-text">{namePrefix.trim() || '이름'} 1</strong>,{' '}
-            <strong className="text-sp-text">
-              {namePrefix.trim() || '이름'} 2
-            </strong>
+            <strong className="text-sp-text">{namePrefix.trim() || '이름'} 2</strong>
             ... 형태로 매겨져요.
           </p>
         </div>
@@ -833,8 +800,7 @@ function PreviewStep({
             htmlFor={tagsInputId}
             className="block text-detail font-sp-semibold uppercase tracking-wider text-sp-muted mb-2"
           >
-            공통 태그{' '}
-            <span className="text-sp-muted/70 normal-case font-normal">(선택)</span>
+            공통 태그 <span className="text-sp-muted/70 normal-case font-normal">(선택)</span>
           </label>
           <TagChipsEditor
             id={tagsInputId}

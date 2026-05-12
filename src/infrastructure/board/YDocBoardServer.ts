@@ -22,10 +22,7 @@ import type { BoardAuthToken } from '@domain/valueObjects/BoardAuthToken';
 import type { BoardSessionCode } from '@domain/valueObjects/BoardSessionCode';
 import type { BoardId } from '@domain/valueObjects/BoardId';
 import { generateSessionCode } from '@domain/valueObjects/BoardSessionCode';
-import {
-  sanitizeParticipantName,
-  verifyJoinCredentials,
-} from '@domain/rules/boardRules';
+import { sanitizeParticipantName, verifyJoinCredentials } from '@domain/rules/boardRules';
 
 import {
   HEARTBEAT_INTERVAL_MS,
@@ -107,7 +104,10 @@ export class YDocBoardServer implements IBoardServerPort {
     });
 
     const httpServer = http.createServer((req, res) => {
-      if (!req.url) { res.writeHead(404).end(); return; }
+      if (!req.url) {
+        res.writeHead(404).end();
+        return;
+      }
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/' || url.pathname === '/board.html') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -116,11 +116,13 @@ export class YDocBoardServer implements IBoardServerPort {
       }
       if (url.pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          ok: true,
-          boardId: opts.boardId,
-          participantCount: participants.size,
-        }));
+        res.end(
+          JSON.stringify({
+            ok: true,
+            boardId: opts.boardId,
+            participantCount: participants.size,
+          }),
+        );
         return;
       }
       res.writeHead(404).end();
@@ -152,7 +154,7 @@ export class YDocBoardServer implements IBoardServerPort {
 
       if (!authOk) {
         // 진단 로그 — 디버깅 후 제거/downgrade 가능. 토큰 전체는 로그에 남기지 않는다.
-        // eslint-disable-next-line no-console
+
         console.warn('[board] auth failed', {
           path: url.pathname,
           providedTokenLen: providedToken.length,
@@ -274,7 +276,11 @@ export class YDocBoardServer implements IBoardServerPort {
     if (s.awarenessPoll) clearInterval(s.awarenessPoll);
 
     for (const ws of s.wss.clients) {
-      try { ws.close(); } catch { /* noop */ }
+      try {
+        ws.close();
+      } catch {
+        /* noop */
+      }
     }
     await new Promise<void>((resolve) => s.wss.close(() => resolve()));
     await new Promise<void>((resolve) => s.httpServer.close(() => resolve()));
@@ -282,7 +288,11 @@ export class YDocBoardServer implements IBoardServerPort {
     // y-websocket 내부 docs 정리 (GC 의존이지만 명시적으로 제거)
     const doc = ywsUtils.docs.get(s.roomName);
     if (doc) {
-      try { doc.destroy(); } catch { /* noop */ }
+      try {
+        doc.destroy();
+      } catch {
+        /* noop */
+      }
       ywsUtils.docs.delete(s.roomName);
     }
     this.session = null;

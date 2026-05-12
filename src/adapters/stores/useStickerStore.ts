@@ -1,10 +1,5 @@
 import { create } from 'zustand';
-import type {
-  Sticker,
-  StickerPack,
-  StickerSettings,
-  StickersData,
-} from '@domain/entities/Sticker';
+import type { Sticker, StickerPack, StickerSettings, StickersData } from '@domain/entities/Sticker';
 import { createEmptyStickersData } from '@domain/entities/Sticker';
 import { stickerRepository } from '@adapters/di/container';
 import { ManageStickers } from '@usecases/sticker/ManageStickers';
@@ -89,7 +84,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
       } catch (err) {
         const reason = err instanceof Error ? err.message : '알 수 없는 오류';
         // 콘솔에는 상세 로그를 남기되, UI는 빈 상태로 폴백한다.
-        // eslint-disable-next-line no-console
+
         console.error('[useStickerStore] load 실패:', err);
         set({
           data: createEmptyStickersData(new Date().toISOString()),
@@ -106,10 +101,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         notifyStickerDataChanged();
         return sticker;
       } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : '이모티콘을 추가하지 못했어요.';
+        const message = err instanceof Error ? err.message : '이모티콘을 추가하지 못했어요.';
         useToastStore.getState().show(message, 'error');
         return null;
       }
@@ -117,16 +109,12 @@ export const useStickerStore = create<StickerState>((set, get) => {
 
     addStickersBulk: async (inputs) => {
       try {
-        const { stickers, data, skipped } =
-          await manageStickers.addStickersBulk(inputs);
+        const { stickers, data, skipped } = await manageStickers.addStickersBulk(inputs);
         set({ data });
         notifyStickerDataChanged();
         return { stickers, skipped };
       } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : '이모티콘을 일괄 등록하지 못했어요.';
+        const message = err instanceof Error ? err.message : '이모티콘을 일괄 등록하지 못했어요.';
         useToastStore.getState().show(message, 'error');
         return { stickers: [], skipped: [] };
       }
@@ -138,10 +126,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         set({ data });
         notifyStickerDataChanged();
       } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : '이모티콘을 수정하지 못했어요.';
+        const message = err instanceof Error ? err.message : '이모티콘을 수정하지 못했어요.';
         useToastStore.getState().show(message, 'error');
       }
     },
@@ -152,10 +137,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         set({ data });
         notifyStickerDataChanged();
       } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : '이모티콘을 삭제하지 못했어요.';
+        const message = err instanceof Error ? err.message : '이모티콘을 삭제하지 못했어요.';
         useToastStore.getState().show(message, 'error');
       }
     },
@@ -167,7 +149,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         notifyStickerDataChanged();
       } catch (err) {
         // 사용 기록 실패는 사용자 경험을 막지 않도록 콘솔만 남긴다.
-        // eslint-disable-next-line no-console
+
         console.error('[useStickerStore] recordUsage 실패:', err);
       }
     },
@@ -179,8 +161,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         notifyStickerDataChanged();
         return pack;
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : '팩을 추가하지 못했어요.';
+        const message = err instanceof Error ? err.message : '팩을 추가하지 못했어요.';
         useToastStore.getState().show(message, 'error');
         return null;
       }
@@ -192,8 +173,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         set({ data });
         notifyStickerDataChanged();
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : '팩 이름을 바꾸지 못했어요.';
+        const message = err instanceof Error ? err.message : '팩 이름을 바꾸지 못했어요.';
         useToastStore.getState().show(message, 'error');
       }
     },
@@ -204,8 +184,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         set({ data });
         notifyStickerDataChanged();
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : '팩을 삭제하지 못했어요.';
+        const message = err instanceof Error ? err.message : '팩을 삭제하지 못했어요.';
         useToastStore.getState().show(message, 'error');
       }
     },
@@ -216,8 +195,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         set({ data });
         notifyStickerDataChanged();
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : '팩 순서를 바꾸지 못했어요.';
+        const message = err instanceof Error ? err.message : '팩 순서를 바꾸지 못했어요.';
         useToastStore.getState().show(message, 'error');
       }
     },
@@ -228,8 +206,7 @@ export const useStickerStore = create<StickerState>((set, get) => {
         set({ data });
         notifyStickerDataChanged();
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : '설정을 저장하지 못했어요.';
+        const message = err instanceof Error ? err.message : '설정을 저장하지 못했어요.';
         useToastStore.getState().show(message, 'error');
       }
     },

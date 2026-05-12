@@ -12,39 +12,57 @@ interface ThemeSectionProps {
   onStyleChange: (style: WidgetStyleSettings) => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 const DEFAULT_CUSTOM_COLORS: ThemeColors = PRESET_THEMES[0]!.colors;
 
-export function ThemeSection({ dashboardTheme, widgetStyle, onChange, onStyleChange }: ThemeSectionProps) {
+export function ThemeSection({
+  dashboardTheme,
+  widgetStyle,
+  onChange,
+  onStyleChange,
+}: ThemeSectionProps) {
   const currentId = dashboardTheme?.presetId ?? 'dark';
   const customColors = dashboardTheme?.customColors ?? DEFAULT_CUSTOM_COLORS;
 
-  const customTheme: DashboardTheme = useMemo(() => ({
-    id: 'custom',
-    name: '커스텀',
-    colors: customColors,
-  }), [customColors]);
+  const customTheme: DashboardTheme = useMemo(
+    () => ({
+      id: 'custom',
+      name: '커스텀',
+      colors: customColors,
+    }),
+    [customColors],
+  );
 
-  const handlePresetClick = useCallback((theme: DashboardTheme) => {
-    onChange({ presetId: theme.id as PresetThemeId, customColors: dashboardTheme?.customColors });
-    // styleHint가 있으면 위젯 스타일도 함께 적용
-    if (theme.styleHint) {
-      const colorReset = { bgColor: null, cardColor: null, accentColor: null, textColor: null } as const;
-      onStyleChange({
-        ...(widgetStyle ?? DEFAULT_WIDGET_STYLE),
-        ...theme.styleHint,
-        ...colorReset,
-      });
-    }
-  }, [onChange, onStyleChange, dashboardTheme?.customColors, widgetStyle]);
+  const handlePresetClick = useCallback(
+    (theme: DashboardTheme) => {
+      onChange({ presetId: theme.id as PresetThemeId, customColors: dashboardTheme?.customColors });
+      // styleHint가 있으면 위젯 스타일도 함께 적용
+      if (theme.styleHint) {
+        const colorReset = {
+          bgColor: null,
+          cardColor: null,
+          accentColor: null,
+          textColor: null,
+        } as const;
+        onStyleChange({
+          ...(widgetStyle ?? DEFAULT_WIDGET_STYLE),
+          ...theme.styleHint,
+          ...colorReset,
+        });
+      }
+    },
+    [onChange, onStyleChange, dashboardTheme?.customColors, widgetStyle],
+  );
 
   const handleCustomClick = useCallback(() => {
     onChange({ presetId: 'custom', customColors });
   }, [onChange, customColors]);
 
-  const handleCustomColorsChange = useCallback((colors: ThemeColors) => {
-    onChange({ presetId: 'custom', customColors: colors });
-  }, [onChange]);
+  const handleCustomColorsChange = useCallback(
+    (colors: ThemeColors) => {
+      onChange({ presetId: 'custom', customColors: colors });
+    },
+    [onChange],
+  );
 
   const handleCustomReset = useCallback(() => {
     onChange({ presetId: 'custom', customColors: DEFAULT_CUSTOM_COLORS });

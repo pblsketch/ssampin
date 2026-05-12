@@ -26,10 +26,8 @@ export function useNativeDesktopDiagListener(): void {
       // main process가 직접 console.log한 것과 동일한 prefix 형태를 그대로 출력.
       // args는 객체/handle 등이므로 spread로 console에 넘겨 가독성 유지.
       if (args && args.length > 0) {
-        // eslint-disable-next-line no-console
         console.log(message, ...args);
       } else {
-        // eslint-disable-next-line no-console
         console.log(message);
       }
     });

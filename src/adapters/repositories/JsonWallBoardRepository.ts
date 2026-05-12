@@ -61,12 +61,7 @@ export function migratePostFields(post: unknown): RealtimeWallPost {
   }
   const raw = post as RealtimeWallPost & { likes?: number };
   const isV14Data = raw.likedBy !== undefined || raw.comments !== undefined;
-  if (
-    raw.likes !== undefined &&
-    raw.teacherHearts === undefined &&
-    !isV14Data
-  ) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  if (raw.likes !== undefined && raw.teacherHearts === undefined && !isV14Data) {
     const { likes, ...rest } = raw;
     return { ...rest, teacherHearts: likes };
   }
@@ -137,9 +132,7 @@ export class JsonWallBoardRepository implements IWallBoardRepository {
     const meta = toWallBoardMeta(board);
     const existing = idx.boards.findIndex((b) => b.id === board.id);
     const nextBoards =
-      existing >= 0
-        ? idx.boards.map((b, i) => (i === existing ? meta : b))
-        : [...idx.boards, meta];
+      existing >= 0 ? idx.boards.map((b, i) => (i === existing ? meta : b)) : [...idx.boards, meta];
     await this.writeIndex({ version: 1, boards: nextBoards });
   }
 

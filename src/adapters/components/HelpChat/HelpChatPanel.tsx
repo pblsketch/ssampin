@@ -63,7 +63,7 @@ export function HelpChatPanel() {
     if (pendingMessages.length > 0) {
       // 마지막 어시스턴트 메시지가 5초 이상 지났으면 암시적 긍정으로 판단
       // pendingMessages.length > 0 이므로 lastPending은 반드시 존재
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
       const lastPending = pendingMessages.at(-1)!;
       const elapsed = Date.now() - lastPending.timestamp;
       const isImplicitPositive = elapsed > 5000;
@@ -83,16 +83,22 @@ export function HelpChatPanel() {
   };
 
   /** 피드백: 해결됨 */
-  const handleFeedbackResolved = useCallback((messageId: string) => {
-    chat.setMessageFeedback(messageId, 'resolved');
-    track('chatbot_feedback', { result: 'resolved', sessionId: chat.sessionId });
-  }, [chat, track]);
+  const handleFeedbackResolved = useCallback(
+    (messageId: string) => {
+      chat.setMessageFeedback(messageId, 'resolved');
+      track('chatbot_feedback', { result: 'resolved', sessionId: chat.sessionId });
+    },
+    [chat, track],
+  );
 
   /** 피드백: 미해결 */
-  const handleFeedbackUnresolved = useCallback((messageId: string) => {
-    chat.setMessageFeedback(messageId, 'unresolved');
-    track('chatbot_feedback', { result: 'unresolved', sessionId: chat.sessionId });
-  }, [chat, track]);
+  const handleFeedbackUnresolved = useCallback(
+    (messageId: string) => {
+      chat.setMessageFeedback(messageId, 'unresolved');
+      track('chatbot_feedback', { result: 'unresolved', sessionId: chat.sessionId });
+    },
+    [chat, track],
+  );
 
   /** 피드백: 더 질문하기 → 입력창 포커스 */
   const handleFeedbackAskMore = useCallback(() => {
@@ -105,14 +111,20 @@ export function HelpChatPanel() {
   }, []);
 
   /** 피드백: 개발자에게 전달 */
-  const handleFeedbackEscalate = useCallback((messageId: string) => {
-    const msg = chat.messages.find((m) => m.id === messageId);
-    const lastUser = chat.messages.filter((m) => m.role === 'user').pop();
-    track('chatbot_escalate', { questionText: lastUser?.content?.slice(0, 200) ?? '', sessionId: chat.sessionId });
-    chat.escalateFromFeedback();
-    // 피드백 상태는 ChatFeedback 컴포넌트 내에서 escalated 상태로 관리됨
-    void msg; // unused but kept for clarity
-  }, [chat, track]);
+  const handleFeedbackEscalate = useCallback(
+    (messageId: string) => {
+      const msg = chat.messages.find((m) => m.id === messageId);
+      const lastUser = chat.messages.filter((m) => m.role === 'user').pop();
+      track('chatbot_escalate', {
+        questionText: lastUser?.content?.slice(0, 200) ?? '',
+        sessionId: chat.sessionId,
+      });
+      chat.escalateFromFeedback();
+      // 피드백 상태는 ChatFeedback 컴포넌트 내에서 escalated 상태로 관리됨
+      void msg; // unused but kept for clarity
+    },
+    [chat, track],
+  );
 
   // 설정에서 챗봇을 숨긴 경우 렌더링하지 않음 (단축키로는 접근 가능)
   if (!showChatbot && !isOpen) return null;
@@ -154,7 +166,16 @@ export function HelpChatPanel() {
         aria-label={isOpen ? '채팅 닫기' : '쌤핀 AI에게 물어보기'}
       >
         {isOpen ? (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M18 6 6 18" />
             <path d="M6 6l12 12" />
           </svg>

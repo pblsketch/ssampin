@@ -1,8 +1,5 @@
 import { create } from 'zustand';
-import type {
-  DesktopOrganizeConfig,
-  GridDimension,
-} from '@domain/entities/DesktopOrganizeConfig';
+import type { DesktopOrganizeConfig, GridDimension } from '@domain/entities/DesktopOrganizeConfig';
 import { desktopOrganizeRepository } from '@adapters/di/container';
 import { ManageDesktopOrganize } from '@usecases/desktopOrganize/ManageDesktopOrganize';
 import type { GridResizePlan } from '@usecases/desktopOrganize/computeGridResizePlan';
@@ -55,7 +52,7 @@ export const useDesktopOrganizeStore = create<DesktopOrganizeState>((set, get) =
         set({ config });
       } catch (err) {
         // load 실패 시 콘솔 로그만. UI는 config=null skeleton 유지.
-        // eslint-disable-next-line no-console
+
         console.error('[desktop-organize] load failed', err);
       }
     },
@@ -68,7 +65,6 @@ export const useDesktopOrganizeStore = create<DesktopOrganizeState>((set, get) =
         const next = await useCase.setTitle(current, boxIndex, title);
         set({ config: next });
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[desktop-organize] setTitle failed', err);
       } finally {
         set({ isApplying: false });
@@ -95,7 +91,6 @@ export const useDesktopOrganizeStore = create<DesktopOrganizeState>((set, get) =
           }
         }, UNDO_WINDOW_MS + 100);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[desktop-organize] applyGridResize failed', err);
       } finally {
         set({ isApplying: false });
@@ -110,7 +105,6 @@ export const useDesktopOrganizeStore = create<DesktopOrganizeState>((set, get) =
         const next = await useCase.resetTitles(current);
         set({ config: next });
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[desktop-organize] resetTitles failed', err);
       } finally {
         set({ isApplying: false });
@@ -125,7 +119,6 @@ export const useDesktopOrganizeStore = create<DesktopOrganizeState>((set, get) =
         const next = await useCase.setBoxTransparent(current, boxTransparent);
         set({ config: next });
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[desktop-organize] setBoxTransparent failed', err);
       } finally {
         set({ isApplying: false });
@@ -161,7 +154,6 @@ export const useDesktopOrganizeStore = create<DesktopOrganizeState>((set, get) =
         });
         return true;
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[desktop-organize] undo failed', err);
         return false;
       } finally {

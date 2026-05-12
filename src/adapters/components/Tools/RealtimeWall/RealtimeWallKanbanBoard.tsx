@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import {
-  DndContext,
-  PointerSensor,
-  useDroppable,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
+import { DndContext, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -15,10 +9,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type {
-  RealtimeWallColumn,
-  RealtimeWallPost,
-} from '@domain/entities/RealtimeWall';
+import type { RealtimeWallColumn, RealtimeWallPost } from '@domain/entities/RealtimeWall';
 import { isOwnCard } from '@domain/rules/realtimeWallRules';
 import { useRealtimeWallBoardColorScheme } from './RealtimeWallBoardColorSchemeContext';
 import { RealtimeWallCard } from './RealtimeWallCard';
@@ -65,9 +56,10 @@ function moveKanbanPost(
 
   const sourceColumnId = activePost.kanban.columnId;
   const sourceIds = sortColumnPosts(posts, sourceColumnId).map((post) => post.id);
-  const targetIds = sourceColumnId === targetColumnId
-    ? [...sourceIds]
-    : sortColumnPosts(posts, targetColumnId).map((post) => post.id);
+  const targetIds =
+    sourceColumnId === targetColumnId
+      ? [...sourceIds]
+      : sortColumnPosts(posts, targetColumnId).map((post) => post.id);
 
   const sourceIndex = sourceIds.indexOf(postId);
   if (sourceIndex === -1) return [...posts];
@@ -194,19 +186,15 @@ function SortableRealtimeWallCardItem({
   /** Step 2 — 교사 좋아요 토글 */
   onTeacherLike?: (postId: string) => void;
   /** Step 2 — 교사 댓글 추가 */
-  onTeacherAddComment?: (postId: string, input: Omit<import('@domain/entities/RealtimeWall').StudentCommentInput, 'sessionToken'>) => void;
+  onTeacherAddComment?: (
+    postId: string,
+    input: Omit<import('@domain/entities/RealtimeWall').StudentCommentInput, 'sessionToken'>,
+  ) => void;
 }) {
   // v2.1 Phase C — useSortable disabled per-card 동적 결정
   // - 교사: 항상 enabled (기존 동작)
   // - 학생: 자기 카드만 enabled (다른 학생 카드 드래그 불가)
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: post.id,
     data: { type: 'post', columnId: post.kanban.columnId },
     disabled,
@@ -218,7 +206,6 @@ function SortableRealtimeWallCardItem({
   //   - viewerRole='teacher': dragHandle prop으로 전달 (기존 동작)
   // 디버그 로그(production 유지) — 학교 환경 진단용.
   if (typeof window !== 'undefined' && viewerRole === 'student' && isOwnSelf && !disabled) {
-    // eslint-disable-next-line no-console
     console.log('[Kanban] student own card sortable enabled', {
       postId: post.id,
       columnId: post.kanban.columnId,
@@ -241,9 +228,7 @@ function SortableRealtimeWallCardItem({
 
   // 학생 자기 카드 sky-300 outline 힌트 — 드래그 가능 시각 단서
   const studentSelfWrapClass =
-    viewerRole === 'student' && isOwnSelf
-      ? 'rounded-xl ring-1 ring-sky-300/40'
-      : '';
+    viewerRole === 'student' && isOwnSelf ? 'rounded-xl ring-1 ring-sky-300/40' : '';
 
   return (
     <div
@@ -353,7 +338,10 @@ interface KanbanColumnViewExtraProps {
   /** Step 2 — 교사 좋아요 토글 */
   readonly onTeacherLike?: (postId: string) => void;
   /** Step 2 — 교사 댓글 추가 */
-  readonly onTeacherAddComment?: (postId: string, input: Omit<import('@domain/entities/RealtimeWall').StudentCommentInput, 'sessionToken'>) => void;
+  readonly onTeacherAddComment?: (
+    postId: string,
+    input: Omit<import('@domain/entities/RealtimeWall').StudentCommentInput, 'sessionToken'>,
+  ) => void;
   /**
    * Step 3 — 교사 전용 컬럼 헤더 "+" 버튼 콜백.
    * viewerRole='teacher'일 때만 헤더 우측에 작은 "+" 버튼 노출.
@@ -473,13 +461,19 @@ function KanbanColumnView({
             light 보드에서 컬럼 tint(/15) 위에 text-slate-700이 묻혀 거의 안 보였음.
             text-slate-900 + font-extrabold로 대비를 확실하게 끌어올림.
             모든 6개 tint(blue/emerald/violet/amber/rose/cyan ×0.15) 위에서 WCAG AA 통과. */}
-        <span className={`min-w-0 flex-1 truncate text-sm ${isLight ? 'text-slate-900 font-extrabold' : 'text-sp-text font-bold'}`}>{column.title}</span>
-        <span className={[
-          'shrink-0 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ring-1',
-          isLight
-            ? 'bg-white text-slate-600 ring-slate-300/80'
-            : 'bg-sp-card text-sp-text ring-sp-border',
-        ].join(' ')}>
+        <span
+          className={`min-w-0 flex-1 truncate text-sm ${isLight ? 'text-slate-900 font-extrabold' : 'text-sp-text font-bold'}`}
+        >
+          {column.title}
+        </span>
+        <span
+          className={[
+            'shrink-0 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ring-1',
+            isLight
+              ? 'bg-white text-slate-600 ring-slate-300/80'
+              : 'bg-sp-card text-sp-text ring-sp-border',
+          ].join(' ')}
+        >
           {posts.length}
         </span>
         {/* Step 3 — 교사 컬럼 "+" 버튼 (회귀 위험 #3 격리: 학생 onAddCardToColumn과 별도 prop).
@@ -583,7 +577,10 @@ function KanbanColumnView({
             />
           ))
         ) : (
-          <SortableContext items={posts.map((post) => post.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext
+            items={posts.map((post) => post.id)}
+            strategy={verticalListSortingStrategy}
+          >
             {posts.map((post) => {
               // v2.1 Phase C — 학생 모드는 자기 카드만 sortable enable
               // 회귀 위험 #3 보존 — 학생은 교사 actions/dragHandle DOM 부재 (showTeacherActions=false)
@@ -628,12 +625,14 @@ function KanbanColumnView({
 
         {/* v1.16.x Phase 3 — 학생 모드에서는 풀-와이드 CTA가 빈 컬럼 안내를 대체하므로 중복 방지. */}
         {posts.length === 0 && !showColumnAddButton && (
-          <div className={[
-            'flex h-full min-h-[160px] items-center justify-center rounded-lg border border-dashed px-4 text-center text-xs',
-            isLight
-              ? 'border-slate-300/70 text-slate-400'
-              : 'border-sp-border/40 text-sp-muted/70',
-          ].join(' ')}>
+          <div
+            className={[
+              'flex h-full min-h-[160px] items-center justify-center rounded-lg border border-dashed px-4 text-center text-xs',
+              isLight
+                ? 'border-slate-300/70 text-slate-400'
+                : 'border-sp-border/40 text-sp-muted/70',
+            ].join(' ')}
+          >
             {readOnly ? '카드 없음' : '여기로 드래그해 정리하세요'}
           </div>
         )}
@@ -791,7 +790,6 @@ export function RealtimeWallKanbanBoard({
 
   // 디버그 로그(production 유지) — 학교 환경 진단용. 학생 모드 진입 시.
   if (typeof window !== 'undefined' && isStudent) {
-    // eslint-disable-next-line no-console
     console.log('[Kanban] student mode mount', {
       readOnly: boardReadOnly,
       useReadOnlyDisplay,
@@ -868,7 +866,7 @@ export function RealtimeWallKanbanBoard({
       // v2.1 Phase C — 학생 자기 카드 onOwnCardMove 콜백 (Plan FR-C2)
       // submit-move WebSocket 송신 → 서버가 broadcast post-updated patch로 reconcile
       // 디버그 로그(production 유지) — 학교 환경 진단용.
-      // eslint-disable-next-line no-console
+
       console.log('[Kanban] student dragEnd → onOwnCardMove', {
         activeId,
         targetColumnId,
@@ -941,9 +939,7 @@ export function RealtimeWallKanbanBoard({
               onTeacherAddCardToColumn={onTeacherAddCardToColumn}
             />
           ))}
-          {showAddColumn && onAddColumnInline && (
-            <AddColumnInlineCard onAdd={onAddColumnInline} />
-          )}
+          {showAddColumn && onAddColumnInline && <AddColumnInlineCard onAdd={onAddColumnInline} />}
         </div>
       ) : (
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>

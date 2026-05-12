@@ -70,10 +70,7 @@ interface RealtimeWallSyncState {
 
   // v1.14 P2 — 학생 액션. WebSocket으로 student-like / student-comment 메시지 송신.
   toggleLike: (postId: string) => void;
-  addComment: (
-    postId: string,
-    input: Omit<StudentCommentInput, 'sessionToken'>,
-  ) => void;
+  addComment: (postId: string, input: Omit<StudentCommentInput, 'sessionToken'>) => void;
 
   // v1.14 P3 — 학생 카드 추가. submit 메시지 송신.
   // v2.1 (Phase B) — 시그니처 확장: images? / pdfDataUrl? / pdfFilename? / color? / pinHash?
@@ -107,10 +104,7 @@ interface RealtimeWallSyncState {
    * v2.1 — 댓글 v2 (이미지 1장 첨부 가능).
    * Phase B 신규 — `submit-comment-v2` WebSocket 메시지.
    */
-  submitCommentV2: (
-    postId: string,
-    input: Omit<StudentCommentInput, 'sessionToken'>,
-  ) => void;
+  submitCommentV2: (postId: string, input: Omit<StudentCommentInput, 'sessionToken'>) => void;
 
   /**
    * 서버가 submit에 'submitted' ack로 응답 시 호출. applyMessage가 아닌 직접
@@ -442,16 +436,11 @@ export const useRealtimeWallSyncStore = create<RealtimeWallSyncState>((set, get)
         set({ board: msg.board, studentFormLocked: msg.board.studentFormLocked });
         return;
       case 'post-added':
-        set((s) =>
-          s.board
-            ? { board: { ...s.board, posts: [...s.board.posts, msg.post] } }
-            : s,
-        );
+        set((s) => (s.board ? { board: { ...s.board, posts: [...s.board.posts, msg.post] } } : s));
         return;
       case 'post-updated':
         // 디버그 로그(production 유지) — 학교 환경 진단용. submit-move broadcast 도착 확인.
         if (typeof window !== 'undefined') {
-          // eslint-disable-next-line no-console
           console.log('[Store] applyMessage post-updated', {
             postId: msg.postId,
             patchKeys: Object.keys(msg.patch ?? {}),
@@ -503,9 +492,7 @@ export const useRealtimeWallSyncStore = create<RealtimeWallSyncState>((set, get)
                 board: {
                   ...s.board,
                   posts: s.board.posts.map((p) =>
-                    p.id === msg.postId
-                      ? { ...p, likes: msg.likes, likedBy: msg.likedBy }
-                      : p,
+                    p.id === msg.postId ? { ...p, likes: msg.likes, likedBy: msg.likedBy } : p,
                   ),
                 },
               }
@@ -830,7 +817,7 @@ export const useRealtimeWallSyncStore = create<RealtimeWallSyncState>((set, get)
   submitOwnCardMove: (postId, position) => {
     // 회귀 위험 #8: hard delete X — 위치 patch만.
     // 디버그 로그(production 유지) — 학교 환경 진단용.
-    // eslint-disable-next-line no-console
+
     console.log('[Store] submitOwnCardMove called', {
       postId,
       position,
@@ -843,7 +830,7 @@ export const useRealtimeWallSyncStore = create<RealtimeWallSyncState>((set, get)
     });
     if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) {
       // 연결 끊김 — silent (드래그 중 lastError 표시는 UX 오버헤드)
-      // eslint-disable-next-line no-console
+
       console.warn('[Store] submitOwnCardMove aborted: socket not OPEN');
       return;
     }
@@ -883,7 +870,7 @@ export const useRealtimeWallSyncStore = create<RealtimeWallSyncState>((set, get)
       if (pinHash) payload['pinHash'] = pinHash;
       if (position.freeform) payload['freeform'] = position.freeform;
       if (position.kanban) payload['kanban'] = position.kanban;
-      // eslint-disable-next-line no-console
+
       console.log('[Store] submitOwnCardMove sending', {
         type: 'submit-move',
         postId,
@@ -893,7 +880,6 @@ export const useRealtimeWallSyncStore = create<RealtimeWallSyncState>((set, get)
       });
       activeSocket.send(JSON.stringify(payload));
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[Store] submitOwnCardMove send failed', err);
       // noop — 다음 broadcast 도착 시 자연 reconcile
     }

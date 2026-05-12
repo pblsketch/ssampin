@@ -23,11 +23,7 @@ import {
   type WallBoardTheme,
 } from '@domain/entities/RealtimeWallBoardTheme';
 
-export const DEFAULT_REALTIME_WALL_COLUMNS = [
-  '생각',
-  '질문',
-  '정리',
-] as const;
+export const DEFAULT_REALTIME_WALL_COLUMNS = ['생각', '질문', '정리'] as const;
 
 export const REALTIME_WALL_MIN_COLUMNS = 2;
 /**
@@ -52,17 +48,16 @@ const FREEFORM_Y_GAP = 28;
 const FREEFORM_START_X = 24;
 const FREEFORM_START_Y = 24;
 
-export function buildRealtimeWallColumns(
-  titles: readonly string[],
-): RealtimeWallColumn[] {
+export function buildRealtimeWallColumns(titles: readonly string[]): RealtimeWallColumn[] {
   const normalized = titles
     .map((title) => title.trim())
     .filter((title, index, arr) => title.length > 0 && arr.indexOf(title) === index)
     .slice(0, REALTIME_WALL_MAX_COLUMNS);
 
-  const safeTitles = normalized.length >= REALTIME_WALL_MIN_COLUMNS
-    ? normalized
-    : [...DEFAULT_REALTIME_WALL_COLUMNS];
+  const safeTitles =
+    normalized.length >= REALTIME_WALL_MIN_COLUMNS
+      ? normalized
+      : [...DEFAULT_REALTIME_WALL_COLUMNS];
 
   return safeTitles.map((title, index) => ({
     id: `column-${index + 1}`,
@@ -369,8 +364,7 @@ export function togglePinRealtimeWallPost(
   posts: readonly RealtimeWallPost[],
   postId: string,
 ): RealtimeWallPost[] {
-  const nextZIndex =
-    posts.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
+  const nextZIndex = posts.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
   return posts.map((post) => {
     if (post.id !== postId) return post;
     return {
@@ -412,13 +406,9 @@ export function approveRealtimeWallPost(
       ? targetPost.kanban.columnId
       : fallbackColumnId;
   const nextOrder = posts.filter(
-    (post) =>
-      post.id !== postId &&
-      post.status === 'approved' &&
-      post.kanban.columnId === columnId,
+    (post) => post.id !== postId && post.status === 'approved' && post.kanban.columnId === columnId,
   ).length;
-  const nextZIndex =
-    posts.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
+  const nextZIndex = posts.reduce((maxZ, post) => Math.max(maxZ, post.freeform.zIndex), 0) + 1;
 
   return posts.map((post) => {
     if (post.id !== postId) return post;
@@ -461,9 +451,7 @@ const WALL_SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
  *
  * Design §1.1 shortCode 규정.
  */
-export function generateWallShortCode(
-  randomSource: () => number = Math.random,
-): string {
+export function generateWallShortCode(randomSource: () => number = Math.random): string {
   let code = '';
   for (let i = 0; i < WALL_SHORT_CODE_LENGTH; i++) {
     const idx = Math.floor(randomSource() * WALL_SHORT_CODE_ALPHABET.length);
@@ -508,9 +496,8 @@ export function buildWallPreviewPosts(
   const approved = posts.filter((p) => p.status === 'approved');
   const sorted = sortRealtimeWallPostsForBoard(approved);
   return sorted.slice(0, max).map((p) => {
-    const text = p.text.length > WALL_PREVIEW_TEXT_MAX
-      ? p.text.slice(0, WALL_PREVIEW_TEXT_MAX)
-      : p.text;
+    const text =
+      p.text.length > WALL_PREVIEW_TEXT_MAX ? p.text.slice(0, WALL_PREVIEW_TEXT_MAX) : p.text;
     const preview: WallPreviewPost = {
       id: p.id,
       nickname: p.nickname,
@@ -618,9 +605,7 @@ function nextColumnId(existing: readonly RealtimeWallColumn[]): string {
  *
  * 삽입·삭제·재배치 후 항상 이 함수로 order를 일관화한다.
  */
-function normalizeColumnOrder(
-  columns: readonly RealtimeWallColumn[],
-): RealtimeWallColumn[] {
+function normalizeColumnOrder(columns: readonly RealtimeWallColumn[]): RealtimeWallColumn[] {
   return columns.map((c, index) => ({ ...c, order: index }));
 }
 
@@ -641,10 +626,7 @@ export function addWallColumn(
   if (trimmed.length === 0) return [...columns];
   if (columns.length >= REALTIME_WALL_MAX_COLUMNS) return [...columns];
   const id = nextColumnId(columns);
-  return normalizeColumnOrder([
-    ...columns,
-    { id, title: trimmed, order: columns.length },
-  ]);
+  return normalizeColumnOrder([...columns, { id, title: trimmed, order: columns.length }]);
 }
 
 /**
@@ -731,9 +713,7 @@ export function removeWallColumn(
     return { columns: [...columns], posts: [...posts] };
   }
 
-  const remainingColumns = normalizeColumnOrder(
-    columns.filter((c) => c.id !== columnId),
-  );
+  const remainingColumns = normalizeColumnOrder(columns.filter((c) => c.id !== columnId));
 
   switch (strategy.kind) {
     case 'move-to': {
@@ -868,10 +848,7 @@ export const REALTIME_WALL_COMMENT_MAX_NICKNAME_LENGTH = 20;
  * @param sessionToken 학생 브라우저 토큰
  * @returns 변경된 post (likes/likedBy 필드만 갱신). 기타 필드는 그대로.
  */
-export function toggleStudentLike(
-  post: RealtimeWallPost,
-  sessionToken: string,
-): RealtimeWallPost {
+export function toggleStudentLike(post: RealtimeWallPost, sessionToken: string): RealtimeWallPost {
   const currentLikedBy = post.likedBy ?? [];
   const currentLikes = post.likes ?? 0;
   const alreadyLiked = currentLikedBy.includes(sessionToken);
@@ -920,9 +897,7 @@ export function addStudentComment(
   id: string,
   now: number,
 ): RealtimeWallPost {
-  const trimmedNickname = input.nickname
-    .trim()
-    .slice(0, REALTIME_WALL_COMMENT_MAX_NICKNAME_LENGTH);
+  const trimmedNickname = input.nickname.trim().slice(0, REALTIME_WALL_COMMENT_MAX_NICKNAME_LENGTH);
   const trimmedText = input.text.trim().slice(0, REALTIME_WALL_COMMENT_MAX_TEXT_LENGTH);
   if (trimmedNickname.length === 0) return post;
   if (trimmedText.length === 0) return post;
@@ -950,10 +925,7 @@ export function addStudentComment(
  * (인덱스 보존 + 복구 여지). commentId 미존재 시 원본 그대로 반환.
  * 이미 'hidden' 상태인 댓글도 idempotent (두 번 호출해도 동일).
  */
-export function removeStudentComment(
-  post: RealtimeWallPost,
-  commentId: string,
-): RealtimeWallPost {
+export function removeStudentComment(post: RealtimeWallPost, commentId: string): RealtimeWallPost {
   const currentComments = post.comments ?? [];
   const idx = currentComments.findIndex((c) => c.id === commentId);
   if (idx === -1) return post;
@@ -972,9 +944,7 @@ export function removeStudentComment(
  * v1.13 저장 파일 로드 직후 일괄 적용 — JsonWallBoardRepository.load() +
  * electron/ipc/realtimeWallBoard.ts readBoardSync().
  */
-export function normalizePostForPadletMode(
-  post: RealtimeWallPost,
-): RealtimeWallPost {
+export function normalizePostForPadletMode(post: RealtimeWallPost): RealtimeWallPost {
   return {
     ...post,
     likes: post.likes ?? 0,
@@ -1070,12 +1040,7 @@ function approximateRawBytesFromDataUrl(dataUrl: string): number {
   const commaIdx = dataUrl.indexOf(',');
   if (commaIdx === -1) return 0;
   const base64Len = dataUrl.length - commaIdx - 1;
-  const padding =
-    dataUrl.endsWith('==')
-      ? 2
-      : dataUrl.endsWith('=')
-        ? 1
-        : 0;
+  const padding = dataUrl.endsWith('==') ? 2 : dataUrl.endsWith('=') ? 1 : 0;
   return Math.floor((base64Len * 3) / 4) - padding;
 }
 
@@ -1163,7 +1128,6 @@ function decodeBase64Head(dataUrl: string): Uint8Array | null {
     }
     // Node fallback
     if (typeof Buffer !== 'undefined') {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       return new Uint8Array(Buffer.from(head, 'base64'));
     }
   } catch {
@@ -1272,10 +1236,7 @@ export type PdfValidationResult =
  * @param pdfBytes 파일 raw bytes (Main 프로세스에서 검증)
  * @param pdfUrl   서버가 발급한 file:// URL (검증)
  */
-export function validatePdf(
-  pdfBytes: Uint8Array,
-  pdfUrl: string,
-): PdfValidationResult {
+export function validatePdf(pdfBytes: Uint8Array, pdfUrl: string): PdfValidationResult {
   // URL 형식 (file:// 만 허용)
   if (typeof pdfUrl !== 'string' || !pdfUrl.startsWith('file://')) {
     return { ok: false, reason: 'invalid-url' };
@@ -1315,9 +1276,7 @@ export type BoardSettingsValidationResult =
  *
  * Phase B에서는 도메인 규칙 선언만. Phase A에서 IPC 핸들러 + UI 패널이 활용.
  */
-export function validateBoardSettings(
-  settings: unknown,
-): BoardSettingsValidationResult {
+export function validateBoardSettings(settings: unknown): BoardSettingsValidationResult {
   if (!settings || typeof settings !== 'object') {
     return { ok: false, reason: 'invalid-shape' };
   }
@@ -1334,12 +1293,9 @@ export function validateBoardSettings(
 /**
  * v2.1 — 카드 색상 검증 (Design §2.1 RealtimeWallCardColor union).
  */
-export function isValidRealtimeWallCardColor(
-  value: unknown,
-): value is RealtimeWallCardColor {
+export function isValidRealtimeWallCardColor(value: unknown): value is RealtimeWallCardColor {
   return (
-    typeof value === 'string' &&
-    (REALTIME_WALL_CARD_COLORS as readonly string[]).includes(value)
+    typeof value === 'string' && (REALTIME_WALL_CARD_COLORS as readonly string[]).includes(value)
   );
 }
 
@@ -1354,9 +1310,7 @@ export function isValidRealtimeWallCardColor(
  *
  * v1 normalizer (`normalizePostForPadletMode`) 호출 후 v2.1 필드 추가 — idempotent.
  */
-export function normalizePostForPadletModeV2(
-  post: RealtimeWallPost,
-): RealtimeWallPost {
+export function normalizePostForPadletModeV2(post: RealtimeWallPost): RealtimeWallPost {
   const v1Normalized = normalizePostForPadletMode(post);
   return {
     ...v1Normalized,
@@ -1381,7 +1335,10 @@ export function normalizePostForPadletModeV2(
  * idempotent — 두 번 호출해도 동일 결과.
  */
 export function normalizeBoardForPadletModeV2<
-  T extends { readonly posts: readonly RealtimeWallPost[]; readonly settings?: RealtimeWallBoardSettings },
+  T extends {
+    readonly posts: readonly RealtimeWallPost[];
+    readonly settings?: RealtimeWallBoardSettings;
+  },
 >(board: T): T {
   const baseSettings: RealtimeWallBoardSettings =
     board.settings ?? DEFAULT_REALTIME_WALL_BOARD_SETTINGS;
@@ -1499,12 +1456,7 @@ export type MoveValidationResult =
   | { ok: true }
   | {
       ok: false;
-      reason:
-        | 'not-found'
-        | 'not-owner'
-        | 'invalid-position'
-        | 'invalid-column'
-        | 'mobile-readonly';
+      reason: 'not-found' | 'not-owner' | 'invalid-position' | 'invalid-column' | 'mobile-readonly';
     };
 
 /**
@@ -1752,7 +1704,11 @@ export function applyEdit(
     if (req.linkUrl !== undefined) {
       if (req.linkUrl === null || req.linkUrl.trim().length === 0) {
         // 링크 제거 — 새 객체 분해로 linkUrl/linkPreview 제거
-        const { linkUrl: _l, linkPreview: _p, ...rest } = next as RealtimeWallPost & {
+        const {
+          linkUrl: _l,
+          linkPreview: _p,
+          ...rest
+        } = next as RealtimeWallPost & {
           linkUrl?: string;
           linkPreview?: RealtimeWallLinkPreview;
         };
@@ -1814,9 +1770,7 @@ export function applyDelete(
   posts: readonly RealtimeWallPost[],
   postId: string,
 ): RealtimeWallPost[] {
-  return posts.map((p) =>
-    p.id === postId ? { ...p, status: 'hidden-by-author' as const } : p,
-  );
+  return posts.map((p) => (p.id === postId ? { ...p, status: 'hidden-by-author' as const } : p));
 }
 
 /**
@@ -1830,9 +1784,7 @@ export function applyRestore(
   postId: string,
 ): RealtimeWallPost[] {
   return posts.map((p) =>
-    p.id === postId && p.status === 'hidden-by-author'
-      ? { ...p, status: 'approved' as const }
-      : p,
+    p.id === postId && p.status === 'hidden-by-author' ? { ...p, status: 'approved' as const } : p,
   );
 }
 
@@ -1856,11 +1808,7 @@ export function findPostIdsByOwner(
       out.push(p.id);
       continue;
     }
-    if (
-      criteria.pinHash &&
-      p.studentPinHash &&
-      p.studentPinHash === criteria.pinHash
-    ) {
+    if (criteria.pinHash && p.studentPinHash && p.studentPinHash === criteria.pinHash) {
       out.push(p.id);
     }
   }
@@ -1879,9 +1827,7 @@ export function applyBulkHideByOwner(
 ): RealtimeWallPost[] {
   const targetIds = new Set(findPostIdsByOwner(posts, criteria));
   if (targetIds.size === 0) return [...posts];
-  return posts.map((p) =>
-    targetIds.has(p.id) ? { ...p, status: 'hidden' as const } : p,
-  );
+  return posts.map((p) => (targetIds.has(p.id) ? { ...p, status: 'hidden' as const } : p));
 }
 
 /**
@@ -1904,9 +1850,7 @@ export function applyNicknameUpdate(
   if (targetIds.size === 0) return { posts: [...posts], postIds: [] };
   const trimmed = newNickname.trim().slice(0, REALTIME_WALL_MAX_NICKNAME_LENGTH);
   if (trimmed.length === 0) return { posts: [...posts], postIds: [] };
-  const nextPosts = posts.map((p) =>
-    targetIds.has(p.id) ? { ...p, nickname: trimmed } : p,
-  );
+  const nextPosts = posts.map((p) => (targetIds.has(p.id) ? { ...p, nickname: trimmed } : p));
   return { posts: nextPosts, postIds: Array.from(targetIds) };
 }
 
