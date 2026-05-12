@@ -256,8 +256,8 @@ interface ElectronAPI {
   // Cross-window navigation
   navigateToPage: (page: string) => Promise<void>;
   onNavigateToPage: (callback: (page: string) => void) => () => void;
-  // Google OAuth — {code, redirectUri} 묶음 반환
-  startOAuth: (authUrl: string) => Promise<{ code: string; redirectUri: string }>;
+  // Google OAuth — {code, redirectUri, codeVerifier} 묶음 반환 (Desktop app 클라이언트는 PKCE 로 교환)
+  startOAuth: (authUrl: string) => Promise<{ code: string; redirectUri: string; codeVerifier: string }>;
   cancelOAuth: () => Promise<void>;
   onOAuthRedirectUri: (callback: (uri: string) => void) => () => void;
   onOAuthError: (callback: (error: { code: string; message: string }) => void) => () => void;

@@ -55,7 +55,7 @@ interface GoogleAccountState {
   initialize: () => Promise<void>;
   startAuth: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   cancelAuth: () => Promise<void>;
-  completeAuth: (code: string, redirectUri: string) => Promise<void>;
+  completeAuth: (code: string, redirectUri: string, codeVerifier?: string) => Promise<void>;
   startPKCEFallback: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   completePKCEAuth: (code: string) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -124,7 +124,7 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
 
         // 성공 → 폴백 제안 숨기기
         set({ showFallbackSuggestion: false, fallbackSuggestionData: null });
-        await get().completeAuth(result.code, result.redirectUri);
+        await get().completeAuth(result.code, result.redirectUri, result.codeVerifier);
       } finally {
         fallbackCleanup?.();
       }
@@ -173,12 +173,12 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
     });
   },
 
-  completeAuth: async (code: string, redirectUri: string) => {
-    console.log('[GoogleAccount] completeAuth start', { redirectUri });
+  completeAuth: async (code: string, redirectUri: string, codeVerifier?: string) => {
+    console.log('[GoogleAccount] completeAuth start', { redirectUri, hasVerifier: Boolean(codeVerifier) });
     set({ isLoading: true, error: null });
     try {
       const { authenticateGoogle } = await import('@adapters/di/container');
-      const tokens = await authenticateGoogle.authenticate(code, redirectUri);
+      const tokens = await authenticateGoogle.authenticate(code, redirectUri, codeVerifier);
       console.log('[GoogleAccount] completeAuth tokens saved');
 
       // 토큰 저장 직후 즉시 연결 상태로 마크 — 캘린더 프리로드는 별개로 분리.

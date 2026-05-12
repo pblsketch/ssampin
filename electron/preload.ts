@@ -242,8 +242,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('navigate:to-page', handler);
     return () => { ipcRenderer.removeListener('navigate:to-page', handler); };
   },
-  // Google OAuth — 신규 시그니처: {code, redirectUri} 묶음 반환 (별도 oauth:redirect-uri 이벤트 의존 제거)
-  startOAuth: (authUrl: string): Promise<{ code: string; redirectUri: string }> =>
+  // Google OAuth — {code, redirectUri, codeVerifier} 묶음 반환 (별도 oauth:redirect-uri 이벤트 의존 제거)
+  // codeVerifier: Desktop app 클라이언트는 client_secret 대신 PKCE 로 토큰을 교환한다 (P0-C / F-2)
+  startOAuth: (authUrl: string): Promise<{ code: string; redirectUri: string; codeVerifier: string }> =>
     ipcRenderer.invoke('oauth:start', authUrl),
   cancelOAuth: (): Promise<void> =>
     ipcRenderer.invoke('oauth:cancel'),
