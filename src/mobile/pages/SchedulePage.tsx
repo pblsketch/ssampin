@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import { useMobileEventsStore } from '@mobile/stores/useMobileEventsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { Toggle } from '@mobile/components/common/Toggle';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import {
   format,
@@ -71,6 +72,9 @@ export function SchedulePage() {
   const [newTitle, setNewTitle] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newCategory, setNewCategory] = useState('');
+  const [isAllDay, setIsAllDay] = useState(true);
+  const [newStartTime, setNewStartTime] = useState('');
+  const [newEndTime, setNewEndTime] = useState('');
 
   useEffect(() => {
     void loadEvents();
@@ -155,16 +159,25 @@ export function SchedulePage() {
     setNewTitle('');
     setNewDate(defaultDate);
     setNewCategory(categories[0]?.id ?? '');
+    setIsAllDay(true);
+    setNewStartTime('');
+    setNewEndTime('');
     setShowAddModal(true);
   };
 
   const handleAdd = async () => {
     if (!newTitle.trim() || !newDate) return;
+    const start = isAllDay ? '' : newStartTime.trim();
+    const end = isAllDay ? '' : newEndTime.trim();
+    const timeStr = start ? (end ? `${start} - ${end}` : start) : undefined;
     const event: SchoolEvent = {
       id: generateUUID(),
       title: newTitle.trim(),
       date: newDate,
       category: newCategory,
+      ...(timeStr ? { time: timeStr } : {}),
+      ...(start ? { startTime: start } : {}),
+      ...(end ? { endTime: end } : {}),
     };
     await addEvent(event);
     setShowAddModal(false);
@@ -173,8 +186,8 @@ export function SchedulePage() {
   const listHeader = selectedDay
     ? `${format(selectedDay, 'M월 d일', { locale: ko })} 일정`
     : isViewingCurrentMonth
-    ? '다가오는 일정'
-    : `${format(currentMonth, 'M월', { locale: ko })} 일정`;
+      ? '다가오는 일정'
+      : `${format(currentMonth, 'M월', { locale: ko })} 일정`;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -229,9 +242,7 @@ export function SchedulePage() {
                 key={`${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`}
                 onClick={() => handleDayClick(day)}
                 className={`flex flex-col items-center py-1 rounded-lg min-h-[44px] transition-colors ${
-                  isSelected && !isToday
-                    ? 'ring-2 ring-blue-500'
-                    : ''
+                  isSelected && !isToday ? 'ring-2 ring-blue-500' : ''
                 } ${isCurrentMonth ? '' : 'opacity-30'}`}
               >
                 <span
@@ -239,12 +250,12 @@ export function SchedulePage() {
                     isToday
                       ? 'bg-sp-accent text-sp-accent-fg font-bold'
                       : isSelected
-                      ? 'ring-2 ring-blue-500 text-sp-text font-medium'
-                      : colIndex === 0
-                      ? 'text-red-400'
-                      : colIndex === 6
-                      ? 'text-blue-400'
-                      : 'text-sp-text'
+                        ? 'ring-2 ring-blue-500 text-sp-text font-medium'
+                        : colIndex === 0
+                          ? 'text-red-400'
+                          : colIndex === 6
+                            ? 'text-blue-400'
+                            : 'text-sp-text'
                   }`}
                 >
                   {day.getDate()}
@@ -373,6 +384,39 @@ export function SchedulePage() {
                 ))}
               </select>
             </div>
+
+            {/* 종일 토글 */}
+            <div className="flex items-center justify-between glass-card rounded-xl px-4 py-3">
+              <span className="text-sp-text text-sm">종일</span>
+              <Toggle checked={isAllDay} onChange={setIsAllDay} label="종일 일정 설정" />
+            </div>
+
+            {/* 시작/종료 시간 — 종일이 아닐 때만 */}
+            {!isAllDay && (
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-sp-muted text-xs mb-1">시작 시간</label>
+                  <input
+                    type="time"
+                    value={newStartTime}
+                    onChange={(e) => setNewStartTime(e.target.value)}
+                    aria-label="시작 시간"
+                    className="w-full glass-input text-sm"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sp-muted text-xs mb-1">종료 시간 (선택)</label>
+                  <input
+                    type="time"
+                    value={newEndTime}
+                    onChange={(e) => setNewEndTime(e.target.value)}
+                    disabled={!newStartTime}
+                    aria-label="종료 시간"
+                    className="w-full glass-input text-sm disabled:opacity-40"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Buttons */}
             <div className="flex gap-3 pt-1">
