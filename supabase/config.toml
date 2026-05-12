@@ -4,10 +4,12 @@
 # (배포 시 `supabase functions deploy <name> --no-verify-jwt` 로 관리됨 — MEMORY.md 참고).
 # 이 파일은 그 상태를 명시적으로 문서화한다. 비밀값(키)은 절대 포함하지 않는다.
 #
-# ⚠️ 아래 [functions.*] verify_jwt 값은 "현재 배포 상태 추정"이다. 모든 함수가
-#    Authorization 헤더를 자체 파싱(Google access_token 검증 또는 admin_key 비교)하거나
-#    완전 공개(학생 제출/공개 챗봇) 엔드포인트이므로 verify_jwt = false 로 배포된 것으로 본다.
-#    실제 Supabase 대시보드의 함수 설정과 일치하는지 사용자 확인 필요.
+# 아래 [functions.*] verify_jwt 값은 2026-05-12 에 실제 배포 상태와 대조 완료
+# (각 함수에 Authorization 헤더 없이 호출 → Supabase 게이트웨이 401(UNAUTHORIZED_NO_AUTH_HEADER)
+#  이면 verify_jwt=true, 함수 코드의 자체 응답이면 verify_jwt=false 로 판별).
+# 결과: ssampin-escalate, submit-assignment 두 함수만 verify_jwt=true(클라이언트가 anon key 를
+#       Authorization 헤더로 보내야 통과 — 게이트웨이 레벨 1차 필터), 나머지 7개는 false(함수가
+#       자체 인증하거나 완전 공개).
 #
 # 이 외 [auth] / [db] / [api] 등은 supabase CLI 기본값에 가깝게 최소만 둔다 — 로컬 개발 시
 # 실제 적용되므로 보수적으로 유지.
@@ -59,7 +61,7 @@ enable_confirmations = false
 enabled = false
 
 # ── Edge Functions ───────────────────────────────────────────────────────────
-# verify_jwt 값은 위 ⚠️ 주석 참고 (현 배포 상태 추정 — 사용자 확인 필요).
+# verify_jwt 값은 2026-05-12 실제 배포와 대조 완료 (위 헤더 주석 참고).
 
 # 챗봇 지식베이스 관리 — Bearer ADMIN_API_KEY 로 자체 인증.
 [functions.ssampin-embed]
@@ -69,9 +71,9 @@ verify_jwt = false
 [functions.ssampin-chat]
 verify_jwt = false
 
-# 챗봇 → 개발자 에스컬레이션(이메일) — 공개 엔드포인트.
+# 챗봇 → 개발자 에스컬레이션(이메일). 게이트웨이에서 JWT(anon key) 1차 검증 + 함수 자체 처리.
 [functions.ssampin-escalate]
-verify_jwt = false
+verify_jwt = true
 
 # 교사 OAuth 토큰 저장 — Google access_token → userinfo 검증으로 자체 인증.
 [functions.save-teacher-token]
@@ -93,6 +95,6 @@ verify_jwt = false
 [functions.get-submissions]
 verify_jwt = false
 
-# 학생 과제 제출 — 공개 엔드포인트(학생 인증 없음 — 의도된 설계).
+# 학생 과제 제출. 게이트웨이에서 JWT(anon key) 1차 검증 + 함수 자체 처리(학생 신원 인증은 없음).
 [functions.submit-assignment]
-verify_jwt = false
+verify_jwt = true
