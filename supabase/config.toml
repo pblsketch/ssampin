@@ -98,3 +98,8 @@ verify_jwt = false
 # 학생 과제 제출. 게이트웨이에서 JWT(anon key) 1차 검증 + 함수 자체 처리(학생 신원 인증은 없음).
 [functions.submit-assignment]
 verify_jwt = true
+
+# 모바일 PWA Google OAuth code↔token 교환 — 서버 env GOOGLE_CLIENT_SECRET 로 교환.
+# 인증 없음(anon key 옵션) + body 검증 + IP rate limit. security-hardening P0-C / 감사 F-2.
+[functions.oauth-exchange]
+verify_jwt = false

@@ -111,10 +111,11 @@ export default defineConfig(({ mode }) => {
     },
   },
   define: {
+    // 모바일 PWA 는 Google "Web application" OAuth 클라이언트 — code↔token 교환은
+    // Supabase Edge Function `oauth-exchange` 가 서버 env 의 client_secret 으로 수행한다.
+    // client_secret 을 PWA 번들에 절대 주입하지 않는다 (security-hardening P0-C / 감사 F-2).
     'process.env.GOOGLE_CLIENT_ID': JSON.stringify((env.VITE_GOOGLE_CLIENT_ID || '').trim()),
-    'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify((env.VITE_GOOGLE_CLIENT_SECRET || '').trim()),
     'import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_ID': JSON.stringify((env.VITE_MOBILE_GOOGLE_CLIENT_ID || '').trim()),
-    'import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_SECRET': JSON.stringify((env.VITE_MOBILE_GOOGLE_CLIENT_SECRET || '').trim()),
     '__APP_VERSION__': JSON.stringify(pkg.version),
   },
   // Electron 전용 패키지를 외부로 처리
