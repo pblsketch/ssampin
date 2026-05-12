@@ -4,6 +4,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { autoUpdater } from 'electron-updater';
 import { installNavigationGuard } from './security-guards';
+import { attachCsp, installCspViolationLogger } from './security/csp';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerPKCEFallbackHandlers } from './ipc/oauthPKCEFallback';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
@@ -4199,6 +4200,18 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     applySystemSettings();
+
+    // ── CSP (security-hardening P1-2 / 감사 M-1) ──────────────────────────
+    // 패키지(`file://`) 빌드에서만 `Content-Security-Policy-Report-Only` 헤더를 부착한다.
+    // Report-Only 는 아무것도 차단하지 않음 — DevTools/메인 콘솔에 위반만 보고된다.
+    // dev 모드(Vite HMR: inline script + eval + ws://localhost)에서는 붙이지 않는다.
+    // enforce(`Content-Security-Policy`) 전환은 위반 로그를 수 주간 관찰한 뒤 후속 PR.
+    // 정책 본문·화이트리스트는 electron/security/csp.ts 참조.
+    installCspViolationLogger();
+    if (!process.env['VITE_DEV_SERVER_URL']) {
+      attachCsp({ reportOnly: true });
+    }
+
     // 진단 로그 fanout (console + IPC + file) 초기화.
     // BrowserWindow 직접 import를 피하기 위해 closure로 주입.
     initNativeDesktopDiag(

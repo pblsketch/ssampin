@@ -60,4 +60,11 @@ OAuth 클라이언트 **ID**.
 `.env` / `.env*.local` 은 `.gitignore` 에 포함되어 있습니다. 시크릿이 실수로 커밋된 것을
 발견하면 위 신고 절차로 알려 주세요.
 
+## Content-Security-Policy (CSP) — enforce 전환 절차
+
+데스크톱 앱은 패키지(`file://`) 빌드에서 `Content-Security-Policy-Report-Only` 헤더를 부착합니다
+(`electron/security/csp.ts` 의 `buildAppCsp`/`attachCsp`, `electron/main.ts` 의 `app.whenReady()` 안에서 prod 일 때만 호출). 현재는 **Report-Only** 단계로 아무것도 차단하지 않으며 위반은 콘솔에 `[CSP violation]` 로만 기록됩니다(`installCspViolationLogger`).
+
+**enforce 전환 절차**: 패키지 빌드를 수 주간 운영하며 콘솔/DevTools 에 Report-Only 위반이 없는지 관찰 → 위반이 나오면 해당 출처를 `buildAppCsp()` 화이트리스트에 추가 → 위반 0(또는 의도된 화이트리스트만) 확인 후 `electron/main.ts` 의 `attachCsp({ reportOnly: false })` 로 바꿔 `Content-Security-Policy`(enforce) 헤더로 전환. `'unsafe-eval'` 은 어떤 경우에도 `script-src` 에 추가하지 않습니다(eval 사용 의존성이 드러나면 별도 이슈로 처리).
+
 보안 개선에 기여해 주셔서 감사합니다.

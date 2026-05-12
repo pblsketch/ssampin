@@ -148,7 +148,16 @@ ipcMain.handle('shell:openExternal', (_e, url: string): void => {
 ## 3. P1 스케치 (이번 PDCA 후반 또는 별도)
 
 - **P1-1 코드 서명 + Win 빌드 CI 이전**: Win — OV 코드서명 인증서(또는 Azure Trusted Signing) 발급 → `electron-builder.yml` `win.certificateFile`/`certificatePassword`(또는 Azure) → Win 빌드를 GitHub Actions 로 이전(secret 으로 인증서 주입, 빌드 PC 의존 제거). macOS — Apple Developer + `hardenedRuntime`+`entitlements`(이미 있음)+notarization → 인앱 자동업데이트 복원(`update:download` 의 mac 분기 제거 가능). **비용·조달 일정 의존 → 독립 트랙**.
-- **P1-2 CSP**: `session.defaultSession.webRequest.onHeadersReceived` 로 `Content-Security-Policy-Report-Only` 먼저 → 위반 로그 수집(`default-src 'self'`; `img-src 'self' data: blob: ssampin-slides: https:`; `style-src 'self' 'unsafe-inline'`(Tailwind/inline style 정리 전까지); `font-src 'self' https://fonts.gstatic.com data:`; `connect-src 'self' https://*.supabase.co https://api.* wss://*` 등) → 화이트리스트 확정 후 enforce 로 전환. `index.html` 메타 태그 방식도 가능하나 헤더 방식이 더 강함.
+- **P1-2 CSP** — ✅ **Report-Only 도입됨** (PR `feat/security-hardening-p1-2-csp`): 패키지(`file://`) 빌드에서만 `session.defaultSession.webRequest.onHeadersReceived` 로 `Content-Security-Policy-Report-Only` 헤더 부착(dev 모드는 Vite HMR 의 inline script + eval + `ws://localhost` 때문에 skip). 정책 본문은 `electron/security/csp.ts` `buildAppCsp()` 한 곳. `index.html` 메타 태그 방식은 안 씀(헤더 단일화). 위반은 `electron/security/csp.ts` `installCspViolationLogger` 가 `webContents` 의 `console-message` 에서 `[CSP violation]` 로 메인 콘솔에 가볍게 남김(정식 report-uri 엔드포인트는 안 만듦). **enforce(`Content-Security-Policy`) 전환은 후속 PR** — 패키지 빌드에서 앱 전 화면을 돌려보며 Report-Only 위반을 수 주간 관찰해 화이트리스트를 보정한 뒤 `attachCsp({ reportOnly: false })` 로 스위치.
+  - **'unsafe-eval' 절대 금지** (이게 M-1 의 핵심 — Electron 경고가 unsafe-eval 을 지목). `script-src` 본체는 `'self'` 만; 인라인 이벤트 핸들러 속성(`index.html` 의 폰트 `<link onload="this.media='all'">`)용으로 `script-src-attr 'unsafe-inline'` 만 별도. `style-src 'unsafe-inline'` 은 Tailwind/런타임 inline style + splash 인라인 `<style>` 때문에 현실적으로 유지(정리는 후속). 어떤 의존성이 `eval`/`new Function` 을 쓰면 Report-Only 단계에서 위반으로 드러나며 별도 이슈로 처리(여기서 'unsafe-eval' 추가해 무마하지 않음).
+  - **화이트리스트 출처**(코드에서 확인):
+    - `img-src 'self' data: blob: ssampin-slides: https:` — 첨부/아이콘 미리보기, Interactive Slides 이미지 스킴(`bypassCSP: true` 등록돼 있지만 명시도 함), 담벼락 OG 미리보기·교사 카드 이미지(임의 https origin) + `lh3.googleusercontent.com` 등.
+    - `font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net` — Noto Sans KR / Material Symbols / JetBrains Mono(Google Fonts) + Pretendard Variable(jsDelivr).
+    - `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net` — Tailwind/런타임 inline style + splash + Google Fonts CSS + Pretendard CSS.
+    - `connect-src 'self' data: blob: https://api.weatherapi.com https://open.neis.go.kr https://*.supabase.co https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://ssampin.com https://cdn.jsdelivr.net ws: wss:` — 날씨 / NEIS / 챗봇·과제·동기화·분석·단축링크 / Calendar·Tasks·Drive·Slides·userinfo / OAuth 토큰·폐기 / OAuth authorize / release-notes.json / 폰트 CSS 참조 / 실시간 담벼락 cloudflared 터널·YDoc 보드·슬라이드 WS.
+    - `frame-src https://www.youtube-nocookie.com` — 담벼락 카드 YouTube 임베드.
+    - `media-src 'self' data: blob:`, `worker-src 'self' blob:`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `default-src 'self'`.
+  - 참고: `student.html` / `mobile.html` / `slides-student.html` 은 로컬 http 서버로 서빙되는 별개 컨텍스트이며 이미 각자 `<meta http-equiv="Content-Security-Policy">` enforce CSP 를 갖고 있음(이번 PR 범위 밖).
 - **P1-3 CI 보안 게이트**: `ci.yml` 에 `npm audit --audit-level=high`(처음 `continue-on-error` → 안정 후 게이트) + `.github/dependabot.yml`(npm + github-actions, weekly) + CodeQL workflow(`javascript-typescript`) + `supabase/config.toml` 저장소 추가(현재 누락 → IaC 가시화).
 - **P1-4 Edge Function**: `ssampin-escalate` — IP/세션 기반 rate limit(예: 5/시간) + 개발자 알림 이메일을 하드코딩 → env(`ESCALATE_NOTIFY_EMAIL`) 필수. `submit-assignment` — rate limit + (선택) 과제별 학생 코드 옵션으로 위장 제출 완화. 모든 Edge Function — catch 에서 내부 에러/스택 노출 금지, 일반 메시지 + 서버 로그만.
 
@@ -184,7 +193,10 @@ ipcMain.handle('shell:openExternal', (_e, url: string): void => {
 - [ ] C-3. 빌드 후 `grep -rE "client_secret|GOCSPX" dist/ dist-mobile/` → 0건. OAuth 로그인(데스크톱 앱 + 모바일 PWA) 수동 RG
 
 ### Phase P1 (별도 PR 들)
-- [ ] P1-1 코드 서명 + Win 빌드 CI / P1-2 CSP(Report-Only→enforce) / P1-3 npm audit+Dependabot+CodeQL+config.toml / P1-4 Edge Function rate limit·에러 일반화
+- [ ] P1-1 코드 서명 + Win 빌드 CI
+- [x] P1-2 CSP — **Report-Only 도입됨**(PR `feat/security-hardening-p1-2-csp`: `electron/security/csp.ts` + main.ts prod-only `attachCsp` + `installCspViolationLogger`). **enforce 전환은 후속** — 패키지 빌드 위반 관찰 후 `attachCsp({ reportOnly: false })`.
+- [x] P1-3 npm audit+Dependabot+CodeQL+config.toml (PR #13)
+- [x] P1-4 Edge Function rate limit·에러 일반화 (PR #31)
 
 ### Phase Check/Report
 - [ ] `/pdca analyze security-hardening` (gap: 설계 vs 구현) → `/pdca report` (P0+P1 기준; P1 코드서명이 인증서 일정상 미완이면 "보류+사유"로)
