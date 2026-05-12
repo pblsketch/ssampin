@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor, globalShortcut, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, dialog, shell, Tray, Menu, nativeImage, powerMonitor, globalShortcut, clipboard, session } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { autoUpdater } from 'electron-updater';
 import { installNavigationGuard } from './security-guards';
+import { attachCsp, installCspViolationLogger } from './security/csp';
 import { registerOAuthHandlers } from './ipc/oauth';
 import { registerPKCEFallbackHandlers } from './ipc/oauthPKCEFallback';
 import { registerSecureStorageHandlers } from './ipc/secureStorage';
@@ -4199,6 +4200,16 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     applySystemSettings();
+    // Content-Security-Policy (security-hardening P1-2 / 감사 M-1).
+    // dev 모드(Vite HMR: inline script + eval + ws://localhost)에서는 붙이지 않는다 —
+    // 본 정책은 패키지(file://) 빌드 전용. 현재는 Report-Only(아무것도 차단 안 함);
+    // enforce(`Content-Security-Policy`) 전환은 위반 로그를 수 주간 관찰한 뒤 후속 PR.
+    // 정책·화이트리스트는 electron/security/csp.ts 참조. onHeadersReceived 는 첫 요청
+    // 전에 등록돼야 하므로 createWindow() 보다 앞에서 호출.
+    installCspViolationLogger(app);
+    if (!process.env['VITE_DEV_SERVER_URL']) {
+      attachCsp(session.defaultSession, /* reportOnly */ true);
+    }
     // 진단 로그 fanout (console + IPC + file) 초기화.
     // BrowserWindow 직접 import를 피하기 위해 closure로 주입.
     initNativeDesktopDiag(
