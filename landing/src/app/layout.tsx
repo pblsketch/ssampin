@@ -109,11 +109,11 @@ const softwareJsonLd = {
     url: 'https://github.com/pblsketch',
   },
   downloadUrl:
-    'https://github.com/pblsketch/ssampin-releases/releases/latest/download/ssampin-Setup.exe',
+    'https://github.com/pblsketch/ssampin/releases/latest/download/ssampin-Setup.exe',
   screenshot: 'https://ssampin.com/images/dashboard.png',
   inLanguage: 'ko-KR',
   featureList: '시간표 관리, 좌석 배치, 일정 관리, 급식 정보, 날씨, 쌤도구, PIN 잠금, 위젯 모드',
-  releaseNotes: 'https://github.com/pblsketch/ssampin-releases/releases',
+  releaseNotes: 'https://github.com/pblsketch/ssampin/releases',
 };
 
 const faqJsonLd = {
