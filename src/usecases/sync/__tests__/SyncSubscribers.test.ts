@@ -25,9 +25,7 @@ import { SYNC_REGISTRY, SYNC_FILES } from '../syncRegistry';
  */
 describe('syncRegistry 구조적 정합성', () => {
   it('(a) SYNC_FILES는 SYNC_REGISTRY의 정적 도메인에서 정확히 파생되어야 한다', () => {
-    const registryFileNames = SYNC_REGISTRY
-      .filter(d => !d.isDynamic)
-      .map(d => d.fileName);
+    const registryFileNames = SYNC_REGISTRY.filter((d) => !d.isDynamic).map((d) => d.fileName);
     expect([...SYNC_FILES]).toEqual(registryFileNames);
   });
 
@@ -44,19 +42,25 @@ describe('syncRegistry 구조적 정합성', () => {
     expect(endIdx, 'App.tsx STORE_SUBSCRIBE_MAP의 종료 지점을 찾지 못함').toBeGreaterThan(startIdx);
     const block = appSource.slice(startIdx, endIdx);
 
-    const shouldSubscribe = SYNC_REGISTRY
-      .filter(d => !d.subscribeExcluded && !d.isDynamic);
+    const shouldSubscribe = SYNC_REGISTRY.filter((d) => !d.subscribeExcluded && !d.isDynamic);
 
     const missing: string[] = [];
     for (const domain of shouldSubscribe) {
-      if (!block.includes(`'${domain.fileName}'`)) {
-        missing.push(domain.fileName);
+      const fn = domain.fileName;
+      // prettier(quoteProps:'as-needed')가 단순 식별자 키의 따옴표를 제거하므로
+      // 따옴표 있는 형태('class-schedule')와 없는 형태(students:) 모두 허용한다.
+      const present =
+        block.includes(`'${fn}'`) ||
+        block.includes(`"${fn}"`) ||
+        new RegExp(`(?:^|[\\s{,(])${fn}\\s*:`, 'm').test(block);
+      if (!present) {
+        missing.push(fn);
       }
     }
     expect(
       missing,
       `다음 도메인이 App.tsx STORE_SUBSCRIBE_MAP에 없습니다: ${missing.join(', ')}\n` +
-      `새 도메인을 SYNC_REGISTRY에 추가할 때 STORE_SUBSCRIBE_MAP도 함께 업데이트하세요.`,
+        `새 도메인을 SYNC_REGISTRY에 추가할 때 STORE_SUBSCRIBE_MAP도 함께 업데이트하세요.`,
     ).toEqual([]);
   });
 
@@ -71,22 +75,25 @@ describe('syncRegistry 구조적 정합성', () => {
   });
 
   it('(d) settings 도메인은 subscribeExcluded: true이어야 한다 (무한루프 방지)', () => {
-    const settings = SYNC_REGISTRY.find(d => d.fileName === 'settings');
+    const settings = SYNC_REGISTRY.find((d) => d.fileName === 'settings');
     expect(settings, 'settings 도메인이 registry에 없음').toBeDefined();
     expect(settings!.subscribeExcluded).toBe(true);
   });
 
   it('(e) 모든 도메인에 reload 함수가 정의되어 있어야 한다', () => {
-    const missing = SYNC_REGISTRY
-      .filter(d => typeof d.reload !== 'function')
-      .map(d => d.fileName);
+    const missing = SYNC_REGISTRY.filter((d) => typeof d.reload !== 'function').map(
+      (d) => d.fileName,
+    );
     expect(missing, `reload 함수 미정의 도메인: ${missing.join(', ')}`).toEqual([]);
   });
 
   it('(f) isDynamic: true인 도메인은 enumerateDynamic 함수를 반드시 가져야 한다', () => {
-    const invalid = SYNC_REGISTRY
-      .filter(d => d.isDynamic && typeof d.enumerateDynamic !== 'function')
-      .map(d => d.fileName);
-    expect(invalid, `isDynamic이지만 enumerateDynamic이 없는 도메인: ${invalid.join(', ')}`).toEqual([]);
+    const invalid = SYNC_REGISTRY.filter(
+      (d) => d.isDynamic && typeof d.enumerateDynamic !== 'function',
+    ).map((d) => d.fileName);
+    expect(
+      invalid,
+      `isDynamic이지만 enumerateDynamic이 없는 도메인: ${invalid.join(', ')}`,
+    ).toEqual([]);
   });
 });
