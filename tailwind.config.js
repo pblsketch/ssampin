@@ -2,13 +2,31 @@
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   safelist: [
-    'col-span-1', 'col-span-2', 'col-span-3', 'col-span-4',
-    'md:col-span-1', 'md:col-span-2', 'md:col-span-3', 'md:col-span-4',
+    'col-span-1',
+    'col-span-2',
+    'col-span-3',
+    'col-span-4',
+    'md:col-span-1',
+    'md:col-span-2',
+    'md:col-span-3',
+    'md:col-span-4',
     // 라이트 모드 시간표 과목 텍스트 색상
-    'text-yellow-700', 'text-green-700', 'text-blue-700', 'text-purple-700',
-    'text-orange-700', 'text-red-700', 'text-pink-700', 'text-indigo-700',
-    'text-teal-700', 'text-emerald-700', 'text-cyan-700', 'text-violet-700',
-    'text-amber-700', 'text-lime-700', 'text-rose-700', 'text-slate-700',
+    'text-yellow-700',
+    'text-green-700',
+    'text-blue-700',
+    'text-purple-700',
+    'text-orange-700',
+    'text-red-700',
+    'text-pink-700',
+    'text-indigo-700',
+    'text-teal-700',
+    'text-emerald-700',
+    'text-cyan-700',
+    'text-violet-700',
+    'text-amber-700',
+    'text-lime-700',
+    'text-rose-700',
+    'text-slate-700',
   ],
   darkMode: 'class',
   theme: {
@@ -19,25 +37,32 @@ export default {
           surface: 'var(--sp-surface)',
           card: 'var(--sp-card)',
           border: 'var(--sp-border)',
+          divider: 'var(--sp-divider)',
+          subtle: 'var(--sp-subtle)',
           accent: 'var(--sp-accent)',
           'accent-fg': 'var(--sp-accent-fg)',
           highlight: 'var(--sp-highlight)',
           text: 'var(--sp-text)',
           muted: 'var(--sp-muted)',
+          /* 의미 색상 — 출결/동기화/상태 표시 등에서 재사용. CSS 변수라 light/dark 자동 대응. */
+          success: 'var(--sp-success)',
+          warning: 'var(--sp-warning)',
+          error: 'var(--sp-error)',
+          info: 'var(--sp-info)',
         },
       },
       fontSize: {
-        'micro': ['0.5rem', { lineHeight: '0.75rem' }],         // 8px — 극소 라벨
-        'tiny': ['0.5625rem', { lineHeight: '0.875rem' }],      // 9px — 컴팩트 뱃지
-        'caption': ['0.625rem', { lineHeight: '1rem' }],        // 10px — 버전, 캡션
-        'detail': ['0.6875rem', { lineHeight: '1rem' }],        // 11px — 상세 텍스트
+        micro: ['0.5rem', { lineHeight: '0.75rem' }], // 8px — 극소 라벨
+        tiny: ['0.5625rem', { lineHeight: '0.875rem' }], // 9px — 컴팩트 뱃지
+        caption: ['0.625rem', { lineHeight: '1rem' }], // 10px — 버전, 캡션
+        detail: ['0.6875rem', { lineHeight: '1rem' }], // 11px — 상세 텍스트
         // text-xs(12px), text-sm(14px), text-base(16px), text-lg(18px) 등은 Tailwind 기본값 사용
-        'icon-xs': ['0.625rem', { lineHeight: '1' }],           // 10px Material Symbol
-        'icon-sm': ['0.875rem', { lineHeight: '1' }],           // 14px Material Symbol
-        'icon': ['1rem', { lineHeight: '1' }],                  // 16px Material Symbol
-        'icon-md': ['1.125rem', { lineHeight: '1' }],           // 18px Material Symbol
-        'icon-lg': ['1.25rem', { lineHeight: '1' }],            // 20px Material Symbol
-        'icon-xl': ['1.5rem', { lineHeight: '1' }],             // 24px Material Symbol
+        'icon-xs': ['0.625rem', { lineHeight: '1' }], // 10px Material Symbol
+        'icon-sm': ['0.875rem', { lineHeight: '1' }], // 14px Material Symbol
+        icon: ['1rem', { lineHeight: '1' }], // 16px Material Symbol
+        'icon-md': ['1.125rem', { lineHeight: '1' }], // 18px Material Symbol
+        'icon-lg': ['1.25rem', { lineHeight: '1' }], // 20px Material Symbol
+        'icon-xl': ['1.5rem', { lineHeight: '1' }], // 24px Material Symbol
       },
       fontFamily: {
         display: ['Pretendard Variable', 'Pretendard', 'Noto Sans KR', 'sans-serif'],
@@ -47,48 +72,48 @@ export default {
       fontWeight: {
         /* sp- prefix — Tailwind 기본 font-medium/semibold/bold는 건드리지 않음.
          * 신규 컴포넌트만 font-sp-medium 등으로 opt-in 사용. */
-        'sp-normal':   'var(--sp-weight-normal)',     // 400
-        'sp-medium':   'var(--sp-weight-medium)',     // 510 (Pretendard Variable axis)
-        'sp-semibold': 'var(--sp-weight-semibold)',   // 590
-        'sp-bold':     'var(--sp-weight-bold)',       // 680
+        'sp-normal': 'var(--sp-weight-normal)', // 400
+        'sp-medium': 'var(--sp-weight-medium)', // 510 (Pretendard Variable axis)
+        'sp-semibold': 'var(--sp-weight-semibold)', // 590
+        'sp-bold': 'var(--sp-weight-bold)', // 680
       },
       borderRadius: {
         /* ⚠️ 신규 코드에서 rounded-sp-* 사용 금지(memory/feedback_rounding_policy.md).
          * 기존 37개 파일은 회귀 방지를 위해 유지. 신규는 Tailwind 기본 키 사용:
          * rounded-md(6) / rounded-lg(8) / rounded-xl(12, 카드 기본) /
          * rounded-2xl(16) / rounded-3xl(24). */
-        'sp-xs':   'var(--sp-radius-xs)',     // 4px
-        'sp-sm':   'var(--sp-radius-sm)',     // 6px
-        'sp-md':   'var(--sp-radius-md)',     // 8px
-        'sp-lg':   'var(--sp-radius-lg)',     // 12px
-        'sp-xl':   'var(--sp-radius-xl)',     // 16px
-        'sp-pill': 'var(--sp-radius-pill)',   // 9999px
+        'sp-xs': 'var(--sp-radius-xs)', // 4px
+        'sp-sm': 'var(--sp-radius-sm)', // 6px
+        'sp-md': 'var(--sp-radius-md)', // 8px
+        'sp-lg': 'var(--sp-radius-lg)', // 12px
+        'sp-xl': 'var(--sp-radius-xl)', // 16px
+        'sp-pill': 'var(--sp-radius-pill)', // 9999px
       },
       boxShadow: {
-        'sp-none':   'var(--sp-shadow-none)',
-        'sp-sm':     'var(--sp-shadow-sm)',
-        'sp-md':     'var(--sp-shadow-md)',
-        'sp-lg':     'var(--sp-shadow-lg)',
+        'sp-none': 'var(--sp-shadow-none)',
+        'sp-sm': 'var(--sp-shadow-sm)',
+        'sp-md': 'var(--sp-shadow-md)',
+        'sp-lg': 'var(--sp-shadow-lg)',
         'sp-accent': 'var(--sp-shadow-accent)',
       },
       transitionDuration: {
-        'sp-quick': 'var(--sp-duration-quick)',  // 120ms
-        'sp-base':  'var(--sp-duration-base)',   // 160ms
-        'sp-slow':  'var(--sp-duration-slow)',   // 200ms
+        'sp-quick': 'var(--sp-duration-quick)', // 120ms
+        'sp-base': 'var(--sp-duration-base)', // 160ms
+        'sp-slow': 'var(--sp-duration-slow)', // 200ms
       },
       transitionTimingFunction: {
-        'sp-out':       'var(--sp-ease-out)',
+        'sp-out': 'var(--sp-ease-out)',
         'sp-out-cubic': 'var(--sp-ease-out-cubic)',
-        'sp-in-out':    'var(--sp-ease-in-out)',
+        'sp-in-out': 'var(--sp-ease-in-out)',
       },
       zIndex: {
         /* 시맨틱 z-index 레이어 (2026-04-25 신설).
          * 신규 코드는 z-{layer} 사용. 기존 z-50/z-[60]/z-[110] 등은 점진 마이그레이션. */
         'sp-dropdown': '40',
-        'sp-modal':    '50',
-        'sp-toast':    '60',
-        'sp-palette':  '70',
-        'sp-tooltip':  '80',
+        'sp-modal': '50',
+        'sp-toast': '60',
+        'sp-palette': '70',
+        'sp-tooltip': '80',
       },
       animation: {
         'slide-in-right': 'slideInRight 0.3s ease-out',
@@ -121,14 +146,14 @@ export default {
         // v2.0.3 — 아이콘 모드 idle 애니메이션 (3초 주기, 살짝 흔들+숨쉬기)
         pinIdle: {
           '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
-          '25%':      { transform: 'translateY(-2px) rotate(-2deg)' },
-          '50%':      { transform: 'translateY(0px) rotate(0deg)' },
-          '75%':      { transform: 'translateY(-2px) rotate(2deg)' },
+          '25%': { transform: 'translateY(-2px) rotate(-2deg)' },
+          '50%': { transform: 'translateY(0px) rotate(0deg)' },
+          '75%': { transform: 'translateY(-2px) rotate(2deg)' },
         },
         // v2.0.3 — 호버 시 통통 점프
         pinHoverBounce: {
           '0%, 100%': { transform: 'translateY(0px) scale(1)' },
-          '50%':      { transform: 'translateY(-4px) scale(1.05)' },
+          '50%': { transform: 'translateY(-4px) scale(1.05)' },
         },
         // v2.1 (Phase A-A1) — FAB 잠금 시 호버 진동
         fabJiggle: {

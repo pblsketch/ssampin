@@ -68,10 +68,10 @@ export function SyncStatusBanner() {
   // 오류
   if (state === 'error' && error) {
     return (
-      <div className="mx-4 mb-3 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3">
+      <div className="mx-4 mb-3 rounded-xl bg-sp-error/10 border border-sp-error/30 px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2 flex-1 min-w-0">
-            <span className="material-symbols-outlined text-red-400 text-base mt-0.5 shrink-0">
+            <span className="material-symbols-outlined text-sp-error text-base mt-0.5 shrink-0">
               error
             </span>
             <span className="text-sm text-sp-text leading-snug">{error}</span>
@@ -90,7 +90,7 @@ export function SyncStatusBanner() {
               setDismissed(false);
               void syncFromCloud();
             }}
-            className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
+            className="text-xs text-sp-error hover:opacity-80 font-medium transition-opacity"
           >
             다시 시도
           </button>
@@ -102,10 +102,10 @@ export function SyncStatusBanner() {
   // 동기화 완료 성공 배너
   if (state === 'idle' && lastSyncedAt && showSuccess) {
     return (
-      <div className="mx-4 mb-3 rounded-xl bg-green-500/10 border border-green-500/20 px-4 py-3">
+      <div className="mx-4 mb-3 rounded-xl bg-sp-success/10 border border-sp-success/30 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-green-400 text-base">
+            <span className="material-symbols-outlined text-sp-success text-base">
               check_circle
             </span>
             <span className="text-sm text-sp-text font-medium">

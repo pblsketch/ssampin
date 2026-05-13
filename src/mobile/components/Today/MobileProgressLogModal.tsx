@@ -388,7 +388,7 @@ export function MobileProgressLogModal({
             <button
               onClick={() => void handleSave()}
               disabled={!canSave}
-              className="flex items-center gap-1.5 px-4 py-2 bg-sp-accent text-white text-sm rounded-lg hover:bg-sp-accent/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-4 py-2 bg-sp-accent text-sp-accent-fg text-sm rounded-lg hover:bg-sp-accent/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>

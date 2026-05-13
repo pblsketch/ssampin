@@ -588,7 +588,7 @@ function SeatingView({
 
       {/* 좌석 그리드 */}
       <div
-        className="grid gap-1.5"
+        className="grid gap-2"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: rows }, (_, rowIdx) =>
@@ -772,7 +772,7 @@ function TeachingSeatingView({
 
       {/* 좌석 그리드 */}
       <div
-        className="grid gap-1.5"
+        className="grid gap-2"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: rows }, (_, rowIdx) =>

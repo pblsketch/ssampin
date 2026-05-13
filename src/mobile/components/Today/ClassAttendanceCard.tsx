@@ -17,15 +17,15 @@ export function ClassAttendanceCard({ attendanceRecord, onCheckAttendance }: Pro
       {checked ? (
         <div className="flex gap-3 items-center">
           <div className="text-center">
-            <p className="text-green-500 font-bold text-lg">{present}</p>
+            <p className="text-sp-success font-bold text-lg">{present}</p>
             <p className="text-sp-muted text-caption">출석</p>
           </div>
           <div className="text-center">
-            <p className="text-red-500 font-bold text-lg">{absent}</p>
+            <p className="text-sp-error font-bold text-lg">{absent}</p>
             <p className="text-sp-muted text-caption">결석</p>
           </div>
           <div className="text-center">
-            <p className="text-yellow-500 font-bold text-lg">{late}</p>
+            <p className="text-sp-warning font-bold text-lg">{late}</p>
             <p className="text-sp-muted text-caption">지각</p>
           </div>
         </div>

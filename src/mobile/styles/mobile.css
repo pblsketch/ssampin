@@ -2,18 +2,28 @@
    쌤핀 모바일 — Glassmorphism 디자인 시스템
    ═══════════════════════════════════════════════ */
 
-/* ── 라이트 모드 sp-* 오버라이드 ── */
+/* ── 라이트 모드 sp-* 오버라이드 ──
+ *  의미(semantic) 색상은 라이트에서 약간 진하게(접근성 4.5:1+),
+ *  다크에서 약간 밝게 잡아 양 테마 모두 가독성 확보. */
 :root {
   --sp-bg: #f1f5f9;
   --sp-surface: rgba(255, 255, 255, 0.95);
   --sp-card-base: rgba(255, 255, 255, 0.7);
   --sp-card: var(--sp-card-base);
   --sp-border: rgba(0, 0, 0, 0.08);
+  --sp-divider: rgba(0, 0, 0, 0.04); /* sp-border 보다 한 단계 옅은 카드 내부 구분선 */
+  --sp-subtle: rgba(15, 23, 42, 0.04); /* hover/secondary surface — light-friendly */
   --sp-accent: #3b82f6;
   --sp-accent-fg: #ffffff;
   --sp-highlight: #f59e0b;
   --sp-text: #0f172a;
   --sp-muted: #64748b;
+
+  /* 의미 색상 — 출석/지각/결석/조퇴, 동기화 상태, 알림 등에서 재사용 */
+  --sp-success: #16a34a; /* green-600 */
+  --sp-warning: #d97706; /* amber-600 */
+  --sp-error: #dc2626; /* red-600 */
+  --sp-info: #7c3aed; /* violet-600 — 조퇴/보조 */
 
   --tab-bar-height: calc(56px + env(safe-area-inset-bottom));
   --header-height: calc(48px + env(safe-area-inset-top));
@@ -26,11 +36,18 @@
   --sp-card-base: rgba(30, 41, 59, 0.7);
   --sp-card: var(--sp-card-base);
   --sp-border: rgba(255, 255, 255, 0.08);
+  --sp-divider: rgba(255, 255, 255, 0.05);
+  --sp-subtle: rgba(255, 255, 255, 0.04);
   --sp-accent: #3b82f6;
   --sp-accent-fg: #ffffff;
   --sp-highlight: #f59e0b;
   --sp-text: #f1f5f9;
   --sp-muted: #94a3b8;
+
+  --sp-success: #4ade80; /* green-400 — 다크에서 좀 더 밝게 */
+  --sp-warning: #fbbf24; /* amber-400 */
+  --sp-error: #f87171; /* red-400 */
+  --sp-info: #a78bfa; /* violet-400 */
 }
 
 /* 다크모드 date/time 위젯 */

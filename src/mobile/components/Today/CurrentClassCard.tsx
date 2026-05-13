@@ -36,7 +36,7 @@ function DayScheduleOverview({
   if (entries.length === 0) return null;
 
   return (
-    <div className="mt-3 pt-3 border-t border-white/10">
+    <div className="mt-3 pt-3 border-t border-sp-divider">
       <div className="flex items-center gap-1.5 mb-2">
         <span className="material-symbols-outlined text-sp-muted" style={{ fontSize: '14px' }}>
           calendar_today
@@ -57,13 +57,13 @@ function DayScheduleOverview({
           let pillClass =
             'flex-shrink-0 flex flex-col items-center px-2.5 py-1.5 rounded-xl text-xs transition-all ';
           if (isCurrent) {
-            pillClass += 'bg-sp-accent/30 border border-sp-accent/60 text-sp-accent/70';
+            pillClass += 'bg-sp-accent/20 border border-sp-accent/50 text-sp-accent';
           } else if (isNext) {
-            pillClass += 'bg-green-500/20 border border-green-500/40 text-green-200';
+            pillClass += 'bg-sp-success/15 border border-sp-success/40 text-sp-success';
           } else if (isPast) {
-            pillClass += 'bg-white/5 border border-white/10 text-sp-muted opacity-50';
+            pillClass += 'bg-sp-subtle border border-sp-divider text-sp-muted opacity-60';
           } else {
-            pillClass += 'bg-white/10 border border-white/15 text-sp-text';
+            pillClass += 'bg-sp-subtle border border-sp-border text-sp-text';
           }
 
           return (
@@ -79,14 +79,14 @@ function DayScheduleOverview({
                 )}
                 {isNext && !isCurrent && (
                   <span
-                    className="material-symbols-outlined text-green-400"
+                    className="material-symbols-outlined text-sp-success"
                     style={{ fontSize: '10px' }}
                   >
                     arrow_right
                   </span>
                 )}
                 <span
-                  className={`font-semibold ${isCurrent ? 'text-sp-accent' : isNext ? 'text-green-300' : ''}`}
+                  className={`font-semibold ${isCurrent ? 'text-sp-accent' : isNext ? 'text-sp-success' : ''}`}
                 >
                   {period}교시
                 </span>
@@ -157,13 +157,14 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
     );
   } else if (isAfterSchool) {
     icon = 'nightlight';
-    iconClass = 'text-amber-500';
+    iconClass = 'text-sp-highlight';
     title = '일과 종료';
     variant = 'default';
     summary = '오늘 수고하셨습니다';
     body = (
       <>
-        <p className="text-sp-text font-bold text-lg">오늘 수고하셨습니다!</p>
+        {/* 감성 문구는 보조 톤으로 — 카드 제목('일과 종료')이 주된 위계 */}
+        <p className="text-sp-muted text-sm">오늘 수고하셨습니다 ☕</p>
         {daySchedule && (
           <DayScheduleOverview
             daySchedule={daySchedule}
@@ -217,7 +218,7 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             {formatMinutes(remainingMinutes)} 남음
           </span>
         </div>
-        <div className="h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-sp-subtle rounded-full overflow-hidden">
           <div
             className="h-full bg-sp-accent rounded-full transition-all duration-1000"
             style={{ width: `${progress}%` }}
