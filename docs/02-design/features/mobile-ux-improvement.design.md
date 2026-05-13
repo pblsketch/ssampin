@@ -7,7 +7,7 @@ author: pblsketch
 project: ssampin
 version_target: 전체(Phase 1~5) 완료 후 단일 릴리즈에 묶음 게시 (버전 미정, v2.x 마이너)
 depends_on: docs/01-plan/features/mobile-ux-improvement.plan.md
-status: Draft (Phase 1~5 구현 완료 — PR #30 Phase1+2+3 · PR #35 Phase5 F-13·F-14 · PR #36 Phase4 · F-16 온보딩 브랜치 feat/mobile-onboarding-steps. 남은 것: 수업명단 스와이프 후속·번들 릴리즈)
+status: Draft (Phase 1~5 + F-16 + 수업 명단 스와이프 구현 완료 — PR #30 Phase1+2+3 · PR #35 Phase5 F-13·F-14 · PR #36 Phase4(담임) · PR #37 F-16 · 수업 명단 스와이프 브랜치 feat/mobile-teaching-swipe. 남은 것: 번들 릴리즈)
 ---
 
 # 쌤핀 모바일 UI/UX 개선 설계서
@@ -26,7 +26,7 @@ status: Draft (Phase 1~5 구현 완료 — PR #30 Phase1+2+3 · PR #35 Phase5 F-
 | 1     | F-1 출결 총원 실데이터 · F-2 교시 드롭다운 · F-3 일정 시간 필드            | ✅ main 머지 (PR #30)                                                                                                                                                           | §2 상세 |
 | 2     | F-4 카드 접기(홈 4개 카드) · F-5 카드 숨기기 · F-6 출결 버튼 라벨 가시성   | ✅ main 머지 (PR #30)                                                                                                                                                           | §3 상세 |
 | 3     | F-7 4탭+FAB · F-8 전역 FAB · F-9 터치·safe-area                            | ✅ main 머지 (PR #30)                                                                                                                                                           | §4 상세 |
-| 4     | F-10 스와이프-투-리빌 · F-11 햅틱 · F-12 코치마크                          | ✅ main 머지 (PR #36, 담임 명단 한정 — 수업 명단 스와이프는 후속)                                                                                                               | §5 상세 |
+| 4     | F-10 스와이프-투-리빌 · F-11 햅틱 · F-12 코치마크                          | ✅ 담임 명단 main 머지 (PR #36) · 수업 명단 스와이프 구현·검증 완료 (브랜치 feat/mobile-teaching-swipe)                                                                         | §5 상세 |
 | 5     | F-13 교시 시간 편집 · F-14 학급 정보 편집 · F-15 설정 동기화 · F-16 온보딩 | ✅ F-13·F-14 main 머지 (PR #35) · F-15 전용 충돌모달 불필요(기존 sync `resolveConflict` 커버) · F-16 온보딩 학교·교시 스텝 구현·검증 완료 (브랜치 feat/mobile-onboarding-steps) | §6 상세 |
 
 > 권장 구현 순서: Phase 1+2 완료 ✅ → **Phase 3 (네비 재편, 다른 화면들과 연쇄 변경)** → **Phase 5 (설정 동기화, 위험 크지만 독립적)** → **Phase 4 (스와이프, UX 폴리시 — frontend-design 협업 비중 큼)**. (각 Phase 내 F-13 → F-14 순서 등은 해당 §의 "범위·순서" 참조.)
