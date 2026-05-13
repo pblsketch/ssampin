@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import { useMobileTodoStore } from '@mobile/stores/useMobileTodoStore';
 import { useMobileUiTriggerStore } from '@mobile/stores/useMobileUiTriggerStore';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 
 const PRIORITY_CONFIG: Record<TodoPriority, { label: string; emoji: string; color: string }> = {
@@ -43,6 +44,8 @@ function AddTodoModal({ onAdd, onCancel }: AddTodoModalProps) {
   const [text, setText] = useState('');
   const [priority, setPriority] = useState<TodoPriority>('none');
   const [dueDate, setDueDate] = useState('');
+
+  useBottomSheet();
 
   const handleAdd = useCallback(() => {
     const trimmed = text.trim();

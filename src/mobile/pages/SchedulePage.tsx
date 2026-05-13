@@ -3,6 +3,7 @@ import { generateUUID } from '@infrastructure/utils/uuid';
 import { useMobileEventsStore } from '@mobile/stores/useMobileEventsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useMobileUiTriggerStore } from '@mobile/stores/useMobileUiTriggerStore';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { Toggle } from '@mobile/components/common/Toggle';
 import type { SchoolEvent, CategoryItem } from '@domain/entities/SchoolEvent';
 import {
@@ -68,6 +69,8 @@ export function SchedulePage() {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  useBottomSheet(showAddModal);
 
   // Add modal form state
   const [newTitle, setNewTitle] = useState('');

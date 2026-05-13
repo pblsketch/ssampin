@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 
 interface PraiseMemoSheetProps {
   studentName: string;
@@ -21,6 +22,8 @@ export function PraiseMemoSheet({
   const [memo, setMemo] = useState('');
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useBottomSheet();
 
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 80);

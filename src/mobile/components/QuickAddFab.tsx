@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useIsAnyBottomSheetOpen } from '@mobile/stores/useBottomSheetStore';
 
 export interface QuickAddAction {
   key: string;
@@ -16,25 +17,34 @@ interface QuickAddFabProps {
 /**
  * 전역 빠른 추가 FAB — 탭하면 바텀시트로 액션 목록(현재 탭에 따라 달라짐).
  * actions 가 비어 있으면 아무것도 렌더하지 않는다 (예: '더보기' 탭).
+ *
+ * 다른 바텀시트(StudentQuickActionSheet 등)가 열려 있을 때는 자동으로 fade-out 되어
+ * 시트 하단의 액션 버튼을 가리지 않는다. 전역 카운터(`useBottomSheetStore`) 구독.
  */
 export function QuickAddFab({ actions }: QuickAddFabProps) {
   const [open, setOpen] = useState(false);
+  const otherSheetOpen = useIsAnyBottomSheetOpen();
 
   if (actions.length === 0) return null;
 
+  // 다른 시트(StudentQuickActionSheet 등)가 열려 있는 동안에는 FAB 를 숨겨
+  // 시트 하단의 액션 버튼을 가리지 않게 한다. FAB 자체의 액션 시트는 이 카운터에
+  // 등록하지 않으므로 (`open` 이 true 여도 `otherSheetOpen` 은 false) 자기 자신을
+  // 숨기는 회귀는 없다.
+  const hide = otherSheetOpen;
+
   return (
     <>
-      {/*
-        z-40: 모달/바텀시트(z-50)·코치마크(z-[60])·토스트(z-[60]) 보다 낮춰 둔다.
-        다른 모달이 열렸을 때 FAB 가 시트 위로 떠올라 버튼을 가리는 회귀 방지.
-        FAB 자체의 액션 시트(아래)는 z-50 이라 FAB 탭 시 정상 노출됨.
-      */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="빠른 추가"
         aria-haspopup="dialog"
-        className="fixed right-4 bottom-[calc(var(--tab-bar-height)+1rem)] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sp-accent text-sp-accent-fg shadow-lg transition-transform active:scale-95"
+        aria-hidden={hide || undefined}
+        tabIndex={hide ? -1 : 0}
+        className={`fixed right-4 bottom-[calc(var(--tab-bar-height)+1rem)] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sp-accent text-sp-accent-fg shadow-lg transition-all duration-200 active:scale-95 ${
+          hide ? 'pointer-events-none opacity-0 scale-90' : 'opacity-100 scale-100'
+        }`}
       >
         <span className="material-symbols-outlined text-2xl">add</span>
       </button>

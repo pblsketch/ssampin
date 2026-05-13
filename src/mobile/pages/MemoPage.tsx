@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMobileMemoStore } from '@mobile/stores/useMobileMemoStore';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import type { Memo } from '@domain/entities/Memo';
 import type { MemoColor } from '@domain/valueObjects/MemoColor';
@@ -52,6 +53,8 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
   const [content, setContent] = useState('');
   const [color, setColor] = useState<MemoColor>('yellow');
 
+  useBottomSheet();
+
   const handleAdd = () => {
     const trimmed = content.trim();
     if (!trimmed) return;
@@ -82,7 +85,9 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
                 onClick={() => setColor(c)}
                 title={COLOR_LABEL[c]}
                 className={`w-7 h-7 rounded-full ${COLOR_DOT[c]} transition-transform ${
-                  color === c ? 'ring-2 ring-offset-2 ring-offset-sp-surface dark:ring-offset-sp-card ring-sp-accent scale-110' : 'opacity-70'
+                  color === c
+                    ? 'ring-2 ring-offset-2 ring-offset-sp-surface dark:ring-offset-sp-card ring-sp-accent scale-110'
+                    : 'opacity-70'
                 }`}
               />
             ))}
@@ -121,6 +126,8 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
   const [content, setContent] = useState(memo.content);
   const [color, setColor] = useState<MemoColor>(memo.color);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useBottomSheet();
 
   const handleSave = () => {
     const trimmed = content.trim();
@@ -173,7 +180,9 @@ function EditModal({ memo, onClose, onSave, onDelete }: EditModalProps) {
                 onClick={() => setColor(c)}
                 title={COLOR_LABEL[c]}
                 className={`w-7 h-7 rounded-full ${COLOR_DOT[c]} transition-transform ${
-                  color === c ? 'ring-2 ring-offset-2 ring-offset-sp-surface dark:ring-offset-sp-card ring-sp-accent scale-110' : 'opacity-70'
+                  color === c
+                    ? 'ring-2 ring-offset-2 ring-offset-sp-surface dark:ring-offset-sp-card ring-sp-accent scale-110'
+                    : 'opacity-70'
                 }`}
               />
             ))}
@@ -255,10 +264,7 @@ export function MemoPage({ onBack = undefined }: Props) {
       {/* 헤더 */}
       <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
         {onBack && (
-          <button
-            onClick={onBack}
-            className="flex items-center justify-center w-10 h-10"
-          >
+          <button onClick={onBack} className="flex items-center justify-center w-10 h-10">
             <span className="material-symbols-outlined text-sp-text">arrow_back</span>
           </button>
         )}
@@ -292,44 +298,41 @@ export function MemoPage({ onBack = undefined }: Props) {
           </div>
         ) : (
           <ul className="space-y-3">
-            {[...memos].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((memo) => (
-              <li key={memo.id}>
-                <div
-                  className={`rounded-xl p-4 border border-sp-border ${COLOR_BG[memo.color]} cursor-pointer active:scale-[0.98] transition-transform select-none`}
-                  onClick={() => setEditingMemo(memo)}
-                  onTouchStart={() => startLongPress(memo)}
-                  onTouchEnd={cancelLongPress}
-                  onTouchMove={cancelLongPress}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sp-text text-sm leading-relaxed line-clamp-2 flex-1">
-                      {memo.content}
-                    </p>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(memo.id);
-                      }}
-                      className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-sp-muted hover:text-red-400 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-icon-md">delete</span>
-                    </button>
+            {[...memos]
+              .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+              .map((memo) => (
+                <li key={memo.id}>
+                  <div
+                    className={`rounded-xl p-4 border border-sp-border ${COLOR_BG[memo.color]} cursor-pointer active:scale-[0.98] transition-transform select-none`}
+                    onClick={() => setEditingMemo(memo)}
+                    onTouchStart={() => startLongPress(memo)}
+                    onTouchEnd={cancelLongPress}
+                    onTouchMove={cancelLongPress}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sp-text text-sm leading-relaxed line-clamp-2 flex-1">
+                        {memo.content}
+                      </p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(memo.id);
+                        }}
+                        className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-sp-muted hover:text-red-400 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-icon-md">delete</span>
+                      </button>
+                    </div>
+                    <p className="text-sp-muted text-xs mt-2">{relativeTime(memo.updatedAt)}</p>
                   </div>
-                  <p className="text-sp-muted text-xs mt-2">{relativeTime(memo.updatedAt)}</p>
-                </div>
-              </li>
-            ))}
+                </li>
+              ))}
           </ul>
         )}
       </div>
 
       {/* 추가 모달 */}
-      {showAdd && (
-        <AddModal
-          onClose={() => setShowAdd(false)}
-          onAdd={handleAdd}
-        />
-      )}
+      {showAdd && <AddModal onClose={() => setShowAdd(false)} onAdd={handleAdd} />}
 
       {/* 편집 모달 */}
       {editingMemo && (

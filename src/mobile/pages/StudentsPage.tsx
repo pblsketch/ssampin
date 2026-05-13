@@ -21,6 +21,7 @@ import { SwipeUndoToast } from '@mobile/components/SwipeRow/SwipeUndoToast';
 import { useSwipeUndoStore } from '@mobile/components/SwipeRow/useSwipeUndoStore';
 import { PraiseMemoSheet } from '@mobile/components/Students/PraiseMemoSheet';
 import { SwipeHintBanner } from '@mobile/components/Students/SwipeHintBanner';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 
 type ViewMode = 'seating' | 'list';
 type ClassSelection = 'homeroom' | string; // 'homeroom' 또는 teachingClass.id
@@ -1245,6 +1246,8 @@ function StudentQuickActionSheet({
   getRecordForDate,
 }: StudentQuickActionSheetProps) {
   const [subTab, setSubTab] = useState<SheetSubTab>('attendance');
+
+  useBottomSheet();
 
   // 배경 터치로 닫기
   const handleBackdropClick = (e: React.MouseEvent) => {
