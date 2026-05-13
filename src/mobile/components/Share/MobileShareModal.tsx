@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
 import { SITE_URL } from '@config/siteUrl';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 
 interface MobileShareModalProps {
   isOpen: boolean;
@@ -18,18 +19,30 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
   const [qrReady, setQrReady] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  useBottomSheet(isOpen);
+
   const kakaoAvailable = typeof window !== 'undefined' && !!window.Kakao;
 
   // QR 생성
   useEffect(() => {
-    if (!isOpen) { setQrReady(false); return; }
+    if (!isOpen) {
+      setQrReady(false);
+      return;
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
     QRCode.toCanvas(
       canvas,
       SITE_URL,
-      { width: 160, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } },
-      (err) => { if (!err) setQrReady(true); },
+      {
+        width: 160,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#000000', light: '#ffffff' },
+      },
+      (err) => {
+        if (!err) setQrReady(true);
+      },
     );
   }, [isOpen]);
 
@@ -96,7 +109,10 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
         aria-modal="true"
         aria-labelledby="modal-title-mobile-share"
       >
-        <div className="bg-sp-surface rounded-t-2xl shadow-2xl max-h-[85dvh] overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div
+          className="bg-sp-surface rounded-t-2xl shadow-2xl max-h-[85dvh] overflow-y-auto"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
           {/* Handle */}
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 rounded-full bg-sp-border" />
@@ -104,7 +120,9 @@ export function MobileShareModal({ isOpen, onClose, onShared }: MobileShareModal
 
           {/* Header */}
           <div className="px-5 pb-4 pt-2">
-            <h2 id="modal-title-mobile-share" className="text-lg font-bold text-sp-text">동료 선생님께 추천</h2>
+            <h2 id="modal-title-mobile-share" className="text-lg font-bold text-sp-text">
+              동료 선생님께 추천
+            </h2>
             <p className="text-xs text-sp-muted mt-1">쌤핀이 도움이 되셨다면 알려주세요!</p>
           </div>
 

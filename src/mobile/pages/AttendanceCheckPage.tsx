@@ -13,6 +13,7 @@ import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingCla
 import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRecordsStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { isStudentActive } from '@domain/rules/studentActivity';
 
 interface Props {
@@ -94,6 +95,8 @@ export function AttendanceCheckPage({
   // 수업 출결은 화면에서 교시를 바꿀 수 있다 (담임 출결은 period=0 고정). 초기값은 호출처가 넘긴 period.
   const [selectedPeriod, setSelectedPeriod] = useState(period);
   const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
+
+  useBottomSheet(periodMenuOpen);
   const periodCount = settings.periodTimes.length > 0 ? settings.periodTimes.length : 7;
 
   const [studentStatuses, setStudentStatuses] = useState<Map<string, AttendanceStatus>>(new Map());
