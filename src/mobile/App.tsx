@@ -205,17 +205,43 @@ export function App() {
     });
   }, [attendanceLoaded, studentsLoaded, recordsLoaded, migrateExistingAttendance]);
 
-  // OAuth 콜백 처리
+  // OAuth 콜백 처리.
+  // 실패 시 URL 의 `?code=...` 를 지우고 로딩 상태를 풀어준다(.catch + .finally).
+  // 이게 빠지면 교환 실패 시 "동기화 연결 중..." 화면에 영원히 갇힌다.
   useEffect(() => {
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
+    const oauthError = url.searchParams.get('error');
+
+    if (oauthError) {
+      // 사용자가 Google 동의 화면에서 취소했거나 OAuth 자체가 에러로 끝남
+      window.history.replaceState({}, '', '/');
+      console.warn('[oauth] Google OAuth returned error:', oauthError);
+      if (oauthError !== 'access_denied') {
+        alert(`Google 로그인이 취소되었습니다.\n(${oauthError})`);
+      }
+      return;
+    }
 
     if (code && !isProcessingCallback) {
       setIsProcessingCallback(true);
-      auth.handleCallback(code).then(() => {
-        window.history.replaceState({}, '', '/');
-        setIsProcessingCallback(false);
-      });
+      auth
+        .handleCallback(code)
+        .then(() => {
+          window.history.replaceState({}, '', '/');
+        })
+        .catch((err: unknown) => {
+          console.error('[oauth-callback] handleCallback failed:', err);
+          window.history.replaceState({}, '', '/');
+          const message = err instanceof Error ? err.message : String(err);
+          alert(
+            `Google 로그인을 마치지 못했어요.\n\n${message}\n\n` +
+              '잠시 뒤 다시 시도해주세요. 문제가 계속되면 개발자에게 알려주세요.',
+          );
+        })
+        .finally(() => {
+          setIsProcessingCallback(false);
+        });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
