@@ -72,8 +72,12 @@ export function StudentsPage() {
 
   // 바텀시트 상태
   const [sheetStudent, setSheetStudent] = useState<SheetStudentInfo | null>(null);
-  // 스와이프 → 칭찬 메모 입력 시트
-  const [praiseStudent, setPraiseStudent] = useState<HomeroomStudent | null>(null);
+  // 스와이프 → 칭찬 메모 입력 시트 (담임/수업 공용 — 이름·번호·저장 콜백만 받는다)
+  const [praiseTarget, setPraiseTarget] = useState<{
+    name: string;
+    number?: number;
+    onSave: (memo: string) => Promise<void>;
+  } | null>(null);
 
   const settings = useMobileSettingsStore((s) => s.settings);
   const loadSettings = useMobileSettingsStore((s) => s.load);
@@ -228,12 +232,52 @@ export function StudentsPage() {
     [writeHomeroomStatus],
   );
 
-  const handlePraiseSave = useCallback(
-    async (student: HomeroomStudent, memo: string) => {
+  // 수업반 스와이프 빠른 출결: 수업반 출석부(period 0)만 갱신 (담임 브리지는 수업반에 없음).
+  const writeClassStatus = useCallback(
+    async (tc: TeachingClass, student: TeachingClassStudent, status: AttendanceStatus) => {
+      const sKey = studentKey(student);
+      const existing = getRecordForDate(tc.id, 0, selectedDateStr);
+      const others = (existing?.students ?? []).filter((sa) => {
+        const saKey =
+          sa.grade != null && sa.classNum != null
+            ? `${sa.grade}-${sa.classNum}-${sa.number}`
+            : String(sa.number);
+        return saKey !== sKey;
+      });
+      const entry = {
+        number: student.number,
+        status,
+        ...(student.grade != null ? { grade: student.grade } : {}),
+        ...(student.classNum != null ? { classNum: student.classNum } : {}),
+      };
+      await saveAttendanceRecord({
+        classId: tc.id,
+        date: selectedDateStr,
+        period: 0,
+        students: [...others, entry],
+      });
+    },
+    [getRecordForDate, selectedDateStr, saveAttendanceRecord],
+  );
+
+  const handleClassQuickRecord = useCallback(
+    async (tc: TeachingClass, student: TeachingClassStudent, status: 'late' | 'absent') => {
+      await writeClassStatus(tc, student, status);
+      const label = status === 'late' ? '지각' : '결석';
+      useSwipeUndoStore
+        .getState()
+        .show(`${student.name} · ${label}`, () => writeClassStatus(tc, student, 'present'));
+    },
+    [writeClassStatus],
+  );
+
+  // 칭찬 메모 한 줄 → 담임 기록(life/칭찬). 담임은 Student.id, 수업반은 studentKey 로 키잉(기존 기록 탭과 동일).
+  const addPraiseRecord = useCallback(
+    async (studentId: string, name: string, memo: string) => {
       const id = generateUUID();
       await addStudentRecord({
         id,
-        studentId: student.id,
+        studentId,
         category: 'life',
         subcategory: '칭찬',
         content: memo,
@@ -242,7 +286,7 @@ export function StudentsPage() {
       });
       useSwipeUndoStore
         .getState()
-        .show(`${student.name} · 칭찬 메모 저장됨`, () => deleteStudentRecord(id));
+        .show(`${name} · 칭찬 메모 저장됨`, () => deleteStudentRecord(id));
     },
     [addStudentRecord, deleteStudentRecord, selectedDateStr],
   );
@@ -397,7 +441,13 @@ export function StudentsPage() {
               <HomeroomListView
                 students={sortedStudents}
                 onStudentTap={openHomeroomStudentSheet}
-                onPraise={(student) => setPraiseStudent(student)}
+                onPraise={(student) =>
+                  setPraiseTarget({
+                    name: student.name,
+                    number: student.studentNumber,
+                    onSave: (memo) => addPraiseRecord(student.id, student.name, memo),
+                  })
+                }
                 onQuickRecord={handleQuickRecord}
                 dateStr={selectedDateStr}
                 getRecordForDate={getRecordForDate}
@@ -413,12 +463,23 @@ export function StudentsPage() {
               getRecordForDate={getRecordForDate}
             />
           ) : (
-            <TeachingListView
-              teachingClass={selectedTeachingClass}
-              onStudentTap={(s) => openTeachingStudentSheet(s, selectedTeachingClass.id)}
-              dateStr={selectedDateStr}
-              getRecordForDate={getRecordForDate}
-            />
+            <>
+              <SwipeHintBanner />
+              <TeachingListView
+                teachingClass={selectedTeachingClass}
+                onStudentTap={(s) => openTeachingStudentSheet(s, selectedTeachingClass.id)}
+                onPraise={(s) =>
+                  setPraiseTarget({
+                    name: s.name,
+                    number: s.number,
+                    onSave: (memo) => addPraiseRecord(studentKey(s), s.name, memo),
+                  })
+                }
+                onQuickRecord={(s, st) => handleClassQuickRecord(selectedTeachingClass, s, st)}
+                dateStr={selectedDateStr}
+                getRecordForDate={getRecordForDate}
+              />
+            </>
           )
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -436,13 +497,13 @@ export function StudentsPage() {
         />
       )}
 
-      {/* 스와이프 → 칭찬 메모 입력 시트 */}
-      {praiseStudent && (
+      {/* 스와이프 → 칭찬 메모 입력 시트 (담임/수업 공용) */}
+      {praiseTarget && (
         <PraiseMemoSheet
-          studentName={praiseStudent.name}
-          studentNumber={praiseStudent.studentNumber}
-          onSave={(memo) => handlePraiseSave(praiseStudent, memo)}
-          onClose={() => setPraiseStudent(null)}
+          studentName={praiseTarget.name}
+          studentNumber={praiseTarget.number}
+          onSave={praiseTarget.onSave}
+          onClose={() => setPraiseTarget(null)}
         />
       )}
 
@@ -983,6 +1044,8 @@ function HomeroomListView({
 interface TeachingListViewProps {
   teachingClass: TeachingClass;
   onStudentTap: (student: TeachingClassStudent) => void;
+  onPraise: (student: TeachingClassStudent) => void;
+  onQuickRecord: (student: TeachingClassStudent, status: 'late' | 'absent') => void | Promise<void>;
   dateStr: string;
   getRecordForDate: (
     classId: string,
@@ -994,6 +1057,8 @@ interface TeachingListViewProps {
 function TeachingListView({
   teachingClass,
   onStudentTap,
+  onPraise,
+  onQuickRecord,
   dateStr,
   getRecordForDate,
 }: TeachingListViewProps) {
@@ -1047,56 +1112,97 @@ function TeachingListView({
       {students.map((student) => {
         const sKey = studentKey(student);
         const status = student.isVacant ? null : getStudentStatus(student);
-        return (
-          <li key={sKey}>
-            <button
-              onClick={() => !student.isVacant && onStudentTap(student)}
-              disabled={student.isVacant}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                student.isVacant ? 'opacity-40' : 'active:bg-sp-surface/60'
+        const rowButton = (
+          <button
+            onClick={() => !student.isVacant && onStudentTap(student)}
+            disabled={student.isVacant}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+              student.isVacant ? 'opacity-40' : 'active:bg-sp-surface/60'
+            }`}
+          >
+            {/* 번호 뱃지 */}
+            <span
+              className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold shrink-0 ${
+                student.isVacant ? 'bg-sp-surface text-sp-muted' : 'bg-sp-accent/15 text-sp-accent'
               }`}
             >
-              {/* 번호 뱃지 */}
-              <span
-                className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold shrink-0 ${
-                  student.isVacant
-                    ? 'bg-sp-surface text-sp-muted'
-                    : 'bg-sp-accent/15 text-sp-accent'
-                }`}
-              >
-                {student.number}
-              </span>
+              {student.number}
+            </span>
 
-              {/* 이름 + 반 정보 + 출석 dot */}
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <div className="min-w-0">
-                  <span
-                    className={`text-sm font-medium ${
-                      student.isVacant ? 'text-sp-muted line-through' : 'text-sp-text'
-                    }`}
-                  >
-                    {student.name}
+            {/* 이름 + 반 정보 + 출석 dot */}
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="min-w-0">
+                <span
+                  className={`text-sm font-medium ${
+                    student.isVacant ? 'text-sp-muted line-through' : 'text-sp-text'
+                  }`}
+                >
+                  {student.name}
+                </span>
+                {student.grade != null && student.classNum != null && (
+                  <span className="text-sp-muted text-xs ml-1.5">
+                    {student.grade}학년 {student.classNum}반
                   </span>
-                  {student.grade != null && student.classNum != null && (
-                    <span className="text-sp-muted text-xs ml-1.5">
-                      {student.grade}학년 {student.classNum}반
-                    </span>
-                  )}
-                </div>
-                {statusDot(status)}
+                )}
               </div>
+              {statusDot(status)}
+            </div>
 
-              {/* 결번 표시 or 탭 힌트 */}
-              {student.isVacant ? (
-                <span className="text-xs text-sp-muted bg-sp-surface px-2 py-0.5 rounded-full">
-                  결번
-                </span>
-              ) : (
-                <span className="material-symbols-outlined text-sp-muted text-icon-md">
-                  chevron_right
-                </span>
-              )}
-            </button>
+            {/* 결번 표시 or 탭 힌트 */}
+            {student.isVacant ? (
+              <span className="text-xs text-sp-muted bg-sp-surface px-2 py-0.5 rounded-full">
+                결번
+              </span>
+            ) : (
+              <span className="material-symbols-outlined text-sp-muted text-icon-md">
+                chevron_right
+              </span>
+            )}
+          </button>
+        );
+        return (
+          <li key={sKey}>
+            {student.isVacant ? (
+              rowButton
+            ) : (
+              <SwipeRow
+                rowId={sKey}
+                leftRevealWidth={96}
+                rightRevealWidth={148}
+                leftActions={
+                  <button
+                    type="button"
+                    onClick={() => onPraise(student)}
+                    className="flex w-full flex-col items-center justify-center gap-0.5 bg-emerald-500 text-xs font-bold text-white"
+                  >
+                    <span className="material-symbols-outlined text-lg">favorite</span>
+                    칭찬
+                  </button>
+                }
+                rightActions={
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void onQuickRecord(student, 'late')}
+                      className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-yellow-500 text-xs font-bold text-white"
+                    >
+                      <span className="material-symbols-outlined text-lg">schedule</span>
+                      지각
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onQuickRecord(student, 'absent')}
+                      className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-red-500 text-xs font-bold text-white"
+                    >
+                      <span className="material-symbols-outlined text-lg">cancel</span>
+                      결석
+                    </button>
+                  </>
+                }
+              >
+                {rowButton}
+              </SwipeRow>
+            )}
           </li>
         );
       })}
