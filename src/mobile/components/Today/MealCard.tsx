@@ -92,7 +92,7 @@ export function MealCard({ meals, loading }: Props) {
             onClick={() => setCurrentIdx(idx)}
             className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
               idx === currentIdx
-                ? 'bg-orange-500/15 text-orange-500'
+                ? 'bg-sp-highlight/15 text-sp-highlight'
                 : 'text-sp-muted hover:text-sp-text'
             }`}
           >
@@ -136,7 +136,7 @@ export function MealCard({ meals, loading }: Props) {
                 <div
                   key={idx}
                   className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    idx === currentIdx ? 'bg-orange-500' : 'bg-black/10 dark:bg-white/10'
+                    idx === currentIdx ? 'bg-sp-highlight' : 'bg-sp-divider'
                   }`}
                 />
               ))}

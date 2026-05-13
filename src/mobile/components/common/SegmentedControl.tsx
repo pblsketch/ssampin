@@ -39,7 +39,7 @@ export function SegmentedControl<K extends string>({
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(opt.key)}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm transition-colors min-h-[36px] ${
+            className={`flex-1 rounded-md px-3 py-2 text-sm transition-colors min-h-[44px] ${
               selected
                 ? 'bg-sp-accent/20 text-sp-accent font-semibold'
                 : 'text-sp-muted font-medium'
