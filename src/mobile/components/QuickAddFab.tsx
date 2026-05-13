@@ -24,12 +24,17 @@ export function QuickAddFab({ actions }: QuickAddFabProps) {
 
   return (
     <>
+      {/*
+        z-40: 모달/바텀시트(z-50)·코치마크(z-[60])·토스트(z-[60]) 보다 낮춰 둔다.
+        다른 모달이 열렸을 때 FAB 가 시트 위로 떠올라 버튼을 가리는 회귀 방지.
+        FAB 자체의 액션 시트(아래)는 z-50 이라 FAB 탭 시 정상 노출됨.
+      */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="빠른 추가"
         aria-haspopup="dialog"
-        className="fixed right-4 bottom-[calc(var(--tab-bar-height)+1rem)] z-50 flex h-14 w-14 items-center justify-center rounded-full bg-sp-accent text-sp-accent-fg shadow-lg transition-transform active:scale-95"
+        className="fixed right-4 bottom-[calc(var(--tab-bar-height)+1rem)] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sp-accent text-sp-accent-fg shadow-lg transition-transform active:scale-95"
       >
         <span className="material-symbols-outlined text-2xl">add</span>
       </button>
