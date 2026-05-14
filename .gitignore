@@ -48,6 +48,10 @@ promo-styles-output/
 
 # 빌드 산출물 (학생 entry SPA)
 dist-student/
+dist-slides-student/
+
+# Supabase CLI 캐시
+supabase/.temp/
 
 # AI 도구 캐시
 .codex/
