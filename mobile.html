@@ -19,5 +19,21 @@
     <div id="root"></div>
     <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js" defer></script>
     <script type="module" src="/src/mobile/main.tsx"></script>
+
+    <!-- Service Worker 자동 새로고침
+         vite-plugin-pwa 의 autoUpdate 모드는 새 SW 가 활성화되어도(skipWaiting+clientsClaim)
+         현재 페이지를 자동 새로고침하지 않는다. 이로 인해 사용자가 PWA 를 재오픈해도 옛 번들이
+         계속 보이는 문제가 생긴다(2회 재오픈 필요). controllerchange 이벤트를 듣고 한 번만
+         reload 해서 새 코드가 즉시 반영되게 한다. -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        var __ssampinReloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (__ssampinReloading) return;
+          __ssampinReloading = true;
+          window.location.reload();
+        });
+      }
+    </script>
   </body>
 </html>
