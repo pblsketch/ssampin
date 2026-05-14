@@ -1375,8 +1375,32 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
               : 'relative flex h-full min-h-0 flex-col gap-2 rounded-xl'
           }
           style={
+            // 2026-05-14 사용자 신고 (Phase 3) — "C안 적용 후에도 가로 스크롤이 살아있고
+            // ActionBar 가 좌측 스크롤 위치에서 안 보임" 결함 영구 차단.
+            //
+            // 근본 원인: liveContainerRect 는 `<main>.getBoundingClientRect()` 의 4 필드
+            // {top, left, width, height} 를 그대로 inline style 로 spread 한다. Sidebar
+            // transition(200ms) 도중 측정되거나 ResizeObserver 발화 race 시 width 값이
+            // viewport 폭을 약간 초과해 `fixed` 컨테이너 자체가 viewport 밖으로 나가고,
+            // overflow-hidden 은 자식 클리핑만 하므로 BrowserWindow 가로 스크롤바가 생성된다.
+            // 그 결과 ActionBar(grid track 56px 셀, 우측 끝) 가 viewport 밖에 위치.
+            //
+            // 수정: width/height 를 spread 하지 않고 명시적 4-point anchor
+            // (top, left, right: 0, bottom: 0) 로 fixed wrapper 가 viewport 안에 영구 갇히도록.
+            // Sidebar 비키기 의도(top/left)는 보존, 우/하는 viewport edge 에 anchor.
+            // → ActionBar 가 어떤 스크롤 위치에서도 항상 viewport 우측에 보임.
             isLiveMode
-              ? { ...buildLiveContainerStyle(boardTheme), ...(liveContainerRect ?? {}) }
+              ? {
+                  ...buildLiveContainerStyle(boardTheme),
+                  ...(liveContainerRect
+                    ? {
+                        top: liveContainerRect.top,
+                        left: liveContainerRect.left,
+                        right: 0,
+                        bottom: 0,
+                      }
+                    : {}),
+                }
               : undefined
           }
         >

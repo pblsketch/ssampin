@@ -173,3 +173,41 @@ describe('ToolRealtimeWall — 라이브 grid ActionBar viewport overflow 회귀
     expect(toolSource).toMatch(/data-testid="realtime-wall-live-grid"/);
   });
 });
+
+/**
+ * realtime-wall-share-link-bug Phase 3 (2026-05-14) — fixed wrapper viewport anchor.
+ *
+ * 사용자 신고 (Phase 2 적용 후 잔존, 인용): "아직도 오른쪽으로 스크롤을 해야지 이
+ * 사이드바가 보여. 좌우 스크롤이 어느 위치에 있어도 사이드바가 항상 보이게 해야 해"
+ *
+ * 근본 원인 (Phase 2 가 못 잡은 두 번째 layer):
+ *   Phase 2 의 grid track 56px 명시는 grid 내부 레이아웃 invariant 였지만, 그 grid 의
+ *   부모 `runningContainerRef` 가 `fixed` + inline style `...liveContainerRect` 로
+ *   `{top, left, width, height}` 4 필드를 모두 spread. Sidebar transition 또는
+ *   ResizeObserver race 시 stale width 가 viewport 폭을 초과하면 fixed wrapper
+ *   자체가 viewport 밖으로 나가고, BrowserWindow 가로 스크롤바 생성 → grid 의
+ *   ActionBar(우측 56px 셀)가 viewport 밖에 위치.
+ *
+ * 수정: inline style 에서 width/height spread 제거 + 명시적 4-point anchor
+ *   (top, left, right: 0, bottom: 0). Sidebar 비키기 의도(top/left)는 보존,
+ *   우/하는 viewport edge 에 anchor → fixed wrapper 가 viewport 안에 영구 갇힘.
+ *
+ * 회귀 방지 invariant:
+ *   I-5. inline style 에 `right: 0` 과 `bottom: 0` 이 명시되어 있다.
+ *   I-6. 과거 회귀 패턴 `...(liveContainerRect ?? {})` 가 다시 들어오면 fail.
+ */
+describe('ToolRealtimeWall — fixed wrapper viewport anchor (Phase 3)', () => {
+  const toolSource = readFileSync(TOOL_PATH, 'utf8');
+
+  it('I-5: 라이브 fixed wrapper inline style 에 right: 0 + bottom: 0 명시', () => {
+    // 4-point anchor 가 viewport overflow 의 마지막 방어선.
+    expect(toolSource).toMatch(/right:\s*0/);
+    expect(toolSource).toMatch(/bottom:\s*0/);
+  });
+
+  it('I-6: liveContainerRect 를 nullish-spread 로 통째로 펼치지 않는다', () => {
+    // 회귀 시 width/height 가 다시 inline style 로 들어가 stale rect 가 viewport
+    // 폭 초과 → 가로 스크롤 부활. 명시적 picking 패턴만 허용.
+    expect(toolSource).not.toMatch(/\.\.\.\(liveContainerRect \?\? \{\}\)/);
+  });
+});
