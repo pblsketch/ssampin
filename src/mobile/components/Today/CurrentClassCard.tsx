@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { CurrentPeriodInfo } from '@mobile/hooks/useCurrentPeriod';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
+import { CollapsibleCard } from '@mobile/components/common/CollapsibleCard';
 import { MobileProgressLogModal } from './MobileProgressLogModal';
 
 function formatMinutes(min: number): string {
@@ -22,7 +23,12 @@ interface DayScheduleOverviewProps {
   isBreak: boolean;
 }
 
-function DayScheduleOverview({ daySchedule, currentPeriod, nextPeriod, isBreak }: DayScheduleOverviewProps) {
+function DayScheduleOverview({
+  daySchedule,
+  currentPeriod,
+  nextPeriod,
+  isBreak,
+}: DayScheduleOverviewProps) {
   const entries = daySchedule
     .map((entry, idx) => ({ period: idx + 1, entry }))
     .filter(({ entry }) => entry !== null && entry.subject.trim() !== '');
@@ -30,7 +36,7 @@ function DayScheduleOverview({ daySchedule, currentPeriod, nextPeriod, isBreak }
   if (entries.length === 0) return null;
 
   return (
-    <div className="mt-3 pt-3 border-t border-white/10">
+    <div className="mt-3 pt-3 border-t border-sp-divider">
       <div className="flex items-center gap-1.5 mb-2">
         <span className="material-symbols-outlined text-sp-muted" style={{ fontSize: '14px' }}>
           calendar_today
@@ -41,37 +47,47 @@ function DayScheduleOverview({ daySchedule, currentPeriod, nextPeriod, isBreak }
         {entries.map(({ period, entry }) => {
           const isCurrent = currentPeriod === period;
           const isNext = isBreak && nextPeriod === period;
-          const isPast = currentPeriod !== null
-            ? period < currentPeriod
-            : nextPeriod !== null
-              ? period < nextPeriod
-              : false;
+          const isPast =
+            currentPeriod !== null
+              ? period < currentPeriod
+              : nextPeriod !== null
+                ? period < nextPeriod
+                : false;
 
-          let pillClass = 'flex-shrink-0 flex flex-col items-center px-2.5 py-1.5 rounded-xl text-xs transition-all ';
+          let pillClass =
+            'flex-shrink-0 flex flex-col items-center px-2.5 py-1.5 rounded-xl text-xs transition-all ';
           if (isCurrent) {
-            pillClass += 'bg-sp-accent/30 border border-sp-accent/60 text-sp-accent/70';
+            pillClass += 'bg-sp-accent/20 border border-sp-accent/50 text-sp-accent';
           } else if (isNext) {
-            pillClass += 'bg-green-500/20 border border-green-500/40 text-green-200';
+            pillClass += 'bg-sp-success/15 border border-sp-success/40 text-sp-success';
           } else if (isPast) {
-            pillClass += 'bg-white/5 border border-white/10 text-sp-muted opacity-50';
+            pillClass += 'bg-sp-subtle border border-sp-divider text-sp-muted opacity-60';
           } else {
-            pillClass += 'bg-white/10 border border-white/15 text-sp-text';
+            pillClass += 'bg-sp-subtle border border-sp-border text-sp-text';
           }
 
           return (
             <div key={period} className={pillClass}>
               <div className="flex items-center gap-1 mb-0.5">
                 {isCurrent && (
-                  <span className="material-symbols-outlined text-sp-accent" style={{ fontSize: '10px' }}>
+                  <span
+                    className="material-symbols-outlined text-sp-accent"
+                    style={{ fontSize: '10px' }}
+                  >
                     radio_button_checked
                   </span>
                 )}
                 {isNext && !isCurrent && (
-                  <span className="material-symbols-outlined text-green-400" style={{ fontSize: '10px' }}>
+                  <span
+                    className="material-symbols-outlined text-sp-success"
+                    style={{ fontSize: '10px' }}
+                  >
                     arrow_right
                   </span>
                 )}
-                <span className={`font-semibold ${isCurrent ? 'text-sp-accent' : isNext ? 'text-green-300' : ''}`}>
+                <span
+                  className={`font-semibold ${isCurrent ? 'text-sp-accent' : isNext ? 'text-sp-success' : ''}`}
+                >
                   {period}교시
                 </span>
               </div>
@@ -92,21 +108,38 @@ function DayScheduleOverview({ daySchedule, currentPeriod, nextPeriod, isBreak }
 }
 
 export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
-  const { currentPeriod, nextPeriod, progress, remainingMinutes, isBreak, isBeforeSchool, isAfterSchool, dayOfWeek } = periodInfo;
+  const {
+    currentPeriod,
+    nextPeriod,
+    progress,
+    remainingMinutes,
+    isBreak,
+    isBeforeSchool,
+    isAfterSchool,
+    dayOfWeek,
+  } = periodInfo;
   const daySchedule = teacherSchedule[dayOfWeek] ?? null;
   const [progressModalOpen, setProgressModalOpen] = useState(false);
 
+  // 상태별 헤더(아이콘·제목·요약·강조) + 본문 계산
+  let icon: string;
+  let iconClass: string;
+  let title: string;
+  let summary: string;
+  let variant: 'default' | 'accent';
+  let body: React.ReactNode;
+  let classInfo: { subject: string; classroom: string } | null = null;
+
   if (isBeforeSchool) {
-    const firstClassInfo = daySchedule ? daySchedule[0] ?? null : null;
-    return (
-      <div className="glass-card-accent p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="material-symbols-outlined text-amber-500">wb_sunny</span>
-          <span className="text-sp-muted text-sm">등교 전</span>
-        </div>
-        <p className="text-sp-text font-bold text-lg">
-          {nextPeriod ? `${formatMinutes(remainingMinutes)} 후 1교시 시작` : '오늘 일과 준비 중'}
-        </p>
+    const firstClassInfo = daySchedule ? (daySchedule[0] ?? null) : null;
+    icon = 'wb_sunny';
+    iconClass = 'text-amber-500';
+    title = '등교 전';
+    variant = 'accent';
+    summary = nextPeriod ? `${formatMinutes(remainingMinutes)} 후 1교시 시작` : '오늘 일과 준비 중';
+    body = (
+      <>
+        <p className="text-sp-text font-bold text-lg">{summary}</p>
         {firstClassInfo && (
           <p className="text-sp-muted text-sm mt-1">
             {firstClassInfo.subject} · {firstClassInfo.classroom}
@@ -120,18 +153,18 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             isBreak={false}
           />
         )}
-      </div>
+      </>
     );
-  }
-
-  if (isAfterSchool) {
-    return (
-      <div className="glass-card p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="material-symbols-outlined text-amber-500">nightlight</span>
-          <span className="text-sp-muted text-sm">일과 종료</span>
-        </div>
-        <p className="text-sp-text font-bold text-lg">오늘 수고하셨습니다!</p>
+  } else if (isAfterSchool) {
+    icon = 'nightlight';
+    iconClass = 'text-sp-highlight';
+    title = '일과 종료';
+    variant = 'default';
+    summary = '오늘 수고하셨습니다';
+    body = (
+      <>
+        {/* 감성 문구는 보조 톤으로 — 카드 제목('일과 종료')이 주된 위계 */}
+        <p className="text-sp-muted text-sm">오늘 수고하셨습니다 ☕</p>
         {daySchedule && (
           <DayScheduleOverview
             daySchedule={daySchedule}
@@ -140,20 +173,17 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             isBreak={false}
           />
         )}
-      </div>
+      </>
     );
-  }
-
-  if (isBreak) {
-    return (
-      <div className="glass-card p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="material-symbols-outlined text-green-500">coffee</span>
-          <span className="text-sp-muted text-sm">쉬는 시간</span>
-        </div>
-        <p className="text-sp-text font-bold text-lg">
-          {nextPeriod ? `${formatMinutes(remainingMinutes)} 후 ${nextPeriod}교시` : '쉬는 시간'}
-        </p>
+  } else if (isBreak) {
+    icon = 'coffee';
+    iconClass = 'text-green-500';
+    title = '쉬는 시간';
+    variant = 'default';
+    summary = nextPeriod ? `${formatMinutes(remainingMinutes)} 후 ${nextPeriod}교시` : '쉬는 시간';
+    body = (
+      <>
+        <p className="text-sp-text font-bold text-lg">{summary}</p>
         {daySchedule && (
           <DayScheduleOverview
             daySchedule={daySchedule}
@@ -162,37 +192,38 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             isBreak={true}
           />
         )}
-      </div>
+      </>
     );
-  }
-
-  // 수업 중
-  const classInfo = currentPeriod && daySchedule
-    ? daySchedule[currentPeriod - 1] ?? null
-    : null;
-
-  return (
-    <>
-      <div className="glass-card-accent p-4">
+  } else {
+    // 수업 중
+    classInfo = currentPeriod && daySchedule ? (daySchedule[currentPeriod - 1] ?? null) : null;
+    icon = 'school';
+    iconClass = 'text-sp-accent';
+    title = `${currentPeriod}교시`;
+    variant = 'accent';
+    summary = classInfo
+      ? `${classInfo.subject} · ${classInfo.classroom}`
+      : `${formatMinutes(remainingMinutes)} 남음`;
+    body = (
+      <>
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-sp-accent">school</span>
-            <span className="pill-badge bg-sp-accent text-sp-accent-fg">{currentPeriod}교시</span>
-          </div>
-          <span className="text-sp-muted text-sm">{formatMinutes(remainingMinutes)} 남음</span>
+          {classInfo ? (
+            <p className="text-sp-text font-bold text-lg">
+              {classInfo.subject} · {classInfo.classroom}
+            </p>
+          ) : (
+            <span />
+          )}
+          <span className="text-sp-muted text-sm shrink-0">
+            {formatMinutes(remainingMinutes)} 남음
+          </span>
         </div>
-        {classInfo && (
-          <p className="text-sp-text font-bold text-lg mb-2">
-            {classInfo.subject} · {classInfo.classroom}
-          </p>
-        )}
-        <div className="h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-sp-subtle rounded-full overflow-hidden">
           <div
             className="h-full bg-sp-accent rounded-full transition-all duration-1000"
             style={{ width: `${progress}%` }}
           />
         </div>
-        {/* 진도 기록 버튼 — 수업 중 분기에서만 노출 */}
         {classInfo && currentPeriod && (
           <button
             type="button"
@@ -211,7 +242,22 @@ export function CurrentClassCard({ periodInfo, teacherSchedule }: Props) {
             isBreak={false}
           />
         )}
-      </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <CollapsibleCard
+        cardId="currentClass"
+        title={title}
+        icon={icon}
+        iconClass={iconClass}
+        variant={variant}
+        summary={summary}
+      >
+        {body}
+      </CollapsibleCard>
       {classInfo && currentPeriod && (
         <MobileProgressLogModal
           isOpen={progressModalOpen}

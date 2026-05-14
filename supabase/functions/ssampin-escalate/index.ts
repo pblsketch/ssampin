@@ -3,10 +3,17 @@
  *
  * 버그 신고, 기능 제안, 기타 문의를 개발자에게 이메일로 전달합니다.
  * 이메일 전송: Resend API 사용
+ *
+ * 필요한 환경변수:
+ *   RESEND_API_KEY        — Resend API 키 (없으면 이메일 발송만 skip, 에스컬레이션은 DB 에 저장됨)
+ *   ESCALATE_NOTIFY_EMAIL — 에스컬레이션 알림을 받을 개발자 이메일 (없으면 이메일 발송 skip + 로그)
+ *
+ * security-hardening P1-4 (감사 M-7): IP 기반 rate limit + 개발자 이메일 하드코딩 제거.
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 
 // ── 타입 정의 ──────────────────────────────────────────────
 
@@ -48,7 +55,11 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 const TYPE_EMOJIS: Record<string, string> = { bug: '🐛', feature: '💡', other: '💬' };
-const TYPE_LABELS: Record<string, string> = { bug: '버그 신고', feature: '기능 제안', other: '기타 문의' };
+const TYPE_LABELS: Record<string, string> = {
+  bug: '버그 신고',
+  feature: '기능 제안',
+  other: '기타 문의',
+};
 
 /** Resend API로 이메일 전송 */
 async function sendEscalationEmail(params: {
@@ -59,10 +70,21 @@ async function sendEscalationEmail(params: {
   conversationContext: ConversationRow[];
 }): Promise<boolean> {
   const resendApiKey = Deno.env.get('RESEND_API_KEY');
-  const developerEmail = Deno.env.get('DEVELOPER_EMAIL') ?? 'wnsdlf1212@gmail.com';
+  // 개발자 알림 이메일은 환경변수로만 받는다 (하드코딩 금지 — 감사 M-7).
+  // 하위 호환: 기존 DEVELOPER_EMAIL 도 인정.
+  const developerEmail = Deno.env.get('ESCALATE_NOTIFY_EMAIL') ?? Deno.env.get('DEVELOPER_EMAIL');
 
   if (!resendApiKey) {
-    console.warn('RESEND_API_KEY가 설정되지 않아 이메일을 보내지 못했습니다');
+    console.warn(
+      'RESEND_API_KEY가 설정되지 않아 이메일을 보내지 못했습니다 (에스컬레이션은 DB 에 저장됨)',
+    );
+    return false;
+  }
+
+  if (!developerEmail) {
+    console.warn(
+      'ESCALATE_NOTIFY_EMAIL 이 설정되지 않아 알림 이메일을 보내지 못했습니다 (에스컬레이션은 DB 에 저장됨)',
+    );
     return false;
   }
 
@@ -70,7 +92,10 @@ async function sendEscalationEmail(params: {
   const label = TYPE_LABELS[params.type] ?? '기타 문의';
 
   const conversationHtml = params.conversationContext
-    .map((msg) => `<p><strong>${msg.role === 'user' ? '👤 사용자' : '🤖 AI'}:</strong> ${escapeHtml(msg.content)}</p>`)
+    .map(
+      (msg) =>
+        `<p><strong>${msg.role === 'user' ? '👤 사용자' : '🤖 AI'}:</strong> ${escapeHtml(msg.content)}</p>`,
+    )
     .join('');
 
   const html = `<!DOCTYPE html>
@@ -95,7 +120,7 @@ async function sendEscalationEmail(params: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${resendApiKey}`,
+        Authorization: `Bearer ${resendApiKey}`,
       },
       body: JSON.stringify({
         from: 'SsamPin Bot <onboarding@resend.dev>',
@@ -146,8 +171,21 @@ serve(async (req: Request): Promise<Response> => {
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+
+    // Rate limit — IP 당 시간당 5회, 세션 당 시간당 5회 (메일/테이블 폭주 차단)
+    const clientIP = clientIpFrom(req);
+    const isLimited = await checkRateLimit(supabase, 'escalate', [
+      { identifier: clientIP, windowMs: 3_600_000, max: 5 },
+      { identifier: body.sessionId, windowMs: 3_600_000, max: 5 },
+    ]);
+    if (isLimited) {
+      return jsonResponse(
+        { ok: false, message: '잠시 후 다시 시도해 주세요. 너무 많은 요청이 감지되었어요.' },
+        429,
+      );
+    }
 
     // 최근 대화 맥락 조회
     const { data: recentConversations } = await supabase
@@ -171,7 +209,12 @@ serve(async (req: Request): Promise<Response> => {
     });
 
     if (insertError) {
-      throw new Error(`DB 저장 실패: ${insertError.message}`);
+      // 내부 식별자(테이블/제약 이름)는 로그에만, 클라이언트에는 일반 메시지.
+      console.error('[ssampin-escalate] DB 저장 실패:', insertError);
+      return jsonResponse(
+        { ok: false, message: '전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.' },
+        500,
+      );
     }
 
     // 이메일 전송
@@ -199,12 +242,14 @@ serve(async (req: Request): Promise<Response> => {
       ok: true,
       message: `${label}가 개발자에게 전달되었어요! 빠르게 확인하겠습니다 🙏`,
     } satisfies EscalateResponse);
-
   } catch (error) {
     console.error('Escalate error:', error);
-    return jsonResponse({
-      ok: false,
-      message: '전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.',
-    } satisfies EscalateResponse, 500);
+    return jsonResponse(
+      {
+        ok: false,
+        message: '전달 중 오류가 발생했어요. 나중에 다시 시도해 주세요.',
+      } satisfies EscalateResponse,
+      500,
+    );
   }
 });

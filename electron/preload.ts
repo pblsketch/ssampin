@@ -150,14 +150,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('icon:expand', target),
   iconDiag: (payload: { event: string; data?: unknown }): Promise<void> =>
     ipcRenderer.invoke('icon:diag', payload),
+  // 저장 대화상자 — 경로 문자열 대신 1회용 핸들 + 표시용 파일명 반환 (메인이 경로를 보유).
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;
     filters: { name: string; extensions: string[] }[];
-  }): Promise<string | null> =>
+  }): Promise<{ handle: string; fileName: string } | null> =>
     ipcRenderer.invoke('export:showSaveDialog', options),
-  writeFile: (filePath: string, data: ArrayBuffer | string): Promise<void> =>
-    ipcRenderer.invoke('export:writeFile', filePath, data),
+  // 핸들로 쓰기 — handle 은 showSaveDialog 가 발급한 것. 1회 소비.
+  writeFile: (handle: string, data: ArrayBuffer | string): Promise<void> =>
+    ipcRenderer.invoke('export:writeFile', { handle, data }),
   printToPDF: (
     options?: {
       pageSize?:
@@ -173,8 +175,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   ): Promise<ArrayBuffer | null> =>
     ipcRenderer.invoke('export:printToPDF', options),
-  openFile: (filePath: string): Promise<void> =>
-    ipcRenderer.invoke('export:openFile', filePath),
+  // 방금 저장한 파일 열기 — handle 은 showSaveDialog 가 발급한 것 (소비하지 않음).
+  openFile: (handle: string): Promise<void> =>
+    ipcRenderer.invoke('export:openFile', { handle }),
   importAlarmAudio: (): Promise<{ name: string; dataUrl: string } | null> =>
     ipcRenderer.invoke('audio:importAlarm'),
   importFont: (): Promise<{ name: string; dataUrl: string; mimeType: string } | null> =>
@@ -239,8 +242,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('navigate:to-page', handler);
     return () => { ipcRenderer.removeListener('navigate:to-page', handler); };
   },
-  // Google OAuth — 신규 시그니처: {code, redirectUri} 묶음 반환 (별도 oauth:redirect-uri 이벤트 의존 제거)
-  startOAuth: (authUrl: string): Promise<{ code: string; redirectUri: string }> =>
+  // Google OAuth — {code, redirectUri, codeVerifier} 묶음 반환 (별도 oauth:redirect-uri 이벤트 의존 제거)
+  // codeVerifier: Desktop app 클라이언트는 OAuth 시크릿 없이 PKCE 로 토큰을 교환한다 (P0-C / F-2)
+  startOAuth: (authUrl: string): Promise<{ code: string; redirectUri: string; codeVerifier: string }> =>
     ipcRenderer.invoke('oauth:start', authUrl),
   cancelOAuth: (): Promise<void> =>
     ipcRenderer.invoke('oauth:cancel'),

@@ -13,18 +13,38 @@
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import {
+  corsHeaders,
+  jsonResponse,
+  errorResponse,
+  internalErrorResponse,
+} from '../_shared/cors.ts';
 import { decrypt, encrypt } from '../_shared/crypto.ts';
+import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// 멀티파트 전체 본문 상한 — 파일 10MB + 메타데이터 여유분. 봇/스팸 폭주 1차 차단.
+const MAX_REQUEST_SIZE = 12 * 1024 * 1024;
+const MAX_TEXT_CONTENT = 64 * 1024; // 텍스트 제출 본문 64KB
+const MAX_STUDENT_NAME = 100; // 이름 필드 길이 상한
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3';
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // 만료 5분 전부터 미리 갱신
 
 /** 차단 확장자 */
 const BLOCKED_EXTENSIONS = [
-  'exe', 'bat', 'cmd', 'scr', 'msi', 'com', 'pif',
-  'js', 'vbs', 'wsf', 'ps1', 'sh',
+  'exe',
+  'bat',
+  'cmd',
+  'scr',
+  'msi',
+  'com',
+  'pif',
+  'js',
+  'vbs',
+  'wsf',
+  'ps1',
+  'sh',
 ];
 
 /** 파일 형식별 허용 확장자 */
@@ -101,17 +121,14 @@ async function uploadToDrive(
 
   const body = new Blob(parts);
 
-  const res = await fetch(
-    `${DRIVE_UPLOAD_URL}/files?uploadType=multipart&fields=id`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-      },
-      body,
+  const res = await fetch(`${DRIVE_UPLOAD_URL}/files?uploadType=multipart&fields=id`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`,
     },
-  );
+    body,
+  });
 
   if (!res.ok) {
     const err = await res.text();
@@ -140,17 +157,14 @@ async function updateDriveFile(
 
   const body = new Blob(parts);
 
-  const res = await fetch(
-    `${DRIVE_UPLOAD_URL}/files/${fileId}?uploadType=multipart&fields=id`,
-    {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-      },
-      body,
+  const res = await fetch(`${DRIVE_UPLOAD_URL}/files/${fileId}?uploadType=multipart&fields=id`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`,
     },
-  );
+    body,
+  });
 
   if (!res.ok) {
     const err = await res.text();
@@ -266,6 +280,12 @@ serve(async (req: Request) => {
   }
 
   try {
+    // 0. 전체 본문 크기 1차 가드 (멀티파트 파싱 전)
+    const contentLength = parseInt(req.headers.get('content-length') ?? '', 10);
+    if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_SIZE) {
+      return errorResponse('요청 본문이 너무 큽니다', 413);
+    }
+
     // multipart/form-data 파싱
     const formData = await req.formData();
     const assignmentId = formData.get('assignmentId') as string;
@@ -281,8 +301,16 @@ serve(async (req: Request) => {
       return errorResponse('필수 필드가 누락되었습니다', 400);
     }
 
+    if (studentName.length > MAX_STUDENT_NAME) {
+      return errorResponse('이름이 너무 깁니다', 400);
+    }
+
     if (!file && !textContent) {
       return errorResponse('파일 또는 텍스트를 제출해야 합니다', 400);
+    }
+
+    if (textContent && textContent.length > MAX_TEXT_CONTENT) {
+      return errorResponse('텍스트 내용이 너무 깁니다 (64KB 이하)', 400);
     }
 
     // 1. 파일 크기 체크
@@ -294,6 +322,17 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+
+    // 1-b. Rate limit — 봇/스팸 폭주 차단 (학생 제출이라 한도는 넉넉히):
+    //   IP 당 시간당 30회, (assignment, IP) 조합 당 시간당 30회.
+    const clientIP = clientIpFrom(req);
+    const isLimited = await checkRateLimit(supabase, 'submit-assignment', [
+      { identifier: clientIP, windowMs: 3_600_000, max: 30 },
+      { identifier: `${assignmentId}:${clientIP}`, windowMs: 3_600_000, max: 30 },
+    ]);
+    if (isLimited) {
+      return errorResponse('잠시 후 다시 시도해 주세요. 너무 많은 요청이 감지되었습니다.', 429);
+    }
 
     // 2. 과제 정보 조회
     const { data: assignment, error: assignmentError } = await supabase
@@ -356,16 +395,28 @@ serve(async (req: Request) => {
 
       // 8. Google Drive 업로드 (401 시 토큰 재갱신 후 1회 재시도)
       const paddedNumber = String(studentNumber).padStart(2, '0');
-      const gradeClassPrefix = studentGrade && studentClass ? `${studentGrade}-${studentClass}_` : '';
+      const gradeClassPrefix =
+        studentGrade && studentClass ? `${studentGrade}-${studentClass}_` : '';
       const driveFileName = `${gradeClassPrefix}${paddedNumber}_${studentName}_${file.name}`;
       const mimeType = file.type || 'application/octet-stream';
 
       const doDriveUpload = async (token: string): Promise<string> => {
         if (existingSubmission?.drive_file_id) {
-          const result = await updateDriveFile(token, existingSubmission.drive_file_id, file, mimeType);
+          const result = await updateDriveFile(
+            token,
+            existingSubmission.drive_file_id,
+            file,
+            mimeType,
+          );
           return result.id;
         } else {
-          const result = await uploadToDrive(token, assignment.drive_folder_id, driveFileName, file, mimeType);
+          const result = await uploadToDrive(
+            token,
+            assignment.drive_folder_id,
+            driveFileName,
+            file,
+            mimeType,
+          );
           return result.id;
         }
       };
@@ -395,32 +446,34 @@ serve(async (req: Request) => {
     }
 
     // 9. submissions upsert (assignment_id + student_grade + student_class + student_number 기준)
-    const { error: upsertError } = await supabase
-      .from('submissions')
-      .upsert(
-        {
-          assignment_id: assignmentId,
-          student_id: studentId || null,
-          student_grade: studentGrade,
-          student_class: studentClass,
-          student_number: studentNumber,
-          student_name: studentName,
-          submitted_at: new Date().toISOString(),
-          file_name: file?.name ?? null,
-          file_size: file?.size ?? 0,
-          drive_file_id: driveFileId,
-          text_content: textContent || null,
-          is_late: isLate,
-        },
-        { onConflict: 'assignment_id,student_grade,student_class,student_number' },
-      );
+    const { error: upsertError } = await supabase.from('submissions').upsert(
+      {
+        assignment_id: assignmentId,
+        student_id: studentId || null,
+        student_grade: studentGrade,
+        student_class: studentClass,
+        student_number: studentNumber,
+        student_name: studentName,
+        submitted_at: new Date().toISOString(),
+        file_name: file?.name ?? null,
+        file_size: file?.size ?? 0,
+        drive_file_id: driveFileId,
+        text_content: textContent || null,
+        is_late: isLate,
+      },
+      { onConflict: 'assignment_id,student_grade,student_class,student_number' },
+    );
 
     if (upsertError) {
-      return errorResponse(`제출 저장 실패: ${upsertError.message}`, 500);
+      return internalErrorResponse(
+        'submit-assignment',
+        upsertError,
+        '제출 저장 중 오류가 발생했습니다',
+      );
     }
 
     return jsonResponse({ message: '제출 완료' });
   } catch (err) {
-    return errorResponse(`서버 오류: ${(err as Error).message}`, 500);
+    return internalErrorResponse('submit-assignment', err);
   }
 });

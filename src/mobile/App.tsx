@@ -19,35 +19,43 @@ import { ToolAssignmentPage } from './pages/ToolAssignmentPage';
 import { ToolSurveyPage } from './pages/ToolSurveyPage';
 // 쌤도구 PC 컴포넌트 — 동적 import (코드 스플리팅)
 const ToolTrafficLight = React.lazy(() =>
-  import('@adapters/components/Tools/ToolTrafficLight').then(m => ({ default: m.ToolTrafficLight }))
+  import('@adapters/components/Tools/ToolTrafficLight').then((m) => ({
+    default: m.ToolTrafficLight,
+  })),
 );
 const ToolDice = React.lazy(() =>
-  import('@adapters/components/Tools/ToolDice').then(m => ({ default: m.ToolDice }))
+  import('@adapters/components/Tools/ToolDice').then((m) => ({ default: m.ToolDice })),
 );
 const ToolCoin = React.lazy(() =>
-  import('@adapters/components/Tools/ToolCoin').then(m => ({ default: m.ToolCoin }))
+  import('@adapters/components/Tools/ToolCoin').then((m) => ({ default: m.ToolCoin })),
 );
 const ToolScoreboard = React.lazy(() =>
-  import('@adapters/components/Tools/ToolScoreboard').then(m => ({ default: m.ToolScoreboard }))
+  import('@adapters/components/Tools/ToolScoreboard').then((m) => ({ default: m.ToolScoreboard })),
 );
 const ToolTimer = React.lazy(() =>
-  import('@adapters/components/Tools/ToolTimer').then(m => ({ default: m.ToolTimer }))
+  import('@adapters/components/Tools/ToolTimer').then((m) => ({ default: m.ToolTimer })),
 );
 const ToolWorkSymbols = React.lazy(() =>
-  import('@adapters/components/Tools/ToolWorkSymbols').then(m => ({ default: m.ToolWorkSymbols }))
+  import('@adapters/components/Tools/ToolWorkSymbols').then((m) => ({
+    default: m.ToolWorkSymbols,
+  })),
 );
 const ToolRandom = React.lazy(() =>
-  import('@adapters/components/Tools/ToolRandom').then(m => ({ default: m.ToolRandom }))
+  import('@adapters/components/Tools/ToolRandom').then((m) => ({ default: m.ToolRandom })),
 );
 const ToolRoulette = React.lazy(() =>
-  import('@adapters/components/Tools/ToolRoulette').then(m => ({ default: m.ToolRoulette }))
+  import('@adapters/components/Tools/ToolRoulette').then((m) => ({ default: m.ToolRoulette })),
 );
 const ToolQRCode = React.lazy(() =>
-  import('@adapters/components/Tools/ToolQRCode').then(m => ({ default: m.ToolQRCode }))
+  import('@adapters/components/Tools/ToolQRCode').then((m) => ({ default: m.ToolQRCode })),
 );
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { InstallGuide } from './components/Onboarding/InstallGuide';
+import { NavMigrationCoachmark } from './components/Onboarding/NavMigrationCoachmark';
 import { InAppBrowserBanner } from './components/InAppBrowserBanner';
+import { SegmentedControl } from './components/common/SegmentedControl';
+import { QuickAddFab, type QuickAddAction } from './components/QuickAddFab';
+import { useMobileUiTriggerStore } from './stores/useMobileUiTriggerStore';
 
 /** 쌤도구 동적 로딩 시 표시할 폴백 스피너 */
 function ToolLoadingFallback() {
@@ -63,7 +71,9 @@ function ToolLoadingFallback() {
   );
 }
 
-type MobileTab = 'today' | 'schedule' | 'todo' | 'students' | 'attendance' | 'more';
+type MobileTab = 'home' | 'students' | 'schedule' | 'more';
+type StudentsSeg = 'homeroom' | 'teaching';
+type ScheduleSeg = 'schedule' | 'todo';
 
 interface TabConfig {
   key: MobileTab;
@@ -72,13 +82,21 @@ interface TabConfig {
 }
 
 const tabs: TabConfig[] = [
-  { key: 'today', label: '오늘', icon: 'today' },
-  { key: 'schedule', label: '일정', icon: 'event_note' },
-  { key: 'todo', label: '할 일', icon: 'check_circle' },
-  { key: 'students', label: '담임', icon: 'people' },
-  { key: 'attendance', label: '수업', icon: 'co_present' },
+  { key: 'home', label: '홈', icon: 'home' },
+  { key: 'students', label: '학생', icon: 'group' },
+  { key: 'schedule', label: '일정', icon: 'calendar_month' },
   { key: 'more', label: '더보기', icon: 'more_horiz' },
 ];
+
+const STUDENTS_SEGMENTS = [
+  { key: 'homeroom', label: '담임' },
+  { key: 'teaching', label: '수업' },
+] as const;
+
+const SCHEDULE_SEGMENTS = [
+  { key: 'schedule', label: '일정' },
+  { key: 'todo', label: '할 일' },
+] as const;
 
 interface AttendanceNav {
   classId: string;
@@ -88,13 +106,27 @@ interface AttendanceNav {
 }
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<MobileTab>('today');
+  const [activeTab, setActiveTab] = useState<MobileTab>('home');
+  const [studentsSeg, setStudentsSeg] = useState<StudentsSeg>('homeroom');
+  const [scheduleSeg, setScheduleSeg] = useState<ScheduleSeg>('schedule');
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
   const [attendanceNav, setAttendanceNav] = useState<AttendanceNav | null>(null);
+  const requestUiAction = useMobileUiTriggerStore((s) => s.requestAction);
   const [moreSub, setMoreSub] = useState<
-    'settings' | 'memo' | 'tools' | 'tool-assignment' | 'tool-survey'
-    | 'tool-traffic-light' | 'tool-dice' | 'tool-coin' | 'tool-scoreboard'
-    | 'tool-timer' | 'tool-work-symbols' | 'tool-random' | 'tool-roulette' | 'tool-qrcode'
+    | 'settings'
+    | 'memo'
+    | 'tools'
+    | 'tool-assignment'
+    | 'tool-survey'
+    | 'tool-traffic-light'
+    | 'tool-dice'
+    | 'tool-coin'
+    | 'tool-scoreboard'
+    | 'tool-timer'
+    | 'tool-work-symbols'
+    | 'tool-random'
+    | 'tool-roulette'
+    | 'tool-qrcode'
     | null
   >(null);
   const [showOnboarding, setShowOnboarding] = useState(() => {
@@ -159,7 +191,9 @@ export function App() {
   const attendanceLoaded = useMobileAttendanceStore((s) => s.loaded);
   const studentsLoaded = useMobileStudentStore((s) => s.loaded);
   const recordsLoaded = useMobileStudentRecordsStore((s) => s.loaded);
-  const migrateExistingAttendance = useMobileStudentRecordsStore((s) => s.migrateExistingAttendance);
+  const migrateExistingAttendance = useMobileStudentRecordsStore(
+    (s) => s.migrateExistingAttendance,
+  );
 
   // 기존 출결 데이터 → student-records 브릿지 마이그레이션 (최초 1회)
   useEffect(() => {
@@ -171,17 +205,43 @@ export function App() {
     });
   }, [attendanceLoaded, studentsLoaded, recordsLoaded, migrateExistingAttendance]);
 
-  // OAuth 콜백 처리
+  // OAuth 콜백 처리.
+  // 실패 시 URL 의 `?code=...` 를 지우고 로딩 상태를 풀어준다(.catch + .finally).
+  // 이게 빠지면 교환 실패 시 "동기화 연결 중..." 화면에 영원히 갇힌다.
   useEffect(() => {
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
+    const oauthError = url.searchParams.get('error');
+
+    if (oauthError) {
+      // 사용자가 Google 동의 화면에서 취소했거나 OAuth 자체가 에러로 끝남
+      window.history.replaceState({}, '', '/');
+      console.warn('[oauth] Google OAuth returned error:', oauthError);
+      if (oauthError !== 'access_denied') {
+        alert(`Google 로그인이 취소되었습니다.\n(${oauthError})`);
+      }
+      return;
+    }
 
     if (code && !isProcessingCallback) {
       setIsProcessingCallback(true);
-      auth.handleCallback(code).then(() => {
-        window.history.replaceState({}, '', '/');
-        setIsProcessingCallback(false);
-      });
+      auth
+        .handleCallback(code)
+        .then(() => {
+          window.history.replaceState({}, '', '/');
+        })
+        .catch((err: unknown) => {
+          console.error('[oauth-callback] handleCallback failed:', err);
+          window.history.replaceState({}, '', '/');
+          const message = err instanceof Error ? err.message : String(err);
+          alert(
+            `Google 로그인을 마치지 못했어요.\n\n${message}\n\n` +
+              '잠시 뒤 다시 시도해주세요. 문제가 계속되면 개발자에게 알려주세요.',
+          );
+        })
+        .finally(() => {
+          setIsProcessingCallback(false);
+        });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -193,45 +253,54 @@ export function App() {
     touchStartY.current = touch.clientY;
   }, []);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (touchStartX.current === null || touchStartY.current === null) return;
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (touchStartX.current === null || touchStartY.current === null) return;
+      // '더보기' 하위 페이지(설정·메모·도구 등)가 열려 있으면 스와이프 탭 전환 차단
+      if (moreSub !== null) {
+        touchStartX.current = null;
+        touchStartY.current = null;
+        return;
+      }
 
-    const touch = e.changedTouches.item(0);
-    if (!touch) return;
+      const touch = e.changedTouches.item(0);
+      if (!touch) return;
 
-    const deltaX = touch.clientX - touchStartX.current;
-    const deltaY = touch.clientY - touchStartY.current;
+      const deltaX = touch.clientX - touchStartX.current;
+      const deltaY = touch.clientY - touchStartY.current;
 
-    // 수직 스크롤이 더 클 경우 스와이프 무시
-    if (Math.abs(deltaY) > Math.abs(deltaX)) {
-      touchStartX.current = null;
-      touchStartY.current = null;
-      return;
-    }
+      // 수직 스크롤이 더 클 경우 스와이프 무시
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        touchStartX.current = null;
+        touchStartY.current = null;
+        return;
+      }
 
-    // 50px 이상 수평 스와이프
-    if (Math.abs(deltaX) > 50) {
-      const currentIndex = tabs.findIndex((t) => t.key === activeTab);
-      if (deltaX < 0 && currentIndex < tabs.length - 1) {
-        // 왼쪽 스와이프 → 다음 탭
-        const nextTab = tabs[currentIndex + 1];
-        if (nextTab) {
-          setActiveTab(nextTab.key);
-          setMoreSub(null);
-        }
-      } else if (deltaX > 0 && currentIndex > 0) {
-        // 오른쪽 스와이프 → 이전 탭
-        const prevTab = tabs[currentIndex - 1];
-        if (prevTab) {
-          setActiveTab(prevTab.key);
-          setMoreSub(null);
+      // 50px 이상 수평 스와이프
+      if (Math.abs(deltaX) > 50) {
+        const currentIndex = tabs.findIndex((t) => t.key === activeTab);
+        if (deltaX < 0 && currentIndex < tabs.length - 1) {
+          // 왼쪽 스와이프 → 다음 탭
+          const nextTab = tabs[currentIndex + 1];
+          if (nextTab) {
+            setActiveTab(nextTab.key);
+            setMoreSub(null);
+          }
+        } else if (deltaX > 0 && currentIndex > 0) {
+          // 오른쪽 스와이프 → 이전 탭
+          const prevTab = tabs[currentIndex - 1];
+          if (prevTab) {
+            setActiveTab(prevTab.key);
+            setMoreSub(null);
+          }
         }
       }
-    }
 
-    touchStartX.current = null;
-    touchStartY.current = null;
-  }, [activeTab]);
+      touchStartX.current = null;
+      touchStartY.current = null;
+    },
+    [activeTab, moreSub],
+  );
 
   // 온보딩 (첫 방문)
   if (showOnboarding) {
@@ -277,6 +346,46 @@ export function App() {
       />
     );
   }
+
+  // 전역 빠른 추가 FAB 액션 (현재 탭 기준; '더보기' 탭에서는 FAB 숨김)
+  const fabActions: QuickAddAction[] =
+    activeTab === 'more'
+      ? []
+      : [
+          {
+            key: 'add-event',
+            label: '일정 추가',
+            icon: 'event',
+            onSelect: () => {
+              setMoreSub(null);
+              setActiveTab('schedule');
+              setScheduleSeg('schedule');
+              requestUiAction('add-event');
+            },
+          },
+          {
+            key: 'add-todo',
+            label: '할 일 추가',
+            icon: 'check_circle',
+            tone: 'bg-green-500/15 text-green-500',
+            onSelect: () => {
+              setMoreSub(null);
+              setActiveTab('schedule');
+              setScheduleSeg('todo');
+              requestUiAction('add-todo');
+            },
+          },
+          {
+            key: 'memo',
+            label: '메모 작성',
+            icon: 'sticky_note_2',
+            tone: 'bg-yellow-500/15 text-yellow-500',
+            onSelect: () => {
+              setActiveTab('more');
+              setMoreSub('memo');
+            },
+          },
+        ];
 
   return (
     <div className="flex flex-col h-dvh mobile-bg">
@@ -324,20 +433,47 @@ export function App() {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {activeTab === 'today' && (
-          <TodayHub onNavigateAttendance={setAttendanceNav} />
+        {activeTab === 'home' && <TodayHub onNavigateAttendance={setAttendanceNav} />}
+        {activeTab === 'students' && (
+          <div className="flex flex-col h-full">
+            <div className="shrink-0 px-4 pt-2 pb-2">
+              <SegmentedControl
+                options={STUDENTS_SEGMENTS}
+                value={studentsSeg}
+                onChange={setStudentsSeg}
+                ariaLabel="담임/수업 보기"
+              />
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {studentsSeg === 'homeroom' ? <StudentsPage /> : <ClassListPage />}
+            </div>
+          </div>
         )}
-        {activeTab === 'schedule' && <SchedulePage />}
-        {activeTab === 'todo' && <TodoPage />}
-        {activeTab === 'students' && <StudentsPage />}
-        {activeTab === 'attendance' && <ClassListPage />}
-        {activeTab === 'more' && (
-          moreSub === 'settings' ? (
+        {activeTab === 'schedule' && (
+          <div className="flex flex-col h-full">
+            <div className="shrink-0 px-4 pt-2 pb-2">
+              <SegmentedControl
+                options={SCHEDULE_SEGMENTS}
+                value={scheduleSeg}
+                onChange={setScheduleSeg}
+                ariaLabel="일정/할 일 보기"
+              />
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {scheduleSeg === 'schedule' ? <SchedulePage /> : <TodoPage />}
+            </div>
+          </div>
+        )}
+        {activeTab === 'more' &&
+          (moreSub === 'settings' ? (
             <SettingsPage onBack={() => setMoreSub(null)} />
           ) : moreSub === 'memo' ? (
             <MemoPage onBack={() => setMoreSub(null)} />
           ) : moreSub === 'tools' ? (
-            <ToolsOverviewPage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} onBack={() => setMoreSub(null)} />
+            <ToolsOverviewPage
+              onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)}
+              onBack={() => setMoreSub(null)}
+            />
           ) : moreSub === 'tool-assignment' ? (
             <ToolAssignmentPage onBack={() => setMoreSub('tools')} />
           ) : moreSub === 'tool-survey' ? (
@@ -380,36 +516,49 @@ export function App() {
             </Suspense>
           ) : (
             <MorePage onNavigate={(sub) => setMoreSub(sub as NonNullable<typeof moreSub>)} />
-          )
-        )}
+          ))}
       </main>
 
       {/* 설치 가이드 (PWA 미설치 시) */}
       <InstallGuide />
 
+      {/* 전역 빠른 추가 FAB */}
+      <QuickAddFab actions={fabActions} />
+
+      {/* 하단 탭 6→4 재편 첫 실행 안내 */}
+      <NavMigrationCoachmark />
+
       {/* Tab Bar */}
-      <nav aria-label="하단 내비게이션" className="tab-bar flex items-center justify-around glass-tabbar shrink-0">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => {
-              setActiveTab(tab.key);
-              if (tab.key !== 'more') setMoreSub(null);
-            }}
-            className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-2 transition-all active:scale-95 ${
-              activeTab === tab.key
-                ? 'text-sp-accent'
-                : 'text-sp-muted'
-            }`}
-          >
-            <span className={`material-symbols-outlined text-2xl ${
-              activeTab === tab.key ? 'font-bold' : ''
-            }`}>
-              {tab.icon}
-            </span>
-            <span className="text-tiny font-medium leading-tight">{tab.label}</span>
-          </button>
-        ))}
+      <nav
+        aria-label="하단 내비게이션"
+        className="tab-bar flex items-center justify-around glass-tabbar shrink-0"
+      >
+        {tabs.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setActiveTab(tab.key);
+                if (tab.key !== 'more') setMoreSub(null);
+              }}
+              aria-label={`${tab.label} 탭`}
+              aria-current={active ? 'page' : undefined}
+              className="flex flex-1 items-center justify-center py-1 transition-transform active:scale-95"
+            >
+              <span
+                className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1 transition-colors ${
+                  active ? 'bg-sp-accent/12 text-sp-accent' : 'text-sp-muted'
+                }`}
+              >
+                <span className={`material-symbols-outlined text-2xl ${active ? 'font-bold' : ''}`}>
+                  {tab.icon}
+                </span>
+                <span className="text-tiny font-medium leading-tight">{tab.label}</span>
+              </span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );

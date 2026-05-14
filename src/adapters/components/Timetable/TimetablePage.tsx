@@ -259,16 +259,16 @@ export function TimetablePage() {
       if (window.electronAPI) {
         const ext = format === 'excel' ? 'xlsx' : 'hwpx';
         const filterName = format === 'excel' ? 'Excel 파일' : '한글 문서';
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '내보내기',
           defaultPath: defaultFileName,
           filters: [{ name: filterName, extensions: [ext] }],
         });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, normalized);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, normalized);
           showToast('파일이 저장되었습니다', 'success', {
             label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(filePath),
+            onClick: () => window.electronAPI?.openFile(saved.handle),
           });
         }
       } else {
@@ -375,16 +375,16 @@ export function TimetablePage() {
       const normalized = await exportTeacherTimetableTemplate(settings.maxPeriods, days, teacherSchedule);
 
       if (window.electronAPI) {
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '양식 다운로드',
           defaultPath: '교사_시간표_양식.xlsx',
           filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
         });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, normalized);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, normalized);
           showToast('양식이 저장되었습니다', 'success', {
             label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(filePath),
+            onClick: () => window.electronAPI?.openFile(saved.handle),
           });
         }
       } else {

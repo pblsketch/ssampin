@@ -457,16 +457,16 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
         const defaultFileName = `${fileBase}_담벼락.${ext}`;
 
         if (window.electronAPI) {
-          const filePath = await window.electronAPI.showSaveDialog({
+          const saved = await window.electronAPI.showSaveDialog({
             title: '실시간 담벼락 내보내기',
             defaultPath: defaultFileName,
             filters: [{ name: filterName, extensions: [ext] }],
           });
-          if (filePath) {
-            await window.electronAPI.writeFile(filePath, buffer);
+          if (saved) {
+            await window.electronAPI.writeFile(saved.handle, buffer);
             showToast('파일을 저장했어요', 'success', {
               label: '파일 열기',
-              onClick: () => window.electronAPI?.openFile(filePath),
+              onClick: () => window.electronAPI?.openFile(saved.handle),
             });
           }
         } else {

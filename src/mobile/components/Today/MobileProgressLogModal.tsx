@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
@@ -64,6 +65,8 @@ export function MobileProgressLogModal({
   const updateEntry = useMobileProgressStore((s) => s.updateEntry);
   const getTodayEntries = useMobileProgressStore((s) => s.getTodayEntries);
   const settings = useMobileSettingsStore((s) => s.settings);
+
+  useBottomSheet(isOpen);
 
   // 시간표(과목+교실)에 매칭되는 후보 학급들 (mode='add' && defaultClassId 미지정 시에만 의미 있음)
   const candidates = useMemo(() => {
@@ -153,7 +156,8 @@ export function MobileProgressLogModal({
   // 학급 표시 정보 (lockClass=true일 때 readonly 한 줄로 보여줄 때 사용)
   const lockedClass = useMemo(() => {
     if (!lockClass) return null;
-    const id = mode === 'edit' && entryToEdit ? entryToEdit.classId : (defaultClassId ?? selectedClassId);
+    const id =
+      mode === 'edit' && entryToEdit ? entryToEdit.classId : (defaultClassId ?? selectedClassId);
     return classes.find((c) => c.id === id) ?? null;
   }, [lockClass, mode, entryToEdit, defaultClassId, selectedClassId, classes]);
 
@@ -180,8 +184,7 @@ export function MobileProgressLogModal({
       } else {
         // 미래 날짜로 추가하면 'planned'(예정), 그 외엔 'completed'(완료) 기본값
         const targetDate = formDate || todayString();
-        const inferredStatus: ProgressStatus =
-          targetDate > todayString() ? 'planned' : 'completed';
+        const inferredStatus: ProgressStatus = targetDate > todayString() ? 'planned' : 'completed';
         await addEntry(
           selectedClassId,
           targetDate,
@@ -230,7 +233,9 @@ export function MobileProgressLogModal({
         <div className="px-4 py-4 space-y-3 overflow-y-auto">
           {savedAt !== null ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
-              <span className="material-symbols-outlined text-5xl text-green-400">check_circle</span>
+              <span className="material-symbols-outlined text-5xl text-green-400">
+                check_circle
+              </span>
               <p className="text-sp-text font-medium">{successLabel}</p>
             </div>
           ) : (
@@ -383,11 +388,13 @@ export function MobileProgressLogModal({
             <button
               onClick={() => void handleSave()}
               disabled={!canSave}
-              className="flex items-center gap-1.5 px-4 py-2 bg-sp-accent text-white text-sm rounded-lg hover:bg-sp-accent/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-4 py-2 bg-sp-accent text-sp-accent-fg text-sm rounded-lg hover:bg-sp-accent/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>
-                  <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                  <span className="material-symbols-outlined text-base animate-spin">
+                    progress_activity
+                  </span>
                   저장 중
                 </>
               ) : (

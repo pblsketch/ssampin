@@ -281,10 +281,14 @@ npx tsc --noEmit         # 타입 체크 (에러 0개 유지)
 
 ---
 
-## 📦 배포 / 릴리즈
+## 🤝 다중 세션 협업 프로토콜 (필독 — git 작업 전 반드시 확인)
 
-- **소스 저장소** `pblsketch/ssampin` — **프라이빗**. 릴리즈 객체를 만들지 않고 버전 태그(`git tag`)만 보관.
-- **배포 저장소** `pblsketch/ssampin-releases` — **퍼블릭**. 인스톨러(`ssampin-Setup.exe`)·DMG·자동업데이트 메타파일(`latest.yml`/`latest-mac.yml`)을 여기에 게시한다. (`docs/02-design/features/repo-privatization.design.md` 참고)
-- 자동 업데이트 feed: [`electron/main.ts`](electron/main.ts) `autoUpdater.setFeedURL` → `github.com/pblsketch/ssampin-releases/releases/latest/download`.
-- 랜딩 다운로드 URL: [`landing/src/config.ts`](landing/src/config.ts). 릴리즈 노트: `https://ssampin.com/release-notes.json` (= [`landing/public/release-notes.json`](landing/public/release-notes.json), `public/release-notes.json` 의 사본 — 릴리즈 시 둘 다 갱신).
-- 릴리즈 절차(8단계)는 프로젝트 메모리의 "Release Workflow" 섹션 참조.
+여러 Claude Code 세션이 **같은 워킹 디렉터리·같은 `.git`을 동시에 공유**할 수 있다. 한 세션의 부주의한 git 조작이 다른 세션의 미커밋 작업을 날리거나 브랜치를 빼앗을 수 있으므로 다음을 **반드시** 지킨다.
+
+1. **작업 시작 전 `git status` 확인** — `M`/`??`로 표시된 파일은 다른 세션이 작업 중일 수 있다. 그 파일들은 건드리지 않는다. (특히 `electron/ipc/*`, `electron/main.ts`, `src/global.d.ts`, 진행 중 기능 폴더 등.)
+2. **일괄 git 명령 금지** — `git add .` / `git add -A` / `git add --all` / `git stash`(인자 없이) / `git reset --hard` / `git clean -f` / `git restore .` / `git checkout .` 모두 금지. **항상 명시한 파일 경로만** 스테이징·복원한다 (예: `git add src/foo/bar.ts`). 커밋도 `git commit`만 쓰고 `-a` 금지.
+3. **브랜치 전환은 worktree로** — `git checkout <branch>` / `git switch <branch>`로 메인 워킹 트리의 브랜치를 바꾸면 다른 세션이 그 브랜치로 끌려간다. 다른 브랜치에서 작업해야 하면 메인 워킹 트리를 건드리지 말고 `git worktree add ../ssampin-<용도> <branch>`로 별도 디렉터리에서 작업한 뒤 끝나면 `git worktree remove`.
+4. **`main` 직푸시 금지** — `main`은 브랜치 보호 ruleset(`main protection`)으로 보호됨: PR 필수 + CI(typecheck·lint·test·regression) 통과 필수 + force push 차단. 모든 변경은 `feature/...` 브랜치 → `gh pr create` → CI 통과 → 머지. (Repository admin은 긴급 시 bypass 가능하나, 코드 변경은 반드시 PR.)
+5. **로컬에서 `npm ci` / `npm ci --dry-run` 금지** — Windows에서 node_modules를 파괴함. 의존성 추가/변경 후엔 `rm -rf node_modules package-lock.json && npm install`로 lockfile을 클린 재생성한다 (`npm install -D <pkg>` 같은 부분 갱신은 OS 간 lockfile 불일치를 누적시켜 CI의 `npm ci`가 거부함).
+6. **커밋 시 husky 훅 통과** — `.husky/pre-commit`이 `lint-staged`(스테이징 파일에 `prettier --write` + `eslint --fix`)를 실행한다. lint-staged가 다른 세션의 미스테이징 변경을 내부적으로 격리하므로 보존되지만, 충돌·이상 시 커밋을 중단하고 사용자에게 보고한다. `--no-verify`로 훅을 건너뛰지 않는다.
+7. **충돌·이상 감지 시 멈추고 보고** — `git checkout`이 "would be overwritten"으로 거부되거나, 예상치 못한 브랜치/미커밋 변경이 보이면 강제로 밀어붙이지 말고(`-f` 금지) 상황을 사용자에게 보고한 뒤 지시를 받는다.

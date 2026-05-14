@@ -66,12 +66,12 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
   static readonly TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
   private readonly clientId: string;
-  private readonly clientSecret: string;
 
   constructor() {
     // Vite define은 dot 표기만 치환하므로 dot 표기 사용
+    // 데스크톱 앱은 Google "Desktop app"(installed) 클라이언트 — client_secret 없이 PKCE 만 사용
+    // (security-hardening P0-C / 감사 F-2: client_secret 을 렌더러 번들에 주입하지 않음)
     this.clientId = (process.env.GOOGLE_CLIENT_ID ?? '').trim();
-    this.clientSecret = (process.env.GOOGLE_CLIENT_SECRET ?? '').trim();
   }
 
   /**
@@ -122,10 +122,10 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
     redirectUri: string,
     codeVerifier?: string,
   ): Promise<GoogleAuthTokens> {
+    // Desktop app 클라이언트 — client_secret 미사용, PKCE code_verifier 로 교환
     const body: Record<string, string> = {
       code,
       client_id: this.clientId,
-      client_secret: this.clientSecret,
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     };
@@ -172,13 +172,13 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
    * @param refreshToken 기존 리프레시 토큰
    */
   async refreshTokens(refreshToken: string): Promise<GoogleAuthTokens> {
+    // Desktop app 클라이언트 — refresh 교환에도 client_secret 미사용
     const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         refresh_token: refreshToken,
         client_id: this.clientId,
-        client_secret: this.clientSecret,
         grant_type: 'refresh_token',
       }).toString(),
     });

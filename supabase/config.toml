@@ -1,0 +1,105 @@
+# Supabase 프로젝트 설정 (IaC) — security-hardening P1-3 (감사 M-11 / §4)
+#
+# 지금까지 저장소에 config.toml 이 없어 Edge Function 의 verify_jwt 설정이 암묵적이었다
+# (배포 시 `supabase functions deploy <name> --no-verify-jwt` 로 관리됨 — MEMORY.md 참고).
+# 이 파일은 그 상태를 명시적으로 문서화한다. 비밀값(키)은 절대 포함하지 않는다.
+#
+# 아래 [functions.*] verify_jwt 값은 2026-05-12 에 실제 배포 상태와 대조 완료
+# (각 함수에 Authorization 헤더 없이 호출 → Supabase 게이트웨이 401(UNAUTHORIZED_NO_AUTH_HEADER)
+#  이면 verify_jwt=true, 함수 코드의 자체 응답이면 verify_jwt=false 로 판별).
+# 결과: ssampin-escalate, submit-assignment 두 함수만 verify_jwt=true(클라이언트가 anon key 를
+#       Authorization 헤더로 보내야 통과 — 게이트웨이 레벨 1차 필터), 나머지 7개는 false(함수가
+#       자체 인증하거나 완전 공개).
+#
+# 이 외 [auth] / [db] / [api] 등은 supabase CLI 기본값에 가깝게 최소만 둔다 — 로컬 개발 시
+# 실제 적용되므로 보수적으로 유지.
+
+project_id = "ssampin"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+
+# 로컬 메일 테스트 (실제 프로덕션 메일은 Resend 사용 — ssampin-escalate)
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[analytics]
+enabled = false
+
+# ── Edge Functions ───────────────────────────────────────────────────────────
+# verify_jwt 값은 2026-05-12 실제 배포와 대조 완료 (위 헤더 주석 참고).
+
+# 챗봇 지식베이스 관리 — Bearer ADMIN_API_KEY 로 자체 인증.
+[functions.ssampin-embed]
+verify_jwt = false
+
+# 공개 AI 챗봇 RAG 파이프라인 — 인증 없음 + IP/세션 rate limit.
+[functions.ssampin-chat]
+verify_jwt = false
+
+# 챗봇 → 개발자 에스컬레이션(이메일). 게이트웨이에서 JWT(anon key) 1차 검증 + 함수 자체 처리.
+[functions.ssampin-escalate]
+verify_jwt = true
+
+# 교사 OAuth 토큰 저장 — Google access_token → userinfo 검증으로 자체 인증.
+[functions.save-teacher-token]
+verify_jwt = false
+
+# 과제 생성 — Google access_token 검증으로 자체 인증.
+[functions.create-assignment]
+verify_jwt = false
+
+# 과제 삭제 — body 의 adminKey 비교로 자체 인증.
+[functions.delete-assignment]
+verify_jwt = false
+
+# 학생 제출 페이지용 과제 정보 조회 — 공개 엔드포인트(민감 필드 제외).
+[functions.get-assignment-public]
+verify_jwt = false
+
+# 제출물 조회 — body 의 adminKey 비교로 자체 인증.
+[functions.get-submissions]
+verify_jwt = false
+
+# 학생 과제 제출. 게이트웨이에서 JWT(anon key) 1차 검증 + 함수 자체 처리(학생 신원 인증은 없음).
+[functions.submit-assignment]
+verify_jwt = true
+
+# 모바일 PWA Google OAuth code↔token 교환 — 서버 env GOOGLE_CLIENT_SECRET 로 교환.
+# 인증 없음(anon key 옵션) + body 검증 + IP rate limit. security-hardening P0-C / 감사 F-2.
+[functions.oauth-exchange]
+verify_jwt = false

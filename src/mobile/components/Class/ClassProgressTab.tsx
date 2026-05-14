@@ -4,6 +4,7 @@ import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingCla
 import { useMobileScheduleStore } from '@mobile/stores/useMobileScheduleStore';
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { MobileProgressLogModal } from '@mobile/components/Today/MobileProgressLogModal';
+import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { ClassProgressEntryItem } from './ClassProgressEntryItem';
 import { getMatchingPeriods, type DayTeacherSlot } from '@domain/rules/progressMatching';
 import { getDayOfWeek } from '@domain/rules/periodRules';
@@ -217,8 +218,7 @@ export function ClassProgressTab({ classId, className }: ClassProgressTabProps) 
                   </h4>
                   <ul className="space-y-2">
                     {items.map((entry) => {
-                      const openActionSheet = () =>
-                        setModalState({ type: 'actionSheet', entry });
+                      const openActionSheet = () => setModalState({ type: 'actionSheet', entry });
                       return (
                         <li key={entry.id}>
                           <ClassProgressEntryItem
@@ -292,6 +292,7 @@ interface ActionSheetProps {
 }
 
 function ActionSheet({ onEdit, onDelete, onClose }: ActionSheetProps) {
+  useBottomSheet();
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
@@ -341,6 +342,7 @@ interface ConfirmDeleteDialogProps {
 }
 
 function ConfirmDeleteDialog({ entry, onConfirm, onCancel }: ConfirmDeleteDialogProps) {
+  useBottomSheet();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-6"
@@ -364,7 +366,7 @@ function ConfirmDeleteDialog({ entry, onConfirm, onCancel }: ConfirmDeleteDialog
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg font-medium"
+            className="px-4 py-2 text-sm text-white bg-sp-error hover:opacity-90 rounded-lg font-medium"
             style={{ minHeight: 44 }}
           >
             삭제

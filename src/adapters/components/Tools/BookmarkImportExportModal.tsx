@@ -53,15 +53,15 @@ export function BookmarkImportExportModal({ onClose, onResultMessage }: Bookmark
     }
 
     const date = new Date().toISOString().slice(0, 10);
-    const result = await window.electronAPI?.showSaveDialog?.({
+    const saved = await window.electronAPI?.showSaveDialog?.({
       title: '즐겨찾기 내보내기',
       defaultPath: `ssampin-bookmarks-${date}.ssampin-bookmarks.json`,
       filters: [
         { name: '쌤핀 즐겨찾기', extensions: ['json'] },
       ],
     });
-    if (!result) return;
-    await window.electronAPI?.writeFile?.(result, JSON.stringify(payload, null, 2));
+    if (!saved) return;
+    await window.electronAPI?.writeFile?.(saved.handle, JSON.stringify(payload, null, 2));
     onResultMessage(
       `${payload.groups.length}개 그룹 · ${payload.bookmarks.length}개 즐겨찾기를 내보냈어요.`,
     );

@@ -3,7 +3,12 @@
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import {
+  corsHeaders,
+  jsonResponse,
+  errorResponse,
+  internalErrorResponse,
+} from '../_shared/cors.ts';
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -45,11 +50,15 @@ serve(async (req: Request) => {
       .order('student_number', { ascending: true });
 
     if (submissionsError) {
-      return errorResponse(`조회 실패: ${submissionsError.message}`, 500);
+      return internalErrorResponse(
+        'get-submissions',
+        submissionsError,
+        '제출 현황 조회 중 오류가 발생했습니다',
+      );
     }
 
     return jsonResponse(submissions ?? []);
   } catch (err) {
-    return errorResponse(`서버 오류: ${(err as Error).message}`, 500);
+    return internalErrorResponse('get-submissions', err);
   }
 });

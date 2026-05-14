@@ -205,12 +205,14 @@ interface ElectronAPI {
   iconResetPosition: () => Promise<void>;
   iconExpand: (target: { to: 'main' | 'widget' | 'restore' }) => Promise<void>;
   iconDiag: (payload: { event: string; data?: unknown }) => Promise<void>;
+  /** 저장 대화상자. 경로 대신 1회용 handle + 표시용 fileName 반환. */
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;
     filters: { name: string; extensions: string[] }[];
-  }) => Promise<string | null>;
-  writeFile: (filePath: string, data: ArrayBuffer | string) => Promise<void>;
+  }) => Promise<{ handle: string; fileName: string } | null>;
+  /** showSaveDialog 가 준 handle 로 파일 쓰기 (1회 소비). */
+  writeFile: (handle: string, data: ArrayBuffer | string) => Promise<void>;
   printToPDF: (
     options?: {
       pageSize?:
@@ -225,7 +227,8 @@ interface ElectronAPI {
       marginsType?: 0 | 1 | 2;
     },
   ) => Promise<ArrayBuffer | null>;
-  openFile: (filePath: string) => Promise<void>;
+  /** showSaveDialog 가 준 handle 로 방금 저장한 파일 열기 (소비하지 않음). */
+  openFile: (handle: string) => Promise<void>;
   importAlarmAudio: () => Promise<{ name: string; dataUrl: string } | null>;
   importFont: () => Promise<{ name: string; dataUrl: string; mimeType: string } | null>;
   importShareFile: () => Promise<{ content: string | ArrayBuffer; fileType: 'ssampin' | 'xlsx' } | null>;
@@ -253,8 +256,8 @@ interface ElectronAPI {
   // Cross-window navigation
   navigateToPage: (page: string) => Promise<void>;
   onNavigateToPage: (callback: (page: string) => void) => () => void;
-  // Google OAuth — {code, redirectUri} 묶음 반환
-  startOAuth: (authUrl: string) => Promise<{ code: string; redirectUri: string }>;
+  // Google OAuth — {code, redirectUri, codeVerifier} 묶음 반환 (Desktop app 클라이언트는 PKCE 로 교환)
+  startOAuth: (authUrl: string) => Promise<{ code: string; redirectUri: string; codeVerifier: string }>;
   cancelOAuth: () => Promise<void>;
   onOAuthRedirectUri: (callback: (uri: string) => void) => () => void;
   onOAuthError: (callback: (error: { code: string; message: string }) => void) => () => void;

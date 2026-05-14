@@ -47,3 +47,12 @@ jobs:
       # 4. 회귀 grep 어서션 — scripts/regression-grep-check.mjs
       - name: Regression check
         run: npm run regression-check
+
+      # === 비차단 가시화 (실패해도 CI 통과 — 안정화 후 별도 PR 에서 게이트로 승격) ===
+
+      # 5. 의존성 취약점 스캔 — npm audit (high 이상). security-hardening P1-3.
+      #    처음엔 non-blocking 으로 가시화만 — Dependabot 으로 패치 PR 이 흐르고
+      #    트리아지가 정착하면 continue-on-error 를 제거해 하드 게이트로 승격.
+      - name: npm audit (non-blocking)
+        run: npm audit --audit-level=high
+        continue-on-error: true

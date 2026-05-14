@@ -25,10 +25,14 @@ function serveMobileHtml(): Plugin {
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
-  // 빌드 타임 env 가드: production build 시 Supabase 환경변수 누락이면 즉시 실패.
+  // 빌드 타임 env 가드: 실제 production 배포 빌드에서 Supabase 환경변수 누락이면 즉시 실패.
   // 2026-05-13 OAuth 무한로딩 핫픽스 / 2026-05-14 설문 응답 silent fail 이슈와 같은
   // "Vercel env 누락이 silent fail로 이어져 사용자 신고 발생" 패턴을 영구 차단한다.
-  if (command === 'build' && mode === 'production') {
+  //
+  // Vercel Preview/Development 배포는 면제 — Preview env 에 동일 변수를 등록할 의무가
+  // 없으므로 PR 머지를 막지 않기 위해 production 배포에만 가드를 적용한다.
+  const isVercelNonProd = !!process.env.VERCEL && process.env.VERCEL_ENV !== 'production';
+  if (command === 'build' && mode === 'production' && !isVercelNonProd) {
     const missing: string[] = [];
     if (!env.VITE_SUPABASE_URL) missing.push('VITE_SUPABASE_URL');
     if (!env.VITE_SUPABASE_ANON_KEY) missing.push('VITE_SUPABASE_ANON_KEY');
@@ -134,15 +138,12 @@ export default defineConfig(({ mode, command }) => {
       },
     },
     define: {
+      // 모바일 PWA 는 Google "Web application" OAuth 클라이언트 — code↔token 교환은
+      // Supabase Edge Function `oauth-exchange` 가 서버 env 의 client_secret 으로 수행한다.
+      // client_secret 을 PWA 번들에 절대 주입하지 않는다 (security-hardening P0-C / 감사 F-2).
       'process.env.GOOGLE_CLIENT_ID': JSON.stringify((env.VITE_GOOGLE_CLIENT_ID || '').trim()),
-      'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify(
-        (env.VITE_GOOGLE_CLIENT_SECRET || '').trim(),
-      ),
       'import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_ID': JSON.stringify(
         (env.VITE_MOBILE_GOOGLE_CLIENT_ID || '').trim(),
-      ),
-      'import.meta.env.VITE_MOBILE_GOOGLE_CLIENT_SECRET': JSON.stringify(
-        (env.VITE_MOBILE_GOOGLE_CLIENT_SECRET || '').trim(),
       ),
       __APP_VERSION__: JSON.stringify(pkg.version),
     },

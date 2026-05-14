@@ -328,16 +328,16 @@ export function TimetableEditor({ tab, onCancel, onSaved }: TimetableEditorProps
       const normalized = await exportTeacherTimetableTemplate(localMaxPeriods, days, teacherSchedule);
 
       if (window.electronAPI) {
-        const filePath = await window.electronAPI.showSaveDialog({
+        const saved = await window.electronAPI.showSaveDialog({
           title: '양식 다운로드',
           defaultPath: '교사_시간표_양식.xlsx',
           filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
         });
-        if (filePath) {
-          await window.electronAPI.writeFile(filePath, normalized);
+        if (saved) {
+          await window.electronAPI.writeFile(saved.handle, normalized);
           useToastStore.getState().show('양식이 저장되었습니다', 'success', {
             label: '파일 열기',
-            onClick: () => window.electronAPI?.openFile(filePath),
+            onClick: () => window.electronAPI?.openFile(saved.handle),
           });
         }
       } else {

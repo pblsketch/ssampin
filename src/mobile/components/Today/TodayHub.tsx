@@ -9,6 +9,10 @@ import { useMobileMealStore } from '@mobile/stores/useMobileMealStore';
 import { useMobileDriveSyncStore } from '@mobile/stores/useMobileDriveSyncStore';
 import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingClassStore';
 import { useMobileProgressStore } from '@mobile/stores/useMobileProgressStore';
+import { useMobileStudentStore } from '@mobile/stores/useMobileStudentStore';
+import { useMobileHomeLayoutStore } from '@mobile/stores/useMobileHomeLayoutStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
+import { CollapsibleCard } from '@mobile/components/common/CollapsibleCard';
 import { CurrentClassCard } from './CurrentClassCard';
 import { HomeroomAttendanceCard } from './HomeroomAttendanceCard';
 import { ClassAttendanceCard } from './ClassAttendanceCard';
@@ -46,6 +50,14 @@ export function TodayHub({ onNavigateAttendance }: Props) {
   const loadTeachingClasses = useMobileTeachingClassStore((s) => s.load);
   const loadProgress = useMobileProgressStore((s) => s.load);
 
+  const homeroomStudents = useMobileStudentStore((s) => s.students);
+  const loadStudents = useMobileStudentStore((s) => s.load);
+
+  const hiddenCards = useMobileHomeLayoutStore((s) => s.hiddenCards);
+  const isHidden = (
+    id: 'currentClass' | 'homeroomAttendance' | 'classAttendance' | 'weather' | 'meal',
+  ) => hiddenCards[id] === true;
+
   const periodInfo = useCurrentPeriod(settings.periodTimes);
 
   // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
@@ -58,7 +70,8 @@ export function TodayHub({ onNavigateAttendance }: Props) {
     void loadAttendance();
     void loadTeachingClasses();
     void loadProgress();
-  }, [loadSettings, loadSchedule, loadAttendance, loadTeachingClasses, loadProgress]);
+    void loadStudents();
+  }, [loadSettings, loadSchedule, loadAttendance, loadTeachingClasses, loadProgress, loadStudents]);
 
   useEffect(() => {
     if (settingsLoaded && mealAtptCode && mealSchoolCode) {
@@ -77,12 +90,17 @@ export function TodayHub({ onNavigateAttendance }: Props) {
   const isHomeroom = roles.includes('homeroom');
 
   const daySchedule = teacherSchedule[periodInfo.dayOfWeek];
-  const currentClass = periodInfo.currentPeriod && daySchedule
-    ? daySchedule[periodInfo.currentPeriod - 1] ?? null
-    : null;
+  const currentClass =
+    periodInfo.currentPeriod && daySchedule
+      ? (daySchedule[periodInfo.currentPeriod - 1] ?? null)
+      : null;
 
-  const totalStudents = 30;
+  const totalStudents = homeroomStudents.filter(isStudentActive).length;
   const homeroomRecord = getTodayRecord(settings.className);
+
+  const showHomeroomCard = isHomeroom && !isHidden('homeroomAttendance');
+  const showClassCard =
+    Boolean(periodInfo.currentPeriod && currentClass) && !isHidden('classAttendance');
 
   const today = new Date();
   const dateStr = format(today, 'M\uC6D4 d\uC77C (EEEE)', { locale: ko });
@@ -107,54 +125,78 @@ export function TodayHub({ onNavigateAttendance }: Props) {
       {/* Bento Grid */}
       <div className="px-4 grid grid-cols-2 gap-3">
         {/* 현재 교시 — 풀 너비 */}
-        <div className="col-span-2">
-          <CurrentClassCard periodInfo={periodInfo} teacherSchedule={teacherSchedule} />
-        </div>
-
-        {/* 담임 출결 + 수업 출결 — 반 너비 */}
-        {isHomeroom && (
-          <div className="col-span-1">
-            <HomeroomAttendanceCard
-              todayRecord={homeroomRecord}
-              totalStudents={totalStudents}
-              onCheckAttendance={() => onNavigateAttendance({
-                classId: settings.className,
-                className: settings.className,
-                period: 0,
-                type: 'homeroom',
-              })}
-            />
+        {!isHidden('currentClass') && (
+          <div className="col-span-2">
+            <CurrentClassCard periodInfo={periodInfo} teacherSchedule={teacherSchedule} />
           </div>
         )}
 
-        {periodInfo.currentPeriod && currentClass ? (
-          <div className={isHomeroom ? 'col-span-1' : 'col-span-2'}>
-            <ClassAttendanceCard
-              period={periodInfo.currentPeriod}
-              classInfo={currentClass}
-              attendanceRecord={getTodayRecord(currentClass.classroom, periodInfo.currentPeriod)}
-              onCheckAttendance={() => onNavigateAttendance({
-                classId: currentClass.classroom,
-                className: currentClass.classroom,
-                period: periodInfo.currentPeriod!,
-                type: 'class',
-              })}
-            />
+        {/* 담임 출결 + 수업 출결 — 반 너비 */}
+        {showHomeroomCard && (
+          <div className="col-span-1">
+            <CollapsibleCard
+              cardId="homeroomAttendance"
+              title="우리 반"
+              icon="groups"
+              iconClass="text-amber-500"
+              className="h-full"
+            >
+              <HomeroomAttendanceCard
+                todayRecord={homeroomRecord}
+                totalStudents={totalStudents}
+                onCheckAttendance={() =>
+                  onNavigateAttendance({
+                    classId: settings.className,
+                    className: settings.className,
+                    period: 0,
+                    type: 'homeroom',
+                  })
+                }
+              />
+            </CollapsibleCard>
           </div>
-        ) : isHomeroom ? (
-          /* 수업이 없는데 담임 출결만 있으면 나머지 반 너비 채우기 */
+        )}
+
+        {showClassCard && periodInfo.currentPeriod && currentClass ? (
+          <div className={showHomeroomCard ? 'col-span-1' : 'col-span-2'}>
+            <CollapsibleCard
+              cardId="classAttendance"
+              title={`${periodInfo.currentPeriod}교시 · ${currentClass.classroom}`}
+              icon="fact_check"
+              iconClass="text-sp-accent"
+              className="h-full"
+            >
+              <ClassAttendanceCard
+                attendanceRecord={getTodayRecord(currentClass.classroom, periodInfo.currentPeriod)}
+                onCheckAttendance={() =>
+                  onNavigateAttendance({
+                    classId: currentClass.classroom,
+                    className: currentClass.classroom,
+                    period: periodInfo.currentPeriod!,
+                    type: 'class',
+                  })
+                }
+              />
+            </CollapsibleCard>
+          </div>
+        ) : showHomeroomCard ? (
+          /* 수업 출결 카드가 없는데 담임 출결만 있으면 나머지 반 너비 채우기 */
           <div className="col-span-1" />
         ) : null}
 
         {/* 날씨 — 풀 너비 */}
-        <div className="col-span-2">
-          <WeatherCard />
-        </div>
+        {!isHidden('weather') && (
+          <div className="col-span-2">
+            <WeatherCard />
+          </div>
+        )}
 
         {/* 급식 — 풀 너비 */}
-        <div className="col-span-2">
-          <MealCard meals={todayMeals} loading={mealLoading} />
-        </div>
+        {!isHidden('meal') && (
+          <div className="col-span-2">
+            <MealCard meals={todayMeals} loading={mealLoading} />
+          </div>
+        )}
       </div>
     </div>
   );

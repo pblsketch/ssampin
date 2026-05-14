@@ -74,7 +74,7 @@ interface CalendarSyncState {
   initialize: () => Promise<void>;
   startAuth: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   cancelAuth: () => Promise<void>;
-  completeAuth: (code: string, redirectUri: string) => Promise<void>;
+  completeAuth: (code: string, redirectUri: string, codeVerifier?: string) => Promise<void>;
   startPKCEFallback: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   completePKCEAuth: (code: string) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -180,7 +180,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         const result = await api.startOAuth(authUrl);
         console.log('[CalendarSync] startOAuth resolved', { hasCode: Boolean(result?.code) });
         set({ showFallbackSuggestion: false, fallbackSuggestionData: null });
-        await get().completeAuth(result.code, result.redirectUri);
+        await get().completeAuth(result.code, result.redirectUri, result.codeVerifier);
       } finally {
         fallbackCleanup?.();
       }
@@ -227,12 +227,12 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     });
   },
 
-  completeAuth: async (code: string, redirectUri: string) => {
-    console.log('[CalendarSync] completeAuth start', { redirectUri });
+  completeAuth: async (code: string, redirectUri: string, codeVerifier?: string) => {
+    console.log('[CalendarSync] completeAuth start', { redirectUri, hasVerifier: Boolean(codeVerifier) });
     set({ isLoading: true, error: null });
     try {
       const { authenticateGoogle } = await import('@adapters/di/container');
-      const tokens = await authenticateGoogle.authenticate(code, redirectUri);
+      const tokens = await authenticateGoogle.authenticate(code, redirectUri, codeVerifier);
       console.log('[CalendarSync] completeAuth tokens saved');
 
       // 토큰 저장 직후 즉시 연결 상태 마크 — 캘린더 프리로드는 백그라운드 분리.
