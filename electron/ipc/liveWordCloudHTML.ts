@@ -7,10 +7,7 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
-export function generateWordCloudHTML(
-  question: string,
-  maxSubmissions: number,
-): string {
+export function generateWordCloudHTML(question: string, maxSubmissions: number): string {
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -19,6 +16,10 @@ export function generateWordCloudHTML(
   <title>쌤핀 워드클라우드</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* HTML hidden 속성이 display:flex CSS에 덮여 모든 상태가 동시 노출되던 버그 차단.
+     * 다른 학생 페이지(liveVoteHTML, liveMultiSurveyHTML)와 동일한 패턴으로 정렬. */
+    [hidden] { display: none !important; }
 
     body {
       min-height: 100vh;

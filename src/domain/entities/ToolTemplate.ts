@@ -11,12 +11,16 @@ export type PollTemplateQuestion = {
 export type PollTemplateConfig = {
   readonly type: 'poll';
   readonly questions: readonly PollTemplateQuestion[];
+  /** 실시간 답변 확인 토글 (옵션, 기본 false). 누락 시 false로 fallback. */
+  readonly realtimeResponseView?: boolean;
 };
 
 export type SurveyTemplateConfig = {
   readonly type: 'survey';
   readonly question: string;
   readonly maxLength: number;
+  /** 실시간 답변 확인 토글 (옵션, 기본 false). 누락 시 false로 fallback. */
+  readonly realtimeResponseView?: boolean;
 };
 
 export type MultiSurveyTemplateQuestion = {
@@ -38,6 +42,8 @@ export type MultiSurveyTemplateConfig = {
   readonly questions: readonly MultiSurveyTemplateQuestion[];
   readonly stepMode: boolean;
   readonly useStopwords: boolean;
+  /** 실시간 답변 확인 토글 (옵션, 기본 false, 세션 단위). 누락 시 false로 fallback. */
+  readonly realtimeResponseView?: boolean;
 };
 
 export type WordCloudTemplateConfig = {
