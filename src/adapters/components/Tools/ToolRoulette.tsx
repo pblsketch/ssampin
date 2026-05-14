@@ -465,9 +465,10 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
                   style={{
                     transform: `rotate(${rotation}deg)`,
                     transformOrigin: `${cx}px ${cy}px`,
-                    transition: isSpinning
-                      ? 'transform 3.5s cubic-bezier(0.17, 0.67, 0.12, 0.99)'
-                      : 'none',
+                    // transition 을 항상 활성화 — 'none' ↔ '3.5s' 토글 시 Chromium 이
+                    // transform 변경을 transition 활성화 전에 즉시 반영해 두 번째 spin 부터
+                    // 보간이 사라지는 race condition 회피. mount 시 rotation=0 무변화라 부작용 없음.
+                    transition: 'transform 3.5s cubic-bezier(0.17, 0.67, 0.12, 0.99)',
                   }}
                   onTransitionEnd={handleTransitionEnd}
                 >
