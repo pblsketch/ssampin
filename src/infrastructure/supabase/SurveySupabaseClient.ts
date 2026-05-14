@@ -69,8 +69,8 @@ export class SurveySupabaseClient {
   private headers(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
-      'apikey': this.anonKey,
-      'Authorization': `Bearer ${this.anonKey}`,
+      apikey: this.anonKey,
+      Authorization: `Bearer ${this.anonKey}`,
     };
   }
 
@@ -94,7 +94,7 @@ export class SurveySupabaseClient {
       method: 'POST',
       headers: {
         ...this.headers(),
-        'Prefer': 'return=minimal',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
         id: params.id,
@@ -126,7 +126,13 @@ export class SurveySupabaseClient {
       { headers: this.headers() },
     );
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error(
+        `[SurveySupabaseClient.getSurvey] HTTP ${res.status} ${res.statusText} | id=${id} | body=${body.slice(0, 200)}`,
+      );
+      throw new Error(`Supabase getSurvey failed: ${res.status} ${res.statusText}`);
+    }
     const rows = (await res.json()) as SurveyRow[];
     if (rows.length === 0) return null;
 
@@ -144,6 +150,9 @@ export class SurveySupabaseClient {
 
   /**
    * 응답 목록 조회 (교사용)
+   *
+   * 실패 시 빈 배열로 silent fail 하면 사용자가 "응답 0건"으로 오인하고
+   * 동기화 문제로 신고하게 된다(2026-05-14 사용자 신고 사례). 실패는 throw 한다.
    */
   async getResponses(surveyId: string): Promise<SurveyResponsePublic[]> {
     this.ensureConfigured();
@@ -152,7 +161,13 @@ export class SurveySupabaseClient {
       { headers: this.headers() },
     );
 
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error(
+        `[SurveySupabaseClient.getResponses] HTTP ${res.status} ${res.statusText} | surveyId=${surveyId} | body=${body.slice(0, 200)}`,
+      );
+      throw new Error(`Supabase getResponses failed: ${res.status} ${res.statusText}`);
+    }
     const rows = (await res.json()) as ResponseRow[];
 
     return rows.map((r) => ({
@@ -177,7 +192,7 @@ export class SurveySupabaseClient {
       method: 'POST',
       headers: {
         ...this.headers(),
-        'Prefer': 'return=minimal',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
         survey_id: surveyId,
@@ -199,17 +214,20 @@ export class SurveySupabaseClient {
   /**
    * 중복 응답 확인
    */
-  async checkAlreadyResponded(
-    surveyId: string,
-    studentNumber: number,
-  ): Promise<boolean> {
+  async checkAlreadyResponded(surveyId: string, studentNumber: number): Promise<boolean> {
     this.ensureConfigured();
     const res = await fetch(
       `${this.baseUrl}/rest/v1/survey_responses?survey_id=eq.${surveyId}&student_number=eq.${studentNumber}&select=id`,
       { headers: this.headers() },
     );
 
-    if (!res.ok) return false;
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error(
+        `[SurveySupabaseClient.checkAlreadyResponded] HTTP ${res.status} ${res.statusText} | surveyId=${surveyId} number=${studentNumber} | body=${body.slice(0, 200)}`,
+      );
+      throw new Error(`Supabase checkAlreadyResponded failed: ${res.status} ${res.statusText}`);
+    }
     const rows = (await res.json()) as Array<{ id: string }>;
     return rows.length > 0;
   }
@@ -234,7 +252,9 @@ export class SurveySupabaseClient {
     };
 
     void poll();
-    timerId = setInterval(() => { void poll(); }, intervalMs);
+    timerId = setInterval(() => {
+      void poll();
+    }, intervalMs);
 
     return () => {
       if (timerId !== null) {

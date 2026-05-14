@@ -41,6 +41,12 @@ const LAYOUT_OPTIONS: LayoutOption[] = [
     icon: 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z',
     shortcut: 'Ctrl+4',
   },
+  {
+    mode: 'sidebar-right',
+    label: '우측 사이드',
+    icon: 'M17 3h4v18h-4z',
+    shortcut: 'Ctrl+5',
+  },
 ];
 
 /**

@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import type { Survey, SurveyLocalData, SurveyLocalEntry, SurveysData } from '@domain/entities/Survey';
+import type {
+  Survey,
+  SurveyLocalData,
+  SurveyLocalEntry,
+  SurveysData,
+} from '@domain/entities/Survey';
 import type { SurveyResponsePublic } from '@infrastructure/supabase/SurveySupabaseClient';
 import { storage, surveySupabaseClient } from '@mobile/di/container';
 
@@ -7,6 +12,8 @@ interface SurveyResponseStatus {
   total: number;
   responded: number;
   loading: boolean;
+  /** Supabase 호출 실패 메시지 — 표시되면 사용자가 신고 시 즉시 RC 판별 가능 */
+  error?: string;
 }
 
 interface MobileSurveyToolState {
@@ -22,7 +29,12 @@ interface MobileSurveyToolState {
   reload: () => Promise<void>;
   fetchResponses: (surveyId: string, targetCount: number) => Promise<void>;
   /** 교사 모드: 학생 체크 항목 저장 */
-  setLocalEntry: (surveyId: string, studentId: string, questionId: string, value: string | boolean) => Promise<void>;
+  setLocalEntry: (
+    surveyId: string,
+    studentId: string,
+    questionId: string,
+    value: string | boolean,
+  ) => Promise<void>;
 }
 
 export const useMobileSurveyToolStore = create<MobileSurveyToolState>((set, get) => ({
@@ -35,7 +47,10 @@ export const useMobileSurveyToolStore = create<MobileSurveyToolState>((set, get)
   load: async () => {
     if (get().loaded) return;
     try {
-      const data = await storage.read<{ surveys: readonly Survey[]; localData: readonly SurveyLocalData[] }>('surveys');
+      const data = await storage.read<{
+        surveys: readonly Survey[];
+        localData: readonly SurveyLocalData[];
+      }>('surveys');
       if (data) {
         set({
           surveys: data.surveys ?? [],
@@ -78,9 +93,7 @@ export const useMobileSurveyToolStore = create<MobileSurveyToolState>((set, get)
     }
 
     const updatedLocalData: readonly SurveyLocalData[] = existing
-      ? localData.map((d) =>
-          d.surveyId === surveyId ? { ...d, entries: updatedEntries } : d,
-        )
+      ? localData.map((d) => (d.surveyId === surveyId ? { ...d, entries: updatedEntries } : d))
       : [...localData, { surveyId, entries: updatedEntries }];
 
     const next: SurveysData = { surveys, localData: updatedLocalData };
@@ -91,7 +104,9 @@ export const useMobileSurveyToolStore = create<MobileSurveyToolState>((set, get)
     try {
       const { useMobileDriveSyncStore } = await import('@mobile/stores/useMobileDriveSyncStore');
       useMobileDriveSyncStore.getState().triggerSaveSync();
-    } catch { /* sync 실패 무시 */ }
+    } catch {
+      /* sync 실패 무시 */
+    }
   },
 
   fetchResponses: async (surveyId, targetCount) => {
@@ -102,6 +117,7 @@ export const useMobileSurveyToolStore = create<MobileSurveyToolState>((set, get)
           total: targetCount,
           responded: s.responseStatus[surveyId]?.responded ?? 0,
           loading: true,
+          error: undefined,
         },
       },
     }));
@@ -119,13 +135,15 @@ export const useMobileSurveyToolStore = create<MobileSurveyToolState>((set, get)
           },
         },
       }));
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '응답을 불러오지 못했습니다';
       set((s) => ({
         responseStatus: {
           ...s.responseStatus,
           [surveyId]: {
             ...s.responseStatus[surveyId]!,
             loading: false,
+            error: msg,
           },
         },
       }));

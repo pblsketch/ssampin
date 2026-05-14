@@ -12,6 +12,7 @@ function getPanelCount(mode: WidgetLayoutMode): number {
     case 'split-h': return 2;
     case 'split-v': return 2;
     case 'quad': return 4;
+    case 'sidebar-right': return 1;
   }
 }
 
@@ -21,6 +22,7 @@ function getDefaultColsPerPanel(mode: WidgetLayoutMode): number {
     case 'split-v': return 3;
     case 'split-h': return 3;
     case 'quad': return 2;
+    case 'sidebar-right': return 1;
   }
 }
 

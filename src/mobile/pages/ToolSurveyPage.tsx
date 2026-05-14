@@ -57,7 +57,9 @@ function TeacherCheckRow({
           checked ? 'bg-green-500/5' : 'bg-red-500/5'
         }`}
       >
-        <span className={`material-symbols-outlined text-lg ${checked ? 'text-green-500' : 'text-red-400'}`}>
+        <span
+          className={`material-symbols-outlined text-lg ${checked ? 'text-green-500' : 'text-red-400'}`}
+        >
           {checked ? 'check_circle' : 'cancel'}
         </span>
         <span className="text-xs text-sp-muted w-6 text-right">{student.number}</span>
@@ -68,20 +70,28 @@ function TeacherCheckRow({
 
   // 질문이 여러 개: 탭하면 펼쳐서 질문별 토글
   return (
-    <div className={`rounded-lg overflow-hidden ${allChecked ? 'bg-green-500/5' : checkedCount > 0 ? 'bg-yellow-500/5' : 'bg-red-500/5'}`}>
+    <div
+      className={`rounded-lg overflow-hidden ${allChecked ? 'bg-green-500/5' : checkedCount > 0 ? 'bg-yellow-500/5' : 'bg-red-500/5'}`}
+    >
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-3 px-3 py-2.5 w-full text-left active:scale-[0.98] transition-transform"
       >
-        <span className={`material-symbols-outlined text-lg ${
-          allChecked ? 'text-green-500' : checkedCount > 0 ? 'text-yellow-500' : 'text-red-400'
-        }`}>
+        <span
+          className={`material-symbols-outlined text-lg ${
+            allChecked ? 'text-green-500' : checkedCount > 0 ? 'text-yellow-500' : 'text-red-400'
+          }`}
+        >
           {allChecked ? 'check_circle' : checkedCount > 0 ? 'remove_circle' : 'cancel'}
         </span>
         <span className="text-xs text-sp-muted w-6 text-right">{student.number}</span>
         <span className="text-sm text-sp-text flex-1">{student.name}</span>
-        <span className="text-xs text-sp-muted">{checkedCount}/{questions.length}</span>
-        <span className={`material-symbols-outlined text-sp-muted text-sm transition-transform ${expanded ? 'rotate-180' : ''}`}>
+        <span className="text-xs text-sp-muted">
+          {checkedCount}/{questions.length}
+        </span>
+        <span
+          className={`material-symbols-outlined text-sp-muted text-sm transition-transform ${expanded ? 'rotate-180' : ''}`}
+        >
           expand_more
         </span>
       </button>
@@ -96,7 +106,9 @@ function TeacherCheckRow({
                 onClick={() => handleToggle(q.id, checked)}
                 className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md active:bg-sp-border/20 transition-colors text-left"
               >
-                <span className={`material-symbols-outlined text-base ${checked ? 'text-green-500' : 'text-sp-muted'}`}>
+                <span
+                  className={`material-symbols-outlined text-base ${checked ? 'text-green-500' : 'text-sp-muted'}`}
+                >
                   {checked ? 'check_box' : 'check_box_outline_blank'}
                 </span>
                 <span className="text-xs text-sp-text flex-1 truncate">{q.label}</span>
@@ -110,7 +122,8 @@ function TeacherCheckRow({
 }
 
 function SurveyDetail({ survey, onBack }: { survey: Survey; onBack: () => void }) {
-  const { localData, responseStatus, responses, fetchResponses, setLocalEntry } = useMobileSurveyToolStore();
+  const { localData, responseStatus, responses, fetchResponses, setLocalEntry } =
+    useMobileSurveyToolStore();
   const teachingClasses = useMobileTeachingClassStore((s) => s.classes);
   const students = useMobileStudentStore((s) => s.students);
 
@@ -129,7 +142,8 @@ function SurveyDetail({ survey, onBack }: { survey: Survey; onBack: () => void }
   const studentList: { number: number; name: string; id: string }[] = (() => {
     if (survey.classId) {
       const cls = teachingClasses.find((c) => c.id === survey.classId);
-      if (cls) return cls.students.map((s) => ({ number: s.number, name: s.name, id: `${s.number}` }));
+      if (cls)
+        return cls.students.map((s) => ({ number: s.number, name: s.name, id: `${s.number}` }));
     }
     // 담임 학생 목록 사용
     return students.map((s) => ({ number: s.studentNumber ?? 0, name: s.name, id: s.id }));
@@ -142,7 +156,10 @@ function SurveyDetail({ survey, onBack }: { survey: Survey; onBack: () => void }
   const fullyCheckedCount = isTeacherMode
     ? studentList.filter((s) => {
         const studentEntries = (local?.entries ?? []).filter((e) => e.studentId === s.id);
-        return studentEntries.filter((e) => e.value === true || e.value === 'true').length === survey.questions.length;
+        return (
+          studentEntries.filter((e) => e.value === true || e.value === 'true').length ===
+          survey.questions.length
+        );
       }).length
     : resps.length;
   const totalCount = studentList.length || survey.targetCount || 0;
@@ -178,7 +195,9 @@ function SurveyDetail({ survey, onBack }: { survey: Survey; onBack: () => void }
           <div className="flex-1">
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold text-sp-accent">{fullyCheckedCount}</span>
-              <span className="text-sm text-sp-muted">/ {totalCount}명 {isTeacherMode ? '완료' : '응답'}</span>
+              <span className="text-sm text-sp-muted">
+                / {totalCount}명 {isTeacherMode ? '완료' : '응답'}
+              </span>
             </div>
             {totalCount > 0 && (
               <div className="mt-2 h-2 rounded-full bg-sp-border/30 overflow-hidden">
@@ -198,10 +217,14 @@ function SurveyDetail({ survey, onBack }: { survey: Survey; onBack: () => void }
             </button>
           ) : (
             <button
-              onClick={() => survey.targetCount && void fetchResponses(survey.id, survey.targetCount)}
+              onClick={() =>
+                survey.targetCount && void fetchResponses(survey.id, survey.targetCount)
+              }
               className="text-sp-muted active:scale-95 transition-transform p-2"
             >
-              <span className={`material-symbols-outlined ${status?.loading ? 'animate-spin' : ''}`}>
+              <span
+                className={`material-symbols-outlined ${status?.loading ? 'animate-spin' : ''}`}
+              >
                 {status?.loading ? 'progress_activity' : 'refresh'}
               </span>
             </button>
@@ -209,11 +232,28 @@ function SurveyDetail({ survey, onBack }: { survey: Survey; onBack: () => void }
         </div>
       </div>
 
+      {/* 응답 조회 실패 안내 (학생 응답 모드 전용) */}
+      {!isTeacherMode && status?.error && (
+        <div className="mx-4 mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+          <p className="text-xs text-red-300 font-semibold flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm">error</span>
+            응답을 불러오지 못했습니다
+          </p>
+          <p className="text-[11px] text-red-300/70 mt-1 break-all">{status.error}</p>
+          <p className="text-[11px] text-sp-muted mt-1">
+            네트워크를 확인하거나 새로고침 버튼을 다시 눌러주세요. 계속되면 개발자에게 위 메시지를
+            전달해주세요.
+          </p>
+        </div>
+      )}
+
       {/* 학생별 현황 */}
       <div className="flex-1 overflow-auto p-4 space-y-1">
         {!isTeacherMode && status?.loading && resps.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">progress_activity</span>
+            <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">
+              progress_activity
+            </span>
           </div>
         ) : studentList.length > 0 ? (
           studentList
@@ -239,14 +279,19 @@ function SurveyDetail({ survey, onBack }: { survey: Survey; onBack: () => void }
                     done ? 'bg-green-500/5' : 'bg-red-500/5'
                   }`}
                 >
-                  <span className={`material-symbols-outlined text-lg ${done ? 'text-green-500' : 'text-red-400'}`}>
+                  <span
+                    className={`material-symbols-outlined text-lg ${done ? 'text-green-500' : 'text-red-400'}`}
+                  >
                     {done ? 'check_circle' : 'cancel'}
                   </span>
                   <span className="text-xs text-sp-muted w-6 text-right">{student.number}</span>
                   <span className="text-sm text-sp-text flex-1">{student.name}</span>
                   {resp && (
                     <span className="text-xs text-sp-muted">
-                      {new Date(resp.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(resp.submittedAt).toLocaleTimeString('ko-KR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </span>
                   )}
                 </div>
@@ -254,11 +299,17 @@ function SurveyDetail({ survey, onBack }: { survey: Survey; onBack: () => void }
             })
         ) : resps.length > 0 ? (
           resps.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-green-500/5">
+            <div
+              key={r.id}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-green-500/5"
+            >
               <span className="material-symbols-outlined text-green-500 text-lg">check_circle</span>
               <span className="text-xs text-sp-muted w-6 text-right">{r.studentNumber}</span>
               <span className="text-sm text-sp-text flex-1">
-                {new Date(r.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                {new Date(r.submittedAt).toLocaleTimeString('ko-KR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </span>
             </div>
           ))
@@ -283,7 +334,9 @@ export function ToolSurveyPage({ onBack }: Props) {
   if (!loaded) {
     return (
       <div className="flex items-center justify-center h-full">
-        <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">progress_activity</span>
+        <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">
+          progress_activity
+        </span>
       </div>
     );
   }
@@ -331,7 +384,9 @@ export function ToolSurveyPage({ onBack }: Props) {
                         className="w-full glass-card p-4 text-left active:scale-[0.98] transition-transform"
                       >
                         <div className="flex items-start gap-3">
-                          <div className={`flex items-center justify-center w-10 h-10 rounded-xl shrink-0 mt-0.5 ${bgCls}`}>
+                          <div
+                            className={`flex items-center justify-center w-10 h-10 rounded-xl shrink-0 mt-0.5 ${bgCls}`}
+                          >
                             <span className={`material-symbols-outlined ${textCls}`}>
                               {s.mode === 'teacher' ? 'checklist' : 'poll'}
                             </span>
@@ -348,7 +403,9 @@ export function ToolSurveyPage({ onBack }: Props) {
                               </p>
                             )}
                           </div>
-                          <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">chevron_right</span>
+                          <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
+                            chevron_right
+                          </span>
                         </div>
                       </button>
                     );
@@ -371,7 +428,9 @@ export function ToolSurveyPage({ onBack }: Props) {
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-500/15 shrink-0 mt-0.5">
-                          <span className="material-symbols-outlined text-gray-400">inventory_2</span>
+                          <span className="material-symbols-outlined text-gray-400">
+                            inventory_2
+                          </span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-sp-text truncate">{s.title}</p>
@@ -379,7 +438,9 @@ export function ToolSurveyPage({ onBack }: Props) {
                             {s.mode === 'teacher' ? '교사 체크' : '학생 응답'} · 보관됨
                           </p>
                         </div>
-                        <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">chevron_right</span>
+                        <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
+                          chevron_right
+                        </span>
                       </div>
                     </button>
                   ))}
