@@ -351,9 +351,19 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
 
       setIsLiveMode(true);
       setConnectedStudents(0);
+      // 2026-05-14 realtime-wall-share-link-bug fix —
+      // 라이브 진입 즉시 공유 드로어 자동 오픈. 이전에는 사용자가 우측 56px 슬림
+      // ActionBar 의 share 아이콘을 직접 찾아 눌러야 학생 접속 URL/QR 이 노출됐고,
+      // 그 발견성 부족으로 "공유가 전혀 안 보임" 핫픽스 신고가 발생했음.
+      // 드로어가 열려있는 동안 ShareSectionBody 가 tunnelLoading / tunnelError 도
+      // 자체 안내하므로 cloudflared 연결 진행 단계까지 사용자에게 즉시 보인다.
+      setBoardSettingsDrawer('share');
       await connectTunnel();
-    } catch {
-      setLiveError('실시간 담벼락 서버를 시작할 수 없습니다.');
+    } catch (error) {
+      console.error('[realtime-wall] startLive failed', error);
+      setLiveError(
+        '학생 참여를 시작하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.',
+      );
     }
   }, [connectTunnel, normalizedTitle]);
 
@@ -373,6 +383,10 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
     setCustomCodeInput('');
     setCustomCodeError(null);
     setStudentFormLocked(false);
+    // 2026-05-14 realtime-wall-share-link-bug fix — 라이브 종료 시 공유 드로어도
+    // 함께 닫는다. 라이브가 끝났는데 share 섹션이 열린 채 남아있으면 share prop 이
+    // undefined 가 되며 빈 drawer 가 잠시 보일 수 있음.
+    setBoardSettingsDrawer(null);
   }, []);
 
   const handleSetCustomCode = useCallback(async () => {
@@ -1403,14 +1417,129 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
             </section>
           )}
 
+          {/*
+            2026-05-14 realtime-wall-share-link-bug fix — 라이브 모드 슬림 상태 칩.
+            보드 풀-사이즈는 유지하면서 (높이 36px), 학생 접속 주소·접속 인원·"공유 보기"
+            진입점을 항상 노출한다. 우측 56px ActionBar 의 share 아이콘만으로는 발견성이
+            낮아 사용자가 "공유 UI 가 전혀 없다"고 인식하던 회귀의 안전망.
+
+            동작:
+              - tunnelLoading=true → "외부 접속 주소를 만드는 중..." 안내 + spinner
+              - displayUrl 있음 → 접속 주소 truncate + 복사 + "공유 보기"
+              - tunnelError 있음 → 에러 메시지 + "다시 시도"
+          */}
+          {isLiveMode && (
+            <section className="shrink-0 rounded-lg border border-sp-accent/30 bg-sp-accent/5 px-3 py-1.5">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="flex items-center gap-1.5 font-semibold text-sp-accent">
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]" />
+                  라이브 · 학생 {connectedStudents}명
+                </span>
+                {tunnelLoading && !((shortUrl ?? tunnelUrl)) ? (
+                  <span className="flex items-center gap-1 text-sp-muted">
+                    <span className="material-symbols-outlined animate-spin text-sm text-sp-accent">progress_activity</span>
+                    외부 접속 주소를 만드는 중...
+                  </span>
+                ) : tunnelError && !((shortUrl ?? tunnelUrl)) ? (
+                  <span className="text-red-400">{tunnelError}</span>
+                ) : ((shortUrl ?? tunnelUrl)) ? (
+                  <>
+                    <span className="text-sp-muted">학생 접속:</span>
+                    <span className="min-w-0 max-w-[260px] truncate font-mono font-bold text-sp-accent">
+                      {shortUrl ?? tunnelUrl}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = shortUrl ?? tunnelUrl;
+                        if (url) void navigator.clipboard.writeText(url);
+                      }}
+                      className="rounded-md border border-sp-accent/30 bg-sp-accent/10 px-2 py-0.5 text-detail font-medium text-sp-accent transition hover:bg-sp-accent/20"
+                      aria-label="학생 접속 주소 복사"
+                    >
+                      복사
+                    </button>
+                  </>
+                ) : null}
+                <div className="ml-auto flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setBoardSettingsDrawer('share')}
+                    className="flex items-center gap-1 rounded-md bg-sp-accent px-2.5 py-1 text-detail font-bold text-white transition hover:bg-sp-accent/85"
+                    aria-label="공유 보기"
+                  >
+                    <span className="material-symbols-outlined text-sm">qr_code_2</span>
+                    공유 보기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleStopLive();
+                    }}
+                    className="flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-detail font-medium text-red-400 transition hover:bg-red-500/15"
+                    aria-label="참여 종료"
+                  >
+                    <span className="material-symbols-outlined text-sm">stop_circle</span>
+                    종료
+                  </button>
+                </div>
+              </div>
+              {liveError && <p className="mt-1 text-detail text-red-400">{liveError}</p>}
+            </section>
+          )}
+
+          {/*
+            2026-05-14 realtime-wall-share-link-bug Phase 2 — ActionBar viewport overflow fix.
+
+            증상: 라이브 진입 후 우측 56px ActionBar (공유/디자인/잠금 등 7개) 가
+            viewport 우측 밖으로 밀려나 사용자가 가로 스크롤을 해야만 발견. 사용자
+            인용 — "학생 참여 시작 버튼을 클릭하면 설정, 공유 등의 사이드바가 맨
+            왼쪽에 가려져서 보이지 않는 거였어".
+
+            근본 원인 (frontend-architect 정밀 진단):
+              1) `xl:` breakpoint(1280px) 미만에서 grid template 이 적용 안 됨 →
+                 ActionBar 가 일반 블록 흐름으로 떨어짐.
+              2) 더 깊은 원인: `useLiveContainerRect` 의 ResizeObserver 가
+                 Sidebar collapse/expand 200ms transition 중 stale 한 main rect
+                 (=viewport 전폭에 가까운 width) 를 캡처. `fixed` 컨테이너 width
+                 가 viewport 전폭이면 그 안의 `grid 1fr + auto` 가 viewport 폭을
+                 초과 → BrowserWindow 레벨 가로 스크롤 발생. `overflow-hidden`
+                 은 자식 클리핑만 하고 viewport 스크롤바는 못 막음.
+
+            수정 (C안 — grid track 명시 + xl: 제거):
+              - `xl:` prefix 제거 → 모든 breakpoint (1024px 노트북 포함) 에서 동일
+                grid 적용. 1024px 에서 1fr 셀이 ~700px 까지 줄어드는 건 kanban 이
+                원래 가로 스크롤 보드라 허용 가능.
+              - `auto` → 명시적 `56px` 로 ActionBar 트랙 폭 고정. minmax(0,1fr)
+                가 grid 의 초과분을 흡수해 stale rect 라도 grid 자체가 부모 width
+                안에 레이아웃 완성.
+              - min-w-0 3중화 (section/div/BoardThemeWrapper) 유지 — grid 셀이
+                kanban 내부 컨텐츠(컬럼 폭 합) 에 의해 강제 확장되는 것을 막아
+                1fr 가 실제로 축소되도록.
+              - ActionBar 의 `w-14 shrink-0` 유지 (RealtimeWallTeacherActionBar.tsx
+                line 139) — grid 가 축소 압력을 ActionBar 에 전달해도 56px 보존.
+
+            검증된 보존:
+              - kanban 내부 `overflow-x-auto` 는 컬럼 가로 스크롤 그대로 — ActionBar
+                와 독립.
+              - BoardThemeWrapper background gradient 가 그대로 보드 셀에 매핑
+                (gutter padding 없이 grid track 으로 분리).
+              - QR fullscreen (z-50) / drawer (z-40) 위계 그대로.
+
+            A안 (absolute right-0 + padding-right) 폐기 사유:
+              - `fixed overflow-hidden` 부모 안의 absolute 는 gradient right edge 와
+                padding gutter 가 어긋남 (Padlet 동일뷰 가드레일 위반).
+              - 보드 높이 < ActionBar 높이 시 ActionBar 가 보드 영역 덮을 위험.
+            B안 (sticky right-0) 폐기 사유:
+              - `fixed overflow-hidden` 이 scroll container 를 생성 안 해 sticky
+                가 일반 flow 로 fallback — 동작 안 함.
+          */}
           <div
+            data-testid="realtime-wall-live-grid"
             className={
-              // 2026-04-26 풀-사이즈 보드 + 우측 56px ActionBar.
-              // approvalMode === 'manual' 일 때만 좌측 큐 패널 노출 (auto에서는 큐 비어있음).
-              // grid columns: [큐(manual만)] [보드 1fr] [ActionBar 56px]
               approvalMode === 'manual'
-                ? 'grid min-h-0 flex-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)_auto]'
-                : 'grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto]'
+                ? 'grid min-h-0 flex-1 gap-3 grid-cols-[280px_minmax(0,1fr)_56px]'
+                : 'grid min-h-0 flex-1 gap-3 grid-cols-[minmax(0,1fr)_56px]'
             }
           >
             {approvalMode === 'manual' && (
@@ -1447,7 +1576,8 @@ export function ToolRealtimeWall({ onBack, isFullscreen }: ToolRealtimeWallProps
               </div>
             </section>
 
-            {/* 우측 슬림 ActionBar — 교사 전용 컨트롤 격리 (Padlet 정합) */}
+            {/* 우측 슬림 ActionBar — 교사 전용 컨트롤 격리 (Padlet 정합).
+                grid track 56px 에 정확히 매핑 (ActionBar 의 w-14 = 56px). */}
             <RealtimeWallTeacherActionBar
               layoutMode={layoutMode}
               isLiveMode={isLiveMode}
