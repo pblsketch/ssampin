@@ -6,10 +6,12 @@ import { ClassRosterSelector } from './ClassRosterSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
-import { shuffleArray, pickRandom } from '@domain/rules/randomRules';
+import { shuffleArray, pickRandom, pickWithMemory } from '@domain/rules/randomRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
+import { useSettingsStore, getToolRandomnessOn } from '@adapters/stores/useSettingsStore';
+import { RandomnessToggle } from './RandomnessToggle';
 
 interface ToolRandomProps {
   onBack: () => void;
@@ -58,6 +60,10 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const teachingClasses = useTeachingClassStore((s) => s.classes);
   const tcLoaded = useTeachingClassStore((s) => s.loaded);
   const loadTc = useTeachingClassStore((s) => s.load);
+
+  // --- 골고루 모드 (anti-repeat) ---
+  const settings = useSettingsStore((s) => s.settings);
+  const antiRepeatOn = getToolRandomnessOn(settings, 'random');
 
   // --- Pick State ---
   const [pickedItems, setPickedItems] = useState<string[]>([]);
@@ -153,7 +159,8 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
     speedRef.current = 50;
     stepCountRef.current = 0;
 
-    const totalSteps = 30;
+    // P1-1: 시각적 다양성 강화 — 30 → 40 step
+    const totalSteps = 40;
 
     const tick = () => {
       stepCountRef.current += 1;
@@ -161,12 +168,14 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
       setSlotDisplay(pool[idx] ?? '');
 
       if (stepCountRef.current >= totalSteps) {
-        // Final pick
+        // Final pick — anti-repeat 모드면 직전 결과들을 회피
         if (animationRef.current) {
           clearInterval(animationRef.current);
           animationRef.current = null;
         }
-        const [picked] = pickRandom(pool, 1);
+        const picked = antiRepeatOn
+          ? pickWithMemory(pool, { history: pickedItems })
+          : pickRandom(pool, 1)[0];
         if (picked !== undefined) {
           setSlotDisplay(picked);
           onComplete(picked);
@@ -191,7 +200,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
     };
 
     animationRef.current = setInterval(tick, speedRef.current);
-  }, [playProgress, playResult]);
+  }, [playProgress, playResult, antiRepeatOn, pickedItems]);
 
   // --- Handle pick ---
   const handlePick = useCallback(() => {
@@ -233,7 +242,23 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
               clearInterval(animationRef.current);
               animationRef.current = null;
             }
-            const picked = pickRandom(pool, count);
+            // N명 뽑기: anti-repeat 일 땐 한 명씩 순차적으로 뽑아 history 누적
+            let picked: string[];
+            if (antiRepeatOn) {
+              const result: string[] = [];
+              const remaining = [...pool];
+              const history = [...pickedItems];
+              for (let i = 0; i < count && remaining.length > 0; i++) {
+                const next = pickWithMemory(remaining, { history });
+                if (next === undefined) break;
+                result.push(next);
+                remaining.splice(remaining.indexOf(next), 1);
+                history.unshift(next);
+              }
+              picked = result;
+            } else {
+              picked = pickRandom(pool, count);
+            }
             setResult(picked);
             setSlotDisplay('');
             setShowResult(true);
@@ -310,7 +335,7 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
         break;
       }
     }
-  }, [isAnimating, mode, excludePicked, getPool, pickedItems, multipleCount, runSlotAnimation, playProgress, playResult]);
+  }, [isAnimating, mode, excludePicked, getPool, pickedItems, multipleCount, runSlotAnimation, playProgress, playResult, antiRepeatOn]);
 
   // --- Reset ---
   const handleReset = useCallback(() => {
@@ -690,21 +715,24 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
         {/* Options & Picked history (only for single / multiple modes) */}
         {(mode === 'single' || mode === 'multiple') && (
           <div className="bg-sp-card rounded-xl border border-sp-border p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <label className="text-sp-muted text-sm">이미 뽑힌 사람 제외</label>
-                <button
-                  onClick={() => setExcludePicked((prev) => !prev)}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${
-                    excludePicked ? 'bg-sp-accent' : 'bg-sp-border'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                      excludePicked ? 'translate-x-5' : 'translate-x-0'
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <label className="text-sp-muted text-sm">이미 뽑힌 사람 제외</label>
+                  <button
+                    onClick={() => setExcludePicked((prev) => !prev)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      excludePicked ? 'bg-sp-accent' : 'bg-sp-border'
                     }`}
-                  />
-                </button>
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        excludePicked ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <RandomnessToggle tool="random" />
               </div>
               <span className="text-xs text-sp-muted">
                 {availablePool.length}/{poolTotal}명 남음
