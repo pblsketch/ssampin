@@ -226,7 +226,8 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
 
         const tick = () => {
           stepCountRef.current += 1;
-          const randomItems = pickRandom(pool, count);
+          // 슬롯 중간 디스플레이용 — 시각 효과라 균등 셔플로 충분
+          const randomItems = shuffleArray(pool).slice(0, count);
           setSlotDisplay(randomItems.join(', '));
 
           if (stepCountRef.current >= totalSteps) {
