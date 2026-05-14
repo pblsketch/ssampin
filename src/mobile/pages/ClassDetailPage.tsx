@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { ClassAttendanceTab } from '@mobile/components/Class/ClassAttendanceTab';
 import { ClassProgressTab } from '@mobile/components/Class/ClassProgressTab';
 
@@ -16,7 +16,8 @@ interface ClassDetailPageProps {
  * 학급 상세 페이지 — 헤더 + [출결][진도] 서브탭 + 컨텐츠 슬롯.
  * Design §3.2.
  *
- * 좌우 스와이프(threshold 50px, 가로 우세) 지원.
+ * 서브탭 전환은 상단 [출결]/[진도] 탭 버튼 클릭만으로 (좌우 스와이프 제거,
+ * PR #48 의 글로벌 스와이프 제거와 일관 — 사용자 요청, 2026-05-14).
  */
 export function ClassDetailPage({
   classId,
@@ -25,27 +26,6 @@ export function ClassDetailPage({
   initialTab = 'attendance',
 }: ClassDetailPageProps) {
   const [activeSubTab, setActiveSubTab] = useState<ClassSubTab>(initialTab);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const t = e.touches[0];
-    if (t) touchStartRef.current = { x: t.clientX, y: t.clientY };
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const start = touchStartRef.current;
-    if (!start) return;
-    const t = e.changedTouches[0];
-    if (!t) return;
-    const dx = t.clientX - start.x;
-    const dy = t.clientY - start.y;
-    // 수직 스크롤 우선 (UX) — 가로가 세로보다 1.5배 이상일 때만 서브탭 전환
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      if (dx < 0 && activeSubTab === 'attendance') setActiveSubTab('progress');
-      if (dx > 0 && activeSubTab === 'progress') setActiveSubTab('attendance');
-    }
-    touchStartRef.current = null;
-  };
 
   return (
     <div className="flex flex-col h-full">
@@ -88,17 +68,12 @@ export function ClassDetailPage({
         ))}
       </div>
 
-      {/* 컨텐츠 슬롯 (스와이프 영역)
-          data-no-tab-swipe: 자체 서브탭 스와이프 핸들러가 있으므로 글로벌 탭 스와이프와 분리.
-          (현재 2서브탭 구조에선 무해하나, 명시적 분리로 미래 회귀 차단) */}
+      {/* 컨텐츠 슬롯 */}
       <div
         id={`class-panel-${activeSubTab}`}
         role="tabpanel"
         aria-labelledby={`class-tab-${activeSubTab}`}
         className="flex-1 overflow-hidden"
-        data-no-tab-swipe
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
         {activeSubTab === 'attendance' && (
           <ClassAttendanceTab classId={classId} className={className} />
