@@ -3,13 +3,19 @@ import { ToolLayout } from './ToolLayout';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
-import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
+import {
+  TemplateSaveModal,
+  TemplateLoadDropdown,
+  ResultSaveButton,
+  PastResultsView,
+} from './TemplateManager';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 import type { MultiSurveyQuestion } from '@domain/entities/MultiSurvey';
 import { TeacherControlPanel } from './TeacherControlPanel';
 import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
+import { RealtimeResponseToggle } from '@adapters/components/common/RealtimeResponseToggle';
 
 interface ToolSurveyProps {
   onBack: () => void;
@@ -60,9 +66,22 @@ interface CreateViewProps {
   onShowPastResults?: () => void;
   stepMode: boolean;
   onStepModeChange: (v: boolean) => void;
+  realtimeResponseView: boolean;
+  onRealtimeResponseViewChange: (v: boolean) => void;
 }
 
-function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, loadedDraft, onShowPastResults, stepMode, onStepModeChange }: CreateViewProps) {
+function CreateView({
+  isFullscreen,
+  onStart,
+  onSaveRequest,
+  onLoadTemplate,
+  loadedDraft,
+  onShowPastResults,
+  stepMode,
+  onStepModeChange,
+  realtimeResponseView,
+  onRealtimeResponseViewChange,
+}: CreateViewProps) {
   const [questions, setQuestions] = useState<SurveyQuestion[]>([defaultSurveyQuestion()]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [exampleIdx, setExampleIdx] = useState(-1);
@@ -124,7 +143,9 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
   const active = questions[activeIdx];
 
   return (
-    <div className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-4' : 'gap-5'}`}>
+    <div
+      className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-4' : 'gap-5'}`}
+    >
       {/* Question tabs */}
       <div className="flex items-center gap-2 flex-wrap">
         {questions.map((q, idx) => (
@@ -164,7 +185,9 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
               placeholder="질문을 입력하세요"
               className="flex-1 bg-sp-bg border border-sp-border rounded-xl px-4 py-3 text-xl text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
               maxLength={100}
-              onKeyDown={(e) => { if (e.key === 'Enter' && canStart) handleStart(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && canStart) handleStart();
+              }}
             />
             <button
               onClick={handleExampleClick}
@@ -194,7 +217,13 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
               ))}
             </div>
             <p className="text-xs text-sp-muted mt-1">
-              {active.maxLength <= 50 ? '짧은 한 문장' : active.maxLength <= 100 ? '1~2문장 분량' : active.maxLength <= 200 ? '2~3문장 분량' : '긴 서술형'}
+              {active.maxLength <= 50
+                ? '짧은 한 문장'
+                : active.maxLength <= 100
+                  ? '1~2문장 분량'
+                  : active.maxLength <= 200
+                    ? '2~3문장 분량'
+                    : '긴 서술형'}
             </p>
           </div>
 
@@ -229,9 +258,7 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
 
       {/* 내 템플릿 */}
       <div className="flex items-center gap-2 flex-wrap shrink-0">
-        {onLoadTemplate && (
-          <TemplateLoadDropdown toolType="survey" onLoad={onLoadTemplate} />
-        )}
+        {onLoadTemplate && <TemplateLoadDropdown toolType="survey" onLoad={onLoadTemplate} />}
         {onSaveRequest && (
           <button
             onClick={() => {
@@ -260,7 +287,10 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
           <p className="text-xs text-sp-muted mb-2 font-medium">전체 문항 미리보기</p>
           <div className="flex flex-col gap-1">
             {questions.map((q, i) => (
-              <p key={i} className={`text-xs ${q.question.trim() ? 'text-sp-text' : 'text-red-400'}`}>
+              <p
+                key={i}
+                className={`text-xs ${q.question.trim() ? 'text-sp-text' : 'text-red-400'}`}
+              >
                 Q{i + 1}. {q.question.trim() || '(질문 미입력)'}
                 <span className="text-sp-muted ml-1">({q.maxLength}자)</span>
               </p>
@@ -297,6 +327,13 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
           </button>
         </div>
       )}
+
+      {/* 실시간 답변 확인 토글 — 라이브 중 학생 답변 텍스트 즉시 노출 여부 */}
+      <RealtimeResponseToggle
+        checked={realtimeResponseView}
+        onChange={onRealtimeResponseViewChange}
+        tool="survey"
+      />
 
       {/* Start button */}
       <button
@@ -358,7 +395,9 @@ function LiveSurveyPanel({
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl]);
 
@@ -369,7 +408,9 @@ function LiveSurveyPanel({
         margin: 3,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl, showQRFullscreen]);
 
@@ -388,7 +429,9 @@ function LiveSurveyPanel({
   }
 
   return (
-    <div className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col items-center gap-3 shrink-0 ${isFullscreen ? '' : ''}`}>
+    <div
+      className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col items-center gap-3 shrink-0 ${isFullscreen ? '' : ''}`}
+    >
       <div className="flex items-center gap-2 w-full">
         <span className="text-green-400 text-sm font-bold">● LIVE</span>
         <span className="text-sp-muted text-sm">
@@ -430,14 +473,24 @@ function LiveSurveyPanel({
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
-                <button onClick={() => { void navigator.clipboard.writeText(tunnelUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                <button
+                  onClick={() => {
+                    void navigator.clipboard.writeText(tunnelUrl);
+                  }}
+                  className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
+                  title="주소 복사"
+                >
+                  <span className="material-symbols-outlined text-icon-sm">content_copy</span>
+                </button>
               </div>
               <p className="text-blue-400 text-xs">🌐 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
           ) : tunnelError ? (
             <div className="flex flex-col gap-1">
               <p className="text-red-400 text-xs">{tunnelError}</p>
-              <p className="text-sp-muted text-xs">Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}</p>
+              <p className="text-sp-muted text-xs">
+                Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}
+              </p>
             </div>
           ) : null}
 
@@ -447,7 +500,15 @@ function LiveSurveyPanel({
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
                 <div className="flex items-center gap-1.5">
                   <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
-                  <button onClick={() => { void navigator.clipboard.writeText(shortUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                  <button
+                    onClick={() => {
+                      void navigator.clipboard.writeText(shortUrl);
+                    }}
+                    className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
+                    title="주소 복사"
+                  >
+                    <span className="material-symbols-outlined text-icon-sm">content_copy</span>
+                  </button>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -455,7 +516,9 @@ function LiveSurveyPanel({
                   type="text"
                   value={customCodeInput}
                   onChange={(e) => onCustomCodeChange(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') onSetCustomCode(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onSetCustomCode();
+                  }}
                   placeholder={shortCode ?? '커스텀 코드'}
                   maxLength={30}
                   className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
@@ -468,9 +531,7 @@ function LiveSurveyPanel({
                   변경
                 </button>
               </div>
-              {customCodeError && (
-                <p className="text-red-400 text-xs">{customCodeError}</p>
-              )}
+              {customCodeError && <p className="text-red-400 text-xs">{customCodeError}</p>}
             </div>
           )}
         </div>
@@ -484,6 +545,8 @@ function LiveSurveyPanel({
 interface SurveyingViewProps {
   questions: SurveyQuestion[];
   submissions: SurveySubmission[];
+  /** 라이브 화면에서 학생 답변 텍스트를 즉시 노출할지 (Plan §2.1, 기본 false). */
+  realtimeResponseView: boolean;
   isFullscreen: boolean;
   isLiveMode: boolean;
   liveServerInfo: { port: number; localIPs: string[] } | null;
@@ -524,6 +587,7 @@ interface SurveyingViewProps {
 function SurveyingView({
   questions,
   submissions,
+  realtimeResponseView,
   isFullscreen,
   isLiveMode,
   liveServerInfo,
@@ -657,7 +721,8 @@ function SurveyingView({
           {submissions.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <p className="text-sp-muted text-center">
-                아직 응답이 없습니다.<br />
+                아직 응답이 없습니다.
+                <br />
                 <span className="text-sm">학생들이 응답하면 여기에 표시됩니다.</span>
               </p>
             </div>
@@ -665,14 +730,34 @@ function SurveyingView({
             submissions.map((sub, idx) => (
               <div
                 key={sub.id}
-                className="bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 flex items-center gap-3"
+                className={`bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 flex items-start gap-3 min-h-[3rem] ${
+                  idx === 0 ? 'animate-fade-in' : ''
+                }`}
               >
-                <span className="text-sp-accent font-mono text-sm font-bold">
+                <span className="text-sp-accent font-mono text-sm font-bold shrink-0 pt-0.5">
                   #{submissions.length - idx}
                 </span>
-                <span className="text-sp-text text-sm">학생 제출 완료</span>
-                <span className="text-sp-muted text-xs ml-auto">
-                  {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                {realtimeResponseView ? (
+                  <div className="flex-1 min-w-0">
+                    {sub.answers.map((a, i) => (
+                      <p
+                        key={i}
+                        className="text-sp-text text-sm line-clamp-2 leading-snug"
+                        title={a.text || '(빈 답변)'}
+                      >
+                        {a.text || '(빈 답변)'}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-sp-text text-sm">학생 제출 완료</span>
+                )}
+                <span className="text-sp-muted text-xs ml-auto shrink-0 pt-0.5">
+                  {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
                 </span>
               </div>
             ))
@@ -735,13 +820,20 @@ interface ResultsViewProps {
   teacherTotalConnected?: number;
 }
 
-function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, resultSaveButton, teacherAggregatedByQuestion, teacherTotalConnected }: ResultsViewProps) {
+function ResultsView({
+  questions,
+  submissions,
+  isFullscreen,
+  onNewSurvey,
+  resultSaveButton,
+  teacherAggregatedByQuestion,
+  teacherTotalConnected,
+}: ResultsViewProps) {
   // 교사 주도 모드 집계가 있으면 submissions 기반 로직을 우회한다.
-  const hasTeacherAggregated = teacherAggregatedByQuestion !== undefined
-    && Object.keys(teacherAggregatedByQuestion).length > 0;
-  const headerTotal = hasTeacherAggregated
-    ? (teacherTotalConnected ?? 0)
-    : submissions.length;
+  const hasTeacherAggregated =
+    teacherAggregatedByQuestion !== undefined &&
+    Object.keys(teacherAggregatedByQuestion).length > 0;
+  const headerTotal = hasTeacherAggregated ? (teacherTotalConnected ?? 0) : submissions.length;
 
   // 교사 집계에서 문항별 답변 리스트 추출 (주관식만 사용)
   const getTeacherTexts = (qId: string): string[] | null => {
@@ -782,10 +874,14 @@ function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, result
                   className="bg-sp-card border border-sp-border rounded-xl p-4"
                 >
                   <div className="flex items-start gap-3">
-                    <span className={`shrink-0 font-mono text-sp-muted font-bold ${isFullscreen ? 'text-base' : 'text-sm'}`}>
+                    <span
+                      className={`shrink-0 font-mono text-sp-muted font-bold ${isFullscreen ? 'text-base' : 'text-sm'}`}
+                    >
                       #{texts.length - idx}
                     </span>
-                    <p className={`text-sp-text flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}>
+                    <p
+                      className={`text-sp-text flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}
+                    >
                       {text}
                     </p>
                   </div>
@@ -813,9 +909,7 @@ function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, result
                             <span className="shrink-0 font-mono text-sp-muted font-bold text-sm">
                               #{texts.length - tIdx}
                             </span>
-                            <p className="text-sp-text flex-1 leading-relaxed text-base">
-                              {text}
-                            </p>
+                            <p className="text-sp-text flex-1 leading-relaxed text-base">{text}</p>
                           </div>
                         </div>
                       ))
@@ -834,15 +928,16 @@ function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, result
           submissions.map((sub, idx) => {
             const answer = sub.answers.find((a) => a.questionId === questions[0]!.id);
             return (
-              <div
-                key={sub.id}
-                className="bg-sp-card border border-sp-border rounded-xl p-4"
-              >
+              <div key={sub.id} className="bg-sp-card border border-sp-border rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  <span className={`shrink-0 font-mono text-sp-muted font-bold ${isFullscreen ? 'text-base' : 'text-sm'}`}>
+                  <span
+                    className={`shrink-0 font-mono text-sp-muted font-bold ${isFullscreen ? 'text-base' : 'text-sm'}`}
+                  >
                     #{submissions.length - idx}
                   </span>
-                  <p className={`text-sp-text flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}>
+                  <p
+                    className={`text-sp-text flex-1 leading-relaxed ${isFullscreen ? 'text-lg' : 'text-base'}`}
+                  >
                     {answer?.text ?? ''}
                   </p>
                 </div>
@@ -876,9 +971,9 @@ function ResultsView({ questions, submissions, isFullscreen, onNewSurvey, result
                     </div>
                   );
                 })}
-                {submissions.every((sub) => !sub.answers.find((a) => a.questionId === q.id)?.text.trim()) && (
-                  <p className="text-sp-muted text-sm ml-2">응답이 없습니다.</p>
-                )}
+                {submissions.every(
+                  (sub) => !sub.answers.find((a) => a.questionId === q.id)?.text.trim(),
+                ) && <p className="text-sp-muted text-sm ml-2">응답이 없습니다.</p>}
               </div>
             </div>
           ))
@@ -918,14 +1013,20 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [showPastResults, setShowPastResults] = useState(false);
-  const [loadedDraft, setLoadedDraft] = useState<{ question: string; maxLength: number } | null>(null);
-  const [pendingSave, setPendingSave] = useState<{ question: string; maxLength: number } | null>(null);
+  const [loadedDraft, setLoadedDraft] = useState<{ question: string; maxLength: number } | null>(
+    null,
+  );
+  const [pendingSave, setPendingSave] = useState<{ question: string; maxLength: number } | null>(
+    null,
+  );
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [submissions, setSubmissions] = useState<SurveySubmission[]>([]);
 
   // Live mode state
   const [isLiveMode, setIsLiveMode] = useState(false);
-  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(null);
+  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(
+    null,
+  );
   const [connectedStudents, setConnectedStudents] = useState(0);
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -942,21 +1043,33 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
 
   // stepMode — 다문항 + 교사 주도 진행 모드 (기본값 false, 기존 동작 유지)
   const [stepMode, setStepMode] = useState(false);
+  // 실시간 답변 확인 — 라이브 중 학생 답변 텍스트 즉시 노출 (기본값 false, 옵트인)
+  const [realtimeResponseView, setRealtimeResponseView] = useState(false);
 
   // 교사 주도 진행 모드 상태 (stepMode=true + 다문항일 때 활성)
-  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>('lobby');
+  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>(
+    'lobby',
+  );
   const [teacherQuestionIndex, setTeacherQuestionIndex] = useState(0);
   const [teacherTotalConnected, setTeacherTotalConnected] = useState(0);
   const [teacherTotalAnswered, setTeacherTotalAnswered] = useState(0);
-  const [teacherAggregated, setTeacherAggregated] = useState<AggregatedResult | undefined>(undefined);
+  const [teacherAggregated, setTeacherAggregated] = useState<AggregatedResult | undefined>(
+    undefined,
+  );
   const [teacherRoster, setTeacherRoster] = useState<RosterEntry[]>([]);
-  const [teacherTextDetail, setTeacherTextDetail] = useState<TextAnswerEntry[] | undefined>(undefined);
+  const [teacherTextDetail, setTeacherTextDetail] = useState<TextAnswerEntry[] | undefined>(
+    undefined,
+  );
   // Bug #B: 교사 주도 모드에서 각 문항의 REVEALED 시점에 수신한 aggregated.answers를
   // 문항ID 기준으로 누적한다. 세션 종료 후 ResultsView가 submissions 대신 이 집계를 우선 사용.
-  const [teacherAggregatedByQuestion, setTeacherAggregatedByQuestion] = useState<Record<string, AggregatedResult>>({});
+  const [teacherAggregatedByQuestion, setTeacherAggregatedByQuestion] = useState<
+    Record<string, AggregatedResult>
+  >({});
   // phase-changed 콜백에서 최신 questions 배열 참조용 ref
   const questionsRef = useRef<SurveyQuestion[]>([]);
-  useEffect(() => { questionsRef.current = questions; }, [questions]);
+  useEffect(() => {
+    questionsRef.current = questions;
+  }, [questions]);
 
   const isMultiQuestion = questions.length > 1;
 
@@ -990,7 +1103,10 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           required: true,
           maxLength: q.maxLength,
         }));
-        const info = await window.electronAPI.startLiveMultiSurvey({ questions: surveyQuestions, stepMode });
+        const info = await window.electronAPI.startLiveMultiSurvey({
+          questions: surveyQuestions,
+          stepMode,
+        });
         if (info.localIPs.length === 0) {
           setLiveError('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
           return;
@@ -1008,7 +1124,10 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           setShortUrl(null);
           setShortCode(null);
           void liveSessionClientRef.current.registerSession(result.tunnelUrl).then((session) => {
-            if (session) { setShortUrl(session.shortUrl); setShortCode(session.code); }
+            if (session) {
+              setShortUrl(session.shortUrl);
+              setShortCode(session.code);
+            }
           });
         } catch {
           setTunnelError('인터넷 연결에 실패했습니다. Wi-Fi로 접속하거나 네트워크를 확인해주세요.');
@@ -1022,7 +1141,10 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           return;
         }
         const q = questions[0]!;
-        const info = await window.electronAPI.startLiveSurvey({ question: q.question, maxLength: q.maxLength });
+        const info = await window.electronAPI.startLiveSurvey({
+          question: q.question,
+          maxLength: q.maxLength,
+        });
         if (info.localIPs.length === 0) {
           setLiveError('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
           return;
@@ -1040,7 +1162,10 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           setShortUrl(null);
           setShortCode(null);
           void liveSessionClientRef.current.registerSession(result.tunnelUrl).then((session) => {
-            if (session) { setShortUrl(session.shortUrl); setShortCode(session.code); }
+            if (session) {
+              setShortUrl(session.shortUrl);
+              setShortCode(session.code);
+            }
           });
         } catch {
           setTunnelError('인터넷 연결에 실패했습니다. Wi-Fi로 접속하거나 네트워크를 확인해주세요.');
@@ -1085,7 +1210,10 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     if (!tunnelUrl || !customCodeInput.trim()) return;
     setCustomCodeError(null);
     try {
-      const session = await liveSessionClientRef.current.setCustomCode(tunnelUrl, customCodeInput.trim());
+      const session = await liveSessionClientRef.current.setCustomCode(
+        tunnelUrl,
+        customCodeInput.trim(),
+      );
       setShortUrl(session.shortUrl);
       setShortCode(session.code);
       setCustomCodeInput('');
@@ -1115,16 +1243,19 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     setShowQRFullscreen((prev) => !prev);
   }, []);
 
-  const handleSaveTemplate = useCallback((name: string, question: string, maxLength: number) => {
-    const config = { type: 'survey' as const, question, maxLength };
-    if (editingTemplateId) {
-      void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
-    } else {
-      void useToolTemplateStore.getState().addTemplate(name, 'survey', config);
-    }
-    setShowSaveModal(false);
-    setEditingTemplateId(null);
-  }, [editingTemplateId]);
+  const handleSaveTemplate = useCallback(
+    (name: string, question: string, maxLength: number) => {
+      const config = { type: 'survey' as const, question, maxLength, realtimeResponseView };
+      if (editingTemplateId) {
+        void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
+      } else {
+        void useToolTemplateStore.getState().addTemplate(name, 'survey', config);
+      }
+      setShowSaveModal(false);
+      setEditingTemplateId(null);
+    },
+    [editingTemplateId, realtimeResponseView],
+  );
 
   const handleSaveRequest = useCallback((question: string, maxLength: number) => {
     setPendingSave({ question, maxLength });
@@ -1136,6 +1267,8 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
     if (template.config.type !== 'survey') return;
     setLoadedDraft({ question: template.config.question, maxLength: template.config.maxLength });
     setEditingTemplateId(template.id);
+    // 누락 시 false fallback (스키마 비파괴 확장)
+    setRealtimeResponseView(template.config.realtimeResponseView ?? false);
   }, []);
 
   // Live survey IPC event listeners
@@ -1155,7 +1288,10 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
       const unsubCount = window.electronAPI.onLiveMultiSurveyConnectionCount?.((data) => {
         setConnectedStudents(data.count);
       });
-      return () => { unsubSubmitted?.(); unsubCount?.(); };
+      return () => {
+        unsubSubmitted?.();
+        unsubCount?.();
+      };
     } else {
       // Single question: use liveSurvey events
       const questionId = questions[0]!.id;
@@ -1169,7 +1305,10 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
       const unsubCount = window.electronAPI.onLiveSurveyConnectionCount?.((data) => {
         setConnectedStudents(data.count);
       });
-      return () => { unsubSubmitted?.(); unsubCount?.(); };
+      return () => {
+        unsubSubmitted?.();
+        unsubCount?.();
+      };
     }
   }, [isLiveMode, isMultiQuestion, questions]);
 
@@ -1252,7 +1391,9 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
             return (
               <Fragment key={step.key}>
                 {i > 0 && <span className="text-sp-border">›</span>}
-                <span className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                <span
+                  className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}
+                >
                   {step.label}
                 </span>
               </Fragment>
@@ -1262,22 +1403,27 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
       )}
       {showPastResults ? (
         <PastResultsView toolType="survey" onClose={() => setShowPastResults(false)} />
-      ) : viewMode === 'create' && (
-        <CreateView
-          isFullscreen={isFullscreen}
-          onStart={handleStart}
-          onSaveRequest={handleSaveRequest}
-          onLoadTemplate={handleLoadTemplate}
-          loadedDraft={loadedDraft}
-          onShowPastResults={() => setShowPastResults(true)}
-          stepMode={stepMode}
-          onStepModeChange={setStepMode}
-        />
+      ) : (
+        viewMode === 'create' && (
+          <CreateView
+            isFullscreen={isFullscreen}
+            onStart={handleStart}
+            onSaveRequest={handleSaveRequest}
+            onLoadTemplate={handleLoadTemplate}
+            loadedDraft={loadedDraft}
+            onShowPastResults={() => setShowPastResults(true)}
+            stepMode={stepMode}
+            onStepModeChange={setStepMode}
+            realtimeResponseView={realtimeResponseView}
+            onRealtimeResponseViewChange={setRealtimeResponseView}
+          />
+        )
       )}
       {!showPastResults && viewMode === 'surveying' && (
         <SurveyingView
           questions={questions}
           submissions={submissions}
+          realtimeResponseView={realtimeResponseView}
           isFullscreen={isFullscreen}
           isLiveMode={isLiveMode}
           liveServerInfo={liveServerInfo}
@@ -1306,11 +1452,21 @@ export function ToolSurvey({ onBack, isFullscreen }: ToolSurveyProps) {
           teacherAggregated={teacherAggregated}
           teacherRoster={teacherRoster}
           teacherTextDetail={teacherTextDetail}
-          onTeacherActivate={() => { void window.electronAPI?.liveMultiSurveyActivateSession(); }}
-          onTeacherReveal={() => { void window.electronAPI?.liveMultiSurveyReveal(); }}
-          onTeacherAdvance={() => { void window.electronAPI?.liveMultiSurveyAdvance(); }}
-          onTeacherPrev={() => { void window.electronAPI?.liveMultiSurveyPrev(); }}
-          onTeacherReopen={() => { void window.electronAPI?.liveMultiSurveyReopen(); }}
+          onTeacherActivate={() => {
+            void window.electronAPI?.liveMultiSurveyActivateSession();
+          }}
+          onTeacherReveal={() => {
+            void window.electronAPI?.liveMultiSurveyReveal();
+          }}
+          onTeacherAdvance={() => {
+            void window.electronAPI?.liveMultiSurveyAdvance();
+          }}
+          onTeacherPrev={() => {
+            void window.electronAPI?.liveMultiSurveyPrev();
+          }}
+          onTeacherReopen={() => {
+            void window.electronAPI?.liveMultiSurveyReopen();
+          }}
           onTeacherEnd={() => {
             void window.electronAPI?.liveMultiSurveyEndSession();
             void handleStopLive();

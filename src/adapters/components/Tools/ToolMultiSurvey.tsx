@@ -18,6 +18,7 @@ import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
 import { SpreadsheetView } from './Results/SpreadsheetView';
 import { MultiSurveyLiveBoardView } from './MultiSurveyLiveBoard/MultiSurveyLiveBoardView';
 import { FEEDBACK_PRESETS, type FeedbackPreset } from '@adapters/constants/feedbackPresets';
+import { RealtimeResponseToggle } from '@adapters/components/common/RealtimeResponseToggle';
 
 interface ToolMultiSurveyProps {
   onBack: () => void;
@@ -74,6 +75,39 @@ const SCALE_RANGE_OPTIONS = [
 
 function uid(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * 라이브 카드 미리보기 — `realtimeResponseView` ON 시 문항별 답변을 한 줄로 요약한다.
+ *
+ * - single-choice: 선택한 옵션 텍스트
+ * - multi-choice: 선택한 옵션 텍스트들을 ", "로 join
+ * - text: 입력 텍스트 (공백 시 "(빈 답변)")
+ * - scale: "값/최대" 표기
+ * - 미답(`undefined`) 시 "—"
+ */
+export function renderAnswerPreview(
+  q: EditableQuestion,
+  value: string | string[] | number | undefined,
+): string {
+  if (value === undefined || value === null) return '—';
+  if (q.type === 'single-choice') {
+    const id = String(value);
+    return q.options.find((o) => o.id === id)?.text || '(선택값 없음)';
+  }
+  if (q.type === 'multi-choice') {
+    const ids = Array.isArray(value) ? value : [String(value)];
+    const labels = ids
+      .map((id) => q.options.find((o) => o.id === id)?.text)
+      .filter((t): t is string => Boolean(t));
+    return labels.length > 0 ? labels.join(', ') : '(선택값 없음)';
+  }
+  if (q.type === 'scale') {
+    return `${value}/${q.scaleMax}`;
+  }
+  // text
+  const text = String(value).trim();
+  return text.length > 0 ? text : '(빈 답변)';
 }
 
 function defaultOption(index: number): EditableOption {
@@ -461,6 +495,8 @@ interface CreateViewProps {
   externalTitle: string | null;
   externalQuestions: EditableQuestion[] | null;
   onTemplateApplied: () => void;
+  realtimeResponseView: boolean;
+  onRealtimeResponseViewChange: (v: boolean) => void;
 }
 
 function CreateView({
@@ -483,6 +519,8 @@ function CreateView({
   externalTitle,
   externalQuestions,
   onTemplateApplied,
+  realtimeResponseView,
+  onRealtimeResponseViewChange,
 }: CreateViewProps) {
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState<EditableQuestion[]>([defaultQuestion()]);
@@ -719,6 +757,13 @@ function CreateView({
         </button>
       )}
 
+      {/* 실시간 답변 확인 토글 — 라이브 중 학생 답변 텍스트 즉시 노출 여부 (세션 단위) */}
+      <RealtimeResponseToggle
+        checked={realtimeResponseView}
+        onChange={onRealtimeResponseViewChange}
+        tool="multiSurvey"
+      />
+
       {/* Start button */}
       <button
         onClick={handleStart}
@@ -934,6 +979,8 @@ interface RunningViewProps {
   title: string;
   questions: EditableQuestion[];
   submissions: MultiSurveySubmission[];
+  /** 실시간 답변 확인 — ON 시 라이브 카드에 답변 텍스트 요약 노출 (Plan §2.1). */
+  realtimeResponseView: boolean;
   isFullscreen: boolean;
   isLiveMode: boolean;
   liveServerInfo: { port: number; localIPs: string[] } | null;
@@ -975,6 +1022,7 @@ function RunningView({
   title,
   questions,
   submissions,
+  realtimeResponseView,
   isFullscreen,
   isLiveMode,
   liveServerInfo,
@@ -1060,7 +1108,10 @@ function RunningView({
         </div>
       )}
 
-      {/* Teacher control panel — stepMode=true, isLiveMode=true, 2개 이상 문항이면 메인 영역 전체 차지 */}
+      {/* Teacher control panel — stepMode=true, isLiveMode=true, 2개 이상 문항이면 메인 영역 전체 차지.
+       * NOTE(survey-realtime-response-view PDCA, Design §5.3.4): phase 모드는 이미 `revealed`
+       * 단계에서 텍스트 답변을 노출(이름/무기명 토글). `open` 단계에 토글로 미리 노출하면 phase
+       * 모드의 의도(교사가 reveal 시점 통제)와 충돌하므로 `realtimeResponseView`는 scroll 모드만 적용. */}
       {showTeacherPanel ? (
         <div className="flex-1 min-h-0 flex flex-col">
           <TeacherControlPanel
@@ -1100,13 +1151,32 @@ function RunningView({
             submissions.map((sub, idx) => (
               <div
                 key={sub.id}
-                className="bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 flex items-center gap-3"
+                className={`bg-sp-card border border-sp-border rounded-lg px-4 py-2.5 flex items-start gap-3 min-h-[3rem] ${
+                  idx === 0 ? 'animate-fade-in' : ''
+                }`}
               >
-                <span className="text-sp-accent font-mono text-sm font-bold">
+                <span className="text-sp-accent font-mono text-sm font-bold shrink-0 pt-0.5">
                   #{submissions.length - idx}
                 </span>
-                <span className="text-sp-text text-sm">학생 제출 완료</span>
-                <span className="text-sp-muted text-xs ml-auto">
+                {realtimeResponseView ? (
+                  <div className="flex-1 min-w-0 flex flex-col gap-1">
+                    {questions.map((q, qIdx) => {
+                      const answer = sub.answers.find((a) => a.questionId === q.id);
+                      const preview = renderAnswerPreview(q, answer?.value);
+                      return (
+                        <div key={q.id} className="flex items-start gap-2 text-xs">
+                          <span className="text-sp-muted shrink-0">Q{qIdx + 1}.</span>
+                          <span className="text-sp-text line-clamp-1 flex-1" title={preview}>
+                            {preview}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span className="text-sp-text text-sm">학생 제출 완료</span>
+                )}
+                <span className="text-sp-muted text-xs ml-auto shrink-0 pt-0.5">
                   {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -1183,6 +1253,8 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
   const [stepMode, setStepMode] = useState(false);
   const [useStopwords, setUseStopwords] = useState(true);
   const [showLiveBoard, setShowLiveBoard] = useState(false);
+  // 실시간 답변 확인 — 세션 단위 (기본 false, 옵트인)
+  const [realtimeResponseView, setRealtimeResponseView] = useState(false);
 
   // Live mode state
   const [isLiveMode, setIsLiveMode] = useState(false);
@@ -1241,6 +1313,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
         })),
         stepMode,
         useStopwords,
+        realtimeResponseView,
       };
       if (editingTemplateId) {
         void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
@@ -1250,7 +1323,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
       setShowSaveModal(false);
       setEditingTemplateId(null);
     },
-    [stepMode, useStopwords, editingTemplateId],
+    [stepMode, useStopwords, realtimeResponseView, editingTemplateId],
   );
 
   const handleLoadTemplate = useCallback((template: ToolTemplate) => {
@@ -1273,6 +1346,8 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
     setPendingTitle(cfg.title);
     setPendingQuestions(loadedQuestions);
     setEditingTemplateId(template.id);
+    // 누락 시 false fallback
+    setRealtimeResponseView(cfg.realtimeResponseView ?? false);
   }, []);
 
   const handleStart = useCallback((t: string, qs: EditableQuestion[]) => {
@@ -1561,6 +1636,8 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
             setPendingTitle(null);
             setPendingQuestions(null);
           }}
+          realtimeResponseView={realtimeResponseView}
+          onRealtimeResponseViewChange={setRealtimeResponseView}
         />
       )}
       {phase === 'running' && showLiveBoard && (
@@ -1590,6 +1667,7 @@ export function ToolMultiSurvey({ onBack, isFullscreen }: ToolMultiSurveyProps) 
             title={title}
             questions={questions}
             submissions={submissions}
+            realtimeResponseView={realtimeResponseView}
             isFullscreen={isFullscreen}
             isLiveMode={isLiveMode}
             liveServerInfo={liveServerInfo}

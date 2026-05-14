@@ -4,12 +4,18 @@ import type { PollOption, PollQuestion } from '@domain/entities/Poll';
 import QRCode from 'qrcode';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
-import { TemplateSaveModal, TemplateLoadDropdown, ResultSaveButton, PastResultsView } from './TemplateManager';
+import {
+  TemplateSaveModal,
+  TemplateLoadDropdown,
+  ResultSaveButton,
+  PastResultsView,
+} from './TemplateManager';
 import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
 import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import type { ToolTemplate } from '@domain/entities/ToolTemplate';
 import { TeacherControlPanel } from './TeacherControlPanel';
 import type { RosterEntry, TextAnswerEntry } from './TeacherControlPanel';
+import { RealtimeResponseToggle } from '@adapters/components/common/RealtimeResponseToggle';
 
 interface ToolPollProps {
   onBack: () => void;
@@ -46,7 +52,11 @@ interface Preset {
 const PRESETS: Preset[] = [
   { emoji: '\u{1F44D}', label: '찬성/반대', options: ['찬성', '반대'] },
   { emoji: '\u{1F600}', label: '만족도', options: ['매우 만족', '만족', '보통', '불만족'] },
-  { emoji: '\u{1F4CA}', label: '이해도', options: ['완벽히 이해', '대체로 이해', '조금 어려움', '모르겠음'] },
+  {
+    emoji: '\u{1F4CA}',
+    label: '이해도',
+    options: ['완벽히 이해', '대체로 이해', '조금 어려움', '모르겠음'],
+  },
   { emoji: '\u{1F522}', label: '1~5점', options: ['1점', '2점', '3점', '4점', '5점'] },
 ];
 
@@ -93,9 +103,22 @@ interface CreateViewProps {
   onShowPastResults?: () => void;
   stepMode: boolean;
   onStepModeChange: (v: boolean) => void;
+  realtimeResponseView: boolean;
+  onRealtimeResponseViewChange: (v: boolean) => void;
 }
 
-function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, loadedDraft, onShowPastResults, stepMode, onStepModeChange }: CreateViewProps) {
+function CreateView({
+  isFullscreen,
+  onStart,
+  onSaveRequest,
+  onLoadTemplate,
+  loadedDraft,
+  onShowPastResults,
+  stepMode,
+  onStepModeChange,
+  realtimeResponseView,
+  onRealtimeResponseViewChange,
+}: CreateViewProps) {
   const [drafts, setDrafts] = useState<QuestionDraft[]>([makeQuestionDraft()]);
   const [exampleIdx, setExampleIdx] = useState(-1);
   const inputRefs = useRef<Map<string, (HTMLInputElement | null)[]>>(new Map());
@@ -103,83 +126,112 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
   // Apply loadedDraft when it changes
   useEffect(() => {
     if (!loadedDraft || loadedDraft.length === 0) return;
-    setDrafts(loadedDraft.map((d) => ({
-      id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      question: d.question,
-      optionTexts: d.options.length > 0 ? [...d.options] : ['', ''],
-      required: true,
-    })));
+    setDrafts(
+      loadedDraft.map((d) => ({
+        id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        question: d.question,
+        optionTexts: d.options.length > 0 ? [...d.options] : ['', ''],
+        required: true,
+      })),
+    );
   }, [loadedDraft]);
 
   const canStart = drafts.every(
-    (d) => d.question.trim().length > 0 && d.optionTexts.filter((t) => t.trim().length > 0).length >= 2
+    (d) =>
+      d.question.trim().length > 0 && d.optionTexts.filter((t) => t.trim().length > 0).length >= 2,
   );
 
-  const updateDraft = useCallback((draftId: string, updater: (d: QuestionDraft) => QuestionDraft) => {
-    setDrafts((prev) => prev.map((d) => (d.id === draftId ? updater(d) : d)));
-  }, []);
+  const updateDraft = useCallback(
+    (draftId: string, updater: (d: QuestionDraft) => QuestionDraft) => {
+      setDrafts((prev) => prev.map((d) => (d.id === draftId ? updater(d) : d)));
+    },
+    [],
+  );
 
-  const handleOptionChange = useCallback((draftId: string, index: number, value: string) => {
-    updateDraft(draftId, (d) => ({
-      ...d,
-      optionTexts: d.optionTexts.map((t, i) => (i === index ? value : t)),
-    }));
-  }, [updateDraft]);
+  const handleOptionChange = useCallback(
+    (draftId: string, index: number, value: string) => {
+      updateDraft(draftId, (d) => ({
+        ...d,
+        optionTexts: d.optionTexts.map((t, i) => (i === index ? value : t)),
+      }));
+    },
+    [updateDraft],
+  );
 
-  const handleAddOption = useCallback((draftId: string) => {
-    setDrafts((prev) => {
-      const draft = prev.find((d) => d.id === draftId);
-      if (!draft || draft.optionTexts.length >= 6) return prev;
-      return prev.map((d) => (d.id === draftId ? { ...d, optionTexts: [...d.optionTexts, ''] } : d));
-    });
-    setTimeout(() => {
-      const refs = inputRefs.current.get(draftId);
-      const draft = drafts.find((d) => d.id === draftId);
-      if (refs && draft) refs[draft.optionTexts.length]?.focus();
-    }, 50);
-  }, [drafts]);
-
-  const handleRemoveOption = useCallback((draftId: string, index: number) => {
-    updateDraft(draftId, (d) => {
-      if (d.optionTexts.length <= 2) return d;
-      return { ...d, optionTexts: d.optionTexts.filter((_, i) => i !== index) };
-    });
-  }, [updateDraft]);
-
-  const handleOptionKeyDown = useCallback((e: React.KeyboardEvent, draftId: string, index: number) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const draft = drafts.find((d) => d.id === draftId);
-      if (!draft) return;
-      if (index < draft.optionTexts.length - 1) {
+  const handleAddOption = useCallback(
+    (draftId: string) => {
+      setDrafts((prev) => {
+        const draft = prev.find((d) => d.id === draftId);
+        if (!draft || draft.optionTexts.length >= 6) return prev;
+        return prev.map((d) =>
+          d.id === draftId ? { ...d, optionTexts: [...d.optionTexts, ''] } : d,
+        );
+      });
+      setTimeout(() => {
         const refs = inputRefs.current.get(draftId);
-        refs?.[index + 1]?.focus();
-      } else if (draft.optionTexts.length < 6) {
-        handleAddOption(draftId);
+        const draft = drafts.find((d) => d.id === draftId);
+        if (refs && draft) refs[draft.optionTexts.length]?.focus();
+      }, 50);
+    },
+    [drafts],
+  );
+
+  const handleRemoveOption = useCallback(
+    (draftId: string, index: number) => {
+      updateDraft(draftId, (d) => {
+        if (d.optionTexts.length <= 2) return d;
+        return { ...d, optionTexts: d.optionTexts.filter((_, i) => i !== index) };
+      });
+    },
+    [updateDraft],
+  );
+
+  const handleOptionKeyDown = useCallback(
+    (e: React.KeyboardEvent, draftId: string, index: number) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const draft = drafts.find((d) => d.id === draftId);
+        if (!draft) return;
+        if (index < draft.optionTexts.length - 1) {
+          const refs = inputRefs.current.get(draftId);
+          refs?.[index + 1]?.focus();
+        } else if (draft.optionTexts.length < 6) {
+          handleAddOption(draftId);
+        }
       }
-    }
-  }, [drafts, handleAddOption]);
+    },
+    [drafts, handleAddOption],
+  );
 
-  const handlePreset = useCallback((draftId: string, preset: Preset) => {
-    updateDraft(draftId, (d) => ({ ...d, optionTexts: [...preset.options] }));
-  }, [updateDraft]);
+  const handlePreset = useCallback(
+    (draftId: string, preset: Preset) => {
+      updateDraft(draftId, (d) => ({ ...d, optionTexts: [...preset.options] }));
+    },
+    [updateDraft],
+  );
 
-  const handleExampleClick = useCallback((draftId: string) => {
-    const nextIdx = (exampleIdx + 1) % EXAMPLE_QUESTIONS.length;
-    setExampleIdx(nextIdx);
-    updateDraft(draftId, (d) => ({ ...d, question: EXAMPLE_QUESTIONS[nextIdx]! }));
-  }, [exampleIdx, updateDraft]);
+  const handleExampleClick = useCallback(
+    (draftId: string) => {
+      const nextIdx = (exampleIdx + 1) % EXAMPLE_QUESTIONS.length;
+      setExampleIdx(nextIdx);
+      updateDraft(draftId, (d) => ({ ...d, question: EXAMPLE_QUESTIONS[nextIdx]! }));
+    },
+    [exampleIdx, updateDraft],
+  );
 
   const handleAddQuestion = useCallback(() => {
     if (drafts.length >= MAX_QUESTIONS) return;
     setDrafts((prev) => [...prev, makeQuestionDraft()]);
   }, [drafts.length]);
 
-  const handleRemoveQuestion = useCallback((draftId: string) => {
-    if (drafts.length <= 1) return;
-    setDrafts((prev) => prev.filter((d) => d.id !== draftId));
-    inputRefs.current.delete(draftId);
-  }, [drafts.length]);
+  const handleRemoveQuestion = useCallback(
+    (draftId: string) => {
+      if (drafts.length <= 1) return;
+      setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      inputRefs.current.delete(draftId);
+    },
+    [drafts.length],
+  );
 
   const handleMoveQuestion = useCallback((draftId: string, direction: -1 | 1) => {
     setDrafts((prev) => {
@@ -196,7 +248,11 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
   const handleStart = useCallback(() => {
     if (!canStart) return;
     const questions: PollQuestion[] = drafts
-      .filter((d) => d.question.trim().length > 0 && d.optionTexts.filter((t) => t.trim().length > 0).length >= 2)
+      .filter(
+        (d) =>
+          d.question.trim().length > 0 &&
+          d.optionTexts.filter((t) => t.trim().length > 0).length >= 2,
+      )
       .map((d) => {
         const validOptions = d.optionTexts
           .map((text) => text.trim())
@@ -211,7 +267,9 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
   }, [canStart, drafts, onStart]);
 
   return (
-    <div className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-4' : 'gap-6'}`}>
+    <div
+      className={`w-full max-w-2xl mx-auto flex flex-col ${isFullscreen ? 'h-full min-h-0 gap-4' : 'gap-6'}`}
+    >
       {/* Questions */}
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
         {drafts.map((draft, qIdx) => {
@@ -222,7 +280,10 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
           const refs = inputRefs.current.get(draft.id)!;
 
           return (
-            <div key={draft.id} className="bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col gap-3">
+            <div
+              key={draft.id}
+              className="bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col gap-3"
+            >
               {/* Question header */}
               <div className="flex items-center gap-2">
                 {drafts.length > 1 && (
@@ -231,7 +292,9 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
                 <input
                   type="text"
                   value={draft.question}
-                  onChange={(e) => updateDraft(draft.id, (d) => ({ ...d, question: e.target.value }))}
+                  onChange={(e) =>
+                    updateDraft(draft.id, (d) => ({ ...d, question: e.target.value }))
+                  }
                   placeholder="질문을 입력하세요"
                   className="flex-1 bg-sp-bg border border-sp-border rounded-xl px-4 py-3 text-xl text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none transition-colors"
                   maxLength={100}
@@ -283,7 +346,9 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
                         style={{ backgroundColor: OPTION_COLORS[index % OPTION_COLORS.length] }}
                       />
                       <input
-                        ref={(el) => { refs[index] = el; }}
+                        ref={(el) => {
+                          refs[index] = el;
+                        }}
                         type="text"
                         value={text}
                         onChange={(e) => handleOptionChange(draft.id, index, e.target.value)}
@@ -331,7 +396,9 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
                 <input
                   type="checkbox"
                   checked={draft.required}
-                  onChange={(e) => updateDraft(draft.id, (d) => ({ ...d, required: e.target.checked }))}
+                  onChange={(e) =>
+                    updateDraft(draft.id, (d) => ({ ...d, required: e.target.checked }))
+                  }
                   className="rounded"
                 />
                 필수 응답
@@ -372,9 +439,7 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
 
       {/* Template actions */}
       <div className="flex items-center gap-2 flex-wrap shrink-0">
-        {onLoadTemplate && (
-          <TemplateLoadDropdown toolType="poll" onLoad={onLoadTemplate} />
-        )}
+        {onLoadTemplate && <TemplateLoadDropdown toolType="poll" onLoad={onLoadTemplate} />}
         {onSaveRequest && (
           <button
             onClick={() => {
@@ -382,7 +447,7 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
                 drafts.map((d) => ({
                   question: d.question,
                   options: d.optionTexts.map((t) => t.trim()).filter((t) => t.length > 0),
-                }))
+                })),
               );
             }}
             disabled={!canStart}
@@ -400,6 +465,13 @@ function CreateView({ isFullscreen, onStart, onSaveRequest, onLoadTemplate, load
           </button>
         )}
       </div>
+
+      {/* 실시간 답변 확인 토글 — ON 시 라이브 시작 시 막대그래프 즉시 노출 (Design §1.2) */}
+      <RealtimeResponseToggle
+        checked={realtimeResponseView}
+        onChange={onRealtimeResponseViewChange}
+        tool="poll"
+      />
 
       {/* Start button */}
       <button
@@ -461,7 +533,9 @@ function LiveVotePanel({
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl]);
 
@@ -472,7 +546,9 @@ function LiveVotePanel({
         margin: 3,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: 'M',
-      }).catch(() => {/* ignore */});
+      }).catch(() => {
+        /* ignore */
+      });
     }
   }, [displayUrl, showQRFullscreen]);
 
@@ -491,7 +567,9 @@ function LiveVotePanel({
   }
 
   return (
-    <div className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col items-center gap-3 shrink-0 ${isFullscreen ? '' : ''}`}>
+    <div
+      className={`bg-sp-card border border-sp-border rounded-xl p-4 flex flex-col items-center gap-3 shrink-0 ${isFullscreen ? '' : ''}`}
+    >
       <div className="flex items-center gap-2 w-full">
         <span className="text-green-400 text-sm font-bold">{'\u25CF'} LIVE</span>
         <span className="text-sp-muted text-sm">
@@ -531,14 +609,24 @@ function LiveVotePanel({
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-sp-text font-mono text-sm break-all flex-1">{tunnelUrl}</p>
-                <button onClick={() => { void navigator.clipboard.writeText(tunnelUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                <button
+                  onClick={() => {
+                    void navigator.clipboard.writeText(tunnelUrl);
+                  }}
+                  className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
+                  title="주소 복사"
+                >
+                  <span className="material-symbols-outlined text-icon-sm">content_copy</span>
+                </button>
               </div>
               <p className="text-blue-400 text-xs">{'\u{1F310}'} 인터넷 모드 — Wi-Fi 불필요</p>
             </div>
           ) : tunnelError ? (
             <div className="flex flex-col gap-1">
               <p className="text-red-400 text-xs">{tunnelError}</p>
-              <p className="text-sp-muted text-xs">Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}</p>
+              <p className="text-sp-muted text-xs">
+                Wi-Fi 직접 접속: http://{serverInfo.localIPs[0] ?? '...'}:{serverInfo.port}
+              </p>
             </div>
           ) : null}
 
@@ -548,7 +636,15 @@ function LiveVotePanel({
                 <p className="text-sp-muted text-xs mb-0.5">짧은 주소</p>
                 <div className="flex items-center gap-1.5">
                   <p className="text-sp-accent font-bold text-sm font-mono flex-1">{shortUrl}</p>
-                  <button onClick={() => { void navigator.clipboard.writeText(shortUrl); }} className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors" title="주소 복사"><span className="material-symbols-outlined text-icon-sm">content_copy</span></button>
+                  <button
+                    onClick={() => {
+                      void navigator.clipboard.writeText(shortUrl);
+                    }}
+                    className="shrink-0 p-1 rounded-md hover:bg-sp-text/10 text-sp-muted hover:text-sp-text transition-colors"
+                    title="주소 복사"
+                  >
+                    <span className="material-symbols-outlined text-icon-sm">content_copy</span>
+                  </button>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -556,7 +652,9 @@ function LiveVotePanel({
                   type="text"
                   value={customCodeInput}
                   onChange={(e) => onCustomCodeChange(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') onSetCustomCode(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onSetCustomCode();
+                  }}
                   placeholder={shortCode ?? '커스텀 코드'}
                   maxLength={30}
                   className="flex-1 bg-sp-bg border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text placeholder-sp-muted focus:border-sp-accent focus:outline-none"
@@ -569,9 +667,7 @@ function LiveVotePanel({
                   변경
                 </button>
               </div>
-              {customCodeError && (
-                <p className="text-red-400 text-xs">{customCodeError}</p>
-              )}
+              {customCodeError && <p className="text-red-400 text-xs">{customCodeError}</p>}
             </div>
           )}
         </div>
@@ -642,11 +738,17 @@ function VotingView({
   onCustomCodeChange,
   onSetCustomCode,
 }: VotingViewProps) {
-  const totalVotesAll = questions.reduce((sum, q) => sum + q.options.reduce((s, o) => s + o.votes, 0), 0);
+  const totalVotesAll = questions.reduce(
+    (sum, q) => sum + q.options.reduce((s, o) => s + o.votes, 0),
+    0,
+  );
   const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set());
   const animTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const longPressTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const [directInputKey, setDirectInputKey] = useState<{ questionId: string; optionId: string } | null>(null);
+  const [directInputKey, setDirectInputKey] = useState<{
+    questionId: string;
+    optionId: string;
+  } | null>(null);
   const [directInputValue, setDirectInputValue] = useState('');
   const directInputRef = useRef<HTMLInputElement>(null);
 
@@ -666,39 +768,45 @@ function VotingView({
     }
   }, [directInputKey]);
 
-  const handleVoteClick = useCallback((questionId: string, optionId: string) => {
-    if (!isOpen) return;
-    onVote(questionId, optionId, 1);
+  const handleVoteClick = useCallback(
+    (questionId: string, optionId: string) => {
+      if (!isOpen) return;
+      onVote(questionId, optionId, 1);
 
-    const key = `${questionId}-${optionId}`;
-    setAnimatingIds((prev) => {
-      const next = new Set(prev);
-      next.add(key);
-      return next;
-    });
-    const existing = animTimers.current.get(key);
-    if (existing) clearTimeout(existing);
-    const timer = setTimeout(() => {
+      const key = `${questionId}-${optionId}`;
       setAnimatingIds((prev) => {
         const next = new Set(prev);
-        next.delete(key);
+        next.add(key);
         return next;
       });
-      animTimers.current.delete(key);
-    }, 300);
-    animTimers.current.set(key, timer);
-  }, [isOpen, onVote]);
+      const existing = animTimers.current.get(key);
+      if (existing) clearTimeout(existing);
+      const timer = setTimeout(() => {
+        setAnimatingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        animTimers.current.delete(key);
+      }, 300);
+      animTimers.current.set(key, timer);
+    },
+    [isOpen, onVote],
+  );
 
-  const handlePointerDown = useCallback((questionId: string, optionId: string, currentVotes: number) => {
-    if (!isOpen) return;
-    const key = `${questionId}-${optionId}`;
-    const timer = setTimeout(() => {
-      setDirectInputValue(String(currentVotes));
-      setDirectInputKey({ questionId, optionId });
-      longPressTimers.current.delete(key);
-    }, 500);
-    longPressTimers.current.set(key, timer);
-  }, [isOpen]);
+  const handlePointerDown = useCallback(
+    (questionId: string, optionId: string, currentVotes: number) => {
+      if (!isOpen) return;
+      const key = `${questionId}-${optionId}`;
+      const timer = setTimeout(() => {
+        setDirectInputValue(String(currentVotes));
+        setDirectInputKey({ questionId, optionId });
+        longPressTimers.current.delete(key);
+      }, 500);
+      longPressTimers.current.set(key, timer);
+    },
+    [isOpen],
+  );
 
   const handlePointerUp = useCallback((questionId: string, optionId: string) => {
     const key = `${questionId}-${optionId}`;
@@ -764,7 +872,9 @@ function VotingView({
               {/* Question title */}
               <div className="text-center shrink-0">
                 <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
-                  {questions.length > 1 && <span className="text-sp-accent mr-2">Q{qIdx + 1}.</span>}
+                  {questions.length > 1 && (
+                    <span className="text-sp-accent mr-2">Q{qIdx + 1}.</span>
+                  )}
                   {q.question}
                 </h2>
               </div>
@@ -804,7 +914,9 @@ function VotingView({
                           className="w-4 h-4 rounded-full shrink-0"
                           style={{ backgroundColor: option.color }}
                         />
-                        <span className={`font-medium text-sp-text flex-1 ${isFullscreen ? 'text-2xl' : 'text-xl'}`}>
+                        <span
+                          className={`font-medium text-sp-text flex-1 ${isFullscreen ? 'text-2xl' : 'text-xl'}`}
+                        >
                           {option.text}
                         </span>
 
@@ -823,10 +935,12 @@ function VotingView({
                               color: option.color,
                             }}
                             onMouseEnter={(e) => {
-                              (e.currentTarget as HTMLButtonElement).style.backgroundColor = hexToRgba(option.color, 0.35);
+                              (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                                hexToRgba(option.color, 0.35);
                             }}
                             onMouseLeave={(e) => {
-                              (e.currentTarget as HTMLButtonElement).style.backgroundColor = hexToRgba(option.color, 0.2);
+                              (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                                hexToRgba(option.color, 0.2);
                             }}
                           >
                             +1
@@ -872,8 +986,14 @@ function VotingView({
 
       {/* Direct input modal */}
       {directInputKey !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setDirectInputKey(null)}>
-          <div className="bg-sp-card border border-sp-border rounded-2xl p-6 w-72 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setDirectInputKey(null)}
+        >
+          <div
+            className="bg-sp-card border border-sp-border rounded-2xl p-6 w-72 flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-sp-text font-bold text-lg text-center">몇 명?</h3>
             <input
               ref={directInputRef}
@@ -934,6 +1054,7 @@ function VotingView({
         <div className="flex items-center gap-2">
           <button
             onClick={onToggleResults}
+            title="라이브 중 즉석 토글 — 문항 설계 시 [실시간 답변 확인]을 켜면 처음부터 켜진 상태로 시작합니다."
             className="px-4 py-2 rounded-xl bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all text-sm font-medium"
           >
             {showResults ? '\u{1F441}\uFE0F 결과 숨기기' : '\u{1F441}\uFE0F 결과 보기'}
@@ -975,8 +1096,17 @@ interface ResultsViewProps {
   resultSaveButton?: React.ReactNode;
 }
 
-function ResultsView({ questions, isFullscreen, onRevote, onNewPoll, resultSaveButton }: ResultsViewProps) {
-  const totalVotesAll = questions.reduce((sum, q) => sum + q.options.reduce((s, o) => s + o.votes, 0), 0);
+function ResultsView({
+  questions,
+  isFullscreen,
+  onRevote,
+  onNewPoll,
+  resultSaveButton,
+}: ResultsViewProps) {
+  const totalVotesAll = questions.reduce(
+    (sum, q) => sum + q.options.reduce((s, o) => s + o.votes, 0),
+    0,
+  );
   const [animated, setAnimated] = useState(false);
 
   useEffect(() => {
@@ -998,7 +1128,9 @@ function ResultsView({ questions, isFullscreen, onRevote, onNewPoll, resultSaveB
               {/* Question */}
               <div className="text-center shrink-0">
                 <h2 className={`font-bold text-sp-text ${isFullscreen ? 'text-4xl' : 'text-2xl'}`}>
-                  {questions.length > 1 && <span className="text-sp-accent mr-2">Q{qIdx + 1}.</span>}
+                  {questions.length > 1 && (
+                    <span className="text-sp-accent mr-2">Q{qIdx + 1}.</span>
+                  )}
                   {q.question}
                 </h2>
               </div>
@@ -1021,14 +1153,18 @@ function ResultsView({ questions, isFullscreen, onRevote, onNewPoll, resultSaveB
                           className="w-3 h-3 rounded-full shrink-0"
                           style={{ backgroundColor: option.color }}
                         />
-                        <span className={`font-medium text-sp-text ${isFullscreen ? 'text-xl' : 'text-base'}`}>
+                        <span
+                          className={`font-medium text-sp-text ${isFullscreen ? 'text-xl' : 'text-base'}`}
+                        >
                           {option.text}
                         </span>
                         {isWinner && <span className="text-yellow-400">{'\u{1F451}'}</span>}
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className={`flex-1 rounded-lg overflow-hidden ${isWinner ? 'h-10' : 'h-8'} bg-sp-bg`}>
+                        <div
+                          className={`flex-1 rounded-lg overflow-hidden ${isWinner ? 'h-10' : 'h-8'} bg-sp-bg`}
+                        >
                           <div
                             className="h-full rounded-lg flex items-center px-3 transition-all duration-[800ms] ease-out"
                             style={{
@@ -1109,12 +1245,19 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [showPastResults, setShowPastResults] = useState(false);
-  const [loadedDraft, setLoadedDraft] = useState<Array<{ question: string; options: string[] }> | null>(null);
+  const [loadedDraft, setLoadedDraft] = useState<Array<{
+    question: string;
+    options: string[];
+  }> | null>(null);
   const [questions, setQuestions] = useState<PollQuestion[]>([]);
   const [isOpen, setIsOpen] = useState(true);
   const [showResults, setShowResults] = useState(false);
+  // 실시간 답변 확인 — 세션 단위 (기본 false, 옵트인). ON 시 라이브 시작 시 showResults 자동 ON (Design §1.2).
+  const [realtimeResponseView, setRealtimeResponseView] = useState(false);
   const [isLiveMode, setIsLiveMode] = useState(false);
-  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(null);
+  const [liveServerInfo, setLiveServerInfo] = useState<{ port: number; localIPs: string[] } | null>(
+    null,
+  );
   const [connectedStudents, setConnectedStudents] = useState(0);
   const [showQRFullscreen, setShowQRFullscreen] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -1129,25 +1272,35 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
 
   // ── 교사 주도 진행 모드 상태 (stepMode=true + 다문항 + 라이브 모드일 때만 사용) ──
   const [stepMode, setStepMode] = useState(false);
-  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>('lobby');
+  const [teacherPhase, setTeacherPhase] = useState<'lobby' | 'open' | 'revealed' | 'ended'>(
+    'lobby',
+  );
   const [teacherQuestionIndex, setTeacherQuestionIndex] = useState(0);
   const [teacherTotalConnected, setTeacherTotalConnected] = useState(0);
   const [teacherTotalAnswered, setTeacherTotalAnswered] = useState(0);
-  const [teacherAggregated, setTeacherAggregated] = useState<AggregatedResult | undefined>(undefined);
+  const [teacherAggregated, setTeacherAggregated] = useState<AggregatedResult | undefined>(
+    undefined,
+  );
   const [teacherRoster, setTeacherRoster] = useState<RosterEntry[]>([]);
-  const [teacherTextDetail, setTeacherTextDetail] = useState<TextAnswerEntry[] | undefined>(undefined);
+  const [teacherTextDetail, setTeacherTextDetail] = useState<TextAnswerEntry[] | undefined>(
+    undefined,
+  );
 
   const isMultiQuestion = questions.length > 1;
 
   // stepMode=true + 라이브 + 다문항 ⇒ TeacherControlPanel이 메인 (기존 Live/Voting 카드 전부 숨김)
   const isTeacherDrivenLive = isLiveMode && stepMode && questions.length >= 2;
 
-  const handleStart = useCallback((qs: PollQuestion[]) => {
-    setQuestions(qs);
-    setIsOpen(true);
-    setShowResults(false);
-    setViewMode('voting');
-  }, []);
+  const handleStart = useCallback(
+    (qs: PollQuestion[]) => {
+      setQuestions(qs);
+      setIsOpen(true);
+      // Design §1.2: 실시간 답변 확인이 ON이면 라이브 시작 시 결과 막대 즉시 노출.
+      setShowResults(realtimeResponseView);
+      setViewMode('voting');
+    },
+    [realtimeResponseView],
+  );
 
   const handleVote = useCallback((questionId: string, optionId: string, delta: number) => {
     setQuestions((prev) =>
@@ -1161,7 +1314,7 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
             return { ...o, votes: newVotes };
           }),
         };
-      })
+      }),
     );
   }, []);
 
@@ -1178,7 +1331,7 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
       prev.map((q) => ({
         ...q,
         options: q.options.map((o) => ({ ...o, votes: 0 })),
-      }))
+      })),
     );
     setIsOpen(true);
     setShowResults(false);
@@ -1208,7 +1361,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           required: true,
           options: q.options.map((o) => ({ id: o.id, text: o.text })),
         }));
-        const info = await window.electronAPI.startLiveMultiSurvey({ questions: surveyQuestions, stepMode });
+        const info = await window.electronAPI.startLiveMultiSurvey({
+          questions: surveyQuestions,
+          stepMode,
+        });
         if (info.localIPs.length === 0) {
           setLiveError('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
           return;
@@ -1236,7 +1392,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           setShortUrl(null);
           setShortCode(null);
           void liveSessionClientRef.current.registerSession(result.tunnelUrl).then((session) => {
-            if (session) { setShortUrl(session.shortUrl); setShortCode(session.code); }
+            if (session) {
+              setShortUrl(session.shortUrl);
+              setShortCode(session.code);
+            }
           });
         } catch {
           setTunnelError('인터넷 연결에 실패했습니다. Wi-Fi로 접속하거나 네트워크를 확인해주세요.');
@@ -1252,7 +1411,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
         const firstQ = questions[0];
         if (!firstQ) return;
         const data = firstQ.options.map((o) => ({ id: o.id, text: o.text, color: o.color }));
-        const info = await window.electronAPI.startLiveVote({ question: firstQ.question, options: data });
+        const info = await window.electronAPI.startLiveVote({
+          question: firstQ.question,
+          options: data,
+        });
         if (info.localIPs.length === 0) {
           setLiveError('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
           return;
@@ -1270,7 +1432,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           setShortUrl(null);
           setShortCode(null);
           void liveSessionClientRef.current.registerSession(result.tunnelUrl).then((session) => {
-            if (session) { setShortUrl(session.shortUrl); setShortCode(session.code); }
+            if (session) {
+              setShortUrl(session.shortUrl);
+              setShortCode(session.code);
+            }
           });
         } catch {
           setTunnelError('인터넷 연결에 실패했습니다. Wi-Fi로 접속하거나 네트워크를 확인해주세요.');
@@ -1307,7 +1472,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
     if (!tunnelUrl || !customCodeInput.trim()) return;
     setCustomCodeError(null);
     try {
-      const session = await liveSessionClientRef.current.setCustomCode(tunnelUrl, customCodeInput.trim());
+      const session = await liveSessionClientRef.current.setCustomCode(
+        tunnelUrl,
+        customCodeInput.trim(),
+      );
       setShortUrl(session.shortUrl);
       setShortCode(session.code);
       setCustomCodeInput('');
@@ -1337,30 +1505,43 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
     setShowQRFullscreen((prev) => !prev);
   }, []);
 
-  const [pendingSave, setPendingSave] = useState<Array<{ question: string; options: string[] }> | null>(null);
+  const [pendingSave, setPendingSave] = useState<Array<{
+    question: string;
+    options: string[];
+  }> | null>(null);
 
-  const handleSaveTemplate = useCallback((name: string) => {
-    if (!pendingSave) return;
-    const config = { type: 'poll' as const, questions: pendingSave };
-    if (editingTemplateId) {
-      void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
-    } else {
-      void useToolTemplateStore.getState().addTemplate(name, 'poll', config);
-    }
-    setShowSaveModal(false);
-    setEditingTemplateId(null);
-  }, [editingTemplateId, pendingSave]);
+  const handleSaveTemplate = useCallback(
+    (name: string) => {
+      if (!pendingSave) return;
+      const config = { type: 'poll' as const, questions: pendingSave, realtimeResponseView };
+      if (editingTemplateId) {
+        void useToolTemplateStore.getState().updateTemplate(editingTemplateId, { name, config });
+      } else {
+        void useToolTemplateStore.getState().addTemplate(name, 'poll', config);
+      }
+      setShowSaveModal(false);
+      setEditingTemplateId(null);
+    },
+    [editingTemplateId, pendingSave, realtimeResponseView],
+  );
 
-  const handleSaveRequest = useCallback((drafts: Array<{ question: string; options: string[] }>) => {
-    setPendingSave(drafts);
-    setEditingTemplateId(null);
-    setShowSaveModal(true);
-  }, []);
+  const handleSaveRequest = useCallback(
+    (drafts: Array<{ question: string; options: string[] }>) => {
+      setPendingSave(drafts);
+      setEditingTemplateId(null);
+      setShowSaveModal(true);
+    },
+    [],
+  );
 
   const handleLoadTemplate = useCallback((template: ToolTemplate) => {
     if (template.config.type !== 'poll') return;
-    setLoadedDraft([...template.config.questions.map((q) => ({ question: q.question, options: [...q.options] }))]);
+    setLoadedDraft([
+      ...template.config.questions.map((q) => ({ question: q.question, options: [...q.options] })),
+    ]);
     setEditingTemplateId(template.id);
+    // 누락 시 false fallback (스키마 비파괴 확장)
+    setRealtimeResponseView(template.config.realtimeResponseView ?? false);
   }, []);
 
   // Live vote IPC event listeners — single question uses liveVote, multi uses liveMultiSurvey
@@ -1380,7 +1561,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
       const unsubCount = window.electronAPI.onLiveMultiSurveyConnectionCount?.((data) => {
         setConnectedStudents(data.count);
       });
-      return () => { unsubSubmitted?.(); unsubCount?.(); };
+      return () => {
+        unsubSubmitted?.();
+        unsubCount?.();
+      };
     } else {
       // Single question: use liveVote events
       const firstQId = questions[0]?.id;
@@ -1391,7 +1575,10 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
       const unsubCount = window.electronAPI.onLiveVoteConnectionCount?.((data) => {
         setConnectedStudents(data.count);
       });
-      return () => { unsubVoted?.(); unsubCount?.(); };
+      return () => {
+        unsubVoted?.();
+        unsubCount?.();
+      };
     }
   }, [isLiveMode, isMultiQuestion, questions, handleVote]);
 
@@ -1445,7 +1632,7 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
           sessionId: r.sessionId,
           nickname: r.nickname,
           answeredCurrent: r.answeredQuestions.includes(teacherQuestionIndex),
-        }))
+        })),
       );
     });
 
@@ -1495,7 +1682,9 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
             return (
               <Fragment key={step.key}>
                 {i > 0 && <span className="text-sp-border">›</span>}
-                <span className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                <span
+                  className={`text-xs font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}
+                >
                   {step.label}
                 </span>
               </Fragment>
@@ -1505,20 +1694,25 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
       )}
       {showPastResults ? (
         <PastResultsView toolType="poll" onClose={() => setShowPastResults(false)} />
-      ) : viewMode === 'create' && (
-        <CreateView
-          isFullscreen={isFullscreen}
-          onStart={handleStart}
-          onSaveRequest={handleSaveRequest}
-          onLoadTemplate={handleLoadTemplate}
-          loadedDraft={loadedDraft}
-          onShowPastResults={() => setShowPastResults(true)}
-          stepMode={stepMode}
-          onStepModeChange={setStepMode}
-        />
+      ) : (
+        viewMode === 'create' && (
+          <CreateView
+            isFullscreen={isFullscreen}
+            onStart={handleStart}
+            onSaveRequest={handleSaveRequest}
+            onLoadTemplate={handleLoadTemplate}
+            loadedDraft={loadedDraft}
+            onShowPastResults={() => setShowPastResults(true)}
+            stepMode={stepMode}
+            onStepModeChange={setStepMode}
+            realtimeResponseView={realtimeResponseView}
+            onRealtimeResponseViewChange={setRealtimeResponseView}
+          />
+        )
       )}
-      {!showPastResults && viewMode === 'voting' && (
-        isTeacherDrivenLive ? (
+      {!showPastResults &&
+        viewMode === 'voting' &&
+        (isTeacherDrivenLive ? (
           /* ── stepMode=true 라이브: TeacherControlPanel이 메인 (LIVE+QR+문항리스트 전부 숨김) ── */
           <TeacherControlPanel
             phase={teacherPhase}
@@ -1588,8 +1782,7 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
             onCustomCodeChange={setCustomCodeInput}
             onSetCustomCode={handleSetCustomCode}
           />
-        )
-      )}
+        ))}
       {!showPastResults && viewMode === 'results' && (
         <ResultsView
           questions={questions}
@@ -1604,9 +1797,12 @@ export function ToolPoll({ onBack, isFullscreen }: ToolPollProps) {
                 type: 'poll' as const,
                 question: questions[0]?.question ?? '',
                 options: questions.flatMap((q) =>
-                  q.options.map((o) => ({ text: o.text, votes: o.votes, color: o.color }))
+                  q.options.map((o) => ({ text: o.text, votes: o.votes, color: o.color })),
                 ),
-                totalVotes: questions.reduce((s, q) => s + q.options.reduce((ss, o) => ss + o.votes, 0), 0),
+                totalVotes: questions.reduce(
+                  (s, q) => s + q.options.reduce((ss, o) => ss + o.votes, 0),
+                  0,
+                ),
               }}
             />
           }
