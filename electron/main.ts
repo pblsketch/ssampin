@@ -696,6 +696,7 @@ const LAYOUT_SHORTCUTS: ReadonlyArray<{ accel: string; mode: string }> = [
   { accel: 'CommandOrControl+2', mode: 'split-h' },
   { accel: 'CommandOrControl+3', mode: 'split-v' },
   { accel: 'CommandOrControl+4', mode: 'quad' },
+  { accel: 'CommandOrControl+5', mode: 'sidebar-right' },
 ];
 
 let layoutShortcutsRegistered = false;
@@ -2258,16 +2259,45 @@ function registerIpcHandlers(): void {
           height: Math.floor(workArea.height / 2),
         };
         break;
+      case 'sidebar-right':
+        // 우측 사이드: 화면을 가로로 4등분한 우측 1/4 영역(전체 높이)
+        bounds = {
+          x: workArea.x + Math.floor((workArea.width * 3) / 4),
+          y: workArea.y,
+          width: Math.floor(workArea.width / 4),
+          height: workArea.height,
+        };
+        break;
       default:
         // 알 수 없는 모드: 원래 크기로 복원
         if (widgetBoundsBeforeLayout) {
+          widgetWindow.setMinimumSize(640, 480);
           widgetWindow.setBounds(widgetBoundsBeforeLayout);
           widgetBoundsBeforeLayout = null;
         }
         return;
     }
 
+    // 'sidebar-right'는 1/4 폭(예: 1920→480)이라 기본 minWidth=640에 막혀
+    // OS가 폭을 640으로 늘리고 우측 끝을 벗어나, ensureWidgetOnScreen()이
+    // 좌측으로 밀어내면서 결과적으로 ~1/3 화면을 덮는 버그가 생긴다.
+    // 모드별로 최소 크기를 조정한 뒤 setBounds 호출. minHeight 도 같이 낮춰
+    // 한 줄 위젯 스택이 잘리지 않도록 한다.
+    if (mode === 'sidebar-right') {
+      widgetWindow.setMinimumSize(220, 320);
+    } else {
+      widgetWindow.setMinimumSize(640, 480);
+    }
+
     widgetWindow.setBounds(bounds);
+    // 일부 환경(WS_CHILD/native-desktop + Win32 SetWindowPos race)에서 setBounds가
+    // 정확히 반영 안 되는 사례 보고. 동기 setSize/setPosition 으로 한 번 더 강제.
+    widgetWindow.setPosition(bounds.x, bounds.y);
+    widgetWindow.setSize(bounds.width, bounds.height);
+    const applied = widgetWindow.getBounds();
+    console.log(
+      `[widget] setWidgetLayout(${mode}) requested=${JSON.stringify(bounds)} applied=${JSON.stringify(applied)} workArea=${JSON.stringify(workArea)}`,
+    );
     // 레이아웃 변경 후 화면 밖 검증
     ensureWidgetOnScreen();
     if (desktopWidgetManager.isEnabled() && widgetWindow && !widgetWindow.isDestroyed()) {

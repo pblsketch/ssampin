@@ -108,7 +108,7 @@ export interface AlarmSoundSettings {
   readonly preWarning: PreWarningSettings;
 }
 
-export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad';
+export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad' | 'sidebar-right';
 
 // 위젯 표시 모드
 // - 'normal': 일반 모드 — 다른 창에 가려질 수 있음, Win+D에 사라지지 않음

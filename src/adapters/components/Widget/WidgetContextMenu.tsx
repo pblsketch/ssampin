@@ -182,6 +182,7 @@ export function WidgetContextMenu({ x, y, onClose }: WidgetContextMenuProps) {
             { mode: 'split-h' as WidgetLayoutMode, label: '좌우 분할', shortcut: 'Ctrl+2' },
             { mode: 'split-v' as WidgetLayoutMode, label: '상하 분할', shortcut: 'Ctrl+3' },
             { mode: 'quad' as WidgetLayoutMode, label: '4분할', shortcut: 'Ctrl+4' },
+            { mode: 'sidebar-right' as WidgetLayoutMode, label: '우측 사이드', shortcut: 'Ctrl+5' },
           ]).map((opt) => {
             const isActive = (settings.widget.layoutMode ?? 'full') === opt.mode;
             return (

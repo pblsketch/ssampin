@@ -28,7 +28,7 @@ interface ContextMenuState {
   y: number;
 }
 
-const LAYOUT_CYCLE: WidgetLayoutMode[] = ['full', 'split-h', 'split-v', 'quad'];
+const LAYOUT_CYCLE: WidgetLayoutMode[] = ['full', 'split-h', 'split-v', 'quad', 'sidebar-right'];
 
 export function Widget() {
   const { track } = useAnalytics();
@@ -71,7 +71,8 @@ export function Widget() {
     const checkSize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      if (w < 640) {
+      // 우측 사이드(1/4 폭)는 좁은 게 본 의도라 w<640 fallback에서 제외한다.
+      if (w < 640 && layoutMode !== 'sidebar-right') {
         setEffectiveMode('full');
       } else if (h < 480 && (layoutMode === 'split-v' || layoutMode === 'quad')) {
         setEffectiveMode(layoutMode === 'quad' ? 'split-h' : 'full');
@@ -195,6 +196,10 @@ export function Widget() {
           e.preventDefault();
           setLayoutMode('quad');
           break;
+        case '5':
+          e.preventDefault();
+          setLayoutMode('sidebar-right');
+          break;
         case '0': {
           e.preventDefault();
           const idx = LAYOUT_CYCLE.indexOf(layoutMode);
@@ -217,7 +222,7 @@ export function Widget() {
     const onShortcut = window.electronAPI?.onLayoutShortcut;
     if (!onShortcut) return;
     const dispose = onShortcut((mode) => {
-      const valid: ReadonlyArray<WidgetLayoutMode> = ['full', 'split-h', 'split-v', 'quad'];
+      const valid: ReadonlyArray<WidgetLayoutMode> = ['full', 'split-h', 'split-v', 'quad', 'sidebar-right'];
       if ((valid as readonly string[]).includes(mode)) {
         setLayoutMode(mode as WidgetLayoutMode);
       }
@@ -443,14 +448,17 @@ export function Widget() {
                   <WidgetTabBar activeTab={activeTab} onTabChange={setActiveTab} />
                 )}
                 <div
-                  style={effectiveMode !== 'full' ? {
+                  style={(effectiveMode !== 'full' && effectiveMode !== 'sidebar-right') ? {
                     transform: `scale(${effectiveMode === 'quad' ? 0.7 : 0.85})`,
                     transformOrigin: 'top left',
                     width: `${100 / (effectiveMode === 'quad' ? 0.7 : 0.85)}%`,
                   } : undefined}
                 >
                   <div
-                    className="grid grid-cols-4 gap-3 grid-flow-row-dense"
+                    className={[
+                      'grid gap-3 grid-flow-row-dense',
+                      effectiveMode === 'sidebar-right' ? 'grid-cols-1' : 'grid-cols-4',
+                    ].join(' ')}
                     style={{ gridAutoRows: '80px' }}
                   >
                     {filteredWidgets.map((instance) => {
@@ -460,7 +468,7 @@ export function Widget() {
                       return (
                         <div
                           key={instance.widgetId}
-                          className={getSpanClass(instance.colSpan)}
+                          className={effectiveMode === 'sidebar-right' ? 'col-span-1' : getSpanClass(instance.colSpan)}
                           style={{ gridRow: `span ${instance.rowSpan} / span ${instance.rowSpan}` }}
                         >
                           <WidgetCard definition={definition} onNavigate={handleWidgetNavigate} />
