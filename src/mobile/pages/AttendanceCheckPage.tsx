@@ -295,9 +295,17 @@ export function AttendanceCheckPage({
 
   return (
     <div className={`flex flex-col h-full ${embedded ? '' : 'bg-sp-bg'}`}>
-      {/* 헤더 — embedded 모드에서는 생략 (ClassDetailPage가 이미 학급 헤더를 그림) */}
+      {/* 헤더 — embedded 모드에서는 생략 (ClassDetailPage가 이미 학급 헤더를 그림)
+          minHeight + paddingTop으로 App.tsx 헤더 패턴 일치: --header-height 토큰이
+          이미 env(safe-area-inset-top)을 포함하므로 iPhone 노치/다이나믹 아일랜드 자동 회피 */}
       {!embedded && (
-        <header className="glass-header flex items-center gap-3 px-4 py-3 shrink-0">
+        <header
+          className="glass-header flex items-center gap-3 px-4 shrink-0"
+          style={{
+            minHeight: 'var(--header-height)',
+            paddingTop: 'env(safe-area-inset-top)',
+          }}
+        >
           <button onClick={onBack} className="touch-target flex items-center justify-center">
             <span className="material-symbols-outlined text-sp-text">arrow_back</span>
           </button>

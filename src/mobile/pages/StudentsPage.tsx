@@ -357,9 +357,10 @@ export function StudentsPage() {
           )}
         </div>
 
-        {/* 학급 선택 탭 (담임반 + 수업반들) */}
+        {/* 학급 선택 탭 (담임반 + 수업반들)
+            data-no-tab-swipe: 가로 스크롤 영역이므로 글로벌 탭 스와이프 무력화 */}
         {teachingClasses.length > 0 && (
-          <div className="flex overflow-x-auto gap-2 px-4 pb-3 no-scrollbar">
+          <div data-no-tab-swipe className="flex overflow-x-auto gap-2 px-4 pb-3 no-scrollbar">
             {/* 담임반 탭 */}
             <button
               onClick={() => setSelectedClass('homeroom')}

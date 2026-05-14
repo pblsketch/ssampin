@@ -88,12 +88,15 @@ export function ClassDetailPage({
         ))}
       </div>
 
-      {/* 컨텐츠 슬롯 (스와이프 영역) */}
+      {/* 컨텐츠 슬롯 (스와이프 영역)
+          data-no-tab-swipe: 자체 서브탭 스와이프 핸들러가 있으므로 글로벌 탭 스와이프와 분리.
+          (현재 2서브탭 구조에선 무해하나, 명시적 분리로 미래 회귀 차단) */}
       <div
         id={`class-panel-${activeSubTab}`}
         role="tabpanel"
         aria-labelledby={`class-tab-${activeSubTab}`}
         className="flex-1 overflow-hidden"
+        data-no-tab-swipe
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >

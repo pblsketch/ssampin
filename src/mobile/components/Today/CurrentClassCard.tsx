@@ -43,7 +43,7 @@ function DayScheduleOverview({
         </span>
         <span className="text-sp-muted text-xs font-medium">오늘 일정</span>
       </div>
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+      <div data-no-tab-swipe className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
         {entries.map(({ period, entry }) => {
           const isCurrent = currentPeriod === period;
           const isNext = isBreak && nextPeriod === period;
