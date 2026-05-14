@@ -7,9 +7,7 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
-import { useSettingsStore, getToolRandomnessOn } from '@adapters/stores/useSettingsStore';
 import { secureRandom, pickIndexWithMemory } from '@domain/rules/randomRules';
-import { RandomnessToggle } from './RandomnessToggle';
 
 interface ToolRouletteProps {
   onBack: () => void;
@@ -64,11 +62,9 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const [winner, setWinner] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
-  // anti-repeat (인덱스 회피 메모리) + 사전 결정된 다음 winner
+  // 인덱스 회피 메모리 (anti-repeat 항상 ON) + 사전 결정된 다음 winner
   const [historyIdx, setHistoryIdx] = useState<number[]>([]);
   const pendingIdxRef = useRef<number | null>(null);
-  const settings = useSettingsStore((s) => s.settings);
-  const antiRepeatOn = getToolRandomnessOn(settings, 'roulette');
 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
@@ -196,10 +192,8 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const spin = useCallback(() => {
     if (isSpinning || items.length < 2) return;
 
-    // ── 1. 인덱스 먼저 결정 (anti-repeat 양립 위함) ──
-    const targetIdx = antiRepeatOn
-      ? pickIndexWithMemory(items.length, { history: historyIdx })
-      : Math.floor(secureRandom() * items.length);
+    // ── 1. 인덱스 먼저 결정 (anti-repeat 항상 ON) ──
+    const targetIdx = pickIndexWithMemory(items.length, { history: historyIdx });
     pendingIdxRef.current = targetIdx;
 
     // ── 2. 섹션 중앙각 + jitter 로 finalAngle 산출 ──
@@ -224,7 +218,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
     setWinner(null);
     setWinnerIndex(null);
     playProgress();
-  }, [isSpinning, items.length, rotation, playProgress, antiRepeatOn, historyIdx]);
+  }, [isSpinning, items.length, rotation, playProgress, historyIdx]);
 
   const handleTransitionEnd = useCallback(() => {
     if (!isSpinning) return;
@@ -541,7 +535,6 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
             >
               {isSpinning ? '돌아가는 중...' : '🎯 돌리기!'}
             </button>
-            <RandomnessToggle tool="roulette" />
           </div>
         </div>
 

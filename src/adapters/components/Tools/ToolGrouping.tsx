@@ -7,7 +7,6 @@ import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
-import { useSettingsStore, getToolRandomnessOn } from '@adapters/stores/useSettingsStore';
 import {
   assignGroups,
   calcGroupCount,
@@ -24,7 +23,6 @@ import {
   type RoleConfig,
   assignRolesToGroup,
 } from '@domain/rules/groupingRules';
-import { RandomnessToggle } from './RandomnessToggle';
 
 /** 두 모둠 편성 결과가 멤버 구성 측면에서 동일한지 비교 */
 function groupResultsEqual(a: GroupResult[], b: GroupResult[]): boolean {
@@ -84,8 +82,6 @@ const GROUP_TEXT_COLORS = [
 
 export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
   const { track } = useAnalytics();
-  const settings = useSettingsStore((s) => s.settings);
-  const antiRepeatOn = getToolRandomnessOn(settings, 'grouping');
   useEffect(() => {
     track('tool_use', { tool: 'grouping' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -284,8 +280,8 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
         roleAssignMode,
       };
       let groups = assignGroups(memberPool, effectiveGroupCount, opts);
-      // anti-repeat: 직전 편성과 멤버 구성이 동일하면 한 번 더 시도 (random 모드에서만)
-      if (antiRepeatOn && method === 'random' && history.length > 0 && groupResultsEqual(groups, history[0]!)) {
+      // 직전 편성과 멤버 구성이 동일하면 한 번 더 시도 (random 모드에서만, 다양성 보장)
+      if (method === 'random' && history.length > 0 && groupResultsEqual(groups, history[0]!)) {
         groups = assignGroups(memberPool, effectiveGroupCount, opts);
       }
       setResult(groups);
@@ -293,7 +289,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
       setLockedGroups(new Set());
       setIsAnimating(false);
     }, 400);
-  }, [totalMembers, effectiveGroupCount, memberPool, method, constraints, genderMode, balanceLevel, leaderMethod, roleAssignMode, roleConfigs, antiRepeatOn, history]);
+  }, [totalMembers, effectiveGroupCount, memberPool, method, constraints, genderMode, balanceLevel, leaderMethod, roleAssignMode, roleConfigs, history]);
 
   // --- Reshuffle ---
   const handleReshuffle = useCallback(() => {
@@ -310,8 +306,8 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
 
       if (lockedGroups.size === 0) {
         let groups = assignGroups(memberPool, effectiveGroupCount, roleOpts);
-        // anti-repeat: 직전 편성과 동일하면 한 번 더 시도
-        if (antiRepeatOn && method === 'random' && history.length > 0 && groupResultsEqual(groups, history[0]!)) {
+        // 직전 편성과 동일하면 한 번 더 시도 (다양성 보장)
+        if (method === 'random' && history.length > 0 && groupResultsEqual(groups, history[0]!)) {
           groups = assignGroups(memberPool, effectiveGroupCount, roleOpts);
         }
         setResult(groups);
@@ -343,7 +339,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
       }
       setIsAnimating(false);
     }, 400);
-  }, [result, lockedGroups, totalMembers, memberPool, effectiveGroupCount, method, constraints, genderMode, balanceLevel, leaderMethod, roleAssignMode, roleConfigs, antiRepeatOn, history]);
+  }, [result, lockedGroups, totalMembers, memberPool, effectiveGroupCount, method, constraints, genderMode, balanceLevel, leaderMethod, roleAssignMode, roleConfigs, history]);
 
   const toggleLock = useCallback((idx: number) => {
     setLockedGroups((prev) => {
@@ -1012,12 +1008,9 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
               >
                 {isAnimating ? '편성 중...' : '👥 모둠 편성!'}
               </button>
-              <div className="flex items-center gap-3">
-                {totalMembers > 0 && (
-                  <span className="text-xs text-sp-muted">{totalMembers}명 참여</span>
-                )}
-                <RandomnessToggle tool="grouping" />
-              </div>
+              {totalMembers > 0 && (
+                <span className="text-xs text-sp-muted">{totalMembers}명 참여</span>
+              )}
             </div>
           </>
         )}
