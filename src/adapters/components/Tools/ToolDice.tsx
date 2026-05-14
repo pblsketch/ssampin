@@ -2,9 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
-import { useSettingsStore, getToolRandomnessOn } from '@adapters/stores/useSettingsStore';
 import { secureRandom, pickIndexWithMemory } from '@domain/rules/randomRules';
-import { RandomnessToggle } from './RandomnessToggle';
 
 interface ToolDiceProps {
   onBack: () => void;
@@ -233,16 +231,14 @@ export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
   const [history, setHistory] = useState<number[][]>([]);
   const [rollId, setRollId] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const settings = useSettingsStore((s) => s.settings);
-  const antiRepeatOn = getToolRandomnessOn(settings, 'dice');
 
   const roll = useCallback(() => {
     if (isRolling) return;
 
-    // anti-repeat 모드 + 1개 주사위일 때만 직전 결과 회피 의미 있음
-    // (2~3개일 땐 조합 회피는 비용 대비 효과 낮아 OFF 와 동일하게 secureRandom 균등)
+    // 1개 주사위일 때만 직전 결과 회피 (anti-repeat 항상 ON)
+    // 2~3개일 땐 조합 회피 비용 대비 효과 낮아 secureRandom 균등
     let newResults: number[];
-    if (antiRepeatOn && diceCount === 1) {
+    if (diceCount === 1) {
       const historyFlat = history.flat().map((v) => v - 1).slice(0, 3);
       const idx = pickIndexWithMemory(6, { history: historyFlat });
       newResults = [idx + 1];
@@ -264,7 +260,7 @@ export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
       playResult();
       setHistory((prev) => [newResults, ...prev].slice(0, 10));
     }, 1500);
-  }, [isRolling, diceCount, antiRepeatOn, history, playProgress, playResult]);
+  }, [isRolling, diceCount, history, playProgress, playResult]);
 
   const handleDiceCountChange = useCallback(
     (count: DiceCount) => {
@@ -352,7 +348,6 @@ export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
         >
           {isRolling ? '던지는 중...' : '🎲 던지기!'}
         </button>
-        <RandomnessToggle tool="dice" />
 
         {/* History */}
         {history.length > 0 && (

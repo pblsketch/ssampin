@@ -6,29 +6,6 @@ import { settingsRepository } from '@adapters/di/container';
 import { detectLunchFromPeriods, getDefaultLunchTime } from '@domain/rules/periodRules';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
-/**
- * 쌤도구 "골고루 모드" 도구별 기본값.
- * - 랜덤뽑기/조정하기/룰렛: ON (학생 뽑기 류 — 다양성 우선)
- * - 동전/주사위: OFF (확률 학습 시나리오 보호)
- */
-export const DEFAULT_TOOL_RANDOMNESS = {
-  random: true,
-  grouping: true,
-  roulette: true,
-  coin: false,
-  dice: false,
-} as const;
-
-export type ToolRandomnessKey = keyof typeof DEFAULT_TOOL_RANDOMNESS;
-
-/** Settings 에서 도구별 "골고루 모드" 활성 여부 조회 (미설정 시 기본값). */
-export function getToolRandomnessOn(
-  settings: Settings | undefined,
-  tool: ToolRandomnessKey,
-): boolean {
-  return settings?.toolRandomness?.[tool] ?? DEFAULT_TOOL_RANDOMNESS[tool];
-}
-
 export const DEFAULT_WORK_SYMBOLS: readonly WorkSymbolItem[] = [
   { id: 'silence', emoji: '🤫', name: '조용히', description: '소리 내지 않고 혼자 활동합니다', bgGradient: 'from-blue-950/30 to-transparent' },
   { id: 'raise-hand', emoji: '🙋', name: '손들고 질문', description: '질문이 있으면 손을 들어주세요', bgGradient: 'from-green-950/30 to-transparent' },

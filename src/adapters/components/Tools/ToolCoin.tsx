@@ -2,9 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
-import { useSettingsStore, getToolRandomnessOn } from '@adapters/stores/useSettingsStore';
-import { secureRandom, pickWithMemory } from '@domain/rules/randomRules';
-import { RandomnessToggle } from './RandomnessToggle';
+import { pickWithMemory } from '@domain/rules/randomRules';
 
 interface ToolCoinProps {
   onBack: () => void;
@@ -36,25 +34,18 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
   // Track cumulative rotation so we always spin forward
   const cumulativeRotationRef = useRef(0);
   const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 직전 결과 회피용 (anti-repeat 모드 ON 일 때만 의미 있음)
+  // 직전 결과 회피용 (anti-repeat 항상 ON)
   const lastResultRef = useRef<CoinResult>(null);
-  const settings = useSettingsStore((s) => s.settings);
-  const antiRepeatOn = getToolRandomnessOn(settings, 'coin');
 
   const handleFlip = useCallback(() => {
     if (isFlipping) return;
 
-    // Determine result — anti-repeat ON 시 직전 결과 회피
-    let isHeads: boolean;
-    if (antiRepeatOn) {
-      const picked = pickWithMemory<'heads' | 'tails'>(['heads', 'tails'], {
-        history: lastResultRef.current ? [lastResultRef.current as 'heads' | 'tails'] : [],
-        windowSize: 1,
-      });
-      isHeads = picked === 'heads';
-    } else {
-      isHeads = secureRandom() < 0.5;
-    }
+    // Determine result — 직전 결과 회피 (windowSize 1, penalty 0.25)
+    const picked = pickWithMemory<'heads' | 'tails'>(['heads', 'tails'], {
+      history: lastResultRef.current ? [lastResultRef.current as 'heads' | 'tails'] : [],
+      windowSize: 1,
+    });
+    const isHeads = picked === 'heads';
     const nextResult: CoinResult = isHeads ? 'heads' : 'tails';
     lastResultRef.current = nextResult;
 
@@ -96,7 +87,7 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
         tails: prev.tails + (nextResult === 'tails' ? 1 : 0),
       }));
     }, 1550);
-  }, [isFlipping, antiRepeatOn, playProgress, playResult]);
+  }, [isFlipping, playProgress, playResult]);
 
   const handleResetStats = useCallback(() => {
     setStats({ heads: 0, tails: 0 });
@@ -210,7 +201,6 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
         >
           {isFlipping ? '던지는 중...' : '🪙 던지기!'}
         </button>
-        <RandomnessToggle tool="coin" />
 
         {/* Statistics */}
         <div className="w-full bg-sp-card rounded-xl border border-sp-border p-5">
