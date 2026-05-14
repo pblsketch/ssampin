@@ -367,6 +367,18 @@ export interface Settings {
   readonly toolsOrder?: readonly string[];
   /** 쌤도구 페이지에서 숨길 도구 ID 목록. 빈 배열/미설정 = 모두 표시 */
   readonly hiddenTools?: readonly string[];
+  /**
+   * 쌤도구 난수 옵션 — "골고루 모드" 토글 (anti-repeat).
+   * 미설정 시 도구별 기본값: 랜덤뽑기/조정하기/룰렛 ON, 동전/주사위 OFF.
+   * 동전·주사위는 통계 학습 시나리오를 위해 기본 OFF.
+   */
+  readonly toolRandomness?: {
+    readonly random?: boolean;
+    readonly grouping?: boolean;
+    readonly roulette?: boolean;
+    readonly coin?: boolean;
+    readonly dice?: boolean;
+  };
   /** 즐겨찾기 위젯에서 숨길 북마크 그룹 ID 목록 */
   readonly bookmarkWidgetHiddenGroups?: readonly string[];
   /** 즐겨찾기 위젯에서 숨길 개별 북마크 ID 목록 */

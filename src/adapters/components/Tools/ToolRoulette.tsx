@@ -7,6 +7,9 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
+import { useSettingsStore, getToolRandomnessOn } from '@adapters/stores/useSettingsStore';
+import { secureRandom, pickIndexWithMemory } from '@domain/rules/randomRules';
+import { RandomnessToggle } from './RandomnessToggle';
 
 interface ToolRouletteProps {
   onBack: () => void;
@@ -61,6 +64,11 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const [winner, setWinner] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
+  // anti-repeat (인덱스 회피 메모리) + 사전 결정된 다음 winner
+  const [historyIdx, setHistoryIdx] = useState<number[]>([]);
+  const pendingIdxRef = useRef<number | null>(null);
+  const settings = useSettingsStore((s) => s.settings);
+  const antiRepeatOn = getToolRandomnessOn(settings, 'roulette');
 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
@@ -101,6 +109,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
       setWinner(null);
       setWinnerIndex(null);
       setHistory([]);
+      setHistoryIdx([]);
     }
   }, []);
 
@@ -187,47 +196,56 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const spin = useCallback(() => {
     if (isSpinning || items.length < 2) return;
 
-    const extraRotations = 360 * (5 + Math.random() * 3);
-    const randomOffset = Math.random() * 360;
-    const newRotation = rotation + extraRotations + randomOffset;
+    // ── 1. 인덱스 먼저 결정 (anti-repeat 양립 위함) ──
+    const targetIdx = antiRepeatOn
+      ? pickIndexWithMemory(items.length, { history: historyIdx })
+      : Math.floor(secureRandom() * items.length);
+    pendingIdxRef.current = targetIdx;
+
+    // ── 2. 섹션 중앙각 + jitter 로 finalAngle 산출 ──
+    // 섹션 i의 영역: [-90 + i*sectionAngle, -90 + (i+1)*sectionAngle] (SVG 좌표)
+    // 회전 θ 적용 후 포인터(top, -90도) 아래에 섹션 i의 중앙이 오려면:
+    //   θ ≡ -(i + 0.5) * sectionAngle  (mod 360)
+    const sectionAngle = 360 / items.length;
+    const baseFinal = ((-(targetIdx + 0.5) * sectionAngle) % 360 + 360) % 360;
+    // 섹션 내부에서 약간 흔들림 (인접 섹션 경계는 안 침범)
+    const jitterMax = sectionAngle * 0.3; // 섹션 폭의 ±30%
+    const jitter = (secureRandom() - 0.5) * 2 * jitterMax;
+    const finalAngle = ((baseFinal + jitter) % 360 + 360) % 360;
+
+    // ── 3. 7~11 바퀴 + delta 로 newRotation 계산 ──
+    const fullSpins = (7 + Math.floor(secureRandom() * 5)) * 360;
+    const currentNormalized = ((rotation % 360) + 360) % 360;
+    const delta = ((finalAngle - currentNormalized) % 360 + 360) % 360;
+    const newRotation = rotation + fullSpins + delta;
 
     setRotation(newRotation);
     setIsSpinning(true);
     setWinner(null);
     setWinnerIndex(null);
     playProgress();
-  }, [isSpinning, items.length, rotation, playProgress]);
+  }, [isSpinning, items.length, rotation, playProgress, antiRepeatOn, historyIdx]);
 
   const handleTransitionEnd = useCallback(() => {
     if (!isSpinning) return;
     setIsSpinning(false);
 
-    // The pointer is at the top (270 degrees in standard coordinates, but our wheel starts at -90)
-    // SVG 0 degrees = right; we offset start by -90 so top = 0 deg
-    // The pointer is at the top of the wheel. Wheel rotates clockwise.
-    // finalAngle: how much the wheel has rotated.
-    // The pointer is fixed at top. We need to find which section is under the pointer.
-    // Sections are drawn starting from -90 deg (top) going clockwise.
-    // After rotation, pointer lands at: (360 - (finalAngle % 360)) % 360 within the wheel's own coordinate
-    const finalAngle = ((rotation % 360) + 360) % 360;
-    // The pointer points "down" at the top, meaning it points at angle 0 in our wheel coordinate system (top)
-    // The wheel has rotated `finalAngle` clockwise, so the section under the pointer is at angle (360 - finalAngle) in the wheel
-    const pointerAngleInWheel = (360 - finalAngle) % 360;
+    // 사전 결정된 인덱스를 그대로 사용 (재계산 안 함 → anti-repeat 양립)
+    const idx = pendingIdxRef.current ?? 0;
+    const safeIdx = items.length > 0 ? ((idx % items.length) + items.length) % items.length : 0;
+    const winnerName = items[safeIdx] ?? items[0] ?? '';
 
-    const sectionAngle = 360 / items.length;
-    const idx = Math.floor(pointerAngleInWheel / sectionAngle) % items.length;
-    const winnerName = items[idx] ?? items[0] ?? '';
-
-    setWinnerIndex(idx);
+    setWinnerIndex(safeIdx);
     setWinner(winnerName);
     setHistory((prev) => [winnerName, ...prev].slice(0, 10));
+    setHistoryIdx((prev) => [safeIdx, ...prev].slice(0, 10));
     playResult();
 
     if (winnerTimerRef.current) clearTimeout(winnerTimerRef.current);
     winnerTimerRef.current = setTimeout(() => {
       setWinner(null);
     }, 2000);
-  }, [isSpinning, rotation, items, playResult]);
+  }, [isSpinning, items, playResult]);
 
   const handleLoadPreset = useCallback((presetItems: readonly string[]) => {
     setItems([...presetItems].slice(0, 20));
@@ -522,6 +540,7 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
             >
               {isSpinning ? '돌아가는 중...' : '🎯 돌리기!'}
             </button>
+            <RandomnessToggle tool="roulette" />
           </div>
         </div>
 
