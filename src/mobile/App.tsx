@@ -139,6 +139,33 @@ export function App() {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
+  /**
+   * 터치 시작점이 가로 스크롤 가능한 영역(혹은 명시적으로 탭 스와이프를 거부한 영역) 안에 있으면
+   * 글로벌 탭 스와이프를 비활성화한다.
+   *
+   * - `[data-no-tab-swipe]` 속성을 가진 조상이 있으면 즉시 차단(opt-out)
+   * - 또는 조상 중 `overflow-x: auto/scroll`이고 `scrollWidth > clientWidth`인 요소가 있으면 차단
+   *   (반 선택 가로 스크롤, 카드 캐러셀 등 자동 보호)
+   *
+   * 헤더 등 단순 가로 정렬(`overflow: visible`)은 영향 없음.
+   */
+  const isInsideHorizontalScroller = useCallback((target: EventTarget | null): boolean => {
+    let node = target as HTMLElement | null;
+    while (node && node !== document.body) {
+      if (node.dataset && node.dataset.noTabSwipe !== undefined) return true;
+      const style = window.getComputedStyle(node);
+      const overflowX = style.overflowX;
+      if (
+        (overflowX === 'auto' || overflowX === 'scroll') &&
+        node.scrollWidth > node.clientWidth
+      ) {
+        return true;
+      }
+      node = node.parentElement;
+    }
+    return false;
+  }, []);
+
   // 테마 적용 함수
   const applyTheme = useCallback(() => {
     const theme = localStorage.getItem('ssampin-mobile-theme') ?? 'system';
@@ -246,12 +273,21 @@ export function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 스와이프로 탭 전환
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches.item(0);
-    if (!touch) return;
-    touchStartX.current = touch.clientX;
-    touchStartY.current = touch.clientY;
-  }, []);
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      const touch = e.touches.item(0);
+      if (!touch) return;
+      // 가로 스크롤 영역(반 선택 등)에서 시작된 터치는 탭 스와이프로 가로채지 않는다
+      if (isInsideHorizontalScroller(e.target)) {
+        touchStartX.current = null;
+        touchStartY.current = null;
+        return;
+      }
+      touchStartX.current = touch.clientX;
+      touchStartY.current = touch.clientY;
+    },
+    [isInsideHorizontalScroller],
+  );
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
