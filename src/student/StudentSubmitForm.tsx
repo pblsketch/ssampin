@@ -6,6 +6,7 @@ import {
   REALTIME_WALL_MAX_NICKNAME_LENGTH,
   REALTIME_WALL_MAX_TEXT_LENGTH_V2,
 } from '@domain/rules/realtimeWallRules';
+import { Notice } from '@adapters/components/common/Notice';
 import { StudentColorPicker } from '@adapters/components/Tools/RealtimeWall/StudentColorPicker';
 import { StudentPipaConsentModal } from '@adapters/components/Tools/RealtimeWall/StudentPipaConsentModal';
 import { useGraphemeCounter } from './useGraphemeCounter';
@@ -177,9 +178,7 @@ export function StudentSubmitForm({
   const compositeText = useMemo(() => {
     const trimmedTitle = title.trim();
     const trimmedBody = body.trim();
-    return trimmedTitle.length > 0
-      ? `# ${trimmedTitle}\n\n${trimmedBody}`
-      : trimmedBody;
+    return trimmedTitle.length > 0 ? `# ${trimmedTitle}\n\n${trimmedBody}` : trimmedBody;
   }, [title, body]);
 
   // v2.2 — 이미지 다중 업로드 훅 (직접 사용)
@@ -194,9 +193,7 @@ export function StudentSubmitForm({
           setPipaConsentOpen(true);
         }
       }
-      setImages((prev) =>
-        [...prev, dataUrl].slice(0, REALTIME_WALL_MAX_IMAGES_PER_POST),
-      );
+      setImages((prev) => [...prev, dataUrl].slice(0, REALTIME_WALL_MAX_IMAGES_PER_POST));
     },
     [images.length],
   );
@@ -574,9 +571,9 @@ export function StudentSubmitForm({
 
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {draftNotice && (
-              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+              <Notice variant="warning">
                 이전에 첨부했던 이미지/PDF는 저장되지 않아 다시 올려야 해요.
-              </p>
+              </Notice>
             )}
 
             {/* 제목 */}
@@ -675,16 +672,10 @@ export function StudentSubmitForm({
                 className="max-w-[160px] rounded-lg border border-sp-border bg-sp-surface px-3 py-1.5 text-sm text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none disabled:opacity-60"
               />
             )}
-            <StudentColorPicker
-              value={color}
-              onChange={setColor}
-              disabled={isSubmitting}
-            />
+            <StudentColorPicker value={color} onChange={setColor} disabled={isSubmitting} />
             {/* Step 1 — 교사 모드 및 edit 모드에서는 승인 안내 메시지 숨김 */}
             {!isEditMode && !effectiveAsTeacher && (
-              <p className="ml-auto text-xs text-sp-muted">
-                선생님이 승인하면 보드에 나타나요
-              </p>
+              <p className="ml-auto text-xs text-sp-muted">선생님이 승인하면 보드에 나타나요</p>
             )}
           </footer>
 
@@ -730,5 +721,8 @@ function dataTransferFromFiles(files: File[]): DataTransfer {
   }
   // jsdom 등 — DataTransfer 미지원 시 임시 객체
   const fakeFiles = files as unknown as FileList;
-  return { files: fakeFiles, items: [] as unknown as DataTransferItemList } as unknown as DataTransfer;
+  return {
+    files: fakeFiles,
+    items: [] as unknown as DataTransferItemList,
+  } as unknown as DataTransfer;
 }

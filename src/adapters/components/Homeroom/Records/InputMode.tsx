@@ -26,6 +26,7 @@ import {
   initEditAttendancePeriods,
 } from './recordUtils';
 import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
+import { Notice } from '@adapters/components/common/Notice';
 import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
 
 export interface InputModeProps extends ModeProps {
@@ -1062,15 +1063,15 @@ function InputMode({
 
                 {/* 직전 등록에서 중복으로 건너뜀 날짜 안내 */}
                 {skippedDates.length > 0 && (
-                  <div className="mt-1 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                    <p className="text-xs text-amber-400 flex items-center gap-1 mb-1">
-                      <span className="material-symbols-outlined text-sm">warning</span>
-                      중복으로 건너뜀 ({skippedDates.length}일)
-                    </p>
-                    <p className="text-xs text-sp-muted leading-relaxed">
+                  <Notice
+                    variant="warning"
+                    title={`중복으로 건너뜀 (${skippedDates.length}일)`}
+                    className="mt-1"
+                  >
+                    <span className="text-sp-muted">
                       {skippedDates.map((d) => formatDateKR(d)).join(', ')}
-                    </p>
-                  </div>
+                    </span>
+                  </Notice>
                 )}
               </div>
             )}

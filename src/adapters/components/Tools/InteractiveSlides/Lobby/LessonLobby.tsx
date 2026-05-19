@@ -10,11 +10,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import type {
-  InteractiveLesson,
-  SessionAccessMode,
-} from '@domain/entities/InteractiveSlides';
+import type { InteractiveLesson, SessionAccessMode } from '@domain/entities/InteractiveSlides';
 import { useSlidesSessionStore } from '@adapters/stores/useSlidesSessionStore';
+import { Notice } from '@adapters/components/common/Notice';
 
 export interface LessonLobbyProps {
   readonly lesson: InteractiveLesson;
@@ -277,8 +275,9 @@ function SessionLiveCard({
 
   // 터널 모드 (Plan §11.3) — accessMode='tunnel'일 때만 시도.
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
-  const [tunnelStatus, setTunnelStatus] =
-    useState<'idle' | 'starting' | 'ready' | 'error' | 'unavailable'>('idle');
+  const [tunnelStatus, setTunnelStatus] = useState<
+    'idle' | 'starting' | 'ready' | 'error' | 'unavailable'
+  >('idle');
   const [tunnelError, setTunnelError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -325,9 +324,7 @@ function SessionLiveCard({
       } catch (err) {
         if (canceled) return;
         setTunnelStatus('error');
-        setTunnelError(
-          err instanceof Error ? err.message : '터널 시작 실패',
-        );
+        setTunnelError(err instanceof Error ? err.message : '터널 시작 실패');
       }
     })();
     return () => {
@@ -513,9 +510,9 @@ function SessionCodeDisplay({
                 LAN 모드로 전환하거나 cloudflared 설치를 확인하세요.
               </div>
             )}
-            <div className="px-3 py-2 bg-amber-400/10 border border-amber-400/30 rounded-lg text-xs text-amber-200">
-              🌐 외부 인터넷 노출 모드 — 학생 PII가 인터넷 경유
-            </div>
+            <Notice variant="warning" icon="🌐">
+              외부 인터넷 노출 모드 — 학생 PII가 인터넷 경유
+            </Notice>
           </>
         )}
       </div>
@@ -549,15 +546,9 @@ function StudentRosterCard({
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-xs text-sp-muted">{sessionName}</div>
-          <div className="text-base font-bold">
-            입장 {totalOnline}명
-          </div>
+          <div className="text-base font-bold">입장 {totalOnline}명</div>
         </div>
-        <button
-          type="button"
-          onClick={onStop}
-          className="text-xs text-sp-muted hover:text-red-400"
-        >
+        <button type="button" onClick={onStop} className="text-xs text-sp-muted hover:text-red-400">
           세션 닫기
         </button>
       </div>
@@ -579,9 +570,7 @@ function StudentRosterCard({
                 }`}
                 aria-hidden
               />
-              <span className="text-sm text-sp-text truncate">
-                {s.studentName}
-              </span>
+              <span className="text-sm text-sp-text truncate">{s.studentName}</span>
             </li>
           ))}
         </ul>
@@ -589,4 +578,3 @@ function StudentRosterCard({
     </div>
   );
 }
-
