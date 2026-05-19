@@ -114,8 +114,8 @@ export class ConsultationSupabaseClient {
   private headers(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
-      'apikey': this.anonKey,
-      'Authorization': `Bearer ${this.anonKey}`,
+      apikey: this.anonKey,
+      Authorization: `Bearer ${this.anonKey}`,
     };
   }
 
@@ -140,7 +140,7 @@ export class ConsultationSupabaseClient {
       method: 'POST',
       headers: {
         ...this.headers(),
-        'Prefer': 'return=minimal',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
         id: params.id,
@@ -172,9 +172,7 @@ export class ConsultationSupabaseClient {
     }> = [];
 
     // slotMinutes 단위로 분할 (학생/학부모 동일)
-    const blockedSet = new Set(
-      (params.blockedSlots ?? []).map((b) => `${b.date}_${b.startTime}`),
-    );
+    const blockedSet = new Set((params.blockedSlots ?? []).map((b) => `${b.date}_${b.startTime}`));
     for (const d of params.dates) {
       let current = parseTime(d.startTime);
       const end = parseTime(d.endTime);
@@ -197,7 +195,7 @@ export class ConsultationSupabaseClient {
       method: 'POST',
       headers: {
         ...this.headers(),
-        'Prefer': 'return=minimal',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify(slots),
     });
@@ -351,7 +349,7 @@ export class ConsultationSupabaseClient {
         method: 'DELETE',
         headers: {
           ...this.headers(),
-          'Prefer': 'return=minimal',
+          Prefer: 'return=minimal',
         },
       },
     );
@@ -362,21 +360,221 @@ export class ConsultationSupabaseClient {
     }
 
     // 슬롯 상태 복구
-    const slotRes = await fetch(
-      `${this.baseUrl}/rest/v1/consultation_slots?id=eq.${slotId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          ...this.headers(),
-          'Prefer': 'return=minimal',
-        },
-        body: JSON.stringify({ status: 'available' }),
+    const slotRes = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=eq.${slotId}`, {
+      method: 'PATCH',
+      headers: {
+        ...this.headers(),
+        Prefer: 'return=minimal',
       },
-    );
+      body: JSON.stringify({ status: 'available' }),
+    });
 
     if (!slotRes.ok) {
       const err = await slotRes.text();
       throw new Error(`Failed to restore slot status: ${err}`);
+    }
+  }
+
+  /**
+   * 일정 메타 부분 갱신 (title/type/methods/slotMinutes/dates/message).
+   * 슬롯 재생성은 `replaceSlots`로 별도 호출한다 (예약 있는 슬롯 보존을 위해 분리).
+   */
+  async updateSchedule(
+    id: string,
+    patch: {
+      title?: string;
+      type?: 'parent' | 'student';
+      methods?: ReadonlyArray<'face' | 'phone' | 'video'>;
+      slotMinutes?: number;
+      dates?: ReadonlyArray<{ date: string; startTime: string; endTime: string }>;
+      message?: string;
+    },
+  ): Promise<void> {
+    this.ensureConfigured();
+
+    const body: Record<string, unknown> = {};
+    if (patch.title !== undefined) body['title'] = patch.title;
+    if (patch.type !== undefined) body['type'] = patch.type;
+    if (patch.methods !== undefined) body['methods'] = patch.methods;
+    if (patch.slotMinutes !== undefined) body['slot_minutes'] = patch.slotMinutes;
+    if (patch.dates !== undefined) body['dates'] = patch.dates;
+    if (patch.message !== undefined) body['message'] = patch.message;
+
+    if (Object.keys(body).length === 0) return;
+
+    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        ...this.headers(),
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to update consultation schedule: ${err}`);
+    }
+  }
+
+  /**
+   * 슬롯 재생성.
+   *
+   * 알고리즘:
+   *  1) 현재 슬롯 조회
+   *  2) 새 dates × slotMinutes 로 (date_startTime) 키 집합 계산
+   *  3) 현재 슬롯 중 새 키 집합에 없고 status !== 'booked' 인 것만 DELETE
+   *     (예약 있는 슬롯은 반드시 보존 — caller 가 사전 영향 분석으로 처리해야 함)
+   *  4) 새 키 집합에 있으나 현재 없는 슬롯만 INSERT
+   *  5) blockedSlots 키에 해당하는 신규 슬롯은 status='blocked' 로
+   */
+  async replaceSlots(
+    scheduleId: string,
+    params: {
+      dates: ReadonlyArray<{ date: string; startTime: string; endTime: string }>;
+      slotMinutes: number;
+      blockedSlots?: ReadonlyArray<{ date: string; startTime: string }>;
+    },
+  ): Promise<void> {
+    this.ensureConfigured();
+
+    // 1) 현재 슬롯
+    const currentSlots = await this.getSlots(scheduleId);
+    const currentByKey = new Map<string, SlotPublic>();
+    for (const s of currentSlots) currentByKey.set(`${s.date}_${s.startTime}`, s);
+
+    // 2) 새 키 집합
+    const blockedSet = new Set((params.blockedSlots ?? []).map((b) => `${b.date}_${b.startTime}`));
+    const desired: Array<{
+      date: string;
+      startTime: string;
+      endTime: string;
+      blocked: boolean;
+    }> = [];
+    for (const d of params.dates) {
+      let cursor = parseTime(d.startTime);
+      const end = parseTime(d.endTime);
+      while (cursor + params.slotMinutes <= end) {
+        const startStr = formatTime(cursor);
+        desired.push({
+          date: d.date,
+          startTime: startStr,
+          endTime: formatTime(cursor + params.slotMinutes),
+          blocked: blockedSet.has(`${d.date}_${startStr}`),
+        });
+        cursor += params.slotMinutes;
+      }
+    }
+    const desiredKeys = new Set(desired.map((d) => `${d.date}_${d.startTime}`));
+
+    // 3) 삭제 대상: 새 키 집합에 없고 booked 도 아닌 슬롯
+    const toDelete = currentSlots.filter(
+      (s) => !desiredKeys.has(`${s.date}_${s.startTime}`) && s.status !== 'booked',
+    );
+    if (toDelete.length > 0) {
+      const ids = toDelete.map((s) => s.id).join(',');
+      const delRes = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=in.(${ids})`, {
+        method: 'DELETE',
+        headers: { ...this.headers(), Prefer: 'return=minimal' },
+      });
+      if (!delRes.ok) {
+        const err = await delRes.text();
+        throw new Error(`Failed to delete obsolete slots: ${err}`);
+      }
+    }
+
+    // 4) 추가 대상: 새 키 집합에 있으나 현재 없는 슬롯
+    const toInsert = desired
+      .filter((d) => !currentByKey.has(`${d.date}_${d.startTime}`))
+      .map((d) => ({
+        schedule_id: scheduleId,
+        date: d.date,
+        start_time: d.startTime,
+        end_time: d.endTime,
+        status: d.blocked ? 'blocked' : 'available',
+      }));
+    if (toInsert.length > 0) {
+      const insRes = await fetch(`${this.baseUrl}/rest/v1/consultation_slots`, {
+        method: 'POST',
+        headers: { ...this.headers(), Prefer: 'return=minimal' },
+        body: JSON.stringify(toInsert),
+      });
+      if (!insRes.ok) {
+        const err = await insRes.text();
+        throw new Error(`Failed to insert new slots: ${err}`);
+      }
+    }
+  }
+
+  /**
+   * 예약 재배정 — atomic RPC.
+   *
+   * `reschedule_consultation_booking(p_booking_id, p_new_slot_id, p_schedule_id)`
+   * 함수가 FOR UPDATE 잠금으로 동시 race 를 차단한다.
+   * SQL: supabase/sql/2026-05-19__reschedule_rpc.sql
+   */
+  async rescheduleBooking(params: {
+    bookingId: string;
+    newSlotId: string;
+    scheduleId: string;
+  }): Promise<{ success: boolean; message: string }> {
+    this.ensureConfigured();
+    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/reschedule_consultation_booking`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({
+        p_booking_id: params.bookingId,
+        p_new_slot_id: params.newSlotId,
+        p_schedule_id: params.scheduleId,
+      }),
+    });
+
+    if (!res.ok) {
+      if (res.status === 409) {
+        return {
+          success: false,
+          message: '선택한 시간대는 이미 예약되었거나 차단되었습니다.',
+        };
+      }
+      const text = await res.text().catch(() => '');
+      return {
+        success: false,
+        message: text || '예약 시간 변경에 실패했습니다.',
+      };
+    }
+
+    const raw = (await res.json().catch(() => null)) as {
+      success?: boolean;
+      message?: string;
+    } | null;
+    if (raw && typeof raw === 'object') {
+      return {
+        success: raw.success ?? true,
+        message: raw.message ?? '예약 시간이 변경되었습니다.',
+      };
+    }
+    return { success: true, message: '예약 시간이 변경되었습니다.' };
+  }
+
+  /**
+   * 슬롯 상태 배치 변경 (Phase 2 동기화에서 활용).
+   * Phase 1 에서는 호출자가 없어도 export 만 유지한다.
+   */
+  async bulkUpdateSlotStatus(
+    slotIds: readonly string[],
+    status: 'available' | 'blocked',
+  ): Promise<void> {
+    this.ensureConfigured();
+    if (slotIds.length === 0) return;
+    const ids = slotIds.join(',');
+    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=in.(${ids})`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), Prefer: 'return=minimal' },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to bulk update slot status: ${err}`);
     }
   }
 
@@ -403,7 +601,9 @@ export class ConsultationSupabaseClient {
     };
 
     void poll();
-    timerId = setInterval(() => { void poll(); }, intervalMs);
+    timerId = setInterval(() => {
+      void poll();
+    }, intervalMs);
 
     return () => {
       if (timerId !== null) {

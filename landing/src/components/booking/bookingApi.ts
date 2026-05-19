@@ -4,8 +4,8 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 function headers(): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    'apikey': SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
   };
 }
 
@@ -34,6 +34,28 @@ export interface SlotPublic {
 }
 
 export interface BookResult {
+  success: boolean;
+  message: string;
+  /** Phase 3 — 학부모 셀프 변경/취소용. 028 이후 신규 booking 부터 발급. */
+  token?: string;
+  /** 예약된 booking id (성공 시) */
+  bookingId?: string;
+}
+
+/** 학부모 셀프 페이지(`/booking/[id]/mine`)에서 사용. */
+export interface MyBookingPublic {
+  readonly id: string;
+  readonly scheduleId: string;
+  readonly slotId: string;
+  readonly studentNumber: number;
+  readonly method: 'face' | 'phone' | 'video';
+  readonly bookerInfoEncrypted?: string;
+  readonly memoEncrypted?: string;
+  readonly createdAt: string;
+  readonly slot: SlotPublic | null;
+}
+
+export interface SimpleRpcResult {
   success: boolean;
   message: string;
 }
@@ -159,14 +181,27 @@ export async function bookSlot(params: {
       return { success: false, message: '예약 요청에 실패했습니다. 다시 시도해주세요.' };
     }
 
-    const result = (await res.json()) as { success: boolean; bookingId?: string; error?: string };
+    const result = (await res.json()) as {
+      success: boolean;
+      bookingId?: string;
+      token?: string;
+      error?: string;
+    };
 
     if (result.success) {
-      return { success: true, message: '예약이 완료되었습니다!' };
+      return {
+        success: true,
+        message: '예약이 완료되었습니다!',
+        token: result.token,
+        bookingId: result.bookingId,
+      };
     }
 
     if (result.error === 'already_booked') {
-      return { success: false, message: '해당 시간은 이미 예약되었습니다. 다른 시간을 선택해주세요.' };
+      return {
+        success: false,
+        message: '해당 시간은 이미 예약되었습니다. 다른 시간을 선택해주세요.',
+      };
     }
 
     if (result.error === 'student_already_booked') {
@@ -179,17 +214,154 @@ export async function bookSlot(params: {
   }
 }
 
+// ─── Phase 3 — 학부모 셀프 변경/취소 ─────────────────────────────────────────
+
+/** token 으로 본인 예약 + 슬롯 정보 조회. */
+export async function getMyBooking(token: string): Promise<MyBookingPublic | null> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_consultation_booking_by_token`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ p_token: token }),
+    });
+    if (!res.ok) return null;
+    const raw = (await res.json()) as {
+      success: boolean;
+      error?: string;
+      booking?: {
+        id: string;
+        scheduleId: string;
+        slotId: string;
+        studentNumber: number;
+        method: string;
+        bookerInfoEncrypted: string | null;
+        memoEncrypted: string | null;
+        createdAt: string;
+      };
+      slot?: {
+        id: string;
+        scheduleId: string;
+        date: string;
+        startTime: string;
+        endTime: string;
+        status: string;
+      } | null;
+    };
+    if (!raw.success || !raw.booking) return null;
+    const b = raw.booking;
+    const slot = raw.slot
+      ? {
+          id: raw.slot.id,
+          scheduleId: raw.slot.scheduleId,
+          date: raw.slot.date,
+          startTime: raw.slot.startTime,
+          endTime: raw.slot.endTime,
+          status: raw.slot.status as SlotPublic['status'],
+        }
+      : null;
+    return {
+      id: b.id,
+      scheduleId: b.scheduleId,
+      slotId: b.slotId,
+      studentNumber: b.studentNumber,
+      method: b.method as MyBookingPublic['method'],
+      bookerInfoEncrypted: b.bookerInfoEncrypted ?? undefined,
+      memoEncrypted: b.memoEncrypted ?? undefined,
+      createdAt: b.createdAt,
+      slot,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** token 으로 예약 시간 변경. */
+export async function rescheduleMyBooking(
+  token: string,
+  newSlotId: string,
+): Promise<SimpleRpcResult> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/rpc/reschedule_consultation_booking_by_token`,
+      {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ p_token: token, p_new_slot_id: newSlotId }),
+      },
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { success: false, message: text || '예약 시간 변경에 실패했습니다.' };
+    }
+    const raw = (await res.json()) as { success?: boolean; message?: string };
+    return {
+      success: raw.success ?? false,
+      message: raw.message ?? '예약 시간 변경에 실패했습니다.',
+    };
+  } catch {
+    return { success: false, message: '네트워크 오류가 발생했습니다.' };
+  }
+}
+
+/** token 으로 예약 취소. */
+export async function cancelMyBooking(token: string): Promise<SimpleRpcResult> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cancel_consultation_booking_by_token`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ p_token: token }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { success: false, message: text || '예약 취소에 실패했습니다.' };
+    }
+    const raw = (await res.json()) as { success?: boolean; message?: string };
+    return {
+      success: raw.success ?? false,
+      message: raw.message ?? '예약 취소에 실패했습니다.',
+    };
+  } catch {
+    return { success: false, message: '네트워크 오류가 발생했습니다.' };
+  }
+}
+
+/** Phase 3 — localStorage 에 booking token 저장/조회. */
+export const BOOKING_TOKEN_STORAGE_PREFIX = 'ssampin_booking_token_';
+
+export function saveBookingToken(scheduleId: string, token: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`${BOOKING_TOKEN_STORAGE_PREFIX}${scheduleId}`, token);
+  } catch {
+    // localStorage 차단 환경 — 무시
+  }
+}
+
+export function readBookingToken(scheduleId: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(`${BOOKING_TOKEN_STORAGE_PREFIX}${scheduleId}`);
+  } catch {
+    return null;
+  }
+}
+
+export function clearBookingToken(scheduleId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(`${BOOKING_TOKEN_STORAGE_PREFIX}${scheduleId}`);
+  } catch {
+    // ignore
+  }
+}
+
 // ─── AES-GCM Encryption Helper ───────────────────────────────────────────────
 
 async function deriveKey(password: string): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(password),
-    'PBKDF2',
-    false,
-    ['deriveKey'],
-  );
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, [
+    'deriveKey',
+  ]);
   const salt = enc.encode('ssampin-consultation-v1');
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations: 100_000, hash: 'SHA-256' },
