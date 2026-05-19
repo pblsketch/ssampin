@@ -21,14 +21,17 @@ const ACCENT_CLASSES: Record<AccentColor, AccentClasses> = {
     hint: 'text-red-300/80',
   },
   amber: {
-    // 다크 배경 + amber 틴트 위에서 amber-200/300은 색상 동화로 가독성 ↓ — amber-100으로 명도 ↑
-    // 배경도 /15 → /25 로 5%p 강화하여 활성 강조 보강 (frontend-architect 협업 2026-05-20)
-    allActive: 'bg-amber-500/25 text-amber-100 ring-1 ring-amber-500/40',
+    // 옅은 amber 배경(/15~25) + 옅은 amber 텍스트(-100/200/300)는 노란-노란 색상 동화로
+    // 활성 칩 자체가 카드와 동화되어 안 보임 (2026-05-20 사용자 시각 검증).
+    // 해결: "단단한 amber 배경 + 어두운 amber 텍스트" 반전 패치 패턴.
+    // bg-amber-400 (#FBBF24) + text-amber-950 (#451A03) → WCAG AA 통과 + 시각 분리 명확.
+    allActive: 'bg-amber-400 text-amber-950 ring-1 ring-amber-500 font-semibold',
     allInactive: 'bg-sp-surface text-sp-muted hover:text-sp-text',
-    periodActive: 'bg-amber-500/25 text-amber-100 ring-1 ring-amber-500/50',
+    periodActive: 'bg-amber-400 text-amber-950 ring-1 ring-amber-500 font-semibold',
     periodInactive: 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80',
     border: 'border-amber-500/30',
-    hint: 'text-amber-200/90',
+    // 힌트는 배경 틴트 없이 다크 카드 위 작은 글씨 — 채도 높은 amber-400 + medium 굵기로 가독성 ↑.
+    hint: 'text-amber-400 font-medium',
   },
   orange: {
     allActive: 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/40',
@@ -152,7 +155,7 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
         </button>
       </div>
       {selectedLabels.length > 0 && !allRegularSelected && (
-        <p className={`text-detail ${classes.hint}`}>{selectedLabels.join('·')} 선택됨</p>
+        <p className={`text-xs ${classes.hint}`}>{selectedLabels.join('·')} 선택됨</p>
       )}
     </div>
   );
