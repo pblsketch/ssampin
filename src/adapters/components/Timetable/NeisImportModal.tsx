@@ -20,10 +20,7 @@ import {
   formatDateDisplay,
 } from '@domain/entities/NeisTimetable';
 import type { ClassScheduleData } from '@domain/entities/Timetable';
-import {
-  transformToClassSchedule,
-  getMaxPeriod,
-} from '@domain/rules/neisTransformRules';
+import { transformToClassSchedule, getMaxPeriod } from '@domain/rules/neisTransformRules';
 
 interface NeisImportModalProps {
   isOpen: boolean;
@@ -37,7 +34,13 @@ type WizardStep = 'school' | 'classSelect' | 'period' | 'confirm' | 'loading' | 
 
 type PeriodOption = 'thisWeek' | 'lastWeek' | 'custom';
 
-export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, onEnableAutoSync }: NeisImportModalProps) {
+export function NeisImportModal({
+  isOpen,
+  onClose,
+  onImport,
+  hasExistingData,
+  onEnableAutoSync,
+}: NeisImportModalProps) {
   const { settings } = useSettingsStore();
   const { searchResults, searching, searchSchools, clearSearch } = useMealStore();
   const showToast = useToastStore((s) => s.show);
@@ -126,7 +129,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
         setClassListError(
           e instanceof NeisApiError
             ? getNeisErrorMessage(e.errorType)
-            : '반 목록을 불러올 수 없습니다. 학교 정보와 학교 구분(초/중/고)을 확인해주세요.'
+            : '반 목록을 불러올 수 없습니다. 학교 정보와 학교 구분(초/중/고)을 확인해주세요.',
         );
       })
       .finally(() => {
@@ -172,11 +175,11 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
 
         setErrorMsg(
           `시간표 데이터가 없습니다.\n\n` +
-          `가능한 원인:\n` +
-          `• 해당 기간에 등록된 시간표가 없음 (개학 전 데이터)\n` +
-          `• 학교 구분(초/중/고)이 실제 학교와 다름\n` +
-          `• 학년/반 번호가 NEIS에 등록된 것과 다름\n\n` +
-          `조회 정보: ${hint}`
+            `가능한 원인:\n` +
+            `• 해당 기간에 등록된 시간표가 없음 (개학 전 데이터)\n` +
+            `• 학교 구분(초/중/고)이 실제 학교와 다름\n` +
+            `• 학년/반 번호가 NEIS에 등록된 것과 다름\n\n` +
+            `조회 정보: ${hint}`,
         );
         setStep('error');
         return;
@@ -194,7 +197,17 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
       }
       setStep('error');
     }
-  }, [selectedSchool, selectedGrade, selectedClass, neisLevel, academicYear, semester, dateRange, apiKey, onImport]);
+  }, [
+    selectedSchool,
+    selectedGrade,
+    selectedClass,
+    neisLevel,
+    academicYear,
+    semester,
+    dateRange,
+    apiKey,
+    onImport,
+  ]);
 
   /* ── 다음 단계 진행 ── */
   const goNext = useCallback(() => {
@@ -229,11 +242,14 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
   }, [step, selectedSchool, selectedGrade, selectedClass, periodOption, customFrom, customTo]);
 
   /* ── 학교 선택 핸들러 ── */
-  const handleSelectSchool = useCallback((school: SchoolSearchResult) => {
-    setSelectedSchool(school);
-    setSchoolQuery('');
-    clearSearch();
-  }, [clearSearch]);
+  const handleSelectSchool = useCallback(
+    (school: SchoolSearchResult) => {
+      setSelectedSchool(school);
+      setSchoolQuery('');
+      clearSearch();
+    },
+    [clearSearch],
+  );
 
   /* ── 리셋 ── */
   useEffect(() => {
@@ -256,7 +272,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="나이스 시간표 불러오기" srOnlyTitle size="lg">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
           <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
@@ -284,8 +300,8 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                         isCompleted
                           ? 'bg-sp-accent text-white'
                           : isActive
-                          ? 'bg-sp-accent/20 text-sp-accent border-2 border-sp-accent'
-                          : 'bg-sp-surface text-sp-muted border border-sp-border'
+                            ? 'bg-sp-accent/20 text-sp-accent border-2 border-sp-accent'
+                            : 'bg-sp-surface text-sp-muted border border-sp-border'
                       }`}
                     >
                       {isCompleted ? (
@@ -294,7 +310,9 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                         stepNum
                       )}
                     </div>
-                    <span className={`text-caption font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}>
+                    <span
+                      className={`text-caption font-medium ${isActive ? 'text-sp-accent' : 'text-sp-muted'}`}
+                    >
                       {label}
                     </span>
                   </div>
@@ -318,7 +336,10 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                     )}
                   </div>
                   <button
-                    onClick={() => { setSelectedSchool(null); setSchoolQuery(''); }}
+                    onClick={() => {
+                      setSelectedSchool(null);
+                      setSchoolQuery('');
+                    }}
                     className="text-xs text-sp-accent hover:text-blue-400 font-medium"
                   >
                     변경
@@ -376,12 +397,17 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                   <label className="text-xs font-semibold text-sp-muted">학년</label>
                   <select
                     value={selectedGrade}
-                    onChange={(e) => { setSelectedGrade(e.target.value); setClassListError(''); }}
+                    onChange={(e) => {
+                      setSelectedGrade(e.target.value);
+                      setClassListError('');
+                    }}
                     className="w-full px-3 py-2 rounded-xl bg-sp-surface border border-sp-border text-sm text-sp-text focus:border-sp-accent focus:outline-none"
                   >
                     <option value="">선택</option>
                     {gradeRange.map((g) => (
-                      <option key={g} value={String(g)}>{g}학년</option>
+                      <option key={g} value={String(g)}>
+                        {g}학년
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -401,15 +427,15 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                     >
                       <option value="">선택</option>
                       {classList.map((c) => (
-                        <option key={c.CLASS_NM} value={c.CLASS_NM}>{c.CLASS_NM}반</option>
+                        <option key={c.CLASS_NM} value={c.CLASS_NM}>
+                          {c.CLASS_NM}반
+                        </option>
                       ))}
                     </select>
                   )}
                 </div>
               </div>
-              <p className="text-xs text-sp-muted">
-                선택한 반의 시간표를 불러옵니다.
-              </p>
+              <p className="text-xs text-sp-muted">선택한 반의 시간표를 불러옵니다.</p>
               {classListError && (
                 <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">
                   {classListError}
@@ -428,7 +454,12 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                     lastWeek: '지난 주',
                     custom: '직접 선택',
                   };
-                  const range = opt === 'thisWeek' ? getCurrentWeekRange() : opt === 'lastWeek' ? getLastWeekRange() : null;
+                  const range =
+                    opt === 'thisWeek'
+                      ? getCurrentWeekRange()
+                      : opt === 'lastWeek'
+                        ? getLastWeekRange()
+                        : null;
 
                   return (
                     <button
@@ -445,7 +476,9 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
                           periodOption === opt ? 'border-sp-accent' : 'border-sp-border'
                         }`}
                       >
-                        {periodOption === opt && <div className="w-2.5 h-2.5 rounded-full bg-sp-accent" />}
+                        {periodOption === opt && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-sp-accent" />
+                        )}
                       </div>
                       <div>
                         <p className="text-sm font-medium text-sp-text">{labels[opt]}</p>
@@ -506,42 +539,51 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
           {step === 'done' && (
             <div className="flex flex-col items-center justify-center py-8 gap-3">
               <div className="w-14 h-14 rounded-full bg-green-500/20 flex items-center justify-center">
-                <span className="material-symbols-outlined text-green-400 text-3xl">check_circle</span>
+                <span className="material-symbols-outlined text-green-400 text-3xl">
+                  check_circle
+                </span>
               </div>
               <p className="text-sm font-medium text-sp-text">시간표를 성공적으로 불러왔습니다!</p>
               <p className="text-xs text-sp-muted">필요한 부분은 수동으로 수정할 수 있습니다.</p>
 
               {/* 자동 동기화 제안 */}
-              {onEnableAutoSync && !settings.neis.autoSync?.enabled && !autoSyncOffered && selectedGrade && selectedClass && (
-                <div className="mt-4 w-full p-4 bg-sp-accent/5 border border-sp-accent/20 rounded-xl">
-                  <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-sp-accent text-xl mt-0.5">sync</span>
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-sp-text">자동 동기화를 켤까요?</p>
-                      <p className="text-xs text-sp-muted mt-1">
-                        매주 앱을 시작할 때 {selectedGrade}학년 {selectedClass}반 시간표를 자동으로 가져옵니다.
-                      </p>
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => {
-                            onEnableAutoSync(selectedGrade, selectedClass);
-                            setAutoSyncOffered(true);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-bold hover:bg-blue-600 transition-colors"
-                        >
-                          켜기
-                        </button>
-                        <button
-                          onClick={() => setAutoSyncOffered(true)}
-                          className="px-3 py-1.5 rounded-lg border border-sp-border text-xs text-sp-muted hover:text-sp-text transition-colors"
-                        >
-                          나중에
-                        </button>
+              {onEnableAutoSync &&
+                !settings.neis.autoSync?.enabled &&
+                !autoSyncOffered &&
+                selectedGrade &&
+                selectedClass && (
+                  <div className="mt-4 w-full p-4 bg-sp-accent/5 border border-sp-accent/20 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <span className="material-symbols-outlined text-sp-accent text-xl mt-0.5">
+                        sync
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-sp-text">자동 동기화를 켤까요?</p>
+                        <p className="text-xs text-sp-muted mt-1">
+                          매주 앱을 시작할 때 {selectedGrade}학년 {selectedClass}반 시간표를
+                          자동으로 가져옵니다.
+                        </p>
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => {
+                              onEnableAutoSync(selectedGrade, selectedClass);
+                              setAutoSyncOffered(true);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-bold hover:bg-blue-600 transition-colors"
+                          >
+                            켜기
+                          </button>
+                          <button
+                            onClick={() => setAutoSyncOffered(true)}
+                            className="px-3 py-1.5 rounded-lg border border-sp-border text-xs text-sp-muted hover:text-sp-text transition-colors"
+                          >
+                            나중에
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
               {autoSyncOffered && settings.neis.autoSync?.enabled && (
                 <p className="text-xs text-green-400 flex items-center gap-1 mt-2">
                   <span className="material-symbols-outlined text-sm">check</span>
@@ -557,13 +599,26 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
               <div className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center">
                 <span className="material-symbols-outlined text-red-400 text-3xl">error</span>
               </div>
-              <p className="text-sm text-sp-text text-center px-4 whitespace-pre-line">{errorMsg}</p>
+              <p className="text-sm text-sp-text text-center px-4 whitespace-pre-line">
+                {errorMsg}
+              </p>
 
               <div className="w-full p-3 bg-sp-surface rounded-xl border border-sp-border text-xs text-sp-muted space-y-1">
                 <p className="font-semibold text-sp-text mb-1">현재 설정 확인</p>
                 <p>학교: {settings.neis.schoolName || '미설정'}</p>
-                <p>학교 구분: {settings.schoolLevel === 'elementary' ? '초등학교' : settings.schoolLevel === 'middle' ? '중학교' : settings.schoolLevel === 'high' ? '고등학교' : '미설정'}</p>
-                <p>학년도: {academicYear}년 {semester}학기</p>
+                <p>
+                  학교 구분:{' '}
+                  {settings.schoolLevel === 'elementary'
+                    ? '초등학교'
+                    : settings.schoolLevel === 'middle'
+                      ? '중학교'
+                      : settings.schoolLevel === 'high'
+                        ? '고등학교'
+                        : '미설정'}
+                </p>
+                <p>
+                  학년도: {academicYear}년 {semester}학기
+                </p>
               </div>
 
               <div className="flex gap-2 mt-1">
@@ -615,7 +670,7 @@ export function NeisImportModal({ isOpen, onClose, onImport, hasExistingData, on
               >
                 확인
               </button>
-            ) : (step === 'school' || step === 'classSelect' || step === 'period') ? (
+            ) : step === 'school' || step === 'classSelect' || step === 'period' ? (
               <>
                 <button
                   onClick={onClose}

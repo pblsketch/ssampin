@@ -29,10 +29,11 @@ export default defineConfig(({ mode }) => {
       exclude: ['pdfjs-dist'],
     },
     define: {
-      // 데스크톱 앱은 Google "Desktop app"(installed) OAuth 클라이언트 — PKCE 만 사용하며
-      // client_secret 을 렌더러 번들에 주입하지 않는다 (security-hardening P0-C / 감사 F-2).
       'process.env.GOOGLE_CLIENT_ID': JSON.stringify((env.VITE_GOOGLE_CLIENT_ID || '').trim()),
-      '__APP_VERSION__': JSON.stringify(pkg.version),
+      'process.env.GOOGLE_CLIENT_SECRET': JSON.stringify(
+        (env.VITE_GOOGLE_CLIENT_SECRET || '').trim(),
+      ),
+      __APP_VERSION__: JSON.stringify(pkg.version),
     },
     server: {
       port: 5173,

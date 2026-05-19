@@ -8,16 +8,64 @@ import { IconButton } from '@adapters/components/common/IconButton';
 
 const DEFAULT_CAT_IDS = new Set(['school', 'class', 'department', 'treeSchool', 'etc']);
 
-const SETTINGS_COLOR_MAP: Record<string, { bg: string; shadow: string; ring: string; label: string }> = {
-  blue: { bg: 'bg-blue-500', shadow: 'shadow-[0_0_8px_rgba(59,130,246,0.5)]', ring: 'ring-blue-500', label: '파랑' },
-  green: { bg: 'bg-green-500', shadow: 'shadow-[0_0_8px_rgba(34,197,94,0.5)]', ring: 'ring-green-500', label: '초록' },
-  yellow: { bg: 'bg-amber-500', shadow: 'shadow-[0_0_8px_rgba(245,158,11,0.5)]', ring: 'ring-amber-500', label: '노랑' },
-  purple: { bg: 'bg-purple-500', shadow: 'shadow-[0_0_8px_rgba(168,85,247,0.5)]', ring: 'ring-purple-500', label: '보라' },
-  red: { bg: 'bg-red-500', shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]', ring: 'ring-red-500', label: '빨강' },
-  pink: { bg: 'bg-pink-500', shadow: 'shadow-[0_0_8px_rgba(236,72,153,0.5)]', ring: 'ring-pink-500', label: '분홍' },
-  indigo: { bg: 'bg-indigo-500', shadow: 'shadow-[0_0_8px_rgba(99,102,241,0.5)]', ring: 'ring-indigo-500', label: '남색' },
-  teal: { bg: 'bg-teal-500', shadow: 'shadow-[0_0_8px_rgba(20,184,166,0.5)]', ring: 'ring-teal-500', label: '청록' },
-  gray: { bg: 'bg-slate-400', shadow: 'shadow-[0_0_8px_rgba(148,163,184,0.5)]', ring: 'ring-slate-400', label: '회색' },
+const SETTINGS_COLOR_MAP: Record<
+  string,
+  { bg: string; shadow: string; ring: string; label: string }
+> = {
+  blue: {
+    bg: 'bg-blue-500',
+    shadow: 'shadow-[0_0_8px_rgba(59,130,246,0.5)]',
+    ring: 'ring-blue-500',
+    label: '파랑',
+  },
+  green: {
+    bg: 'bg-green-500',
+    shadow: 'shadow-[0_0_8px_rgba(34,197,94,0.5)]',
+    ring: 'ring-green-500',
+    label: '초록',
+  },
+  yellow: {
+    bg: 'bg-amber-500',
+    shadow: 'shadow-[0_0_8px_rgba(245,158,11,0.5)]',
+    ring: 'ring-amber-500',
+    label: '노랑',
+  },
+  purple: {
+    bg: 'bg-purple-500',
+    shadow: 'shadow-[0_0_8px_rgba(168,85,247,0.5)]',
+    ring: 'ring-purple-500',
+    label: '보라',
+  },
+  red: {
+    bg: 'bg-red-500',
+    shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]',
+    ring: 'ring-red-500',
+    label: '빨강',
+  },
+  pink: {
+    bg: 'bg-pink-500',
+    shadow: 'shadow-[0_0_8px_rgba(236,72,153,0.5)]',
+    ring: 'ring-pink-500',
+    label: '분홍',
+  },
+  indigo: {
+    bg: 'bg-indigo-500',
+    shadow: 'shadow-[0_0_8px_rgba(99,102,241,0.5)]',
+    ring: 'ring-indigo-500',
+    label: '남색',
+  },
+  teal: {
+    bg: 'bg-teal-500',
+    shadow: 'shadow-[0_0_8px_rgba(20,184,166,0.5)]',
+    ring: 'ring-teal-500',
+    label: '청록',
+  },
+  gray: {
+    bg: 'bg-slate-400',
+    shadow: 'shadow-[0_0_8px_rgba(148,163,184,0.5)]',
+    ring: 'ring-slate-400',
+    label: '회색',
+  },
 };
 
 function colorDot(color: string, size = 'w-3 h-3') {
@@ -27,13 +75,7 @@ function colorDot(color: string, size = 'w-3 h-3') {
 }
 
 /* ── 인라인 이름 편집 ────────────────────────────── */
-function InlineNameEditor({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (name: string) => void;
-}) {
+function InlineNameEditor({ value, onSave }: { value: string; onSave: (name: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,7 +113,10 @@ function InlineNameEditor({
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === 'Enter') commit();
-        if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+        if (e.key === 'Escape') {
+          setDraft(value);
+          setEditing(false);
+        }
       }}
       className="text-sm font-medium text-sp-text bg-sp-bg/60 border border-sp-accent/50 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-sp-accent w-full min-w-0"
     />
@@ -79,13 +124,7 @@ function InlineNameEditor({
 }
 
 /* ── 색상 선택 드롭다운 (Portal로 렌더링하여 잘림 방지) ── */
-function ColorPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (color: string) => void;
-}) {
+function ColorPicker({ value, onChange }: { value: string; onChange: (color: string) => void }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -97,7 +136,8 @@ function ColorPicker({
       if (
         btnRef.current?.contains(e.target as Node) ||
         popupRef.current?.contains(e.target as Node)
-      ) return;
+      )
+        return;
       setOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
@@ -123,42 +163,44 @@ function ColorPicker({
         title="색상 변경"
       >
         <div className={colorDot(value, 'w-4 h-4')} />
-        <span className="material-symbols-outlined text-icon-sm text-sp-muted">
-          expand_more
-        </span>
+        <span className="material-symbols-outlined text-icon-sm text-sp-muted">expand_more</span>
       </button>
 
-      {open && createPortal(
-        <div
-          ref={popupRef}
-          className="fixed z-sp-tooltip bg-sp-card border border-sp-border rounded-xl shadow-2xl p-3"
-          style={{ top: pos.top, left: pos.left, minWidth: 200 }}
-        >
-          <div className="grid grid-cols-3 gap-2">
-            {[...CATEGORY_COLOR_PRESETS, 'gray' as const].map((c) => {
-              const info = SETTINGS_COLOR_MAP[c];
-              if (!info) return null;
-              const isSelected = c === value;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => { onChange(c); setOpen(false); }}
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                    isSelected
-                      ? 'bg-sp-accent/10 ring-1 ring-sp-accent/40 text-sp-text font-semibold'
-                      : 'hover:bg-sp-surface text-sp-muted'
-                  }`}
-                >
-                  <div className={`w-3 h-3 rounded-full ${info.bg}`} />
-                  {info.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>,
-        document.body,
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={popupRef}
+            className="fixed z-sp-tooltip bg-sp-card border border-sp-border rounded-xl shadow-2xl p-3"
+            style={{ top: pos.top, left: pos.left, minWidth: 200 }}
+          >
+            <div className="grid grid-cols-3 gap-2">
+              {[...CATEGORY_COLOR_PRESETS, 'gray' as const].map((c) => {
+                const info = SETTINGS_COLOR_MAP[c];
+                if (!info) return null;
+                const isSelected = c === value;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      onChange(c);
+                      setOpen(false);
+                    }}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                      isSelected
+                        ? 'bg-sp-accent/10 ring-1 ring-sp-accent/40 text-sp-text font-semibold'
+                        : 'hover:bg-sp-surface text-sp-muted'
+                    }`}
+                  >
+                    <div className={`w-3 h-3 rounded-full ${info.bg}`} />
+                    {info.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
@@ -194,8 +236,8 @@ function DeleteConfirmDialog({
           )}
           {eventCount > 0 && (
             <p className="text-xs text-sp-muted mt-1">
-              이 카테고리를 사용하는 일정 {eventCount}개가 있습니다.
-              삭제해도 일정은 유지되지만, 카테고리 표시가 사라집니다.
+              이 카테고리를 사용하는 일정 {eventCount}개가 있습니다. 삭제해도 일정은 유지되지만,
+              카테고리 표시가 사라집니다.
             </p>
           )}
         </div>
@@ -252,7 +294,10 @@ function CategoryRow({
         categoryName={category.name}
         eventCount={eventCount}
         isDefault={isDefault}
-        onConfirm={() => { onDelete(); setConfirmDelete(false); }}
+        onConfirm={() => {
+          onDelete();
+          setConfirmDelete(false);
+        }}
         onCancel={() => setConfirmDelete(false)}
       />
     );
@@ -283,10 +328,7 @@ function CategoryRow({
 
         {/* 이름 편집 */}
         <div className="flex-1 min-w-0 ml-3">
-          <InlineNameEditor
-            value={category.name}
-            onSave={(name) => onUpdate({ name })}
-          />
+          <InlineNameEditor value={category.name} onSave={(name) => onUpdate({ name })} />
         </div>
 
         {isDefault && (
@@ -311,7 +353,8 @@ function CategoryRow({
 
 /* ── 메인 모달 ───────────────────────────────────── */
 export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
-  const { categories, events, addCategory, updateCategory, deleteCategory, reorderCategories } = useEventsStore();
+  const { categories, events, addCategory, updateCategory, deleteCategory, reorderCategories } =
+    useEventsStore();
   const [showCatForm, setShowCatForm] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState<string>('blue');
@@ -342,23 +385,26 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
     setDragOverIndex(index);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    const fromIndex = dragIndexRef.current;
-    if (fromIndex === null || fromIndex === dropIndex) {
+  const handleDrop = useCallback(
+    (e: React.DragEvent, dropIndex: number) => {
+      e.preventDefault();
+      const fromIndex = dragIndexRef.current;
+      if (fromIndex === null || fromIndex === dropIndex) {
+        setDragOverIndex(null);
+        dragIndexRef.current = null;
+        return;
+      }
+
+      const ids = categories.map((c) => c.id);
+      const [movedId] = ids.splice(fromIndex, 1);
+      if (movedId) ids.splice(dropIndex, 0, movedId);
+      void reorderCategories(ids);
+
       setDragOverIndex(null);
       dragIndexRef.current = null;
-      return;
-    }
-
-    const ids = categories.map((c) => c.id);
-    const [movedId] = ids.splice(fromIndex, 1);
-    if (movedId) ids.splice(dropIndex, 0, movedId);
-    void reorderCategories(ids);
-
-    setDragOverIndex(null);
-    dragIndexRef.current = null;
-  }, [categories, reorderCategories]);
+    },
+    [categories, reorderCategories],
+  );
 
   const handleDragEnd = useCallback(() => {
     setDragOverIndex(null);
@@ -367,7 +413,7 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal isOpen onClose={onClose} title="일정 카테고리 관리" srOnlyTitle size="md">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 pb-4 border-b border-sp-border shrink-0">
           <div className="flex items-center gap-3">
@@ -376,103 +422,110 @@ export function CategoryManagementModal({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-sp-text">일정 카테고리 관리</h3>
-              <p className="text-xs text-sp-muted mt-0.5">이름, 색상을 수정하고 드래그하여 순서를 변경하세요</p>
+              <p className="text-xs text-sp-muted mt-0.5">
+                이름, 색상을 수정하고 드래그하여 순서를 변경하세요
+              </p>
             </div>
           </div>
           <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
-          {/* 카테고리 목록 */}
-          <div className="p-6 overflow-y-auto space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-sp-muted">
-                내 카테고리 ({categories.length})
-              </span>
-              {!showCatForm && (
-                <button
-                  type="button"
-                  onClick={() => setShowCatForm(true)}
-                  className="text-xs font-medium text-sp-accent hover:text-blue-400 flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-icon">add</span>
-                  카테고리 추가
-                </button>
-              )}
-            </div>
-
-            {/* 도움말 */}
-            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-sp-accent/5 border border-sp-accent/10">
-              <span className="material-symbols-outlined text-sp-accent text-icon">info</span>
-              <span className="text-detail text-sp-muted">
-                이름 클릭 → 수정 · 색상 점 클릭 → 변경 · 드래그하여 순서 이동
-              </span>
-            </div>
-
-            <div className="space-y-1.5">
-              {categories.map((cat, index) => (
-                <CategoryRow
-                  key={cat.id}
-                  category={cat}
-                  isDefault={DEFAULT_CAT_IDS.has(cat.id)}
-                  eventCount={getEventCount(cat.id)}
-                  isDragOver={dragOverIndex === index}
-                  onUpdate={(partial) => void updateCategory(cat.id, partial)}
-                  onDelete={() => void deleteCategory(cat.id)}
-                  onDragStart={() => handleDragStart(index)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDragEnd={handleDragEnd}
-                  onDrop={(e) => handleDrop(e, index)}
-                />
-              ))}
-
-              {/* 새 카테고리 추가 폼 */}
-              {showCatForm && (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-3 flex-1 min-w-0 px-5 py-3 rounded-lg bg-sp-surface border border-sp-accent/30">
-                    <div className="flex gap-1.5 flex-wrap w-[40%]">
-                      {[...CATEGORY_COLOR_PRESETS, 'gray' as const].map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setNewCatColor(c)}
-                          className={`w-5 h-5 rounded-full ${SETTINGS_COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${
-                            newCatColor === c ? 'ring-2 ring-sp-text ring-offset-2 ring-offset-sp-card' : ''
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <input
-                      type="text"
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && void handleAddCategory()}
-                      placeholder="카테고리 이름"
-                      className="flex-1 bg-transparent text-sm text-sp-text placeholder-sp-muted focus:outline-none border-none p-0 min-w-0"
-                      autoFocus
-                    />
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => void handleAddCategory()}
-                        className="text-sp-accent hover:text-blue-400 text-xs font-medium"
-                      >
-                        추가
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setShowCatForm(false); setNewCatName(''); }}
-                        className="text-sp-muted hover:text-sp-text text-xs"
-                      >
-                        취소
-                      </button>
-                    </div>
-                  </div>
-                  {/* 삭제 아이콘 자리 맞춤용 */}
-                  <div className="w-[18px] shrink-0" />
-                </div>
-              )}
-            </div>
+        {/* 카테고리 목록 */}
+        <div className="p-6 overflow-y-auto space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-sp-muted">
+              내 카테고리 ({categories.length})
+            </span>
+            {!showCatForm && (
+              <button
+                type="button"
+                onClick={() => setShowCatForm(true)}
+                className="text-xs font-medium text-sp-accent hover:text-blue-400 flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-icon">add</span>
+                카테고리 추가
+              </button>
+            )}
           </div>
+
+          {/* 도움말 */}
+          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-sp-accent/5 border border-sp-accent/10">
+            <span className="material-symbols-outlined text-sp-accent text-icon">info</span>
+            <span className="text-detail text-sp-muted">
+              이름 클릭 → 수정 · 색상 점 클릭 → 변경 · 드래그하여 순서 이동
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            {categories.map((cat, index) => (
+              <CategoryRow
+                key={cat.id}
+                category={cat}
+                isDefault={DEFAULT_CAT_IDS.has(cat.id)}
+                eventCount={getEventCount(cat.id)}
+                isDragOver={dragOverIndex === index}
+                onUpdate={(partial) => void updateCategory(cat.id, partial)}
+                onDelete={() => void deleteCategory(cat.id)}
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnd={handleDragEnd}
+                onDrop={(e) => handleDrop(e, index)}
+              />
+            ))}
+
+            {/* 새 카테고리 추가 폼 */}
+            {showCatForm && (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-1 min-w-0 px-5 py-3 rounded-lg bg-sp-surface border border-sp-accent/30">
+                  <div className="flex gap-1.5 flex-wrap w-[40%]">
+                    {[...CATEGORY_COLOR_PRESETS, 'gray' as const].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setNewCatColor(c)}
+                        className={`w-5 h-5 rounded-full ${SETTINGS_COLOR_MAP[c]?.bg ?? 'bg-slate-400'} ${
+                          newCatColor === c
+                            ? 'ring-2 ring-sp-text ring-offset-2 ring-offset-sp-card'
+                            : ''
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && void handleAddCategory()}
+                    placeholder="카테고리 이름"
+                    className="flex-1 bg-transparent text-sm text-sp-text placeholder-sp-muted focus:outline-none border-none p-0 min-w-0"
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleAddCategory()}
+                      className="text-sp-accent hover:text-blue-400 text-xs font-medium"
+                    >
+                      추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCatForm(false);
+                        setNewCatName('');
+                      }}
+                      className="text-sp-muted hover:text-sp-text text-xs"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+                {/* 삭제 아이콘 자리 맞춤용 */}
+                <div className="w-[18px] shrink-0" />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </Modal>
   );

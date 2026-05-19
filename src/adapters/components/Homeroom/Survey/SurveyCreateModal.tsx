@@ -53,7 +53,11 @@ function newQuestion(): QuestionDraft {
 
 /* ──────────────── 컴포넌트 ──────────────── */
 
-export function SurveyCreateModal({ onClose, classId, targetCount: targetCountProp }: SurveyCreateModalProps) {
+export function SurveyCreateModal({
+  onClose,
+  classId,
+  targetCount: targetCountProp,
+}: SurveyCreateModalProps) {
   const { createSurvey } = useSurveyStore();
   const showToast = useToastStore((s) => s.show);
   const resolvedTargetCount = targetCountProp ?? 30;
@@ -106,40 +110,47 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
     setQuestions((prev) => (prev.length <= 1 ? prev : prev.filter((q) => q.id !== id)));
   }, []);
 
-  const updateQuestion = useCallback(<K extends keyof QuestionDraft>(
-    id: string, field: K, value: QuestionDraft[K],
-  ) => {
-    setQuestions((prev) => prev.map((q) => {
-      if (q.id !== id) return q;
-      const updated = { ...q, [field]: value };
-      // 유형 변경 시 옵션 초기화
-      if (field === 'type' && value !== 'choice') {
-        updated.options = [];
-      }
-      return updated;
-    }));
-  }, []);
+  const updateQuestion = useCallback(
+    <K extends keyof QuestionDraft>(id: string, field: K, value: QuestionDraft[K]) => {
+      setQuestions((prev) =>
+        prev.map((q) => {
+          if (q.id !== id) return q;
+          const updated = { ...q, [field]: value };
+          // 유형 변경 시 옵션 초기화
+          if (field === 'type' && value !== 'choice') {
+            updated.options = [];
+          }
+          return updated;
+        }),
+      );
+    },
+    [],
+  );
 
   const addOption = useCallback((questionId: string) => {
-    setQuestions((prev) => prev.map((q) =>
-      q.id === questionId ? { ...q, options: [...q.options, ''] } : q,
-    ));
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === questionId ? { ...q, options: [...q.options, ''] } : q)),
+    );
   }, []);
 
   const updateOption = useCallback((questionId: string, idx: number, value: string) => {
-    setQuestions((prev) => prev.map((q) => {
-      if (q.id !== questionId) return q;
-      const opts = [...q.options];
-      opts[idx] = value;
-      return { ...q, options: opts };
-    }));
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id !== questionId) return q;
+        const opts = [...q.options];
+        opts[idx] = value;
+        return { ...q, options: opts };
+      }),
+    );
   }, []);
 
   const removeOption = useCallback((questionId: string, idx: number) => {
-    setQuestions((prev) => prev.map((q) => {
-      if (q.id !== questionId) return q;
-      return { ...q, options: q.options.filter((_, i) => i !== idx) };
-    }));
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id !== questionId) return q;
+        return { ...q, options: q.options.filter((_, i) => i !== idx) };
+      }),
+    );
   }, []);
 
   /* ── 유효성 ── */
@@ -183,7 +194,8 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
         isArchived: false,
         classId,
         targetCount: resolvedTargetCount,
-        customLinkCode: mode === 'student' && customLinkCode.trim() ? customLinkCode.trim() : undefined,
+        customLinkCode:
+          mode === 'student' && customLinkCode.trim() ? customLinkCode.trim() : undefined,
         pinProtection: mode === 'student' ? pinProtection : undefined,
         studentPins: studentPins,
       });
@@ -195,7 +207,9 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
           let studentPinHashes: Record<string, string> | undefined;
           if (survey.pinProtection && survey.studentPins) {
             const entries = await Promise.all(
-              Object.entries(survey.studentPins).map(async ([num, pin]) => [num, await hashPin(pin)] as const)
+              Object.entries(survey.studentPins).map(
+                async ([num, pin]) => [num, await hashPin(pin)] as const,
+              ),
             );
             studentPinHashes = Object.fromEntries(entries);
           }
@@ -226,11 +240,25 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
     } finally {
       setSaving(false);
     }
-  }, [canSubmit, title, description, mode, questions, dueDate, color, classId, customLinkCode, pinProtection, createSurvey, showToast, onClose]);
+  }, [
+    canSubmit,
+    title,
+    description,
+    mode,
+    questions,
+    dueDate,
+    color,
+    classId,
+    customLinkCode,
+    pinProtection,
+    createSurvey,
+    showToast,
+    onClose,
+  ]);
 
   return (
     <Modal isOpen onClose={onClose} title="새 설문/체크리스트" srOnlyTitle size="lg">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-5 border-b border-sp-border shrink-0">
           <h3 className="text-lg font-bold text-sp-text">새 설문/체크리스트</h3>
@@ -246,7 +274,7 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={classId ? "예: 수행평가 체크 (1차)" : "예: 우유 급식 신청 (3월)"}
+              placeholder={classId ? '예: 수행평가 체크 (1차)' : '예: 우유 급식 신청 (3월)'}
               className="w-full bg-sp-surface border border-sp-border rounded-lg px-3 py-2.5 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
               maxLength={60}
             />
@@ -266,36 +294,36 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
           </div>
 
           {/* 응답 방식 */}
-            <div>
-              <label className="text-xs font-medium text-sp-muted mb-1.5 block">응답 방식</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setMode('teacher')}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
-                    mode === 'teacher'
-                      ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                      : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
-                  }`}
-                >
-                  <span>✏️</span>
-                  <span>내가 직접 체크</span>
-                </button>
-                <button
-                  onClick={() => setMode('student')}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
-                    mode === 'student'
-                      ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                      : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
-                  }`}
-                >
-                  <span>📱</span>
-                  <span>학생 자가 응답</span>
-                </button>
-              </div>
+          <div>
+            <label className="text-xs font-medium text-sp-muted mb-1.5 block">응답 방식</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setMode('teacher')}
+                className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
+                  mode === 'teacher'
+                    ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                    : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                <span>✏️</span>
+                <span>내가 직접 체크</span>
+              </button>
+              <button
+                onClick={() => setMode('student')}
+                className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
+                  mode === 'student'
+                    ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
+                    : 'bg-sp-surface border-sp-border text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                <span>📱</span>
+                <span>학생 자가 응답</span>
+              </button>
             </div>
+          </div>
 
-            {/* 질문 목록 */}
-            <div>
+          {/* 질문 목록 */}
+          <div>
             <label className="text-xs font-medium text-sp-muted mb-1.5 block">
               질문 ({questions.length}개)
             </label>
@@ -369,7 +397,9 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
                         + 옵션 추가
                       </button>
                       {q.options.length < 2 && (
-                        <p className="text-caption text-amber-400">선택형은 최소 2개 옵션이 필요합니다</p>
+                        <p className="text-caption text-amber-400">
+                          선택형은 최소 2개 옵션이 필요합니다
+                        </p>
                       )}
                     </div>
                   )}
@@ -379,7 +409,9 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
                     <button
                       onClick={() => updateQuestion(q.id, 'required', !q.required)}
                       className={`text-xs px-2 py-0.5 rounded-md transition-all ${
-                        q.required ? 'bg-sp-accent/20 text-sp-accent' : 'text-sp-muted hover:text-sp-text'
+                        q.required
+                          ? 'bg-sp-accent/20 text-sp-accent'
+                          : 'text-sp-muted hover:text-sp-text'
                       }`}
                     >
                       {q.required ? '필수' : '선택'}
@@ -403,7 +435,9 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
             <label className="text-xs font-medium text-sp-muted mb-1.5 block">
               마감일 (선택)
               {mode === 'student' && !dueDate && (
-                <span className="text-amber-400 ml-1">학생 응답 모드에서는 마감일 설정을 권장합니다</span>
+                <span className="text-amber-400 ml-1">
+                  학생 응답 모드에서는 마감일 설정을 권장합니다
+                </span>
               )}
             </label>
             <input
@@ -417,9 +451,7 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
           {/* 사칭 방지 PIN (학생 응답 모드일 때만) */}
           {mode === 'student' && (
             <div>
-              <label className="text-xs font-medium text-sp-muted mb-1.5 block">
-                사칭 방지
-              </label>
+              <label className="text-xs font-medium text-sp-muted mb-1.5 block">사칭 방지</label>
               <div className="flex items-center justify-between bg-sp-surface rounded-lg border border-sp-border px-4 py-3">
                 <div>
                   <p className="text-sm text-sp-text font-medium">PIN 코드 인증</p>
@@ -433,9 +465,11 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
                     pinProtection ? 'bg-sp-accent' : 'bg-sp-border'
                   }`}
                 >
-                  <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${
-                    pinProtection ? 'left-5' : 'left-1'
-                  }`} />
+                  <div
+                    className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${
+                      pinProtection ? 'left-5' : 'left-1'
+                    }`}
+                  />
                 </button>
               </div>
               {pinProtection && (
@@ -465,9 +499,7 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
                   className="flex-1 bg-sp-surface border border-sp-border rounded-r-lg px-3 py-2.5 text-sm text-sp-text placeholder-sp-muted/50 focus:border-sp-accent focus:outline-none transition-colors"
                 />
               </div>
-              {linkCodeError && (
-                <p className="text-caption text-red-400 mt-1">{linkCodeError}</p>
-              )}
+              {linkCodeError && <p className="text-caption text-red-400 mt-1">{linkCodeError}</p>}
               {customLinkCode && !linkCodeError && !isCheckingCode && (
                 <p className="text-caption text-green-400 mt-1">사용 가능</p>
               )}
@@ -486,7 +518,9 @@ export function SurveyCreateModal({ onClose, classId, targetCount: targetCountPr
                   key={c.id}
                   onClick={() => setColor(c.id)}
                   className={`w-7 h-7 rounded-full transition-all ${c.cls} ${
-                    color === c.id ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card scale-110' : 'opacity-60 hover:opacity-100'
+                    color === c.id
+                      ? 'ring-2 ring-white ring-offset-2 ring-offset-sp-card scale-110'
+                      : 'opacity-60 hover:opacity-100'
                   }`}
                   title={c.label}
                 />

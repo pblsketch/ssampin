@@ -19,10 +19,7 @@ const SHORTCUT_DISPLAY = 'Ctrl + Shift + E';
  * - 단축키 (read-only, 변경은 설정 → 단축키 페이지)
  * - macOS 전용 — 접근성 권한 안내 배너 (PRD §4.1.1 Phase 2)
  */
-export function StickerSettingsModal({
-  isOpen,
-  onClose,
-}: StickerSettingsModalProps): JSX.Element {
+export function StickerSettingsModal({ isOpen, onClose }: StickerSettingsModalProps): JSX.Element {
   const settings = useStickerStore((s) => s.data.settings);
   const updateSettings = useStickerStore((s) => s.updateSettings);
 
@@ -60,9 +57,7 @@ export function StickerSettingsModal({
   const handleCheckAccessibility = () => {
     const requestPerm = window.electronAPI?.sticker?.requestAccessibilityPermission;
     if (typeof requestPerm !== 'function') {
-      useToastStore
-        .getState()
-        .show('이 환경에서는 권한 확인이 지원되지 않아요.', 'info');
+      useToastStore.getState().show('이 환경에서는 권한 확인이 지원되지 않아요.', 'info');
       return;
     }
     void requestPerm()
@@ -74,22 +69,17 @@ export function StickerSettingsModal({
         } else {
           useToastStore
             .getState()
-            .show(
-              '시스템 환경설정 → 보안 및 개인정보 → 접근성에서 쌤핀을 추가해 주세요.',
-              'info',
-            );
+            .show('시스템 환경설정 → 보안 및 개인정보 → 접근성에서 쌤핀을 추가해 주세요.', 'info');
         }
       })
       .catch(() => {
-        useToastStore
-          .getState()
-          .show('권한 확인 중 오류가 발생했어요.', 'error');
+        useToastStore.getState().show('권한 확인 중 오류가 발생했어요.', 'error');
       });
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="이모티콘 설정" srOnlyTitle size="md">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         <header className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
           <h3 className="text-base font-sp-bold text-sp-text flex items-center gap-2">
             <span className="material-symbols-outlined icon-md text-sp-muted">tune</span>
@@ -168,9 +158,7 @@ export function StickerSettingsModal({
 
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm font-sp-semibold text-sp-text">
-                최근 사용 표시 개수
-              </p>
+              <p className="text-sm font-sp-semibold text-sp-text">최근 사용 표시 개수</p>
               <p className="text-detail text-sp-muted mt-0.5">
                 피커 상단에 보일 최근 사용 이모티콘 수
               </p>
@@ -191,9 +179,7 @@ export function StickerSettingsModal({
           <div className="flex items-center justify-between gap-4 pt-3 border-t border-sp-border">
             <div className="min-w-0">
               <p className="text-sm font-sp-semibold text-sp-text">단축키</p>
-              <p className="text-detail text-sp-muted mt-0.5">
-                피커 열기/닫기 토글 단축키
-              </p>
+              <p className="text-detail text-sp-muted mt-0.5">피커 열기/닫기 토글 단축키</p>
             </div>
             <kbd className="px-3 py-1.5 rounded-lg bg-sp-text/5 ring-1 ring-sp-border font-mono text-xs text-sp-text shrink-0">
               {SHORTCUT_DISPLAY}
@@ -226,13 +212,7 @@ interface ToggleRowProps {
   badge?: string;
 }
 
-function ToggleRow({
-  title,
-  description,
-  checked,
-  onChange,
-  badge,
-}: ToggleRowProps): JSX.Element {
+function ToggleRow({ title, description, checked, onChange, badge }: ToggleRowProps): JSX.Element {
   return (
     <label className="flex items-center justify-between gap-4 cursor-pointer group">
       <div className="min-w-0">

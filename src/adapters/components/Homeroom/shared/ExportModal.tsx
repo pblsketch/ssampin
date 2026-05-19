@@ -27,15 +27,19 @@ type ExportTab = 'clipboard' | 'csv';
 
 /* ──────────────────────── 컴포넌트 ──────────────────────── */
 
-export function ExportModal({ title, columns, rows, onClose, fileName = 'export' }: ExportModalProps) {
+export function ExportModal({
+  title,
+  columns,
+  rows,
+  onClose,
+  fileName = 'export',
+}: ExportModalProps) {
   const [activeTab, setActiveTab] = useState<ExportTab>('clipboard');
   const showToast = useToastStore((s) => s.show);
 
   const tsvText = useMemo(() => {
     const header = columns.map((c) => c.label).join('\t');
-    const body = rows.map((row) =>
-      columns.map((c) => String(row[c.key] ?? '')).join('\t'),
-    );
+    const body = rows.map((row) => columns.map((c) => String(row[c.key] ?? '')).join('\t'));
     return [header, ...body].join('\n');
   }, [columns, rows]);
 
@@ -47,9 +51,7 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
       return v;
     };
     const header = columns.map((c) => escape(c.label)).join(',');
-    const body = rows.map((row) =>
-      columns.map((c) => escape(String(row[c.key] ?? ''))).join(','),
-    );
+    const body = rows.map((row) => columns.map((c) => escape(String(row[c.key] ?? ''))).join(','));
     return [header, ...body].join('\n');
   }, [columns, rows]);
 
@@ -76,7 +78,7 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
 
   return (
     <Modal isOpen onClose={onClose} title={title} srOnlyTitle size="lg">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-5 border-b border-sp-border">
           <h3 className="text-lg font-bold text-sp-text">{title}</h3>
@@ -88,7 +90,9 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
           <button
             onClick={() => setActiveTab('clipboard')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'clipboard' ? 'bg-sp-accent text-sp-accent-fg' : 'text-sp-muted hover:text-sp-text'
+              activeTab === 'clipboard'
+                ? 'bg-sp-accent text-sp-accent-fg'
+                : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             📋 클립보드
@@ -96,7 +100,9 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
           <button
             onClick={() => setActiveTab('csv')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'csv' ? 'bg-sp-accent text-sp-accent-fg' : 'text-sp-muted hover:text-sp-text'
+              activeTab === 'csv'
+                ? 'bg-sp-accent text-sp-accent-fg'
+                : 'text-sp-muted hover:text-sp-text'
             }`}
           >
             📄 CSV 다운로드
@@ -105,15 +111,16 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
 
         {/* 미리보기 */}
         <div className="flex-1 overflow-auto p-5">
-          <div className="text-xs text-sp-muted mb-2">
-            미리보기 ({rows.length}행)
-          </div>
+          <div className="text-xs text-sp-muted mb-2">미리보기 ({rows.length}행)</div>
           <div className="bg-sp-surface rounded-lg p-3 overflow-x-auto max-h-60">
             <table className="text-xs text-sp-text w-full">
               <thead>
                 <tr>
                   {columns.map((col) => (
-                    <th key={col.key} className="text-left px-2 py-1 text-sp-muted font-medium whitespace-nowrap">
+                    <th
+                      key={col.key}
+                      className="text-left px-2 py-1 text-sp-muted font-medium whitespace-nowrap"
+                    >
                       {col.label}
                     </th>
                   ))}
@@ -132,9 +139,7 @@ export function ExportModal({ title, columns, rows, onClose, fileName = 'export'
               </tbody>
             </table>
             {rows.length > 10 && (
-              <p className="text-xs text-sp-muted text-center mt-2">
-                ... 외 {rows.length - 10}행
-              </p>
+              <p className="text-xs text-sp-muted text-center mt-2">... 외 {rows.length - 10}행</p>
             )}
           </div>
         </div>
