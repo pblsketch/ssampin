@@ -635,6 +635,13 @@ function MainApp() {
   useEffect(() => {
     if (isDualToolId(currentPage)) setLastSingleTool(currentPage);
   }, [currentPage]);
+
+  // Phase 2: 일정표·일정 변경 시 상담 슬롯 가용성 자동 재계산 구독.
+  // App 라이프타임 동안 1회만 등록.
+  useEffect(() => {
+    const unsub = useConsultationStore.getState().registerScheduleSyncListener();
+    return () => unsub();
+  }, []);
   const handleRequestDualMode = useCallbackForDualEntry(setCurrentPage);
   const { setShareFile, setShowImportModal } = useEventsStore();
   const { settings } = useSettingsStore();
@@ -763,10 +770,9 @@ function MainApp() {
         } catch {
           serialized = String(payload.data);
         }
-         
+
         console.log(payload.message, serialized);
       } else {
-         
         console.log(payload.message);
       }
     });
@@ -889,7 +895,6 @@ function MainApp() {
       void initDriveSync();
     }, 2000);
     return () => clearTimeout(timer);
-     
   }, []);
 
   // Google Drive 주기적 동기화
@@ -911,7 +916,6 @@ function MainApp() {
     }, intervalMs);
 
     return () => clearInterval(timer);
-     
   }, [settings.sync?.autoSyncIntervalMin, settings.sync?.enabled]);
 
   // autoSyncOnSave: 스토어 변경 시 자동 업로드
@@ -967,7 +971,6 @@ function MainApp() {
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-     
   }, [settings.sync?.enabled, settings.sync?.autoSyncOnSave]);
 
   // Google Drive: 창 포커스 복귀 시 syncFromCloud → syncToCloud
@@ -1011,7 +1014,6 @@ function MainApp() {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', onWindowFocus);
     };
-     
   }, [settings.sync?.enabled]);
 
   // Google Drive 충돌 상태 구독
