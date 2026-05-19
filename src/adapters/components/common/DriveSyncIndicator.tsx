@@ -4,7 +4,8 @@ import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
 
 export function DriveSyncIndicator() {
   const { settings } = useSettingsStore();
-  const { status, error, progress, conflicts, syncToCloud, syncFromCloud, resetStatus } = useDriveSyncStore();
+  const { status, error, progress, conflicts, syncToCloud, syncFromCloud, resetStatus } =
+    useDriveSyncStore();
 
   // 동기화 비활성이면 렌더링 안 함
   if (!settings.sync?.enabled) return null;
@@ -24,11 +25,11 @@ export function DriveSyncIndicator() {
     <div className="mb-2">
       {status === 'syncing' && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sp-surface text-xs text-sp-muted">
-          <span className="material-symbols-outlined text-icon animate-spin text-sp-accent">sync</span>
+          <span className="material-symbols-outlined text-icon animate-spin text-sp-accent">
+            sync
+          </span>
           <span>
-            {progress
-              ? `동기화 중... (${progress.current}/${progress.total})`
-              : '동기화 중...'}
+            {progress ? `동기화 중... (${progress.current}/${progress.total})` : '동기화 중...'}
           </span>
         </div>
       )}
@@ -55,8 +56,10 @@ export function DriveSyncIndicator() {
             <span className="material-symbols-outlined text-icon-sm">refresh</span>
           </button>
           {isAuthBlocked && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-detail text-amber-200 leading-relaxed">
-              학교 계정(@*.go.kr 등)은 외부 앱 차단 정책일 수 있어요. <span className="font-medium">설정 → Google 통합</span>에서 연결을 해제하고 <span className="font-medium">개인 Gmail</span>로 다시 연결해주세요.
+            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-detail text-amber-100 leading-relaxed">
+              학교 계정(@*.go.kr 등)은 외부 앱 차단 정책일 수 있어요.{' '}
+              <span className="font-medium">설정 → Google 통합</span>에서 연결을 해제하고{' '}
+              <span className="font-medium">개인 Gmail</span>로 다시 연결해주세요.
             </div>
           )}
         </div>

@@ -1,8 +1,13 @@
 import { RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import type { Student } from '@domain/entities/Student';
-import type { StudentRecord, CounselingMethod, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
+import type {
+  StudentRecord,
+  CounselingMethod,
+  AttendancePeriodEntry,
+} from '@domain/entities/StudentRecord';
 import { formatPeriodLabel } from '@domain/entities/Attendance';
+import { enumerateRange } from '@adapters/components/common/calendarUtils';
 
 /* ──────────────────────── 공유 타입 ──────────────────────── */
 
@@ -40,10 +45,10 @@ export interface RecordEditProps {
 /* ──────────────────────── 출결 편집 유틸 ──────────────────────── */
 
 const SUBCATEGORY_STATUS_MAP: Record<string, AttendancePeriodEntry['status']> = {
-  '결석': 'absent',
-  '지각': 'late',
-  '조퇴': 'earlyLeave',
-  '결과': 'classAbsence',
+  결석: 'absent',
+  지각: 'late',
+  조퇴: 'earlyLeave',
+  결과: 'classAbsence',
 };
 
 /**
@@ -51,9 +56,10 @@ const SUBCATEGORY_STATUS_MAP: Record<string, AttendancePeriodEntry['status']> = 
  * - record.attendancePeriods 가 있으면 그대로 사용
  * - 없으면(레거시) subcategory 문자열을 파싱해 1행을 만든다 (period=1 기본값)
  */
-export function initEditAttendancePeriods(
-  record: { readonly subcategory: string; readonly attendancePeriods?: readonly AttendancePeriodEntry[] },
-): AttendancePeriodEntry[] {
+export function initEditAttendancePeriods(record: {
+  readonly subcategory: string;
+  readonly attendancePeriods?: readonly AttendancePeriodEntry[];
+}): AttendancePeriodEntry[] {
   if (record.attendancePeriods && record.attendancePeriods.length > 0) {
     return [...record.attendancePeriods];
   }
@@ -62,11 +68,13 @@ export function initEditAttendancePeriods(
   const typeLabel = match?.[1]?.trim() ?? '결석';
   const reason = match?.[2]?.trim() as AttendancePeriodEntry['reason'] | undefined;
   const status = SUBCATEGORY_STATUS_MAP[typeLabel] ?? 'absent';
-  return [{
-    period: 1,
-    status,
-    ...(reason ? { reason } : {}),
-  }];
+  return [
+    {
+      period: 1,
+      status,
+      ...(reason ? { reason } : {}),
+    },
+  ];
 }
 
 /* ──────────────────────── 날짜 유틸 ──────────────────────── */
@@ -97,20 +105,14 @@ export function getMonthRange(): { start: Date; end: Date } {
 
 /**
  * 시작일~종료일 사이의 날짜 배열 생성 (로컬 기준, UTC 밀림 없음)
- * @returns YYYY-MM-DD 문자열 배열 (시작일·종료일 포함)
+ *
+ * 본 함수는 `calendarUtils.enumerateRange` 의 호환 alias 다.
+ * 신규 코드는 `enumerateRange` 를 직접 import 하여 사용한다.
+ *
+ * @returns YYYY-MM-DD 문자열 배열 (시작일·종료일 포함). start > end 면 빈 배열.
  */
 export function createDateRange(start: string, end: string): string[] {
-  const dates: string[] = [];
-  const d = new Date(start + 'T00:00:00');
-  const endDate = new Date(end + 'T00:00:00');
-
-  while (d <= endDate) {
-    dates.push(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
-    );
-    d.setDate(d.getDate() + 1);
-  }
-  return dates;
+  return enumerateRange(start, end);
 }
 
 export function formatDateKR(dateStr: string): string {
@@ -137,7 +139,8 @@ export function formatTimeKR(isoStr: string): string {
 export const GRAY_COLOR = RECORD_COLOR_MAP['gray']!;
 
 export function getSubcategoryChipClass(color: string, isSelected: boolean): string {
-  const base = 'px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer select-none';
+  const base =
+    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer select-none';
   const c = RECORD_COLOR_MAP[color] ?? GRAY_COLOR;
   return `${base} ${isSelected ? c.activeBg : c.inactiveBg}`;
 }
@@ -146,13 +149,19 @@ export function getCategoryLabelColor(color: string): string {
   return RECORD_COLOR_MAP[color]?.text ?? GRAY_COLOR.text;
 }
 
-export function getRecordTagClass(categoryId: string, categories: readonly RecordCategoryItem[]): string {
+export function getRecordTagClass(
+  categoryId: string,
+  categories: readonly RecordCategoryItem[],
+): string {
   const cat = categories.find((c) => c.id === categoryId);
   const c = RECORD_COLOR_MAP[cat?.color ?? 'gray'] ?? GRAY_COLOR;
   return `px-2 py-0.5 rounded text-xs font-medium ${c.tagBg}`;
 }
 
-export function getCategoryDotColor(categoryId: string, categories: readonly RecordCategoryItem[]): string {
+export function getCategoryDotColor(
+  categoryId: string,
+  categories: readonly RecordCategoryItem[],
+): string {
   const cat = categories.find((c) => c.id === categoryId);
   const colorMap: Record<string, string> = {
     red: 'bg-red-400',
@@ -171,10 +180,10 @@ export function getCategoryDotColor(categoryId: string, categories: readonly Rec
 /* ──────────────────────── 출결 유형별 태그 색상 ──────────────────────── */
 
 const ATTENDANCE_TAG_COLORS: Record<string, string> = {
-  '결석': 'bg-red-500/15 text-red-400',
-  '지각': 'bg-yellow-500/15 text-yellow-400',
-  '조퇴': 'bg-orange-500/15 text-orange-400',
-  '결과': 'bg-purple-500/15 text-purple-400',
+  결석: 'bg-red-500/15 text-red-400',
+  지각: 'bg-yellow-500/15 text-yellow-400',
+  조퇴: 'bg-orange-500/15 text-orange-400',
+  결과: 'bg-purple-500/15 text-purple-400',
 };
 
 export function getAttendanceTypeFromSubcategory(subcategory: string): string | null {
@@ -183,7 +192,10 @@ export function getAttendanceTypeFromSubcategory(subcategory: string): string | 
 }
 
 /** 출결 레코드면 유형별 색상, 아니면 기존 카테고리 색상 */
-export function getSmartTagClass(record: { category: string; subcategory: string }, categories: readonly RecordCategoryItem[]): string {
+export function getSmartTagClass(
+  record: { category: string; subcategory: string },
+  categories: readonly RecordCategoryItem[],
+): string {
   if (record.category === 'attendance') {
     const attType = getAttendanceTypeFromSubcategory(record.subcategory);
     if (attType && ATTENDANCE_TAG_COLORS[attType]) {
@@ -250,10 +262,10 @@ export function formatAttendancePeriodLines(
 
 /** 출결 유형 정렬 우선순위 */
 export const ATTENDANCE_SORT_ORDER: Record<string, number> = {
-  '결석': 0,
-  '지각': 1,
-  '조퇴': 2,
-  '결과': 3,
+  결석: 0,
+  지각: 1,
+  조퇴: 2,
+  결과: 3,
 };
 
 export type RecordSortMode = 'time' | 'type' | 'studentNumber';

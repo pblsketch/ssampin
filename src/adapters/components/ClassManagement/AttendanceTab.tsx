@@ -2,7 +2,12 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import type { AttendanceStatus, AttendanceReason, StudentAttendance, AttendanceRecord } from '@domain/entities/Attendance';
+import type {
+  AttendanceStatus,
+  AttendanceReason,
+  StudentAttendance,
+  AttendanceRecord,
+} from '@domain/entities/Attendance';
 import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodShort } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -12,6 +17,7 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { getCurrentPeriod, getDayOfWeek } from '@domain/rules/periodRules';
 import { AttendanceMatrixView } from './AttendanceMatrixView';
 import { AttendanceDetailEditor } from './shared/AttendanceDetailEditor';
+import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
 
 /* ──────────────────────── 유틸 ──────────────────────── */
 
@@ -24,10 +30,7 @@ function todayString(): string {
  * 오늘 날짜일 때만, 교사가 설정한 periodTimes 기준으로 현재 교시를 반환.
  * 수업 시간 외이거나 오늘이 아니면 null.
  */
-function computeAutoPeriod(
-  periodTimes: readonly PeriodTime[],
-  targetDate: string,
-): number | null {
+function computeAutoPeriod(periodTimes: readonly PeriodTime[], targetDate: string): number | null {
   if (targetDate !== todayString()) return null;
   return getCurrentPeriod(periodTimes, new Date());
 }
@@ -97,6 +100,13 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     () => localStorage.getItem('ssampin:attendance-guide-dismissed') === 'true',
   );
 
+  // ── 다중 날짜 모드 (Phase 3 — FR-07/FR-08) ──
+  const [multiDateMode, setMultiDateMode] = useState(false);
+  const [multiDateSet, setMultiDateSet] = useState<ReadonlySet<string>>(new Set());
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
+
   const showToast = useToastStore((s) => s.show);
 
   const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
@@ -141,8 +151,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
   const students = useMemo(() => allStudents.filter(isStudentActive), [allStudents]);
 
   const groupSiblingCount = useMemo(
-    () =>
-      cls?.groupId ? classes.filter((c) => c.groupId === cls.groupId).length : 0,
+    () => (cls?.groupId ? classes.filter((c) => c.groupId === cls.groupId).length : 0),
     [cls, classes],
   );
 
@@ -293,18 +302,59 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
   const handleSave = useCallback(async () => {
     setSaveStatus('saving');
+    const studentsPayload = localStudents.map((s) => ({
+      number: s.number,
+      status: s.status,
+      ...(s.grade != null ? { grade: s.grade } : {}),
+      ...(s.classNum != null ? { classNum: s.classNum } : {}),
+      ...(s.reason ? { reason: s.reason } : {}),
+      ...(s.memo ? { memo: s.memo } : {}),
+    }));
+
+    // ── 다중 날짜 fan-out (Phase 3 FR-07) ──
+    if (multiDateMode && multiDateSet.size > 0) {
+      const sorted = Array.from(multiDateSet).sort();
+      if (sorted.length > 30) {
+        showToast('최대 30일까지 일괄 등록 가능합니다', 'error');
+        setSaveStatus('idle');
+        return;
+      }
+      setBatchProgress({ current: 0, total: sorted.length });
+      let successCount = 0;
+      for (let i = 0; i < sorted.length; i++) {
+        const d = sorted[i]!;
+        try {
+          await saveAttendanceRecord({
+            classId,
+            date: d,
+            period,
+            students: studentsPayload,
+          });
+          successCount += 1;
+        } catch {
+          // 실패한 날짜는 누적 안 하고 계속 진행
+        }
+        setBatchProgress({ current: i + 1, total: sorted.length });
+      }
+      setBatchProgress(null);
+      setSaveStatus('saved');
+      setHasModified(false);
+      showToast(
+        successCount === sorted.length
+          ? `${sorted.length}일 출결이 일괄 저장되었습니다`
+          : `${sorted.length}일 중 ${successCount}일 저장됨`,
+        successCount === sorted.length ? 'success' : 'info',
+      );
+      setTimeout(() => setSaveStatus('idle'), 2000);
+      return;
+    }
+
+    // ── 단일 날짜 저장 (기존) ──
     const record: AttendanceRecord = {
       classId,
       date,
       period,
-      students: localStudents.map((s) => ({
-        number: s.number,
-        status: s.status,
-        ...(s.grade != null ? { grade: s.grade } : {}),
-        ...(s.classNum != null ? { classNum: s.classNum } : {}),
-        ...(s.reason ? { reason: s.reason } : {}),
-        ...(s.memo ? { memo: s.memo } : {}),
-      })),
+      students: studentsPayload,
     };
     await saveAttendanceRecord(record);
     setSaveStatus('saved');
@@ -314,22 +364,29 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
       localStorage.setItem('ssampin:attendance-guide-dismissed', 'true');
     }
     setTimeout(() => setSaveStatus('idle'), 2000);
-  }, [classId, date, period, localStudents, saveAttendanceRecord, dismissedGuide]);
+  }, [
+    classId,
+    date,
+    period,
+    localStudents,
+    saveAttendanceRecord,
+    dismissedGuide,
+    multiDateMode,
+    multiDateSet,
+    showToast,
+  ]);
 
   const handleExport = useCallback(async () => {
     if (!cls) return;
-    const allRecords = useTeachingClassStore.getState().attendanceRecords
-      .filter((r) => r.classId === classId);
+    const allRecords = useTeachingClassStore
+      .getState()
+      .attendanceRecords.filter((r) => r.classId === classId);
     if (allRecords.length === 0) {
       showToast('내보낼 출결 기록이 없습니다', 'info');
       return;
     }
     try {
-      const buffer = await exportAttendanceToExcel(
-        allRecords,
-        cls.students,
-        cls.name,
-      );
+      const buffer = await exportAttendanceToExcel(allRecords, cls.students, cls.name);
       const defaultFileName = `${cls.name}_출결기록.xlsx`;
       if (window.electronAPI) {
         const saved = await window.electronAPI.showSaveDialog({
@@ -426,11 +483,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
       {/* ── 매트릭스 모드 ── */}
       {viewMode === 'matrix' && (
-        <AttendanceMatrixView
-          classId={classId}
-          date={date}
-          onDateChange={handleDateChange}
-        />
+        <AttendanceMatrixView classId={classId} date={date} onDateChange={handleDateChange} />
       )}
 
       {/* ── 단일 교시 모드 ── */}
@@ -440,13 +493,47 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <label className="text-xs text-sp-muted">날짜</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="px-3 py-1.5 bg-sp-card border border-sp-border rounded-lg
-                           text-sp-text text-sm focus:outline-none focus:border-sp-accent"
-              />
+              {multiDateMode ? (
+                <div className="min-w-[200px]">
+                  <MultiDatePicker
+                    mode="multi"
+                    multiValues={multiDateSet}
+                    onMultiChange={setMultiDateSet}
+                    onToast={showToast}
+                    maxCount={30}
+                    portal
+                    triggerLabel="여러 날짜 선택"
+                  />
+                </div>
+              ) : (
+                <div className="min-w-[180px]">
+                  <MultiDatePicker
+                    mode="single"
+                    singleValue={date}
+                    onSingleChange={handleDateChange}
+                    portal
+                  />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMultiDateMode((v) => !v);
+                  if (multiDateMode) setMultiDateSet(new Set()); // 다중 → 단일 시 초기화
+                }}
+                className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
+                  multiDateMode
+                    ? 'bg-sp-accent text-white'
+                    : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text'
+                }`}
+                aria-pressed={multiDateMode}
+                title="여러 날짜에 동일 출결 일괄 적용"
+              >
+                <span className="material-symbols-outlined text-sm align-middle mr-1">
+                  date_range
+                </span>
+                여러 날
+              </button>
             </div>
             <div className="flex items-center gap-1.5">
               <label className="text-xs text-sp-muted">교시</label>
@@ -461,17 +548,22 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
                       onClick={() => handlePeriodChange(p)}
                       title={
                         special
-                          ? p === PERIOD_MORNING ? '조회 (아침 담임 시간)' : '종례 (하교 담임 시간)'
-                          : isMatching ? `${cls?.subject} 수업` : undefined
+                          ? p === PERIOD_MORNING
+                            ? '조회 (아침 담임 시간)'
+                            : '종례 (하교 담임 시간)'
+                          : isMatching
+                            ? `${cls?.subject} 수업`
+                            : undefined
                       }
                       className={`relative ${special ? 'px-2 h-8' : 'w-8 h-8'} rounded-lg text-sm font-medium transition-all
-                        ${period === p
-                          ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40 shadow-md shadow-sp-accent/20'
-                          : isMatching
-                            ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
-                            : special
-                              ? 'bg-sp-card border border-sp-border/70 text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-                              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                        ${
+                          period === p
+                            ? 'bg-sp-accent text-white ring-2 ring-sp-accent/40 shadow-md shadow-sp-accent/20'
+                            : isMatching
+                              ? 'bg-sp-accent/15 border-2 border-sp-accent text-sp-accent font-semibold'
+                              : special
+                                ? 'bg-sp-card border border-sp-border/70 text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
+                                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
                         }`}
                     >
                       {label}
@@ -487,8 +579,10 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
           {/* 그룹 출결 안내 (조회/종례는 그룹 전체 공유) */}
           {cls?.groupId && groupSiblingCount > 1 && isSpecialPeriod(period) && (
-            <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
-                            rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+            <div
+              className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
+                            rounded-xl px-4 py-2.5 text-sm text-sp-accent"
+            >
               <span className="material-symbols-outlined text-base">groups</span>
               <span>조회 출결은 이 학급의 모든 과목에 공유됩니다.</span>
             </div>
@@ -496,8 +590,10 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
 
           {/* 수정 안내 바 */}
           {hasExistingRecord && initialized && !dismissedGuide && (
-            <div className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
-                            rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+            <div
+              className="flex items-center gap-2 bg-sp-accent/10 border border-sp-accent/30
+                            rounded-xl px-4 py-2.5 text-sm text-sp-accent"
+            >
               <span className="material-symbols-outlined text-base">edit_note</span>
               <span>이전 기록을 불러왔습니다. 학생을 클릭하면 출결 상태를 수정할 수 있습니다.</span>
               <button
@@ -540,9 +636,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
                 <span className={`material-symbols-outlined text-base ${STAT_COLORS[status]}`}>
                   {STATUS_CONFIG[status].icon}
                 </span>
-                <span className="text-xs text-sp-muted">
-                  {STATUS_CONFIG[status].label}:
-                </span>
+                <span className="text-xs text-sp-muted">{STATUS_CONFIG[status].label}:</span>
                 <span className={`text-sm font-medium ${STAT_COLORS[status]}`}>
                   {stats[status]}명
                 </span>
@@ -558,17 +652,17 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
               내보내기
             </button>
             <div className="flex-1" />
-            <span className="text-xs text-sp-muted">
-              전체 {localStudents.length}명
-            </span>
+            <span className="text-xs text-sp-muted">전체 {localStudents.length}명</span>
           </div>
 
           {/* 학생 목록 */}
           {initialized && (
             <div className="bg-sp-surface border border-sp-border rounded-xl overflow-hidden">
               {/* 헤더 */}
-              <div className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} px-4 py-2 border-b border-sp-border
-                              text-xs text-sp-muted font-medium`}>
+              <div
+                className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} px-4 py-2 border-b border-sp-border
+                              text-xs text-sp-muted font-medium`}
+              >
                 {hasGradeInfo && <span>소속</span>}
                 <span>번호</span>
                 <span>이름</span>
@@ -584,22 +678,19 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
                   const config = STATUS_CONFIG[status];
 
                   return (
-                    <div
-                      key={sKey}
-                      className={`px-4 py-2.5 hover:bg-sp-card/50 transition-colors`}
-                    >
-                      <div className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} items-center`}>
+                    <div key={sKey} className={`px-4 py-2.5 hover:bg-sp-card/50 transition-colors`}>
+                      <div
+                        className={`grid ${hasGradeInfo ? 'grid-cols-[4.5rem_3rem_1fr_8rem]' : 'grid-cols-[3rem_1fr_8rem]'} items-center`}
+                      >
                         {hasGradeInfo && (
                           <span className="text-xs text-sp-muted">
-                            {student.grade != null && student.classNum != null ? `${student.grade}-${student.classNum}` : ''}
+                            {student.grade != null && student.classNum != null
+                              ? `${student.grade}-${student.classNum}`
+                              : ''}
                           </span>
                         )}
-                        <span className="text-sm text-sp-muted font-medium">
-                          {student.number}
-                        </span>
-                        <span className="text-sm text-sp-text">
-                          {student.name}
-                        </span>
+                        <span className="text-sm text-sp-muted font-medium">{student.number}</span>
+                        <span className="text-sm text-sp-text">{student.name}</span>
                         <div className="flex justify-center">
                           <button
                             onClick={() => toggleStatus(sKey)}
@@ -608,9 +699,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
                                        hover:opacity-80`}
                             title={`클릭하여 출결 상태 변경 (${config.label} → ${STATUS_CONFIG[STATUS_CYCLE[status]].label})`}
                           >
-                            <span className="material-symbols-outlined text-sm">
-                              {config.icon}
-                            </span>
+                            <span className="material-symbols-outlined text-sm">{config.icon}</span>
                             {config.label}
                           </button>
                         </div>
@@ -633,24 +722,61 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
             </div>
           )}
 
+          {/* 다중 모드 안내 배너 (FR-07) */}
+          {multiDateMode && (
+            <div className="flex items-start gap-2 bg-sp-accent/10 border border-sp-accent/30 rounded-xl px-4 py-2.5 text-sm text-sp-accent">
+              <span className="material-symbols-outlined text-base">info</span>
+              <div className="flex-1">
+                <div className="font-medium">
+                  여러 날 일괄 등록 모드 — 선택된 {multiDateSet.size}일에 동일한 출결이 적용됩니다
+                </div>
+                {multiDateSet.size > 0 && (
+                  <div className="text-xs text-sp-muted mt-0.5">
+                    {Array.from(multiDateSet)
+                      .sort()
+                      .map((d) => {
+                        const dd = new Date(d + 'T00:00:00');
+                        return `${dd.getMonth() + 1}/${dd.getDate()}`;
+                      })
+                      .join(', ')}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 저장 버튼 */}
           <div className="flex justify-end">
             <button
               onClick={() => void handleSave()}
-              disabled={saveStatus === 'saving'}
+              disabled={saveStatus === 'saving' || (multiDateMode && multiDateSet.size === 0)}
               className={`flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-medium
                          transition-all duration-200 ${
-                saveStatus === 'saved'
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-sp-accent text-white hover:bg-sp-accent/80'
-              } ${
-                hasModified && saveStatus === 'idle' ? 'animate-pulse ring-2 ring-sp-accent/50' : ''
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                           saveStatus === 'saved'
+                             ? 'bg-green-500/20 text-green-400'
+                             : 'bg-sp-accent text-white hover:bg-sp-accent/80'
+                         } ${
+                           hasModified && saveStatus === 'idle'
+                             ? 'animate-pulse ring-2 ring-sp-accent/50'
+                             : ''
+                         } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <span className="material-symbols-outlined text-lg">
-                {saveStatus === 'saved' ? 'check' : saveStatus === 'saving' ? 'hourglass_empty' : 'save'}
+                {saveStatus === 'saved'
+                  ? 'check'
+                  : saveStatus === 'saving'
+                    ? 'hourglass_empty'
+                    : 'save'}
               </span>
-              {saveStatus === 'saved' ? '저장됨!' : saveStatus === 'saving' ? '저장 중...' : '출석 저장'}
+              {saveStatus === 'saved'
+                ? '저장됨!'
+                : saveStatus === 'saving'
+                  ? batchProgress
+                    ? `${batchProgress.current}/${batchProgress.total}일 저장 중...`
+                    : '저장 중...'
+                  : multiDateMode && multiDateSet.size > 1
+                    ? `${multiDateSet.size}일 일괄 저장`
+                    : '출석 저장'}
             </button>
           </div>
         </>
