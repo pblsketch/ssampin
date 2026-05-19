@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
+import { Notice } from '@adapters/components/common/Notice';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -34,7 +35,9 @@ interface ExtractEntry {
   teachers: Set<string>;
 }
 
-function extractFromClassSchedule(schedule: ClassScheduleData | null | undefined): Map<string, ExtractEntry> {
+function extractFromClassSchedule(
+  schedule: ClassScheduleData | null | undefined,
+): Map<string, ExtractEntry> {
   const map = new Map<string, ExtractEntry>();
   if (!schedule) return map;
   for (const day of DAYS) {
@@ -96,13 +99,16 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
 
   /** 그룹 요약 추출 */
   const groups = useMemo<GroupSummary[]>(() => {
-    const map = new Map<string, {
-      groupId: string;
-      name: string;
-      subjects: string[];
-      studentCount: number;
-      classCount: number;
-    }>();
+    const map = new Map<
+      string,
+      {
+        groupId: string;
+        name: string;
+        subjects: string[];
+        studentCount: number;
+        classCount: number;
+      }
+    >();
     for (const c of classes) {
       if (!c.groupId) continue;
       const existing = map.get(c.groupId);
@@ -143,10 +149,7 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
     [groups, selectedGroupId],
   );
 
-  const subjectsInGroup = useMemo(
-    () => new Set(selectedGroup?.subjects ?? []),
-    [selectedGroup],
-  );
+  const subjectsInGroup = useMemo(() => new Set(selectedGroup?.subjects ?? []), [selectedGroup]);
 
   /** 시간표에서 후보 과목 추출 */
   const candidates = useMemo<SubjectCandidate[]>(() => {
@@ -305,9 +308,7 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
         {/* 그룹 선택 단계 */}
         {!selectedGroup ? (
           <>
-            <p className="text-sm text-sp-muted mb-3">
-              어느 학급에 과목을 추가할까요?
-            </p>
+            <p className="text-sm text-sp-muted mb-3">어느 학급에 과목을 추가할까요?</p>
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {groups.map((g) => (
                 <button
@@ -322,9 +323,7 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
                       학생 {g.studentCount}명 · 과목 {g.classCount}개
                     </span>
                   </div>
-                  <p className="text-detail text-sp-muted mt-1 truncate">
-                    {g.subjects.join(', ')}
-                  </p>
+                  <p className="text-detail text-sp-muted mt-1 truncate">{g.subjects.join(', ')}</p>
                 </button>
               ))}
             </div>
@@ -351,24 +350,20 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
             )}
 
             <div className="mb-3 px-3 py-2 bg-sp-accent/10 border border-sp-accent/30 rounded-lg text-xs text-sp-muted">
-              <span className="text-sp-text font-medium">{selectedGroup.name}</span> 학급에
-              과목을 추가합니다. 학생 명렬은 그룹 기존 {selectedGroup.studentCount}명이 그대로 공유됩니다.
+              <span className="text-sp-text font-medium">{selectedGroup.name}</span> 학급에 과목을
+              추가합니다. 학생 명렬은 그룹 기존 {selectedGroup.studentCount}명이 그대로 공유됩니다.
             </div>
 
             {!hasTeacherName && hasTimetable && (
-              <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-lg text-xs text-amber-300 mb-3">
+              <Notice variant="warning" className="mb-3">
                 선생님 이름이 설정에 등록되지 않아 전담 과목을 구분할 수 없습니다.
-              </div>
+              </Notice>
             )}
 
             {candidates.length === 0 ? (
               <div className="py-6 text-center bg-sp-surface/40 border border-sp-border rounded-lg mb-3">
-                <p className="text-sm text-sp-muted mb-2">
-                  시간표에서 추출 가능한 과목이 없습니다
-                </p>
-                <p className="text-detail text-sp-muted/70">
-                  아래에서 직접 입력해주세요
-                </p>
+                <p className="text-sm text-sp-muted mb-2">시간표에서 추출 가능한 과목이 없습니다</p>
+                <p className="text-detail text-sp-muted/70">아래에서 직접 입력해주세요</p>
               </div>
             ) : (
               <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
@@ -402,9 +397,7 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
                         className="w-4 h-4 rounded border-sp-border text-sp-accent focus:ring-sp-accent"
                       />
                       <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-sp-text">
-                          {item.subject}
-                        </span>
+                        <span className="text-sm font-medium text-sp-text">{item.subject}</span>
                         {item.isCustom ? (
                           <span className="text-caption text-sp-accent bg-sp-accent/10 px-1.5 py-0.5 rounded">
                             직접 추가
@@ -446,9 +439,7 @@ export function AddSubjectsToGroup({ onClose, onSwitchToNew }: AddSubjectsToGrou
 
             {/* 직접 입력 */}
             <div className="mt-4 pt-4 border-t border-sp-border">
-              <label className="block text-xs text-sp-muted mb-2">
-                시간표에 없는 과목 추가
-              </label>
+              <label className="block text-xs text-sp-muted mb-2">시간표에 없는 과목 추가</label>
               <div className="flex gap-2">
                 <input
                   type="text"

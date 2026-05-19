@@ -23,16 +23,11 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
 // 화이트리스트 — 작은 badge/chip 으로 가독성 영향이 적거나, 별도 작업으로 이관 예정인 위치.
 // 신규 항목 추가는 PR 코드리뷰에서 정당성 확인 후 허용.
 const ALLOWED_FILES: readonly string[] = [
-  // Phase 2 마이그레이션 예정 — large 안내 박스이지만 별도 PR로 Notice variant="warning" 으로 이관 계획 (2026-05-15)
-  'src/adapters/components/Calendar/CalendarMappingModal.tsx',
-  'src/adapters/components/ClassManagement/AddClassModal/AddSubjectsToGroup.tsx',
-  'src/adapters/components/ClassManagement/AddClassModal/StepSubjectSelect.tsx',
-  'src/adapters/components/Tools/InteractiveSlides/Lobby/LessonLobby.tsx',
+  // top bar 패턴 (border-b full-width) — Notice 의 box 외관(rounded-lg + border-l-4 stripe)과
+  // 시각 동등 불가. 별도 TopAlertBar 컴포넌트 도입 시 재평가 (notice-phase2-migration, 2026-05-20)
   'src/adapters/components/Tools/InteractiveSlides/Presenter/LessonPresenter.tsx',
-  'src/slides-student/pages/LobbyPage.tsx',
   'src/slides-student/pages/SlidePage.tsx',
-  'src/student/StudentSubmitForm.tsx',
-  // status badge / chip (좁은 라벨 → 영향 작음, Phase 2 작업으로 이관 예정)
+  // status badge / chip (좁은 라벨 → 영향 작음, 라이트 테마 가독성은 Phase 2B CSS override 가 처리)
   'src/adapters/components/ClassManagement/AttendanceTab.tsx',
   'src/adapters/components/ClassManagement/ClassRecordInputView.tsx',
   'src/adapters/components/ClassManagement/ClassRecordSearchView.tsx',
@@ -107,9 +102,7 @@ describe('MT-D1: amber-on-amber large container 가독성 가드', () => {
     const files: string[] = [];
     walk(srcDir, files);
 
-    const allowed = new Set(
-      ALLOWED_FILES.map((p) => path.resolve(repoRoot, p)),
-    );
+    const allowed = new Set(ALLOWED_FILES.map((p) => path.resolve(repoRoot, p)));
 
     const violations: string[] = [];
     for (const file of files) {

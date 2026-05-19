@@ -31,7 +31,7 @@
     --sp-card-gap: 12px;
     --sp-card-border: none;
     --sp-card-shadow: none;
-    --sp-font-family: "Pretendard Variable", "Pretendard", "Noto Sans KR", sans-serif;
+    --sp-font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
 
     /* === Radius scale === */
     --sp-radius-xs: 4px;
@@ -43,33 +43,26 @@
 
     /* === Shadow stack (Notion 3-layer, 라이트 기본) === */
     --sp-shadow-none: 0 0 0 transparent;
-    --sp-shadow-sm:
-      0 3px 9px rgba(0, 0, 0, 0.031),
-      0 0.7px 1.46px rgba(0, 0, 0, 0.015);
+    --sp-shadow-sm: 0 3px 9px rgba(0, 0, 0, 0.031), 0 0.7px 1.46px rgba(0, 0, 0, 0.015);
     --sp-shadow-md:
-      0 4px 18px rgba(0, 0, 0, 0.039),
-      0 2.025px 7.85px rgba(0, 0, 0, 0.027),
-      0 0.8px 2.93px rgba(0, 0, 0, 0.02),
-      0 0.175px 1.04px rgba(0, 0, 0, 0.013);
-    --sp-shadow-lg:
-      0 20px 50px rgba(0, 0, 0, 0.078),
-      0 6px 16px rgba(0, 0, 0, 0.039);
-    --sp-shadow-accent:
-      0 8px 24px rgba(35, 131, 226, 0.25);
+      0 4px 18px rgba(0, 0, 0, 0.039), 0 2.025px 7.85px rgba(0, 0, 0, 0.027),
+      0 0.8px 2.93px rgba(0, 0, 0, 0.02), 0 0.175px 1.04px rgba(0, 0, 0, 0.013);
+    --sp-shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.078), 0 6px 16px rgba(0, 0, 0, 0.039);
+    --sp-shadow-accent: 0 8px 24px rgba(35, 131, 226, 0.25);
 
     /* === Weight scale (Pretendard Variable axis) === */
-    --sp-weight-normal:   400;
-    --sp-weight-medium:   510;
+    --sp-weight-normal: 400;
+    --sp-weight-medium: 510;
     --sp-weight-semibold: 590;
-    --sp-weight-bold:     680;
+    --sp-weight-bold: 680;
 
     /* === Motion === */
     --sp-duration-quick: 120ms;
-    --sp-duration-base:  160ms;
-    --sp-duration-slow:  200ms;
-    --sp-ease-out:       cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --sp-duration-base: 160ms;
+    --sp-duration-slow: 200ms;
+    --sp-ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
     --sp-ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
-    --sp-ease-in-out:    cubic-bezier(0.86, 0, 0.07, 1);
+    --sp-ease-in-out: cubic-bezier(0.86, 0, 0.07, 1);
   }
 
   body {
@@ -92,7 +85,17 @@
 }
 
 :root {
-  font-family: var(--sp-font-family, 'Noto Sans KR'), -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-family:
+    var(--sp-font-family, 'Noto Sans KR'),
+    -apple-system,
+    BlinkMacSystemFont,
+    system-ui,
+    Roboto,
+    'Helvetica Neue',
+    'Segoe UI',
+    'Apple SD Gothic Neo',
+    'Malgun Gothic',
+    sans-serif;
   line-height: 1.5;
   font-weight: 400;
 }
@@ -167,20 +170,12 @@ body {
   --sp-today-bg: rgba(30, 41, 59, 0.8);
 
   /* Dark shadow override — Linear 5-layer */
-  --sp-shadow-sm:
-    0 2px 4px rgba(0, 0, 0, 0.2),
-    0 1px 2px rgba(0, 0, 0, 0.12);
+  --sp-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.12);
   --sp-shadow-md:
-    0 8px 2px 0 rgba(0, 0, 0, 0),
-    0 5px 2px 0 rgba(0, 0, 0, 0.04),
-    0 3px 2px 0 rgba(0, 0, 0, 0.16),
-    0 1px 1px 0 rgba(0, 0, 0, 0.28),
-    0 0 1px 0 rgba(0, 0, 0, 0.32);
-  --sp-shadow-lg:
-    0 24px 48px rgba(0, 0, 0, 0.48),
-    0 8px 16px rgba(0, 0, 0, 0.32);
-  --sp-shadow-accent:
-    0 8px 24px rgba(59, 130, 246, 0.35);
+    0 8px 2px 0 rgba(0, 0, 0, 0), 0 5px 2px 0 rgba(0, 0, 0, 0.04), 0 3px 2px 0 rgba(0, 0, 0, 0.16),
+    0 1px 1px 0 rgba(0, 0, 0, 0.28), 0 0 1px 0 rgba(0, 0, 0, 0.32);
+  --sp-shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.48), 0 8px 16px rgba(0, 0, 0, 0.32);
+  --sp-shadow-accent: 0 8px 24px rgba(59, 130, 246, 0.35);
 }
 
 /* ─── Light Theme: Fix hover text & background visibility ─── */
@@ -200,7 +195,7 @@ body {
 }
 
 .theme-light .hover\:bg-white\/20:hover {
-  background-color: rgba(0, 0, 0, 0.10) !important;
+  background-color: rgba(0, 0, 0, 0.1) !important;
 }
 
 /* ─── Light Theme: Fix static text colors ─── */
@@ -208,6 +203,37 @@ body {
 /* text-white on light bg → sp-text (dark) */
 .theme-light .text-white {
   color: var(--sp-text) !important;
+}
+
+/* ─── Light Theme: chip/badge 가독성 가드 ─── */
+/* amber/red/orange/purple-100~300 옅은 텍스트는 라이트 그레이 배경(#e0e2e6) 위에서
+   콘트라스트 < 2:1 — 베이지 위 노랑 효과로 거의 안 보임. 700 톤으로 강제해
+   WCAG AA(≥4.5:1) 회복. 다크 테마에는 영향 없음.
+
+   `[class*="text-amber-300"]` 부분 매치 패턴: alpha 변형(`text-amber-300/80` 등)도 동시 적용.
+   Tailwind 가 `text-amber-300/80` 을 `text-amber-300\/80` 클래스로 컴파일하므로
+   정확 매치 `.text-amber-300` 으로는 hint 같은 alpha 변형이 누락됨.
+
+   Notice 컴포넌트는 sp-text(테마 토큰)을 쓰므로 자동 분기, override 불필요. */
+.theme-light [class*='text-amber-100'],
+.theme-light [class*='text-amber-200'],
+.theme-light [class*='text-amber-300'] {
+  color: #b45309 !important; /* amber-700 */
+}
+.theme-light [class*='text-red-100'],
+.theme-light [class*='text-red-200'],
+.theme-light [class*='text-red-300'] {
+  color: #b91c1c !important; /* red-700 */
+}
+.theme-light [class*='text-orange-100'],
+.theme-light [class*='text-orange-200'],
+.theme-light [class*='text-orange-300'] {
+  color: #c2410c !important; /* orange-700 */
+}
+.theme-light [class*='text-purple-100'],
+.theme-light [class*='text-purple-200'],
+.theme-light [class*='text-purple-300'] {
+  color: #7e22ce !important; /* purple-700 */
 }
 
 /* ─── Auto-contrast: accent 배경 위 텍스트 가독성 보장 ─── */
@@ -223,53 +249,53 @@ body {
 }
 
 /* Subject/category color backgrounds */
-.theme-light [class*="bg-blue-"].text-white,
-.theme-light [class*="bg-blue-"] .text-white {
+.theme-light [class*='bg-blue-'].text-white,
+.theme-light [class*='bg-blue-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-red-"].text-white,
-.theme-light [class*="bg-red-"] .text-white {
+.theme-light [class*='bg-red-'].text-white,
+.theme-light [class*='bg-red-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-green-"].text-white,
-.theme-light [class*="bg-green-"] .text-white {
+.theme-light [class*='bg-green-'].text-white,
+.theme-light [class*='bg-green-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-purple-"].text-white,
-.theme-light [class*="bg-purple-"] .text-white {
+.theme-light [class*='bg-purple-'].text-white,
+.theme-light [class*='bg-purple-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-orange-"].text-white,
-.theme-light [class*="bg-orange-"] .text-white {
+.theme-light [class*='bg-orange-'].text-white,
+.theme-light [class*='bg-orange-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-pink-"].text-white,
-.theme-light [class*="bg-pink-"] .text-white {
+.theme-light [class*='bg-pink-'].text-white,
+.theme-light [class*='bg-pink-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-indigo-"].text-white,
-.theme-light [class*="bg-indigo-"] .text-white {
+.theme-light [class*='bg-indigo-'].text-white,
+.theme-light [class*='bg-indigo-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-teal-"].text-white,
-.theme-light [class*="bg-teal-"] .text-white {
+.theme-light [class*='bg-teal-'].text-white,
+.theme-light [class*='bg-teal-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-emerald-"].text-white,
-.theme-light [class*="bg-emerald-"] .text-white {
+.theme-light [class*='bg-emerald-'].text-white,
+.theme-light [class*='bg-emerald-'] .text-white {
   color: white !important;
 }
 
-.theme-light [class*="bg-rose-"].text-white,
-.theme-light [class*="bg-rose-"] .text-white {
+.theme-light [class*='bg-rose-'].text-white,
+.theme-light [class*='bg-rose-'] .text-white {
   color: white !important;
 }
 
@@ -570,7 +596,6 @@ body {
 
 /* PIN Overlay Animations */
 @keyframes pin-shake {
-
   0%,
   100% {
     transform: translateX(0);
@@ -627,7 +652,6 @@ body {
 }
 
 @keyframes shuffle-cycle {
-
   0%,
   100% {
     opacity: 0.5;
@@ -658,7 +682,6 @@ body {
 }
 
 @keyframes shuffle-glow {
-
   0%,
   100% {
     box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
