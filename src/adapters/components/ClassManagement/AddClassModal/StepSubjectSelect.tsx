@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
+import { Notice } from '@adapters/components/common/Notice';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
@@ -44,7 +45,9 @@ interface ExtractEntry {
 }
 
 /** classSchedule에서 과목+교사 추출 */
-function extractFromClassSchedule(schedule: ClassScheduleData | null | undefined): Map<string, ExtractEntry> {
+function extractFromClassSchedule(
+  schedule: ClassScheduleData | null | undefined,
+): Map<string, ExtractEntry> {
   const map = new Map<string, ExtractEntry>();
   if (!schedule) return map;
   for (const day of DAYS) {
@@ -191,7 +194,14 @@ export function StepSubjectSelect({
       }));
 
     return [...result, ...customEntries];
-  }, [scheduleEntries, customSubjects, existingKeys, className, hasTeacherName, trimmedTeacherName]);
+  }, [
+    scheduleEntries,
+    customSubjects,
+    existingKeys,
+    className,
+    hasTeacherName,
+    trimmedTeacherName,
+  ]);
 
   const hasTimetable = scheduleEntries.length > 0;
 
@@ -213,8 +223,7 @@ export function StepSubjectSelect({
       // teacherName 있음: 전담이 아닌 과목만 체크
       const next = new Set<string>();
       scheduleEntries.forEach((entry) => {
-        const isSpecialist =
-          entry.teachers.size > 0 && !entry.teachers.has(trimmedTeacherName);
+        const isSpecialist = entry.teachers.size > 0 && !entry.teachers.has(trimmedTeacherName);
         if (!isSpecialist && !existingKeys.has(`${className}__${entry.subject}`)) {
           next.add(entry.subject);
         }
@@ -367,11 +376,11 @@ export function StepSubjectSelect({
       )}
 
       {!hasTeacherName && hasTimetable && source === 'class' && (
-        <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-lg text-xs text-amber-300 mb-3">
+        <Notice variant="warning" className="mb-3">
           선생님 이름이 설정에 등록되지 않아 전담 과목을 구분할 수 없습니다.
           <br />
           설정 → 일반에서 이름을 입력하시면 자동 구분됩니다.
-        </div>
+        </Notice>
       )}
 
       {source === 'teacher' && hasTimetable && (
@@ -387,9 +396,7 @@ export function StepSubjectSelect({
             <span className="material-symbols-outlined text-3xl text-sp-muted/50 mb-2 block">
               event_busy
             </span>
-            <p className="text-sm text-sp-muted mb-4">
-              학급 시간표가 아직 등록되지 않았습니다
-            </p>
+            <p className="text-sm text-sp-muted mb-4">학급 시간표가 아직 등록되지 않았습니다</p>
             <div className="flex flex-wrap gap-2 justify-center mb-4 px-3">
               {FALLBACK_SUBJECTS.map((s) => {
                 const active = customSubjects.includes(s);
@@ -453,9 +460,7 @@ export function StepSubjectSelect({
 
           {/* 선택 카운트 + 선택된 직접 추가 리스트 */}
           {selectedCount > 0 && (
-            <p className="text-detail text-sp-muted mt-3 text-center">
-              {selectedCount}개 선택됨
-            </p>
+            <p className="text-detail text-sp-muted mt-3 text-center">{selectedCount}개 선택됨</p>
           )}
         </div>
       ) : (
@@ -471,7 +476,9 @@ export function StepSubjectSelect({
                     type="button"
                     onClick={() => setHideSpecialists((v) => !v)}
                     className={`text-detail ${
-                      hideSpecialists ? 'text-sp-accent hover:underline' : 'text-sp-muted hover:text-sp-text'
+                      hideSpecialists
+                        ? 'text-sp-accent hover:underline'
+                        : 'text-sp-muted hover:text-sp-text'
                     }`}
                   >
                     {hideSpecialists ? '전담 과목 표시' : '전담 과목 숨김'}
@@ -528,17 +535,13 @@ export function StepSubjectSelect({
                     className="w-4 h-4 rounded border-sp-border text-sp-accent focus:ring-sp-accent"
                   />
                   <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-sp-text">
-                      {item.subject}
-                    </span>
+                    <span className="text-sm font-medium text-sp-text">{item.subject}</span>
                     {item.isCustom ? (
                       <span className="text-caption text-sp-accent bg-sp-accent/10 px-1.5 py-0.5 rounded">
                         직접 추가
                       </span>
                     ) : (
-                      <span className="text-detail text-sp-muted">
-                        주 {item.weeklyPeriods}시간
-                      </span>
+                      <span className="text-detail text-sp-muted">주 {item.weeklyPeriods}시간</span>
                     )}
                     {specialistLabel && (
                       <span className="text-caption text-sp-muted bg-sp-surface px-1.5 py-0.5 rounded">
@@ -571,9 +574,7 @@ export function StepSubjectSelect({
 
           {/* 직접 추가 입력란 */}
           <div className="mt-4 pt-4 border-t border-sp-border">
-            <label className="block text-xs text-sp-muted mb-2">
-              시간표에 없는 과목 추가
-            </label>
+            <label className="block text-xs text-sp-muted mb-2">시간표에 없는 과목 추가</label>
             <div className="flex gap-2">
               <input
                 type="text"

@@ -4,6 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import type { MealInfo, MealSource, ManualMealInfo } from '@domain/entities/Meal';
 import { MealEditModal } from './MealEditModal';
 import { PageHeader } from '@adapters/components/common/PageHeader';
+import { Notice } from '@adapters/components/common/Notice';
 
 const DAY_LABELS = ['월', '화', '수', '목', '금'] as const;
 
@@ -276,12 +277,10 @@ export function MealPage() {
 
       {/* Import 결과 메시지 */}
       {importResult && (
-        <div
-          className={`mx-8 mt-4 px-4 py-3 rounded-xl text-sm ${
-            importResult.errors.length > 0
-              ? 'bg-amber-500/10 border border-amber-500/30 text-amber-100'
-              : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
-          }`}
+        <Notice
+          variant={importResult.errors.length > 0 ? 'warning' : 'success'}
+          size="md"
+          className="mx-8 mt-4"
         >
           <p>{importResult.imported}개 급식 메뉴를 가져왔습니다.</p>
           {importResult.errors.length > 0 && (
@@ -291,7 +290,7 @@ export function MealPage() {
               ))}
             </ul>
           )}
-        </div>
+        </Notice>
       )}
 
       {/* ── 본문 영역 (주간 네비게이션 + 주간 급식표) ── */}

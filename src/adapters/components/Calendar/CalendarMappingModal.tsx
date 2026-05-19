@@ -4,6 +4,7 @@ import type { CalendarMapping } from '@domain/entities/CalendarMapping';
 import type { GoogleCalendarInfo } from '@domain/entities/GoogleCalendarInfo';
 import { isGoogleAuthBlockedError } from '@domain/rules/calendarSyncRules';
 import { Modal } from '@adapters/components/common/Modal';
+import { Notice } from '@adapters/components/common/Notice';
 
 interface CalendarMappingModalProps {
   isOpen: boolean;
@@ -12,8 +13,13 @@ interface CalendarMappingModalProps {
   isInitialSetup?: boolean;
 }
 
-export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: CalendarMappingModalProps) {
-  const { mappings, googleCalendars, fetchGoogleCalendars, updateMappings, syncNow } = useCalendarSyncStore();
+export function CalendarMappingModal({
+  isOpen,
+  onClose,
+  isInitialSetup,
+}: CalendarMappingModalProps) {
+  const { mappings, googleCalendars, fetchGoogleCalendars, updateMappings, syncNow } =
+    useCalendarSyncStore();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isLoadingCalendars, setIsLoadingCalendars] = useState(false);
@@ -25,9 +31,7 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
 
     // 기존 매핑에서 선택된 캘린더 복원
     const enabledIds = new Set(
-      mappings
-        .filter(m => m.syncEnabled && m.googleCalendarId)
-        .map(m => m.googleCalendarId!),
+      mappings.filter((m) => m.syncEnabled && m.googleCalendarId).map((m) => m.googleCalendarId!),
     );
     setSelected(enabledIds);
     setCalendarError(null);
@@ -40,7 +44,7 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
         // 최초 설정이고 매핑 없으면 primary 캘린더 자동 선택
         if (isInitialSetup && enabledIds.size === 0) {
           const cals = useCalendarSyncStore.getState().googleCalendars;
-          const primary = cals.find(c => c.primary);
+          const primary = cals.find((c) => c.primary);
           if (primary) {
             setSelected(new Set([primary.id]));
           }
@@ -55,7 +59,7 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
   }, [isOpen, fetchGoogleCalendars, mappings, isInitialSetup]);
 
   const toggleCalendar = (calId: string) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(calId)) next.delete(calId);
       else next.add(calId);
@@ -71,15 +75,17 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
         .filter((cal: GoogleCalendarInfo) => selected.has(cal.id))
         .map((cal: GoogleCalendarInfo) => {
           // 기존 매핑이 있으면 유지
-          const existing = mappings.find(m => m.googleCalendarId === cal.id);
-          return existing ? { ...existing, syncEnabled: true } : {
-            categoryId: cal.id,
-            categoryName: cal.summary,
-            googleCalendarId: cal.id,
-            googleCalendarName: cal.summary,
-            syncEnabled: true,
-            syncDirection: 'bidirectional' as const,
-          };
+          const existing = mappings.find((m) => m.googleCalendarId === cal.id);
+          return existing
+            ? { ...existing, syncEnabled: true }
+            : {
+                categoryId: cal.id,
+                categoryName: cal.summary,
+                googleCalendarId: cal.id,
+                googleCalendarName: cal.summary,
+                syncEnabled: true,
+                syncDirection: 'bidirectional' as const,
+              };
         });
 
       await updateMappings(newMappings);
@@ -93,8 +99,7 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
     setIsSaving(false);
   };
 
-  const getCalendarColor = (cal: GoogleCalendarInfo) =>
-    cal.backgroundColor ?? '#3b82f6';
+  const getCalendarColor = (cal: GoogleCalendarInfo) => cal.backgroundColor ?? '#3b82f6';
 
   const titleText = isInitialSetup ? '동기화할 캘린더 선택' : '캘린더 선택';
 
@@ -131,20 +136,21 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
               {calendarError}
             </div>
             {isGoogleAuthBlockedError(calendarError) && (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-200 leading-relaxed">
-                <p className="font-semibold text-amber-100 mb-1.5 flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-icon-sm">school</span>
-                  학교 Google 계정인가요?
-                </p>
+              <Notice variant="warning" title="학교 Google 계정인가요?" icon="🏫">
                 <p className="mb-2">
-                  학교에서 발급한 계정(@*.go.kr, @*.sen.go.kr 등)은 관리자 정책으로 외부 앱이 차단될 수 있어요. 이 경우 토큰은 발급되지만 캘린더·드라이브 호출이 모두 401로 거부됩니다.
+                  학교에서 발급한 계정(@*.go.kr, @*.sen.go.kr 등)은 관리자 정책으로 외부 앱이 차단될
+                  수 있어요. 이 경우 토큰은 발급되지만 캘린더·드라이브 호출이 모두 401로 거부됩니다.
                 </p>
-                <p className="font-medium text-amber-100 mb-1">해결 방법</p>
-                <ol className="list-decimal list-inside space-y-0.5 text-amber-200/90">
-                  <li>설정 → Google 통합에서 <span className="font-medium">연결 해제</span></li>
-                  <li>개인 Gmail 계정으로 <span className="font-medium">다시 연결</span></li>
+                <p className="font-medium mb-1">해결 방법</p>
+                <ol className="list-decimal list-inside space-y-0.5 text-sp-muted">
+                  <li>
+                    설정 → Google 통합에서 <span className="font-medium">연결 해제</span>
+                  </li>
+                  <li>
+                    개인 Gmail 계정으로 <span className="font-medium">다시 연결</span>
+                  </li>
                 </ol>
-              </div>
+              </Notice>
             )}
             <button
               onClick={() => {
@@ -155,7 +161,9 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
                   .catch((err) => {
                     setIsLoadingCalendars(false);
                     setCalendarError(
-                      err instanceof Error ? err.message : '캘린더 목록을 가져오는 데 실패했습니다.',
+                      err instanceof Error
+                        ? err.message
+                        : '캘린더 목록을 가져오는 데 실패했습니다.',
                     );
                   });
               }}
@@ -202,9 +210,7 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-sp-text">
                     {cal.summary}
-                    {cal.primary && (
-                      <span className="ml-1.5 text-xs text-sp-muted">(기본)</span>
-                    )}
+                    {cal.primary && <span className="ml-1.5 text-xs text-sp-muted">(기본)</span>}
                   </p>
                   {cal.accessRole === 'reader' && (
                     <p className="text-xs text-sp-muted">읽기 전용</p>
@@ -242,10 +248,10 @@ export function CalendarMappingModal({ isOpen, onClose, isInitialSetup }: Calend
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 저장 중...
               </span>
+            ) : isInitialSetup ? (
+              `${selected.size}개 캘린더 동기화 시작`
             ) : (
-              isInitialSetup
-                ? `${selected.size}개 캘린더 동기화 시작`
-                : '저장'
+              '저장'
             )}
           </button>
         </div>
