@@ -1,249 +1,54 @@
-# CLAUDE.md — 쌤핀 (SsamPin) 프로젝트 컨텍스트
+# CLAUDE.md — 쌤핀 (SsamPin)
 
-> 이 파일은 Claude Code가 프로젝트를 이해하고 작업할 때 참고하는 문서입니다.
+교사용 데스크톱 대시보드 앱. Electron + React 18 + TypeScript strict + Tailwind CSS + Vite + Zustand.
+한국 중·고등학교 교사 대상. 오프라인 완전 동작, 로컬 JSON 저장.
 
----
+## 도메인 규칙 (반드시 참조)
 
-## 프로젝트 개요
+- **아키텍처/의존성**: `docs/architecture-rules.md` — Clean Architecture 4 레이어, import 규칙, 프로젝트 구조
+- **디자인 시스템**: `docs/design-system.md` — sp-\* 토큰, 폰트, 레이아웃, design examples/ 참조 규칙
+- **코딩 컨벤션**: `docs/coding-conventions.md` — TypeScript strict, React, 스타일 규칙
+- **디자인 컨텍스트**: `.impeccable.md` — 브랜드 퍼스널리티, 미적 방향
 
-**쌤핀(SsamPin)** — 중요한 걸 핀으로 꽂아두는 선생님의 데스크톱 대시보드 앱.
-교사의 일상 업무(시간표, 좌석배치, 일정, 메모, 할일, 학생기록)를 하나의 앱으로 통합 관리.
+## 핵심 규칙 (항상 기억)
 
-- **대상**: 한국 중·고등학교 교사
-- **플랫폼**: Windows 데스크톱 (Electron)
-- **특징**: 오프라인 완전 동작, 로컬 JSON 저장, 위젯 모드 지원
+1. `domain/` 레이어는 외부 의존성 import 절대 금지
+2. `any` 타입 사용 금지, TypeScript 에러 0개 유지
+3. 하드코딩 HEX 금지 — 반드시 `sp-*` 토큰 사용
+4. 모든 UI 텍스트는 한국어
+5. `design examples/` 폴더 디자인을 최대한 재현
 
----
+## 검증 게이트 (완료 선언 전 반드시 실행)
 
-## 기술 스택
+```bash
+# 1단계: 구문 검증
+npx tsc --noEmit              # TypeScript 에러 0개
 
-| 분류 | 기술 | 버전 |
-|------|------|------|
-| 런타임 | Electron | ^33.x |
-| UI | React | ^18.3 |
-| 언어 | TypeScript (strict) | ^5.6 |
-| 스타일 | Tailwind CSS | ^3.4 |
-| 번들러 | Vite | ^5.4 |
-| 상태관리 | Zustand | ^4.5 |
-| 날짜 | date-fns | ^3.6 |
-| 한글 파일 | @ubermensch1218/hwpxcore | latest |
-| Excel | exceljs | ^4.4 |
-| 빌드 | electron-builder | ^25.x |
-| 폰트 | Noto Sans KR | CDN/번들 |
+# 2단계: 코드 품질
+npm run lint                   # ESLint 통과
 
----
+# 3단계: 테스트
+npm run test                   # Vitest 통과
 
-## 아키텍처: Clean Architecture (4 레이어)
-
-```
-┌─────────────────────────────────────────────┐
-│  infrastructure/  — Electron, 파일 I/O, API │
-│  ┌─────────────────────────────────────┐    │
-│  │  adapters/  — React, Zustand, DI   │    │
-│  │  ┌─────────────────────────────┐    │    │
-│  │  │  usecases/  — 앱 로직      │    │    │
-│  │  │  ┌─────────────────────┐    │    │    │
-│  │  │  │  domain/  — 핵심    │    │    │    │
-│  │  │  └─────────────────────┘    │    │    │
-│  │  └─────────────────────────────┘    │    │
-│  └─────────────────────────────────────┘    │
-└─────────────────────────────────────────────┘
+# 4단계: 회귀 방지
+npm run regression-check       # 회귀 체크 통과
 ```
 
-### 의존성 규칙 (절대 위반 금지)
+검증 게이트를 모두 통과해야 완료로 간주한다. 에이전트가 자체 판단으로 완료를 선언하지 않는다.
 
-```
-✅ infrastructure/ → domain/ (포트 인터페이스 구현)
-✅ adapters/       → domain/ + usecases/
-✅ usecases/       → domain/만
-❌ domain/         → 아무것도 import 안 함
-❌ usecases/       → adapters/, infrastructure/ import 금지
-```
+## 세션 프로토콜
 
-**유일한 예외**: `adapters/di/container.ts`는 infrastructure/를 import하여 의존성을 조립한다.
+### 시작 시
 
-### 프로젝트 구조
+1. `PROGRESS.md` 읽고 현재 상태 파악
+2. `DECISIONS.md` 읽고 기존 결정 확인
+3. `git status` 확인 — 다른 세션 작업 중인 파일 건드리지 않기
 
-```
-ssampin/
-├── electron/                    # 🔴 Electron 메인 프로세스
-│   ├── main.ts                  # BrowserWindow, IPC 핸들러
-│   └── preload.ts               # contextBridge
-├── src/
-│   ├── domain/                  # 🟡 핵심 비즈니스 규칙 (순수 TypeScript, 외부 의존 없음)
-│   │   ├── entities/            # 엔티티 타입 (Student, SchoolEvent, Timetable...)
-│   │   ├── valueObjects/        # 값 객체 (PeriodTime, DayOfWeek, MemoColor...)
-│   │   ├── rules/               # 비즈니스 규칙 순수 함수
-│   │   │   ├── periodRules.ts   # 현재 교시 판정
-│   │   │   ├── seatRules.ts     # 좌석 교환/배치 검증
-│   │   │   ├── ddayRules.ts     # D-Day 계산, 알림 대상 판정
-│   │   │   ├── todoRules.ts     # 정렬, 필터, overdue 판정
-│   │   │   ├── eventRules.ts    # 일정 필터/정렬
-│   │   │   ├── shareRules.ts    # .ssampin 파일 검증, 중복 감지
-│   │   │   └── studentRecordRules.ts  # 학생 기록 필터/통계
-│   │   ├── ports/               # 저장소 추상 인터페이스
-│   │   │   └── IStoragePort.ts
-│   │   └── repositories/        # Repository 인터페이스 (포트)
-│   │       ├── IScheduleRepository.ts
-│   │       ├── ISeatingRepository.ts
-│   │       ├── IEventsRepository.ts
-│   │       ├── IMemoRepository.ts
-│   │       ├── ITodoRepository.ts
-│   │       ├── ISettingsRepository.ts
-│   │       ├── IStudentRecordsRepository.ts
-│   │       └── IMessageRepository.ts
-│   │
-│   ├── usecases/                # 🟢 애플리케이션 로직 (domain만 import)
-│   │   ├── schedule/            # GetCurrentPeriod, UpdateClassSchedule...
-│   │   ├── seating/             # SwapSeats, RandomizeSeats, UpdateSeating
-│   │   ├── events/              # ManageEvents, CheckEventAlerts, ExportEvents, ImportEvents
-│   │   ├── memo/                # ManageMemos
-│   │   ├── todo/                # ManageTodos
-│   │   └── studentRecords/      # ManageStudentRecords
-│   │
-│   ├── adapters/                # 🔵 UI + 변환 계층 (domain + usecases import)
-│   │   ├── components/          # React 컴포넌트
-│   │   │   ├── Layout/          # Sidebar
-│   │   │   ├── Dashboard/       # Clock, WeatherBar, MessageBanner, 위젯 카드들
-│   │   │   ├── Timetable/       # 시간표 뷰 + 에디터
-│   │   │   ├── Seating/         # 좌석배치 + 드래그앤드롭
-│   │   │   ├── Schedule/        # 일정 관리 (캘린더 + 리스트)
-│   │   │   ├── StudentRecords/  # 담임 메모장
-│   │   │   ├── Memo/            # 포스트잇 메모
-│   │   │   ├── Todo/            # 투두리스트
-│   │   │   ├── Settings/        # 설정
-│   │   │   ├── Widget/          # 위젯 모드
-│   │   │   ├── Export/          # 내보내기
-│   │   │   ├── Onboarding/      # 첫 실행 마법사
-│   │   │   └── common/          # Toast, Modal 등 공통 UI
-│   │   ├── stores/              # Zustand 스토어 (useScheduleStore, useSeatingStore...)
-│   │   ├── hooks/               # React 커스텀 훅 (useClock...)
-│   │   ├── repositories/        # Repository 구현체 (JsonScheduleRepository...)
-│   │   ├── presenters/          # Domain → UI 변환 (timetablePresenter...)
-│   │   └── di/                  # DI 컨테이너 (container.ts)
-│   │
-│   ├── infrastructure/          # 🔴 외부 기술 구현
-│   │   ├── storage/             # ElectronStorageAdapter, LocalStorageAdapter
-│   │   ├── weather/             # 날씨 API 클라이언트
-│   │   └── export/              # HwpxExporter, ExcelExporter, PdfExporter
-│   │
-│   ├── App.tsx                  # 루트 컴포넌트 (DI 초기화 + 라우팅)
-│   └── main.tsx                 # React 엔트리포인트
-│
-├── design examples/             # 🎨 UI 디자인 레퍼런스 (Google Stitch 생성물)
-├── mockups/                     # 목업 이미지 (참고용)
-├── docs/                        # PRD.md, SPEC.md, claude-code-prompts.md
-├── dist/                        # Vite 빌드 출력
-├── dist-electron/               # Electron 컴파일 출력
-└── release/                     # electron-builder 인스톨러 출력
-```
+### 종료 시
 
----
-
-## 🎨 디자인 레퍼런스
-
-### design examples/ 폴더 (필수 참고)
-
-`design examples/` 폴더에 Google Stitch로 생성한 **UI 디자인 예시**가 들어있다.
-**프론트엔드 컴포넌트를 구현할 때 반드시 이 폴더의 이미지를 먼저 확인하고, 디자인을 최대한 재현할 것.**
-
-- 레이아웃, 색상, 간격, 컴포넌트 배치를 디자인 예시에 맞춘다
-- 디자인 예시에 없는 페이지는 기존 디자인 톤을 유지하여 일관성 있게 구현한다
-- 디자인과 SPEC이 충돌하면 **디자인 예시를 우선**한다 (시각적 완성도 중요)
-
-### 디자인 시스템
-
-| 용도 | 토큰 | HEX |
-|------|------|-----|
-| 배경 (최하단) | sp-bg | #0a0e17 |
-| 서피스 (사이드바) | sp-surface | #131a2b |
-| 카드 | sp-card | #1a2332 |
-| 테두리 | sp-border | #2a3548 |
-| 강조 (파란) | sp-accent | #3b82f6 |
-| 하이라이트 (앰버) | sp-highlight | #f59e0b |
-| 텍스트 (밝은) | sp-text | #e2e8f0 |
-| 텍스트 (흐린) | sp-muted | #94a3b8 |
-
-- **폰트**: Noto Sans KR (제목 Bold, 본문 Regular)
-- **모서리**: rounded-xl (카드), rounded-lg (버튼/입력)
-- **모든 UI 텍스트는 한국어**
-
-### 과목별 컬러 코드
-
-국어=yellow, 영어=green, 수학=blue, 과학=purple, 사회=orange, 체육=red, 음악=pink, 미술=indigo, 창체=teal
-
----
-
-## 코딩 컨벤션
-
-### TypeScript
-- **strict 모드** 필수 (`noImplicitAny`, `strictNullChecks`)
-- `any` 타입 사용 금지
-- Props는 별도 `interface` 정의
-- 에러 처리 필수 (try-catch)
-
-### React
-- 함수형 컴포넌트만 사용
-- 커스텀 훅은 `use` 접두사
-- 컴포넌트 파일명: PascalCase (예: `DashboardTimetable.tsx`)
-
-### Import 규칙 (아키텍처 의존성 강제)
-```typescript
-// ✅ 올바른 import
-import { Student } from '@domain/entities/Student';           // domain → OK
-import { SwapSeats } from '@usecases/seating/SwapSeats';     // usecases → OK (adapters에서)
-import { useSeatingStore } from '@adapters/stores/useSeatingStore'; // adapters → OK (같은 레이어)
-
-// ❌ 금지된 import
-import { useSeatingStore } from '@adapters/stores/...';  // usecases에서 adapters import → 금지!
-import { ElectronStorageAdapter } from '@infrastructure/...'; // usecases에서 infrastructure → 금지!
-```
-
-### Path Alias (tsconfig.json)
-```json
-{
-  "paths": {
-    "@domain/*": ["src/domain/*"],
-    "@usecases/*": ["src/usecases/*"],
-    "@adapters/*": ["src/adapters/*"],
-    "@infrastructure/*": ["src/infrastructure/*"]
-  }
-}
-```
-
-### 스타일
-- 들여쓰기: 2 spaces
-- 세미콜론: 사용
-- 따옴표: 작은따옴표
-- 후행 쉼표: 사용
-- Tailwind CSS 유틸리티 클래스 사용 (인라인 스타일 지양)
-
----
-
-## 데이터 저장
-
-- **Electron**: `app.getPath('userData')/data/{filename}.json`
-- **브라우저(개발)**: `localStorage` 폴백
-- **추상화**: `IStoragePort` 인터페이스로 환경 자동 감지
-- 스키마 변경 시 마이그레이션 로직을 Repository 구현체에 추가
-
----
-
-## 주요 기능 목록
-
-| 기능 | 페이지 | 핵심 Use Case |
-|------|--------|---------------|
-| 대시보드 | `/` | GetCurrentPeriod, CheckEventAlerts |
-| 시간표 | `/timetable` | UpdateClassSchedule, UpdateTeacherSchedule |
-| 좌석배치 | `/seating` | SwapSeats, RandomizeSeats |
-| 일정관리 | `/schedule` | ManageEvents, ExportEvents, ImportEvents |
-| 담임메모 | `/student-records` | ManageStudentRecords |
-| 메모 | `/memo` | ManageMemos |
-| 할일 | `/todo` | ManageTodos |
-| 설정 | `/settings` | — |
-| 위젯모드 | (별도 윈도우) | 대시보드 축소판 |
-
----
+1. `PROGRESS.md` 업데이트 (완료/진행/블록/다음)
+2. 새로운 결정이 있으면 `DECISIONS.md`에 ADR 추가
+3. 검증 게이트 결과 기록
 
 ## 개발 명령어
 
@@ -252,43 +57,27 @@ npm run dev              # 브라우저 모드 (Vite dev server)
 npm run electron:dev     # Electron + Vite 동시 실행
 npm run build            # 프로덕션 빌드
 npm run electron:build   # Electron 인스톨러 빌드
-npx tsc --noEmit         # 타입 체크 (에러 0개 유지)
 ```
 
----
+## PDCA 문서 구조
+
+- `docs/01-plan/features/` — 기능별 계획서 (.plan.md)
+- `docs/02-design/features/` — 기능별 설계서 (.design.md)
+- `docs/03-analysis/` — 기능별 분석/QA (.analysis.md)
+- `docs/04-report/features/` — 완료 보고서 (.report.md)
 
 ## 참고 문서
 
-| 문서 | 위치 | 설명 |
-|------|------|------|
-| PRD | `PRD.md` | 제품 요구사항 (기능 정의) |
-| SPEC | `SPEC.md` | 기술 명세 (아키텍처, 데이터 모델, 보안) |
-| 개발 프롬프트 | `claude-code-prompts.md` | Phase별 구현 프롬프트 |
-| 디자인 프롬프트 | `stitch-prompts.md` | Google Stitch UI 생성 프롬프트 |
-| 디자인 예시 | `design examples/` | 🎨 **UI 구현 시 필수 참고** |
-| 목업 | `mockups/` | 초기 목업 이미지 |
+- `PRD.md` — 제품 요구사항 (574줄, 필요시 참조)
+- `SPEC.md` — 기술 명세 (1551줄, 필요시 참조)
+- `claude-code-prompts.md` — Phase별 구현 프롬프트 (참고용)
 
----
+## 다중 세션 git 프로토콜
 
-## ⚠️ 주의사항
-
-1. **domain/ 레이어는 절대 외부 의존성을 가지면 안 된다** (React, Zustand, Electron 등 import 금지)
-2. **`design examples/` 폴더의 디자인을 최대한 반영**할 것 — 색상, 레이아웃, 간격, 컴포넌트 스타일
-3. **Electron과 브라우저 모두에서 동작**해야 한다 (`npm run dev`로 브라우저 테스트 가능)
-4. **모든 UI 텍스트는 한국어**로 작성
-5. 파일 저장/로드 시 반드시 **DI 컨테이너 → Repository → IStoragePort** 경로를 따른다
-6. `any` 타입 사용 금지, TypeScript 에러 0개 유지
-
----
-
-## 🤝 다중 세션 협업 프로토콜 (필독 — git 작업 전 반드시 확인)
-
-여러 Claude Code 세션이 **같은 워킹 디렉터리·같은 `.git`을 동시에 공유**할 수 있다. 한 세션의 부주의한 git 조작이 다른 세션의 미커밋 작업을 날리거나 브랜치를 빼앗을 수 있으므로 다음을 **반드시** 지킨다.
-
-1. **작업 시작 전 `git status` 확인** — `M`/`??`로 표시된 파일은 다른 세션이 작업 중일 수 있다. 그 파일들은 건드리지 않는다. (특히 `electron/ipc/*`, `electron/main.ts`, `src/global.d.ts`, 진행 중 기능 폴더 등.)
-2. **일괄 git 명령 금지** — `git add .` / `git add -A` / `git add --all` / `git stash`(인자 없이) / `git reset --hard` / `git clean -f` / `git restore .` / `git checkout .` 모두 금지. **항상 명시한 파일 경로만** 스테이징·복원한다 (예: `git add src/foo/bar.ts`). 커밋도 `git commit`만 쓰고 `-a` 금지.
-3. **브랜치 전환은 worktree로** — `git checkout <branch>` / `git switch <branch>`로 메인 워킹 트리의 브랜치를 바꾸면 다른 세션이 그 브랜치로 끌려간다. 다른 브랜치에서 작업해야 하면 메인 워킹 트리를 건드리지 말고 `git worktree add ../ssampin-<용도> <branch>`로 별도 디렉터리에서 작업한 뒤 끝나면 `git worktree remove`.
-4. **`main` 직푸시 금지** — `main`은 브랜치 보호 ruleset(`main protection`)으로 보호됨: PR 필수 + CI(typecheck·lint·test·regression) 통과 필수 + force push 차단. 모든 변경은 `feature/...` 브랜치 → `gh pr create` → CI 통과 → 머지. (Repository admin은 긴급 시 bypass 가능하나, 코드 변경은 반드시 PR.)
-5. **로컬에서 `npm ci` / `npm ci --dry-run` 금지** — Windows에서 node_modules를 파괴함. 의존성 추가/변경 후엔 `rm -rf node_modules package-lock.json && npm install`로 lockfile을 클린 재생성한다 (`npm install -D <pkg>` 같은 부분 갱신은 OS 간 lockfile 불일치를 누적시켜 CI의 `npm ci`가 거부함).
-6. **커밋 시 husky 훅 통과** — `.husky/pre-commit`이 `lint-staged`(스테이징 파일에 `prettier --write` + `eslint --fix`)를 실행한다. lint-staged가 다른 세션의 미스테이징 변경을 내부적으로 격리하므로 보존되지만, 충돌·이상 시 커밋을 중단하고 사용자에게 보고한다. `--no-verify`로 훅을 건너뛰지 않는다.
-7. **충돌·이상 감지 시 멈추고 보고** — `git checkout`이 "would be overwritten"으로 거부되거나, 예상치 못한 브랜치/미커밋 변경이 보이면 강제로 밀어붙이지 말고(`-f` 금지) 상황을 사용자에게 보고한 뒤 지시를 받는다.
+1. 작업 전 `git status` 확인 — M/?? 파일은 다른 세션 작업 중일 수 있음
+2. `git add .` / `git add -A` / `git stash` / `git reset --hard` / `git clean -f` 금지 — 항상 명시 경로만
+3. 브랜치 전환은 `git worktree`로 — 메인 워킹 트리 브랜치 변경 금지
+4. `main` 직푸시 금지 — feature/ 브랜치 → PR → CI 통과 → 머지
+5. `npm ci` 금지 — `rm -rf node_modules package-lock.json && npm install`
+6. husky pre-commit 훅 통과 필수 — `--no-verify` 금지
+7. 충돌/이상 감지 시 강제 밀어붙이지 말고 사용자에게 보고

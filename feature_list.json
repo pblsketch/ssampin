@@ -1,0 +1,332 @@
+{
+  "_meta": {
+    "project": "ssampin",
+    "version": "v2.0.5",
+    "updated": "2026-05-19",
+    "description": "기능별 behavior/verification/state 트리플. 하네스 검증용."
+  },
+  "features": [
+    {
+      "id": "dashboard",
+      "name": "대시보드",
+      "description": "위젯 기반 메인 화면. 레이아웃 프리셋, 위젯 추가/제거/리사이즈.",
+      "domain_entities": ["DashboardTheme", "ImageWidget"],
+      "layers": {
+        "domain": "src/domain/entities/DashboardTheme.ts",
+        "usecases": "src/usecases/desktopOrganize/",
+        "adapters": "src/adapters/stores/, src/widgets/",
+        "ui": "src/widgets/"
+      },
+      "behavior": "위젯 드래그&드롭 배치, 5개 레이아웃 프리셋(Ctrl+1~5), 테마 전환",
+      "verification": "npx tsc --noEmit && npm run lint && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "timetable",
+      "name": "시간표",
+      "description": "NEIS 시간표 연동 + 수동 편집. 교시별 과목/반 매핑.",
+      "domain_entities": ["Timetable", "NeisTimetable", "TeachingClass"],
+      "layers": {
+        "domain": "src/domain/entities/Timetable.ts",
+        "usecases": "src/usecases/timetable/",
+        "adapters": "src/adapters/repositories/, src/adapters/stores/"
+      },
+      "behavior": "NEIS API로 시간표 자동 로드, 수동 편집, 교시 클릭 시 해당 반 대시보드 전환",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "seating",
+      "name": "자리배치",
+      "description": "학생 좌석 배치도. 랜덤 배정, 제약조건(앞자리/떨어뜨리기), 빈자리 보존.",
+      "domain_entities": ["Seating", "SeatConstraints", "SeatPickerConfig"],
+      "layers": {
+        "domain": "src/domain/entities/Seating.ts",
+        "usecases": "src/usecases/seating/",
+        "adapters": "src/adapters/stores/, src/adapters/components/"
+      },
+      "behavior": "랜덤 배치, 제약조건 설정, 드래그 교체, 빈자리 위치 유지",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "student-records",
+      "name": "학생 기록",
+      "description": "학생별 상담/관찰/출결 기록. 템플릿 기반 입력.",
+      "domain_entities": [
+        "Student",
+        "StudentRecord",
+        "Consultation",
+        "Observation",
+        "Attendance",
+        "RecordTemplate"
+      ],
+      "layers": {
+        "domain": "src/domain/entities/Student.ts, StudentRecord.ts",
+        "usecases": "src/usecases/studentRecords/",
+        "adapters": "src/adapters/stores/, src/adapters/repositories/"
+      },
+      "behavior": "학생 프로필 조회, 상담/관찰 기록 CRUD, 출결 관리, 기록 검색/필터",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "roster",
+      "name": "학급 명단",
+      "description": "반별 학생 명단 관리. 번호/이름/성별 등.",
+      "domain_entities": ["ClassRoster", "Student", "Team"],
+      "layers": {
+        "domain": "src/domain/entities/ClassRoster.ts",
+        "usecases": "src/usecases/roster/, src/usecases/classManagement/",
+        "adapters": "src/adapters/stores/, src/adapters/repositories/"
+      },
+      "behavior": "학생 추가/삭제/수정, 번호 자동 재배정, 전출입 처리",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "memo",
+      "name": "메모",
+      "description": "교사용 메모. 이미지 첨부, 폰트 크기 조절.",
+      "domain_entities": ["Memo"],
+      "layers": {
+        "domain": "src/domain/entities/Memo.ts",
+        "usecases": "src/usecases/memo/",
+        "adapters": "src/adapters/stores/"
+      },
+      "behavior": "메모 CRUD, 이미지 첨부, 폰트 크기 변경, 고정(pin)",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "todo",
+      "name": "할일",
+      "description": "할일 목록. Google Tasks 동기화.",
+      "domain_entities": ["Todo", "TodoSettings"],
+      "layers": {
+        "domain": "src/domain/entities/Todo.ts",
+        "usecases": "src/usecases/todo/, src/usecases/tasks/",
+        "adapters": "src/adapters/stores/"
+      },
+      "behavior": "할일 CRUD, 완료 토글, Google Tasks 양방향 동기화",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "schedule",
+      "name": "일정/학사",
+      "description": "NEIS 학사일정 + 개인 일정. D-Day 카운트다운.",
+      "domain_entities": [
+        "SchoolEvent",
+        "NeisSchedule",
+        "DDay",
+        "ExternalCalendar",
+        "CalendarMapping"
+      ],
+      "layers": {
+        "domain": "src/domain/entities/SchoolEvent.ts",
+        "usecases": "src/usecases/schedule/, src/usecases/calendar/",
+        "adapters": "src/adapters/stores/"
+      },
+      "behavior": "NEIS 학사일정 로드, 개인 일정 CRUD, D-Day 위젯, Google Calendar 동기화",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "tools",
+      "name": "수업 도구",
+      "description": "타이머, 스톱워치, 랜덤뽑기, 모둠뽑기, 룰렛 등 수업 보조 도구.",
+      "domain_entities": ["ToolPreset", "ToolResult", "ToolTemplate", "ToolSurvey"],
+      "layers": {
+        "domain": "src/domain/entities/ToolPreset.ts",
+        "usecases": null,
+        "adapters": "src/adapters/components/"
+      },
+      "behavior": "5개 도구 난수 생성(secureRandom + anti-repeat), 프리셋 저장, 전체화면",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "realtime-wall",
+      "name": "실시간 게시판",
+      "description": "학생 기기에서 실시간 포스트잇/이미지 공유. Padlet 모드.",
+      "domain_entities": [
+        "RealtimeWall",
+        "RealtimeWallBoardSettings",
+        "RealtimeWallBoardTheme",
+        "BoardSession",
+        "BoardParticipant"
+      ],
+      "layers": {
+        "domain": "src/domain/entities/RealtimeWall.ts",
+        "usecases": "src/usecases/realtimeWall/, src/usecases/board/",
+        "adapters": "src/adapters/stores/"
+      },
+      "behavior": "공유 링크 생성, 학생 실시간 글/이미지 포스팅, 교사 관리, 테마 커스터마이징",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "survey",
+      "name": "설문",
+      "description": "학생 대상 설문 생성 및 실시간 답변 확인.",
+      "domain_entities": ["Survey", "MultiSurvey", "Poll"],
+      "layers": {
+        "domain": "src/domain/entities/Survey.ts",
+        "usecases": null,
+        "adapters": "src/adapters/stores/"
+      },
+      "behavior": "설문 생성, 공유 링크, 실시간 답변 수집, 결과 시각화",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "notebook",
+      "name": "노트",
+      "description": "교사용 노트. 섹션/페이지 구조.",
+      "domain_entities": ["Notebook", "NoteSection", "NotePage"],
+      "layers": {
+        "domain": "src/domain/entities/Notebook.ts",
+        "usecases": "src/usecases/note/",
+        "adapters": "src/adapters/stores/"
+      },
+      "behavior": "노트북/섹션/페이지 CRUD, 마크다운 편집",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "sync",
+      "name": "Google Drive 동기화",
+      "description": "데이터 백업/복원. Google Drive 기반 기기 간 동기화.",
+      "domain_entities": ["DriveSyncState", "SyncState", "SyncQueueItem", "Backup"],
+      "layers": {
+        "domain": "src/domain/entities/DriveSyncState.ts",
+        "usecases": "src/usecases/sync/",
+        "adapters": "src/adapters/stores/, src/adapters/repositories/"
+      },
+      "behavior": "자동/수동 백업, Google Drive 업로드/다운로드, 충돌 해결, 초기 동기화 확인",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "settings",
+      "name": "설정",
+      "description": "앱 전반 설정. 테마, 학교, 학기, PIN 잠금.",
+      "domain_entities": ["Settings", "PinSettings", "FontPreset"],
+      "layers": {
+        "domain": "src/domain/entities/Settings.ts",
+        "usecases": null,
+        "adapters": "src/adapters/stores/"
+      },
+      "behavior": "9개 테마 프리셋 + 커스텀 테마, 학교/학기 설정, PIN 잠금, 폰트 프리셋",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "stable"
+    },
+    {
+      "id": "sticker",
+      "name": "스티커",
+      "description": "학생별 칭찬/보상 스티커.",
+      "domain_entities": ["Sticker"],
+      "layers": {
+        "domain": "src/domain/entities/Sticker.ts",
+        "usecases": "src/usecases/sticker/"
+      },
+      "behavior": "스티커 부여/회수, 학생별 누적, 시각화",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "meal",
+      "name": "급식",
+      "description": "NEIS 급식 정보 표시.",
+      "domain_entities": ["Meal"],
+      "layers": {
+        "domain": "src/domain/entities/Meal.ts",
+        "usecases": "src/usecases/meal/"
+      },
+      "behavior": "NEIS 급식 API 조회, 일별/주별 표시, 알레르기 표시",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "assignment",
+      "name": "과제",
+      "description": "학생 과제 관리.",
+      "domain_entities": ["Assignment"],
+      "layers": {
+        "domain": "src/domain/entities/Assignment.ts",
+        "usecases": "src/usecases/assignment/"
+      },
+      "behavior": "과제 생성, 제출 상태 추적, 마감일 관리",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "bookmark",
+      "name": "북마크",
+      "description": "자주 쓰는 링크 저장.",
+      "domain_entities": ["Bookmark"],
+      "layers": {
+        "domain": "src/domain/entities/Bookmark.ts",
+        "usecases": "src/usecases/bookmark/"
+      },
+      "behavior": "북마크 CRUD, 카테고리 분류",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "mobile",
+      "name": "모바일 웹",
+      "description": "학생/교사 모바일 접근. PWA.",
+      "domain_entities": [],
+      "layers": {
+        "ui": "src/mobile/, src/student/, src/slides-student/"
+      },
+      "behavior": "반응형 UI, SW 자동 새로고침, safe-area, 모바일 최적화",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    },
+    {
+      "id": "forms",
+      "name": "서식관리",
+      "description": "교무 서식(HWPX/PDF) 관리. 카테고리/태그, 미리보기, 채우기.",
+      "domain_entities": ["FormTemplate", "FormCategory"],
+      "layers": {
+        "domain": "src/domain/entities/FormTemplate.ts",
+        "usecases": "src/usecases/forms/"
+      },
+      "behavior": "서식 등록/분류, PDF 썸네일, HWPX 미리보기, 서식 채우기",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "planned",
+      "plan_doc": "docs/02-design/features/서식관리.design.md"
+    },
+    {
+      "id": "interactive-slides",
+      "name": "인터랙티브 슬라이드",
+      "description": "실시간 참여형 프레젠테이션. 학생 기기 연동.",
+      "domain_entities": ["InteractiveSlides"],
+      "layers": {
+        "domain": "src/domain/entities/InteractiveSlides.ts",
+        "usecases": "src/usecases/interactiveSlides/",
+        "ui": "src/slides-student/"
+      },
+      "behavior": "슬라이드 생성/편집, 학생 참여 요소, 실시간 동기화",
+      "verification": "npx tsc --noEmit && npm run test",
+      "state": "planned",
+      "plan_doc": "docs/01-plan/features/interactive-slides.plan.md"
+    },
+    {
+      "id": "desktop-organize",
+      "name": "데스크톱 정리",
+      "description": "대시보드 위젯 레이아웃 관리. 프리셋 저장/로드.",
+      "domain_entities": ["DesktopOrganizeConfig"],
+      "layers": {
+        "domain": "src/domain/entities/DesktopOrganizeConfig.ts",
+        "usecases": "src/usecases/desktopOrganize/"
+      },
+      "behavior": "위젯 배치 저장, 프리셋 전환, 드래그 배치",
+      "verification": "npx tsc --noEmit",
+      "state": "stable"
+    }
+  ]
+}
