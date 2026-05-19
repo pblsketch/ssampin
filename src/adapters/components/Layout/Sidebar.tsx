@@ -117,22 +117,33 @@ const PAGE_TO_FEATURE_KEY: Partial<Record<PageId, ProtectedFeatureKey>> = {
 
 /** PIN 보호 불가 페이지 (대시보드, 내보내기, 쌤도구, 설정) */
 const NON_PROTECTABLE: ReadonlySet<PageId> = new Set([
-  'dashboard', 'export', 'tools',
+  'dashboard',
+  'export',
+  'tools',
   'tool-forms',
-  'tool-timer', 'tool-random', 'tool-traffic-light', 'tool-scoreboard',
-  'tool-roulette', 'tool-dice', 'tool-coin', 'tool-poll', 'tool-survey', 'tool-seat-picker',
-  'tool-sticker', 'settings',
+  'tool-timer',
+  'tool-random',
+  'tool-traffic-light',
+  'tool-scoreboard',
+  'tool-roulette',
+  'tool-dice',
+  'tool-coin',
+  'tool-poll',
+  'tool-survey',
+  'tool-seat-picker',
+  'tool-sticker',
+  'settings',
 ]);
 
 /** NAV_ITEMS에서 자동 파생된 PIN 보호 가능 페이지 목록 */
-export const PROTECTABLE_PAGES: readonly ProtectablePage[] = NAV_ITEMS
-  .filter((item) => !NON_PROTECTABLE.has(item.id))
-  .map((item) => ({
-    pageId: item.id,
-    featureKey: PAGE_TO_FEATURE_KEY[item.id]!,
-    label: item.label,
-    icon: item.icon,
-  }));
+export const PROTECTABLE_PAGES: readonly ProtectablePage[] = NAV_ITEMS.filter(
+  (item) => !NON_PROTECTABLE.has(item.id),
+).map((item) => ({
+  pageId: item.id,
+  featureKey: PAGE_TO_FEATURE_KEY[item.id]!,
+  label: item.label,
+  icon: item.icon,
+}));
 
 export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
   const { track } = useAnalytics();
@@ -176,33 +187,39 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
     e.dataTransfer.setData('text/plain', id);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, id: PageId) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (draggedId !== id) {
-      setDragOverId(id);
-    }
-  }, [draggedId]);
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, id: PageId) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (draggedId !== id) {
+        setDragOverId(id);
+      }
+    },
+    [draggedId],
+  );
 
-  const handleDrop = useCallback((e: React.DragEvent, targetId: PageId) => {
-    e.preventDefault();
-    if (!draggedId || draggedId === targetId) {
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetId: PageId) => {
+      e.preventDefault();
+      if (!draggedId || draggedId === targetId) {
+        setDraggedId(null);
+        setDragOverId(null);
+        return;
+      }
+
+      const currentOrder = sortedItems.map((item) => item.id);
+      const draggedIdx = currentOrder.indexOf(draggedId);
+      const targetIdx = currentOrder.indexOf(targetId);
+      const newOrder = [...currentOrder];
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedId);
+
+      updateSettings({ menuOrder: newOrder });
       setDraggedId(null);
       setDragOverId(null);
-      return;
-    }
-
-    const currentOrder = sortedItems.map((item) => item.id);
-    const draggedIdx = currentOrder.indexOf(draggedId);
-    const targetIdx = currentOrder.indexOf(targetId);
-    const newOrder = [...currentOrder];
-    newOrder.splice(draggedIdx, 1);
-    newOrder.splice(targetIdx, 0, draggedId);
-
-    updateSettings({ menuOrder: newOrder });
-    setDraggedId(null);
-    setDragOverId(null);
-  }, [draggedId, sortedItems, updateSettings]);
+    },
+    [draggedId, sortedItems, updateSettings],
+  );
 
   const handleDragEnd = useCallback(() => {
     setDraggedId(null);
@@ -265,10 +282,13 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
       </div>
 
       {/* 네비게이션 */}
-      <nav aria-label="메인 내비게이션" className="flex-1 px-2 py-2 flex flex-col gap-1 overflow-y-auto">
+      <nav
+        aria-label="메인 내비게이션"
+        className="flex-1 px-2 py-2 flex flex-col gap-1 overflow-y-auto"
+      >
         {visibleItems.map((item) => {
-          const isActive = currentPage === item.id
-            || (item.id === 'tools' && currentPage.startsWith('tool-'));
+          const isActive =
+            currentPage === item.id || (item.id === 'tools' && currentPage.startsWith('tool-'));
           const isDragged = draggedId === item.id;
           const isDragOver = dragOverId === item.id && draggedId !== item.id;
 
@@ -280,7 +300,13 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
               onDragOver={!sidebarCollapsed ? (e) => handleDragOver(e, item.id) : undefined}
               onDrop={!sidebarCollapsed ? (e) => handleDrop(e, item.id) : undefined}
               onDragEnd={!sidebarCollapsed ? handleDragEnd : undefined}
-              onDragLeave={!sidebarCollapsed ? () => { if (dragOverId === item.id) setDragOverId(null); } : undefined}
+              onDragLeave={
+                !sidebarCollapsed
+                  ? () => {
+                      if (dragOverId === item.id) setDragOverId(null);
+                    }
+                  : undefined
+              }
               title={sidebarCollapsed ? item.label : undefined}
               onClick={() => {
                 track('feature_discovery', { feature: item.id, source: 'menu' });
@@ -300,9 +326,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
                 </span>
               )}
               <span className="material-symbols-outlined">{item.icon}</span>
-              {!sidebarCollapsed && (
-                <span className="font-medium text-sm">{item.label}</span>
-              )}
+              {!sidebarCollapsed && <span className="font-medium text-sm">{item.label}</span>}
             </button>
           );
         })}
@@ -318,20 +342,21 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
             onNavigate('settings');
           }}
           title={sidebarCollapsed ? '설정' : undefined}
-          className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-4'} py-3 rounded-xl transition-all w-full text-left ${currentPage === 'settings'
-            ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/20'
-            : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
-            }`}
+          className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-4'} py-3 rounded-xl transition-all w-full text-left ${
+            currentPage === 'settings'
+              ? 'bg-sp-accent text-white shadow-lg shadow-sp-accent/20'
+              : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+          }`}
         >
           <span className="material-symbols-outlined">settings</span>
           {!sidebarCollapsed && <span className="font-medium text-sm">설정</span>}
         </button>
 
-        <div className={`flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-4'} py-2 mt-3`}>
+        <div
+          className={`flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-4'} py-2 mt-3`}
+        >
           <div className="w-8 h-8 rounded-full bg-sp-border flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-sp-muted text-base">
-              person
-            </span>
+            <span className="material-symbols-outlined text-sp-muted text-base">person</span>
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0">
@@ -371,7 +396,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
 
         {!sidebarCollapsed && (
           <p className="text-caption text-sp-muted text-center mt-2">
-            v2.0.5
+            v2.0.6
             {showUpdateBadge && newVersion && (
               <button
                 type="button"

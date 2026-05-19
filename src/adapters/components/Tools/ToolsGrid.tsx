@@ -33,23 +33,78 @@ const TOOLS: ToolCard[] = [
   { id: 'tool-work-symbols', emoji: '🤫', name: '활동 기호', description: '수업 모드를 한눈에' },
   { id: 'tool-poll', emoji: '📊', name: '객관식 설문', description: '의견을 모아봐요' },
   { id: 'tool-survey', emoji: '📝', name: '주관식 설문', description: '자유롭게 의견을 들어봐요' },
-  { id: 'tool-multi-survey', emoji: '📋', name: '복합 유형 설문', description: '여러 질문 유형을 한 번에 설문' },
-  { id: 'tool-wordcloud', emoji: '☁️', name: '워드클라우드 브레인스토밍', description: '떠오르는 단어를 모아봐요' },
+  {
+    id: 'tool-multi-survey',
+    emoji: '📋',
+    name: '복합 유형 설문',
+    description: '여러 질문 유형을 한 번에 설문',
+  },
+  {
+    id: 'tool-wordcloud',
+    emoji: '☁️',
+    name: '워드클라우드 브레인스토밍',
+    description: '떠오르는 단어를 모아봐요',
+  },
   { id: 'tool-seat-picker', emoji: '🪑', name: '자리 뽑기', description: '내 손으로 뽑는 내 자리' },
   { id: 'tool-grouping', emoji: '👥', name: '모둠 편성기', description: '조건에 맞게 모둠을 편성' },
-  { id: 'tool-assignment', emoji: '📋', name: '과제수합', description: '과제를 수합하고 제출 현황을 확인합니다' },
-  { id: 'tool-valueline', emoji: '📏', name: '가치수직선 토론', description: '입장을 수직선 위에 표현' },
-  { id: 'tool-traffic-discussion', emoji: '🚦', name: '신호등 토론', description: '찬성·보류·반대 의사 표현' },
+  {
+    id: 'tool-assignment',
+    emoji: '📋',
+    name: '과제수합',
+    description: '과제를 수합하고 제출 현황을 확인합니다',
+  },
+  {
+    id: 'tool-valueline',
+    emoji: '📏',
+    name: '가치수직선 토론',
+    description: '입장을 수직선 위에 표현',
+  },
+  {
+    id: 'tool-traffic-discussion',
+    emoji: '🚦',
+    name: '신호등 토론',
+    description: '찬성·보류·반대 의사 표현',
+  },
   { id: 'tool-chalkboard', emoji: '🖍️', name: '칠판', description: '분필로 판서하기' },
-  { id: 'tool-collab-board', emoji: '🎨', name: '협업 보드', description: '학생들과 실시간 협업 작업하기', badge: 'BETA' },
-  { id: 'tool-sticker', emoji: '😎', name: '내 이모티콘', description: '단축키 한 번으로 어디든 붙여넣는 나만의 이모티콘', badge: 'NEW' },
+  {
+    id: 'tool-collab-board',
+    emoji: '🎨',
+    name: '협업 보드',
+    description: '학생들과 실시간 협업 작업하기',
+    badge: 'BETA',
+  },
+  {
+    id: 'tool-sticker',
+    emoji: '😎',
+    name: '내 이모티콘',
+    description: '단축키 한 번으로 어디든 붙여넣는 나만의 이모티콘',
+    badge: 'NEW',
+  },
   // 실시간 담벼락: 다음 릴리즈 출시 예정 — BETA로 공개.
-  { id: 'tool-realtime-wall', emoji: '🗂️', name: '실시간 담벼락', description: '학생 글을 실시간으로 모아 칸반형·자유 배치형으로 정리', badge: 'BETA' },
-  // 인터랙티브 슬라이드: v2.2.x 정식 출시 예정 — 완성도 보강 중이라 v2.0.5에선 사용자 노출 일시 보류 (코드·라우팅·InteractiveSlides 폴더 모두 보존).
+  {
+    id: 'tool-realtime-wall',
+    emoji: '🗂️',
+    name: '실시간 담벼락',
+    description: '학생 글을 실시간으로 모아 칸반형·자유 배치형으로 정리',
+    badge: 'BETA',
+  },
+  // 인터랙티브 슬라이드: v2.2.x 정식 출시 예정 — 완성도 보강 중이라 v2.0.6에서도 사용자 노출 일시 보류 (코드·라우팅·InteractiveSlides 폴더 모두 보존).
   // { id: 'tool-interactive-slides', emoji: '🎞️', name: '인터랙티브 슬라이드', description: 'Google Slides·PDF 위에 투표·텍스트·워드클라우드를 띄워 실시간 응답', badge: 'BETA' },
   { id: 'tool-forms', emoji: '📄', name: '서식', description: 'HWPX · PDF · Excel 서식 모아보기' },
-  { id: 'tool-supsori', emoji: '🌳', name: '숲소리', description: '교육 웹진', externalUrl: 'https://supsori.com' },
-  { id: 'tool-pblsketch', emoji: '🎯', name: 'PBL스케치', description: '수업 및 평가 설계 도구', externalUrl: 'https://pblsketch.xyz' },
+  {
+    id: 'tool-supsori',
+    emoji: '🌳',
+    name: '숲소리',
+    description: '교육 웹진',
+    externalUrl: 'https://supsori.com',
+  },
+  {
+    id: 'tool-pblsketch',
+    emoji: '🎯',
+    name: 'PBL스케치',
+    description: '수업 및 평가 설계 도구',
+    externalUrl: 'https://pblsketch.xyz',
+  },
 ];
 
 const DEFAULT_TOOL_ORDER: readonly PageId[] = TOOLS.map((t) => t.id);
@@ -149,43 +204,48 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
         }
       />
       <div className="flex-1 min-h-0 overflow-y-auto p-8">
-      <p className="text-sp-muted text-sm mb-6">
-        {view === 'all'
-          ? '전체 보기 — 모든 도구를 기본 순서대로 보여줍니다'
-          : '내 화면 — 정리한 순서·표시 설정으로 보여줍니다'}
-      </p>
+        <p className="text-sp-muted text-sm mb-6">
+          {view === 'all'
+            ? '전체 보기 — 모든 도구를 기본 순서대로 보여줍니다'
+            : '내 화면 — 정리한 순서·표시 설정으로 보여줍니다'}
+        </p>
 
-      {/* Tool Cards Grid */}
-      {visibleTools.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-sp-border p-10 text-center">
-          <p className="text-sp-muted">표시할 도구가 없습니다. 정리하기에서 도구를 다시 표시하거나 전체 보기로 전환하세요.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {visibleTools.map((tool) => (
-            <button
-              key={tool.id}
-              onClick={() => tool.externalUrl ? openExternal(tool.externalUrl) : onNavigate(tool.id)}
-              className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
-            >
-              <div className="text-4xl mb-3">{tool.emoji}</div>
-              <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
-                {tool.name}
-                {tool.badge && (
-                  <span className="text-caption font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
-                    {tool.badge}
-                  </span>
-                )}
-                {tool.externalUrl && (
-                  <span className="material-symbols-outlined text-icon-sm text-sp-muted">open_in_new</span>
-                )}
-              </h3>
-              <p className="text-sm text-sp-muted mt-1">{tool.description}</p>
-            </button>
-          ))}
-        </div>
-      )}
-
+        {/* Tool Cards Grid */}
+        {visibleTools.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-sp-border p-10 text-center">
+            <p className="text-sp-muted">
+              표시할 도구가 없습니다. 정리하기에서 도구를 다시 표시하거나 전체 보기로 전환하세요.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {visibleTools.map((tool) => (
+              <button
+                key={tool.id}
+                onClick={() =>
+                  tool.externalUrl ? openExternal(tool.externalUrl) : onNavigate(tool.id)
+                }
+                className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
+              >
+                <div className="text-4xl mb-3">{tool.emoji}</div>
+                <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
+                  {tool.name}
+                  {tool.badge && (
+                    <span className="text-caption font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
+                      {tool.badge}
+                    </span>
+                  )}
+                  {tool.externalUrl && (
+                    <span className="material-symbols-outlined text-icon-sm text-sp-muted">
+                      open_in_new
+                    </span>
+                  )}
+                </h3>
+                <p className="text-sm text-sp-muted mt-1">{tool.description}</p>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {organizing && (
@@ -233,31 +293,37 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
     e.dataTransfer.setData('text/plain', id);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, id: PageId) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (draggedId !== id) setDragOverId(id);
-  }, [draggedId]);
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, id: PageId) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (draggedId !== id) setDragOverId(id);
+    },
+    [draggedId],
+  );
 
-  const handleDrop = useCallback((e: React.DragEvent, targetId: PageId) => {
-    e.preventDefault();
-    if (!draggedId || draggedId === targetId) {
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetId: PageId) => {
+      e.preventDefault();
+      if (!draggedId || draggedId === targetId) {
+        setDraggedId(null);
+        setDragOverId(null);
+        return;
+      }
+      setOrder((prev) => {
+        const next = [...prev];
+        const dragIdx = next.indexOf(draggedId);
+        const targetIdx = next.indexOf(targetId);
+        if (dragIdx === -1 || targetIdx === -1) return prev;
+        next.splice(dragIdx, 1);
+        next.splice(targetIdx, 0, draggedId);
+        return next;
+      });
       setDraggedId(null);
       setDragOverId(null);
-      return;
-    }
-    setOrder((prev) => {
-      const next = [...prev];
-      const dragIdx = next.indexOf(draggedId);
-      const targetIdx = next.indexOf(targetId);
-      if (dragIdx === -1 || targetIdx === -1) return prev;
-      next.splice(dragIdx, 1);
-      next.splice(targetIdx, 0, draggedId);
-      return next;
-    });
-    setDraggedId(null);
-    setDragOverId(null);
-  }, [draggedId]);
+    },
+    [draggedId],
+  );
 
   const handleDragEnd = useCallback(() => {
     setDraggedId(null);
@@ -293,7 +359,8 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
               쌤도구 정리하기
             </h3>
             <p className="text-xs text-sp-muted mt-0.5">
-              드래그로 순서를 바꾸고, 토글로 표시 여부를 정합니다 · 표시 {visibleCount} / {order.length}
+              드래그로 순서를 바꾸고, 토글로 표시 여부를 정합니다 · 표시 {visibleCount} /{' '}
+              {order.length}
             </p>
           </div>
           <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
@@ -334,7 +401,9 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
                   onDragOver={(e) => handleDragOver(e, id)}
                   onDrop={(e) => handleDrop(e, id)}
                   onDragEnd={handleDragEnd}
-                  onDragLeave={() => { if (dragOverId === id) setDragOverId(null); }}
+                  onDragLeave={() => {
+                    if (dragOverId === id) setDragOverId(null);
+                  }}
                   className={`flex items-center justify-between py-2.5 px-3 rounded-lg transition-all select-none ${
                     isDragged ? 'opacity-30' : ''
                   } ${isDragOver ? 'ring-2 ring-sp-accent/50 bg-sp-accent/5' : 'hover:bg-sp-surface/50'}`}
@@ -345,7 +414,9 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
                     </span>
                     <span className="text-xl shrink-0">{tool.emoji}</span>
                     <div className="min-w-0">
-                      <div className={`text-sm font-medium flex items-center gap-1.5 ${isHidden ? 'text-sp-muted/50' : 'text-sp-text'}`}>
+                      <div
+                        className={`text-sm font-medium flex items-center gap-1.5 ${isHidden ? 'text-sp-muted/50' : 'text-sp-text'}`}
+                      >
                         <span className="truncate">{tool.name}</span>
                         {tool.badge && (
                           <span className="text-[9px] font-extrabold tracking-wider px-1.5 py-[2px] rounded bg-amber-500/20 text-amber-500">
@@ -353,7 +424,9 @@ function ToolsOrganizerModal({ initialOrder, initialHidden, onClose, onSave }: O
                           </span>
                         )}
                       </div>
-                      <p className={`text-xs mt-0.5 truncate ${isHidden ? 'text-sp-muted/30' : 'text-sp-muted'}`}>
+                      <p
+                        className={`text-xs mt-0.5 truncate ${isHidden ? 'text-sp-muted/30' : 'text-sp-muted'}`}
+                      >
                         {tool.description}
                       </p>
                     </div>
