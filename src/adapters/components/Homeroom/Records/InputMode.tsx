@@ -4,7 +4,11 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { ATTENDANCE_TYPES, ATTENDANCE_REASONS } from '@domain/valueObjects/RecordCategory';
-import type { StudentAttendance, AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
+import type {
+  StudentAttendance,
+  AttendanceStatus,
+  AttendanceReason,
+} from '@domain/entities/Attendance';
 import type { CounselingMethod, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import type { RecordPrefill } from '../HomeroomPage';
 import { DEFAULT_TEMPLATES } from '@domain/valueObjects/DefaultTemplates';
@@ -21,6 +25,8 @@ import {
   getRecordTagClass,
   initEditAttendancePeriods,
 } from './recordUtils';
+import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
+import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
 
 export interface InputModeProps extends ModeProps {
   selectedDate: string;
@@ -34,21 +40,29 @@ type RightTab = 'today' | 'history';
 const LAST_PERIODS_KEY = 'ssampin:homeroom-last-periods';
 
 const STATUS_FROM_TYPE: Record<string, AttendanceStatus> = {
-  '결석': 'absent',
-  '지각': 'late',
-  '조퇴': 'earlyLeave',
-  '결과': 'classAbsence',
+  결석: 'absent',
+  지각: 'late',
+  조퇴: 'earlyLeave',
+  결과: 'classAbsence',
 };
 
 const ACCENT_FROM_TYPE: Record<string, AccentColor> = {
-  '결석': 'red',
-  '지각': 'amber',
-  '조퇴': 'orange',
-  '결과': 'purple',
+  결석: 'red',
+  지각: 'amber',
+  조퇴: 'orange',
+  결과: 'purple',
 };
 
-function InputMode({ students, records, categories, selectedDate, prefill, onPrefillConsumed }: InputModeProps) {
-  const { addRecord, deleteRecord, updateRecord, updateAttendanceRecord } = useStudentRecordsStore();
+function InputMode({
+  students,
+  records,
+  categories,
+  selectedDate,
+  prefill,
+  onPrefillConsumed,
+}: InputModeProps) {
+  const { addRecord, deleteRecord, updateRecord, updateAttendanceRecord } =
+    useStudentRecordsStore();
   const { getDayAttendance, saveDayAttendance } = useTeachingClassStore();
   const bridgeHomeroomDayAttendance = useStudentRecordsStore((s) => s.bridgeHomeroomDayAttendance);
   const className = useSettingsStore((s) => s.settings.className);
@@ -62,7 +76,9 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [editingSubcat, setEditingSubcat] = useState('');
   const [editingReportedToNeis, setEditingReportedToNeis] = useState(false);
   const [editingDocumentSubmitted, setEditingDocumentSubmitted] = useState(false);
-  const [editingAttendancePeriods, setEditingAttendancePeriods] = useState<AttendancePeriodEntry[]>([]);
+  const [editingAttendancePeriods, setEditingAttendancePeriods] = useState<AttendancePeriodEntry[]>(
+    [],
+  );
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<{
     categoryId: string;
@@ -77,7 +93,9 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
       if (Array.isArray(arr)) {
         return new Set(arr.filter((n): n is number => typeof n === 'number'));
       }
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
     return new Set();
   });
   const [memo, setMemo] = useState('');
@@ -92,31 +110,75 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const [showMemoModal, setShowMemoModal] = useState(false);
   const [studentView, setStudentView] = useState<'default' | 'roster'>('default');
 
-  // ── 여러 날(범위) 등록 ──
-  const [dateRangeMode, setDateRangeMode] = useState(false);
+  // ── 여러 날(범위/다중) 등록 ──
+  type DateMode = 'single' | 'range' | 'multi';
+  const [dateMode, setDateMode] = useState<DateMode>('single');
   const [endDate, setEndDate] = useState(selectedDate);
+  const [multiDateSet, setMultiDateSet] = useState<ReadonlySet<string>>(new Set());
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
   const [skippedDates, setSkippedDates] = useState<string[]>([]);
+  const [togglePulse, setTogglePulse] = useState(false);
 
-  // selectedDate 변경 시 endDate 동기화
+  // 명령 팔레트 intent consume
+  const intentPending = useMultiDateAttendanceIntentStore((s) => s.pending);
+  const intentPreferredMode = useMultiDateAttendanceIntentStore((s) => s.preferredMode);
+  const intentPreferredType = useMultiDateAttendanceIntentStore((s) => s.preferredAttendanceType);
+  const consumeIntent = useMultiDateAttendanceIntentStore((s) => s.consume);
+
+  useEffect(() => {
+    if (!intentPending) return;
+    // 출결 카테고리 자동 선택 + 다중 모드 ON
+    setAttendanceType(intentPreferredType);
+    setSelectedSub({ categoryId: 'attendance', subcategory: intentPreferredType });
+    setDateMode(intentPreferredMode);
+    setTogglePulse(true);
+    const t = window.setTimeout(() => setTogglePulse(false), 1500);
+    consumeIntent();
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intentPending]);
+
+  // selectedDate 변경 시 endDate 동기화 (range 모드)
   useEffect(() => {
     setEndDate(selectedDate);
   }, [selectedDate]);
 
-  // 범위 모드 날짜 리스트 + 유효성
-  const rangeDates = useMemo(() => {
-    if (!dateRangeMode) return [selectedDate];
-    if (endDate < selectedDate) return [];
-    return createDateRange(selectedDate, endDate);
-  }, [dateRangeMode, selectedDate, endDate]);
+  // attendanceType 신규 선택 시 토글 즉시 부각 (animate-pulse 1.5초)
+  useEffect(() => {
+    if (attendanceType) {
+      setTogglePulse(true);
+      const t = window.setTimeout(() => setTogglePulse(false), 1500);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, [attendanceType]);
 
-  const rangeError = dateRangeMode && endDate < selectedDate
-    ? '종료일이 시작일보다 빠릅니다'
-    : dateRangeMode && rangeDates.length > 30
-      ? '30일을 초과하는 범위는 등록할 수 없습니다'
-      : null;
+  // 호환 별칭 (기존 코드 영향 최소화) — true 시 multi 또는 range
+  const dateRangeMode = dateMode !== 'single';
+
+  // 모드별 날짜 리스트 + 유효성
+  const rangeDates = useMemo(() => {
+    if (dateMode === 'single') return [selectedDate];
+    if (dateMode === 'range') {
+      if (endDate < selectedDate) return [];
+      return createDateRange(selectedDate, endDate);
+    }
+    // multi 모드
+    return Array.from(multiDateSet).sort();
+  }, [dateMode, selectedDate, endDate, multiDateSet]);
+
+  const rangeError =
+    dateMode === 'range' && endDate < selectedDate
+      ? '종료일이 시작일보다 빠릅니다'
+      : (dateMode === 'range' || dateMode === 'multi') && rangeDates.length > 30
+        ? '30일을 초과하는 범위는 등록할 수 없습니다'
+        : dateMode === 'multi' && rangeDates.length === 0
+          ? '선택된 날짜가 없습니다'
+          : null;
 
   // 3컬럼 리사이즈 (퍼센트 기반)
   const [leftPct, setLeftPct] = useState(38);
@@ -183,7 +245,6 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     onPrefillConsumed?.();
   }, [prefill, students, onPrefillConsumed]);
 
-
   const toggleStudent = useCallback((id: string) => {
     setSelectedStudents((prev) => {
       const next = new Set(prev);
@@ -200,35 +261,35 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   const handleAttendanceTypeClick = useCallback((type: string) => {
     setAttendanceType((prev) => {
       if (prev === type) {
-        setSelectedSub((s) => s?.categoryId === 'attendance' ? null : s);
+        setSelectedSub((s) => (s?.categoryId === 'attendance' ? null : s));
         return null;
       }
-      setSelectedSub((s) => s?.categoryId === 'attendance' ? null : s);
+      setSelectedSub((s) => (s?.categoryId === 'attendance' ? null : s));
       return type;
     });
   }, []);
 
-  const handleAttendanceReasonClick = useCallback((reason: string) => {
-    if (!attendanceType) return;
-    const subcategory = `${attendanceType} (${reason})`;
-    setSelectedSub((prev) =>
-      prev?.categoryId === 'attendance' && prev.subcategory === subcategory
-        ? null
-        : { categoryId: 'attendance', subcategory },
-    );
-  }, [attendanceType]);
-
-  const handleSubcategoryClick = useCallback(
-    (categoryId: string, sub: string) => {
+  const handleAttendanceReasonClick = useCallback(
+    (reason: string) => {
+      if (!attendanceType) return;
+      const subcategory = `${attendanceType} (${reason})`;
       setSelectedSub((prev) =>
-        prev?.categoryId === categoryId && prev.subcategory === sub
+        prev?.categoryId === 'attendance' && prev.subcategory === subcategory
           ? null
-          : { categoryId, subcategory: sub },
+          : { categoryId: 'attendance', subcategory },
       );
-      setAttendanceType(null);
     },
-    [],
+    [attendanceType],
   );
+
+  const handleSubcategoryClick = useCallback((categoryId: string, sub: string) => {
+    setSelectedSub((prev) =>
+      prev?.categoryId === categoryId && prev.subcategory === sub
+        ? null
+        : { categoryId, subcategory: sub },
+    );
+    setAttendanceType(null);
+  }, []);
 
   // 2-2: 템플릿 적용
   const handleTemplateSelect = useCallback((templateId: string) => {
@@ -251,108 +312,129 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   }, []);
 
   // 단일 날짜 저장 (기존 로직 + 출결 교시 fan-out)
-  const saveForDate = useCallback(async (date: string) => {
-    if (selectedStudents.size === 0 || selectedSub === null) return 0;
+  const saveForDate = useCallback(
+    async (date: string) => {
+      if (selectedStudents.size === 0 || selectedSub === null) return 0;
 
-    // ── 출결 카테고리: 교시별 fan-out 저장 ──
-    if (selectedSub.categoryId === 'attendance' && attendanceType) {
-      if (!className) {
-        showToast('설정에서 담임반을 먼저 입력해주세요', 'info');
-        return 0;
-      }
-      const periods = selectedPeriods.size > 0
-        ? Array.from(selectedPeriods)
-        : Array.from({ length: periodCount }, (_, i) => i + 1);
-
-      // "결석 (질병)" → "질병"
-      const match = selectedSub.subcategory.match(/\(([^)]+)\)\s*$/);
-      const reason = (match?.[1] ?? '기타') as AttendanceReason;
-      const status = STATUS_FROM_TYPE[attendanceType] ?? 'absent';
-      const memoText = memo.trim() || undefined;
-
-      const existing = getDayAttendance(className, date);
-      const recordsByPeriod = new Map<number, StudentAttendance[]>();
-      for (const r of existing) {
-        recordsByPeriod.set(r.period, [...r.students]);
-      }
-
-      let affected = 0;
-      for (const period of periods) {
-        const arr = recordsByPeriod.get(period) ?? [];
-        for (const studentId of selectedStudents) {
-          const student = students.find((s) => s.id === studentId);
-          if (!student?.studentNumber) continue;
-          const next: StudentAttendance = {
-            number: student.studentNumber,
-            status,
-            reason: status !== 'present' ? reason : undefined,
-            memo: status !== 'present' ? memoText : undefined,
-          };
-          const idx = arr.findIndex((sa) => sa.number === student.studentNumber);
-          if (idx >= 0) arr[idx] = next;
-          else arr.push(next);
+      // ── 출결 카테고리: 교시별 fan-out 저장 ──
+      if (selectedSub.categoryId === 'attendance' && attendanceType) {
+        if (!className) {
+          showToast('설정에서 담임반을 먼저 입력해주세요', 'info');
+          return 0;
         }
-        recordsByPeriod.set(period, arr);
+        const periods =
+          selectedPeriods.size > 0
+            ? Array.from(selectedPeriods)
+            : Array.from({ length: periodCount }, (_, i) => i + 1);
+
+        // "결석 (질병)" → "질병"
+        const match = selectedSub.subcategory.match(/\(([^)]+)\)\s*$/);
+        const reason = (match?.[1] ?? '기타') as AttendanceReason;
+        const status = STATUS_FROM_TYPE[attendanceType] ?? 'absent';
+        const memoText = memo.trim() || undefined;
+
+        const existing = getDayAttendance(className, date);
+        const recordsByPeriod = new Map<number, StudentAttendance[]>();
+        for (const r of existing) {
+          recordsByPeriod.set(r.period, [...r.students]);
+        }
+
+        let affected = 0;
+        for (const period of periods) {
+          const arr = recordsByPeriod.get(period) ?? [];
+          for (const studentId of selectedStudents) {
+            const student = students.find((s) => s.id === studentId);
+            if (!student?.studentNumber) continue;
+            const next: StudentAttendance = {
+              number: student.studentNumber,
+              status,
+              reason: status !== 'present' ? reason : undefined,
+              memo: status !== 'present' ? memoText : undefined,
+            };
+            const idx = arr.findIndex((sa) => sa.number === student.studentNumber);
+            if (idx >= 0) arr[idx] = next;
+            else arr.push(next);
+          }
+          recordsByPeriod.set(period, arr);
+        }
+
+        await saveDayAttendance(className, date, recordsByPeriod);
+        await bridgeHomeroomDayAttendance({ className, date, recordsByPeriod, students });
+
+        try {
+          localStorage.setItem(LAST_PERIODS_KEY, JSON.stringify(periods));
+        } catch {
+          /* noop */
+        }
+
+        // 영향받은 학생 수
+        affected = Array.from(selectedStudents).filter((id) => {
+          const s = students.find((st) => st.id === id);
+          return !!s?.studentNumber;
+        }).length;
+        return affected;
       }
 
-      await saveDayAttendance(className, date, recordsByPeriod);
-      await bridgeHomeroomDayAttendance({ className, date, recordsByPeriod, students });
+      // ── 기존 경로 (상담/생활/기타) ──
+      const method = selectedSub.categoryId === 'counseling' ? selectedMethod : undefined;
+      const fu = followUp.trim() || undefined;
+      const fuDate = followUpDate || undefined;
+      const neisFlag = selectedSub.categoryId === 'attendance' ? reportedToNeis : undefined;
+      const docFlag = selectedSub.categoryId === 'attendance' ? documentSubmitted : undefined;
 
-      try {
-        localStorage.setItem(LAST_PERIODS_KEY, JSON.stringify(periods));
-      } catch { /* noop */ }
+      // 중복 감지: 해당 날짜에 같은 학생+카테고리+서브카테고리 기록이 있으면 건너뜀
+      const existingSet = new Set(
+        records
+          .filter(
+            (r) =>
+              r.date === date &&
+              r.category === selectedSub.categoryId &&
+              r.subcategory === selectedSub.subcategory,
+          )
+          .map((r) => r.studentId),
+      );
+      const newStudents = Array.from(selectedStudents).filter((id) => !existingSet.has(id));
+      if (newStudents.length === 0) return 0;
 
-      // 영향받은 학생 수
-      affected = Array.from(selectedStudents).filter((id) => {
-        const s = students.find((st) => st.id === id);
-        return !!s?.studentNumber;
-      }).length;
-      return affected;
-    }
-
-    // ── 기존 경로 (상담/생활/기타) ──
-    const method = selectedSub.categoryId === 'counseling' ? selectedMethod : undefined;
-    const fu = followUp.trim() || undefined;
-    const fuDate = followUpDate || undefined;
-    const neisFlag = selectedSub.categoryId === 'attendance' ? reportedToNeis : undefined;
-    const docFlag = selectedSub.categoryId === 'attendance' ? documentSubmitted : undefined;
-
-    // 중복 감지: 해당 날짜에 같은 학생+카테고리+서브카테고리 기록이 있으면 건너뜀
-    const existingSet = new Set(
-      records
-        .filter(
-          (r) =>
-            r.date === date &&
-            r.category === selectedSub.categoryId &&
-            r.subcategory === selectedSub.subcategory,
-        )
-        .map((r) => r.studentId),
-    );
-    const newStudents = Array.from(selectedStudents).filter((id) => !existingSet.has(id));
-    if (newStudents.length === 0) return 0;
-
-    const promises = newStudents.map((studentId) =>
-      addRecord(
-        studentId,
-        selectedSub.categoryId,
-        selectedSub.subcategory,
-        memo,
-        date,
-        method,
-        fu,
-        fuDate,
-        neisFlag,
-        docFlag,
-      ),
-    );
-    await Promise.all(promises);
-    return newStudents.length;
-  }, [
-    selectedStudents, selectedSub, attendanceType, selectedPeriods, periodCount,
-    className, students, getDayAttendance, saveDayAttendance, bridgeHomeroomDayAttendance,
-    memo, records, selectedMethod, followUp, followUpDate, reportedToNeis, documentSubmitted,
-    addRecord, showToast,
-  ]);
+      const promises = newStudents.map((studentId) =>
+        addRecord(
+          studentId,
+          selectedSub.categoryId,
+          selectedSub.subcategory,
+          memo,
+          date,
+          method,
+          fu,
+          fuDate,
+          neisFlag,
+          docFlag,
+        ),
+      );
+      await Promise.all(promises);
+      return newStudents.length;
+    },
+    [
+      selectedStudents,
+      selectedSub,
+      attendanceType,
+      selectedPeriods,
+      periodCount,
+      className,
+      students,
+      getDayAttendance,
+      saveDayAttendance,
+      bridgeHomeroomDayAttendance,
+      memo,
+      records,
+      selectedMethod,
+      followUp,
+      followUpDate,
+      reportedToNeis,
+      documentSubmitted,
+      addRecord,
+      showToast,
+    ],
+  );
 
   const resetForm = useCallback(() => {
     setSelectedStudents(new Set());
@@ -365,7 +447,8 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     setFollowUpDate('');
     setReportedToNeis(false);
     setDocumentSubmitted(false);
-    setDateRangeMode(false);
+    setDateMode('single');
+    setMultiDateSet(new Set());
   }, []);
 
   // 단일 날짜 저장
@@ -396,20 +479,25 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
     resetForm();
 
     const registeredDays = rangeDates.length - newSkipped.length;
-    const msg = newSkipped.length > 0
-      ? `${rangeDates.length}일 중 ${registeredDays}일 등록 완료 (중복 ${newSkipped.length}일 제외)`
-      : `${rangeDates.length}일 출결이 등록되었습니다`;
+    const msg =
+      newSkipped.length > 0
+        ? `${rangeDates.length}일 중 ${registeredDays}일 등록 완료 (중복 ${newSkipped.length}일 제외)`
+        : `${rangeDates.length}일 출결이 등록되었습니다`;
     showToast(msg, totalCreated > 0 ? 'success' : 'info');
   }, [rangeDates, rangeError, saveForDate, resetForm, showToast]);
 
-  // 저장 버튼 클릭 핸들러: 범위 모드면 확인 모달, 아니면 바로 저장
+  // 저장 버튼 클릭 핸들러: 다중/범위 모드면 확인 모달, 아니면 바로 저장
   const handleSaveClick = useCallback(() => {
-    if (dateRangeMode && rangeDates.length > 1) {
+    if (dateMode !== 'single' && rangeDates.length > 1) {
       setShowBatchConfirm(true);
+    } else if (dateMode === 'multi' && rangeDates.length === 1) {
+      // multi 모드 1일도 일괄 저장 (선택된 1일)
+      void handleBatchSave();
     } else {
       void handleSave();
     }
-  }, [dateRangeMode, rangeDates.length, handleSave]);
+    // handleBatchSave 는 아래에서 정의되어 있으므로 의존성에서 일부러 제외하지 않음
+  }, [dateMode, rangeDates.length, handleSave, handleBatchSave]);
 
   /* ── 키보드 단축키 (A/L/E/X 유형, Q/W/R/T 사유, 1~7 교시, 0/Space 전체, Enter 저장, Esc 리셋) ── */
   useEffect(() => {
@@ -421,24 +509,57 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
       const key = e.key.toLowerCase();
 
       // 출결 유형 토글
-      if (key === 'a') { handleAttendanceTypeClick('결석'); e.preventDefault(); return; }
-      if (key === 'l') { handleAttendanceTypeClick('지각'); e.preventDefault(); return; }
-      if (key === 'e') { handleAttendanceTypeClick('조퇴'); e.preventDefault(); return; }
-      if (key === 'x') { handleAttendanceTypeClick('결과'); e.preventDefault(); return; }
+      if (key === 'a') {
+        handleAttendanceTypeClick('결석');
+        e.preventDefault();
+        return;
+      }
+      if (key === 'l') {
+        handleAttendanceTypeClick('지각');
+        e.preventDefault();
+        return;
+      }
+      if (key === 'e') {
+        handleAttendanceTypeClick('조퇴');
+        e.preventDefault();
+        return;
+      }
+      if (key === 'x') {
+        handleAttendanceTypeClick('결과');
+        e.preventDefault();
+        return;
+      }
 
       // 출결 유형 선택된 상태에서만 교시/사유 단축키
       if (attendanceType) {
-        if (key === 'q') { handleAttendanceReasonClick('질병'); e.preventDefault(); return; }
-        if (key === 'w') { handleAttendanceReasonClick('인정'); e.preventDefault(); return; }
-        if (key === 'r') { handleAttendanceReasonClick('미인정'); e.preventDefault(); return; }
-        if (key === 't') { handleAttendanceReasonClick('기타'); e.preventDefault(); return; }
+        if (key === 'q') {
+          handleAttendanceReasonClick('질병');
+          e.preventDefault();
+          return;
+        }
+        if (key === 'w') {
+          handleAttendanceReasonClick('인정');
+          e.preventDefault();
+          return;
+        }
+        if (key === 'r') {
+          handleAttendanceReasonClick('미인정');
+          e.preventDefault();
+          return;
+        }
+        if (key === 't') {
+          handleAttendanceReasonClick('기타');
+          e.preventDefault();
+          return;
+        }
 
         if (/^[1-7]$/.test(key)) {
           const p = parseInt(key, 10);
           if (p <= periodCount) {
             setSelectedPeriods((prev) => {
               const next = new Set(prev);
-              if (next.has(p)) next.delete(p); else next.add(p);
+              if (next.has(p)) next.delete(p);
+              else next.add(p);
               return next;
             });
             e.preventDefault();
@@ -470,16 +591,21 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
 
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [attendanceType, selectedSub, selectedStudents, handleAttendanceTypeClick, handleAttendanceReasonClick, handleSaveClick, periodCount]);
+  }, [
+    attendanceType,
+    selectedSub,
+    selectedStudents,
+    handleAttendanceTypeClick,
+    handleAttendanceReasonClick,
+    handleSaveClick,
+    periodCount,
+  ]);
 
   const dateRecords = useMemo(() => {
     return records.filter((r) => r.date === selectedDate);
   }, [records, selectedDate]);
 
-  const studentMap = useMemo(
-    () => new Map(students.map((s) => [s.id, s])),
-    [students],
-  );
+  const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
   const canSave = selectedStudents.size > 0 && selectedSub !== null && !rangeError;
 
@@ -493,735 +619,835 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
       <div ref={containerRef} className="flex-1 flex min-h-0">
-      {/* ── 좌측: 학생 선택 ── */}
-      <div className="flex flex-col rounded-xl bg-sp-card p-5 min-w-0" style={{ width: `${leftPct}%` }}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
-            <span className="material-symbols-outlined text-base">group</span>
-            학생 선택
-            <span className="text-sp-muted font-normal">
-              ({selectedStudents.size}명 선택됨)
-            </span>
-          </h3>
-          <div className="flex items-center gap-2">
-            {/* 보기 전환 토글 */}
-            <div className="flex items-center bg-sp-surface rounded-lg p-0.5">
+        {/* ── 좌측: 학생 선택 ── */}
+        <div
+          className="flex flex-col rounded-xl bg-sp-card p-5 min-w-0"
+          style={{ width: `${leftPct}%` }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">group</span>
+              학생 선택
+              <span className="text-sp-muted font-normal">({selectedStudents.size}명 선택됨)</span>
+            </h3>
+            <div className="flex items-center gap-2">
+              {/* 보기 전환 토글 */}
+              <div className="flex items-center bg-sp-surface rounded-lg p-0.5">
+                <button
+                  onClick={() => setStudentView('default')}
+                  className={`p-1 rounded transition-colors ${
+                    studentView === 'default'
+                      ? 'bg-sp-accent/20 text-sp-accent'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                  title="기본 보기"
+                >
+                  <span className="material-symbols-outlined text-sm">grid_view</span>
+                </button>
+                <button
+                  onClick={() => setStudentView('roster')}
+                  className={`p-1 rounded transition-colors ${
+                    studentView === 'roster'
+                      ? 'bg-sp-accent/20 text-sp-accent'
+                      : 'text-sp-muted hover:text-sp-text'
+                  }`}
+                  title="명렬표 보기"
+                >
+                  <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+                </button>
+              </div>
+              {selectedStudents.size === 1 && (
+                <button
+                  onClick={() => setRightTab('history')}
+                  className="flex items-center gap-1 text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
+                  title="선택한 학생의 이전 기록 보기"
+                >
+                  <span className="material-symbols-outlined text-sm">history</span>
+                  이전 기록
+                </button>
+              )}
               <button
-                onClick={() => setStudentView('default')}
-                className={`p-1 rounded transition-colors ${
-                  studentView === 'default'
-                    ? 'bg-sp-accent/20 text-sp-accent'
-                    : 'text-sp-muted hover:text-sp-text'
-                }`}
-                title="기본 보기"
+                onClick={clearAll}
+                className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
               >
-                <span className="material-symbols-outlined text-sm">grid_view</span>
-              </button>
-              <button
-                onClick={() => setStudentView('roster')}
-                className={`p-1 rounded transition-colors ${
-                  studentView === 'roster'
-                    ? 'bg-sp-accent/20 text-sp-accent'
-                    : 'text-sp-muted hover:text-sp-text'
-                }`}
-                title="명렬표 보기"
-              >
-                <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+                모두 해제
               </button>
             </div>
-            {selectedStudents.size === 1 && (
-              <button
-                onClick={() => setRightTab('history')}
-                className="flex items-center gap-1 text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
-                title="선택한 학생의 이전 기록 보기"
-              >
-                <span className="material-symbols-outlined text-sm">history</span>
-                이전 기록
-              </button>
-            )}
-            <button
-              onClick={clearAll}
-              className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
-            >
-              모두 해제
-            </button>
           </div>
-        </div>
-        {studentView === 'default' ? (
-          /* ── 기본 보기 ── */
-          <div className="grid grid-cols-4 gap-2 overflow-y-auto flex-1">
-            {students.map((student, idx) => {
-              const num = student.studentNumber ?? (idx + 1);
-              if (student.isVacant) {
+          {studentView === 'default' ? (
+            /* ── 기본 보기 ── */
+            <div className="grid grid-cols-4 gap-2 overflow-y-auto flex-1">
+              {students.map((student, idx) => {
+                const num = student.studentNumber ?? idx + 1;
+                if (student.isVacant) {
+                  return (
+                    <div
+                      key={student.id}
+                      className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30"
+                    >
+                      {num}
+                      <div className="text-caption truncate">결번</div>
+                    </div>
+                  );
+                }
+                const isSelected = selectedStudents.has(student.id);
                 return (
-                  <div
+                  <button
                     key={student.id}
-                    className="px-2 py-2.5 rounded-lg text-xs text-sp-muted/40 text-center bg-sp-surface/30"
-                  >
-                    {num}
-                    <div className="text-caption truncate">결번</div>
-                  </div>
-                );
-              }
-              const isSelected = selectedStudents.has(student.id);
-              return (
-                <button
-                  key={student.id}
-                  onClick={() => toggleStudent(student.id)}
-                  className={`px-1.5 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${isSelected
-                    ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
-                    : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
+                    onClick={() => toggleStudent(student.id)}
+                    className={`px-1.5 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${
+                      isSelected
+                        ? 'bg-sp-accent text-white ring-1 ring-sp-accent'
+                        : 'bg-sp-surface text-sp-text hover:bg-sp-surface/80'
                     }`}
-                >
-                  <div className="text-caption opacity-60 tabular-nums">{num}</div>
-                  <div className="truncate">{student.name}</div>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          /* ── 명렬표 보기 (2단 리스트) ── */
-          <div className="overflow-y-auto flex-1">
-            <div className="grid grid-cols-2 gap-x-3">
-              {[0, 1].map((col) => {
-                const half = Math.ceil(students.length / 2);
-                const slice = students.slice(col * half, (col + 1) * half);
-                const offset = col * half;
-                return (
-                  <div key={col} className="flex flex-col">
-                    {slice.map((student, i) => {
-                      const num = student.studentNumber ?? (offset + i + 1);
-                      if (student.isVacant) {
-                        return (
-                          <div
-                            key={student.id}
-                            className="flex items-center gap-2 px-2 py-1.5 border-l-2 border-transparent opacity-30"
-                          >
-                            <span className="min-w-[2rem] text-right text-sm font-bold tabular-nums text-sp-muted shrink-0">
-                              {num}
-                            </span>
-                            <span className="text-xs text-sp-muted italic">결번</span>
-                          </div>
-                        );
-                      }
-                      const isSelected = selectedStudents.has(student.id);
-                      return (
-                        <button
-                          key={student.id}
-                          onClick={() => toggleStudent(student.id)}
-                          className={`flex items-center gap-2 px-2 py-1.5 rounded-md transition-all text-left w-full border-l-2 ${
-                            isSelected
-                              ? 'bg-sp-accent/15 border-sp-accent'
-                              : 'hover:bg-sp-surface/60 border-transparent'
-                          }`}
-                        >
-                          <span className={`min-w-[2rem] text-right text-sm font-bold tabular-nums shrink-0 leading-none ${
-                            isSelected ? 'text-sp-accent' : 'text-sp-muted/50'
-                          }`}>
-                            {num}
-                          </span>
-                          <span className={`text-sm font-medium leading-none truncate ${
-                            isSelected ? 'text-sp-text' : 'text-sp-text/80'
-                          }`}>
-                            {student.name}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  >
+                    <div className="text-caption opacity-60 tabular-nums">{num}</div>
+                    <div className="truncate">{student.name}</div>
+                  </button>
                 );
               })}
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* 리사이즈 핸들 (좌↔중) */}
-      <div
-        onMouseDown={() => startDrag('left')}
-        className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-sp-accent/10 transition-colors"
-      >
-        <div className="w-0.5 h-8 rounded-full bg-sp-border group-hover:bg-sp-accent transition-colors" />
-      </div>
-
-      {/* ── 중앙: 카테고리 + 메모 입력 ── */}
-      <div className="flex flex-col min-h-0 relative min-w-0" style={{ width: `${centerPct}%` }}>
-        <div className="rounded-xl bg-sp-card p-5 flex-1 overflow-y-auto pb-20">
-          {/* 카테고리 헤더 + 템플릿 */}
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
-              <span className="material-symbols-outlined text-base">category</span>
-              카테고리
-            </h3>
-            <select
-              onChange={(e) => {
-                if (e.target.value) handleTemplateSelect(e.target.value);
-                e.target.value = '';
-              }}
-              defaultValue=""
-              className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
-            >
-              <option value="">{'\uD83D\uDCDD'} 템플릿</option>
-              {DEFAULT_TEMPLATES.map((tpl) => (
-                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 카테고리 목록 */}
-          <div className="space-y-3">
-            {categories.map((cat) => (
-              <div key={cat.id}>
-                <p className={`text-xs font-semibold mb-1.5 ${getCategoryLabelColor(cat.color)}`}>
-                  {cat.name}
-                </p>
-                {cat.id === 'attendance' ? (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      {ATTENDANCE_TYPES.map((type) => {
-                        const isTypeSelected = attendanceType === type;
+          ) : (
+            /* ── 명렬표 보기 (2단 리스트) ── */
+            <div className="overflow-y-auto flex-1">
+              <div className="grid grid-cols-2 gap-x-3">
+                {[0, 1].map((col) => {
+                  const half = Math.ceil(students.length / 2);
+                  const slice = students.slice(col * half, (col + 1) * half);
+                  const offset = col * half;
+                  return (
+                    <div key={col} className="flex flex-col">
+                      {slice.map((student, i) => {
+                        const num = student.studentNumber ?? offset + i + 1;
+                        if (student.isVacant) {
+                          return (
+                            <div
+                              key={student.id}
+                              className="flex items-center gap-2 px-2 py-1.5 border-l-2 border-transparent opacity-30"
+                            >
+                              <span className="min-w-[2rem] text-right text-sm font-bold tabular-nums text-sp-muted shrink-0">
+                                {num}
+                              </span>
+                              <span className="text-xs text-sp-muted italic">결번</span>
+                            </div>
+                          );
+                        }
+                        const isSelected = selectedStudents.has(student.id);
                         return (
                           <button
-                            key={type}
-                            onClick={() => handleAttendanceTypeClick(type)}
-                            className={getSubcategoryChipClass(cat.color, isTypeSelected)}
+                            key={student.id}
+                            onClick={() => toggleStudent(student.id)}
+                            className={`flex items-center gap-2 px-2 py-1.5 rounded-md transition-all text-left w-full border-l-2 ${
+                              isSelected
+                                ? 'bg-sp-accent/15 border-sp-accent'
+                                : 'hover:bg-sp-surface/60 border-transparent'
+                            }`}
                           >
-                            {isTypeSelected && <span className="mr-1">✓</span>}
-                            {type}
+                            <span
+                              className={`min-w-[2rem] text-right text-sm font-bold tabular-nums shrink-0 leading-none ${
+                                isSelected ? 'text-sp-accent' : 'text-sp-muted/50'
+                              }`}
+                            >
+                              {num}
+                            </span>
+                            <span
+                              className={`text-sm font-medium leading-none truncate ${
+                                isSelected ? 'text-sp-text' : 'text-sp-text/80'
+                              }`}
+                            >
+                              {student.name}
+                            </span>
                           </button>
                         );
                       })}
                     </div>
-                    {attendanceType && (
-                      <PeriodChipGroup
-                        periodCount={periodCount}
-                        selected={selectedPeriods}
-                        onChange={setSelectedPeriods}
-                        accent={ACCENT_FROM_TYPE[attendanceType] ?? 'red'}
-                      />
-                    )}
-                    {attendanceType && (
-                      <div className="ml-2 pl-3 border-l-2 border-red-500/30">
-                        <p className="text-detail text-sp-muted mb-1">사유</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {ATTENDANCE_REASONS.map((reason) => {
-                            const combined = `${attendanceType} (${reason})`;
-                            const isReasonSelected =
-                              selectedSub?.categoryId === 'attendance' &&
-                              selectedSub.subcategory === combined;
-                            return (
-                              <button
-                                key={reason}
-                                onClick={() => handleAttendanceReasonClick(reason)}
-                                className={getSubcategoryChipClass(cat.color, isReasonSelected)}
-                              >
-                                {isReasonSelected && <span className="mr-1">✓</span>}
-                                {reason}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <p className="mt-2 text-caption text-sp-muted leading-relaxed">
-                          단축키: A 결석 · L 지각 · E 조퇴 · X 결과 · 1~7 교시 · 0 전체 · Q 질병 · ↵ 저장
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {cat.subcategories.map((sub) => {
-                      const isSelected =
-                        selectedSub?.categoryId === cat.id &&
-                        selectedSub.subcategory === sub;
-                      return (
-                        <button
-                          key={sub}
-                          onClick={() => handleSubcategoryClick(cat.id, sub)}
-                          className={getSubcategoryChipClass(cat.color, isSelected)}
-                        >
-                          {isSelected && <span className="mr-1">✓</span>}
-                          {sub}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* 구분선 */}
-          <div className="border-t border-sp-border my-4" />
-
-          {/* 상담 방법 (counseling일 때만) */}
-          {selectedSub?.categoryId === 'counseling' && (
-            <div className="mb-3">
-              <p className="text-xs text-sp-muted mb-1.5">상담 방법</p>
-              <div className="flex flex-wrap gap-1.5">
-                {METHOD_OPTIONS.map((opt) => {
-                  const isSelected = selectedMethod === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => setSelectedMethod(isSelected ? undefined : opt.value)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                        isSelected
-                          ? 'bg-sp-accent text-white'
-                          : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
-                      }`}
-                    >
-                      {opt.icon} {opt.label}
-                    </button>
                   );
                 })}
               </div>
             </div>
           )}
+        </div>
 
-          {/* 메모 */}
-          <div className="relative">
-            <textarea
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              placeholder="메모 입력 (선택사항)"
-              className="w-full h-20 bg-sp-surface border border-sp-border rounded-lg p-3 pr-9 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
-            />
-            <button
-              onClick={() => setShowMemoModal(true)}
-              className="absolute top-2 right-2 p-1 rounded text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10 transition-colors"
-              title="크게 보기"
-            >
-              <span className="material-symbols-outlined text-base">open_in_full</span>
-            </button>
-          </div>
+        {/* 리사이즈 핸들 (좌↔중) */}
+        <div
+          onMouseDown={() => startDrag('left')}
+          className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-sp-accent/10 transition-colors"
+        >
+          <div className="w-0.5 h-8 rounded-full bg-sp-border group-hover:bg-sp-accent transition-colors" />
+        </div>
 
-          {/* 나이스 반영 & 서류 제출 체크 (출결일 때만) */}
-          {selectedSub?.categoryId === 'attendance' && (
-            <div className="mt-3 space-y-2">
-              <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={reportedToNeis}
-                  onChange={(e) => setReportedToNeis(e.target.checked)}
-                  className="w-4 h-4 rounded border-sp-border text-sp-accent
-                             focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
-                />
-                <span className="flex items-center gap-1">
-                  나이스 반영 완료
-                  <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
-                </span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={documentSubmitted}
-                  onChange={(e) => setDocumentSubmitted(e.target.checked)}
-                  className="w-4 h-4 rounded border-sp-border text-sp-accent
-                             focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
-                />
-                <span className="flex items-center gap-1">
-                  출결 서류 제출 확인
-                  <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
-                </span>
-              </label>
+        {/* ── 중앙: 카테고리 + 메모 입력 ── */}
+        <div className="flex flex-col min-h-0 relative min-w-0" style={{ width: `${centerPct}%` }}>
+          <div className="rounded-xl bg-sp-card p-5 flex-1 overflow-y-auto pb-20">
+            {/* 카테고리 헤더 + 템플릿 */}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+                <span className="material-symbols-outlined text-base">category</span>
+                카테고리
+              </h3>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) handleTemplateSelect(e.target.value);
+                  e.target.value = '';
+                }}
+                defaultValue=""
+                className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+              >
+                <option value="">{'\uD83D\uDCDD'} 템플릿</option>
+                {DEFAULT_TEMPLATES.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
 
-          {/* ── 여러 날 등록 (출결일 때만) ── */}
-          {selectedSub?.categoryId === 'attendance' && (
-            <div className="mt-3 p-3 bg-sp-surface/50 border border-sp-border rounded-xl space-y-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={dateRangeMode}
-                  onChange={(e) => setDateRangeMode(e.target.checked)}
-                  className="w-4 h-4 rounded border-sp-border text-sp-accent
-                             focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
-                />
-                <span className="flex items-center gap-1 text-sp-text font-medium">
-                  <span className="material-symbols-outlined text-sm">date_range</span>
-                  여러 날 한 번에 등록
-                </span>
-                <span className="text-xs text-sp-muted">(교외체험학습 등)</span>
-              </label>
-
-              {dateRangeMode && (
-                <div className="ml-6 space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-sp-muted text-xs w-12">시작일</span>
-                    <span className="text-sp-text font-medium">{formatDateKR(selectedDate)}</span>
-                    <span className="text-sp-muted text-xs">(상단 날짜)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-sp-muted text-xs w-12">종료일</span>
-                    <input
-                      type="date"
-                      value={endDate}
-                      min={selectedDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="px-2 py-1 bg-sp-bg border border-sp-border rounded-lg text-sm text-sp-text
-                                 focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                    />
-                  </div>
-                  {rangeError ? (
-                    <p className="text-xs text-red-400 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">error</span>
-                      {rangeError}
-                    </p>
-                  ) : rangeDates.length > 1 && (
-                    <p className="text-xs text-sp-accent flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">info</span>
-                      {formatDateKR(selectedDate)} ~ {formatDateKR(endDate)} ({rangeDates.length}일)
-                    </p>
-                  )}
-                  {/* 직전 등록에서 중복으로 건너뜀 날짜 안내 */}
-                  {skippedDates.length > 0 && (
-                    <div className="mt-1 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                      <p className="text-xs text-amber-400 flex items-center gap-1 mb-1">
-                        <span className="material-symbols-outlined text-sm">warning</span>
-                        중복으로 건너뜀 ({skippedDates.length}일)
-                      </p>
-                      <p className="text-xs text-sp-muted leading-relaxed">
-                        {skippedDates.map((d) => formatDateKR(d)).join(', ')}
-                      </p>
+            {/* 카테고리 목록 */}
+            <div className="space-y-3">
+              {categories.map((cat) => (
+                <div key={cat.id}>
+                  <p className={`text-xs font-semibold mb-1.5 ${getCategoryLabelColor(cat.color)}`}>
+                    {cat.name}
+                  </p>
+                  {cat.id === 'attendance' ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {ATTENDANCE_TYPES.map((type) => {
+                          const isTypeSelected = attendanceType === type;
+                          return (
+                            <button
+                              key={type}
+                              onClick={() => handleAttendanceTypeClick(type)}
+                              className={getSubcategoryChipClass(cat.color, isTypeSelected)}
+                            >
+                              {isTypeSelected && <span className="mr-1">✓</span>}
+                              {type}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {attendanceType && (
+                        <PeriodChipGroup
+                          periodCount={periodCount}
+                          selected={selectedPeriods}
+                          onChange={setSelectedPeriods}
+                          accent={ACCENT_FROM_TYPE[attendanceType] ?? 'red'}
+                        />
+                      )}
+                      {attendanceType && (
+                        <div className="ml-2 pl-3 border-l-2 border-red-500/30">
+                          <p className="text-detail text-sp-muted mb-1">사유</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ATTENDANCE_REASONS.map((reason) => {
+                              const combined = `${attendanceType} (${reason})`;
+                              const isReasonSelected =
+                                selectedSub?.categoryId === 'attendance' &&
+                                selectedSub.subcategory === combined;
+                              return (
+                                <button
+                                  key={reason}
+                                  onClick={() => handleAttendanceReasonClick(reason)}
+                                  className={getSubcategoryChipClass(cat.color, isReasonSelected)}
+                                >
+                                  {isReasonSelected && <span className="mr-1">✓</span>}
+                                  {reason}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-2 text-caption text-sp-muted leading-relaxed">
+                            단축키: A 결석 · L 지각 · E 조퇴 · X 결과 · 1~7 교시 · 0 전체 · Q 질병 ·
+                            ↵ 저장
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {cat.subcategories.map((sub) => {
+                        const isSelected =
+                          selectedSub?.categoryId === cat.id && selectedSub.subcategory === sub;
+                        return (
+                          <button
+                            key={sub}
+                            onClick={() => handleSubcategoryClick(cat.id, sub)}
+                            className={getSubcategoryChipClass(cat.color, isSelected)}
+                          >
+                            {isSelected && <span className="mr-1">✓</span>}
+                            {sub}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-              )}
+              ))}
             </div>
-          )}
 
-          {/* 후속 조치 (인라인 토글) */}
-          <div className="mt-3">
-            <button
-              onClick={() => setShowFollowUp(!showFollowUp)}
-              className="flex items-center gap-1.5 text-xs text-sp-muted hover:text-sp-text transition-colors"
-            >
-              <span className={`material-symbols-outlined text-sm transition-transform ${showFollowUp ? 'rotate-180' : ''}`}>
-                expand_more
-              </span>
-              {'\uD83D\uDCCC'} 후속 조치 추가
-            </button>
-            {showFollowUp && (
-              <div className="mt-2 flex gap-2">
-                <input
-                  value={followUp}
-                  onChange={(e) => setFollowUp(e.target.value)}
-                  placeholder="후속 조치 내용"
-                  className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                />
-                <input
-                  type="date"
-                  value={followUpDate}
-                  onChange={(e) => setFollowUpDate(e.target.value)}
-                  className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent w-32"
-                />
+            {/* 구분선 */}
+            <div className="border-t border-sp-border my-4" />
+
+            {/* 상담 방법 (counseling일 때만) */}
+            {selectedSub?.categoryId === 'counseling' && (
+              <div className="mb-3">
+                <p className="text-xs text-sp-muted mb-1.5">상담 방법</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {METHOD_OPTIONS.map((opt) => {
+                    const isSelected = selectedMethod === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => setSelectedMethod(isSelected ? undefined : opt.value)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          isSelected
+                            ? 'bg-sp-accent text-white'
+                            : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
+                        }`}
+                      >
+                        {opt.icon} {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* 저장 버튼 (sticky) */}
-        <div className="sticky bottom-0 bg-gradient-to-t from-sp-card to-transparent pt-6 pb-1 px-5 -mt-16 rounded-b-xl">
-          <button
-            onClick={handleSaveClick}
-            disabled={!canSave}
-            className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${canSave
-              ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
-              : 'bg-sp-surface text-sp-muted cursor-not-allowed'
-              }`}
-          >
-            <span className="material-symbols-outlined text-base">save</span>
-            {dateRangeMode && rangeDates.length > 1
-              ? `${rangeDates.length}일 일괄 저장`
-              : '저장하기'}
-          </button>
-        </div>
+            {/* 메모 */}
+            <div className="relative">
+              <textarea
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                placeholder="메모 입력 (선택사항)"
+                className="w-full h-20 bg-sp-surface border border-sp-border rounded-lg p-3 pr-9 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
+              />
+              <button
+                onClick={() => setShowMemoModal(true)}
+                className="absolute top-2 right-2 p-1 rounded text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10 transition-colors"
+                title="크게 보기"
+              >
+                <span className="material-symbols-outlined text-base">open_in_full</span>
+              </button>
+            </div>
 
-        {/* ── 여러 날 일괄 등록 확인 모달 ── */}
-        {showBatchConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-sp-card border border-sp-border rounded-2xl p-6 w-96 shadow-2xl">
-              <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-4">
-                <span className="material-symbols-outlined text-sp-accent">date_range</span>
-                여러 날 일괄 등록
-              </h3>
-              <div className="space-y-2 mb-4">
-                <p className="text-sm text-sp-text">
-                  <span className="font-medium">{formatDateKR(selectedDate)}</span>
-                  {' ~ '}
-                  <span className="font-medium">{formatDateKR(endDate)}</span>
-                  {' '}
-                  <span className="text-sp-accent font-bold">({rangeDates.length}일)</span>
-                </p>
-                <p className="text-sm text-sp-muted">
-                  선택 학생 <span className="text-sp-text font-medium">{selectedStudents.size}명</span>
-                  {' × '}
-                  {rangeDates.length}일 = 총 <span className="text-sp-text font-bold">{selectedStudents.size * rangeDates.length}건</span> 등록
-                </p>
-                <p className="text-xs text-sp-muted">
-                  이미 등록된 날짜는 자동으로 건너뜁니다.
-                </p>
+            {/* 나이스 반영 & 서류 제출 체크 (출결일 때만) */}
+            {selectedSub?.categoryId === 'attendance' && (
+              <div className="mt-3 space-y-2">
+                <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={reportedToNeis}
+                    onChange={(e) => setReportedToNeis(e.target.checked)}
+                    className="w-4 h-4 rounded border-sp-border text-sp-accent
+                             focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
+                  />
+                  <span className="flex items-center gap-1">
+                    나이스 반영 완료
+                    <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-sp-muted cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={documentSubmitted}
+                    onChange={(e) => setDocumentSubmitted(e.target.checked)}
+                    className="w-4 h-4 rounded border-sp-border text-sp-accent
+                             focus:ring-sp-accent focus:ring-offset-0 bg-sp-bg accent-blue-500"
+                  />
+                  <span className="flex items-center gap-1">
+                    출결 서류 제출 확인
+                    <span className="text-xs text-sp-muted/60">(나중에 변경 가능)</span>
+                  </span>
+                </label>
               </div>
+            )}
 
-              {/* 진행률 바 (저장 중일 때만, 10일 이상이면 항상 표시) */}
-              {batchSaving && batchProgress && (
-                <div className="mb-4 space-y-1.5">
-                  <div className="flex justify-between text-xs text-sp-muted">
-                    <span>등록 중...</span>
-                    <span>{batchProgress.current} / {batchProgress.total}일</span>
+            {/* ── 여러 날 등록 — 출결 카테고리 또는 출결 유형 선택 시 노출 (FR-01) ── */}
+            {(attendanceType || selectedSub?.categoryId === 'attendance') && (
+              <div
+                className={`mt-3 p-3 bg-sp-surface/50 border border-sp-border rounded-xl space-y-2 transition-shadow ${
+                  togglePulse ? 'ring-2 ring-sp-accent animate-pulse' : ''
+                }`}
+                data-testid="multi-date-toggle-section"
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-sm text-sp-accent">
+                    date_range
+                  </span>
+                  <span className="text-sp-text font-medium">날짜 모드</span>
+                  <span className="text-xs text-sp-muted">(교외체험학습·코로나 격리 등)</span>
+                </div>
+
+                {/* 모드 Pill 그룹 */}
+                <div
+                  role="radiogroup"
+                  aria-label="날짜 선택 모드"
+                  className="flex items-center gap-1 p-1 bg-sp-bg rounded-lg w-fit"
+                >
+                  {(['single', 'range', 'multi'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={dateMode === m}
+                      onClick={() => setDateMode(m)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none ${
+                        dateMode === m
+                          ? 'bg-sp-accent text-white'
+                          : 'text-sp-muted hover:text-sp-text'
+                      }`}
+                    >
+                      {m === 'single' ? '단일' : m === 'range' ? '범위' : '다중'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* range 모드: 시작 = 상단 날짜, 종료 = MultiDatePicker */}
+                {dateMode === 'range' && (
+                  <div className="ml-1 space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-sp-muted text-xs w-12">시작일</span>
+                      <span className="text-sp-text font-medium">{formatDateKR(selectedDate)}</span>
+                      <span className="text-sp-muted text-xs">(상단 날짜)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-sp-muted text-xs w-12">종료일</span>
+                      <div className="flex-1">
+                        <MultiDatePicker
+                          mode="single"
+                          singleValue={endDate}
+                          onSingleChange={setEndDate}
+                          compact
+                          portal
+                        />
+                      </div>
+                    </div>
+                    {rangeError ? (
+                      <p className="text-xs text-red-400 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">error</span>
+                        {rangeError}
+                      </p>
+                    ) : rangeDates.length > 1 ? (
+                      <p className="text-xs text-sp-accent flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">info</span>
+                        {formatDateKR(selectedDate)} ~ {formatDateKR(endDate)} ({rangeDates.length}
+                        일)
+                      </p>
+                    ) : null}
                   </div>
-                  <div className="h-2 bg-sp-surface rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-sp-accent rounded-full transition-all duration-300"
-                      style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                )}
+
+                {/* multi 모드: 인라인 MultiDatePicker */}
+                {dateMode === 'multi' && (
+                  <div className="ml-1">
+                    <MultiDatePicker
+                      mode="multi"
+                      multiValues={multiDateSet}
+                      onMultiChange={setMultiDateSet}
+                      onToast={showToast}
+                      maxCount={30}
                     />
+                    {rangeError ? (
+                      <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">error</span>
+                        {rangeError}
+                      </p>
+                    ) : rangeDates.length >= 1 ? (
+                      <p className="mt-1 text-xs text-sp-accent flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">info</span>
+                        {rangeDates.length}일 선택됨
+                      </p>
+                    ) : null}
                   </div>
+                )}
+
+                {/* 직전 등록에서 중복으로 건너뜀 날짜 안내 */}
+                {skippedDates.length > 0 && (
+                  <div className="mt-1 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <p className="text-xs text-amber-400 flex items-center gap-1 mb-1">
+                      <span className="material-symbols-outlined text-sm">warning</span>
+                      중복으로 건너뜀 ({skippedDates.length}일)
+                    </p>
+                    <p className="text-xs text-sp-muted leading-relaxed">
+                      {skippedDates.map((d) => formatDateKR(d)).join(', ')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 후속 조치 (인라인 토글) */}
+            <div className="mt-3">
+              <button
+                onClick={() => setShowFollowUp(!showFollowUp)}
+                className="flex items-center gap-1.5 text-xs text-sp-muted hover:text-sp-text transition-colors"
+              >
+                <span
+                  className={`material-symbols-outlined text-sm transition-transform ${showFollowUp ? 'rotate-180' : ''}`}
+                >
+                  expand_more
+                </span>
+                {'\uD83D\uDCCC'} 후속 조치 추가
+              </button>
+              {showFollowUp && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={followUp}
+                    onChange={(e) => setFollowUp(e.target.value)}
+                    placeholder="후속 조치 내용"
+                    className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                  />
+                  <input
+                    type="date"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent w-32"
+                  />
                 </div>
               )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowBatchConfirm(false)}
-                  disabled={batchSaving}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-sp-surface text-sp-muted
-                             hover:text-sp-text hover:bg-sp-surface/80 transition-all disabled:opacity-50"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={() => void handleBatchSave()}
-                  disabled={batchSaving}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-sp-accent text-white
-                             hover:bg-sp-accent/90 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
-                >
-                  {batchSaving ? (
-                    <>
-                      <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                      {batchProgress ? `${batchProgress.current}/${batchProgress.total}일` : '등록 중...'}
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-sm">check</span>
-                      등록하기
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* 리사이즈 핸들 (중↔우) */}
-      <div
-        onMouseDown={() => startDrag('right')}
-        className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-sp-accent/10 transition-colors"
-      >
-        <div className="w-0.5 h-8 rounded-full bg-sp-border group-hover:bg-sp-accent transition-colors" />
-      </div>
-
-      {/* ── 우측: 오늘 기록 / 이전 기록 ── */}
-      <div className="rounded-xl bg-sp-card flex flex-col min-h-0 min-w-0" style={{ width: `${rightPct}%` }}>
-        {/* 탭 헤더 */}
-        <div className="flex border-b border-sp-border shrink-0">
-          <button
-            onClick={() => setRightTab('today')}
-            className={`flex-1 py-3 text-xs font-semibold text-center transition-colors ${
-              rightTab === 'today'
-                ? 'text-sp-accent border-b-2 border-sp-accent'
-                : 'text-sp-muted hover:text-sp-text'
-            }`}
-          >
-            오늘 기록
-          </button>
-          {selectedStudents.size === 1 && (
+          {/* 저장 버튼 (sticky) */}
+          <div className="sticky bottom-0 bg-gradient-to-t from-sp-card to-transparent pt-6 pb-1 px-5 -mt-16 rounded-b-xl">
             <button
-              onClick={() => setRightTab('history')}
+              onClick={handleSaveClick}
+              disabled={!canSave}
+              className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                canSave
+                  ? 'bg-sp-accent text-white hover:bg-sp-accent/90 shadow-lg shadow-sp-accent/20'
+                  : 'bg-sp-surface text-sp-muted cursor-not-allowed'
+              }`}
+            >
+              <span className="material-symbols-outlined text-base">save</span>
+              {dateRangeMode && rangeDates.length > 1
+                ? `${rangeDates.length}일 일괄 저장`
+                : '저장하기'}
+            </button>
+          </div>
+
+          {/* ── 여러 날 일괄 등록 확인 모달 ── */}
+          {showBatchConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-sp-card border border-sp-border rounded-2xl p-6 w-96 shadow-2xl">
+                <h3 className="text-base font-bold text-sp-text flex items-center gap-2 mb-4">
+                  <span className="material-symbols-outlined text-sp-accent">date_range</span>
+                  여러 날 일괄 등록
+                </h3>
+                <div className="space-y-2 mb-4">
+                  {dateMode === 'multi' ? (
+                    <p className="text-sm text-sp-text">
+                      <span className="text-sp-accent font-bold">{rangeDates.length}일</span> 선택됨
+                      — {rangeDates.map((d) => formatDateKR(d)).join(', ')}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-sp-text">
+                      <span className="font-medium">{formatDateKR(selectedDate)}</span>
+                      {' ~ '}
+                      <span className="font-medium">{formatDateKR(endDate)}</span>{' '}
+                      <span className="text-sp-accent font-bold">({rangeDates.length}일)</span>
+                    </p>
+                  )}
+                  <p className="text-sm text-sp-muted">
+                    선택 학생{' '}
+                    <span className="text-sp-text font-medium">{selectedStudents.size}명</span>
+                    {' × '}
+                    {rangeDates.length}일 = 총{' '}
+                    <span className="text-sp-text font-bold">
+                      {selectedStudents.size * rangeDates.length}건
+                    </span>{' '}
+                    등록
+                  </p>
+                  <p className="text-xs text-sp-muted">이미 등록된 날짜는 자동으로 건너뜁니다.</p>
+                </div>
+
+                {/* 진행률 바 (저장 중일 때만, 10일 이상이면 항상 표시) */}
+                {batchSaving && batchProgress && (
+                  <div className="mb-4 space-y-1.5">
+                    <div className="flex justify-between text-xs text-sp-muted">
+                      <span>등록 중...</span>
+                      <span>
+                        {batchProgress.current} / {batchProgress.total}일
+                      </span>
+                    </div>
+                    <div className="h-2 bg-sp-surface rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-sp-accent rounded-full transition-all duration-300"
+                        style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowBatchConfirm(false)}
+                    disabled={batchSaving}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-sp-surface text-sp-muted
+                             hover:text-sp-text hover:bg-sp-surface/80 transition-all disabled:opacity-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={() => void handleBatchSave()}
+                    disabled={batchSaving}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-sp-accent text-white
+                             hover:bg-sp-accent/90 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {batchSaving ? (
+                      <>
+                        <span className="material-symbols-outlined text-sm animate-spin">
+                          progress_activity
+                        </span>
+                        {batchProgress
+                          ? `${batchProgress.current}/${batchProgress.total}일`
+                          : '등록 중...'}
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-sm">check</span>
+                        등록하기
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 리사이즈 핸들 (중↔우) */}
+        <div
+          onMouseDown={() => startDrag('right')}
+          className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-sp-accent/10 transition-colors"
+        >
+          <div className="w-0.5 h-8 rounded-full bg-sp-border group-hover:bg-sp-accent transition-colors" />
+        </div>
+
+        {/* ── 우측: 오늘 기록 / 이전 기록 ── */}
+        <div
+          className="rounded-xl bg-sp-card flex flex-col min-h-0 min-w-0"
+          style={{ width: `${rightPct}%` }}
+        >
+          {/* 탭 헤더 */}
+          <div className="flex border-b border-sp-border shrink-0">
+            <button
+              onClick={() => setRightTab('today')}
               className={`flex-1 py-3 text-xs font-semibold text-center transition-colors ${
-                rightTab === 'history'
+                rightTab === 'today'
                   ? 'text-sp-accent border-b-2 border-sp-accent'
                   : 'text-sp-muted hover:text-sp-text'
               }`}
             >
-              이전 기록
+              오늘 기록
             </button>
-          )}
-        </div>
+            {selectedStudents.size === 1 && (
+              <button
+                onClick={() => setRightTab('history')}
+                className={`flex-1 py-3 text-xs font-semibold text-center transition-colors ${
+                  rightTab === 'history'
+                    ? 'text-sp-accent border-b-2 border-sp-accent'
+                    : 'text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                이전 기록
+              </button>
+            )}
+          </div>
 
-        {/* 탭 콘텐츠 */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {rightTab === 'today' ? (
-            /* ── 오늘 기록 탭 ── */
-            editingRecordId ? (
-              /* 편집 모드 */
-              <div className="p-4 flex flex-col gap-3">
-                <button
-                  onClick={() => { setEditingRecordId(null); setEditingReportedToNeis(false); setEditingDocumentSubmitted(false); }}
-                  className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors self-start"
-                >
-                  <span className="material-symbols-outlined text-sm">arrow_back</span>
-                  목록으로
-                </button>
-                {(() => {
-                  const editingRecord = dateRecords.find((r) => r.id === editingRecordId);
-                  if (!editingRecord) return null;
-                  return (
-                    <InlineRecordEditor
-                      record={editingRecord}
-                      categories={categories}
-                      editContent={editingContent}
-                      setEditContent={setEditingContent}
-                      editCategory={editingCategory}
-                      setEditCategory={setEditingCategory}
-                      editSubcategory={editingSubcat}
-                      setEditSubcategory={setEditingSubcat}
-                      editReportedToNeis={editingReportedToNeis}
-                      setEditReportedToNeis={setEditingReportedToNeis}
-                      editDocumentSubmitted={editingDocumentSubmitted}
-                      setEditDocumentSubmitted={setEditingDocumentSubmitted}
-                      attendancePeriods={
-                        editingRecord.category === 'attendance' ? editingAttendancePeriods : undefined
-                      }
-                      setAttendancePeriods={
-                        editingRecord.category === 'attendance' ? setEditingAttendancePeriods : undefined
-                      }
-                      regularPeriodCount={periodCount}
-                      onSave={async () => {
-                        if (editingRecord.category === 'attendance') {
-                          const student = students.find((s) => s.id === editingRecord.studentId);
-                          // Snapshot for undo
-                          const snapshot = {
-                            nextPeriods: [...(editingRecord.attendancePeriods ?? [])],
-                            content: editingRecord.content,
-                            reportedToNeis: editingRecord.reportedToNeis ?? false,
-                            documentSubmitted: editingRecord.documentSubmitted ?? false,
-                          };
-                          try {
-                            await updateAttendanceRecord({
-                              record: editingRecord,
-                              nextPeriods: editingAttendancePeriods,
-                              content: editingContent,
-                              reportedToNeis: editingReportedToNeis,
-                              documentSubmitted: editingDocumentSubmitted,
-                              classId: className,
-                              date: editingRecord.date,
-                              studentNumber: student?.studentNumber,
-                              regularPeriodCount: periodCount,
-                            });
-                            showToast('출결 기록을 저장했습니다', 'success', {
-                              label: '되돌리기',
-                              onClick: () => {
-                                void updateAttendanceRecord({
-                                  record: editingRecord,
-                                  nextPeriods: snapshot.nextPeriods,
-                                  content: snapshot.content,
-                                  reportedToNeis: snapshot.reportedToNeis,
-                                  documentSubmitted: snapshot.documentSubmitted,
-                                  classId: className,
-                                  date: editingRecord.date,
-                                  studentNumber: student?.studentNumber,
-                                  regularPeriodCount: periodCount,
-                                });
-                              },
-                            });
-                          } catch (err) {
-                            console.error('[InputMode] 출결 기록 저장 실패', err);
-                            showToast('저장에 실패했습니다', 'error');
-                            return;
-                          }
-                        } else {
-                          await updateRecord({
-                            ...editingRecord,
-                            content: editingContent,
-                            category: editingCategory,
-                            subcategory: editingSubcat,
-                          });
+          {/* 탭 콘텐츠 */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {rightTab === 'today' ? (
+              /* ── 오늘 기록 탭 ── */
+              editingRecordId ? (
+                /* 편집 모드 */
+                <div className="p-4 flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      setEditingRecordId(null);
+                      setEditingReportedToNeis(false);
+                      setEditingDocumentSubmitted(false);
+                    }}
+                    className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors self-start"
+                  >
+                    <span className="material-symbols-outlined text-sm">arrow_back</span>
+                    목록으로
+                  </button>
+                  {(() => {
+                    const editingRecord = dateRecords.find((r) => r.id === editingRecordId);
+                    if (!editingRecord) return null;
+                    return (
+                      <InlineRecordEditor
+                        record={editingRecord}
+                        categories={categories}
+                        editContent={editingContent}
+                        setEditContent={setEditingContent}
+                        editCategory={editingCategory}
+                        setEditCategory={setEditingCategory}
+                        editSubcategory={editingSubcat}
+                        setEditSubcategory={setEditingSubcat}
+                        editReportedToNeis={editingReportedToNeis}
+                        setEditReportedToNeis={setEditingReportedToNeis}
+                        editDocumentSubmitted={editingDocumentSubmitted}
+                        setEditDocumentSubmitted={setEditingDocumentSubmitted}
+                        attendancePeriods={
+                          editingRecord.category === 'attendance'
+                            ? editingAttendancePeriods
+                            : undefined
                         }
-                        setEditingRecordId(null);
-                        setEditingReportedToNeis(false);
-                        setEditingDocumentSubmitted(false);
-                        setEditingAttendancePeriods([]);
+                        setAttendancePeriods={
+                          editingRecord.category === 'attendance'
+                            ? setEditingAttendancePeriods
+                            : undefined
+                        }
+                        regularPeriodCount={periodCount}
+                        onSave={async () => {
+                          if (editingRecord.category === 'attendance') {
+                            const student = students.find((s) => s.id === editingRecord.studentId);
+                            // Snapshot for undo
+                            const snapshot = {
+                              nextPeriods: [...(editingRecord.attendancePeriods ?? [])],
+                              content: editingRecord.content,
+                              reportedToNeis: editingRecord.reportedToNeis ?? false,
+                              documentSubmitted: editingRecord.documentSubmitted ?? false,
+                            };
+                            try {
+                              await updateAttendanceRecord({
+                                record: editingRecord,
+                                nextPeriods: editingAttendancePeriods,
+                                content: editingContent,
+                                reportedToNeis: editingReportedToNeis,
+                                documentSubmitted: editingDocumentSubmitted,
+                                classId: className,
+                                date: editingRecord.date,
+                                studentNumber: student?.studentNumber,
+                                regularPeriodCount: periodCount,
+                              });
+                              showToast('출결 기록을 저장했습니다', 'success', {
+                                label: '되돌리기',
+                                onClick: () => {
+                                  void updateAttendanceRecord({
+                                    record: editingRecord,
+                                    nextPeriods: snapshot.nextPeriods,
+                                    content: snapshot.content,
+                                    reportedToNeis: snapshot.reportedToNeis,
+                                    documentSubmitted: snapshot.documentSubmitted,
+                                    classId: className,
+                                    date: editingRecord.date,
+                                    studentNumber: student?.studentNumber,
+                                    regularPeriodCount: periodCount,
+                                  });
+                                },
+                              });
+                            } catch (err) {
+                              console.error('[InputMode] 출결 기록 저장 실패', err);
+                              showToast('저장에 실패했습니다', 'error');
+                              return;
+                            }
+                          } else {
+                            await updateRecord({
+                              ...editingRecord,
+                              content: editingContent,
+                              category: editingCategory,
+                              subcategory: editingSubcat,
+                            });
+                          }
+                          setEditingRecordId(null);
+                          setEditingReportedToNeis(false);
+                          setEditingDocumentSubmitted(false);
+                          setEditingAttendancePeriods([]);
+                        }}
+                        onCancel={() => {
+                          setEditingRecordId(null);
+                          setEditingReportedToNeis(false);
+                          setEditingDocumentSubmitted(false);
+                          setEditingAttendancePeriods([]);
+                        }}
+                      />
+                    );
+                  })()}
+                </div>
+              ) : dateRecords.length > 0 ? (
+                /* 기록 목록 (토글) */
+                <div className="p-4">
+                  <button
+                    onClick={() => setShowTodayRecords((v) => !v)}
+                    className="flex items-center gap-1 text-xs font-semibold text-sp-muted mb-2 uppercase tracking-wide hover:text-sp-text transition-colors"
+                  >
+                    <span
+                      className="material-symbols-outlined text-sm"
+                      style={{
+                        transition: 'transform 0.2s',
+                        transform: showTodayRecords ? 'rotate(90deg)' : 'rotate(0deg)',
                       }}
-                      onCancel={() => {
-                        setEditingRecordId(null);
-                        setEditingReportedToNeis(false);
-                        setEditingDocumentSubmitted(false);
-                        setEditingAttendancePeriods([]);
-                      }}
-                    />
-                  );
-                })()}
-              </div>
-            ) : dateRecords.length > 0 ? (
-              /* 기록 목록 (토글) */
-              <div className="p-4">
-                <button
-                  onClick={() => setShowTodayRecords((v) => !v)}
-                  className="flex items-center gap-1 text-xs font-semibold text-sp-muted mb-2 uppercase tracking-wide hover:text-sp-text transition-colors"
-                >
-                  <span className="material-symbols-outlined text-sm" style={{ transition: 'transform 0.2s', transform: showTodayRecords ? 'rotate(90deg)' : 'rotate(0deg)' }}>
-                    chevron_right
-                  </span>
-                  {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
-                </button>
-                {showTodayRecords && (
-                  <div className="space-y-1">
-                    {dateRecords.map((record) => {
-                      const student = studentMap.get(record.studentId);
-                      return (
-                        <div key={record.id} className="group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors hover:bg-sp-surface/50 focus-within:bg-sp-surface/50">
-                          <span className={getRecordTagClass(record.category, categories)}>
-                            {record.subcategory}
-                          </span>
-                          <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
-                          {record.content && (
-                            <span className="text-sp-muted truncate flex-1">{record.content}</span>
-                          )}
-                          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => {
-                                setEditingRecordId(record.id);
-                                setEditingContent(record.content);
-                                setEditingCategory(record.category);
-                                setEditingSubcat(record.subcategory);
-                                setEditingReportedToNeis(record.reportedToNeis ?? false);
-                                setEditingDocumentSubmitted(record.documentSubmitted ?? false);
-                                if (record.category === 'attendance') {
-                                  setEditingAttendancePeriods(initEditAttendancePeriods(record));
-                                } else {
-                                  setEditingAttendancePeriods([]);
-                                }
-                              }}
-                              className="text-sp-muted hover:text-sp-accent transition-colors"
-                              title="수정"
-                            >
-                              <span className="material-symbols-outlined text-sm">edit</span>
-                            </button>
-                            <button
-                              onClick={() => { if (window.confirm('이 기록을 삭제하시겠습니까?')) void deleteRecord(record.id); }}
-                              className="text-sp-muted hover:text-red-400 transition-colors"
-                              title="삭제"
-                            >
-                              <span className="material-symbols-outlined text-sm">delete</span>
-                            </button>
+                    >
+                      chevron_right
+                    </span>
+                    {formatDateKR(selectedDate)} 기록 ({dateRecords.length}건)
+                  </button>
+                  {showTodayRecords && (
+                    <div className="space-y-1">
+                      {dateRecords.map((record) => {
+                        const student = studentMap.get(record.studentId);
+                        return (
+                          <div
+                            key={record.id}
+                            className="group flex items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 transition-colors hover:bg-sp-surface/50 focus-within:bg-sp-surface/50"
+                          >
+                            <span className={getRecordTagClass(record.category, categories)}>
+                              {record.subcategory}
+                            </span>
+                            <span className="text-sp-text font-medium">{student?.name ?? '?'}</span>
+                            {record.content && (
+                              <span className="text-sp-muted truncate flex-1">
+                                {record.content}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => {
+                                  setEditingRecordId(record.id);
+                                  setEditingContent(record.content);
+                                  setEditingCategory(record.category);
+                                  setEditingSubcat(record.subcategory);
+                                  setEditingReportedToNeis(record.reportedToNeis ?? false);
+                                  setEditingDocumentSubmitted(record.documentSubmitted ?? false);
+                                  if (record.category === 'attendance') {
+                                    setEditingAttendancePeriods(initEditAttendancePeriods(record));
+                                  } else {
+                                    setEditingAttendancePeriods([]);
+                                  }
+                                }}
+                                className="text-sp-muted hover:text-sp-accent transition-colors"
+                                title="수정"
+                              >
+                                <span className="material-symbols-outlined text-sm">edit</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (window.confirm('이 기록을 삭제하시겠습니까?'))
+                                    void deleteRecord(record.id);
+                                }}
+                                className="text-sp-muted hover:text-red-400 transition-colors"
+                                title="삭제"
+                              >
+                                <span className="material-symbols-outlined text-sm">delete</span>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* 빈 상태 */
-              <div className="flex flex-col items-center justify-center py-12 text-sp-muted">
-                <span className="material-symbols-outlined text-3xl mb-2">note_add</span>
-                <p className="text-sm">오늘 기록이 없습니다</p>
-                <p className="text-xs mt-1">좌측에서 학생과 카테고리를 선택하세요</p>
-              </div>
-            )
-          ) : (
-            /* ── 이전 기록 탭 ── */
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* 빈 상태 */
+                <div className="flex flex-col items-center justify-center py-12 text-sp-muted">
+                  <span className="material-symbols-outlined text-3xl mb-2">note_add</span>
+                  <p className="text-sm">오늘 기록이 없습니다</p>
+                  <p className="text-xs mt-1">좌측에서 학생과 카테고리를 선택하세요</p>
+                </div>
+              )
+            ) : /* ── 이전 기록 탭 ── */
             singleSelectedStudent ? (
               <StudentRecordReferencePanel
                 student={singleSelectedStudent}
@@ -1233,64 +1459,71 @@ function InputMode({ students, records, categories, selectedDate, prefill, onPre
                 <span className="material-symbols-outlined text-3xl mb-2">person_search</span>
                 <p className="text-sm">학생 1명을 선택하세요</p>
               </div>
-            )
-          )}
+            )}
+          </div>
         </div>
-      </div>
-      {/* 메모 확대 모달 */}
-      {showMemoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowMemoModal(false)}>
-          <div className="bg-sp-card rounded-2xl shadow-2xl w-[640px] max-w-[90vw] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
-              <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
-                <span className="material-symbols-outlined text-base">edit_note</span>
-                메모 입력
-              </h3>
-              <div className="flex items-center gap-2">
-                <select
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    const tpl = DEFAULT_TEMPLATES.find((t) => t.id === e.target.value);
-                    if (tpl) setMemo(tpl.contentTemplate);
-                    e.target.value = '';
-                  }}
-                  defaultValue=""
-                  className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                >
-                  <option value="">{'\uD83D\uDCDD'} 템플릿</option>
-                  {DEFAULT_TEMPLATES.map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-                  ))}
-                </select>
+        {/* 메모 확대 모달 */}
+        {showMemoModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+            onClick={() => setShowMemoModal(false)}
+          >
+            <div
+              className="bg-sp-card rounded-2xl shadow-2xl w-[640px] max-w-[90vw] max-h-[80vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-sp-border">
+                <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base">edit_note</span>
+                  메모 입력
+                </h3>
+                <div className="flex items-center gap-2">
+                  <select
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const tpl = DEFAULT_TEMPLATES.find((t) => t.id === e.target.value);
+                      if (tpl) setMemo(tpl.contentTemplate);
+                      e.target.value = '';
+                    }}
+                    defaultValue=""
+                    className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                  >
+                    <option value="">{'\uD83D\uDCDD'} 템플릿</option>
+                    {DEFAULT_TEMPLATES.map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setShowMemoModal(false)}
+                    className="p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-lg">close</span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 p-5">
+                <textarea
+                  value={memo}
+                  onChange={(e) => setMemo(e.target.value)}
+                  placeholder="메모를 입력하세요..."
+                  autoFocus
+                  className="w-full h-full min-h-[300px] bg-sp-surface border border-sp-border rounded-xl p-4 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-2 focus:ring-sp-accent"
+                />
+              </div>
+              <div className="flex justify-end px-5 py-3 border-t border-sp-border">
                 <button
                   onClick={() => setShowMemoModal(false)}
-                  className="p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/80 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-lg">close</span>
+                  완료
                 </button>
               </div>
             </div>
-            <div className="flex-1 p-5">
-              <textarea
-                value={memo}
-                onChange={(e) => setMemo(e.target.value)}
-                placeholder="메모를 입력하세요..."
-                autoFocus
-                className="w-full h-full min-h-[300px] bg-sp-surface border border-sp-border rounded-xl p-4 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-2 focus:ring-sp-accent"
-              />
-            </div>
-            <div className="flex justify-end px-5 py-3 border-t border-sp-border">
-              <button
-                onClick={() => setShowMemoModal(false)}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-sp-accent text-white hover:bg-sp-accent/80 transition-colors"
-              >
-                완료
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-        </div>
+        )}
+      </div>
       {/* 메모 확대 모달 (fixed 포지션) */}
     </div>
   );
