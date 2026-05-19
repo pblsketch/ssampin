@@ -26,14 +26,8 @@ export function StickerAddPickerModal({
   onOpenGuide,
 }: StickerAddPickerModalProps): JSX.Element {
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="이모티콘 추가 방식 선택"
-      srOnlyTitle
-      size="md"
-    >
-      <div className="flex flex-col">
+    <Modal isOpen={isOpen} onClose={onClose} title="이모티콘 추가 방식 선택" srOnlyTitle size="md">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
         <header className="flex items-start justify-between px-5 py-4 border-b border-sp-border">
           <div>
@@ -120,32 +114,22 @@ function ModeCard({
       className="group relative text-left p-4 rounded-xl bg-sp-card ring-1 ring-sp-border hover:ring-sp-accent hover:bg-sp-accent/5 hover:shadow-sp-md transition-all duration-sp-base ease-sp-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sp-accent"
     >
       <div className="flex items-start gap-3 mb-2">
-        <div
-          className="text-3xl shrink-0 leading-none select-none"
-          aria-hidden="true"
-        >
+        <div className="text-3xl shrink-0 leading-none select-none" aria-hidden="true">
           {emoji}
         </div>
         <div className="min-w-0 flex-1">
           <h4 className="text-sm md:text-base font-sp-bold text-sp-text leading-tight flex items-center gap-1.5">
-            <span className="material-symbols-outlined icon-sm text-sp-accent">
-              {icon}
-            </span>
+            <span className="material-symbols-outlined icon-sm text-sp-accent">{icon}</span>
             {title}
           </h4>
         </div>
       </div>
 
-      <p className="text-detail text-sp-muted leading-relaxed mb-3">
-        {description}
-      </p>
+      <p className="text-detail text-sp-muted leading-relaxed mb-3">{description}</p>
 
       <ul className="space-y-1 mb-3">
         {highlights.map((h) => (
-          <li
-            key={h}
-            className="text-detail text-sp-text flex items-center gap-1.5 leading-snug"
-          >
+          <li key={h} className="text-detail text-sp-text flex items-center gap-1.5 leading-snug">
             <span className="material-symbols-outlined icon-sm text-sp-accent/80 shrink-0">
               check_circle
             </span>

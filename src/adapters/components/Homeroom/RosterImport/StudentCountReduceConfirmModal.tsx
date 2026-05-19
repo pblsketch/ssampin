@@ -73,7 +73,7 @@ export function StudentCountReduceConfirmModal({
       closeOnEsc={false}
       initialFocusRef={cancelButtonRef as React.RefObject<HTMLElement>}
     >
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 경고 헤더 */}
         <header className="px-6 pt-6 pb-3 flex items-start gap-3">
           <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -84,7 +84,8 @@ export function StudentCountReduceConfirmModal({
               <span className="text-red-400">{count}명</span>의 학생 데이터가 영구 삭제됩니다
             </h3>
             <p className="text-sm text-sp-muted leading-relaxed mt-1">
-              [-] 버튼으로 학생 수를 줄이려면 아래 학생의 모든 정보(이름·연락처·보호자·학생기록 등)가 완전히 사라집니다.
+              [-] 버튼으로 학생 수를 줄이려면 아래 학생의 모든 정보(이름·연락처·보호자·학생기록
+              등)가 완전히 사라집니다.
             </p>
           </div>
         </header>
@@ -93,9 +94,9 @@ export function StudentCountReduceConfirmModal({
           {/* 자동 정리될 비활성 학생 (참고) */}
           {inactiveAutoRemoved && inactiveAutoRemoved.length > 0 && (
             <div className="rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-xs text-sp-muted">
-              비활성 학생 {inactiveAutoRemoved.length}명은 먼저 자동 정리되며,
-              그 후에도 부족한{' '}
-              <span className="text-red-400 font-semibold">{count}명의 활성 학생</span>이 영구 삭제됩니다.
+              비활성 학생 {inactiveAutoRemoved.length}명은 먼저 자동 정리되며, 그 후에도 부족한{' '}
+              <span className="text-red-400 font-semibold">{count}명의 활성 학생</span>이 영구
+              삭제됩니다.
             </div>
           )}
 
@@ -147,7 +148,8 @@ export function StudentCountReduceConfirmModal({
           <div>
             <label className="text-sm text-sp-text block mb-1.5">
               이 작업을 실행하려면 아래 입력란에{' '}
-              <span className="text-red-400 font-semibold font-mono">"{REQUIRED_INPUT}"</span>를 입력하세요.
+              <span className="text-red-400 font-semibold font-mono">"{REQUIRED_INPUT}"</span>를
+              입력하세요.
             </label>
             <input
               type="text"

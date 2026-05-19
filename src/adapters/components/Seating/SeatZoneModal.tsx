@@ -13,22 +13,19 @@ interface SeatZoneModalProps {
 }
 
 const ZONE_IDS: ZoneId[] = [
-  'front1', 'front2', 'front3',
-  'back1', 'back2',
-  'left1', 'right1',
+  'front1',
+  'front2',
+  'front3',
+  'back1',
+  'back2',
+  'left1',
+  'right1',
   'center',
 ];
 
 export function SeatZoneModal({ open, onClose }: SeatZoneModalProps) {
-  const {
-    constraints,
-    loaded,
-    load,
-    addZone,
-    removeZone,
-    addFixedSeat,
-    removeFixedSeat,
-  } = useSeatConstraintsStore();
+  const { constraints, loaded, load, addZone, removeZone, addFixedSeat, removeFixedSeat } =
+    useSeatConstraintsStore();
 
   const activeStudents = useStudentStore((s) => s.activeStudents);
   const seating = useSeatingStore((s) => s.seating);
@@ -116,7 +113,7 @@ export function SeatZoneModal({ open, onClose }: SeatZoneModalProps) {
 
   return (
     <Modal isOpen={open} onClose={onClose} title="배치 조건" srOnlyTitle size="lg">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 border-b border-sp-border">
           <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
@@ -175,7 +172,9 @@ export function SeatZoneModal({ open, onClose }: SeatZoneModalProps) {
                     className="w-32 px-3 py-2 rounded-lg bg-sp-bg border border-sp-border text-sm text-sp-text"
                   >
                     {ZONE_IDS.map((z) => (
-                      <option key={z} value={z}>{ZONE_LABELS[z]}</option>
+                      <option key={z} value={z}>
+                        {ZONE_LABELS[z]}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -215,9 +214,7 @@ export function SeatZoneModal({ open, onClose }: SeatZoneModalProps) {
                         <span className="text-sp-accent text-xs px-2 py-0.5 rounded bg-sp-accent/10">
                           {ZONE_LABELS[z.zone]}
                         </span>
-                        {z.reason && (
-                          <span className="text-sp-muted text-xs">({z.reason})</span>
-                        )}
+                        {z.reason && <span className="text-sp-muted text-xs">({z.reason})</span>}
                       </div>
                       <button
                         onClick={() => void removeZone(z.studentId)}
@@ -341,9 +338,7 @@ export function SeatZoneModal({ open, onClose }: SeatZoneModalProps) {
                         <span className="text-sp-highlight text-xs px-2 py-0.5 rounded bg-sp-highlight/10">
                           {f.row + 1}행 {f.col + 1}열
                         </span>
-                        {f.reason && (
-                          <span className="text-sp-muted text-xs">({f.reason})</span>
-                        )}
+                        {f.reason && <span className="text-sp-muted text-xs">({f.reason})</span>}
                       </div>
                       <button
                         onClick={() => void removeFixedSeat(f.studentId)}

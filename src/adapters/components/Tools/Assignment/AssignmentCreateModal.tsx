@@ -30,7 +30,11 @@ const FILE_TYPE_OPTIONS: { value: FileTypeRestriction; label: string; descriptio
   { value: 'document', label: '문서만', description: 'pdf, hwp, hwpx, docx, pptx, xlsx, txt' },
 ];
 
-export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: AssignmentCreateModalProps) {
+export function AssignmentCreateModal({
+  onClose,
+  onCreated,
+  defaultTarget,
+}: AssignmentCreateModalProps) {
   const { createAssignment, isLoading } = useAssignmentStore();
   const studentLists = useStudentLists();
   const { track } = useAnalytics();
@@ -95,7 +99,8 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
   const effectiveFolderName = folderName || autoFolderName;
 
   // Validation
-  const canSubmit = title.trim() && deadlineDate && selectedTarget && effectiveFolderName && !isLoading;
+  const canSubmit =
+    title.trim() && deadlineDate && selectedTarget && effectiveFolderName && !isLoading;
 
   async function handleSubmit() {
     if (!canSubmit || !selectedTarget) return;
@@ -130,7 +135,7 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
 
   return (
     <Modal isOpen onClose={onClose} title="새 과제 만들기" srOnlyTitle size="xl">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-sp-border/40">
           <div className="flex items-center gap-3">
@@ -142,152 +147,165 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
           <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
-          {/* Body (scrollable) */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            {/* Error */}
-            {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm" role="alert">
-                {error}
-              </div>
-            )}
+        {/* Body (scrollable) */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Error */}
+          {error && (
+            <div
+              className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
 
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-medium text-sp-text mb-1.5">
-                과제 제목 <span className="text-red-400">*</span>
-              </label>
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-sp-text mb-1.5">
+              과제 제목 <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="예: 독서감상문"
+              className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-sp-text mb-1.5">
+              설명 <span className="text-sp-muted">(선택)</span>
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="과제에 대한 안내사항을 입력하세요"
+              rows={2}
+              className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none"
+            />
+          </div>
+
+          {/* Deadline */}
+          <div>
+            <label className="block text-sm font-medium text-sp-text mb-1.5">
+              마감일시 <span className="text-red-400">*</span>
+            </label>
+            <div className="flex gap-3">
               <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="예: 독서감상문"
-                className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors"
+                type="date"
+                value={deadlineDate}
+                onChange={(e) => setDeadlineDate(e.target.value)}
+                className="flex-1 px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
+              />
+              <input
+                type="time"
+                value={deadlineTime}
+                onChange={(e) => setDeadlineTime(e.target.value)}
+                className="w-40 px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
               />
             </div>
+          </div>
 
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-sp-text mb-1.5">
-                설명 <span className="text-sp-muted">(선택)</span>
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="과제에 대한 안내사항을 입력하세요"
-                rows={2}
-                className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none"
-              />
-            </div>
-
-            {/* Deadline */}
-            <div>
-              <label className="block text-sm font-medium text-sp-text mb-1.5">
-                마감일시 <span className="text-red-400">*</span>
-              </label>
-              <div className="flex gap-3">
-                <input
-                  type="date"
-                  value={deadlineDate}
-                  onChange={(e) => setDeadlineDate(e.target.value)}
-                  className="flex-1 px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
-                />
-                <input
-                  type="time"
-                  value={deadlineTime}
-                  onChange={(e) => setDeadlineTime(e.target.value)}
-                  className="w-40 px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
-                />
+          {/* Target selection */}
+          <div>
+            <label className="block text-sm font-medium text-sp-text mb-1.5">
+              대상 선택 <span className="text-red-400">*</span>
+            </label>
+            {studentLists.length === 0 ? (
+              <div className="p-4 bg-sp-surface border border-sp-border/50 rounded-lg text-center">
+                <p className="text-sp-muted text-sm">학생 명단이 없습니다</p>
+                <p className="text-sp-muted/60 text-xs mt-1">
+                  담임업무 → 명렬 관리, 또는 수업 관리에서 학생을 먼저 등록해주세요
+                </p>
               </div>
-            </div>
-
-            {/* Target selection */}
-            <div>
-              <label className="block text-sm font-medium text-sp-text mb-1.5">
-                대상 선택 <span className="text-red-400">*</span>
-              </label>
-              {studentLists.length === 0 ? (
-                <div className="p-4 bg-sp-surface border border-sp-border/50 rounded-lg text-center">
-                  <p className="text-sp-muted text-sm">학생 명단이 없습니다</p>
-                  <p className="text-sp-muted/60 text-xs mt-1">담임업무 → 명렬 관리, 또는 수업 관리에서 학생을 먼저 등록해주세요</p>
-                </div>
-              ) : defaultTarget ? (
-                // defaultTarget이 주어진 탭 컨텍스트(수업관리/담임업무)에서는 대상 변경 차단 — 실수로 다른 반에 생성되는 사고 방지
-                <div className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text flex items-center justify-between">
-                  <span>{selectedTarget?.name ?? ''} ({selectedTarget?.students.length ?? 0}명)</span>
-                  <span className="text-xs text-sp-muted">🔒 현재 탭 대상 고정</span>
-                </div>
-              ) : (
-                <select
-                  value={selectedTarget?.name ?? ''}
-                  onChange={(e) => {
-                    const found = studentLists.find((sl) => sl.name === e.target.value);
-                    setSelectedTarget(found ?? null);
-                  }}
-                  className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
-                >
-                  {studentLists.some((sl) => sl.type === 'class') && (
-                    <optgroup label="담임반">
-                      {studentLists.filter((sl) => sl.type === 'class').map((sl) => (
+            ) : defaultTarget ? (
+              // defaultTarget이 주어진 탭 컨텍스트(수업관리/담임업무)에서는 대상 변경 차단 — 실수로 다른 반에 생성되는 사고 방지
+              <div className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text flex items-center justify-between">
+                <span>
+                  {selectedTarget?.name ?? ''} ({selectedTarget?.students.length ?? 0}명)
+                </span>
+                <span className="text-xs text-sp-muted">🔒 현재 탭 대상 고정</span>
+              </div>
+            ) : (
+              <select
+                value={selectedTarget?.name ?? ''}
+                onChange={(e) => {
+                  const found = studentLists.find((sl) => sl.name === e.target.value);
+                  setSelectedTarget(found ?? null);
+                }}
+                className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text focus:outline-none focus:border-sp-accent transition-colors"
+              >
+                {studentLists.some((sl) => sl.type === 'class') && (
+                  <optgroup label="담임반">
+                    {studentLists
+                      .filter((sl) => sl.type === 'class')
+                      .map((sl) => (
                         <option key={sl.name} value={sl.name}>
                           {sl.name} ({sl.students.length}명)
                         </option>
                       ))}
-                    </optgroup>
-                  )}
-                  {studentLists.some((sl) => sl.type === 'teaching') && (
-                    <optgroup label="수업반">
-                      {studentLists.filter((sl) => sl.type === 'teaching').map((sl) => (
+                  </optgroup>
+                )}
+                {studentLists.some((sl) => sl.type === 'teaching') && (
+                  <optgroup label="수업반">
+                    {studentLists
+                      .filter((sl) => sl.type === 'teaching')
+                      .map((sl) => (
                         <option key={sl.name} value={sl.name}>
                           {sl.name} ({sl.students.length}명)
                         </option>
                       ))}
-                    </optgroup>
-                  )}
-                </select>
-              )}
-            </div>
+                  </optgroup>
+                )}
+              </select>
+            )}
+          </div>
 
-            {/* Drive folder name */}
-            <div>
-              <label className="block text-sm font-medium text-sp-text mb-1.5">
-                구글 드라이브 저장 폴더 <span className="text-red-400">*</span>
-              </label>
-              <DriveFolderInput
-                value={folderName}
-                onChange={setFolderName}
-                placeholder={autoFolderName || '폴더명'}
-                disabled={isLoading}
-              />
-            </div>
+          {/* Drive folder name */}
+          <div>
+            <label className="block text-sm font-medium text-sp-text mb-1.5">
+              구글 드라이브 저장 폴더 <span className="text-red-400">*</span>
+            </label>
+            <DriveFolderInput
+              value={folderName}
+              onChange={setFolderName}
+              placeholder={autoFolderName || '폴더명'}
+              disabled={isLoading}
+            />
+          </div>
 
-            {/* Options section */}
-            <div className="border-t border-sp-border/40 pt-5">
-              <h3 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">옵션</h3>
+          {/* Options section */}
+          <div className="border-t border-sp-border/40 pt-5">
+            <h3 className="text-sm font-semibold text-sp-muted uppercase tracking-wider mb-4">
+              옵션
+            </h3>
 
-              {/* Submit type */}
-              <div className="mb-4">
-                <label className="text-sm text-sp-text mb-2 block">제출 방식</label>
-                <div className="flex gap-2">
-                  {SUBMIT_TYPE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setSubmitType(opt.value)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        submitType === opt.value
-                          ? 'bg-sp-accent text-white'
-                          : 'bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-icon">{opt.icon}</span>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+            {/* Submit type */}
+            <div className="mb-4">
+              <label className="text-sm text-sp-text mb-2 block">제출 방식</label>
+              <div className="flex gap-2">
+                {SUBMIT_TYPE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setSubmitType(opt.value)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      submitType === opt.value
+                        ? 'bg-sp-accent text-white'
+                        : 'bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-icon">{opt.icon}</span>
+                    {opt.label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* File type — only when file submission is enabled */}
-              {submitType !== 'text' && (
+            {/* File type — only when file submission is enabled */}
+            {submitType !== 'text' && (
               <div className="flex items-center justify-between mb-4">
                 <label className="text-sm text-sp-text">파일 형식</label>
                 <select
@@ -302,130 +320,130 @@ export function AssignmentCreateModal({ onClose, onCreated, defaultTarget }: Ass
                   ))}
                 </select>
               </div>
-              )}
+            )}
 
-              {/* Allow late */}
-              <div className="flex items-center justify-between mb-4">
-                <label className="text-sm text-sp-text">지각 제출 허용</label>
-                <button
-                  onClick={() => setAllowLate(!allowLate)}
-                  role="switch"
-                  aria-checked={allowLate}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                    allowLate ? 'bg-sp-accent' : 'bg-sp-border'
+            {/* Allow late */}
+            <div className="flex items-center justify-between mb-4">
+              <label className="text-sm text-sp-text">지각 제출 허용</label>
+              <button
+                onClick={() => setAllowLate(!allowLate)}
+                role="switch"
+                aria-checked={allowLate}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  allowLate ? 'bg-sp-accent' : 'bg-sp-border'
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    allowLate ? 'translate-x-6' : 'translate-x-0.5'
                   }`}
-                >
-                  <div
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                      allowLate ? 'translate-x-6' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              </div>
+                />
+              </button>
+            </div>
 
-              {/* Allow resubmit */}
-              <div className="flex items-center justify-between mb-4">
-                <label className="text-sm text-sp-text">재제출 허용</label>
-                <button
-                  onClick={() => setAllowResubmit(!allowResubmit)}
-                  role="switch"
-                  aria-checked={allowResubmit}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                    allowResubmit ? 'bg-sp-accent' : 'bg-sp-border'
+            {/* Allow resubmit */}
+            <div className="flex items-center justify-between mb-4">
+              <label className="text-sm text-sp-text">재제출 허용</label>
+              <button
+                onClick={() => setAllowResubmit(!allowResubmit)}
+                role="switch"
+                aria-checked={allowResubmit}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  allowResubmit ? 'bg-sp-accent' : 'bg-sp-border'
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    allowResubmit ? 'translate-x-6' : 'translate-x-0.5'
                   }`}
-                >
-                  <div
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                      allowResubmit ? 'translate-x-6' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              </div>
+                />
+              </button>
+            </div>
 
-              {/* Identify by name only — 전학공·동아리처럼 번호 체계가 없는 명단용 */}
-              <div className="flex items-start justify-between mb-4 gap-3">
-                <div className="flex-1">
-                  <label className="text-sm text-sp-text block">이름만으로 제출받기</label>
-                  <p className="text-xs text-sp-muted mt-0.5">
-                    학생이 학년·반·번호를 입력하지 않고 이름만 입력합니다 (전학공, 동아리 등에 추천)
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIdentifyByName(!identifyByName)}
-                  role="switch"
-                  aria-checked={identifyByName}
-                  className={`relative w-12 h-6 rounded-full transition-colors shrink-0 mt-0.5 ${
-                    identifyByName ? 'bg-sp-accent' : 'bg-sp-border'
-                  }`}
-                >
-                  <div
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                      identifyByName ? 'translate-x-6' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Custom short link */}
-              <div>
-                <label className="text-sm text-sp-text mb-1.5 block">
-                  커스텀 링크 <span className="text-sp-muted">(선택)</span>
-                </label>
-                <div className="flex items-center gap-0">
-                  <span className="px-3 py-2.5 bg-sp-surface/60 border border-r-0 border-sp-border rounded-l-lg text-sp-muted text-sm whitespace-nowrap">
-                    {SITE_DISPLAY}/s/
-                  </span>
-                  <input
-                    type="text"
-                    value={customLinkCode}
-                    onChange={(e) => setCustomLinkCode(e.target.value)}
-                    placeholder="예: 1-2수학과제"
-                    className="flex-1 px-3 py-2.5 bg-sp-surface border border-sp-border rounded-r-lg text-sp-text placeholder-sp-muted/50 text-sm focus:outline-none focus:border-sp-accent transition-colors"
-                  />
-                </div>
-                {linkCodeError && (
-                  <p className="text-xs text-red-400 mt-1">{linkCodeError}</p>
-                )}
-                {customLinkCode && !linkCodeError && !isCheckingCode && (
-                  <p className="text-xs text-green-400 mt-1">사용 가능</p>
-                )}
-                <p className="text-xs text-sp-muted/50 mt-1">
-                  비워두면 자동으로 생성됩니다. 한글, 영문, 숫자, -, _ 사용 가능
+            {/* Identify by name only — 전학공·동아리처럼 번호 체계가 없는 명단용 */}
+            <div className="flex items-start justify-between mb-4 gap-3">
+              <div className="flex-1">
+                <label className="text-sm text-sp-text block">이름만으로 제출받기</label>
+                <p className="text-xs text-sp-muted mt-0.5">
+                  학생이 학년·반·번호를 입력하지 않고 이름만 입력합니다 (전학공, 동아리 등에 추천)
                 </p>
               </div>
+              <button
+                onClick={() => setIdentifyByName(!identifyByName)}
+                role="switch"
+                aria-checked={identifyByName}
+                className={`relative w-12 h-6 rounded-full transition-colors shrink-0 mt-0.5 ${
+                  identifyByName ? 'bg-sp-accent' : 'bg-sp-border'
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    identifyByName ? 'translate-x-6' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Custom short link */}
+            <div>
+              <label className="text-sm text-sp-text mb-1.5 block">
+                커스텀 링크 <span className="text-sp-muted">(선택)</span>
+              </label>
+              <div className="flex items-center gap-0">
+                <span className="px-3 py-2.5 bg-sp-surface/60 border border-r-0 border-sp-border rounded-l-lg text-sp-muted text-sm whitespace-nowrap">
+                  {SITE_DISPLAY}/s/
+                </span>
+                <input
+                  type="text"
+                  value={customLinkCode}
+                  onChange={(e) => setCustomLinkCode(e.target.value)}
+                  placeholder="예: 1-2수학과제"
+                  className="flex-1 px-3 py-2.5 bg-sp-surface border border-sp-border rounded-r-lg text-sp-text placeholder-sp-muted/50 text-sm focus:outline-none focus:border-sp-accent transition-colors"
+                />
+              </div>
+              {linkCodeError && <p className="text-xs text-red-400 mt-1">{linkCodeError}</p>}
+              {customLinkCode && !linkCodeError && !isCheckingCode && (
+                <p className="text-xs text-green-400 mt-1">사용 가능</p>
+              )}
+              <p className="text-xs text-sp-muted/50 mt-1">
+                비워두면 자동으로 생성됩니다. 한글, 영문, 숫자, -, _ 사용 가능
+              </p>
             </div>
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-sp-border/40">
-            <button
-              onClick={onClose}
-              className="px-5 py-2.5 text-sp-muted hover:text-sp-text rounded-lg hover:bg-sp-border/30 transition-colors text-sm"
-            >
-              취소
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
-                canSubmit
-                  ? 'bg-sp-accent text-white hover:bg-sp-accent/80'
-                  : 'bg-sp-border text-sp-muted cursor-not-allowed'
-              }`}
-            >
-              {isLoading ? (
-                <>
-                  <span className="material-symbols-outlined text-icon animate-spin">progress_activity</span>
-                  생성 중...
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-icon">add_task</span>
-                  과제 생성
-                </>
-              )}
-            </button>
-          </div>
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-sp-border/40">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 text-sp-muted hover:text-sp-text rounded-lg hover:bg-sp-border/30 transition-colors text-sm"
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className={`px-5 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
+              canSubmit
+                ? 'bg-sp-accent text-white hover:bg-sp-accent/80'
+                : 'bg-sp-border text-sp-muted cursor-not-allowed'
+            }`}
+          >
+            {isLoading ? (
+              <>
+                <span className="material-symbols-outlined text-icon animate-spin">
+                  progress_activity
+                </span>
+                생성 중...
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-icon">add_task</span>
+                과제 생성
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </Modal>
   );

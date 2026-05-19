@@ -24,7 +24,9 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
   const [newCatColor, setNewCatColor] = useState('blue');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newSubInputs, setNewSubInputs] = useState<Record<string, string>>({});
-  const [editingCat, setEditingCat] = useState<{ id: string; name: string; color: string } | null>(null);
+  const [editingCat, setEditingCat] = useState<{ id: string; name: string; color: string } | null>(
+    null,
+  );
 
   const handleAddCategory = async () => {
     const trimmed = newCatName.trim();
@@ -56,7 +58,7 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
 
   return (
     <Modal isOpen onClose={onClose} title="카테고리 관리" srOnlyTitle size="md">
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sp-border">
           <h3 className="text-base font-bold text-sp-text flex items-center gap-2">
@@ -74,23 +76,34 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
             const isEditing = editingCat?.id === cat.id;
 
             return (
-              <div key={cat.id} className="rounded-xl bg-sp-surface border border-sp-border overflow-hidden">
+              <div
+                key={cat.id}
+                className="rounded-xl bg-sp-surface border border-sp-border overflow-hidden"
+              >
                 {/* 카테고리 헤더 행 */}
                 <div className="flex items-center gap-2 px-4 py-3">
                   {isEditing ? (
                     <>
                       <input
                         value={editingCat.name}
-                        onChange={(e) => setEditingCat((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                        onChange={(e) =>
+                          setEditingCat((prev) => (prev ? { ...prev, name: e.target.value } : prev))
+                        }
                         className="flex-1 bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
                       />
                       <select
                         value={editingCat.color}
-                        onChange={(e) => setEditingCat((prev) => prev ? { ...prev, color: e.target.value } : prev)}
+                        onChange={(e) =>
+                          setEditingCat((prev) =>
+                            prev ? { ...prev, color: e.target.value } : prev,
+                          )
+                        }
                         className="bg-sp-card border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-text focus:outline-none"
                       >
                         {COLOR_OPTIONS.map((c) => (
-                          <option key={c} value={c}>{c}</option>
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
                         ))}
                       </select>
                       <button
@@ -118,7 +131,9 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
                           {isExpanded ? '접기' : '펼치기'}
                         </button>
                         <button
-                          onClick={() => setEditingCat({ id: cat.id, name: cat.name, color: cat.color })}
+                          onClick={() =>
+                            setEditingCat({ id: cat.id, name: cat.name, color: cat.color })
+                          }
                           className="text-xs text-sp-muted hover:text-sp-accent transition-colors"
                         >
                           수정
@@ -198,7 +213,9 @@ export function RecordCategoryManagementModal({ onClose }: Props) {
               className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
             >
               {COLOR_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
             <button
