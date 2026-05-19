@@ -21,12 +21,14 @@ const ACCENT_CLASSES: Record<AccentColor, AccentClasses> = {
     hint: 'text-red-300/80',
   },
   amber: {
-    allActive: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/40',
+    // 다크 배경 + amber 틴트 위에서 amber-200/300은 색상 동화로 가독성 ↓ — amber-100으로 명도 ↑
+    // 배경도 /15 → /25 로 5%p 강화하여 활성 강조 보강 (frontend-architect 협업 2026-05-20)
+    allActive: 'bg-amber-500/25 text-amber-100 ring-1 ring-amber-500/40',
     allInactive: 'bg-sp-surface text-sp-muted hover:text-sp-text',
-    periodActive: 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/50',
+    periodActive: 'bg-amber-500/25 text-amber-100 ring-1 ring-amber-500/50',
     periodInactive: 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80',
     border: 'border-amber-500/30',
-    hint: 'text-amber-300/80',
+    hint: 'text-amber-200/90',
   },
   orange: {
     allActive: 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/40',
@@ -150,9 +152,7 @@ export function PeriodChipGroup({ periodCount, selected, onChange, accent = 'red
         </button>
       </div>
       {selectedLabels.length > 0 && !allRegularSelected && (
-        <p className={`text-detail ${classes.hint}`}>
-          {selectedLabels.join('·')} 선택됨
-        </p>
+        <p className={`text-detail ${classes.hint}`}>{selectedLabels.join('·')} 선택됨</p>
       )}
     </div>
   );
