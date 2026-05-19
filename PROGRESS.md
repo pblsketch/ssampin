@@ -19,7 +19,7 @@ v2.0.5 (다음 minor 후보: v2.1.0 — multi-date-attendance + 묶음)
 
 ## In Progress
 
-- **multi-date-attendance Check 대기 (Do 완료)** — `feature/multi-date-attendance` 브랜치, 12 commit 예정, 푸시·PR은 사용자 승인 대기. 다음 단계: `/pdca analyze multi-date-attendance` (gap-detector).
+- **multi-date-attendance Check 완료 (2026-05-20, Match Rate 96.7% PASS)** — `feature/multi-date-attendance` 브랜치 6 commits + 분석 보고서 1건. gap-detector 결과 모든 HIGH 항목 100%, LOW 갭 3건 cosmetic. Iterate 불필요. 다음: `/pdca report multi-date-attendance`. [Analysis](docs/03-analysis/multi-date-attendance.analysis.md)
 
 ## Blocked
 
