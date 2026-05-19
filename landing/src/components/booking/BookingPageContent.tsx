@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { SchedulePublic, SlotPublic } from './bookingApi';
-import { getSchedulePublic, getSlots, checkAlreadyBooked, bookSlot, encrypt } from './bookingApi';
+import {
+  getSchedulePublic,
+  getSlots,
+  checkAlreadyBooked,
+  bookSlot,
+  encrypt,
+  saveBookingToken,
+  readBookingToken,
+} from './bookingApi';
 
 interface BookingPageContentProps {
   scheduleId: string;
@@ -51,8 +59,10 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [consultationTopic, setConsultationTopic] = useState('');
+  /** Phase 3 — 예약 완료 후 또는 같은 기기에서 다시 진입한 경우 본인 token. */
+  const [myBookingToken, setMyBookingToken] = useState<string | null>(null);
 
-  /* ── URL 해시에서 adminKey 추출 ── */
+  /* ── URL 해시에서 adminKey 추출 + 같은 기기에서 보관된 booking token 복원 ── */
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash;
@@ -60,8 +70,10 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
       if (match?.[1]) {
         setAdminKey(decodeURIComponent(match[1]));
       }
+      const savedToken = readBookingToken(scheduleId);
+      if (savedToken) setMyBookingToken(savedToken);
     }
-  }, []);
+  }, [scheduleId]);
 
   /* ── 일정 로드 ── */
   useEffect(() => {
@@ -98,17 +110,20 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
   }, [scheduleId]);
 
   /* ── 번호 선택 후 중복 예약 확인 ── */
-  const handleInfoNext = useCallback(async (num: number) => {
-    if (!schedule) return;
-    const already = await checkAlreadyBooked(scheduleId, num);
-    if (already) {
-      setStudentNumber(num);
-      setView('alreadyBooked');
-    } else {
-      setStudentNumber(num);
-      setView('method');
-    }
-  }, [scheduleId, schedule]);
+  const handleInfoNext = useCallback(
+    async (num: number) => {
+      if (!schedule) return;
+      const already = await checkAlreadyBooked(scheduleId, num);
+      if (already) {
+        setStudentNumber(num);
+        setView('alreadyBooked');
+      } else {
+        setStudentNumber(num);
+        setView('method');
+      }
+    },
+    [scheduleId, schedule],
+  );
 
   /* ── 예약 제출 ── */
   const handleBooking = useCallback(async () => {
@@ -118,7 +133,10 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
 
     let bookerInfoEncrypted: string | undefined;
     if (schedule.type === 'parent' && adminKey) {
-      bookerInfoEncrypted = await encrypt(`${parentRelation}|${parentName}|${parentContact}`, adminKey);
+      bookerInfoEncrypted = await encrypt(
+        `${parentRelation}|${parentName}|${parentContact}`,
+        adminKey,
+      );
     }
 
     let memoEncrypted: string | undefined;
@@ -138,6 +156,10 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
     setIsSubmitting(false);
 
     if (result.success) {
+      if (result.token) {
+        saveBookingToken(scheduleId, result.token);
+        setMyBookingToken(result.token);
+      }
       setView('success');
     } else {
       setError(result.message);
@@ -174,7 +196,9 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
         {view === 'loading' && <LoadingView />}
         {view === 'notFound' && <NotFoundView />}
         {view === 'closed' && <ClosedView title={schedule?.title} />}
-        {view === 'alreadyBooked' && <AlreadyBookedView />}
+        {view === 'alreadyBooked' && (
+          <AlreadyBookedView scheduleId={scheduleId} token={myBookingToken} />
+        )}
         {view === 'info' && schedule && (
           <InfoView
             schedule={schedule}
@@ -207,23 +231,27 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
             onNext={() => setView('confirm')}
           />
         )}
-        {view === 'confirm' && schedule && studentNumber !== null && selectedMethod && selectedSlot && (
-          <ConfirmView
-            schedule={schedule}
-            studentNumber={studentNumber}
-            parentRelation={parentRelation}
-            parentName={parentName}
-            parentContact={parentContact}
-            selectedMethod={selectedMethod}
-            selectedSlot={selectedSlot}
-            consultationTopic={consultationTopic}
-            onBack={() => setView('method')}
-            onSubmit={handleBooking}
-            isSubmitting={isSubmitting}
-            error={error}
-          />
-        )}
-        {view === 'success' && <SuccessView />}
+        {view === 'confirm' &&
+          schedule &&
+          studentNumber !== null &&
+          selectedMethod &&
+          selectedSlot && (
+            <ConfirmView
+              schedule={schedule}
+              studentNumber={studentNumber}
+              parentRelation={parentRelation}
+              parentName={parentName}
+              parentContact={parentContact}
+              selectedMethod={selectedMethod}
+              selectedSlot={selectedSlot}
+              consultationTopic={consultationTopic}
+              onBack={() => setView('method')}
+              onSubmit={handleBooking}
+              isSubmitting={isSubmitting}
+              error={error}
+            />
+          )}
+        {view === 'success' && <SuccessView scheduleId={scheduleId} token={myBookingToken} />}
       </main>
 
       <footer className="border-t border-gray-200 py-4 text-center">
@@ -271,26 +299,62 @@ function ClosedView({ title }: { title?: string }) {
   );
 }
 
-function AlreadyBookedView() {
+function AlreadyBookedView({ scheduleId, token }: { scheduleId: string; token: string | null }) {
+  const mineUrl = token ? `/booking/${scheduleId}/mine?t=${encodeURIComponent(token)}` : null;
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="text-center px-6">
+      <div className="text-center px-6 max-w-sm mx-auto">
         <div className="text-5xl mb-4">✅</div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">이미 예약하셨습니다</h2>
-        <p className="text-gray-500 text-sm">해당 번호는 이미 예약이 완료되었습니다.</p>
+        <p className="text-gray-500 text-sm mb-4">해당 번호는 이미 예약이 완료되었습니다.</p>
+
+        {mineUrl ? (
+          <a
+            href={mineUrl}
+            className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors"
+          >
+            내 예약 변경/취소하기
+          </a>
+        ) : (
+          <p className="text-xs text-gray-400 leading-relaxed">
+            변경/취소를 원하시면 담임 선생님께 요청하시거나,
+            <br />
+            예약 완료 시 받으신 &quot;내 예약 보기&quot; 링크를 사용해 주세요.
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-function SuccessView() {
+function SuccessView({ scheduleId, token }: { scheduleId: string; token: string | null }) {
+  const mineUrl = token ? `/booking/${scheduleId}/mine?t=${encodeURIComponent(token)}` : null;
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="text-center px-6">
+      <div className="text-center px-6 max-w-sm mx-auto">
         <div className="text-5xl mb-4">🎉</div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">예약 완료!</h2>
-        <p className="text-gray-500 text-sm">상담 예약이 성공적으로 완료되었습니다.</p>
-        <p className="text-gray-400 text-xs mt-2">이 창을 닫아도 됩니다.</p>
+        <p className="text-gray-500 text-sm mb-4">상담 예약이 성공적으로 완료되었습니다.</p>
+
+        {mineUrl && (
+          <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mb-4 text-left">
+            <p className="text-xs font-semibold text-indigo-900 mb-1.5">
+              📌 시간 변경/취소가 필요하면
+            </p>
+            <p className="text-xs text-indigo-700 leading-relaxed mb-3">
+              아래 링크를 즐겨찾기에 추가해 주세요. 이 기기에서는 이 페이지에 다시 들어오면 자동으로
+              안내됩니다.
+            </p>
+            <a
+              href={mineUrl}
+              className="inline-flex items-center justify-center w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors"
+            >
+              내 예약 보기
+            </a>
+          </div>
+        )}
+
+        <p className="text-gray-400 text-xs">이 창을 닫아도 됩니다.</p>
       </div>
     </div>
   );
@@ -327,7 +391,10 @@ function InfoView({
   const isParent = schedule.type === 'parent';
   const canContinue =
     selected !== null &&
-    (!isParent || (parentName.trim().length > 0 && parentContact.trim().length > 0 && parentRelation.length > 0));
+    (!isParent ||
+      (parentName.trim().length > 0 &&
+        parentContact.trim().length > 0 &&
+        parentRelation.length > 0));
 
   const handleContinue = async () => {
     if (selected === null || !canContinue) return;
@@ -343,7 +410,9 @@ function InfoView({
         <h2 className="text-lg font-bold text-gray-900 mb-1">{schedule.title}</h2>
         <p className="text-xs text-gray-400 mb-3">{schedule.targetClassName}</p>
         {schedule.message && (
-          <p className="text-sm text-gray-600 bg-gray-50 rounded-xl px-4 py-3">{schedule.message}</p>
+          <p className="text-sm text-gray-600 bg-gray-50 rounded-xl px-4 py-3">
+            {schedule.message}
+          </p>
         )}
       </div>
 
@@ -422,7 +491,9 @@ function InfoView({
       </div>
 
       <button
-        onClick={() => { void handleContinue(); }}
+        onClick={() => {
+          void handleContinue();
+        }}
         disabled={!canContinue || checking}
         className="w-full min-h-12 rounded-xl bg-blue-500 text-white font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
       >
@@ -452,8 +523,19 @@ function MethodView({
       {/* 헤더 */}
       <div className="flex items-center gap-2 mb-6">
         <button onClick={onBack} className="text-gray-400 hover:text-gray-600 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
         </button>
         <span className="text-sm font-medium text-gray-500">2/4 상담 방식 선택</span>
@@ -539,8 +621,19 @@ function TimeView({
       {/* 헤더 */}
       <div className="flex items-center gap-2 mb-6">
         <button onClick={onBack} className="text-gray-400 hover:text-gray-600 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
         </button>
         <span className="text-sm font-medium text-gray-500">3/4 시간 선택</span>
@@ -577,7 +670,9 @@ function TimeView({
               return (
                 <button
                   key={slot.id}
-                  onClick={() => { if (isAvailable) onSelectSlot(slot.id); }}
+                  onClick={() => {
+                    if (isAvailable) onSelectSlot(slot.id);
+                  }}
                   disabled={!isAvailable}
                   className={`min-h-12 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
                     !isAvailable
@@ -591,7 +686,9 @@ function TimeView({
                     `${slot.startTime} ~ ${slot.endTime}`
                   ) : (
                     <span>
-                      <span className="block text-xs">{slot.startTime} ~ {slot.endTime}</span>
+                      <span className="block text-xs">
+                        {slot.startTime} ~ {slot.endTime}
+                      </span>
                       <span className="text-xs">마감</span>
                     </span>
                   )}
@@ -651,8 +748,19 @@ function ConfirmView({
       {/* 헤더 */}
       <div className="flex items-center gap-2 mb-6">
         <button onClick={onBack} className="text-gray-400 hover:text-gray-600 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
         </button>
         <span className="text-sm font-medium text-gray-500">4/4 예약 확인</span>

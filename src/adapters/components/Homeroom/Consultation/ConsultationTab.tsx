@@ -6,15 +6,20 @@ import type { ConsultationSchedule } from '@domain/entities/Consultation';
 import type { RecordPrefill } from '../HomeroomPage';
 import { ConsultationCreateModal } from './ConsultationCreateModal';
 import { ConsultationDetail } from './ConsultationDetail';
+import { ConsultationEditModal } from './ConsultationEditModal';
 
 /* ──────────────── 헬퍼 함수 ──────────────── */
 
 function getMethodLabel(m: string): string {
   switch (m) {
-    case 'face': return '대면';
-    case 'phone': return '전화';
-    case 'video': return '화상';
-    default: return m;
+    case 'face':
+      return '대면';
+    case 'phone':
+      return '전화';
+    case 'video':
+      return '화상';
+    default:
+      return m;
   }
 }
 
@@ -22,7 +27,9 @@ function getTypeLabel(t: string): string {
   return t === 'parent' ? '학부모' : '학생';
 }
 
-function formatDateRange(dates: readonly { date: string; startTime: string; endTime: string }[]): string {
+function formatDateRange(
+  dates: readonly { date: string; startTime: string; endTime: string }[],
+): string {
   if (dates.length === 0) return '';
   if (dates.length === 1) {
     const d = dates[0]!;
@@ -79,7 +86,10 @@ function ConsultationShareModal({ schedule, onClose }: ConsultationShareModalPro
   }, [schedule.title, showToast]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
         className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -98,16 +108,25 @@ function ConsultationShareModal({ schedule, onClose }: ConsultationShareModalPro
           <div className="w-full flex items-center gap-2 bg-sp-surface rounded-lg border border-sp-border px-3 py-2">
             <span className="material-symbols-outlined text-sm text-sp-muted">link</span>
             <span className="flex-1 text-xs text-sp-text truncate select-all">{url}</span>
-            <button onClick={handleCopyLink} className="shrink-0 text-xs text-sp-accent hover:text-sp-accent/80 font-medium transition-colors">
+            <button
+              onClick={handleCopyLink}
+              className="shrink-0 text-xs text-sp-accent hover:text-sp-accent/80 font-medium transition-colors"
+            >
               복사
             </button>
           </div>
           <div className="w-full grid grid-cols-2 gap-2">
-            <button onClick={handleCopyLink} className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors">
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors"
+            >
               <span className="material-symbols-outlined text-sm">content_copy</span>
               링크 복사
             </button>
-            <button onClick={handleDownloadQR} className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent/50 transition-colors">
+            <button
+              onClick={handleDownloadQR}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border text-sp-text text-xs font-medium hover:border-sp-accent/50 transition-colors"
+            >
               <span className="material-symbols-outlined text-sm">download</span>
               QR 저장
             </button>
@@ -124,9 +143,10 @@ interface ConsultationCardProps {
   schedule: ConsultationSchedule;
   onSelect: (id: string) => void;
   onShare: (schedule: ConsultationSchedule) => void;
+  onEdit: (schedule: ConsultationSchedule) => void;
 }
 
-function ConsultationCard({ schedule, onSelect, onShare }: ConsultationCardProps) {
+function ConsultationCard({ schedule, onSelect, onShare, onEdit }: ConsultationCardProps) {
   const typeLabel = getTypeLabel(schedule.type);
   const methodLabels = schedule.methods.map(getMethodLabel).join(', ');
   const dateRange = formatDateRange(schedule.dates);
@@ -150,7 +170,9 @@ function ConsultationCard({ schedule, onSelect, onShare }: ConsultationCardProps
       role="button"
       tabIndex={0}
       onClick={() => onSelect(schedule.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(schedule.id); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onSelect(schedule.id);
+      }}
       className="w-full text-left rounded-xl border border-sp-border p-4 transition-all hover:border-sp-accent/50 hover:shadow-lg bg-sp-accent/5 cursor-pointer"
     >
       <div className="flex items-start gap-3">
@@ -173,12 +195,14 @@ function ConsultationCard({ schedule, onSelect, onShare }: ConsultationCardProps
           </div>
           {dateRange && (
             <div className="text-xs text-sp-muted mt-1">
-              <span className="material-symbols-outlined text-xs align-middle mr-0.5">calendar_today</span>
+              <span className="material-symbols-outlined text-xs align-middle mr-0.5">
+                calendar_today
+              </span>
               {dateRange}
             </div>
           )}
-          {/* 예약 링크 공유 */}
-          <div className="mt-2">
+          {/* 예약 링크 공유 + 수정 */}
+          <div className="mt-2 flex items-center gap-3">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -188,6 +212,17 @@ function ConsultationCard({ schedule, onSelect, onShare }: ConsultationCardProps
             >
               <span className="material-symbols-outlined text-xs">share</span>
               공유 (링크 + QR)
+            </button>
+            <button
+              data-testid={`schedule-${schedule.id}-edit`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(schedule);
+              }}
+              className="text-detail text-sp-muted hover:text-sp-text transition-colors flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-xs">edit</span>
+              수정
             </button>
           </div>
         </div>
@@ -209,20 +244,15 @@ export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [shareSchedule, setShareSchedule] = useState<ConsultationSchedule | null>(null);
+  const [editSchedule, setEditSchedule] = useState<ConsultationSchedule | null>(null);
 
   useEffect(() => {
     if (!loaded) void load();
   }, [loaded, load]);
 
-  const activeSchedules = useMemo(
-    () => schedules.filter((s) => !s.isArchived),
-    [schedules],
-  );
+  const activeSchedules = useMemo(() => schedules.filter((s) => !s.isArchived), [schedules]);
 
-  const archivedSchedules = useMemo(
-    () => schedules.filter((s) => s.isArchived),
-    [schedules],
-  );
+  const archivedSchedules = useMemo(() => schedules.filter((s) => s.isArchived), [schedules]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedScheduleId(id);
@@ -231,6 +261,10 @@ export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
 
   const handleShare = useCallback((schedule: ConsultationSchedule) => {
     setShareSchedule(schedule);
+  }, []);
+
+  const handleEdit = useCallback((schedule: ConsultationSchedule) => {
+    setEditSchedule(schedule);
   }, []);
 
   if (!loaded) {
@@ -248,7 +282,10 @@ export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
       return (
         <ConsultationDetail
           schedule={schedule}
-          onBack={() => { setView('list'); setSelectedScheduleId(null); }}
+          onBack={() => {
+            setView('list');
+            setSelectedScheduleId(null);
+          }}
           onWriteRecord={onWriteRecord}
         />
       );
@@ -270,8 +307,7 @@ export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors"
         >
-          <span className="material-symbols-outlined text-sm">add</span>
-          새 상담 일정
+          <span className="material-symbols-outlined text-sm">add</span>새 상담 일정
         </button>
       </div>
 
@@ -292,7 +328,13 @@ export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
                   진행 중 ({activeSchedules.length})
                 </p>
                 {activeSchedules.map((s) => (
-                  <ConsultationCard key={s.id} schedule={s} onSelect={handleSelect} onShare={handleShare} />
+                  <ConsultationCard
+                    key={s.id}
+                    schedule={s}
+                    onSelect={handleSelect}
+                    onShare={handleShare}
+                    onEdit={handleEdit}
+                  />
                 ))}
               </>
             )}
@@ -309,21 +351,34 @@ export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
                   </span>
                   완료/보관 ({archivedSchedules.length})
                 </button>
-                {showArchived && archivedSchedules.map((s) => (
-                  <ConsultationCard key={s.id} schedule={s} onSelect={handleSelect} onShare={handleShare} />
-                ))}
+                {showArchived &&
+                  archivedSchedules.map((s) => (
+                    <ConsultationCard
+                      key={s.id}
+                      schedule={s}
+                      onSelect={handleSelect}
+                      onShare={handleShare}
+                      onEdit={handleEdit}
+                    />
+                  ))}
               </>
             )}
           </div>
         )}
       </div>
 
-      {showCreateModal && (
-        <ConsultationCreateModal onClose={() => setShowCreateModal(false)} />
-      )}
+      {showCreateModal && <ConsultationCreateModal onClose={() => setShowCreateModal(false)} />}
 
       {shareSchedule && (
         <ConsultationShareModal schedule={shareSchedule} onClose={() => setShareSchedule(null)} />
+      )}
+
+      {editSchedule && (
+        <ConsultationEditModal
+          schedule={editSchedule}
+          onClose={() => setEditSchedule(null)}
+          onSuccess={() => setEditSchedule(null)}
+        />
       )}
     </div>
   );

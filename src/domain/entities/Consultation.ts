@@ -55,3 +55,35 @@ export interface ConsultationBooking {
 export interface ConsultationsData {
   readonly schedules: readonly ConsultationSchedule[];
 }
+
+/**
+ * 상담 일정 부분 갱신 패치.
+ * 모든 필드 optional — 변경하려는 항목만 채워서 전달한다.
+ * id/adminKey/shareUrl/createdAt/isArchived/targetClassName/targetStudents 는 불변.
+ */
+export interface ScheduleUpdatePatch {
+  readonly title?: string;
+  readonly type?: ConsultationType;
+  readonly methods?: readonly ConsultationMethod[];
+  readonly slotMinutes?: number;
+  readonly dates?: readonly ConsultationDate[];
+  readonly message?: string;
+  /** 차단 슬롯 명시 추가 (date_startTime). Phase 2 동기화에서 주로 활용. */
+  readonly blockedSlots?: readonly { readonly date: string; readonly startTime: string }[];
+}
+
+/** 상담 일정 패치 시 영향받는 예약 사유 */
+export type ScheduleUpdateAffectReason = 'slot_removed' | 'slot_blocked' | 'method_unsupported';
+
+/**
+ * `analyzeScheduleUpdateImpact` 결과.
+ * - preserved: 패치 후에도 슬롯이 그대로 살아 있고 method도 지원되는 예약
+ * - affected: 슬롯이 사라지거나 차단되거나 method가 더 이상 지원되지 않는 예약 — 사용자 결정 필요
+ */
+export interface ScheduleUpdateImpact {
+  readonly preserved: readonly ConsultationBooking[];
+  readonly affected: readonly {
+    readonly booking: ConsultationBooking;
+    readonly reason: ScheduleUpdateAffectReason;
+  }[];
+}
