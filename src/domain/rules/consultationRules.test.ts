@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeScheduleUpdateImpact, isSlotBlockedByTimetable } from './consultationRules';
+import {
+  analyzeScheduleUpdateImpact,
+  buildBusyPeriods,
+  expandEventDates,
+  isSlotBlockedByTimetable,
+  makePeriodResolver,
+  resolveEventTimeRange,
+} from './consultationRules';
 import type {
   ConsultationBooking,
   ConsultationSchedule,
   ConsultationSlot,
   ScheduleUpdatePatch,
 } from '@domain/entities/Consultation';
+import type { SchoolEvent } from '@domain/entities/SchoolEvent';
+import type { TimetableOverride } from '@domain/entities/Timetable';
 
 // ── 헬퍼 ─────────────────────────────────────────────────────────────
 
@@ -172,5 +181,239 @@ describe('isSlotBlockedByTimetable', () => {
         { date: '2026-06-02', startTime: '14:00', endTime: '15:00' },
       ]),
     ).toBe(false);
+  });
+});
+
+// ── Phase 2: buildBusyPeriods + 보조 함수 ───────────────────────────
+
+function event(
+  o: Partial<SchoolEvent> & Pick<SchoolEvent, 'id' | 'date' | 'title' | 'category'>,
+): SchoolEvent {
+  return { ...o } as SchoolEvent;
+}
+
+function override_(
+  o: Partial<TimetableOverride> & Pick<TimetableOverride, 'id' | 'date' | 'period'>,
+): TimetableOverride {
+  return {
+    subject: '',
+    createdAt: '2026-05-20T00:00:00.000Z',
+    ...o,
+  } as TimetableOverride;
+}
+
+const PERIOD_TIMES = [
+  { period: 1, start: '09:00', end: '09:45' },
+  { period: 2, start: '09:55', end: '10:40' },
+  { period: 3, start: '10:50', end: '11:35' },
+  { period: 4, start: '11:45', end: '12:30' },
+];
+
+describe('makePeriodResolver', () => {
+  it('숫자 키 → 시간 범위', () => {
+    const r = makePeriodResolver(PERIOD_TIMES);
+    expect(r('1')).toEqual({ start: '09:00', end: '09:45' });
+    expect(r('3')).toEqual({ start: '10:50', end: '11:35' });
+    expect(r('99')).toBeNull();
+  });
+});
+
+describe('resolveEventTimeRange', () => {
+  const r = makePeriodResolver(PERIOD_TIMES);
+
+  it('startTime + endTime 우선', () => {
+    const ev = event({
+      id: 'e1',
+      date: '2026-06-01',
+      title: '',
+      category: 'etc',
+      startTime: '13:00',
+      endTime: '14:00',
+      time: '15:00 - 16:00',
+      period: '2',
+    });
+    expect(resolveEventTimeRange(ev, r)).toEqual({ start: '13:00', end: '14:00' });
+  });
+
+  it('time(HH:mm - HH:mm) 차선', () => {
+    const ev = event({
+      id: 'e1',
+      date: '2026-06-01',
+      title: '',
+      category: 'etc',
+      time: '15:30 - 16:45',
+    });
+    expect(resolveEventTimeRange(ev, r)).toEqual({ start: '15:30', end: '16:45' });
+  });
+
+  it('period 사용', () => {
+    const ev = event({
+      id: 'e1',
+      date: '2026-06-01',
+      title: '',
+      category: 'etc',
+      period: '2',
+    });
+    expect(resolveEventTimeRange(ev, r)).toEqual({ start: '09:55', end: '10:40' });
+  });
+
+  it('period + periodEnd', () => {
+    const ev = event({
+      id: 'e1',
+      date: '2026-06-01',
+      title: '',
+      category: 'etc',
+      period: '1',
+      periodEnd: '3',
+    });
+    expect(resolveEventTimeRange(ev, r)).toEqual({ start: '09:00', end: '11:35' });
+  });
+
+  it('period=allDay → 00:00 ~ 23:59', () => {
+    const ev = event({
+      id: 'e1',
+      date: '2026-06-01',
+      title: '',
+      category: 'etc',
+      period: 'allDay',
+    });
+    expect(resolveEventTimeRange(ev, r)).toEqual({ start: '00:00', end: '23:59' });
+  });
+
+  it('아무 시간 정보 없으면 null', () => {
+    const ev = event({ id: 'e1', date: '2026-06-01', title: '', category: 'etc' });
+    expect(resolveEventTimeRange(ev, r)).toBeNull();
+  });
+});
+
+describe('expandEventDates', () => {
+  it('단일 일자 + allowed 포함', () => {
+    const ev = event({ id: 'e1', date: '2026-06-01', title: '', category: 'etc' });
+    const out = expandEventDates(ev, new Set(['2026-06-01']));
+    expect(out).toEqual(['2026-06-01']);
+  });
+
+  it('endDate 있으면 inclusive 확장', () => {
+    const ev = event({
+      id: 'e1',
+      date: '2026-06-01',
+      endDate: '2026-06-03',
+      title: '',
+      category: 'etc',
+    });
+    const out = expandEventDates(ev, new Set(['2026-06-01', '2026-06-02', '2026-06-03']));
+    expect(out).toEqual(['2026-06-01', '2026-06-02', '2026-06-03']);
+  });
+
+  it('allowed 외 일자는 제외', () => {
+    const ev = event({
+      id: 'e1',
+      date: '2026-06-01',
+      endDate: '2026-06-05',
+      title: '',
+      category: 'etc',
+    });
+    const out = expandEventDates(ev, new Set(['2026-06-02', '2026-06-04']));
+    expect(out).toEqual(['2026-06-02', '2026-06-04']);
+  });
+});
+
+describe('buildBusyPeriods', () => {
+  const r = makePeriodResolver(PERIOD_TIMES);
+  const targetDates = ['2026-06-01', '2026-06-02'];
+
+  it('SchoolEvent.startTime/endTime → busy 1건', () => {
+    const result = buildBusyPeriods({
+      events: [
+        event({
+          id: 'e1',
+          date: '2026-06-01',
+          title: 'X',
+          category: 'school',
+          startTime: '13:00',
+          endTime: '14:30',
+        }),
+      ],
+      overrides: [],
+      targetDates,
+      resolvePeriodTime: r,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      date: '2026-06-01',
+      startTime: '13:00',
+      endTime: '14:30',
+      source: 'event',
+      sourceId: 'e1',
+    });
+  });
+
+  it('SchoolEvent.period 만 있어도 변환', () => {
+    const result = buildBusyPeriods({
+      events: [
+        event({
+          id: 'e1',
+          date: '2026-06-01',
+          title: '',
+          category: 'etc',
+          period: '2',
+        }),
+      ],
+      overrides: [],
+      targetDates,
+      resolvePeriodTime: r,
+    });
+    expect(result[0]).toMatchObject({
+      startTime: '09:55',
+      endTime: '10:40',
+      source: 'event',
+    });
+  });
+
+  it("TimetableOverride.kind='cancel' 은 busy 에서 제외 (휴강 → 가용)", () => {
+    const result = buildBusyPeriods({
+      events: [],
+      overrides: [
+        override_({ id: 'o1', date: '2026-06-01', period: 2, kind: 'cancel' }),
+        override_({ id: 'o2', date: '2026-06-01', period: 3, kind: 'substitute' }),
+      ],
+      targetDates,
+      resolvePeriodTime: r,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.sourceId).toBe('o2');
+  });
+
+  it('TimetableOverride.kind=swap/substitute/custom 모두 busy', () => {
+    const result = buildBusyPeriods({
+      events: [],
+      overrides: [
+        override_({ id: 'o1', date: '2026-06-01', period: 1, kind: 'swap' }),
+        override_({ id: 'o2', date: '2026-06-01', period: 2, kind: 'substitute' }),
+        override_({ id: 'o3', date: '2026-06-01', period: 3, kind: 'custom' }),
+      ],
+      targetDates,
+      resolvePeriodTime: r,
+    });
+    expect(result.map((b) => b.sourceId).sort()).toEqual(['o1', 'o2', 'o3']);
+  });
+
+  it('targetDates 외 일자는 무시 (성능)', () => {
+    const result = buildBusyPeriods({
+      events: [
+        event({
+          id: 'e1',
+          date: '2099-12-31',
+          title: '',
+          category: 'etc',
+          startTime: '10:00',
+          endTime: '11:00',
+        }),
+      ],
+      overrides: [override_({ id: 'o1', date: '2099-12-31', period: 1, kind: 'swap' })],
+      targetDates,
+      resolvePeriodTime: r,
+    });
+    expect(result).toEqual([]);
   });
 });

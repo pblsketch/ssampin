@@ -5,12 +5,20 @@ import type {
   ScheduleUpdateImpact,
   ScheduleUpdatePatch,
 } from '@domain/entities/Consultation';
-import { analyzeScheduleUpdateImpact } from '@domain/rules/consultationRules';
+import {
+  analyzeScheduleUpdateImpact,
+  buildBusyPeriods,
+  isSlotBlockedByTimetable,
+  makePeriodResolver,
+} from '@domain/rules/consultationRules';
 import {
   consultationRepository,
   consultationSupabaseClient,
   shortLinkClient,
 } from '@adapters/di/container';
+import { useEventsStore } from '@adapters/stores/useEventsStore';
+import { useScheduleStore } from '@adapters/stores/useScheduleStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import { SITE_URL } from '@config/siteUrl';
 
@@ -25,6 +33,12 @@ export type RescheduleBookingResult =
 export type CancelBookingResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: string };
+
+export interface RecomputeResult {
+  readonly blockedAdded: number;
+  readonly availableRestored: number;
+  readonly conflictedBookingIds: readonly string[];
+}
 
 const SHARE_BASE_URL = `${SITE_URL}/booking`;
 
@@ -63,6 +77,25 @@ interface ConsultationState {
   ) => Promise<RescheduleBookingResult>;
 
   cancelBooking: (scheduleId: string, bookingId: string) => Promise<CancelBookingResult>;
+
+  /**
+   * 일정표/시간표 변경을 반영해 슬롯 가용성을 재계산한다 (Phase 2).
+   *
+   * 정책:
+   * - 예약이 있는 슬롯은 status 자동 변경하지 않는다 — 충돌만 식별해 반환
+   * - 예약 없는 슬롯은: busy 와 겹치면 blocked, 안 겹치면 available 로 PATCH (멱등)
+   * - archived schedule 은 건너뛴다
+   */
+  recomputeSlotAvailability: (scheduleId: string) => Promise<RecomputeResult>;
+
+  /**
+   * 일정표(useScheduleStore) 와 일정(useEventsStore) 변경을 구독해
+   * 활성 상담 일정 전체의 슬롯 가용성을 자동 재계산한다.
+   *
+   * App.tsx mount 에서 1회 호출. 반환된 unsubscribe 함수로 해제 가능.
+   * debounce 1s + in-flight 가드 + idempotent.
+   */
+  registerScheduleSyncListener: () => () => void;
 }
 
 export const useConsultationStore = create<ConsultationState>((set, get) => ({
@@ -258,5 +291,110 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     } catch (e) {
       return { ok: false, reason: `예약 취소 실패: ${String(e)}` };
     }
+  },
+
+  recomputeSlotAvailability: async (scheduleId) => {
+    const schedule = get().schedules.find((s) => s.id === scheduleId);
+    if (!schedule || schedule.isArchived) {
+      return { blockedAdded: 0, availableRestored: 0, conflictedBookingIds: [] };
+    }
+
+    let slots: Awaited<ReturnType<typeof consultationSupabaseClient.getSlots>>;
+    let bookings: Awaited<ReturnType<typeof consultationSupabaseClient.getBookings>>;
+    try {
+      [slots, bookings] = await Promise.all([
+        consultationSupabaseClient.getSlots(scheduleId),
+        consultationSupabaseClient.getBookings(scheduleId),
+      ]);
+    } catch {
+      return { blockedAdded: 0, availableRestored: 0, conflictedBookingIds: [] };
+    }
+
+    // 입력 수집
+    const scheduleStore = useScheduleStore.getState();
+    const eventsStore = useEventsStore.getState();
+    const settings = useSettingsStore.getState().settings;
+    const resolvePeriodTime = makePeriodResolver(settings.periodTimes);
+
+    const targetDates = schedule.dates.map((d) => d.date);
+    const busyPeriods = buildBusyPeriods({
+      events: eventsStore.events,
+      overrides: scheduleStore.overrides,
+      targetDates,
+      resolvePeriodTime,
+    });
+
+    const bookedSlotIds = new Set(bookings.map((b) => b.slotId));
+    const toBlock: string[] = [];
+    const toRestore: string[] = [];
+    const conflictedBookingIds: string[] = [];
+
+    for (const slot of slots) {
+      const collides = isSlotBlockedByTimetable(slot, busyPeriods);
+
+      // 예약 있는 슬롯: 자동 변경 금지, 충돌만 식별
+      if (bookedSlotIds.has(slot.id)) {
+        if (collides) {
+          const b = bookings.find((bk) => bk.slotId === slot.id);
+          if (b) conflictedBookingIds.push(b.id);
+        }
+        continue;
+      }
+
+      if (collides && slot.status === 'available') toBlock.push(slot.id);
+      else if (!collides && slot.status === 'blocked') toRestore.push(slot.id);
+    }
+
+    // 배치 PATCH — 실패해도 다음 주기에 다시 시도, 사용자에게 무영향
+    try {
+      if (toBlock.length > 0) {
+        await consultationSupabaseClient.bulkUpdateSlotStatus(toBlock, 'blocked');
+      }
+      if (toRestore.length > 0) {
+        await consultationSupabaseClient.bulkUpdateSlotStatus(toRestore, 'available');
+      }
+    } catch {
+      // 무시 — 다음 폴링이나 다음 구독 트리거에서 다시 시도
+    }
+
+    return {
+      blockedAdded: toBlock.length,
+      availableRestored: toRestore.length,
+      conflictedBookingIds,
+    };
+  },
+
+  registerScheduleSyncListener: () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let inFlight = false;
+
+    const runAll = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const active = get().schedules.filter((s) => !s.isArchived);
+        for (const s of active) {
+          await get().recomputeSlotAvailability(s.id);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        void runAll();
+      }, 1000);
+    };
+
+    const unsubSchedule = useScheduleStore.subscribe(schedule);
+    const unsubEvents = useEventsStore.subscribe(schedule);
+
+    return () => {
+      unsubSchedule();
+      unsubEvents();
+      if (timer) clearTimeout(timer);
+    };
   },
 }));

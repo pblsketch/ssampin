@@ -13,6 +13,8 @@ import type {
   ScheduleUpdateImpact,
   ScheduleUpdatePatch,
 } from '../entities/Consultation';
+import type { SchoolEvent } from '../entities/SchoolEvent';
+import type { TimetableOverride } from '../entities/Timetable';
 
 /** "HH:MM" → 분 */
 function parseTime(hhmm: string): number {
@@ -137,4 +139,153 @@ export function isSlotBlockedByTimetable(
     if (slotStart < busyEnd && busyStart < slotEnd) return true;
   }
   return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase 2 — 일정표 ↔ 슬롯 가용성 동기화 입력 빌더
+// ─────────────────────────────────────────────────────────────────────
+
+export interface BusyPeriod {
+  readonly date: string;
+  readonly startTime: string;
+  readonly endTime: string;
+  readonly source: 'event' | 'override';
+  readonly sourceId: string;
+}
+
+/**
+ * SchoolEvent 의 시간 범위를 우선순위에 따라 결정한다.
+ *   1) startTime + endTime (HH:mm)
+ *   2) time ("HH:mm - HH:mm" 형식)
+ *   3) period — resolvePeriodTime 으로 변환. period 가 'allDay' 면 전일.
+ *      periodEnd 가 있으면 periodEnd 의 end 시각까지.
+ *
+ * 매칭 안 되면 null (busy 로 잡지 않음).
+ */
+export function resolveEventTimeRange(
+  ev: SchoolEvent,
+  resolvePeriodTime: (period: string) => { start: string; end: string } | null,
+): { start: string; end: string } | null {
+  if (ev.startTime && ev.endTime) {
+    return { start: ev.startTime, end: ev.endTime };
+  }
+  if (ev.time && ev.time.includes('-')) {
+    const parts = ev.time.split('-').map((s) => s.trim());
+    const s = parts[0];
+    const e = parts[1];
+    if (s && e && /^\d{1,2}:\d{2}$/.test(s) && /^\d{1,2}:\d{2}$/.test(e)) {
+      return { start: s, end: e };
+    }
+  }
+  if (ev.period) {
+    if (ev.period === 'allDay') return { start: '00:00', end: '23:59' };
+    const start = resolvePeriodTime(ev.period);
+    if (!start) return null;
+    if (ev.periodEnd) {
+      const end = resolvePeriodTime(ev.periodEnd);
+      if (end) return { start: start.start, end: end.end };
+    }
+    return start;
+  }
+  return null;
+}
+
+/**
+ * 다일 행사(endDate 가 있는 경우)는 단순 inclusive 일자 확장.
+ * recurrence(매주/매달 반복) 는 별도 PDCA 로 분리 — 지금은 단일 또는 endDate 만 처리.
+ */
+export function expandEventDates(ev: SchoolEvent, allowed: ReadonlySet<string>): string[] {
+  const result: string[] = [];
+  if (allowed.has(ev.date)) result.push(ev.date);
+
+  if (ev.endDate && ev.endDate !== ev.date) {
+    // ev.date ~ ev.endDate inclusive (최대 31일까지만 — 무한 루프 방지)
+    const start = new Date(ev.date);
+    const end = new Date(ev.endDate);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      const cursor = new Date(start);
+      cursor.setDate(cursor.getDate() + 1);
+      let safety = 0;
+      while (cursor <= end && safety < 31) {
+        const iso = cursor.toISOString().slice(0, 10);
+        if (allowed.has(iso)) result.push(iso);
+        cursor.setDate(cursor.getDate() + 1);
+        safety += 1;
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * 상담 일정 동기화의 입력 — busy 구간 배열.
+ *
+ * 입력 소스:
+ *   - SchoolEvent (학교 행사·휴가·외부 일정 — `useEventsStore.events`)
+ *   - TimetableOverride (수업 시간표 임시 변경 — `useScheduleStore.overrides`)
+ *
+ * 정책:
+ *   - SchoolEvent 는 resolveEventTimeRange 로 시간 범위 결정 (시간 없으면 무시)
+ *   - TimetableOverride.kind === 'cancel' 은 휴강 → busy 아님 (가용으로 둠)
+ *     swap / substitute / custom 은 수업이 있는 시간이므로 busy
+ *   - targetDates 외 일자는 모두 무시 (성능)
+ *
+ * 외부 의존 0. resolvePeriodTime 은 호출자가 주입한다.
+ */
+export function buildBusyPeriods(params: {
+  readonly events: readonly SchoolEvent[];
+  readonly overrides: readonly TimetableOverride[];
+  readonly targetDates: readonly string[];
+  readonly resolvePeriodTime: (period: string) => { start: string; end: string } | null;
+}): readonly BusyPeriod[] {
+  const allowed = new Set(params.targetDates);
+  const result: BusyPeriod[] = [];
+
+  // 1) SchoolEvent
+  for (const ev of params.events) {
+    const dates = expandEventDates(ev, allowed);
+    if (dates.length === 0) continue;
+    const range = resolveEventTimeRange(ev, params.resolvePeriodTime);
+    if (!range) continue;
+    for (const d of dates) {
+      result.push({
+        date: d,
+        startTime: range.start,
+        endTime: range.end,
+        source: 'event',
+        sourceId: ev.id,
+      });
+    }
+  }
+
+  // 2) TimetableOverride (cancel 제외)
+  for (const ov of params.overrides) {
+    if (!allowed.has(ov.date)) continue;
+    if (ov.kind === 'cancel') continue;
+    const range = params.resolvePeriodTime(String(ov.period));
+    if (!range) continue;
+    result.push({
+      date: ov.date,
+      startTime: range.start,
+      endTime: range.end,
+      source: 'override',
+      sourceId: ov.id,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * PeriodTime[] 에서 period 번호 → 시간 범위 변환 헬퍼.
+ * domain 레이어에서 store 의존 없이 함수 생성용. 호출자가 useSettingsStore 에서 받아서 주입.
+ */
+export function makePeriodResolver(
+  periodTimes: readonly { period: number; start: string; end: string }[],
+): (period: string) => { start: string; end: string } | null {
+  const map = new Map<string, { start: string; end: string }>();
+  for (const pt of periodTimes) {
+    map.set(String(pt.period), { start: pt.start, end: pt.end });
+  }
+  return (period) => map.get(period) ?? null;
 }

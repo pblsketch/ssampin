@@ -223,6 +223,32 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     }
   }, [schedule.id]);
 
+  // Phase 2: 충돌(일정표 변경으로 예약 슬롯이 차단 시간과 겹침) booking id 집합
+  const [conflictedBookingIds, setConflictedBookingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
+  // Phase 2: 상세 진입 시 1회 슬롯 가용성 재계산 (구독 누락 fallback)
+  useEffect(() => {
+    let cancelled = false;
+    void useConsultationStore
+      .getState()
+      .recomputeSlotAvailability(schedule.id)
+      .then((res) => {
+        if (cancelled) return;
+        setConflictedBookingIds(new Set(res.conflictedBookingIds));
+        if (res.blockedAdded > 0 || res.availableRestored > 0) {
+          void refreshNow();
+        }
+      })
+      .catch(() => {
+        // 무시 — 동기화 실패는 사용자 경험에 영향 0
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [schedule.id, refreshNow]);
+
   /* ── 온라인 상태 감시 ── */
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -436,7 +462,6 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
       } finally {
         setAddingCalendarId(null);
       }
-       
     },
     [decryptedInfoMap, decryptedMemoMap, addedToCalendarIds, schedule.id, showToast, nonVacant],
   );
@@ -670,6 +695,18 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                     </span>
                                     예약됨
                                   </span>
+                                  {conflictedBookingIds.has(booking.id) && (
+                                    <span
+                                      data-testid={`booking-${booking.id}-conflict-badge`}
+                                      title="일정표(휴가·외부일정·시간표 변동)와 시간이 겹칩니다. 시간 변경을 권장합니다."
+                                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-caption font-medium bg-yellow-500/15 text-yellow-400 border border-yellow-500/25"
+                                    >
+                                      <span className="material-symbols-outlined text-xs">
+                                        warning
+                                      </span>
+                                      일정표 충돌
+                                    </span>
+                                  )}
                                   <span className="text-sp-text text-xs font-medium">
                                     {booking.studentNumber}번{' '}
                                     {getStudentName(booking.studentNumber)}

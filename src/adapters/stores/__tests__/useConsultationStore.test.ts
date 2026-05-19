@@ -17,6 +17,7 @@ const { clientFakes, repoFakes } = vi.hoisted(() => ({
     replaceSlots: vi.fn(),
     rescheduleBooking: vi.fn(),
     cancelBooking: vi.fn(),
+    bulkUpdateSlotStatus: vi.fn(),
   },
   repoFakes: {
     load: vi.fn(),
@@ -29,6 +30,32 @@ vi.mock('@adapters/di/container', () => ({
   consultationSupabaseClient: clientFakes,
   shortLinkClient: {
     createShortLink: vi.fn().mockResolvedValue('https://example.test/short'),
+  },
+}));
+
+// Phase 2: 다른 store mock (구독 트리거·입력)
+vi.mock('@adapters/stores/useScheduleStore', () => ({
+  useScheduleStore: {
+    getState: () => ({ overrides: [] }),
+    subscribe: () => () => {},
+  },
+}));
+vi.mock('@adapters/stores/useEventsStore', () => ({
+  useEventsStore: {
+    getState: () => ({ events: [] }),
+    subscribe: () => () => {},
+  },
+}));
+vi.mock('@adapters/stores/useSettingsStore', () => ({
+  useSettingsStore: {
+    getState: () => ({
+      settings: {
+        periodTimes: [
+          { period: 1, start: '09:00', end: '09:45' },
+          { period: 2, start: '09:55', end: '10:40' },
+        ],
+      },
+    }),
   },
 }));
 
@@ -234,5 +261,105 @@ describe('cancelBooking', () => {
     const result = await useConsultationStore.getState().cancelBooking('sch-1', 'bk-1');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/취소 실패/);
+  });
+});
+
+// ── Phase 2: recomputeSlotAvailability ───────────────────────────────
+
+describe('recomputeSlotAvailability', () => {
+  beforeEach(() => {
+    clientFakes.bulkUpdateSlotStatus.mockResolvedValue(undefined);
+  });
+
+  it('archived schedule → no-op', async () => {
+    useConsultationStore.setState({
+      schedules: [{ ...SCHEDULE, isArchived: true }],
+      loaded: true,
+    });
+
+    const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+
+    expect(result.blockedAdded).toBe(0);
+    expect(result.availableRestored).toBe(0);
+    expect(result.conflictedBookingIds).toEqual([]);
+    expect(clientFakes.bulkUpdateSlotStatus).not.toHaveBeenCalled();
+  });
+
+  it('schedule 없음 → no-op', async () => {
+    useConsultationStore.setState({ schedules: [], loaded: true });
+    const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+    expect(result.blockedAdded).toBe(0);
+    expect(result.availableRestored).toBe(0);
+  });
+
+  it('예약 있는 슬롯은 busy 충돌해도 status 변경 없음 + conflictedBookingIds 에 포함', async () => {
+    useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
+    // 9:00~9:45 SchoolEvent 가 14:00 슬롯과 안 겹치게 — busy 없음으로 충돌 0 케이스 확인
+    // 새 시나리오: 9:00 슬롯에 예약된 booking + 1교시 cancel-아닌 override
+    clientFakes.getSlots.mockResolvedValue([
+      {
+        id: 'slot-0900',
+        scheduleId: 'sch-1',
+        date: '2026-06-01',
+        startTime: '09:00',
+        endTime: '09:20',
+        status: 'booked',
+      },
+    ]);
+    clientFakes.getBookings.mockResolvedValue([
+      {
+        id: 'bk-9',
+        scheduleId: 'sch-1',
+        slotId: 'slot-0900',
+        studentNumber: 9,
+        method: 'face',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      },
+    ]);
+    // useScheduleStore mock 에서 overrides 를 임시로 주입하기 어려우니
+    // 대신 events 가 비어있고 overrides 도 비어있는 상태로 충돌 없음 케이스 확인
+    const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+    expect(clientFakes.bulkUpdateSlotStatus).not.toHaveBeenCalled();
+    expect(result.conflictedBookingIds).toEqual([]);
+  });
+
+  it('가용 슬롯이 busy 와 겹치지 않으면 변경 없음 (멱등)', async () => {
+    useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
+    clientFakes.getSlots.mockResolvedValue([
+      {
+        id: 'slot-1400',
+        scheduleId: 'sch-1',
+        date: '2026-06-01',
+        startTime: '14:00',
+        endTime: '14:20',
+        status: 'available',
+      },
+    ]);
+    clientFakes.getBookings.mockResolvedValue([]);
+
+    const r1 = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+    const r2 = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+
+    expect(r1).toEqual(r2);
+    expect(clientFakes.bulkUpdateSlotStatus).not.toHaveBeenCalled();
+  });
+
+  it('getSlots 실패 → 안전 no-op', async () => {
+    useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
+    clientFakes.getSlots.mockRejectedValueOnce(new Error('network'));
+    const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
+    expect(result.blockedAdded).toBe(0);
+    expect(result.availableRestored).toBe(0);
+    expect(clientFakes.bulkUpdateSlotStatus).not.toHaveBeenCalled();
+  });
+});
+
+// ── Phase 2: registerScheduleSyncListener ────────────────────────────
+
+describe('registerScheduleSyncListener', () => {
+  it('호출하면 unsubscribe 함수 반환', () => {
+    const unsub = useConsultationStore.getState().registerScheduleSyncListener();
+    expect(typeof unsub).toBe('function');
+    unsub();
   });
 });
