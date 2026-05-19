@@ -58,7 +58,8 @@ function loadOverrideAllowSet(): Set<string> {
   const css = fs.readFileSync(cssPath, 'utf-8');
   const allow = new Set<string>();
   const exact = /\.theme-light\s+\.text-(\w+)-(\d+)/g;
-  const partial = /\.theme-light\s+\[class\*="text-(\w+)-(\d+)"\]/g;
+  // prettier 가 single/double 어느 쪽이든 정규화할 수 있으므로 양 따옴표 모두 매치.
+  const partial = /\.theme-light\s+\[class\*=["']text-(\w+)-(\d+)["']\]/g;
   for (const re of [exact, partial]) {
     let m: RegExpExecArray | null;
     while ((m = re.exec(css)) !== null) {
