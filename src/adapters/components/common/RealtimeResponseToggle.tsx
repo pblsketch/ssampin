@@ -124,7 +124,7 @@ export function RealtimeResponseToggle({
             이 옵션을 켜면 학생 답변이 도착하는 즉시 교사 화면에 표시됩니다.
           </p>
 
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-amber-200 text-sm leading-relaxed">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-amber-100 text-sm leading-relaxed">
             ⚠ 학생들이 화면을 볼 수 있는 환경(프로젝터 · 교실 TV 공유 화면)에서는 권장하지 않아요.
             다른 학생 답변이 보이면 공정한 응답이 어려워질 수 있어요.
           </div>

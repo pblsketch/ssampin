@@ -15,6 +15,7 @@ import { useMobileStudentRecordsStore } from '@mobile/stores/useMobileStudentRec
 import { useMobileSettingsStore } from '@mobile/stores/useMobileSettingsStore';
 import { useBottomSheet } from '@mobile/hooks/useBottomSheet';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { MultiDatePicker } from '@adapters/components/common/MultiDatePicker';
 
 interface Props {
   classId: string;
@@ -96,7 +97,16 @@ export function AttendanceCheckPage({
   const [selectedPeriod, setSelectedPeriod] = useState(period);
   const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
 
-  useBottomSheet(periodMenuOpen);
+  // 여러 날 적용 Bottom Sheet (Phase 3 FR-09)
+  const [multiDateSheetOpen, setMultiDateSheetOpen] = useState(false);
+  const [multiDateSet, setMultiDateSet] = useState<ReadonlySet<string>>(new Set());
+  const [multiSaveProgress, setMultiSaveProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [multiSaveToast, setMultiSaveToast] = useState<string | null>(null);
+
+  useBottomSheet(periodMenuOpen || multiDateSheetOpen);
   const periodCount = settings.periodTimes.length > 0 ? settings.periodTimes.length : 7;
 
   const [studentStatuses, setStudentStatuses] = useState<Map<string, AttendanceStatus>>(new Map());
@@ -273,6 +283,51 @@ export function AttendanceCheckPage({
     onBack();
   };
 
+  // 여러 날 일괄 저장 (Phase 3 FR-09)
+  const handleMultiDateSave = useCallback(async () => {
+    const dates = Array.from(multiDateSet).sort();
+    if (dates.length === 0) return;
+    if (dates.length > 30) {
+      setMultiSaveToast('최대 30일까지 일괄 저장 가능합니다');
+      return;
+    }
+    setMultiSaveProgress({ current: 0, total: dates.length });
+    const studentsPayload: StudentAttendance[] = studentsRef.current.map((s) => ({
+      number: s.number,
+      status: statusesRef.current.get(studentKey(s)) ?? 'present',
+      reason: reasonsRef.current.get(studentKey(s)) || undefined,
+      memo: memosRef.current.get(studentKey(s)) || undefined,
+      ...(s.grade != null ? { grade: s.grade } : {}),
+      ...(s.classNum != null ? { classNum: s.classNum } : {}),
+    }));
+
+    let successCount = 0;
+    for (let i = 0; i < dates.length; i++) {
+      const d = dates[i]!;
+      try {
+        await saveRecord({
+          classId,
+          date: d,
+          period: selectedPeriod,
+          students: studentsPayload,
+        });
+        successCount += 1;
+      } catch {
+        // 실패 날짜 건너뜀
+      }
+      setMultiSaveProgress({ current: i + 1, total: dates.length });
+    }
+    setMultiSaveProgress(null);
+    setMultiDateSheetOpen(false);
+    setMultiSaveToast(
+      successCount === dates.length
+        ? `${dates.length}일에 동일 출결이 저장되었습니다`
+        : `${dates.length}일 중 ${successCount}일 저장됨`,
+    );
+    // 토스트 자동 해제
+    setTimeout(() => setMultiSaveToast(null), 3000);
+  }, [classId, selectedPeriod, saveRecord, multiDateSet]);
+
   // 교시 변경 — 변경 전 현재 교시의 미저장분을 즉시 flush 후 전환
   const handleSelectPeriod = async (p: number) => {
     setPeriodMenuOpen(false);
@@ -315,6 +370,14 @@ export function AttendanceCheckPage({
             </h2>
             <p className="text-sp-muted text-xs">{className}</p>
           </div>
+          <button
+            onClick={() => setMultiDateSheetOpen(true)}
+            className="px-2.5 py-1.5 text-xs font-medium text-sp-accent rounded-lg hover:bg-sp-accent/10 touch-target active:scale-[0.98] transition-all flex items-center gap-1"
+            aria-label="여러 날에 동일 출결 적용"
+          >
+            <span className="material-symbols-outlined text-base">date_range</span>
+            여러 날
+          </button>
           <button
             onClick={() => void handleComplete()}
             disabled={saving}
@@ -527,6 +590,63 @@ export function AttendanceCheckPage({
           </ul>
         )}
       </div>
+
+      {/* 여러 날 적용 Bottom Sheet (Phase 3 FR-09) */}
+      {multiDateSheetOpen && (
+        <div
+          className="fixed inset-0 z-[80] flex flex-col justify-end bg-black/50"
+          onClick={() => setMultiDateSheetOpen(false)}
+        >
+          <div
+            className="bg-sp-bg rounded-t-2xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="여러 날에 동일 출결 적용"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="flex items-center justify-between p-3 border-b border-sp-border sticky top-0 bg-sp-bg rounded-t-2xl">
+              <div>
+                <h3 className="text-sm font-bold text-sp-text">여러 날 적용</h3>
+                <p className="text-xs text-sp-muted">선택된 날짜 전체에 동일한 출결이 저장됩니다</p>
+              </div>
+              <button
+                onClick={() => void handleMultiDateSave()}
+                disabled={multiDateSet.size === 0 || multiSaveProgress !== null}
+                className="px-3 py-1.5 bg-sp-accent text-sp-accent-fg text-xs font-medium rounded-lg disabled:opacity-50 touch-target"
+              >
+                {multiSaveProgress
+                  ? `${multiSaveProgress.current}/${multiSaveProgress.total}일...`
+                  : multiDateSet.size > 0
+                    ? `${multiDateSet.size}일 저장`
+                    : '저장'}
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3">
+              <MultiDatePicker
+                mode="multi"
+                multiValues={multiDateSet}
+                onMultiChange={setMultiDateSet}
+                maxCount={30}
+                mobileSheet
+                inline
+                onToast={(msg) => setMultiSaveToast(msg)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 여러 날 저장 결과 토스트 */}
+      {multiSaveToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[90] px-4 py-2 bg-sp-card border border-sp-border rounded-lg shadow-xl text-sm text-sp-text"
+        >
+          {multiSaveToast}
+        </div>
+      )}
     </div>
   );
 }

@@ -62,9 +62,7 @@ function MealCell({ meals, hasManual }: { meals: readonly MealInfo[]; hasManual:
         <div key={idx}>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-detail font-bold text-sp-accent">{meal.mealType}</span>
-            {meal.calorie && (
-              <span className="text-caption text-sp-muted">{meal.calorie}</span>
-            )}
+            {meal.calorie && <span className="text-caption text-sp-muted">{meal.calorie}</span>}
           </div>
           <ul className="space-y-0.5">
             {meal.dishes.map((dish, di) => (
@@ -87,10 +85,17 @@ function MealCell({ meals, hasManual }: { meals: readonly MealInfo[]; hasManual:
 export function MealPage() {
   const { settings } = useSettingsStore();
   const {
-    weekMeals, weekLoading, loadWeekMeals,
-    manualMeals, manualLoaded, loadManualMeals,
-    mealSource, setMealSource,
-    saveManualMeal, getMergedMealsForDate, importFromCSV,
+    weekMeals,
+    weekLoading,
+    loadWeekMeals,
+    manualMeals,
+    manualLoaded,
+    loadManualMeals,
+    mealSource,
+    setMealSource,
+    saveManualMeal,
+    getMergedMealsForDate,
+    importFromCSV,
   } = useMealStore();
   // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
   const atptCode = settings.mealSchool?.atptCode || settings.neis?.atptCode;
@@ -105,7 +110,9 @@ export function MealPage() {
 
   // 파일 import 상태
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importResult, setImportResult] = useState<{ imported: number; errors: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; errors: string[] } | null>(
+    null,
+  );
 
   // 수동 급식 로드
   useEffect(() => {
@@ -203,7 +210,9 @@ export function MealPage() {
     return (
       <div className="-m-8 flex h-[calc(100%+4rem)] items-center justify-center flex-col gap-4">
         <span className="text-5xl">🍚</span>
-        <p className="text-sp-muted text-base">설정에서 학교를 등록하거나, 수동 입력 모드를 사용하세요</p>
+        <p className="text-sp-muted text-base">
+          설정에서 학교를 등록하거나, 수동 입력 모드를 사용하세요
+        </p>
         <button
           type="button"
           onClick={() => setMealSource('manual')}
@@ -222,9 +231,11 @@ export function MealPage() {
         iconIsMaterial
         title="급식"
         sticky
-        leftAddon={schoolName ? (
-          <span className="text-sp-muted text-sm font-sp-medium">{schoolName}</span>
-        ) : undefined}
+        leftAddon={
+          schoolName ? (
+            <span className="text-sp-muted text-sm font-sp-medium">{schoolName}</span>
+          ) : undefined
+        }
         rightActions={
           <>
             <select
@@ -265,11 +276,13 @@ export function MealPage() {
 
       {/* Import 결과 메시지 */}
       {importResult && (
-        <div className={`mx-8 mt-4 px-4 py-3 rounded-xl text-sm ${
-          importResult.errors.length > 0
-            ? 'bg-amber-500/10 border border-amber-500/30 text-amber-300'
-            : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
-        }`}>
+        <div
+          className={`mx-8 mt-4 px-4 py-3 rounded-xl text-sm ${
+            importResult.errors.length > 0
+              ? 'bg-amber-500/10 border border-amber-500/30 text-amber-100'
+              : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+          }`}
+        >
           <p>{importResult.imported}개 급식 메뉴를 가져왔습니다.</p>
           {importResult.errors.length > 0 && (
             <ul className="mt-1 text-xs opacity-80">
@@ -283,93 +296,96 @@ export function MealPage() {
 
       {/* ── 본문 영역 (주간 네비게이션 + 주간 급식표) ── */}
       <div className="flex-1 min-h-0 overflow-y-auto p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => goWeek(-1)}
-          className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
-        >
-          <span className="material-symbols-outlined">chevron_left</span>
-        </button>
-
-        <div className="flex items-center gap-3">
-          <h3 className="text-lg font-bold text-sp-text">{formatWeekLabel(weekDates)}</h3>
+        <div className="mb-6 flex items-center justify-between">
           <button
             type="button"
-            onClick={goThisWeek}
-            className="text-xs px-3 py-1 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
+            onClick={() => goWeek(-1)}
+            className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
           >
-            이번 주
+            <span className="material-symbols-outlined">chevron_left</span>
+          </button>
+
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-bold text-sp-text">{formatWeekLabel(weekDates)}</h3>
+            <button
+              type="button"
+              onClick={goThisWeek}
+              className="text-xs px-3 py-1 rounded-lg border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
+            >
+              이번 주
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => goWeek(1)}
+            className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
+          >
+            <span className="material-symbols-outlined">chevron_right</span>
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => goWeek(1)}
-          className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-colors"
-        >
-          <span className="material-symbols-outlined">chevron_right</span>
-        </button>
-      </div>
-
-      {/* 주간 급식표 */}
-      <div>
-        {weekLoading && mealSource !== 'manual' ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="w-6 h-6 border-2 border-sp-accent border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-5 gap-3">
-            {/* 헤더 */}
-            {weekDates.map((date, i) => {
-              const isToday = date === today;
-              return (
-                <div
-                  key={date}
-                  className={`text-center py-3 rounded-t-xl font-bold text-sm ${
-                    isToday
-                      ? 'bg-sp-accent/20 text-sp-accent'
-                      : 'bg-sp-surface text-sp-muted'
-                  }`}
-                >
-                  <div>{DAY_LABELS[i]}</div>
-                  <div className="text-xs mt-0.5">{formatDateDisplay(date)}</div>
-                </div>
-              );
-            })}
-
-            {/* 급식 내용 */}
-            {weekDates.map((date) => {
-              const mergedMeals = getMergedMealsForDate(date);
-              const hasManual = (manualMeals[date]?.length ?? 0) > 0;
-              const isToday = date === today;
-              return (
-                <div
-                  key={`meal-${date}`}
-                  className={`rounded-b-xl p-3 min-h-[200px] flex flex-col ${
-                    isToday
-                      ? 'bg-sp-card ring-1 ring-sp-accent'
-                      : 'bg-sp-card ring-1 ring-sp-border'
-                  }`}
-                >
-                  <div className="flex-1">
-                    <MealCell meals={mergedMeals} hasManual={hasManual && mealSource !== 'neis'} />
-                  </div>
-                  {/* 수동 입력 버튼 */}
-                  <button
-                    type="button"
-                    onClick={() => setEditingDate(date)}
-                    className="mt-2 w-full py-1 text-caption text-sp-muted hover:text-sp-accent border border-dashed border-sp-border rounded-lg transition-colors"
+        {/* 주간 급식표 */}
+        <div>
+          {weekLoading && mealSource !== 'manual' ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-6 h-6 border-2 border-sp-accent border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-5 gap-3">
+              {/* 헤더 */}
+              {weekDates.map((date, i) => {
+                const isToday = date === today;
+                return (
+                  <div
+                    key={date}
+                    className={`text-center py-3 rounded-t-xl font-bold text-sm ${
+                      isToday ? 'bg-sp-accent/20 text-sp-accent' : 'bg-sp-surface text-sp-muted'
+                    }`}
                   >
-                    <span className="material-symbols-outlined text-xs align-middle mr-0.5">edit</span>
-                    수동 입력
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                    <div>{DAY_LABELS[i]}</div>
+                    <div className="text-xs mt-0.5">{formatDateDisplay(date)}</div>
+                  </div>
+                );
+              })}
+
+              {/* 급식 내용 */}
+              {weekDates.map((date) => {
+                const mergedMeals = getMergedMealsForDate(date);
+                const hasManual = (manualMeals[date]?.length ?? 0) > 0;
+                const isToday = date === today;
+                return (
+                  <div
+                    key={`meal-${date}`}
+                    className={`rounded-b-xl p-3 min-h-[200px] flex flex-col ${
+                      isToday
+                        ? 'bg-sp-card ring-1 ring-sp-accent'
+                        : 'bg-sp-card ring-1 ring-sp-border'
+                    }`}
+                  >
+                    <div className="flex-1">
+                      <MealCell
+                        meals={mergedMeals}
+                        hasManual={hasManual && mealSource !== 'neis'}
+                      />
+                    </div>
+                    {/* 수동 입력 버튼 */}
+                    <button
+                      type="button"
+                      onClick={() => setEditingDate(date)}
+                      className="mt-2 w-full py-1 text-caption text-sp-muted hover:text-sp-accent border border-dashed border-sp-border rounded-lg transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-xs align-middle mr-0.5">
+                        edit
+                      </span>
+                      수동 입력
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 수동 입력 모달 */}

@@ -2,6 +2,7 @@ import { NAV_ITEMS } from '@adapters/components/Layout/Sidebar';
 import type { PageId } from '@adapters/components/Layout/Sidebar';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
 import { useSettingsStore, DEFAULT_SHORTCUTS } from '@adapters/stores/useSettingsStore';
+import { useMultiDateAttendanceIntentStore } from '@adapters/stores/useMultiDateAttendanceIntentStore';
 import { comboToDisplay, isMacOS } from '@adapters/hooks/shortcut/keyNormalize';
 
 export type CommandGroupLabel = '페이지' | '빠른 추가' | '설정';
@@ -96,6 +97,36 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
       shortcut: comboFor('quickAdd.note'),
       run: () => useQuickAddStore.getState().open('note'),
     },
+    {
+      id: 'multiDateAttendance.open',
+      label: '여러 날 출결 일괄 등록',
+      group: '빠른 추가' as const,
+      icon: 'date_range',
+      keywords: [
+        '여러',
+        '날',
+        '날짜',
+        '출결',
+        '결석',
+        '지각',
+        '조퇴',
+        '결과',
+        '일괄',
+        '다중',
+        'multi',
+        'attendance',
+        'absence',
+        'date',
+        '교외체험학습',
+        '코로나',
+        '격리',
+        '인플루엔자',
+      ],
+      run: () => {
+        useMultiDateAttendanceIntentStore.getState().setIntent('multi');
+        onNavigate('homeroom');
+      },
+    },
   ];
 
   const settingsCommands: Command[] = [
@@ -121,10 +152,7 @@ export function matchesQuery(command: Command, query: string): boolean {
 }
 
 /** 그룹별로 커맨드를 정렬하고 필터링 결과를 그룹 단위로 반환 */
-export function filterAndGroupCommands(
-  commands: Command[],
-  query: string,
-): CommandGroup[] {
+export function filterAndGroupCommands(commands: Command[], query: string): CommandGroup[] {
   const filtered = commands.filter((cmd) => matchesQuery(cmd, query));
 
   const groupOrder: CommandGroupLabel[] = ['빠른 추가', '페이지', '설정'];
