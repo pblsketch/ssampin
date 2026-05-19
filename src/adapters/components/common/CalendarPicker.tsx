@@ -1,8 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  DAY_LABELS,
+  formatDateStr,
+  parseDateStr,
+  isSameDay,
+  getCalendarDays,
+} from './calendarUtils';
 
 interface CalendarPickerProps {
-  value: string;                    // "2026-03-24"
+  value: string; // "2026-03-24"
   onChange: (date: string) => void;
   /** 수업이 있는 요일 (JS getDay: 0=일, 1=월, ..., 6=토) */
   lessonDays?: readonly number[];
@@ -13,49 +20,15 @@ interface CalendarPickerProps {
   portal?: boolean;
   /** 커스텀 강조 색상 (과목 색상 등). 미지정 시 기본 sp-accent 사용 */
   accentColor?: {
-    text: string;      // e.g. 'text-yellow-300'
-    bg: string;        // e.g. 'bg-yellow-500/20'
-    bgSolid: string;   // e.g. 'bg-yellow-400'
+    text: string; // e.g. 'text-yellow-300'
+    bg: string; // e.g. 'bg-yellow-500/20'
+    bgSolid: string; // e.g. 'bg-yellow-400'
   };
 }
 
 /* ── 유틸 ── */
-
-function formatDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function parseDateStr(s: string): Date {
-  return new Date(s + 'T00:00:00');
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
-
-function getCalendarDays(year: number, month: number): Date[] {
-  const firstDay = new Date(year, month, 1);
-  const startOffset = firstDay.getDay(); // 0=일
-
-  const days: Date[] = [];
-  // 이전 달 빈칸
-  for (let i = startOffset - 1; i >= 0; i--) {
-    days.push(new Date(year, month, -i));
-  }
-  // 이번 달
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  for (let d = 1; d <= daysInMonth; d++) {
-    days.push(new Date(year, month, d));
-  }
-  // 다음 달 (6줄 채우기)
-  const remaining = 42 - days.length;
-  for (let d = 1; d <= remaining; d++) {
-    days.push(new Date(year, month + 1, d));
-  }
-  return days;
-}
+// formatDateStr, parseDateStr, isSameDay, DAY_LABELS, getCalendarDays 는
+// `./calendarUtils` 에서 공유. 외부 import 시그니처는 무변경.
 
 /* ── Portal 드롭다운 위치 계산 ── */
 
@@ -177,10 +150,13 @@ export function CalendarPicker({
     });
   }, []);
 
-  const handleSelect = useCallback((d: Date) => {
-    onChange(formatDateStr(d));
-    setOpen(false);
-  }, [onChange]);
+  const handleSelect = useCallback(
+    (d: Date) => {
+      onChange(formatDateStr(d));
+      setOpen(false);
+    },
+    [onChange],
+  );
 
   const handleToday = useCallback(() => {
     onChange(formatDateStr(today));
@@ -258,13 +234,14 @@ export function CalendarPicker({
               onClick={() => handleSelect(d)}
               className={`relative flex flex-col items-center justify-center h-8 rounded-lg
                          text-xs transition-colors
-                ${isSelected
-                  ? `${bgSolidColor} text-white font-bold`
-                  : isToday
-                    ? `${bgColor} ${textColor} font-medium`
-                    : isCurrentMonth
-                      ? 'hover:bg-sp-text/10'
-                      : 'opacity-30'
+                ${
+                  isSelected
+                    ? `${bgSolidColor} text-white font-bold`
+                    : isToday
+                      ? `${bgColor} ${textColor} font-medium`
+                      : isCurrentMonth
+                        ? 'hover:bg-sp-text/10'
+                        : 'opacity-30'
                 }
                 ${!isSelected && isCurrentMonth && isSunday ? 'text-red-400' : ''}
                 ${!isSelected && isCurrentMonth && isSaturday ? 'text-blue-400' : ''}
@@ -313,19 +290,15 @@ export function CalendarPicker({
       >
         <span className="flex-1 text-left">
           {value || '날짜 선택'}
-          {dayOfWeekStr && (
-            <span className="text-sp-muted ml-1">({dayOfWeekStr})</span>
-          )}
+          {dayOfWeekStr && <span className="text-sp-muted ml-1">({dayOfWeekStr})</span>}
         </span>
-        <span className="material-symbols-outlined text-sp-muted text-base shrink-0">calendar_today</span>
+        <span className="material-symbols-outlined text-sp-muted text-base shrink-0">
+          calendar_today
+        </span>
       </button>
 
       {/* ── 드롭다운 달력 ── */}
-      {open && (
-        portal
-          ? createPortal(dropdownContent, document.body)
-          : dropdownContent
-      )}
+      {open && (portal ? createPortal(dropdownContent, document.body) : dropdownContent)}
     </div>
   );
 }
