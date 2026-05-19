@@ -1,10 +1,12 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import type { StudentAttendance } from '@domain/entities/Attendance';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { AttendanceMatrixCore } from './shared/AttendanceMatrixCore';
+
+const MATRIX_MULTI_DATE_GUIDE_KEY = 'ssampin:attendance-matrix-multi-date-guide-dismissed';
 
 export interface AttendanceMatrixViewProps {
   classId: string;
@@ -68,10 +70,9 @@ export function AttendanceMatrixView({ classId, date, onDateChange }: Attendance
   );
 
   const saveDay = useMemo(
-    () =>
-      async (d: string, byPeriod: ReadonlyMap<number, readonly StudentAttendance[]>) => {
-        await saveDayAttendance(classId, d, byPeriod);
-      },
+    () => async (d: string, byPeriod: ReadonlyMap<number, readonly StudentAttendance[]>) => {
+      await saveDayAttendance(classId, d, byPeriod);
+    },
     [classId, saveDayAttendance],
   );
 
@@ -87,15 +88,51 @@ export function AttendanceMatrixView({ classId, date, onDateChange }: Attendance
     [sortedStudents],
   );
 
+  const [guideDismissed, setGuideDismissed] = useState(
+    () => localStorage.getItem(MATRIX_MULTI_DATE_GUIDE_KEY) === 'true',
+  );
+
+  const dismissGuide = () => {
+    setGuideDismissed(true);
+    localStorage.setItem(MATRIX_MULTI_DATE_GUIDE_KEY, 'true');
+  };
+
   return (
-    <AttendanceMatrixCore
-      students={matrixStudents}
-      classId={classId}
-      date={date}
-      onDateChange={onDateChange}
-      loadDayRecords={loadDayRecords}
-      saveDay={saveDay}
-      matchingPeriods={matchingPeriods}
-    />
+    <div className="flex flex-col gap-2">
+      {!guideDismissed && (
+        <div
+          role="note"
+          className="flex items-start gap-2 bg-sp-accent/10 border border-sp-accent/30 rounded-xl px-4 py-2.5 text-sm text-sp-accent"
+        >
+          <span className="material-symbols-outlined text-base">info</span>
+          <div className="flex-1">
+            <div className="font-medium">
+              전체 교시 매트릭스는 한 번에 한 날짜만 편집할 수 있습니다
+            </div>
+            <div className="text-xs text-sp-muted mt-0.5">
+              여러 날짜를 일괄 등록하려면 상단 [단일 교시] 모드로 전환 후 [여러 날] 토글을
+              사용해주세요.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={dismissGuide}
+            aria-label="안내 닫기"
+            className="shrink-0 p-1 rounded-lg hover:bg-sp-text/10 transition-colors text-sp-muted"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      )}
+      <AttendanceMatrixCore
+        students={matrixStudents}
+        classId={classId}
+        date={date}
+        onDateChange={onDateChange}
+        loadDayRecords={loadDayRecords}
+        saveDay={saveDay}
+        matchingPeriods={matchingPeriods}
+      />
+    </div>
   );
 }
