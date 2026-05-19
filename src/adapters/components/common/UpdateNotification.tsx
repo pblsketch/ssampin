@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { Modal } from '@adapters/components/common/Modal';
 import { DescriptionRenderer } from '@adapters/components/common/DescriptionRenderer';
+import { LaterDropdown } from '@adapters/components/common/LaterDropdown';
+import {
+  useUpdatePreferencesStore,
+  shouldShowUpdateModal,
+} from '@adapters/stores/useUpdatePreferencesStore';
 
 const NOTION_GUIDE_URL = 'https://supsori.notion.site/31676e6c2ab7809ab08eca1f9f307a97';
 const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
@@ -28,6 +33,8 @@ interface VersionNote {
   date: string;
   highlights: string[];
   changes: ChangeItem[];
+  /** 보안 업데이트 — true 시 모든 게이트 우회 + 건너뛰기 메뉴 숨김 + 🔒 헤더 변형. */
+  isSecurity?: boolean;
 }
 
 interface ReleaseNotesData {
@@ -97,7 +104,7 @@ export function UpdateNotification() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [progress, setProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
-  const [dismissed, setDismissed] = useState(false);
+  const [isSecurity, setIsSecurity] = useState(false);
   const [releaseNotes, setReleaseNotes] = useState<VersionNote[]>([]);
   const [noteLoading, setNoteLoading] = useState(false);
   const [, setUserInitiatedDownload] = useState(false);
@@ -110,10 +117,29 @@ export function UpdateNotification() {
 
     const cleanups: (() => void)[] = [];
 
-    cleanups.push(api.onUpdateAvailable((updateInfo) => {
+    cleanups.push(api.onUpdateAvailable(async (updateInfo) => {
       setInfo(updateInfo);
-      setStatus('available');
-      setDismissed(false);
+
+      // release-notes.json 조회 — isSecurity 결정 + 게이트 판정
+      const currentVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+      const notes = await fetchReleaseNotesSince(currentVersion, updateInfo.version);
+      // fetch 실패(빈 배열)는 보수적으로 보안 업데이트로 간주 (사용자 보호)
+      const security = notes.length === 0 ? true : (notes[0]?.isSecurity ?? false);
+      setIsSecurity(security);
+
+      const shouldShow = shouldShowUpdateModal(
+        updateInfo.version,
+        security,
+        useUpdatePreferencesStore.getState()
+      );
+
+      if (shouldShow) {
+        useUpdatePreferencesStore.getState().markNotified(updateInfo.version);
+        setStatus('available');
+      } else {
+        // 모달 안 띄움 — 사이드바 배지가 폴백
+        setStatus('idle');
+      }
     }));
 
     cleanups.push(api.onUpdateDownloadProgress((p) => {
@@ -138,12 +164,22 @@ export function UpdateNotification() {
       setStatus('error');
       setTimeout(() => {
         setStatus('idle');
-        setDismissed(false);
       }, 5000);
     }));
 
     return () => { cleanups.forEach((fn) => fn()); };
   }, []);
+
+  // 사이드바 배지 클릭 → 모달 강제 재노출
+  useEffect(() => {
+    const handler = () => {
+      if (info) {
+        setStatus('available');
+      }
+    };
+    window.addEventListener('ssampin:show-update-modal', handler);
+    return () => window.removeEventListener('ssampin:show-update-modal', handler);
+  }, [info]);
 
   // Fetch release notes when update is available
   useEffect(() => {
@@ -177,13 +213,32 @@ export function UpdateNotification() {
     window.electronAPI?.installUpdate();
   }, [track, info]);
 
+  // X 버튼 / 백드롭 클릭 / ESC — 보안이면 1일, 일반이면 3일 스누즈
   const handleDismiss = useCallback(() => {
-    setDismissed(true);
+    useUpdatePreferencesStore.getState().snooze(isSecurity ? 1 : 3);
+    setStatus('idle');
+  }, [isSecurity]);
+
+  const handleSnooze1d = useCallback(() => {
+    useUpdatePreferencesStore.getState().snooze(1);
+    setStatus('idle');
   }, []);
+
+  const handleSnooze3d = useCallback(() => {
+    useUpdatePreferencesStore.getState().snooze(3);
+    setStatus('idle');
+  }, []);
+
+  const handleSkip = useCallback(() => {
+    if (info?.version) {
+      useUpdatePreferencesStore.getState().skip(info.version);
+    }
+    setStatus('idle');
+  }, [info?.version]);
 
   if (status === 'idle') return null;
 
-  const isOpen = !dismissed;
+  const isOpen = true; // status === 'idle' 일 때 위에서 일찍 반환됨
   const isDownloading = status === 'downloading';
   const totalChanges = releaseNotes.reduce((n, v) => n + v.changes.length, 0);
 
@@ -203,10 +258,27 @@ export function UpdateNotification() {
           {/* Header */}
           <div className="px-6 pt-6 pb-3 flex items-start justify-between gap-3 shrink-0">
             <div>
-              <h3 className="text-sp-text text-base font-bold leading-tight">
-                쌤핀이 v{info.version}로 업데이트됐어요
-              </h3>
-              {releaseNotes[0]?.date && (
+              {isSecurity ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-amber-400" aria-hidden="true">
+                      lock
+                    </span>
+                    <h3 className="text-sp-text text-base font-bold leading-tight">
+                      보안 업데이트 — v{info.version}
+                    </h3>
+                  </div>
+                  <p className="text-amber-300/80 text-xs mt-1 leading-relaxed">
+                    이 업데이트는 보안 패치를 포함하고 있어 건너뛸 수 없어요.
+                    가능한 한 빠른 업데이트를 권장해요.
+                  </p>
+                </>
+              ) : (
+                <h3 className="text-sp-text text-base font-bold leading-tight">
+                  쌤핀이 v{info.version}로 업데이트됐어요
+                </h3>
+              )}
+              {!isSecurity && releaseNotes[0]?.date && (
                 <p className="text-sp-muted text-xs mt-0.5">{releaseNotes[0].date}</p>
               )}
             </div>
@@ -337,12 +409,12 @@ export function UpdateNotification() {
               </a>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleDismiss}
-                className="px-3 py-1.5 text-sm text-sp-muted hover:text-sp-text transition-colors rounded-lg hover:bg-sp-surface"
-              >
-                닫기
-              </button>
+              <LaterDropdown
+                isSecurity={isSecurity}
+                onSnooze1d={handleSnooze1d}
+                onSnooze3d={handleSnooze3d}
+                onSkip={handleSkip}
+              />
               <button
                 onClick={handleDownload}
                 className="px-4 py-1.5 text-sm bg-sp-accent text-white rounded-lg hover:bg-blue-600 transition-colors font-medium flex items-center gap-1.5"

@@ -51,6 +51,15 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useShareStore } from '@adapters/stores/useShareStore';
 import { SyncStatusBar } from '@adapters/components/Calendar/SyncStatusBar';
 import { DriveSyncIndicator } from '@adapters/components/common/DriveSyncIndicator';
+import { useNewVersionAvailable } from '@adapters/hooks/useNewVersionAvailable';
+import {
+  useUpdatePreferencesStore,
+  shouldShowSidebarBadge,
+} from '@adapters/stores/useUpdatePreferencesStore';
+
+function dispatchShowUpdateModal(): void {
+  window.dispatchEvent(new Event('ssampin:show-update-modal'));
+}
 
 interface SidebarProps {
   currentPage: PageId;
@@ -134,6 +143,13 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
 
   const [draggedId, setDraggedId] = useState<PageId | null>(null);
   const [dragOverId, setDragOverId] = useState<PageId | null>(null);
+
+  // 새 버전 배지 — 모달이 닫힌 후에도 사이드바에서 강제 재호출 가능
+  const newVersion = useNewVersionAvailable();
+  const updatePrefs = useUpdatePreferencesStore();
+  const currentVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+  const showUpdateBadge =
+    !!newVersion && shouldShowSidebarBadge(newVersion, currentVersion, updatePrefs);
 
   const sortedItems = useMemo(() => {
     const order = settings.menuOrder;
@@ -220,11 +236,31 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
           aria-label={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
           aria-expanded={!sidebarCollapsed}
           title={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
-          className="text-sp-muted hover:text-sp-text hover:bg-sp-text/5 rounded-lg p-1.5 transition-colors shrink-0"
+          className="relative text-sp-muted hover:text-sp-text hover:bg-sp-text/5 rounded-lg p-1.5 transition-colors shrink-0"
         >
           <span className="material-symbols-outlined text-xl">
             {sidebarCollapsed ? 'menu' : 'menu_open'}
           </span>
+          {sidebarCollapsed && showUpdateBadge && newVersion && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatchShowUpdateModal();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  dispatchShowUpdateModal();
+                }
+              }}
+              aria-label={`새 버전 ${newVersion} 사용 가능 — 클릭해서 자세히 보기`}
+              title={`${newVersion} 사용 가능`}
+              className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-sp-accent hover:scale-125 transition-transform cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
+            />
+          )}
         </button>
       </div>
 
@@ -334,7 +370,18 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
         )}
 
         {!sidebarCollapsed && (
-          <p className="text-caption text-sp-muted text-center mt-2">v2.0.5</p>
+          <p className="text-caption text-sp-muted text-center mt-2">
+            v2.0.5
+            {showUpdateBadge && newVersion && (
+              <button
+                type="button"
+                onClick={dispatchShowUpdateModal}
+                aria-label={`새 버전 ${newVersion} 사용 가능 — 클릭해서 자세히 보기`}
+                title={`${newVersion} 사용 가능 — 클릭해서 자세히 보기`}
+                className="inline-block w-1.5 h-1.5 rounded-full bg-sp-accent ml-1.5 align-middle hover:scale-125 transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent"
+              />
+            )}
+          </p>
         )}
       </div>
     </aside>
