@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Drawer } from '@adapters/components/common/Drawer';
 import { useSeatingStore } from '@adapters/stores/useSeatingStore';
+import type { AvoidHistoryStrength } from '@adapters/stores/useSeatingStore';
 import type { SeatingSnapshot, SnapshotSource } from '@domain/entities/SeatingSnapshot';
 import { SnapshotPreviewGrid } from './SnapshotPreviewGrid';
 import { SnapshotDiffView } from './SnapshotDiffView';
@@ -47,6 +48,8 @@ export function SeatingHistoryPanel({ isOpen, onClose }: SeatingHistoryPanelProp
   const saveCurrentAsSnapshot = useSeatingStore((s) => s.saveCurrentAsSnapshot);
   const restoreSnapshot = useSeatingStore((s) => s.restoreSnapshot);
   const deleteSnapshot = useSeatingStore((s) => s.deleteSnapshot);
+  const avoidStrength = useSeatingStore((s) => s.avoidHistoryStrength);
+  const setAvoidStrength = useSeatingStore((s) => s.setAvoidHistoryStrength);
 
   const [compareId, setCompareId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -127,6 +130,47 @@ export function SeatingHistoryPanel({ isOpen, onClose }: SeatingHistoryPanelProp
           <span className="material-symbols-outlined text-lg">bookmark_add</span>
           <span>현재 배치 저장</span>
         </button>
+      </div>
+
+      {/* 이전 자리 피하기 강도 (Phase 2) */}
+      <div className="px-6 pb-3">
+        <div className="bg-sp-surface/40 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className="material-symbols-outlined text-sm text-sp-muted">tune</span>
+            <span className="text-sm font-medium text-sp-text">이전 자리 피하기</span>
+          </div>
+          <p className="text-xs text-sp-muted mb-2">
+            셔플할 때 최근 3번 배치와 같은 자리에 학생을 두지 않도록 시도합니다.
+          </p>
+          <div role="radiogroup" aria-label="이전 자리 피하기 강도" className="flex gap-1.5">
+            {(
+              [
+                { value: 'off', label: 'OFF', desc: '제약 없음' },
+                { value: 'prefer', label: '가능하면', desc: '가급적 피하기' },
+                { value: 'strict', label: '반드시', desc: '엄격하게 적용' },
+              ] as ReadonlyArray<{ value: AvoidHistoryStrength; label: string; desc: string }>
+            ).map((opt) => {
+              const active = avoidStrength === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setAvoidStrength(opt.value)}
+                  className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    active
+                      ? 'bg-sp-accent text-white'
+                      : 'bg-sp-card text-sp-text hover:bg-sp-text/5 ring-1 ring-sp-border'
+                  }`}
+                  title={opt.desc}
+                >
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* 비교 모드 */}

@@ -17,6 +17,9 @@ import {
   seatConstraintsRepository,
   seatingSnapshotRepository,
 } from '@adapters/di/container';
+
+/** "이전 자리 피하기" UI 강도. UI 라벨: off="OFF", prefer="가능하면", strict="반드시" */
+export type AvoidHistoryStrength = 'off' | 'prefer' | 'strict';
 import { SwapSeats } from '@usecases/seating/SwapSeats';
 import { RandomizeSeats } from '@usecases/seating/RandomizeSeats';
 import { UpdateSeating } from '@usecases/seating/UpdateSeating';
@@ -152,6 +155,11 @@ interface SeatingState {
   /** 스냅샷 삭제 */
   deleteSnapshot: (id: string) => Promise<void>;
 
+  /* ─── "이전 자리 피하기" 강도 (Phase 2) ─── */
+  /** off=비활성, prefer=가능하면, strict=반드시 */
+  avoidHistoryStrength: AvoidHistoryStrength;
+  setAvoidHistoryStrength: (strength: AvoidHistoryStrength) => void;
+
   /** 파생 값 */
   studentCount: () => number;
   emptyCount: () => number;
@@ -208,7 +216,15 @@ function newSnapshotId(): string {
 
 export const useSeatingStore = create<SeatingState>((set, get) => {
   const swapSeatsUC = new SwapSeats(seatingRepository);
-  const randomizeUC = new RandomizeSeats(seatingRepository, seatConstraintsRepository);
+  const randomizeUC = new RandomizeSeats(
+    seatingRepository,
+    seatConstraintsRepository,
+    seatingSnapshotRepository,
+    () => {
+      const strength = get().avoidHistoryStrength;
+      return strength === 'off' ? undefined : { strength };
+    },
+  );
   const updateUC = new UpdateSeating(seatingRepository);
   const clearUC = new ClearSeating(seatingRepository);
 
@@ -226,6 +242,7 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     isEditing: false,
     snapshots: [],
     snapshotsLoaded: false,
+    avoidHistoryStrength: 'off',
 
     load: async () => {
       if (get().loaded) return;
@@ -606,6 +623,12 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       } catch {
         // 무시
       }
+    },
+
+    /* ─── "이전 자리 피하기" 강도 (Phase 2) ─── */
+
+    setAvoidHistoryStrength: (strength) => {
+      set({ avoidHistoryStrength: strength });
     },
 
     studentCount: () => countStudents(get().seating.seats),

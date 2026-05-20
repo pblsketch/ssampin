@@ -8,20 +8,14 @@ import type {
   ZoneConstraint,
 } from '../entities/SeatConstraints';
 import type { OddColumnMode } from './seatingLayoutRules';
-import {
-  buildPairGroups,
-} from './seatingLayoutRules';
+import { buildPairGroups } from './seatingLayoutRules';
 export type { OddColumnMode, PairGroup } from './seatingLayoutRules';
 export { buildPairGroups } from './seatingLayoutRules';
 
 /**
  * 좌석 위치가 유효한지 검증
  */
-export function validateSeatPosition(
-  seating: SeatingData,
-  row: number,
-  col: number,
-): boolean {
+export function validateSeatPosition(seating: SeatingData, row: number, col: number): boolean {
   return row >= 0 && row < seating.rows && col >= 0 && col < seating.cols;
 }
 
@@ -45,10 +39,7 @@ export function swapSeatIds(
 /**
  * Fisher-Yates 셔플 (내부 헬퍼)
  */
-function fisherYatesShuffle<T>(
-  arr: T[],
-  random: () => number,
-): T[] {
+function fisherYatesShuffle<T>(arr: T[], random: () => number): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
@@ -140,18 +131,14 @@ export function shuffleSeats(
 /**
  * 좌석 배열에서 학생 수 (null이 아닌 칸) 세기
  */
-export function countStudents(
-  seats: readonly (readonly (string | null)[])[],
-): number {
+export function countStudents(seats: readonly (readonly (string | null)[])[]): number {
   return seats.flat().filter((id) => id !== null).length;
 }
 
 /**
  * 빈 자리 수 세기
  */
-export function countEmptySeats(
-  seats: readonly (readonly (string | null)[])[],
-): number {
+export function countEmptySeats(seats: readonly (readonly (string | null)[])[]): number {
   return seats.flat().filter((id) => id === null).length;
 }
 
@@ -159,21 +146,14 @@ export function countEmptySeats(
  * 모든 좌석을 null로 초기화한 새 seats 배열 반환 (순수 함수)
  * 행/열 차원은 유지, 학생 배정만 제거
  */
-export function clearAllSeats(
-  rows: number,
-  cols: number,
-): (string | null)[][] {
-  return Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => null),
-  );
+export function clearAllSeats(rows: number, cols: number): (string | null)[][] {
+  return Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
 }
 
 /**
  * 학생 이름으로 Student 목록에서 ID 맵 생성
  */
-export function buildStudentMap(
-  students: readonly Student[],
-): ReadonlyMap<string, Student> {
+export function buildStudentMap(students: readonly Student[]): ReadonlyMap<string, Student> {
   return new Map(students.map((s) => [s.id, s]));
 }
 
@@ -185,6 +165,22 @@ export interface ShuffleResult {
   readonly attempts: number;
   readonly relaxed: boolean;
   readonly violations: string[];
+}
+
+/**
+ * "이전 자리 피하기" 옵션 (Phase 2).
+ *
+ * 과거 N개 배치와 비교해, 학생이 같은 좌표에 다시 앉지 않도록 한다.
+ * 'strict'는 fallback 단계에서 분리 제약보다 먼저 해제되는 약한 제약.
+ */
+export interface AvoidHistoryOption {
+  /** 비교할 과거 배치들의 seats (보통 최근 1~3개 스냅샷) */
+  readonly previousSeats: readonly (readonly (readonly (string | null)[])[])[];
+  /**
+   * - 'strict': 한 학생이라도 과거 좌표 중 하나와 동일하면 reject. 단, fallback 단계에서 가장 먼저 해제됨.
+   * - 'prefer': 위반 학생 수를 ShuffleResult.violations 에 기록하되 reject 하지 않음 (best-effort).
+   */
+  readonly strength: 'strict' | 'prefer';
 }
 
 /**
@@ -201,13 +197,27 @@ export function getZonePositions(
     for (let c = 0; c < cols; c++) {
       let match = false;
       switch (zone) {
-        case 'front1': match = r === 0; break;
-        case 'front2': match = r <= 1; break;
-        case 'front3': match = r <= 2; break;
-        case 'back1': match = r === rows - 1; break;
-        case 'back2': match = r >= rows - 2; break;
-        case 'left1': match = c === 0; break;
-        case 'right1': match = c === cols - 1; break;
+        case 'front1':
+          match = r === 0;
+          break;
+        case 'front2':
+          match = r <= 1;
+          break;
+        case 'front3':
+          match = r <= 2;
+          break;
+        case 'back1':
+          match = r === rows - 1;
+          break;
+        case 'back2':
+          match = r >= rows - 2;
+          break;
+        case 'left1':
+          match = c === 0;
+          break;
+        case 'right1':
+          match = c === cols - 1;
+          break;
         case 'center': {
           const notEdgeRow = r > 0 && r < rows - 1;
           const notEdgeCol = c > 0 && c < cols - 1;
@@ -231,12 +241,7 @@ export function getZonePositions(
 /**
  * 맨해튼 거리
  */
-export function manhattanDistance(
-  r1: number,
-  c1: number,
-  r2: number,
-  c2: number,
-): number {
+export function manhattanDistance(r1: number, c1: number, r2: number, c2: number): number {
   return Math.abs(r1 - r2) + Math.abs(c1 - c2);
 }
 
@@ -294,7 +299,9 @@ export function validateConstraints(
     if (posA && posB) {
       const dist = manhattanDistance(posA.row, posA.col, posB.row, posB.col);
       if (dist < sep.minDistance) {
-        violations.push(`분리 위반: ${sep.studentA}-${sep.studentB} (거리 ${dist} < ${sep.minDistance})`);
+        violations.push(
+          `분리 위반: ${sep.studentA}-${sep.studentB} (거리 ${dist} < ${sep.minDistance})`,
+        );
       }
     }
   }
@@ -306,7 +313,9 @@ export function validateConstraints(
     if (posA && posB) {
       const dist = manhattanDistance(posA.row, posA.col, posB.row, posB.col);
       if (dist > adj.maxDistance) {
-        violations.push(`인접 위반: ${adj.studentA}-${adj.studentB} (거리 ${dist} > ${adj.maxDistance})`);
+        violations.push(
+          `인접 위반: ${adj.studentA}-${adj.studentB} (거리 ${dist} > ${adj.maxDistance})`,
+        );
       }
     }
   }
@@ -329,14 +338,25 @@ export function shuffleSeatsWithConstraints(
   rows: number,
   cols: number,
   random: () => number = Math.random,
-  options?: { pairMode?: boolean; oddColumnMode?: OddColumnMode },
+  options?: {
+    pairMode?: boolean;
+    oddColumnMode?: OddColumnMode;
+    /**
+     * "이전 자리 피하기" 옵션 (Phase 2).
+     * - strict: 위반 시 해당 배치 reject. 200회 실패 시 fallback 단계에서 이 제약이 가장 먼저 해제된다.
+     * - prefer: 위반 학생 수를 위반 리스트에 기록하지만 reject하지 않음 (best-effort).
+     * - undefined: 비활성 (기본).
+     */
+    avoidHistory?: AvoidHistoryOption;
+  },
 ): ShuffleResult {
-  // 조건이 없으면 기존 셔플과 동일
+  // 조건이 없으면 기존 셔플과 동일 (단, avoidHistory 가 활성화되면 정상 경로로 진입)
   if (
     constraints.fixedSeats.length === 0 &&
     constraints.zones.length === 0 &&
     constraints.separations.length === 0 &&
-    constraints.adjacencies.length === 0
+    constraints.adjacencies.length === 0 &&
+    !options?.avoidHistory
   ) {
     if (options?.pairMode) {
       return {
@@ -375,9 +395,7 @@ export function shuffleSeatsWithConstraints(
   // 나머지 학생 (고정도 영역도 아닌)
   const fixedIds = new Set(fixedMap.keys());
   const zoneIds = new Set(zoneStudents.map((z) => z.studentId));
-  const freeStudents = allStudentIds.filter(
-    (id) => !fixedIds.has(id) && !zoneIds.has(id),
-  );
+  const freeStudents = allStudentIds.filter((id) => !fixedIds.has(id) && !zoneIds.has(id));
 
   // 분리/인접 조건 (활성 학생만 필터)
   const activeIds = new Set(allStudentIds);
@@ -391,10 +409,47 @@ export function shuffleSeatsWithConstraints(
   let bestResult: ShuffleResult | null = null;
   let bestViolationCount = Infinity;
 
+  /**
+   * 한 배치에서 "이전 자리 피하기" 위반 학생 수를 계산.
+   * fixedSeats 학생은 위치를 사용자가 강제했으므로 위반 검사에서 제외한다.
+   */
+  const countAvoidHistoryViolations = (
+    grid: readonly (readonly (string | null)[])[],
+    previousSeats: readonly (readonly (readonly (string | null)[])[])[],
+  ): number => {
+    if (previousSeats.length === 0) return 0;
+    let count = 0;
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r];
+      if (!row) continue;
+      for (let c = 0; c < row.length; c++) {
+        const id = row[c];
+        if (id === null || id === undefined) continue;
+        if (fixedMap.has(id)) continue; // 사용자 강제 위치는 제외
+        for (const prev of previousSeats) {
+          const prevId = prev[r]?.[c];
+          if (prevId === id) {
+            count += 1;
+            break; // 한 학생은 1회만 카운트
+          }
+        }
+      }
+    }
+    return count;
+  };
+
   const tryArrange = (
     relaxOffset: number,
+    /**
+     * 이번 시도에서 avoidHistory 를 strict 로 강제할지.
+     * fallback 단계에서 false 로 호출되면 (prefer 와 동일하게) 위반 카운트만 기록.
+     */
+    enforceAvoidHistory: boolean,
   ): ShuffleResult | null => {
     const maxAttempts = 200;
+    const avoidHistory = options?.avoidHistory;
+    const previousSeats = avoidHistory?.previousSeats ?? [];
+    const strictAvoid = enforceAvoidHistory && avoidHistory?.strength === 'strict';
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       // 빈 그리드 생성
@@ -421,9 +476,7 @@ export function shuffleSeatsWithConstraints(
       let zoneFailed = false;
       for (const zc of zoneStudents) {
         const zonePositions = getZonePositions(zc.zone, rows, cols);
-        const available = zonePositions.filter(
-          (p) => !occupied.has(`${p.row},${p.col}`),
-        );
+        const available = zonePositions.filter((p) => !occupied.has(`${p.row},${p.col}`));
         if (available.length === 0) {
           zoneFailed = true;
           break;
@@ -438,8 +491,7 @@ export function shuffleSeatsWithConstraints(
       // 원본 seats에서 null이었던 좌표는 "빈자리"로 간주하여 freeSlots에서 제외한다
       // (단, 고정/영역이 이미 점유한 좌표는 occupied로 별도 관리되므로,
       //  사용자가 고정좌석으로 원본 빈자리를 지정한 경우는 덮어쓰기가 허용됨)
-      const isOriginallyEmpty = (r: number, c: number): boolean =>
-        seats[r]![c] === null;
+      const isOriginallyEmpty = (r: number, c: number): boolean => seats[r]![c] === null;
 
       const freeSlots: { row: number; col: number }[] = [];
       if (options?.pairMode) {
@@ -497,25 +549,51 @@ export function shuffleSeatsWithConstraints(
         }
       }
 
-      // 최선의 결과 추적
-      if (violations.length < bestViolationCount) {
-        bestViolationCount = violations.length;
+      // 4-bis단계: "이전 자리 피하기" 검증
+      const avoidViolationCount =
+        previousSeats.length > 0 ? countAvoidHistoryViolations(grid, previousSeats) : 0;
+
+      if (avoidViolationCount > 0) {
+        if (strictAvoid) {
+          // strict: 한 명이라도 위반이면 reject — 다음 attempt 로
+          violations.push(`이전 자리 위반: ${avoidViolationCount}명`);
+        } else if (avoidHistory) {
+          // prefer 또는 fallback 단계: 정보만 기록, reject 안 함
+          // best-effort 선택을 위해 위반 카운트를 별도 점수로 사용 (violations 에는 첨부하되 success 판정에서 제외)
+        }
+      }
+
+      // 점수: 일반 violations 가 우선, 동률이면 avoid 위반 적은 것 선호
+      const compositeScore = violations.length * 1000 + avoidViolationCount;
+      if (compositeScore < bestViolationCount) {
+        bestViolationCount = compositeScore;
         bestResult = {
           seats: grid,
-          success: violations.length === 0,
+          // strict 모드에서 avoid 위반이 violations 에 포함되면 success=false
+          // prefer 모드에서는 avoid 위반은 success 에 영향 없음
+          success: violations.length === 0 && (!strictAvoid || avoidViolationCount === 0),
           attempts: attempt,
           relaxed: relaxOffset > 0,
-          violations,
+          violations:
+            avoidHistory && !strictAvoid && avoidViolationCount > 0
+              ? [...violations, `이전 자리 권고 위반: ${avoidViolationCount}명`]
+              : violations,
         };
       }
 
-      if (violations.length === 0) {
+      if (violations.length === 0 && (!strictAvoid || avoidViolationCount === 0)) {
+        // strict 모드 + avoid 위반 없음 → 완전 성공
+        // prefer 모드는 avoid 위반과 무관하게 일반 violations=0 이면 성공
+        const finalViolations =
+          avoidHistory && !strictAvoid && avoidViolationCount > 0
+            ? [`이전 자리 권고 위반: ${avoidViolationCount}명`]
+            : [];
         return {
           seats: grid,
           success: true,
           attempts: attempt,
           relaxed: relaxOffset > 0,
-          violations: [],
+          violations: finalViolations,
         };
       }
     }
@@ -523,16 +601,22 @@ export function shuffleSeatsWithConstraints(
     return null; // maxAttempts 초과
   };
 
-  // 1차: 원본 조건으로 시도
-  const firstTry = tryArrange(0);
+  // 1차: 원본 조건 + avoidHistory strict 강제
+  const firstTry = tryArrange(0, true);
   if (firstTry) return firstTry;
 
-  // 2차: 분리 거리 -1 완화
-  const relaxedTry = tryArrange(1);
+  // 2차: avoidHistory 가장 약한 제약이므로 먼저 해제 (분리 거리는 유지)
+  if (options?.avoidHistory?.strength === 'strict') {
+    const noAvoidTry = tryArrange(0, false);
+    if (noAvoidTry) return noAvoidTry;
+  }
+
+  // 3차: 분리 거리 -1 완화 (avoidHistory 도 해제)
+  const relaxedTry = tryArrange(1, false);
   if (relaxedTry) return relaxedTry;
 
-  // 3차: 분리 거리 -2 완화
-  const moreRelaxed = tryArrange(2);
+  // 4차: 분리 거리 -2 완화
+  const moreRelaxed = tryArrange(2, false);
   if (moreRelaxed) return moreRelaxed;
 
   // 최종 실패: 최선의 배치 반환
