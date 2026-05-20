@@ -11,7 +11,12 @@ import {
 } from '@domain/rules/seatRules';
 import type { ShuffleResult } from '@domain/rules/seatRules';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
-import { seatingRepository, seatConstraintsRepository } from '@adapters/di/container';
+import type { SeatingSnapshot, SnapshotSource } from '@domain/entities/SeatingSnapshot';
+import {
+  seatingRepository,
+  seatConstraintsRepository,
+  seatingSnapshotRepository,
+} from '@adapters/di/container';
 import { SwapSeats } from '@usecases/seating/SwapSeats';
 import { RandomizeSeats } from '@usecases/seating/RandomizeSeats';
 import { UpdateSeating } from '@usecases/seating/UpdateSeating';
@@ -134,6 +139,19 @@ interface SeatingState {
   /** 명렬표 전체 교체 시 좌석 재생성 */
   rebuildFromRoster: (students: readonly Student[]) => Promise<void>;
 
+  /* ─── 자리배치 히스토리 (Phase 1) ─── */
+  /** 저장된 스냅샷 목록 (최신순) */
+  snapshots: readonly SeatingSnapshot[];
+  snapshotsLoaded: boolean;
+  /** 스냅샷 전체 로드 */
+  loadSnapshots: () => Promise<void>;
+  /** 현재 배치를 스냅샷으로 저장. label 미지정 시 자동 생성. */
+  saveCurrentAsSnapshot: (label?: string, source?: SnapshotSource) => Promise<void>;
+  /** 특정 스냅샷 ID로 좌석 복원 (sanitize 통과). */
+  restoreSnapshot: (id: string) => Promise<void>;
+  /** 스냅샷 삭제 */
+  deleteSnapshot: (id: string) => Promise<void>;
+
   /** 파생 값 */
   studentCount: () => number;
   emptyCount: () => number;
@@ -142,6 +160,51 @@ interface SeatingState {
 }
 
 const EMPTY_SEATING: SeatingData = { rows: 1, cols: 1, seats: [[null]] };
+
+/** 같은 날짜인지 확인 (로컬 타임존 기준) */
+function isSameDay(t1: number, t2: number): boolean {
+  const d1 = new Date(t1);
+  const d2 = new Date(t2);
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+}
+
+/** 자동 라벨 생성. 예: "5/20 셔플 #3" */
+function buildAutoLabel(
+  source: SnapshotSource,
+  todaySnapshots: readonly SeatingSnapshot[],
+  now: number,
+): string {
+  const date = new Date(now);
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const dateLabel = `${month}/${day}`;
+
+  const sourceLabel: Record<SnapshotSource, string> = {
+    shuffle: '셔플',
+    manual: '저장',
+    auto: '자동',
+  };
+
+  const todayCount = todaySnapshots.filter(
+    (s) => s.source === source && isSameDay(s.timestamp, now),
+  ).length;
+
+  return `${dateLabel} ${sourceLabel[source]} #${todayCount + 1}`;
+}
+
+/** 스냅샷 ID 생성 — crypto.randomUUID 우선, 폴백은 timestamp + counter */
+let snapshotIdCounter = 0;
+function newSnapshotId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  snapshotIdCounter += 1;
+  return `snap-${Date.now()}-${snapshotIdCounter}`;
+}
 
 export const useSeatingStore = create<SeatingState>((set, get) => {
   const swapSeatsUC = new SwapSeats(seatingRepository);
@@ -161,6 +224,8 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     future: [],
     loaded: false,
     isEditing: false,
+    snapshots: [],
+    snapshotsLoaded: false,
 
     load: async () => {
       if (get().loaded) return;
@@ -237,6 +302,14 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         pushToHistory();
         const { seating: updated, result } = await randomizeUC.execute();
         set({ seating: updated });
+        // 셔플 성공 시 자동 스냅샷 — 실패해도 셔플 자체는 영향 없음
+        if (result.success) {
+          try {
+            await get().saveCurrentAsSnapshot(undefined, 'shuffle');
+          } catch {
+            // 스냅샷 저장 실패는 무시 (셔플 결과는 이미 반영됨)
+          }
+        }
         return result;
       } catch {
         return null;
@@ -437,6 +510,12 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       const sanitized = sanitizeSeating(seating, students);
 
       if (sanitized !== seating) {
+        // 좌석 변동 발생 → 백업 스냅샷 자동 저장 (source='auto')
+        try {
+          await get().saveCurrentAsSnapshot(undefined, 'auto');
+        } catch {
+          // 백업 실패는 무시 (동기화는 계속 진행)
+        }
         try {
           await seatingRepository.saveSeating(sanitized);
           set({ seating: sanitized });
@@ -455,6 +534,75 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
           seatingRows: newSeating.rows,
           seatingCols: newSeating.cols,
         });
+      } catch {
+        // 무시
+      }
+    },
+
+    /* ─── 자리배치 히스토리 (Phase 1) ─── */
+
+    loadSnapshots: async () => {
+      if (get().snapshotsLoaded) return;
+      try {
+        const list = await seatingSnapshotRepository.getSnapshots();
+        set({ snapshots: list, snapshotsLoaded: true });
+      } catch {
+        set({ snapshotsLoaded: true });
+      }
+    },
+
+    saveCurrentAsSnapshot: async (label, source = 'manual') => {
+      const { seating, snapshots } = get();
+      const now = Date.now();
+      const finalLabel =
+        label && label.trim().length > 0 ? label.trim() : buildAutoLabel(source, snapshots, now);
+
+      const snapshot: SeatingSnapshot = {
+        id: newSnapshotId(),
+        timestamp: now,
+        label: finalLabel,
+        source,
+        // 깊은 사본: seats 2D 배열까지 복제하여 이후 변경 영향 차단
+        seating: {
+          ...seating,
+          seats: seating.seats.map((row) => [...row]),
+          groups: seating.groups
+            ? seating.groups.map((g) => ({ ...g, studentIds: [...g.studentIds] }))
+            : undefined,
+        },
+      };
+
+      try {
+        await seatingSnapshotRepository.saveSnapshot(snapshot);
+        const refreshed = await seatingSnapshotRepository.getSnapshots();
+        set({ snapshots: refreshed, snapshotsLoaded: true });
+      } catch {
+        // 무시
+      }
+    },
+
+    restoreSnapshot: async (id) => {
+      const target = get().snapshots.find((s) => s.id === id);
+      if (!target) return;
+
+      pushToHistory();
+
+      try {
+        // 졸업/전학 학생 좀비 ID 방지 — 현재 명렬표 기준 sanitize
+        const students = useStudentStore.getState().students;
+        const restored = sanitizeSeating(target.seating, students);
+        await seatingRepository.saveSeating(restored);
+        set({ seating: restored });
+      } catch {
+        // 무시
+      }
+    },
+
+    deleteSnapshot: async (id) => {
+      try {
+        await seatingSnapshotRepository.deleteSnapshot(id);
+        const refreshed = await seatingSnapshotRepository.getSnapshots();
+        set({ snapshots: refreshed });
       } catch {
         // 무시
       }

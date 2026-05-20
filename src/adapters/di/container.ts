@@ -6,6 +6,7 @@ import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { INeisPort } from '@domain/ports/INeisPort';
 import type { IScheduleRepository } from '@domain/repositories/IScheduleRepository';
 import type { ISeatingRepository } from '@domain/repositories/ISeatingRepository';
+import type { ISeatingSnapshotRepository } from '@domain/repositories/ISeatingSnapshotRepository';
 import type { IEventsRepository } from '@domain/repositories/IEventsRepository';
 import type { IMemoRepository } from '@domain/repositories/IMemoRepository';
 import type { ITodoRepository } from '@domain/repositories/ITodoRepository';
@@ -60,6 +61,7 @@ import { ShortLinkClient } from '@infrastructure/supabase/ShortLinkClient';
 
 import { JsonScheduleRepository } from '@adapters/repositories/JsonScheduleRepository';
 import { JsonSeatingRepository } from '@adapters/repositories/JsonSeatingRepository';
+import { JsonSeatingSnapshotRepository } from '@adapters/repositories/JsonSeatingSnapshotRepository';
 import { JsonEventsRepository } from '@adapters/repositories/JsonEventsRepository';
 import { JsonMemoRepository } from '@adapters/repositories/JsonMemoRepository';
 import { JsonTodoRepository } from '@adapters/repositories/JsonTodoRepository';
@@ -117,32 +119,28 @@ export const storage: IStoragePort = isElectron
   ? new ElectronStorageAdapter()
   : new LocalStorageAdapter();
 
-export const scheduleRepository: IScheduleRepository =
-  new JsonScheduleRepository(storage);
+export const scheduleRepository: IScheduleRepository = new JsonScheduleRepository(storage);
 
-export const seatingRepository: ISeatingRepository =
-  new JsonSeatingRepository(storage);
+export const seatingRepository: ISeatingRepository = new JsonSeatingRepository(storage);
 
-export const eventsRepository: IEventsRepository =
-  new JsonEventsRepository(storage);
+export const seatingSnapshotRepository: ISeatingSnapshotRepository =
+  new JsonSeatingSnapshotRepository(storage);
 
-export const memoRepository: IMemoRepository =
-  new JsonMemoRepository(storage);
+export const eventsRepository: IEventsRepository = new JsonEventsRepository(storage);
 
-export const todoRepository: ITodoRepository =
-  new JsonTodoRepository(storage);
+export const memoRepository: IMemoRepository = new JsonMemoRepository(storage);
 
-export const settingsRepository: ISettingsRepository =
-  new JsonSettingsRepository(storage);
+export const todoRepository: ITodoRepository = new JsonTodoRepository(storage);
 
-export const studentRecordsRepository: IStudentRecordsRepository =
-  new JsonStudentRecordsRepository(storage);
+export const settingsRepository: ISettingsRepository = new JsonSettingsRepository(storage);
 
-export const messageRepository: IMessageRepository =
-  new JsonMessageRepository(storage);
+export const studentRecordsRepository: IStudentRecordsRepository = new JsonStudentRecordsRepository(
+  storage,
+);
 
-export const studentRepository: IStudentRepository =
-  new JsonStudentRepository(storage);
+export const messageRepository: IMessageRepository = new JsonMessageRepository(storage);
+
+export const studentRepository: IStudentRepository = new JsonStudentRepository(storage);
 
 export const externalCalendarRepository: IExternalCalendarRepository =
   new JsonExternalCalendarRepository(storage);
@@ -153,53 +151,44 @@ export const seatConstraintsRepository: ISeatConstraintsRepository =
 export const seatPickerConfigRepository: ISeatPickerConfigRepository =
   new JsonSeatPickerConfigRepository(storage);
 
-export const teachingClassRepository: ITeachingClassRepository =
-  new JsonTeachingClassRepository(storage);
+export const teachingClassRepository: ITeachingClassRepository = new JsonTeachingClassRepository(
+  storage,
+);
 
-export const bookmarkRepository: IBookmarkRepository =
-  new JsonBookmarkRepository(storage);
+export const bookmarkRepository: IBookmarkRepository = new JsonBookmarkRepository(storage);
 
 export const desktopOrganizeRepository: IDesktopOrganizeRepository =
   new JsonDesktopOrganizeRepository(storage);
 
-export const ddayRepository: IDDayRepository =
-  new JsonDDayRepository(storage);
+export const ddayRepository: IDDayRepository = new JsonDDayRepository(storage);
 
 export const interactiveLessonRepository: IInteractiveLessonRepository =
   new JsonInteractiveLessonsRepository(storage);
 
-export const manualMealRepository: IManualMealRepository =
-  new JsonManualMealRepository(storage);
+export const manualMealRepository: IManualMealRepository = new JsonManualMealRepository(storage);
 
-export const imageWidgetRepository: IImageWidgetRepository =
-  new JsonImageWidgetRepository(storage);
+export const imageWidgetRepository: IImageWidgetRepository = new JsonImageWidgetRepository(storage);
 
-export const wordCloudRepository: IWordCloudRepository =
-  new JsonWordCloudRepository(storage);
+export const wordCloudRepository: IWordCloudRepository = new JsonWordCloudRepository(storage);
 
-export const toolTemplateRepository: IToolTemplateRepository =
-  new JsonToolTemplateRepository(storage);
+export const toolTemplateRepository: IToolTemplateRepository = new JsonToolTemplateRepository(
+  storage,
+);
 
-export const toolResultRepository: IToolResultRepository =
-  new JsonToolResultRepository(storage);
+export const toolResultRepository: IToolResultRepository = new JsonToolResultRepository(storage);
 
-export const observationRepository: IObservationRepository =
-  new JsonObservationRepository(storage);
+export const observationRepository: IObservationRepository = new JsonObservationRepository(storage);
 
-export const noteRepository: INotebookRepository =
-  new JsonNotebookRepository(storage);
+export const noteRepository: INotebookRepository = new JsonNotebookRepository(storage);
 
 // === 실시간 담벼락 영속 보드 (v1.13 Stage A) ===
-export const wallBoardRepository: IWallBoardRepository =
-  new JsonWallBoardRepository(storage);
+export const wallBoardRepository: IWallBoardRepository = new JsonWallBoardRepository(storage);
 
 // === 내 이모티콘 (Sticker Picker) ===
-export const stickerRepository: IStickerRepository =
-  new JsonStickerRepository(storage);
+export const stickerRepository: IStickerRepository = new JsonStickerRepository(storage);
 
 // === 서식 관리 ===
-export const formRepository: IFormTemplateRepository =
-  new JsonFormTemplateRepository(storage);
+export const formRepository: IFormTemplateRepository = new JsonFormTemplateRepository(storage);
 
 export const formThumbnailer: IThumbnailer = new PdfJsThumbnailer();
 export const formPreviewExtractor: IPreviewExtractor = new HwpxExcelPreviewExtractor();
@@ -214,23 +203,15 @@ export const googleAuthPort: IGoogleAuthPort = new GoogleOAuthClient();
 const googleCalendarApiClient = new GoogleCalendarApiClient();
 export const googleCalendarPort: IGoogleCalendarPort = googleCalendarApiClient;
 
-export const calendarSyncRepo: ICalendarSyncRepository =
-  new GoogleCalendarSyncRepository(storage);
+export const calendarSyncRepo: ICalendarSyncRepository = new GoogleCalendarSyncRepository(storage);
 
-export const authenticateGoogle = new AuthenticateGoogle(
-  googleAuthPort,
-  calendarSyncRepo,
-);
+export const authenticateGoogle = new AuthenticateGoogle(googleAuthPort, calendarSyncRepo);
 
 // 401 재시도를 위한 토큰 갱신 콜백 등록
-googleCalendarApiClient.setTokenRefreshCallback(
-  () => authenticateGoogle.getValidAccessToken(),
-);
+googleCalendarApiClient.setTokenRefreshCallback(() => authenticateGoogle.getValidAccessToken());
 
-export const syncToGoogle = new SyncToGoogle(
-  googleCalendarPort,
-  calendarSyncRepo,
-  () => authenticateGoogle.getValidAccessToken(),
+export const syncToGoogle = new SyncToGoogle(googleCalendarPort, calendarSyncRepo, () =>
+  authenticateGoogle.getValidAccessToken(),
 );
 
 export const manageCalendarMapping = new ManageCalendarMapping(
@@ -252,9 +233,7 @@ const googleTasksApiClient = new GoogleTasksApiClient();
 export const googleTasksPort: IGoogleTasksPort = googleTasksApiClient;
 
 // 401 재시도를 위한 토큰 갱신 콜백 등록
-googleTasksApiClient.setTokenRefreshCallback(
-  () => authenticateGoogle.getValidAccessToken(),
-);
+googleTasksApiClient.setTokenRefreshCallback(() => authenticateGoogle.getValidAccessToken());
 
 // === Analytics ===
 
@@ -262,14 +241,12 @@ export const analyticsPort: IAnalyticsPort = new SupabaseAnalyticsAdapter();
 
 // === 과제수합 관련 ===
 
-export const assignmentRepository: IAssignmentRepository =
-  new JsonAssignmentRepository(storage);
+export const assignmentRepository: IAssignmentRepository = new JsonAssignmentRepository(storage);
 
 // 구체 클래스 참조 (startPolling 접근용)
 export const assignmentSupabaseClient = new AssignmentSupabaseClient();
 
-export const assignmentServicePort: IAssignmentServicePort =
-  assignmentSupabaseClient;
+export const assignmentServicePort: IAssignmentServicePort = assignmentSupabaseClient;
 
 // === 숏링크 ===
 
@@ -278,9 +255,7 @@ export const shortLinkClient = new ShortLinkClient();
 // GoogleDriveClient는 토큰 getter가 필요 → 인증 후 lazy 초기화
 let _driveClient: GoogleDriveClient | null = null;
 
-export function getGoogleDriveClient(
-  getAccessToken: () => Promise<string>,
-): IGoogleDrivePort {
+export function getGoogleDriveClient(getAccessToken: () => Promise<string>): IGoogleDrivePort {
   if (!_driveClient) {
     _driveClient = new GoogleDriveClient(getAccessToken);
   }
@@ -289,15 +264,15 @@ export function getGoogleDriveClient(
 
 // === 상담 예약 ===
 
-export const consultationRepository: IConsultationRepository =
-  new JsonConsultationRepository(storage);
+export const consultationRepository: IConsultationRepository = new JsonConsultationRepository(
+  storage,
+);
 
 export const consultationSupabaseClient = new ConsultationSupabaseClient();
 
 // === 설문/체크리스트 ===
 
-export const surveyRepository: ISurveyRepository =
-  new JsonSurveyRepository(storage);
+export const surveyRepository: ISurveyRepository = new JsonSurveyRepository(storage);
 
 export const surveySupabaseClient = new SurveySupabaseClient();
 
@@ -307,15 +282,12 @@ export function resetGoogleDriveClient(): void {
 
 // === Google Drive 동기화 ===
 
-export const driveSyncRepository: IDriveSyncRepository =
-  new JsonDriveSyncRepository(storage);
+export const driveSyncRepository: IDriveSyncRepository = new JsonDriveSyncRepository(storage);
 
 // DriveSyncAdapter는 토큰 getter가 필요 → lazy 초기화
 let _driveSyncAdapter: DriveSyncAdapter | null = null;
 
-export function getDriveSyncAdapter(
-  getAccessToken: () => Promise<string>,
-): IDriveSyncPort {
+export function getDriveSyncAdapter(getAccessToken: () => Promise<string>): IDriveSyncPort {
   if (!_driveSyncAdapter) {
     _driveSyncAdapter = new DriveSyncAdapter(getAccessToken);
   }
@@ -350,21 +322,9 @@ export function createAssignmentUseCases(getAccessToken: () => Promise<string>) 
       assignmentServicePort,
       getAccessToken,
     ),
-    getAssignments: new GetAssignments(
-      assignmentRepository,
-      assignmentServicePort,
-    ),
-    getSubmissions: new GetSubmissions(
-      assignmentRepository,
-      assignmentServicePort,
-    ),
-    deleteAssignment: new DeleteAssignment(
-      assignmentRepository,
-      assignmentServicePort,
-    ),
-    copyMissingList: new CopyMissingList(
-      assignmentRepository,
-      assignmentServicePort,
-    ),
+    getAssignments: new GetAssignments(assignmentRepository, assignmentServicePort),
+    getSubmissions: new GetSubmissions(assignmentRepository, assignmentServicePort),
+    deleteAssignment: new DeleteAssignment(assignmentRepository, assignmentServicePort),
+    copyMissingList: new CopyMissingList(assignmentRepository, assignmentServicePort),
   };
 }
