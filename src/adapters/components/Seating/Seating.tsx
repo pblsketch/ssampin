@@ -573,17 +573,17 @@ export function Seating(props?: { embedded?: boolean }) {
             </span>
             <span>교사 시점</span>
           </button>
-          {isTeacherView && (
-            <button
-              onClick={() => setShowHistoryPanel(true)}
-              className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
-              title="자리배치 기록 보기"
-            >
-              <span className="material-symbols-outlined text-lg">history</span>
-              <span>배치 기록</span>
-            </button>
-          )}
-          {isTeacherView && totalStudents > 0 && (
+          {/* 배치 기록 (Phase 1) — 교사·학생 시점 모두 노출 (저장된 기록은 모두 동일하게 사용 가능) */}
+          <button
+            onClick={() => setShowHistoryPanel(true)}
+            className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+            title="자리배치 기록 보기"
+          >
+            <span className="material-symbols-outlined text-lg">history</span>
+            <span>배치 기록</span>
+          </button>
+          {/* 이름 학습 (Phase 3a) — 교사·학생 시점 모두 노출. 학생이 0명일 때만 비활성 */}
+          {totalStudents > 0 && (
             <button
               onClick={() => setShowNameLearning(true)}
               className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
