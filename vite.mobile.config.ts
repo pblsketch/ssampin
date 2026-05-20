@@ -98,6 +98,16 @@ export default defineConfig(({ mode, command }) => {
                 cacheableResponse: { statuses: [0, 200] },
               },
             },
+            {
+              // Pretendard Variable (jsdelivr) — CSS + 동적 서브셋 woff2 일괄 캐시
+              urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/gh\/orioncactus\/pretendard\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'pretendard-cache',
+                expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
           ],
         },
       }),

@@ -609,7 +609,7 @@ function SeatingView({
                 key={`${rowIdx}-${colIdx}`}
                 disabled={!tappable}
                 onClick={() => tappable && studentId && onStudentTap(studentId)}
-                className={`w-12 h-12 flex flex-col items-center justify-center rounded-lg border text-xs leading-tight transition-colors ${
+                className={`w-12 h-12 flex flex-col items-center justify-center gap-1 rounded-lg border text-xs leading-tight transition-colors ${
                   tappable
                     ? seatColorByStatus(status)
                     : hasStudent && isVacant
@@ -622,7 +622,9 @@ function SeatingView({
                     {student?.number !== undefined && (
                       <span className="text-sp-muted text-tiny leading-none">{student.number}</span>
                     )}
-                    <span className="font-medium">{student?.name.charAt(0) ?? '?'}</span>
+                    <span className="font-medium text-detail leading-none tracking-tight max-w-full">
+                      {student?.name ?? '?'}
+                    </span>
                   </>
                 ) : hasStudent && isVacant ? (
                   <span className="text-caption">결번</span>
@@ -793,7 +795,7 @@ function TeachingSeatingView({
                 key={`${rowIdx}-${colIdx}`}
                 disabled={!tappable}
                 onClick={() => tappable && student && onStudentTap(student)}
-                className={`w-12 h-12 flex flex-col items-center justify-center rounded-lg border text-xs leading-tight transition-colors ${
+                className={`w-12 h-12 flex flex-col items-center justify-center gap-1 rounded-lg border text-xs leading-tight transition-colors ${
                   tappable
                     ? seatColorByStatus(status)
                     : hasStudent && isVacant
@@ -812,7 +814,9 @@ function TeachingSeatingView({
                         {student?.number}
                       </span>
                     )}
-                    <span className="font-medium">{student?.name.charAt(0) ?? '?'}</span>
+                    <span className="font-medium text-detail leading-none tracking-tight max-w-full">
+                      {student?.name ?? '?'}
+                    </span>
                   </>
                 ) : hasStudent && isVacant ? (
                   <span className="text-caption">결번</span>
