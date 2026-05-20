@@ -6,10 +6,21 @@ import { LearningCard } from './LearningCard';
 
 type LearningMode = 'free' | 'sequential' | 'quiz';
 
+/** 카드에 표시할 최소 학생 정보. ClassSeatingTab(studentKey) ↔ Seating(student.id) 양쪽 호환. */
+export interface LearningStudentInfo {
+  studentNumber?: number;
+  name: string;
+}
+
 interface NameLearningModeProps {
   isOpen: boolean;
   onClose: () => void;
   seating: SeatingData;
+  /**
+   * 좌석 셀의 studentId(또는 studentKey)로 학생 정보를 조회.
+   * 미지정 시 useStudentStore.getStudent 를 사용 (담임 자리배치 기본 동작).
+   */
+  resolveStudent?: (id: string) => LearningStudentInfo | undefined;
 }
 
 interface SeatPos {
@@ -40,8 +51,23 @@ function flattenSeats(seats: SeatingData['seats']): SeatPos[] {
  * 키보드: ESC=종료, Tab=카드 순회, Enter/Space=현재 카드 플립
  * ARIA: role="dialog", aria-modal="true", aria-live 영역으로 진행률 알림
  */
-export function NameLearningMode({ isOpen, onClose, seating }: NameLearningModeProps) {
-  const getStudent = useStudentStore((s) => s.getStudent);
+export function NameLearningMode({
+  isOpen,
+  onClose,
+  seating,
+  resolveStudent,
+}: NameLearningModeProps) {
+  const getStudentFromStore = useStudentStore((s) => s.getStudent);
+  // resolveStudent prop이 있으면 그것을 사용, 없으면 useStudentStore 기본 동작
+  const getStudent = useCallback(
+    (id: string | null): LearningStudentInfo | undefined => {
+      if (id == null) return undefined;
+      if (resolveStudent) return resolveStudent(id);
+      const stored = getStudentFromStore(id);
+      return stored ? { studentNumber: stored.studentNumber, name: stored.name } : undefined;
+    },
+    [resolveStudent, getStudentFromStore],
+  );
 
   const seatList = useMemo(() => flattenSeats(seating.seats), [seating.seats]);
   const total = seatList.length;
