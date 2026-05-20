@@ -456,7 +456,7 @@ export function Seating(props?: { embedded?: boolean }) {
   }
 
   return (
-    <div className={`flex flex-col h-full ${embedded ? '' : '-m-8'}`}>
+    <div className={`relative flex flex-col h-full ${embedded ? '' : '-m-8'}`}>
       {!embedded && (
         <PageHeader
           icon="chair_alt"

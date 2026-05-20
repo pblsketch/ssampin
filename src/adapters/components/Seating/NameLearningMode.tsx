@@ -202,7 +202,7 @@ export function NameLearningMode({ isOpen, onClose, seating }: NameLearningModeP
         aria-label="이름 학습 모드"
         data-learning-fallback
         tabIndex={-1}
-        className="fixed inset-0 z-sp-modal bg-sp-bg/95 backdrop-blur-sm flex flex-col"
+        className="absolute inset-0 z-30 bg-sp-bg/95 backdrop-blur-sm flex flex-col"
       >
         {/* 헤더: 진행률 + 모드 + 종료 */}
         <header className="shrink-0 border-b border-sp-border bg-sp-surface/60 px-6 py-3 flex items-center gap-4 flex-wrap">
