@@ -3,9 +3,11 @@ import {
   shuffleSeats,
   shuffleSeatsPreservingGroups,
   shuffleSeatsWithConstraints,
+  sanitizeGroups,
 } from './seatRules';
 import type { SeatConstraints } from '@domain/entities/SeatConstraints';
 import { EMPTY_SEAT_CONSTRAINTS } from '@domain/entities/SeatConstraints';
+import type { SeatGroup } from '@domain/entities/Seating';
 
 /** 결정론적 PRNG for tests */
 function mulberry32(seed: number): () => number {
@@ -20,9 +22,7 @@ function mulberry32(seed: number): () => number {
 }
 
 /** 2D 좌석에서 null 좌표 셋 반환 */
-function nullPositions(
-  seats: readonly (readonly (string | null)[])[],
-): Set<string> {
+function nullPositions(seats: readonly (readonly (string | null)[])[]): Set<string> {
   const set = new Set<string>();
   for (let r = 0; r < seats.length; r++) {
     for (let c = 0; c < seats[r]!.length; c++) {
@@ -32,9 +32,7 @@ function nullPositions(
   return set;
 }
 
-function studentIdSet(
-  seats: readonly (readonly (string | null)[])[],
-): Set<string> {
+function studentIdSet(seats: readonly (readonly (string | null)[])[]): Set<string> {
   return new Set(seats.flat().filter((x): x is string => x !== null));
 }
 
@@ -135,12 +133,7 @@ describe('shuffleSeatsPreservingGroups', () => {
     ];
     const expectedNulls = nullPositions(seats);
     for (let seed = 1; seed <= 15; seed++) {
-      const result = shuffleSeatsPreservingGroups(
-        seats,
-        4,
-        'single',
-        mulberry32(seed),
-      );
+      const result = shuffleSeatsPreservingGroups(seats, 4, 'single', mulberry32(seed));
       expect(nullPositions(result)).toEqual(expectedNulls);
       expect(studentIdSet(result)).toEqual(studentIdSet(seats));
     }
@@ -152,12 +145,7 @@ describe('shuffleSeatsPreservingGroups', () => {
       [null, 'e', 'f', 'g', 'h'],
     ];
     const expectedNulls = nullPositions(seats);
-    const result = shuffleSeatsPreservingGroups(
-      seats,
-      5,
-      'single',
-      mulberry32(5),
-    );
+    const result = shuffleSeatsPreservingGroups(seats, 5, 'single', mulberry32(5));
     expect(nullPositions(result)).toEqual(expectedNulls);
     expect(studentIdSet(result)).toEqual(studentIdSet(seats));
   });
@@ -168,12 +156,7 @@ describe('shuffleSeatsPreservingGroups', () => {
       ['e', null, 'f', 'g', 'h'],
     ];
     const expectedNulls = nullPositions(seats);
-    const result = shuffleSeatsPreservingGroups(
-      seats,
-      5,
-      'triple',
-      mulberry32(11),
-    );
+    const result = shuffleSeatsPreservingGroups(seats, 5, 'triple', mulberry32(11));
     expect(nullPositions(result)).toEqual(expectedNulls);
     expect(studentIdSet(result)).toEqual(studentIdSet(seats));
   });
@@ -210,13 +193,7 @@ describe('shuffleSeatsWithConstraints', () => {
       ...EMPTY_SEAT_CONSTRAINTS,
       separations: [{ studentA: 'a', studentB: 'b', minDistance: 2 }],
     };
-    const { seats: result } = shuffleSeatsWithConstraints(
-      seats,
-      constraints,
-      3,
-      3,
-      mulberry32(5),
-    );
+    const { seats: result } = shuffleSeatsWithConstraints(seats, constraints, 3, 3, mulberry32(5));
     expect(nullPositions(result)).toEqual(expectedNulls);
     expect(studentIdSet(result)).toEqual(studentIdSet(seats));
   });
@@ -232,19 +209,13 @@ describe('shuffleSeatsWithConstraints', () => {
       ...EMPTY_SEAT_CONSTRAINTS,
       zones: [{ studentId: 'a', zone: 'front1', reason: 'test' }],
     };
-    const { seats: result } = shuffleSeatsWithConstraints(
-      seats,
-      constraints,
-      3,
-      3,
-      mulberry32(7),
-    );
+    const { seats: result } = shuffleSeatsWithConstraints(seats, constraints, 3, 3, mulberry32(7));
     expect(nullPositions(result)).toEqual(expectedNulls);
     expect(studentIdSet(result)).toEqual(studentIdSet(seats));
     // a는 front1(row=0)에 있어야 함
-    const aPos = result.flatMap((row, r) =>
-      row.map((id, c) => ({ id, r, c })),
-    ).find((x) => x.id === 'a');
+    const aPos = result
+      .flatMap((row, r) => row.map((id, c) => ({ id, r, c })))
+      .find((x) => x.id === 'a');
     expect(aPos?.r).toBe(0);
   });
 
@@ -259,13 +230,7 @@ describe('shuffleSeatsWithConstraints', () => {
         { studentId: 'a', row: 1, col: 2, reason: '고정' }, // 빈자리 (1,2)에 a 고정
       ],
     };
-    const { seats: result } = shuffleSeatsWithConstraints(
-      seats,
-      constraints,
-      2,
-      3,
-      mulberry32(9),
-    );
+    const { seats: result } = shuffleSeatsWithConstraints(seats, constraints, 2, 3, mulberry32(9));
     // 고정된 (1,2)는 'a'
     expect(result[1]![2]).toBe('a');
     // 그 대신 원래 a가 있던 (0,0)이 비게 됨 → 학생 ID는 보존되지만 null 좌표가 이동함
@@ -293,5 +258,47 @@ describe('shuffleSeatsWithConstraints', () => {
     );
     expect(nullPositions(result)).toEqual(expectedNulls);
     expect(studentIdSet(result)).toEqual(studentIdSet(seats));
+  });
+});
+
+/* ──────────────────────── sanitizeGroups ──────────────────────── */
+/**
+ * 모둠 정합화 — 졸업/전학 학생이 모둠 슬롯에 남아 GroupSeatingView 에서
+ * "알 수 없음" 으로 표시되던 회귀를 차단하기 위한 순수 함수.
+ */
+describe('sanitizeGroups', () => {
+  function makeGroup(id: string, studentIds: string[], maxSize = 6): SeatGroup {
+    return { id, name: `${id}모둠`, color: '#abcdef', studentIds, maxSize };
+  }
+
+  it('모든 학생이 활성이면 입력 참조를 그대로 반환한다 (Zustand 얕은 비교 친화적)', () => {
+    const groups = [makeGroup('g1', ['s1', 's2']), makeGroup('g2', ['s3'])];
+    const out = sanitizeGroups(groups, new Set(['s1', 's2', 's3']));
+    expect(out).toBe(groups);
+  });
+
+  it('비활성/명렬표 외 학생 ID 를 제거하고 새 배열을 반환한다', () => {
+    const groups = [makeGroup('g1', ['s1', 'gone1', 's2']), makeGroup('g2', ['s3', 'gone2'])];
+    const out = sanitizeGroups(groups, new Set(['s1', 's2', 's3']));
+    expect(out).not.toBe(groups);
+    expect(out?.[0]?.studentIds).toEqual(['s1', 's2']);
+    expect(out?.[1]?.studentIds).toEqual(['s3']);
+    // 모둠 메타데이터(id/name/color/maxSize) 는 보존
+    expect(out?.[0]?.id).toBe('g1');
+    expect(out?.[0]?.maxSize).toBe(6);
+  });
+
+  it('전원이 stale 인 모둠도 슬롯 구조는 보존한다 (사용자가 만든 빈 모둠 유지)', () => {
+    const groups = [makeGroup('g1', ['gone1', 'gone2']), makeGroup('g2', ['s1'])];
+    const out = sanitizeGroups(groups, new Set(['s1']));
+    expect(out?.[0]?.studentIds).toEqual([]);
+    expect(out?.[1]?.studentIds).toEqual(['s1']);
+    expect(out).toHaveLength(2);
+  });
+
+  it('undefined / 빈 배열은 그대로 통과시킨다', () => {
+    expect(sanitizeGroups(undefined, new Set(['s1']))).toBeUndefined();
+    const empty: readonly SeatGroup[] = [];
+    expect(sanitizeGroups(empty, new Set(['s1']))).toBe(empty);
   });
 });

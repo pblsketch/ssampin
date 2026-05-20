@@ -51,7 +51,14 @@ async function buildSecPrParagraph(opts: {
   landscape: 'WIDELY' | 'NARROWLY';
   width: number;
   height: number;
-  margin: { top: number; bottom: number; left: number; right: number; header: number; footer: number };
+  margin: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+    header: number;
+    footer: number;
+  };
 }): Promise<string | null> {
   const skelBytes = loadSkeletonHwpx();
   const zip = await JSZip.loadAsync(skelBytes);
@@ -113,9 +120,7 @@ async function saveWithSectionProps(
   // 4) Inject the secPr paragraph before the first content <hp:p>
   const firstPIdx = sectionXml.indexOf('<hp:p ');
   if (firstPIdx >= 0) {
-    sectionXml = sectionXml.slice(0, firstPIdx)
-      + secPrParagraph
-      + sectionXml.slice(firstPIdx);
+    sectionXml = sectionXml.slice(0, firstPIdx) + secPrParagraph + sectionXml.slice(firstPIdx);
   }
 
   zip.file('Contents/section0.xml', sectionXml);
@@ -348,6 +353,21 @@ export async function exportSeatingToHwpx(
   className: string,
 ): Promise<Uint8Array> {
   const doc = await createDoc();
+
+  // Phase 1 가드 — freestyle 모드는 한글로 출력할 수 없다 (영구 미지원, PDF 권장).
+  // throw 없이 안내 메시지만 담은 문서를 반환해 호출처 변경 0 보장.
+  if (seating.layout === 'freestyle') {
+    const noticeCharId = doc.ensureRunStyle({ bold: true, fontSize: 14 });
+    const centerParaId0 = doc.ensureParaStyle({ alignment: 'CENTER' });
+    while (doc.paragraphs.length > 0) {
+      doc.removeParagraph(0, 0);
+    }
+    doc.addParagraph('자유 배치 모드는 한글로 출력할 수 없습니다. PDF로 출력해 주세요.', {
+      charPrIdRef: noticeCharId,
+      paraPrIdRef: centerParaId0,
+    });
+    return doc.save();
+  }
 
   // ── Page setup: A4 Landscape ──
   // Hangul uses landscape="WIDELY" for landscape orientation.
@@ -684,9 +704,13 @@ export async function exportSeatingToHwpx(
         if (student) {
           const num = String(student.studentNumber ?? '');
           setCellTwoLines(
-            seatTable, displayRow, ci,
-            num, numberCharId,
-            student.name, nameCharId,
+            seatTable,
+            displayRow,
+            ci,
+            num,
+            numberCharId,
+            student.name,
+            nameCharId,
             centerParaId,
           );
         } else {
@@ -724,7 +748,10 @@ export async function exportSeatingToHwpx(
           // 학생이 있는 그룹만 처리
           let hasStudents = false;
           for (let c = adjGroup.startCol; c <= adjGroup.endCol; c++) {
-            if (seatRowData[c] != null) { hasStudents = true; break; }
+            if (seatRowData[c] != null) {
+              hasStudents = true;
+              break;
+            }
           }
           if (!hasStudents) continue;
           for (let ci = 0; ci < tableCols; ci++) {
@@ -734,17 +761,27 @@ export async function exportSeatingToHwpx(
             let prevCi = -1;
             let nextCi = -1;
             for (let pi = ci - 1; pi >= 0; pi--) {
-              if (colDescs[pi]!.type === 'seat') { prevSeatIdx = colDescs[pi]!.seatIdx!; prevCi = pi; break; }
+              if (colDescs[pi]!.type === 'seat') {
+                prevSeatIdx = colDescs[pi]!.seatIdx!;
+                prevCi = pi;
+                break;
+              }
             }
             for (let ni = ci + 1; ni < tableCols; ni++) {
-              if (colDescs[ni]!.type === 'seat') { nextSeatIdx = colDescs[ni]!.seatIdx!; nextCi = ni; break; }
+              if (colDescs[ni]!.type === 'seat') {
+                nextSeatIdx = colDescs[ni]!.seatIdx!;
+                nextCi = ni;
+                break;
+              }
             }
             if (prevSeatIdx < 0 || nextSeatIdx < 0) continue;
             const prevOrigCol = seatCols - 1 - prevSeatIdx;
             const nextOrigCol = seatCols - 1 - nextSeatIdx;
             if (
-              prevOrigCol >= adjGroup.startCol && prevOrigCol <= adjGroup.endCol &&
-              nextOrigCol >= adjGroup.startCol && nextOrigCol <= adjGroup.endCol
+              prevOrigCol >= adjGroup.startCol &&
+              prevOrigCol <= adjGroup.endCol &&
+              nextOrigCol >= adjGroup.startCol &&
+              nextOrigCol <= adjGroup.endCol
             ) {
               // gap 숨기고 인접 좌석 테두리 연결
               seatTable.cell(displayRow, ci).borderFillIDRef = noBorder;
@@ -767,12 +804,18 @@ export async function exportSeatingToHwpx(
   for (let ci = 0; ci < tableCols; ci++) {
     const sepDesc = colDescs[ci]!;
     seatTable.setCellText(separatorRow, ci, '');
-    seatTable.cell(separatorRow, ci).setSize(
-      sepDesc.type === 'seat'
-        ? (ci === lastSeatColIdx ? lastSeatW : SEAT_W)
-        : sepDesc.type === 'gap' ? GAP_W : AISLE_W,
-      2745,
-    );
+    seatTable
+      .cell(separatorRow, ci)
+      .setSize(
+        sepDesc.type === 'seat'
+          ? ci === lastSeatColIdx
+            ? lastSeatW
+            : SEAT_W
+          : sepDesc.type === 'gap'
+            ? GAP_W
+            : AISLE_W,
+        2745,
+      );
   }
   seatTable.mergeCells(separatorRow, 0, separatorRow, tableCols - 1);
   seatTable.cell(separatorRow, 0).borderFillIDRef = noBorder;
@@ -786,10 +829,12 @@ export async function exportSeatingToHwpx(
   const gyotakEndCol = firstRightSeatCol;
 
   // Gap columns adjacent to the 교탁 region
-  const gLeftGapCol = gyotakStartCol > 0 && colDescs[gyotakStartCol - 1]?.type === 'gap'
-    ? gyotakStartCol - 1 : -1;
-  const gRightGapCol = gyotakEndCol < tableCols - 1 && colDescs[gyotakEndCol + 1]?.type === 'gap'
-    ? gyotakEndCol + 1 : -1;
+  const gLeftGapCol =
+    gyotakStartCol > 0 && colDescs[gyotakStartCol - 1]?.type === 'gap' ? gyotakStartCol - 1 : -1;
+  const gRightGapCol =
+    gyotakEndCol < tableCols - 1 && colDescs[gyotakEndCol + 1]?.type === 'gap'
+      ? gyotakEndCol + 1
+      : -1;
 
   const gLeftEmptyEnd = gLeftGapCol > 0 ? gLeftGapCol - 1 : gyotakStartCol - 1;
   const gRightEmptyStart = gRightGapCol >= 0 ? gRightGapCol + 1 : gyotakEndCol + 1;
@@ -904,10 +949,9 @@ export async function exportSeatingToHwpx(
   rosterTable.setCellText(1, 2, '성별');
   for (let c = 0; c < ROSTER_COLS; c++) {
     rosterTable.cell(1, c).borderFillIDRef = solidBorder;
-    rosterTable.cell(1, c).setSize(
-      c === 0 ? ROSTER_NUM_W : c === 1 ? ROSTER_NAME_W : ROSTER_GENDER_W,
-      ROSTER_HEADER_H,
-    );
+    rosterTable
+      .cell(1, c)
+      .setSize(c === 0 ? ROSTER_NUM_W : c === 1 ? ROSTER_NAME_W : ROSTER_GENDER_W, ROSTER_HEADER_H);
     rosterTable.cell(1, c).vertAlign = 'CENTER';
     applyCellStyle(rosterTable, 1, c, { charPrId: rosterHeaderCharId, paraPrId: centerParaId });
   }
@@ -925,10 +969,9 @@ export async function exportSeatingToHwpx(
 
     for (let c = 0; c < ROSTER_COLS; c++) {
       rosterTable.cell(r, c).borderFillIDRef = solidBorder;
-      rosterTable.cell(r, c).setSize(
-        c === 0 ? ROSTER_NUM_W : c === 1 ? ROSTER_NAME_W : ROSTER_GENDER_W,
-        ROSTER_DATA_H,
-      );
+      rosterTable
+        .cell(r, c)
+        .setSize(c === 0 ? ROSTER_NUM_W : c === 1 ? ROSTER_NAME_W : ROSTER_GENDER_W, ROSTER_DATA_H);
       rosterTable.cell(r, c).vertAlign = 'CENTER';
       applyCellStyle(rosterTable, r, c, { charPrId: rosterCharId, paraPrId: centerParaId });
     }
@@ -1011,9 +1054,7 @@ export async function exportStudentRecordsToHwpx(
     let studentRecords = filterByStudent(records, student.id);
 
     if (period) {
-      studentRecords = studentRecords.filter(
-        (r) => r.date >= period.start && r.date <= period.end,
-      );
+      studentRecords = studentRecords.filter((r) => r.date >= period.start && r.date <= period.end);
     }
 
     studentRecords = sortByDateDesc(studentRecords);
@@ -1106,9 +1147,7 @@ export async function exportStudentRecordsToHwpx(
 /**
  * 모둠 편성 결과를 HWPX(한글)로 내보내기
  */
-export async function exportGroupingToHwpx(
-  groups: readonly GroupResult[],
-): Promise<Uint8Array> {
+export async function exportGroupingToHwpx(groups: readonly GroupResult[]): Promise<Uint8Array> {
   const doc = await createDoc();
 
   const titleCharId = doc.ensureRunStyle({ bold: true, fontSize: 16 });
@@ -1139,9 +1178,7 @@ export async function exportGroupingToHwpx(
   // 헤더 행: 모둠 이름
   for (let c = 0; c < totalCols; c++) {
     const g = groups[c]!;
-    const label = g.leaderName
-      ? `${g.label} (모둠장: ${g.leaderName})`
-      : g.label;
+    const label = g.leaderName ? `${g.label} (모둠장: ${g.leaderName})` : g.label;
     table.setCellText(0, c, label);
   }
 

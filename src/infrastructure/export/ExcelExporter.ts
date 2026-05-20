@@ -1,12 +1,21 @@
 import ExcelJS from 'exceljs';
-import type { ClassScheduleData, TeacherScheduleData, TeacherPeriod } from '@domain/entities/Timetable';
+import type {
+  ClassScheduleData,
+  TeacherScheduleData,
+  TeacherPeriod,
+} from '@domain/entities/Timetable';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { STUDENT_STATUS_LABELS } from '@domain/entities/Student';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import type { StudentRecord, AttendanceStats } from '@domain/entities/StudentRecord';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
-import { getAttendanceStats, filterByStudent, filterByCategory, sortByDateDesc } from '@domain/rules/studentRecordRules';
+import {
+  getAttendanceStats,
+  filterByStudent,
+  filterByCategory,
+  sortByDateDesc,
+} from '@domain/rules/studentRecordRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
@@ -25,7 +34,11 @@ import type {
   WordCloudResultData,
 } from '@domain/entities/ToolResult';
 import type { MultiSurveyTemplateQuestion } from '@domain/entities/ToolTemplate';
-import { aggregateAll, totalParticipants, completionRate } from '@domain/rules/toolResultAggregation';
+import {
+  aggregateAll,
+  totalParticipants,
+  completionRate,
+} from '@domain/rules/toolResultAggregation';
 import { serializeAnswerCell, formatSubmissionLabel } from '@domain/rules/toolResultSerialization';
 
 const DAYS = ['월', '화', '수', '목', '금'] as const;
@@ -67,7 +80,9 @@ export async function exportClassScheduleToExcel(
   const headerRow = ws.addRow(['교시', ...DAYS]);
   headerRow.eachCell((cell) => applyHeaderStyle(cell));
   ws.getColumn(1).width = 8;
-  DAYS.forEach((_, i) => { ws.getColumn(i + 2).width = 14; });
+  DAYS.forEach((_, i) => {
+    ws.getColumn(i + 2).width = 14;
+  });
 
   // Data rows
   for (let p = 0; p < maxPeriods; p++) {
@@ -107,7 +122,9 @@ export async function exportTeacherScheduleToExcel(
   const headerRow = ws.addRow(['교시', ...DAYS]);
   headerRow.eachCell((cell) => applyHeaderStyle(cell));
   ws.getColumn(1).width = 8;
-  DAYS.forEach((_, i) => { ws.getColumn(i + 2).width = 18; });
+  DAYS.forEach((_, i) => {
+    ws.getColumn(i + 2).width = 18;
+  });
 
   for (let p = 0; p < maxPeriods; p++) {
     const periods = DAYS.map((day) => schedule[day]?.[p] ?? null);
@@ -127,9 +144,11 @@ export async function exportTeacherScheduleToExcel(
           applyCellStyle(cell);
           return;
         }
-        const argb = colorBy === 'classroom'
-          ? getClassroomArgb(period.classroom, classroomColors) ?? getSubjectArgb(period.subject, subjectColors)
-          : getSubjectArgb(period.subject, subjectColors);
+        const argb =
+          colorBy === 'classroom'
+            ? (getClassroomArgb(period.classroom, classroomColors) ??
+              getSubjectArgb(period.subject, subjectColors))
+            : getSubjectArgb(period.subject, subjectColors);
         applyCellStyle(cell, argb);
       }
     });
@@ -248,9 +267,7 @@ function buildDayColMap(ws: ExcelJS.Worksheet, headerRow: number): Record<string
 
 function extractCellText(cellValue: unknown): string {
   if (typeof cellValue === 'object' && cellValue !== null && 'richText' in cellValue) {
-    return (cellValue as { richText: { text: string }[] }).richText
-      .map((r) => r.text)
-      .join('');
+    return (cellValue as { richText: { text: string }[] }).richText.map((r) => r.text).join('');
   }
   return String(cellValue ?? '').trim();
 }
@@ -303,7 +320,9 @@ function parseSsampinFormat(ws: ExcelJS.Worksheet, headerRow: number): TeacherSc
 
     const periodRaw = row.getCell(1).value;
     // "1교시" 또는 숫자
-    const periodStr = String(periodRaw ?? '').replace('교시', '').trim();
+    const periodStr = String(periodRaw ?? '')
+      .replace('교시', '')
+      .trim();
     const period = parseInt(periodStr, 10);
     if (isNaN(period) || period <= 0) return;
 
@@ -349,7 +368,10 @@ function parseTeacherCell(text: string): { classroom: string; subject: string } 
   }
 
   // 줄바꿈으로 분리 (컴시간)
-  const lines = trimmed.split(/[\n\r]+/).map((s) => s.trim()).filter(Boolean);
+  const lines = trimmed
+    .split(/[\n\r]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   if (lines.length >= 2) {
     const classroom = normalizeClassroom(lines[0]!);
@@ -406,6 +428,16 @@ export async function exportSeatingToExcel(
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('학급 자리 배치도');
+
+  // Phase 1 가드 — freestyle 모드는 엑셀로 출력할 수 없다 (영구 미지원, PDF 권장).
+  // throw 없이 안내 메시지 시트만 채워 호출처 변경 0 보장.
+  if (seating.layout === 'freestyle') {
+    ws.getCell('A1').value = '자유 배치 모드는 엑셀로 출력할 수 없습니다. PDF로 출력해 주세요.';
+    ws.getCell('A1').font = { size: 14, bold: true };
+    ws.getColumn('A').width = 60;
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer as ArrayBuffer;
+  }
 
   // 가로 방향, 한 페이지에 맞춤
   ws.pageSetup = {
@@ -503,7 +535,10 @@ export async function exportSeatingToExcel(
           // 학생이 있는 그룹만 처리
           let hasStudents = false;
           for (let c = adjGroup.startCol; c <= adjGroup.endCol; c++) {
-            if (seatRowData[c] != null) { hasStudents = true; break; }
+            if (seatRowData[c] != null) {
+              hasStudents = true;
+              break;
+            }
           }
           if (!hasStudents) continue;
           // 이 triple 그룹 범위 안에 있는 gap의 인접 좌석 테두리 연결
@@ -515,19 +550,29 @@ export async function exportSeatingToExcel(
             let nextCi = -1;
             for (let pi = ci - 1; pi >= 0; pi--) {
               const d = colMap[pi]!;
-              if (d.type === 'seat') { prevCol = d.col; prevCi = pi; break; }
+              if (d.type === 'seat') {
+                prevCol = d.col;
+                prevCi = pi;
+                break;
+              }
             }
             for (let ni = ci + 1; ni < colMap.length; ni++) {
               const d = colMap[ni]!;
-              if (d.type === 'seat') { nextCol = d.col; nextCi = ni; break; }
+              if (d.type === 'seat') {
+                nextCol = d.col;
+                nextCi = ni;
+                break;
+              }
             }
             if (prevCol < 0 || nextCol < 0) continue;
             // 좌우 반전 적용: colMap 열 → 실제 데이터 열
             const prevMirCol = seating.cols - 1 - prevCol;
             const nextMirCol = seating.cols - 1 - nextCol;
             if (
-              prevMirCol >= adjGroup.startCol && prevMirCol <= adjGroup.endCol &&
-              nextMirCol >= adjGroup.startCol && nextMirCol <= adjGroup.endCol
+              prevMirCol >= adjGroup.startCol &&
+              prevMirCol <= adjGroup.endCol &&
+              nextMirCol >= adjGroup.startCol &&
+              nextMirCol <= adjGroup.endCol
             ) {
               // 이전 좌석: 오른쪽 테두리 제거
               const prevCell = ws.getCell(excelRow.number, prevCi + 1);
@@ -590,9 +635,9 @@ export async function exportSeatingToExcel(
     const excelColNum = i + 1;
     ws.getColumn(excelColNum).width = colMap[i]!.type === 'gap' ? 2 : 12;
   }
-  ws.getColumn(totalExcelCols + 1).width = 3;       // 간격열
-  ws.getColumn(rosterColStart).width = 6;            // 번호
-  ws.getColumn(rosterColStart + 1).width = 12;       // 이름
+  ws.getColumn(totalExcelCols + 1).width = 3; // 간격열
+  ws.getColumn(rosterColStart).width = 6; // 번호
+  ws.getColumn(rosterColStart + 1).width = 12; // 이름
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
@@ -607,21 +652,29 @@ export async function exportRosterToExcel(
   const ws = workbook.addWorksheet('명렬표');
 
   const headerRow = ws.addRow([
-    '학년', '반', '번호', '성명',
-    '학생 연락처', '보호자1 관계', '보호자1 연락처',
-    '보호자2 관계', '보호자2 연락처', '생년월일', '비고',
+    '학년',
+    '반',
+    '번호',
+    '성명',
+    '학생 연락처',
+    '보호자1 관계',
+    '보호자1 연락처',
+    '보호자2 관계',
+    '보호자2 연락처',
+    '생년월일',
+    '비고',
   ]);
   headerRow.eachCell((cell) => applyHeaderStyle(cell));
 
-  ws.getColumn(1).width = 8;   // 학년
-  ws.getColumn(2).width = 8;   // 반
-  ws.getColumn(3).width = 8;   // 번호
-  ws.getColumn(4).width = 16;  // 성명
-  ws.getColumn(5).width = 18;  // 학생 연락처
-  ws.getColumn(6).width = 12;  // 보호자1 관계
-  ws.getColumn(7).width = 18;  // 보호자1 연락처
-  ws.getColumn(8).width = 12;  // 보호자2 관계
-  ws.getColumn(9).width = 18;  // 보호자2 연락처
+  ws.getColumn(1).width = 8; // 학년
+  ws.getColumn(2).width = 8; // 반
+  ws.getColumn(3).width = 8; // 번호
+  ws.getColumn(4).width = 16; // 성명
+  ws.getColumn(5).width = 18; // 학생 연락처
+  ws.getColumn(6).width = 12; // 보호자1 관계
+  ws.getColumn(7).width = 18; // 보호자1 연락처
+  ws.getColumn(8).width = 12; // 보호자2 관계
+  ws.getColumn(9).width = 18; // 보호자2 연락처
   ws.getColumn(10).width = 14; // 생년월일
   ws.getColumn(11).width = 10; // 비고
 
@@ -640,10 +693,15 @@ export async function exportRosterToExcel(
 
   for (const student of sorted) {
     const numberStr = String(student.studentNumber ?? '').padStart(2, '0');
-    const remarks = student.status && student.status !== 'active'
-      ? STUDENT_STATUS_LABELS[student.status] + (student.statusNote ? ` (${student.statusNote})` : '')
-      : student.isVacant ? '결번' : '';
-    const bgColor = (student.status && student.status !== 'active') || student.isVacant ? 'FFEEEEEE' : undefined;
+    const remarks =
+      student.status && student.status !== 'active'
+        ? STUDENT_STATUS_LABELS[student.status] +
+          (student.statusNote ? ` (${student.statusNote})` : '')
+        : student.isVacant
+          ? '결번'
+          : '';
+    const bgColor =
+      (student.status && student.status !== 'active') || student.isVacant ? 'FFEEEEEE' : undefined;
 
     const row = ws.addRow([
       gradeStr,
@@ -667,12 +725,38 @@ export async function exportRosterToExcel(
 
 export async function parseRosterFromExcel(
   buffer: ArrayBuffer,
-): Promise<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean; grade?: string; className?: string }>> {
+): Promise<
+  Array<{
+    name: string;
+    studentNumber: number;
+    phone: string;
+    parentPhone: string;
+    parentPhoneLabel?: string;
+    parentPhone2?: string;
+    parentPhone2Label?: string;
+    birthDate?: string;
+    isVacant: boolean;
+    grade?: string;
+    className?: string;
+  }>
+> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
   const ws = workbook.worksheets[0];
-  const result: Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean; grade?: string; className?: string }> = [];
+  const result: Array<{
+    name: string;
+    studentNumber: number;
+    phone: string;
+    parentPhone: string;
+    parentPhoneLabel?: string;
+    parentPhone2?: string;
+    parentPhone2Label?: string;
+    birthDate?: string;
+    isVacant: boolean;
+    grade?: string;
+    className?: string;
+  }> = [];
 
   if (!ws) return result;
 
@@ -692,14 +776,17 @@ export async function parseRosterFromExcel(
   const headerRow = ws.getRow(1);
   if (headerRow) {
     headerRow.eachCell((cell, colNumber) => {
-      const val = String(cell.value ?? '').trim().replace(/\s/g, '');
+      const val = String(cell.value ?? '')
+        .trim()
+        .replace(/\s/g, '');
       if (/^(학년|grade)$/i.test(val)) gradeCol = colNumber;
       else if (/^(반|학급|class|className)$/i.test(val)) classCol = colNumber;
       else if (/^(번호|No|no|#|학번)$/i.test(val)) numCol = colNumber;
       else if (/^(이름|성명|학생명|name)$/i.test(val)) nameCol = colNumber;
       else if (/^(전화|연락처|학생연락처|학생전화|phone)$/i.test(val)) phoneCol = colNumber;
       else if (/^(보호자1?관계|관계|relationship)$/i.test(val)) parentPhoneLabelCol = colNumber;
-      else if (/^(학부모|보호자|학부모연락처|보호자연락처|보호자1연락처|parentPhone)$/i.test(val)) parentPhoneCol = colNumber;
+      else if (/^(학부모|보호자|학부모연락처|보호자연락처|보호자1연락처|parentPhone)$/i.test(val))
+        parentPhoneCol = colNumber;
       else if (/^(보호자2관계)$/i.test(val)) parentPhone2LabelCol = colNumber;
       else if (/^(보호자2|보호자2연락처|parentPhone2)$/i.test(val)) parentPhone2Col = colNumber;
       else if (/^(생년월일|생일|birthDate|birthday|birth)$/i.test(val)) birthDateCol = colNumber;
@@ -730,7 +817,8 @@ export async function parseRosterFromExcel(
     if (!name && !isVacant && !hasValidNumber) return;
 
     const rowGrade = gradeCol > 0 ? String(row.getCell(gradeCol).value ?? '').trim() : undefined;
-    const rowClassName = classCol > 0 ? String(row.getCell(classCol).value ?? '').trim() : undefined;
+    const rowClassName =
+      classCol > 0 ? String(row.getCell(classCol).value ?? '').trim() : undefined;
 
     const phone = String(row.getCell(phoneCol).value ?? '').trim();
     const parentPhoneLabel = String(row.getCell(parentPhoneLabelCol).value ?? '').trim();
@@ -766,7 +854,9 @@ export async function parseRosterFromExcel(
 
   // 번호 없는 학생(-1)에 자동 번호 부여
   let autoNum = 1;
-  const usedNumbers = new Set(result.filter(s => s.studentNumber > 0).map(s => s.studentNumber));
+  const usedNumbers = new Set(
+    result.filter((s) => s.studentNumber > 0).map((s) => s.studentNumber),
+  );
   for (const student of result) {
     if (student.studentNumber === -1) {
       while (usedNumbers.has(autoNum)) autoNum++;
@@ -813,7 +903,17 @@ export async function generateEventsTemplateExcel(): Promise<ArrayBuffer> {
 
   const examples: string[][] = [
     ['2026-03-02', '', '1학기 시작', '학교', '', '', '2026학년도 1학기 개학일', 'O', ''],
-    ['2026-04-07', '2026-04-11', '학부모 상담 주간', '학급', '', '각 교실', '담임 학부모 개별 상담', '', ''],
+    [
+      '2026-04-07',
+      '2026-04-11',
+      '학부모 상담 주간',
+      '학급',
+      '',
+      '각 교실',
+      '담임 학부모 개별 상담',
+      '',
+      '',
+    ],
     ['2026-03-18', '', '교과협의회', '부서', '15:00 - 16:00', '교무실', '', '', ''],
     ['2026-03-28', '', '나무학교 프로그램', '나무학교', '09:00', '', '생태 체험 학습', '', '매주'],
     ['2026-05-20', '', '체육대회', '학교', '', '운동장', '전교생 체육대회', 'O', ''],
@@ -885,9 +985,9 @@ export async function parseEventsFromExcel(
   if (!ws) return { events, categoryNames: [] };
 
   const recurrenceMap: Record<string, 'weekly' | 'monthly' | 'yearly'> = {
-    '매주': 'weekly',
-    '매월': 'monthly',
-    '매년': 'yearly',
+    매주: 'weekly',
+    매월: 'monthly',
+    매년: 'yearly',
   };
 
   ws.eachRow((row, rowNumber) => {
@@ -969,7 +1069,15 @@ export async function exportStudentRecordsToExcel(
   // ─── Sheet 1: 전체 기록 ────────────────────────────────────────────────────
   const ws1 = workbook.addWorksheet('전체 기록');
 
-  const sheet1Headers = ['날짜', '학생', '카테고리', '서브카테고리', '상담방법', '내용', '후속조치'];
+  const sheet1Headers = [
+    '날짜',
+    '학생',
+    '카테고리',
+    '서브카테고리',
+    '상담방법',
+    '내용',
+    '후속조치',
+  ];
   const sheet1HeaderRow = ws1.addRow(sheet1Headers);
   sheet1HeaderRow.eachCell((cell) => applyHeaderStyle(cell));
 
@@ -1001,7 +1109,11 @@ export async function exportStudentRecordsToExcel(
     ]);
     row.eachCell((cell) => applyCellStyle(cell, bgColor));
     // Left-align content column
-    ws1.getCell(row.number, 6).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+    ws1.getCell(row.number, 6).alignment = {
+      horizontal: 'left',
+      vertical: 'middle',
+      wrapText: true,
+    };
   }
 
   // ─── Sheet 2: 출결 통계 ───────────────────────────────────────────────────
@@ -1061,7 +1173,15 @@ export async function exportStudentRecordsToExcel(
   }
 
   // Bottom totals row
-  const totalRow = ws2.addRow(['합계', '', totalAbsent, totalLate, totalEarlyLeave, totalResultAbsent, totalSum]);
+  const totalRow = ws2.addRow([
+    '합계',
+    '',
+    totalAbsent,
+    totalLate,
+    totalEarlyLeave,
+    totalResultAbsent,
+    totalSum,
+  ]);
   totalRow.eachCell((cell) => applyHeaderStyle(cell));
 
   // ─── Sheet 3: 학생별 요약 ─────────────────────────────────────────────────
@@ -1119,19 +1239,29 @@ function getEventGradeText(event: SchoolEvent): string {
 
 function getEventSourceText(event: SchoolEvent): string {
   switch (event.source) {
-    case 'neis': return 'NEIS';
-    case 'google': return '구글';
-    default: return '쌤핀';
+    case 'neis':
+      return 'NEIS';
+    case 'google':
+      return '구글';
+    default:
+      return '쌤핀';
   }
 }
 
-export async function exportEventsToExcel(
-  events: readonly SchoolEvent[],
-): Promise<ArrayBuffer> {
+export async function exportEventsToExcel(events: readonly SchoolEvent[]): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('학교 일정');
 
-  const headerRow = ws.addRow(['날짜', '제목', '카테고리', '시간', '장소', '설명', '해당학년', '출처']);
+  const headerRow = ws.addRow([
+    '날짜',
+    '제목',
+    '카테고리',
+    '시간',
+    '장소',
+    '설명',
+    '해당학년',
+    '출처',
+  ]);
   headerRow.eachCell((cell) => applyHeaderStyle(cell));
 
   ws.getColumn(1).width = 14;
@@ -1223,7 +1353,13 @@ export async function exportRecordsForSchoolReport(
 
     const stats: AttendanceStats = getAttendanceStats(filteredRecords, student.id);
     const attSum = stats.absent + stats.late + stats.earlyLeave + stats.resultAbsent;
-    const attDataRow = ws.addRow([stats.absent, stats.late, stats.earlyLeave, stats.resultAbsent, attSum]);
+    const attDataRow = ws.addRow([
+      stats.absent,
+      stats.late,
+      stats.earlyLeave,
+      stats.resultAbsent,
+      attSum,
+    ]);
     attDataRow.eachCell((cell) => applyCellStyle(cell));
 
     ws.addRow([]);
@@ -1243,7 +1379,11 @@ export async function exportRecordsForSchoolReport(
         const method = rec.method ? (COUNSELING_METHOD_MAP[rec.method] ?? '') : '';
         const cRow = ws.addRow([rec.date, rec.subcategory, method, rec.content, '']);
         cRow.eachCell((cell) => applyCellStyle(cell, CATEGORY_ROW_COLORS['counseling']));
-        ws.getCell(cRow.number, 4).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        ws.getCell(cRow.number, 4).alignment = {
+          horizontal: 'left',
+          vertical: 'middle',
+          wrapText: true,
+        };
       }
     } else {
       ws.addRow(['기록 없음']);
@@ -1265,7 +1405,11 @@ export async function exportRecordsForSchoolReport(
       for (const rec of lifeRecords) {
         const lRow = ws.addRow([rec.date, rec.subcategory, rec.content]);
         lRow.eachCell((cell) => applyCellStyle(cell, CATEGORY_ROW_COLORS['life']));
-        ws.getCell(lRow.number, 3).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        ws.getCell(lRow.number, 3).alignment = {
+          horizontal: 'left',
+          vertical: 'middle',
+          wrapText: true,
+        };
       }
     } else {
       ws.addRow(['기록 없음']);
@@ -1291,7 +1435,11 @@ export async function exportRecordsForSchoolReport(
         const catName = categoryMap.get(rec.category) ?? rec.category;
         const eRow = ws.addRow([rec.date, `${catName} - ${rec.subcategory}`, rec.content]);
         eRow.eachCell((cell) => applyCellStyle(cell, 'FFF3F4F6'));
-        ws.getCell(eRow.number, 3).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        ws.getCell(eRow.number, 3).alignment = {
+          horizontal: 'left',
+          vertical: 'middle',
+          wrapText: true,
+        };
       }
     }
   }
@@ -1330,26 +1478,29 @@ export async function exportAttendanceToExcel(
 
   const dates = [...new Set(filtered.map((r) => r.date))].sort();
 
-  const activeStudents = [...students]
-    .filter(isStudentActive)
-    .sort((a, b) => {
-      if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
-      if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
-      return a.number - b.number;
-    });
+  const activeStudents = [...students].filter(isStudentActive).sort((a, b) => {
+    if ((a.grade ?? 0) !== (b.grade ?? 0)) return (a.grade ?? 0) - (b.grade ?? 0);
+    if ((a.classNum ?? 0) !== (b.classNum ?? 0)) return (a.classNum ?? 0) - (b.classNum ?? 0);
+    return a.number - b.number;
+  });
 
   const sheetPrefix = className ? `${className} ` : '';
 
   const ws1 = workbook.addWorksheet(`${sheetPrefix}출결 현황`.slice(0, 31));
 
   const headers1 = [
-    '번호', '이름',
+    '번호',
+    '이름',
     ...dates.map((d) => {
       const m = parseInt(d.slice(5, 7), 10);
       const day = parseInt(d.slice(8, 10), 10);
       return `${m}/${day}`;
     }),
-    '출석', '결석', '지각', '조퇴', '결과',
+    '출석',
+    '결석',
+    '지각',
+    '조퇴',
+    '결과',
   ];
   const headerRow1 = ws1.addRow(headers1);
   headerRow1.eachCell((cell) => applyHeaderStyle(cell));
@@ -1365,7 +1516,11 @@ export async function exportAttendanceToExcel(
 
   for (const student of activeStudents) {
     const stats: Record<AttendanceStatus, number> = {
-      present: 0, absent: 0, late: 0, earlyLeave: 0, classAbsence: 0,
+      present: 0,
+      absent: 0,
+      late: 0,
+      earlyLeave: 0,
+      classAbsence: 0,
     };
 
     const rowData: (string | number)[] = [student.number, student.name];
@@ -1428,7 +1583,11 @@ export async function exportAttendanceToExcel(
 
     const total = allRecords.length;
     const stats: Record<AttendanceStatus, number> = {
-      present: 0, absent: 0, late: 0, earlyLeave: 0, classAbsence: 0,
+      present: 0,
+      absent: 0,
+      late: 0,
+      earlyLeave: 0,
+      classAbsence: 0,
     };
     for (const r of allRecords) stats[r.status]++;
 
@@ -1505,9 +1664,9 @@ export async function generateTeachingClassRosterTemplate(): Promise<ArrayBuffer
   const ws = workbook.addWorksheet('수업반 명렬표');
 
   // Column widths
-  ws.getColumn(1).width = 8;  // 학년
-  ws.getColumn(2).width = 8;  // 반
-  ws.getColumn(3).width = 8;  // 번호
+  ws.getColumn(1).width = 8; // 학년
+  ws.getColumn(2).width = 8; // 반
+  ws.getColumn(3).width = 8; // 번호
   ws.getColumn(4).width = 16; // 이름
   ws.getColumn(5).width = 12; // 비고
 
@@ -1558,7 +1717,9 @@ export async function parseTeachingClassRosterFromExcel(
   const headerRow = ws.getRow(1);
   if (headerRow) {
     headerRow.eachCell((cell, colNumber) => {
-      const val = String(cell.value ?? '').trim().replace(/\s/g, '');
+      const val = String(cell.value ?? '')
+        .trim()
+        .replace(/\s/g, '');
       if (/^(번호|No|no|#|학번)$/i.test(val)) numCol = colNumber;
       else if (/^(이름|성명|학생명|name)$/i.test(val)) nameCol = colNumber;
       else if (/^(학년|grade)$/i.test(val)) gradeCol = colNumber;
@@ -1611,7 +1772,7 @@ export async function parseTeachingClassRosterFromExcel(
 
   // 번호 없는 학생(-1)에 자동 번호 부여
   let autoNum = 1;
-  const usedNumbers = new Set(mutableResult.filter(s => s.number > 0).map(s => s.number));
+  const usedNumbers = new Set(mutableResult.filter((s) => s.number > 0).map((s) => s.number));
   for (const student of mutableResult) {
     if (student.number === -1) {
       while (usedNumbers.has(autoNum)) autoNum++;
@@ -1631,9 +1792,7 @@ export async function parseTeachingClassRosterFromExcel(
 /**
  * 모둠 편성 결과를 Excel로 내보내기
  */
-export async function exportGroupingToExcel(
-  groups: readonly GroupResult[],
-): Promise<ArrayBuffer> {
+export async function exportGroupingToExcel(groups: readonly GroupResult[]): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('모둠 편성');
 
@@ -1645,7 +1804,9 @@ export async function exportGroupingToExcel(
   ws.addRow([]);
 
   // 모둠 헤더
-  const headerRow = ws.addRow(groups.map((g) => g.leaderName ? `${g.label} (모둠장: ${g.leaderName})` : g.label));
+  const headerRow = ws.addRow(
+    groups.map((g) => (g.leaderName ? `${g.label} (모둠장: ${g.leaderName})` : g.label)),
+  );
   headerRow.eachCell((cell) => {
     cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
@@ -1673,14 +1834,16 @@ export async function exportGroupingToExcel(
   // 멤버 행들
   const maxMembers = Math.max(...groups.map((g) => g.members.length));
   for (let row = 0; row < maxMembers; row++) {
-    const dataRow = ws.addRow(groups.map((g) => {
-      const m = g.members[row];
-      if (!m) return '';
-      const prefix = m.number != null ? `${m.number}번 ` : '';
-      const suffix = m.name === g.leaderName ? ' ★' : '';
-      const roleSuffix = m.role ? ` (${m.role})` : '';
-      return `${prefix}${m.name}${suffix}${roleSuffix}`;
-    }));
+    const dataRow = ws.addRow(
+      groups.map((g) => {
+        const m = g.members[row];
+        if (!m) return '';
+        const prefix = m.number != null ? `${m.number}번 ` : '';
+        const suffix = m.name === g.leaderName ? ' ★' : '';
+        const roleSuffix = m.role ? ` (${m.role})` : '';
+        return `${prefix}${m.name}${suffix}${roleSuffix}`;
+      }),
+    );
     dataRow.eachCell((cell, colNumber) => {
       const group = groups[colNumber - 1];
       const member = group?.members[row];
@@ -1702,7 +1865,7 @@ export async function exportGroupingToExcel(
     ws.getColumn(i).width = 18;
   }
 
-  return await wb.xlsx.writeBuffer() as ArrayBuffer;
+  return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 }
 
 /* ────────────────────────────────────────────────── */
@@ -1719,10 +1882,10 @@ export interface ObservationExportRecord {
 
 // 태그별 배경색 (ARGB)
 const TAG_FILL_COLORS: Record<string, string> = {
-  '교과역량': 'FFDBEAFE',
-  '학습태도': 'FFDCFCE7',
-  '진로흥미': 'FFEDE9FE',
-  '특이사항': 'FFFEF3C7',
+  교과역량: 'FFDBEAFE',
+  학습태도: 'FFDCFCE7',
+  진로흥미: 'FFEDE9FE',
+  특이사항: 'FFFEF3C7',
 };
 const TAG_FILL_DEFAULT = 'FFF1F5F9';
 
@@ -1739,9 +1902,10 @@ export async function exportObservationsToExcel(
     : records;
 
   // 태그 필터: filterTags가 있으면 해당 태그 중 하나라도 포함된 기록만
-  const filtered = filterTags && filterTags.length > 0
-    ? periodFiltered.filter((r) => r.tags.some((t) => filterTags.includes(t)))
-    : periodFiltered;
+  const filtered =
+    filterTags && filterTags.length > 0
+      ? periodFiltered.filter((r) => r.tags.some((t) => filterTags.includes(t)))
+      : periodFiltered;
 
   const sorted = [...filtered].sort((a, b) => {
     const dateCompare = a.date.localeCompare(b.date);
@@ -1798,15 +1962,20 @@ export async function exportObservationsToExcel(
   ws2.getColumn(2).width = 10;
   ws2.getColumn(3).width = 10;
   ws2.getColumn(4).width = 14;
-  knownTags.forEach((_, i) => { ws2.getColumn(5 + i).width = 12; });
+  knownTags.forEach((_, i) => {
+    ws2.getColumn(5 + i).width = 12;
+  });
   ws2.getColumn(5 + knownTags.length).width = 12;
 
-  const studentMap = new Map<number, {
-    name: string;
-    count: number;
-    lastDate: string;
-    tags: Map<string, number>;
-  }>();
+  const studentMap = new Map<
+    number,
+    {
+      name: string;
+      count: number;
+      lastDate: string;
+      tags: Map<string, number>;
+    }
+  >();
 
   for (const r of sorted) {
     const existing = studentMap.get(r.studentNumber);
@@ -1848,7 +2017,7 @@ export async function exportObservationsToExcel(
     });
   }
 
-  return await workbook.xlsx.writeBuffer() as ArrayBuffer;
+  return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
@@ -1858,8 +2027,8 @@ export async function exportObservationsToExcel(
 const QUESTION_TYPE_LABEL: Record<MultiSurveyTemplateQuestion['type'], string> = {
   'single-choice': '단일 선택',
   'multi-choice': '복수 선택',
-  'text': '텍스트',
-  'scale': '척도',
+  text: '텍스트',
+  scale: '척도',
 };
 
 /** 간이 토크나이저 — 공백/구두점 분리, 한글 2자 이상만 채택 */
@@ -1894,10 +2063,7 @@ function formatAggregateSummary(
 }
 
 /** Sheet 1: 요약 */
-function addMultiSurveySummarySheet(
-  workbook: ExcelJS.Workbook,
-  data: MultiSurveyResultData,
-): void {
+function addMultiSurveySummarySheet(workbook: ExcelJS.Workbook, data: MultiSurveyResultData): void {
   const ws = workbook.addWorksheet('요약');
   const headerRow = ws.addRow(['번호', '질문', '유형', '통계']);
   headerRow.eachCell((cell) => applyHeaderStyle(cell));
@@ -1955,10 +2121,7 @@ function addMultiSurveyResponsesSheet(
     const submittedAt = new Date(sub.submittedAt);
     const timeStr = `${submittedAt.getFullYear()}-${String(submittedAt.getMonth() + 1).padStart(2, '0')}-${String(submittedAt.getDate()).padStart(2, '0')} ${String(submittedAt.getHours()).padStart(2, '0')}:${String(submittedAt.getMinutes()).padStart(2, '0')}`;
 
-    const cells: (string | number | null)[] = [
-      formatSubmissionLabel(subIdx),
-      timeStr,
-    ];
+    const cells: (string | number | null)[] = [formatSubmissionLabel(subIdx), timeStr];
     for (const q of data.questions) {
       const answer = sub.answers.find((a) => a.questionId === q.id);
       const { raw } = serializeAnswerCell(q, answer);
@@ -2079,7 +2242,9 @@ function addWordCloudSheet(workbook: ExcelJS.Workbook, data: WordCloudResultData
   qRow.eachCell((cell) => applyCellStyle(cell));
   ws.mergeCells(qRow.number, 1, qRow.number, 2);
 
-  for (const w of [...data.words].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word))) {
+  for (const w of [...data.words].sort(
+    (a, b) => b.count - a.count || a.word.localeCompare(b.word),
+  )) {
     const row = ws.addRow([w.word, w.count]);
     row.eachCell((cell) => applyCellStyle(cell));
   }

@@ -8,10 +8,13 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 /* eslint-disable no-restricted-imports */
 import { exportSeatingToExcel } from '@infrastructure/export/ExcelExporter';
 import { exportSeatingToHwpx } from '@infrastructure/export/HwpxExporter';
+import { exportSeatingToPdf } from '@infrastructure/export/pdf/SeatingPdf';
 /* eslint-enable no-restricted-imports */
 import { ShuffleOverlay } from './ShuffleOverlay';
 import { GroupShuffleOverlay } from './GroupShuffleOverlay';
 import { GroupSeatingView } from './GroupSeatingView';
+import { FreestyleSeatingView } from './FreestyleSeatingView';
+import { FreestylePresetDialog } from './FreestylePresetDialog';
 import { SeatZoneModal } from './SeatZoneModal';
 import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { SeatingHistoryPanel } from './SeatingHistoryPanel';
@@ -279,6 +282,7 @@ export function Seating(props?: { embedded?: boolean }) {
   const [showConstraintModal, setShowConstraintModal] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showNameLearning, setShowNameLearning] = useState(false);
+  const [showPresetDialog, setShowPresetDialog] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const loaded = seatingLoaded && studentsLoaded;
@@ -354,9 +358,12 @@ export function Seating(props?: { embedded?: boolean }) {
 
     if (layout === 'group') {
       // 모둠 모드: 기존 모둠 구조 유지하면서 학생만 재배정
+      // cluster-fix: groups 가 비어 있을 때 groupCount=1 로 떨어져 학생이 잘리는 회귀 차단.
+      // groups 가 비어 있으면 총원 / maxSize 로 적절한 모둠 수를 자동 산출한다.
       const groups = seating.groups ?? [];
-      const groupCount = Math.max(1, groups.length);
       const maxSize = groups[0]?.maxSize ?? 6;
+      const groupCount =
+        groups.length > 0 ? groups.length : Math.max(1, Math.ceil(totalStudents / maxSize));
       await shuffleGroupSeating(groupCount, maxSize);
       setShowGroupShuffle(true);
       return;
@@ -396,7 +403,7 @@ export function Seating(props?: { embedded?: boolean }) {
   const getStudent = useStudentStore((s) => s.getStudent);
 
   const handleExport = useCallback(
-    async (format: 'excel' | 'hwpx') => {
+    async (format: 'excel' | 'hwpx' | 'pdf') => {
       setShowExportMenu(false);
       try {
         let data: ArrayBuffer | Uint8Array;
@@ -405,9 +412,12 @@ export function Seating(props?: { embedded?: boolean }) {
         if (format === 'excel') {
           data = await exportSeatingToExcel(seating, getStudent, students, className);
           defaultFileName = '학급자리배치도.xlsx';
-        } else {
+        } else if (format === 'hwpx') {
           data = await exportSeatingToHwpx(seating, getStudent, students, className);
           defaultFileName = '학급자리배치도.hwpx';
+        } else {
+          data = await exportSeatingToPdf(seating, getStudent, students, className);
+          defaultFileName = '학급자리배치도.pdf';
         }
 
         const normalized: ArrayBuffer | string =
@@ -416,8 +426,9 @@ export function Seating(props?: { embedded?: boolean }) {
             : data;
 
         if (window.electronAPI) {
-          const ext = format === 'excel' ? 'xlsx' : 'hwpx';
-          const filterName = format === 'excel' ? 'Excel 파일' : '한글 문서';
+          const ext = format === 'excel' ? 'xlsx' : format === 'hwpx' ? 'hwpx' : 'pdf';
+          const filterName =
+            format === 'excel' ? 'Excel 파일' : format === 'hwpx' ? '한글 문서' : 'PDF 문서';
           const saved = await window.electronAPI.showSaveDialog({
             title: '내보내기',
             defaultPath: defaultFileName,
@@ -431,7 +442,8 @@ export function Seating(props?: { embedded?: boolean }) {
             });
           }
         } else {
-          const blob = new Blob([normalized], { type: 'application/octet-stream' });
+          const mimeType = format === 'pdf' ? 'application/pdf' : 'application/octet-stream';
+          const blob = new Blob([normalized], { type: mimeType });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -493,25 +505,40 @@ export function Seating(props?: { embedded?: boolean }) {
               </span>
               모둠
             </button>
+            <button
+              onClick={() => void changeLayout('freestyle')}
+              className={`whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                layout === 'freestyle'
+                  ? 'bg-sp-accent text-white'
+                  : 'text-sp-muted hover:text-sp-text'
+              }`}
+              title="자유 배치 — 일제식·모둠·ㄷ자형 프리셋 + 드래그 이동"
+            >
+              <span className="material-symbols-outlined text-sm mr-1 align-middle">widgets</span>
+              자유
+            </button>
           </div>
-          <button
-            onClick={() => void toggleGroupGridSync()}
-            className={`shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-              groupGridSync
-                ? 'border-sp-accent/40 bg-sp-accent/10 text-sp-accent'
-                : 'border-sp-border bg-sp-card text-sp-muted hover:text-sp-text'
-            }`}
-            title={
-              groupGridSync
-                ? '격자↔모둠 연동: 전환 시 학생 자동 재분배'
-                : '격자↔모둠 비연동: 각각 독립 유지'
-            }
-          >
-            <span className="material-symbols-outlined text-sm">
-              {groupGridSync ? 'link' : 'link_off'}
-            </span>
-            {groupGridSync ? '연동' : '비연동'}
-          </button>
+          {/* 격자↔모둠 연동 토글 — 자유 모드에서는 의미 없으므로 숨김 */}
+          {layout !== 'freestyle' && (
+            <button
+              onClick={() => void toggleGroupGridSync()}
+              className={`shrink-0 whitespace-nowrap flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                groupGridSync
+                  ? 'border-sp-accent/40 bg-sp-accent/10 text-sp-accent'
+                  : 'border-sp-border bg-sp-card text-sp-muted hover:text-sp-text'
+              }`}
+              title={
+                groupGridSync
+                  ? '격자↔모둠 연동: 전환 시 학생 자동 재분배'
+                  : '격자↔모둠 비연동: 각각 독립 유지'
+              }
+            >
+              <span className="material-symbols-outlined text-sm">
+                {groupGridSync ? 'link' : 'link_off'}
+              </span>
+              {groupGridSync ? '연동' : '비연동'}
+            </button>
+          )}
           <div className="w-px h-8 bg-sp-border shrink-0" />
           <button
             onClick={handleRandomize}
@@ -527,6 +554,16 @@ export function Seating(props?: { embedded?: boolean }) {
             <span className="material-symbols-outlined text-lg">tune</span>
             <span>배치 조건</span>
           </button>
+          {layout === 'freestyle' && (
+            <button
+              onClick={() => setShowPresetDialog(true)}
+              className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+              title="자유 배치 프리셋 선택 (일제식 · 모둠형 · ㄷ자형)"
+            >
+              <span className="material-symbols-outlined text-lg">tune</span>
+              <span>프리셋</span>
+            </button>
+          )}
           {layout === 'grid' && (
             <>
               <button
@@ -692,8 +729,17 @@ export function Seating(props?: { embedded?: boolean }) {
             {showExportMenu && (
               <div className="absolute right-0 top-full mt-2 w-56 bg-sp-card border border-sp-border rounded-xl shadow-2xl shadow-black/30 z-50 overflow-hidden">
                 <button
-                  onClick={() => void handleExport('excel')}
+                  onClick={() => void handleExport('pdf')}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-red-400 text-lg">
+                    picture_as_pdf
+                  </span>
+                  <span>학급 자리 배치 PDF (.pdf)</span>
+                </button>
+                <button
+                  onClick={() => void handleExport('excel')}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-sp-text hover:bg-sp-accent/10 transition-colors border-t border-sp-border"
                 >
                   <span className="material-symbols-outlined text-green-400 text-lg">
                     table_view
@@ -737,16 +783,26 @@ export function Seating(props?: { embedded?: boolean }) {
                 </div>
               )}
 
-              {/* 편집 모드 안내 배너 */}
+              {/* 편집 모드 안내 배너 — 레이아웃에 따라 안내 문구 변경 */}
               {isEditing && (
                 <div className="w-full max-w-6xl mx-auto mb-4 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-sp-accent/10 border border-sp-accent/30 text-sm text-sp-accent">
                   <span className="material-symbols-outlined text-base">info</span>
-                  <span>편집 모드: 학생을 드래그하여 자리를 변경할 수 있습니다</span>
+                  <span>
+                    {layout === 'freestyle'
+                      ? '편집 모드: 책상 하나를 끌면 이동, 다른 책상 위에 놓으면 학생 자리 교환. 빈 공간을 드래그하면 여러 책상을 한 번에 선택해 함께 옮길 수 있어요 (Shift+클릭 추가 · ESC 해제)'
+                      : '편집 모드: 학생을 드래그하여 자리를 변경할 수 있습니다'}
+                  </span>
                 </div>
               )}
 
               {/* 좌석 그리드 */}
-              {layout === 'group' ? (
+              {layout === 'freestyle' ? (
+                <FreestyleSeatingView
+                  desks={seating.freestyleDesks ?? []}
+                  isTeacherView={isTeacherView}
+                  isEditing={isEditing}
+                />
+              ) : layout === 'group' ? (
                 <GroupSeatingView
                   groups={seating.groups ?? []}
                   isEditing={isEditing}
@@ -1103,6 +1159,12 @@ export function Seating(props?: { embedded?: boolean }) {
           isOpen={showNameLearning}
           onClose={() => setShowNameLearning(false)}
           seating={seating}
+        />
+
+        {/* 자유 배치 프리셋 다이얼로그 (Phase 4) */}
+        <FreestylePresetDialog
+          isOpen={showPresetDialog}
+          onClose={() => setShowPresetDialog(false)}
         />
       </div>
     </div>

@@ -693,3 +693,39 @@ export function shuffleGroups(
 
   return groups;
 }
+
+/**
+ * 모둠 목록에서 비활성/결번/명렬표 외 학생 ID 를 제거한 결과를 반환합니다.
+ *
+ * - 빈 모둠(전원이 stale 한 경우)도 구조는 보존합니다 — 사용자가 만든 모둠 슬롯을 함부로 지우지 않습니다.
+ * - 변경 사항이 전혀 없으면 입력 참조를 그대로 돌려줍니다. Zustand 의 얕은 비교가 깔끔하게 작동하도록 하는 설계.
+ * - 입력은 `readonly`, 출력은 mutable `SeatGroup[]` 이지만, 호출부에서 다시 `readonly` 로 다뤄도 무방합니다.
+ */
+export function sanitizeGroups(
+  groups: readonly SeatGroup[] | undefined,
+  activeIds: ReadonlySet<string>,
+): readonly SeatGroup[] | undefined {
+  if (!groups) return groups;
+  if (groups.length === 0) return groups;
+
+  let changed = false;
+  const next: SeatGroup[] = [];
+  for (const g of groups) {
+    let groupChanged = false;
+    const filtered: string[] = [];
+    for (const sid of g.studentIds) {
+      if (activeIds.has(sid)) {
+        filtered.push(sid);
+      } else {
+        groupChanged = true;
+      }
+    }
+    if (groupChanged) {
+      changed = true;
+      next.push({ ...g, studentIds: filtered });
+    } else {
+      next.push(g);
+    }
+  }
+  return changed ? next : groups;
+}

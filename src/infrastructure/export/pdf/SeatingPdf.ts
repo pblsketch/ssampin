@@ -1,6 +1,7 @@
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import type { SeatingData } from '@domain/entities/Seating';
+import type { SeatingData, FreestyleDesk } from '@domain/entities/Seating';
+import { GROUP_COLORS } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import { buildPairGroups } from '@domain/rules/seatingLayoutRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -21,6 +22,15 @@ export async function exportSeatingToPdf(
   students: readonly Student[],
   className: string,
 ): Promise<ArrayBuffer> {
+  // 자유 배치 모드는 별도 렌더링 경로 사용 (정규화 좌표 → A4 매핑)
+  if (
+    seating.layout === 'freestyle' &&
+    seating.freestyleDesks &&
+    seating.freestyleDesks.length > 0
+  ) {
+    return exportFreestyleSeatingToPdf(seating, getStudent, students, className);
+  }
+
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   doc.setTitle(formatSeatingTitle(className));
@@ -299,4 +309,297 @@ function formatSeatingTitle(className: string): string {
   const m = className.match(/^(\d+)\s*-\s*(\d+)$/);
   if (m) return `${m[1]}학년 ${m[2]}반 자리배치표`;
   return `${className} 자리배치표`;
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 자유 배치(freestyle) 전용 PDF 렌더링
+ *
+ * 정규화 좌표 (0~1000) 를 A4 landscape 좌측 배치 영역에 매핑한다.
+ * - 책상 사각형 + 회전 + 학번/이름
+ * - 모둠(groupId) 색상 외곽선
+ * - 우측에는 기존 grid 와 동일한 명렬표
+ * ════════════════════════════════════════════════════════════ */
+
+async function exportFreestyleSeatingToPdf(
+  seating: SeatingData,
+  getStudent: (id: string | null) => Student | undefined,
+  students: readonly Student[],
+  className: string,
+): Promise<ArrayBuffer> {
+  const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  doc.setTitle(formatSeatingTitle(className));
+  doc.setAuthor('쌤핀');
+  doc.setCreator('쌤핀 (SsamPin)');
+  doc.setProducer('쌤핀 (SsamPin) - pdf-lib');
+  doc.setCreationDate(new Date());
+
+  const buffers = await loadKoreanFontBuffers();
+  const fonts = {
+    regular: await doc.embedFont(buffers.regular, { subset: false }),
+    bold: await doc.embedFont(buffers.bold, { subset: false }),
+  };
+
+  // A4 landscape: 842 x 595 pt
+  const page = doc.addPage([842, 595]);
+  const { width, height } = page.getSize();
+  const margin = 30;
+  const rosterWidth = 180;
+
+  const title = formatSeatingTitle(className);
+  drawText(page, title, {
+    x: width / 2,
+    y: height - margin - 18,
+    font: fonts.bold,
+    size: 18,
+    align: 'center',
+  });
+
+  // 좌측: 자유 배치 영역 (16:10 비율, 우측 명렬표와 명확히 분리)
+  const boardLeft = margin;
+  const boardTop = height - margin - 50;
+  const boardWidth = width - margin * 3 - rosterWidth;
+  const boardHeight = Math.min(boardWidth * (10 / 16), boardTop - margin - 50);
+  const boardBottom = boardTop - boardHeight;
+
+  // 배치 영역 박스
+  page.drawRectangle({
+    x: boardLeft,
+    y: boardBottom,
+    width: boardWidth,
+    height: boardHeight,
+    borderColor: rgb(0.82, 0.84, 0.88),
+    borderWidth: 0.8,
+    color: rgb(0.985, 0.985, 0.99),
+  });
+
+  // 교탁 표시 (상단)
+  const gyotakWidth = boardWidth * 0.4;
+  const gyotakX = boardLeft + (boardWidth - gyotakWidth) / 2;
+  const gyotakY = boardTop + 6;
+  page.drawRectangle({
+    x: gyotakX,
+    y: gyotakY,
+    width: gyotakWidth,
+    height: 18,
+    color: rgb(0.39, 0.45, 0.55),
+  });
+  drawText(page, '[ 교 탁 ]', {
+    x: gyotakX + gyotakWidth / 2,
+    y: gyotakY + 5,
+    font: fonts.bold,
+    size: 10,
+    align: 'center',
+    color: rgb(1, 1, 1),
+  });
+
+  /** 정규화 좌표(0~1000) → 페이지 픽셀 좌표.
+   * 정규화 y 0=상단, 1000=하단 / PDF y 좌표는 아래에서 위 — y 반전 처리. */
+  const normToPx = (nx: number, ny: number) => ({
+    x: boardLeft + (nx / 1000) * boardWidth,
+    y: boardBottom + boardHeight - (ny / 1000) * boardHeight,
+  });
+
+  // 모둠 색상 매핑
+  const groupColorMap = new Map<string, ReturnType<typeof rgb>>();
+  let groupColorIdx = 0;
+  for (const d of seating.freestyleDesks ?? []) {
+    if (d.groupId && !groupColorMap.has(d.groupId)) {
+      const hex = GROUP_COLORS[groupColorIdx % GROUP_COLORS.length]!;
+      groupColorMap.set(d.groupId, hexToRgb(hex));
+      groupColorIdx += 1;
+    }
+  }
+
+  // 책상 렌더링
+  for (const desk of seating.freestyleDesks ?? []) {
+    drawFreestyleDesk(page, fonts, desk, getStudent, normToPx, groupColorMap);
+  }
+
+  // 우측 명렬표 (기존 grid PDF 와 동일 시각 규칙)
+  const rosterX = width - margin - rosterWidth;
+  const rosterTop = height - margin - 50;
+  drawText(page, title.replace('자리배치표', '명렬표'), {
+    x: rosterX + rosterWidth / 2,
+    y: rosterTop + 8,
+    font: fonts.bold,
+    size: 11,
+    align: 'center',
+  });
+
+  const sorted = [...students]
+    .filter(isStudentActive)
+    .sort((a, b) => (a.studentNumber ?? 0) - (b.studentNumber ?? 0));
+
+  const rosterRowH = 16;
+  const numColW = 32;
+  const nameColW = rosterWidth - numColW;
+
+  drawRosterCell(
+    page,
+    fonts.bold,
+    '번호',
+    rosterX,
+    rosterTop - rosterRowH,
+    numColW,
+    rosterRowH,
+    true,
+  );
+  drawRosterCell(
+    page,
+    fonts.bold,
+    '이름',
+    rosterX + numColW,
+    rosterTop - rosterRowH,
+    nameColW,
+    rosterRowH,
+    true,
+  );
+
+  const availableRosterRows = Math.floor((rosterTop - rosterRowH - margin) / rosterRowH);
+  for (let i = 0; i < sorted.length && i < availableRosterRows; i++) {
+    const s = sorted[i]!;
+    const y = rosterTop - rosterRowH * (i + 2);
+    drawRosterCell(
+      page,
+      fonts.regular,
+      String(s.studentNumber ?? '').padStart(2, '0'),
+      rosterX,
+      y,
+      numColW,
+      rosterRowH,
+      false,
+    );
+    drawRosterCell(
+      page,
+      fonts.regular,
+      s.name ?? '',
+      rosterX + numColW,
+      y,
+      nameColW,
+      rosterRowH,
+      false,
+    );
+  }
+
+  const pdfBytes = await doc.save();
+  // pdf-lib 결과를 ArrayBuffer 로 정규화
+  return pdfBytes.buffer.slice(
+    pdfBytes.byteOffset,
+    pdfBytes.byteOffset + pdfBytes.byteLength,
+  ) as ArrayBuffer;
+}
+
+/** #RRGGBB hex → pdf-lib rgb(0~1) */
+function hexToRgb(hex: string): ReturnType<typeof rgb> {
+  const cleaned = hex.replace('#', '');
+  const r = parseInt(cleaned.slice(0, 2), 16) / 255;
+  const g = parseInt(cleaned.slice(2, 4), 16) / 255;
+  const b = parseInt(cleaned.slice(4, 6), 16) / 255;
+  return rgb(Number.isFinite(r) ? r : 0, Number.isFinite(g) ? g : 0, Number.isFinite(b) ? b : 0);
+}
+
+/** 자유 배치 책상 하나 그리기 — 회전 처리는 사각형/텍스트 별도 처리 */
+function drawFreestyleDesk(
+  page: PDFPage,
+  fonts: { regular: PDFFont; bold: PDFFont },
+  desk: FreestyleDesk,
+  getStudent: (id: string | null) => Student | undefined,
+  normToPx: (nx: number, ny: number) => { x: number; y: number },
+  groupColorMap: Map<string, ReturnType<typeof rgb>>,
+): void {
+  const center = normToPx(desk.x, desk.y);
+  const student = getStudent(desk.studentId);
+  const isEmpty = desk.studentId === null;
+  const rotation = desk.rotation ?? 0;
+
+  // 회전된 책상은 가로/세로 swap (FreestyleSeatingView 와 동일 규칙)
+  const isRotated = rotation === 90 || rotation === 270;
+  const w = isRotated ? 36 : 56;
+  const h = isRotated ? 56 : 36;
+
+  // 책상 사각형 — 중앙 기준이라 좌하단 좌표는 center - w/2, center - h/2
+  // 단순화를 위해 회전은 텍스트에는 적용하되, 사각형은 회전 없이 가로/세로 swap 결과만 그린다.
+  const groupColor = desk.groupId ? groupColorMap.get(desk.groupId) : undefined;
+  const bgColor = isEmpty
+    ? rgb(0.95, 0.96, 0.98)
+    : groupColor
+      ? rgb(
+          Math.min(1, groupColor.red * 0.15 + 0.93),
+          Math.min(1, groupColor.green * 0.15 + 0.93),
+          Math.min(1, groupColor.blue * 0.15 + 0.93),
+        )
+      : rgb(1, 1, 1);
+
+  page.drawRectangle({
+    x: center.x - w / 2,
+    y: center.y - h / 2,
+    width: w,
+    height: h,
+    color: bgColor,
+    borderColor: groupColor ?? rgb(0.76, 0.79, 0.85),
+    borderWidth: groupColor ? 1.2 : 0.8,
+  });
+
+  // 모둠 색상 띠 (상단 3pt)
+  if (groupColor) {
+    page.drawRectangle({
+      x: center.x - w / 2,
+      y: center.y + h / 2 - 3,
+      width: w,
+      height: 3,
+      color: groupColor,
+    });
+  }
+
+  if (isEmpty) {
+    drawText(page, '빈자리', {
+      x: center.x,
+      y: center.y - 3,
+      font: fonts.regular,
+      size: 7,
+      align: 'center',
+      color: rgb(0.5, 0.55, 0.62),
+      maxWidth: w - 4,
+    });
+    return;
+  }
+
+  // 학번 (상단 좌측 작게)
+  const studentNumberLabel =
+    student?.studentNumber !== undefined ? String(student.studentNumber).padStart(2, '0') : '';
+
+  if (studentNumberLabel) {
+    drawText(page, studentNumberLabel, {
+      x: center.x - w / 2 + 3,
+      y: center.y + h / 2 - 10,
+      font: fonts.regular,
+      size: 6,
+      color: rgb(0.45, 0.5, 0.58),
+    });
+  }
+
+  // 이름 (가운데). 회전 책상은 페이지에 직접 회전 텍스트 그리기.
+  const nameText = student?.name ?? '';
+  if (isRotated) {
+    // pdf-lib drawText 의 rotate 옵션 사용 — 텍스트 자체를 회전
+    page.drawText(nameText, {
+      x: center.x,
+      y: center.y,
+      size: 8,
+      font: fonts.bold,
+      color: rgb(0.12, 0.16, 0.22),
+      rotate: degrees(rotation === 90 ? -90 : 90),
+    });
+  } else {
+    drawText(page, nameText, {
+      x: center.x,
+      y: center.y - 4,
+      font: fonts.bold,
+      size: 9,
+      align: 'center',
+      color: rgb(0.12, 0.16, 0.22),
+      maxWidth: w - 4,
+    });
+  }
 }

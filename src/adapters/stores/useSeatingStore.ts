@@ -8,8 +8,15 @@ import {
   countEmptySeats,
   shuffleGroups,
   assignGroupsInOrder,
+  sanitizeGroups,
 } from '@domain/rules/seatRules';
 import type { ShuffleResult } from '@domain/rules/seatRules';
+import {
+  sanitizeFreestyleDesks,
+  cloneFreestyleDesks,
+  generateFreestyleDesks,
+  shuffleFreestyleStudents,
+} from '@domain/rules/freestyleRules';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { SeatingSnapshot, SnapshotSource } from '@domain/entities/SeatingSnapshot';
 import {
@@ -52,6 +59,59 @@ function createSeatingFromStudents(students: readonly Student[]): SeatingData {
   return { rows, cols, seats };
 }
 
+/**
+ * freestyleDesks sanitize 를 SeatingData 에 적용한다.
+ * grid/group 모드에서도 freestyleDesks 가 보존될 수 있으므로 (mode 토글 데이터 손실 0 정책),
+ * freestyleDesks 가 존재하면 항상 sanitize 한다. 변경 없으면 원본 참조 그대로 반환.
+ */
+function applyFreestyleSanitize(seating: SeatingData, students: readonly Student[]): SeatingData {
+  if (!seating.freestyleDesks || seating.freestyleDesks.length === 0) return seating;
+  const sanitized = sanitizeFreestyleDesks(seating.freestyleDesks, students);
+  return sanitized === seating.freestyleDesks ? seating : { ...seating, freestyleDesks: sanitized };
+}
+
+/**
+ * 모둠의 stale studentIds 를 제거한다. 비연동 모드 + 졸업/전학 발생 시 회귀 차단용.
+ * 모둠 슬롯 구조(이름/색/maxSize)는 보존하고, 더 이상 명렬표에 없는 학생 ID 만 제거한다.
+ * 변경 없으면 원본 참조 그대로 반환.
+ */
+function applyGroupsSanitize(seating: SeatingData, students: readonly Student[]): SeatingData {
+  if (!seating.groups || seating.groups.length === 0) return seating;
+  const activeIds = new Set(students.filter(isStudentActive).map((s) => s.id));
+  const sanitized = sanitizeGroups(seating.groups, activeIds);
+  return sanitized === seating.groups ? seating : { ...seating, groups: sanitized };
+}
+
+/**
+ * 'group' 레이아웃인데 모든 모둠이 비어 있고 격자에 학생이 있으면 격자 학생으로 자동 채워 복구한다.
+ * cluster-fix 핫픽스 (load 경로 회복) — 이전 빌드의 stale studentIds 가 sanitize 로 전부 제거된
+ * 상태에서 새 빌드로 진입했을 때, 사용자가 추가 조작 없이 새로고침만으로 모둠이 살아나도록.
+ * 변경 없으면 입력 참조 그대로 반환.
+ */
+function repairEmptyGroupsFromSeats(
+  seating: SeatingData,
+  students: readonly Student[],
+): SeatingData {
+  if (seating.layout !== 'group') return seating;
+  if (!seating.groups || seating.groups.length === 0) return seating;
+  const allEmpty = seating.groups.every((g) => g.studentIds.length === 0);
+  if (!allEmpty) return seating;
+  const activeIdSet = new Set(students.filter(isStudentActive).map((s) => s.id));
+  const allStudentIds = seating.seats
+    .flat()
+    .filter((id): id is string => id !== null && activeIdSet.has(id));
+  if (allStudentIds.length === 0) return seating;
+
+  // 기존 모둠 구조(이름/색/maxSize)를 유지하면서 학생만 채운다.
+  const existing = seating.groups;
+  const maxSize = existing[0]?.maxSize ?? 6;
+  const filled = assignGroupsInOrder(allStudentIds, existing.length, maxSize).map((g, i) => {
+    const base = existing[i]!;
+    return { ...base, studentIds: g.studentIds, maxSize: base.maxSize ?? maxSize };
+  });
+  return { ...seating, groups: filled };
+}
+
 /** 좌석에서 명렬표에 없거나 결번인 학생 ID를 제거하고, 새로 추가된 학생을 빈 자리에 배치 */
 function sanitizeSeating(seating: SeatingData, students: readonly Student[]): SeatingData {
   const activeIds = new Set(students.filter(isStudentActive).map((s) => s.id));
@@ -73,7 +133,8 @@ function sanitizeSeating(seating: SeatingData, students: readonly Student[]): Se
   const unplaced = [...activeIds].filter((id) => !seatedIds.has(id));
 
   if (unplaced.length === 0) {
-    return changed ? { ...seating, seats } : seating;
+    const base = changed ? { ...seating, seats } : seating;
+    return applyGroupsSanitize(applyFreestyleSanitize(base, students), students);
   }
 
   changed = true;
@@ -102,7 +163,11 @@ function sanitizeSeating(seating: SeatingData, students: readonly Student[]): Se
   }
 
   const newRows = seats.length;
-  return { ...seating, rows: newRows, seats };
+  const result: SeatingData = { ...seating, rows: newRows, seats };
+
+  // 5단계 (Phase 1 신규): freestyle 모드의 책상 sanitize.
+  // 6단계 (cluster-fix 핫픽스): 모둠의 stale studentIds 도 함께 제거.
+  return applyGroupsSanitize(applyFreestyleSanitize(result, students), students);
 }
 
 interface SeatingState {
@@ -159,6 +224,20 @@ interface SeatingState {
   /** off=비활성, prefer=가능하면, strict=반드시 */
   avoidHistoryStrength: AvoidHistoryStrength;
   setAvoidHistoryStrength: (strength: AvoidHistoryStrength) => void;
+
+  /* ─── 자유 배치 (Phase 4) ─── */
+  /** 자유 배치 프리셋 적용 — 사용자가 다이얼로그에서 선택한 프리셋을 freestyleDesks 로 재생성 */
+  applyFreestylePreset: (
+    params: import('@domain/rules/freestyleRules').FreestylePresetParams,
+  ) => Promise<void>;
+  /** 책상 위치 이동 (드래그) — id 로 desk 를 찾아 x/y 만 업데이트 */
+  moveFreestyleDesk: (deskId: string, x: number, y: number) => Promise<void>;
+  /** 여러 책상을 한 번에 이동 (Figma 스타일 그룹 드래그) — 각 desk 별 새 x/y 적용 */
+  moveMultipleFreestyleDesks: (
+    updates: ReadonlyArray<{ id: string; x: number; y: number }>,
+  ) => Promise<void>;
+  /** 두 책상 사이 학생 교환 (위치는 그대로, studentId 만 swap) */
+  swapFreestyleStudents: (deskA: string, deskB: string) => Promise<void>;
 
   /* ─── 우연을 가장한 배치 (Phase 3b) ─── */
   /** 교사가 미리 설정한 배치 — 다음 셔플 시 1회 적용 후 자동 소멸 */
@@ -273,7 +352,9 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
 
         if (data !== null) {
           // 명렬표 기준으로 좌석 정합성 검증: 없는/결번 학생 ID 제거
-          const sanitized = sanitizeSeating(data, students);
+          let sanitized = sanitizeSeating(data, students);
+          // cluster-fix 핫픽스: 'group' 레이아웃 + 모든 모둠 0명 + 격자엔 학생 존재 → 자동 복구
+          sanitized = repairEmptyGroupsFromSeats(sanitized, students);
           if (sanitized !== data) {
             await seatingRepository.saveSeating(sanitized);
           }
@@ -332,6 +413,32 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     randomize: async () => {
       try {
         pushToHistory();
+
+        // Phase 5a: freestyle 모드는 책상 위치 고정 + 학생만 셔플
+        // (grid 모드의 4종 제약조건은 Phase 5b 에서 마이그레이션 — 본 단계는 책상 위치만 보존)
+        const current = get().seating;
+        if (
+          current.layout === 'freestyle' &&
+          current.freestyleDesks &&
+          current.freestyleDesks.length > 0
+        ) {
+          const shuffledDesks = shuffleFreestyleStudents(current.freestyleDesks);
+          const updated: SeatingData = { ...current, freestyleDesks: shuffledDesks };
+          await seatingRepository.saveSeating(updated);
+          set({ seating: updated });
+          try {
+            await get().saveCurrentAsSnapshot(undefined, 'shuffle');
+          } catch {
+            /* 스냅샷 실패는 무시 */
+          }
+          return {
+            seats: updated.seats.map((row) => [...row]),
+            success: true,
+            attempts: 1,
+            relaxed: false,
+            violations: [],
+          };
+        }
 
         // Phase 3b: 프리셋이 있으면 실제 셔플 대신 프리셋을 적용 (1회 사용 후 자동 소멸)
         const preset = get().presetArrangement;
@@ -428,6 +535,49 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
       pushToHistory();
       const sync = seating.groupGridSync !== false; // 기본 true
 
+      // Phase 3 (freestyle): freestyle 전환 시 freestyleDesks 가 비어있으면 자동 시험 대형 프리셋 생성.
+      // 학번(studentNumber) 오름차순으로 정렬해 좌측 첫 줄부터 1번 배치.
+      if (
+        layout === 'freestyle' &&
+        (!seating.freestyleDesks || seating.freestyleDesks.length === 0)
+      ) {
+        const allStudentIds = seating.seats.flat().filter((id): id is string => id !== null);
+        if (allStudentIds.length === 0 && seating.groups) {
+          // grid 가 비어있으면 모둠에서 학생 ID 가져옴
+          allStudentIds.push(...seating.groups.flatMap((g) => [...g.studentIds]));
+        }
+        // 학번 오름차순 정렬 (학번 없는 학생은 끝)
+        const studentMap = new Map(useStudentStore.getState().students.map((s) => [s.id, s]));
+        const sortedIds = [...allStudentIds].sort((a, b) => {
+          const na = studentMap.get(a)?.studentNumber ?? Number.POSITIVE_INFINITY;
+          const nb = studentMap.get(b)?.studentNumber ?? Number.POSITIVE_INFINITY;
+          return na - nb;
+        });
+        const desks =
+          sortedIds.length > 0
+            ? generateFreestyleDesks({
+                type: 'exam',
+                studentCount: sortedIds.length,
+                columns: Math.min(7, Math.max(4, seating.cols)),
+                studentIds: sortedIds,
+                numberDirection: 'left-to-right',
+              })
+            : [];
+        const updated: SeatingData = {
+          ...seating,
+          layout,
+          freestyleDesks: desks,
+          freestylePreset: 'exam',
+        };
+        try {
+          await seatingRepository.saveSeating(updated);
+          set({ seating: updated });
+        } catch {
+          /* 무시 */
+        }
+        return;
+      }
+
       if (sync && layout === 'group' && (!seating.groups || seating.groups.length === 0)) {
         // 연동 모드 + grid → group (최초): 격자 학생을 모둠으로 자동 분배
         const allStudentIds = seating.seats.flat().filter((id): id is string => id !== null);
@@ -464,6 +614,46 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         }
       } else {
         // 비연동 모드 또는 이미 모둠이 존재: 레이아웃만 전환
+        // ── cluster-fix 핫픽스 ──
+        // 비연동이어도 "모둠 화면에 진입했는데 모둠이 비어 있다" 면 격자 학생으로 1회 초기화한다.
+        // (groups 자체가 없거나, 모든 모둠의 studentIds 가 0명이거나 — 후자는 stale ID 가 sanitize 로 전부 제거된 회귀 케이스)
+        // 사용자가 의도적으로 학생이 든 모둠을 만들어 둔 경우(groups 중 하나라도 학생이 있음)는 건드리지 않는다.
+        const allEmptyGroups =
+          seating.groups !== undefined &&
+          seating.groups.length > 0 &&
+          seating.groups.every((g) => g.studentIds.length === 0);
+        if (
+          !sync &&
+          layout === 'group' &&
+          (!seating.groups || seating.groups.length === 0 || allEmptyGroups)
+        ) {
+          const allStudentIds = seating.seats.flat().filter((id): id is string => id !== null);
+          if (allStudentIds.length > 0) {
+            const existing = seating.groups ?? [];
+            // 빈 모둠 구조(이름/색)는 보존하고 학생만 채워 넣는다.
+            const maxSize = existing[0]?.maxSize ?? 6;
+            const targetCount =
+              existing.length > 0
+                ? existing.length
+                : Math.max(1, Math.ceil(allStudentIds.length / maxSize));
+            const autoGroups = assignGroupsInOrder(allStudentIds, targetCount, maxSize).map(
+              (g, i) => {
+                const base = existing[i];
+                return base
+                  ? { ...base, studentIds: g.studentIds, maxSize: base.maxSize ?? maxSize }
+                  : g;
+              },
+            );
+            const updated: SeatingData = { ...seating, layout, groups: autoGroups };
+            try {
+              await seatingRepository.saveSeating(updated);
+              set({ seating: updated });
+            } catch {
+              /* 무시 */
+            }
+            return;
+          }
+        }
         const updated: SeatingData = { ...seating, layout };
         try {
           await seatingRepository.saveSeating(updated);
@@ -489,13 +679,12 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     shuffleGroupSeating: async (groupCount, maxSize) => {
       const { seating } = get();
       pushToHistory();
-      // 모든 학생 ID 수집 (격자 + 모둠)
-      let allStudentIds: string[];
-      if (seating.groups && seating.groups.length > 0) {
-        allStudentIds = seating.groups.flatMap((g) => [...g.studentIds]);
-      } else {
-        allStudentIds = seating.seats.flat().filter((id): id is string => id !== null);
-      }
+      // 모든 학생 ID 수집 — 모둠에 학생이 한 명이라도 있으면 그쪽 우선, 아니면 격자에서.
+      // cluster-fix: 기존 코드는 `groups.length > 0` 만 검사해 "구조는 있는데 학생은 전원 stale" 케이스에서
+      // 빈 모둠을 그대로 셔플 → GroupShuffleOverlay 가 무한 대기하던 회귀를 차단.
+      const fromGroups = seating.groups ? seating.groups.flatMap((g) => [...g.studentIds]) : [];
+      const fromSeats = seating.seats.flat().filter((id): id is string => id !== null);
+      const allStudentIds = fromGroups.length > 0 ? fromGroups : fromSeats;
       const groups = shuffleGroups(
         allStudentIds,
         groupCount,
@@ -515,6 +704,106 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     toggleGroupGridSync: async () => {
       const { seating } = get();
       const updated: SeatingData = { ...seating, groupGridSync: seating.groupGridSync === false };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch {
+        /* 무시 */
+      }
+    },
+
+    /* ─── 자유 배치 액션 (Phase 4) ─── */
+
+    applyFreestylePreset: async (params) => {
+      const { seating } = get();
+      pushToHistory();
+      // 학생 ID 자동 수집 (params.studentIds 미지정 시 현재 좌석/모둠/freestyle 에서 추출)
+      let studentIds: string[] = params.studentIds ? [...params.studentIds] : [];
+      if (studentIds.length === 0) {
+        studentIds = seating.seats.flat().filter((id): id is string => id !== null);
+        if (studentIds.length === 0 && seating.groups) {
+          studentIds = seating.groups.flatMap((g) => [...g.studentIds]);
+        }
+        if (studentIds.length === 0 && seating.freestyleDesks) {
+          studentIds = seating.freestyleDesks
+            .map((d) => d.studentId)
+            .filter((id): id is string => id !== null);
+        }
+      }
+      const desks = generateFreestyleDesks({
+        ...params,
+        studentCount: params.studentCount > 0 ? params.studentCount : studentIds.length,
+        studentIds,
+      });
+      const updated: SeatingData = {
+        ...seating,
+        layout: 'freestyle',
+        freestyleDesks: desks,
+        freestylePreset: params.type,
+      };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch {
+        /* 무시 */
+      }
+    },
+
+    moveFreestyleDesk: async (deskId, x, y) => {
+      const { seating } = get();
+      if (!seating.freestyleDesks) return;
+      const clampedX = Math.max(0, Math.min(1000, x));
+      const clampedY = Math.max(0, Math.min(1000, y));
+      const nextDesks = seating.freestyleDesks.map((d) =>
+        d.id === deskId ? { ...d, x: clampedX, y: clampedY } : d,
+      );
+      const updated: SeatingData = { ...seating, freestyleDesks: nextDesks };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch {
+        /* 무시 */
+      }
+    },
+
+    moveMultipleFreestyleDesks: async (updates) => {
+      const { seating } = get();
+      if (!seating.freestyleDesks || updates.length === 0) return;
+      // 변경 대상 id 맵 (각 id 별 새 x/y)
+      const updateMap = new Map<string, { x: number; y: number }>();
+      for (const u of updates) {
+        updateMap.set(u.id, {
+          x: Math.max(0, Math.min(1000, u.x)),
+          y: Math.max(0, Math.min(1000, u.y)),
+        });
+      }
+      pushToHistory();
+      const nextDesks = seating.freestyleDesks.map((d) => {
+        const target = updateMap.get(d.id);
+        return target ? { ...d, x: target.x, y: target.y } : d;
+      });
+      const updated: SeatingData = { ...seating, freestyleDesks: nextDesks };
+      try {
+        await seatingRepository.saveSeating(updated);
+        set({ seating: updated });
+      } catch {
+        /* 무시 */
+      }
+    },
+
+    swapFreestyleStudents: async (deskA, deskB) => {
+      const { seating } = get();
+      if (!seating.freestyleDesks || deskA === deskB) return;
+      const a = seating.freestyleDesks.find((d) => d.id === deskA);
+      const b = seating.freestyleDesks.find((d) => d.id === deskB);
+      if (!a || !b) return;
+      pushToHistory();
+      const nextDesks = seating.freestyleDesks.map((d) => {
+        if (d.id === deskA) return { ...d, studentId: b.studentId };
+        if (d.id === deskB) return { ...d, studentId: a.studentId };
+        return d;
+      });
+      const updated: SeatingData = { ...seating, freestyleDesks: nextDesks };
       try {
         await seatingRepository.saveSeating(updated);
         set({ seating: updated });
@@ -630,6 +919,8 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
           groups: seating.groups
             ? seating.groups.map((g) => ({ ...g, studentIds: [...g.studentIds] }))
             : undefined,
+          // Phase 1 신규 — freestyleDesks 도 깊은 사본 (P0-2 참조 공유 회귀 차단)
+          freestyleDesks: cloneFreestyleDesks(seating.freestyleDesks),
         },
       };
 
@@ -696,6 +987,8 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
         groups: seating.groups
           ? seating.groups.map((g) => ({ ...g, studentIds: [...g.studentIds] }))
           : undefined,
+        // Phase 1 신규 — freestyleDesks 도 깊은 사본 (참조 공유 차단, 스냅샷과 동일 정책)
+        freestyleDesks: cloneFreestyleDesks(seating.freestyleDesks),
       };
       try {
         await seatingRepository.savePreset(snapshot);

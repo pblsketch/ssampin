@@ -9,11 +9,7 @@ interface GroupShuffleOverlayProps {
   onComplete: () => void;
 }
 
-export function GroupShuffleOverlay({
-  groups,
-  students,
-  onComplete,
-}: GroupShuffleOverlayProps) {
+export function GroupShuffleOverlay({ groups, students, onComplete }: GroupShuffleOverlayProps) {
   const studentMap = useMemo(() => {
     const map = new Map<string, Student>();
     for (const s of students) map.set(s.id, s);
@@ -31,9 +27,7 @@ export function GroupShuffleOverlay({
   // 각 모둠별 표시 이름 (cycling 중 랜덤 변경)
   const [displayNames, setDisplayNames] = useState<string[][]>(() =>
     groups.map((g) =>
-      g.studentIds.map(
-        () => studentNames[Math.floor(Math.random() * studentNames.length)] ?? '?',
-      ),
+      g.studentIds.map(() => studentNames[Math.floor(Math.random() * studentNames.length)] ?? '?'),
     ),
   );
 
@@ -57,9 +51,7 @@ export function GroupShuffleOverlay({
         prev.map((groupNames, gi) =>
           groupNames.map((_, si) => {
             if (lockedSet.has(`${gi}-${si}`)) return prev[gi]![si]!;
-            return (
-              studentNames[Math.floor(Math.random() * studentNames.length)] ?? '?'
-            );
+            return studentNames[Math.floor(Math.random() * studentNames.length)] ?? '?';
           }),
         ),
       );
@@ -88,6 +80,22 @@ export function GroupShuffleOverlay({
           cells.push([gi, si]);
         }
       }
+    }
+
+    // cluster-fix 안전 폴백 — 잠글 셀이 한 개도 없으면 (모든 모둠이 0명),
+    // 무한 대기 대신 즉시 done → fadeout → onComplete 로 흘려보낸다.
+    if (cells.length === 0) {
+      const t1 = setTimeout(() => {
+        setPhase('done');
+        const t2 = setTimeout(() => {
+          setPhase('fadeout');
+          const t3 = setTimeout(onComplete, 500);
+          timersRef.current.push(t3);
+        }, 800);
+        timersRef.current.push(t2);
+      }, 300);
+      timersRef.current.push(t1);
+      return;
     }
 
     cells.forEach(([gi, si], idx) => {
@@ -124,7 +132,10 @@ export function GroupShuffleOverlay({
       }`}
     >
       {/* 배경 */}
-      <div className="absolute inset-0 backdrop-blur-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--sp-bg) 92%, transparent)' }} />
+      <div
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--sp-bg) 92%, transparent)' }}
+      />
 
       {/* 콘텐츠 */}
       <div className="relative z-10 flex flex-col items-center w-full">
@@ -181,9 +192,7 @@ export function GroupShuffleOverlay({
                   style={{ background: group.color }}
                 />
                 <span className="text-sm font-bold text-sp-text">{group.name}</span>
-                <span className="text-caption text-sp-muted">
-                  {group.studentIds.length}명
-                </span>
+                <span className="text-caption text-sp-muted">{group.studentIds.length}명</span>
               </div>
 
               {/* 학생 슬롯 */}
@@ -219,9 +228,7 @@ export function GroupShuffleOverlay({
                       {/* 이름 */}
                       <span
                         className={`text-detail leading-tight transition-all duration-300 ${
-                          isLocked
-                            ? 'text-sp-text font-medium'
-                            : 'text-sp-muted/60'
+                          isLocked ? 'text-sp-text font-medium' : 'text-sp-muted/60'
                         }`}
                       >
                         {isLocked ? (student?.name ?? '') : displayName}

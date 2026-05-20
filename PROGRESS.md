@@ -20,6 +20,24 @@ v2.0.5 (다음 minor 후보: v2.1.0 — multi-date-attendance + 묶음)
 ## In Progress
 
 - **multi-date-attendance Check 완료 (2026-05-20, Match Rate 96.7% PASS)** — `feature/multi-date-attendance` 브랜치 6 commits + 분석 보고서 1건. gap-detector 결과 모든 HIGH 항목 100%, LOW 갭 3건 cosmetic. Iterate 불필요. 다음: `/pdca report multi-date-attendance`. [Analysis](docs/03-analysis/multi-date-attendance.analysis.md)
+- **freestyle-seating Phase 1~5a + UX 종합 개선 14건 + PDF 출력 완료 (2026-05-20, main 단일 워킹트리)** — Playwright MCP 실사용 점검으로 결함 발견·즉시 수정 누적:
+  1. 컨테이너 4:3→16:10 + max-height (viewport 잘림 해소)
+  2. 다이얼로그 제목 중복 제거 (srOnlyTitle)
+  3. 모둠 카드 groupId 색상 외곽선+배경
+  4. ㄷ자형 좌·우 반경 안쪽 조정
+  5. 자유 모드에서 「연동」 버튼 숨김
+  6. 편집 안내 메시지 freestyle 전용 (다중 선택 설명 포함)
+  7. 회전된 책상 가로/세로 swap (좌·우 이름 잘림 해소)
+  8. 모둠 내부 cardInnerDx/Dy 최소값 보장 (아바타 겹침 차단)
+  9. Figma 스타일 **다중 선택·이동** (선택 박스 드래그 + Shift+클릭 + ESC + `moveMultipleFreestyleDesks` 액션 + 「N개 선택됨」 안내 칩)
+  10. 다이얼로그 카드 3종→2종 축소 (모둠형 제거)
+  11. **「시험 대형」 신규 type** (rows 대체) + 학번 순 정렬 + 좌↔우 방향 선택 토글
+  12. 책상에 **학번 표시** (격자 모드 SeatCard 와 동일 시각 규칙: 학번+출석 dot+이름)
+  13. 컨테이너 내부 작은 교탁 제거 (외부 「[ 교 탁 ]」 헤더와 중복 해소)
+  14. 시험 대형 **column-major 배치** (1번 1열 1행, 2번 1열 2행, ... 한 열 차면 다음 열로)
+  15. **PDF 출력 완전 구현** — `exportFreestyleSeatingToPdf` 신설, 정규화 좌표→A4 매핑, 회전 텍스트, 모둠 색상, 우측 명렬표. 내보내기 메뉴 PDF/Excel/HWPX 3종 노출.
+
+  **검증 게이트 4/4 통과**: tsc 0 errors, lint 0 errors, test 1457/1457, regression 9/9. Playwright 다운로드 검증: `%PDF-1.7` 매직 / 2.23MB / application/pdf. Phase 5b(제약조건 마이그레이션) + Phase 6(Tier 2/3 프리셋)은 별도 PDCA. [Plan](docs/01-plan/features/freestyle-seating.plan.md) · [Design v0.2.1](docs/02-design/features/freestyle-seating.design.md)
 
 ## Blocked
 
