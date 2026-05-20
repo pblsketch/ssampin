@@ -15,6 +15,7 @@ import { GroupSeatingView } from './GroupSeatingView';
 import { SeatZoneModal } from './SeatZoneModal';
 import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { SeatingHistoryPanel } from './SeatingHistoryPanel';
+import { NameLearningMode } from './NameLearningMode';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
 /* ──────────────────────── 이름 글자 크기 매핑 ──────────────────────── */
@@ -252,6 +253,13 @@ export function Seating(props?: { embedded?: boolean }) {
     toggleGroupGridSync,
   } = useSeatingStore();
 
+  // Phase 3b: 우연을 가장한 배치
+  const presetArrangement = useSeatingStore((s) => s.presetArrangement);
+  const loadPreset = useSeatingStore((s) => s.loadPreset);
+  const setPresetFromCurrent = useSeatingStore((s) => s.setPresetFromCurrent);
+  const clearPresetAction = useSeatingStore((s) => s.clearPreset);
+  const hasPreset = presetArrangement !== null;
+
   const { students, loaded: studentsLoaded, load: loadStudents } = useStudentStore();
 
   const className = useSettingsStore((s) => s.settings.className);
@@ -270,6 +278,7 @@ export function Seating(props?: { embedded?: boolean }) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showConstraintModal, setShowConstraintModal] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [showNameLearning, setShowNameLearning] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const loaded = seatingLoaded && studentsLoaded;
@@ -277,7 +286,8 @@ export function Seating(props?: { embedded?: boolean }) {
   useEffect(() => {
     void loadStudents();
     void loadSeating();
-  }, [loadStudents, loadSeating]);
+    void loadPreset();
+  }, [loadStudents, loadSeating, loadPreset]);
 
   // Global Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y shortcut handling
   useEffect(() => {
@@ -352,14 +362,19 @@ export function Seating(props?: { embedded?: boolean }) {
       return;
     }
 
+    // Phase 3b: 프리셋 활성 상태에서는 셔플 애니메이션 직후 토스트로 알림 (교사용 디버깅 도움)
+    const wasUsingPreset = hasPreset;
+
     setShowShuffle(true);
     const result = await randomize();
-    if (result && !result.success) {
+    if (wasUsingPreset && result && result.success) {
+      useToastStore.getState().show('프리셋 배치가 적용되었습니다', 'info');
+    } else if (result && !result.success) {
       useToastStore.getState().show('일부 배치 조건을 완전히 만족하지 못했습니다', 'info');
     } else if (result && result.relaxed) {
       useToastStore.getState().show('배치 조건이 일부 완화되어 적용되었습니다', 'info');
     }
-  }, [randomize, track, totalStudents, layout, seating.groups, shuffleGroupSeating]);
+  }, [randomize, track, totalStudents, layout, seating.groups, shuffleGroupSeating, hasPreset]);
 
   const handleEditSave = useCallback((_row: number, _col: number, _studentId: string | null) => {
     // 편집 모드에서 학생 이름 변경 시 처리 (추후 확장)
@@ -567,6 +582,62 @@ export function Seating(props?: { embedded?: boolean }) {
               <span className="material-symbols-outlined text-lg">history</span>
               <span>배치 기록</span>
             </button>
+          )}
+          {isTeacherView && totalStudents > 0 && (
+            <button
+              onClick={() => setShowNameLearning(true)}
+              className="shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
+              title="학생 이름 외우기 모드"
+            >
+              <span className="material-symbols-outlined text-lg">quiz</span>
+              <span>이름 학습</span>
+            </button>
+          )}
+          {/* Phase 3b: 프리셋 배치 메뉴 (교사 시점에서만, 학생 화면에는 절대 노출 X) */}
+          {isTeacherView && (
+            <div className="shrink-0 relative">
+              {hasPreset ? (
+                <div className="flex items-center gap-1 px-3 py-2 rounded-lg border border-sp-warning/40 bg-sp-warning/10 text-sm font-medium text-sp-warning shadow-sm">
+                  <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                    target
+                  </span>
+                  <span title="다음 셔플 시 미리 설정한 배치가 적용됩니다">프리셋 대기</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void clearPresetAction();
+                      useToastStore.getState().show('프리셋이 제거되었습니다', 'info');
+                    }}
+                    aria-label="프리셋 제거"
+                    className="ml-1 p-0.5 rounded hover:bg-sp-warning/20"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (totalStudents === 0) return;
+                    if (
+                      window.confirm(
+                        '현재 배치를 프리셋으로 저장할까요?\n' +
+                          '다음에 "랜덤 셔플" 버튼을 누르면 셔플 애니메이션 후 이 배치가 그대로 적용됩니다.\n' +
+                          '(1회 사용 후 자동 해제)',
+                      )
+                    ) {
+                      void setPresetFromCurrent();
+                      useToastStore.getState().show('현재 배치를 프리셋으로 저장했습니다', 'info');
+                    }
+                  }}
+                  disabled={totalStudents === 0}
+                  className="whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-sp-text transition-colors shadow-sm"
+                  title="다음 셔플에 적용할 배치를 미리 저장"
+                >
+                  <span className="material-symbols-outlined text-lg">target</span>
+                  <span>프리셋 저장</span>
+                </button>
+              )}
+            </div>
           )}
           <button
             onClick={() => setEditing(!isEditing)}
@@ -1026,6 +1097,13 @@ export function Seating(props?: { embedded?: boolean }) {
 
         {/* 자리배치 히스토리 패널 (Phase 1) */}
         <SeatingHistoryPanel isOpen={showHistoryPanel} onClose={() => setShowHistoryPanel(false)} />
+
+        {/* 이름 학습 모드 (Phase 3a) */}
+        <NameLearningMode
+          isOpen={showNameLearning}
+          onClose={() => setShowNameLearning(false)}
+          seating={seating}
+        />
       </div>
     </div>
   );

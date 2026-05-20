@@ -160,6 +160,19 @@ interface SeatingState {
   avoidHistoryStrength: AvoidHistoryStrength;
   setAvoidHistoryStrength: (strength: AvoidHistoryStrength) => void;
 
+  /* ─── 우연을 가장한 배치 (Phase 3b) ─── */
+  /** 교사가 미리 설정한 배치 — 다음 셔플 시 1회 적용 후 자동 소멸 */
+  presetArrangement: SeatingData | null;
+  presetLoaded: boolean;
+  /** 저장소에서 프리셋 로드 */
+  loadPreset: () => Promise<void>;
+  /** 현재 배치를 프리셋으로 저장 */
+  setPresetFromCurrent: () => Promise<void>;
+  /** 프리셋 제거 (취소) */
+  clearPreset: () => Promise<void>;
+  /** 프리셋이 활성 상태인지 (UI 인디케이터용) */
+  hasPreset: () => boolean;
+
   /** 파생 값 */
   studentCount: () => number;
   emptyCount: () => number;
@@ -243,6 +256,8 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     snapshots: [],
     snapshotsLoaded: false,
     avoidHistoryStrength: 'off',
+    presetArrangement: null,
+    presetLoaded: false,
 
     load: async () => {
       if (get().loaded) return;
@@ -317,9 +332,38 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     randomize: async () => {
       try {
         pushToHistory();
+
+        // Phase 3b: 프리셋이 있으면 실제 셔플 대신 프리셋을 적용 (1회 사용 후 자동 소멸)
+        const preset = get().presetArrangement;
+        if (preset) {
+          // 현재 명렬표 기준 sanitize (졸업/전학 학생 좀비 ID 차단)
+          const students = useStudentStore.getState().students;
+          const restored = sanitizeSeating(preset, students);
+
+          await seatingRepository.saveSeating(restored);
+          await seatingRepository.clearPreset();
+          set({ seating: restored, presetArrangement: null });
+
+          // 자동 스냅샷 (외부 인식은 셔플과 동일)
+          try {
+            await get().saveCurrentAsSnapshot(undefined, 'shuffle');
+          } catch {
+            // 스냅샷 저장 실패는 무시
+          }
+
+          return {
+            // ShuffleResult.seats 는 mutable 타입이므로 깊은 사본 반환
+            seats: restored.seats.map((row) => [...row]),
+            success: true,
+            attempts: 1,
+            relaxed: false,
+            violations: [],
+          };
+        }
+
+        // 일반 셔플 경로
         const { seating: updated, result } = await randomizeUC.execute();
         set({ seating: updated });
-        // 셔플 성공 시 자동 스냅샷 — 실패해도 셔플 자체는 영향 없음
         if (result.success) {
           try {
             await get().saveCurrentAsSnapshot(undefined, 'shuffle');
@@ -630,6 +674,47 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     setAvoidHistoryStrength: (strength) => {
       set({ avoidHistoryStrength: strength });
     },
+
+    /* ─── 우연을 가장한 배치 (Phase 3b) ─── */
+
+    loadPreset: async () => {
+      if (get().presetLoaded) return;
+      try {
+        const preset = await seatingRepository.getPreset();
+        set({ presetArrangement: preset, presetLoaded: true });
+      } catch {
+        set({ presetLoaded: true });
+      }
+    },
+
+    setPresetFromCurrent: async () => {
+      const { seating } = get();
+      // 깊은 사본 — 현재 배치가 이후 변경돼도 프리셋 보존
+      const snapshot: SeatingData = {
+        ...seating,
+        seats: seating.seats.map((row) => [...row]),
+        groups: seating.groups
+          ? seating.groups.map((g) => ({ ...g, studentIds: [...g.studentIds] }))
+          : undefined,
+      };
+      try {
+        await seatingRepository.savePreset(snapshot);
+        set({ presetArrangement: snapshot, presetLoaded: true });
+      } catch {
+        // 무시
+      }
+    },
+
+    clearPreset: async () => {
+      try {
+        await seatingRepository.clearPreset();
+        set({ presetArrangement: null });
+      } catch {
+        // 무시
+      }
+    },
+
+    hasPreset: () => get().presetArrangement !== null,
 
     studentCount: () => countStudents(get().seating.seats),
     emptyCount: () => countEmptySeats(get().seating.seats),
