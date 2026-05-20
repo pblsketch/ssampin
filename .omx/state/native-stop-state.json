@@ -1,0 +1,34 @@
+{
+  "sessions": {
+    "019e4125-1f25-7fe1-a232-60385155534b": {
+      "ordinary_no_progress_guard": {
+        "fingerprint": "ordinary|{\"title\":\"?�운 ?�어 지�?추�?\"}",
+        "first_seen_at": "2026-05-19T16:50:25.395Z",
+        "last_seen_at": "2026-05-19T16:50:25.395Z",
+        "repeat_count": 1,
+        "last_turn_id": "019e4125-2391-7a42-a5ed-40d7ba44801d",
+        "last_thread_id": null
+      }
+    },
+    "019e4124-6e67-7871-b7eb-a8cdf91bde01": {
+      "ordinary_no_progress_guard": {
+        "fingerprint": "ordinary|`main`?�로 반영 ?�료?�습?�다. ?�격 `main`: `3577ee9 docs: clarify agent explanations for nondevelopers` 변�?범위: `agents.md`, `claude.md` ??문서�?26�?추�? ?�인: `git ls-remote origin refs/heads/main`??`3577ee9...`�?가리키??�??�인?�고, `git show --check`???�류 ?�이 ?�과?�습?�다. 참고�?github가 ?�pr ?�요?��? ?�필??체크 ?�요??규칙??bypass�?기록?�습?�다. ?�용?��? 직접 `main` 머�?�??�청?�서 진행?�고, 코드 변경�? ?�니???�체 ?�스?�는 ?�행?��? ?�았?�니?? ::git-push{cwd=\"e:/github/ssampin-nondeveloper-explanation-guidance\" branch=\"main\"}",
+        "first_seen_at": "2026-05-19T17:02:48.440Z",
+        "last_seen_at": "2026-05-19T17:02:48.440Z",
+        "repeat_count": 1,
+        "last_turn_id": "019e412d-d9da-72d1-af05-fce71e7546ae",
+        "last_thread_id": null
+      }
+    },
+    "019e412c-bbfb-7d70-8a06-5011afb19db5": {
+      "ordinary_no_progress_guard": {
+        "fingerprint": "ordinary|{\"suggestions\":[{\"title\":\"finish parent self-service booking before the next zoom reservation round\",\"description\":\"you viewed the recently updated `?�무?�교 zoom ?�약 관�??�스?? sheet on may 18, and this repo already has fresh `consultation-edit-and-sync` work plus a new `/booking/[id]/mine` flow. codex can finish the remaining slot re-sync and parent change/cancel path so teachers stop handling booking edits manually.\",\"prompt\":\"최근 �?`?�무?�교 zoom ?�약 관�??�스?? ?�트�?기�??�로, ?��? ?�담 ?�약???��?�??�??변�?취소 ?�름???�까지 마무리해�? ?�재 진행 중인 `consultation-edit-and-sync` ?�업???�어???�정??변�???가???�롯 ?�계?�까지 ?�함??구현?�고, `npx tsc --noemit`, `npm run lint`, `npm run test`, `npm run regression-check`�?검증해�?\",\"appid\":\"5f3c8c41a1e54ad7a76272c89e2554fa\"},{\"title\":\"fix light-theme notice contrast before the v2.0.6 hotfix bundle\",\"description\":\"`progress.md` shows a same-day user report that amber chips are barely visible in light theme, and `notice-phase2-migration` is still only planned. codex can convert the remaining warning boxes to `<notice>` and add a ratchet so this does not regress in the next patch.\",\"prompt\":\"?�늘 ?�어???�이???�마 amber chip 가?�성 문제�?바로 처리?�줘. `notice-phase2-migration` plan??기�??�로 ?��? 11�?notice 마이그레?�션�??�이???�마 chip ?��?ratchet ?�스?�까지 구현?�고, 검�?게이??4종을 ?�과?�켜�?\",\"appid\":\"690a90ec05c881918afb6a55dc9bbaa1\"}]}",
+        "first_seen_at": "2026-05-19T17:01:35.008Z",
+        "last_seen_at": "2026-05-19T17:01:35.008Z",
+        "repeat_count": 1,
+        "last_turn_id": "019e412c-bc9e-7503-ba15-49cc449cfe7e",
+        "last_thread_id": null
+      }
+    }
+  }
+}

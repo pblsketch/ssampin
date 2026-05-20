@@ -7,8 +7,11 @@ import { create } from 'zustand';
  *  - 'http://127.0.0.1:8421/callback?code=4/0AcvD...&scope=...' (전체 URL)
  *  - 'code=4/0AcvD...' (쿼리 단편)
  *  - '4/0AcvD...' (raw code)
+ *
+ * **export 사유**: 메타테스트 ([__tests__/extractAuthCode.test.ts]) 에서
+ * 사용자 신고 URL 형식(`iss=...&code=...&scope=...&prompt=consent`) 회귀 방지.
  */
-function extractAuthCode(input: string): string | null {
+export function extractAuthCode(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
   // URL 형태
@@ -56,7 +59,10 @@ interface GoogleAccountState {
   startAuth: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   cancelAuth: () => Promise<void>;
   completeAuth: (code: string, redirectUri: string, codeVerifier?: string) => Promise<void>;
-  startPKCEFallback: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
+  startPKCEFallback: (
+    forceAccountSelect?: boolean,
+    additionalScopes?: readonly string[],
+  ) => Promise<void>;
   completePKCEAuth: (code: string) => Promise<void>;
   disconnect: () => Promise<void>;
   setError: (error: string | null) => void;
@@ -94,16 +100,27 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
 
   startAuth: async (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => {
     console.log('[GoogleAccount] startAuth begin');
-    set({ isLoading: true, error: null, showFallbackSuggestion: false, fallbackSuggestionData: null });
+    set({
+      isLoading: true,
+      error: null,
+      showFallbackSuggestion: false,
+      fallbackSuggestionData: null,
+    });
     try {
       const api = window.electronAPI;
       if (!api?.startOAuth) {
-        throw new Error('구글 캘린더 연결은 데스크톱 앱에서만 가능합니다. Electron 모드로 실행해주세요.');
+        throw new Error(
+          '구글 캘린더 연결은 데스크톱 앱에서만 가능합니다. Electron 모드로 실행해주세요.',
+        );
       }
 
       const { authenticateGoogle } = await import('@adapters/di/container');
       const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
-      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
+      const authUrl = authenticateGoogle.getAuthUrl(
+        'http://127.0.0.1:0/callback',
+        shouldSelectAccount,
+        additionalScopes,
+      );
 
       // 콜백 미수신 → PKCE 폴백 제안 이벤트 리스너
       let fallbackCleanup: (() => void) | null = null;
@@ -174,7 +191,10 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
   },
 
   completeAuth: async (code: string, redirectUri: string, codeVerifier?: string) => {
-    console.log('[GoogleAccount] completeAuth start', { redirectUri, hasVerifier: Boolean(codeVerifier) });
+    console.log('[GoogleAccount] completeAuth start', {
+      redirectUri,
+      hasVerifier: Boolean(codeVerifier),
+    });
     set({ isLoading: true, error: null });
     try {
       const { authenticateGoogle } = await import('@adapters/di/container');
@@ -226,7 +246,11 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
 
       const { authenticateGoogle } = await import('@adapters/di/container');
       const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
-      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
+      const authUrl = authenticateGoogle.getAuthUrl(
+        'http://127.0.0.1:0/callback',
+        shouldSelectAccount,
+        additionalScopes,
+      );
 
       // PKCE 시작: 브라우저에서 인증 URL 열기
       await api.startPKCEAuth(authUrl);
@@ -252,7 +276,9 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
       // 입력값에서 인증 코드 추출 (URL 통째로 또는 raw code 모두 허용)
       const code = extractAuthCode(codeOrUrl);
       if (!code) {
-        throw new Error('인증 코드를 찾지 못했습니다. 브라우저 주소창의 URL 또는 code= 값을 그대로 붙여넣어주세요.');
+        throw new Error(
+          '인증 코드를 찾지 못했습니다. 브라우저 주소창의 URL 또는 code= 값을 그대로 붙여넣어주세요.',
+        );
       }
 
       // verifier + redirect_uri 가져오기 (PKCE 시작 시 사용한 것과 동일해야 함)
@@ -312,9 +338,7 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
         );
         // 매핑에서 생성된 구글 캘린더 전용 카테고리도 정리
         const googleCalendarIds = new Set(
-          calendarState.mappings
-            .filter((m) => m.googleCalendarId)
-            .map((m) => m.categoryId),
+          calendarState.mappings.filter((m) => m.googleCalendarId).map((m) => m.categoryId),
         );
         const cleanedCategories = (evData.categories ?? []).filter(
           (c) => !googleCalendarIds.has(c.id),
@@ -351,7 +375,8 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
   setError: (error) => set({ error }),
   setOAuthError: (oauthError) => set({ oauthError }),
   setShowPKCEFallback: (showPKCEFallback) => set({ showPKCEFallback }),
-  setShowFallbackSuggestion: (show) => set({ showFallbackSuggestion: show, ...(!show && { fallbackSuggestionData: null }) }),
+  setShowFallbackSuggestion: (show) =>
+    set({ showFallbackSuggestion: show, ...(!show && { fallbackSuggestionData: null }) }),
   acceptFallback: async () => {
     // 1. 로컬 서버 OAuth 취소
     const api = window.electronAPI;

@@ -47,6 +47,24 @@
 | (사용자) 모바일 OAuth secret 로테이션 | Google Console 에서 모바일 "Web app" client secret 새 값 → `supabase secrets set GOOGLE_CLIENT_SECRET=새값`(즉시 픽업) / 데스크톱 client secret 폐기                                                                                                                     | 며칠 후 권장(옛 PWA 번들 캐시 사용자가 새 번들 받을 시간 후)                                               |
 | (별개) Dependabot                     | PR 13+건 트리아지/머지 (루트·landing 의존성 bump — 보안 PDCA 무관 루틴)                                                                                                                                                                                                  | 점진 처리                                                                                                  |
 
+## 3.5. P0-C 사후 보정 (2026-05-19) — 데스크톱 client_secret 복원
+
+**배경**: P0-C 머지 후 일부 사용자 환경에서 데스크톱 OAuth 토큰 교환이 `400 invalid_request — client_secret is missing` 으로 실패. 사용자 신고(2026-05-19) 후 [oauth-callback-stuck PDCA](../../01-plan/features/oauth-callback-stuck.plan.md) 로 조사한 결과, Google "Desktop app"(installed) 클라이언트의 토큰 엔드포인트가 실제로 `client_secret` 을 요구함을 확인.
+
+**조치** (`052cf33`, `fix/modal-scroll-overflow` 브랜치):
+
+- [src/infrastructure/google/GoogleOAuthClient.ts](../../../src/infrastructure/google/GoogleOAuthClient.ts) — `clientSecret` 필드 + `exchangeCode`·`refreshTokens` body 에 `client_secret` 추가
+- [vite.config.ts](../../../vite.config.ts) — `process.env.GOOGLE_CLIENT_SECRET = VITE_GOOGLE_CLIENT_SECRET` define 복원
+
+**보안 영향 재평가** (F-2 부분 회귀):
+
+- 데스크톱 렌더러 번들(`dist/`)에 client_secret 재포함 — P0-C 의 명시적 의도와 반대
+- 단, Google 공식 입장상 [Desktop(installed) 클라이언트 secret 은 "기밀이 아님"](https://developers.google.com/identity/protocols/oauth2/native-app) (RFC 8252) — native app secret 은 본래 추출 가능하다고 명시. 실효 위협은 낮음
+- 모바일 Edge Function 경로(`supabase/functions/oauth-exchange`)는 그대로 유지 — 서버 env 격리 보존
+- P0-C 감사(`security-audit.analysis.md:211`) 권장사항 (b) "Google Cloud Console 에서 client type 재확인 후 제거" — 재확인 결과 **secret 필요**로 판명, (a) Edge Function 경유는 데스크톱에선 자동업데이트 흐름과 충돌(앱 외 의존성 추가)이라 미채택
+
+**결론**: F-2 (High) 는 모바일 한정으로 해결 유지, 데스크톱은 Google 정책상 "노출 허용 secret" 으로 분류해 의도적 회귀 수용. 별도 후속 PDCA 없음.
+
 ## 4. 이미 양호했던 부분 (감사 부록 B — 재발 방지 기록)
 
 7개 BrowserWindow 전부 `contextIsolation:true`+`nodeIntegration:false` / navigation·drop guard SSOT(`electron/security-guards.ts`) / OAuth 토큰 AES-256-GCM 서버 암호화 + safeStorage 로컬 / `realtimeWallLinkPreview.ts` 9중 SSRF 방어(모범 사례 — P0-B 에서 `safeFetch.ts` 로 추출해 재사용) / 실시간 WS Zod 검증 + rate limit + payload cap / 챗봇 escape-first(`dangerouslySetInnerHTML` 부재) / `forms:*`·`sticker:*`·`ssampin-slides://` 경로 화이트리스트 / native FFI(`@nut-tree-fork/nut-js`·`koffi`)는 사용자 명시 액션에서만 트리거 / `.env` gitignored.
