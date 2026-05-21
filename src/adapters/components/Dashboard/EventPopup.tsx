@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
+import { Modal } from '@adapters/components/common/Modal';
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -104,113 +105,106 @@ export function EventPopup() {
   const today = new Date();
 
   return (
-    <>
-      {/* 오버레이 — 클릭 시 dismiss (Phase 0 핫픽스 2026-05-21) */}
-      <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={dismissPopup}
-        aria-hidden="true"
-      />
-
-      {/* 모달 — wrapper는 pointer-events-none으로 다른 모달 클릭 통과 보장 (Phase 0) */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="w-full max-w-[480px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden flex flex-col pointer-events-auto">
-          {/* 헤더 */}
-          <div className="p-6 pb-2">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-3xl shrink-0">🔔</span>
-                <h2 className="text-2xl font-bold tracking-tight text-sp-text truncate">
-                  오늘 행사 알림!
-                </h2>
-              </div>
-              {/* 닫기 X 버튼 — Phase 0 핫픽스 (사용자 신고 2026-05-21) */}
-              <button
-                type="button"
-                onClick={dismissPopup}
-                aria-label="닫기"
-                className="shrink-0 -mt-1 -mr-1 p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
-              >
-                <span className="material-symbols-outlined text-lg" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </div>
+    <Modal
+      isOpen
+      onClose={dismissPopup}
+      title="오늘 행사 알림"
+      srOnlyTitle
+      size="sm"
+      panelClassName="!w-[min(480px,calc(100vw-32px))] rounded-2xl shadow-2xl ring-0"
+    >
+      {/* 헤더 — Modal이 sr-only h2를 제공하므로 시각 헤더는 h3로 격하 */}
+      <div className="p-6 pb-2 shrink-0">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-3xl shrink-0">🔔</span>
+            <h3 className="text-2xl font-bold tracking-tight text-sp-text truncate">
+              오늘 행사 알림!
+            </h3>
           </div>
-
-          {/* 스크롤 콘텐츠 */}
-          <div className="px-6 py-2 overflow-y-auto max-h-[70vh]">
-            {/* 날짜 */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-lg">📅</span>
-              <h3 className="text-lg font-semibold text-sp-text">{formatDate(today)}</h3>
-            </div>
-
-            <div className="h-px bg-sp-border mb-4 w-full" />
-
-            {/* 오늘 행사 리스트 */}
-            {alertResult.todayEvents.length > 0 && (
-              <div className="space-y-3 mb-6">
-                {alertResult.todayEvents.map((event) => (
-                  <EventItem key={event.id} event={event} categories={categories} />
-                ))}
-              </div>
-            )}
-
-            {/* 다가오는 행사 */}
-            {alertResult.upcomingEvents.length > 0 && (
-              <>
-                <div className="h-px bg-sp-border mb-4 w-full" />
-                <div className="mb-2">
-                  <h4 className="text-xs font-bold text-sp-muted uppercase tracking-wider mb-3 ml-1">
-                    Upcoming
-                  </h4>
-                  <div className="space-y-2">
-                    {alertResult.upcomingEvents.map(({ event, dday }) => (
-                      <div
-                        key={event.id}
-                        className="flex items-center justify-between p-2.5 rounded-lg border border-sp-border bg-sp-bg/20"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`flex h-2 w-2 rounded-full ${
-                              dday <= 3 ? 'bg-red-500' : 'bg-orange-500'
-                            }`}
-                          />
-                          <span className="text-sm font-medium text-sp-text">{event.title}</span>
-                          <span className="text-xs text-sp-muted">
-                            ({formatShortDate(event.date)})
-                          </span>
-                        </div>
-                        <DDayBadge dday={dday} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* 하단 버튼 */}
-          <div className="p-6 pt-4 mt-auto flex gap-3">
-            <button
-              type="button"
-              onClick={snoozePopup}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-sp-border px-4 py-2.5 text-sm font-semibold text-sp-muted hover:bg-sp-surface transition-all"
-            >
-              <span className="material-symbols-outlined text-icon-md">snooze</span>
-              다시 알림 (1시간 후)
-            </button>
-            <button
-              type="button"
-              onClick={dismissPopup}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-sp-accent hover:brightness-110 text-sp-accent-fg px-4 py-2.5 text-sm font-semibold shadow-sm transition-all"
-            >
-              확인
-            </button>
-          </div>
+          {/* 닫기 X 버튼 (Phase 0 핫픽스 유지) */}
+          <button
+            type="button"
+            onClick={dismissPopup}
+            aria-label="닫기"
+            className="shrink-0 -mt-1 -mr-1 p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+          >
+            <span className="material-symbols-outlined text-lg" aria-hidden="true">
+              close
+            </span>
+          </button>
         </div>
       </div>
-    </>
+
+      {/* 스크롤 콘텐츠 — flex-1 min-h-0 (modal-scroll-overflow-fix 패턴) */}
+      <div className="px-6 py-2 overflow-y-auto max-h-[70vh] flex-1 min-h-0">
+        {/* 날짜 */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-lg">📅</span>
+          <h4 className="text-lg font-semibold text-sp-text">{formatDate(today)}</h4>
+        </div>
+
+        <div className="h-px bg-sp-border mb-4 w-full" />
+
+        {/* 오늘 행사 리스트 */}
+        {alertResult.todayEvents.length > 0 && (
+          <div className="space-y-3 mb-6">
+            {alertResult.todayEvents.map((event) => (
+              <EventItem key={event.id} event={event} categories={categories} />
+            ))}
+          </div>
+        )}
+
+        {/* 다가오는 행사 */}
+        {alertResult.upcomingEvents.length > 0 && (
+          <>
+            <div className="h-px bg-sp-border mb-4 w-full" />
+            <div className="mb-2">
+              <h5 className="text-xs font-bold text-sp-muted uppercase tracking-wider mb-3 ml-1">
+                Upcoming
+              </h5>
+              <div className="space-y-2">
+                {alertResult.upcomingEvents.map(({ event, dday }) => (
+                  <div
+                    key={event.id}
+                    className="flex items-center justify-between p-2.5 rounded-lg border border-sp-border bg-sp-bg/20"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`flex h-2 w-2 rounded-full ${
+                          dday <= 3 ? 'bg-red-500' : 'bg-orange-500'
+                        }`}
+                      />
+                      <span className="text-sm font-medium text-sp-text">{event.title}</span>
+                      <span className="text-xs text-sp-muted">({formatShortDate(event.date)})</span>
+                    </div>
+                    <DDayBadge dday={dday} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 하단 버튼 */}
+      <div className="p-6 pt-4 flex gap-3 shrink-0">
+        <button
+          type="button"
+          onClick={snoozePopup}
+          className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-sp-border px-4 py-2.5 text-sm font-semibold text-sp-muted hover:bg-sp-surface transition-all"
+        >
+          <span className="material-symbols-outlined text-icon-md">snooze</span>
+          다시 알림 (1시간 후)
+        </button>
+        <button
+          type="button"
+          onClick={dismissPopup}
+          className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-sp-accent hover:brightness-110 text-sp-accent-fg px-4 py-2.5 text-sm font-semibold shadow-sm transition-all"
+        >
+          확인
+        </button>
+      </div>
+    </Modal>
   );
 }
