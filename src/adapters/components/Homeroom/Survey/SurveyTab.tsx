@@ -15,18 +15,19 @@ import type { Survey } from '@domain/entities/Survey';
 import { SurveyCreateModal } from './SurveyCreateModal';
 import { SurveyDetail } from './SurveyDetail';
 import { SurveyStudentDetail } from './SurveyStudentDetail';
+import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 
 /* ──────────────── 색상 매핑 ──────────────── */
 
 const COLOR_MAP: Record<string, { bg: string; dot: string; bar: string }> = {
-  blue:   { bg: 'bg-blue-500/10',   dot: 'bg-blue-400',   bar: 'bg-blue-400' },
-  green:  { bg: 'bg-green-500/10',  dot: 'bg-green-400',  bar: 'bg-green-400' },
+  blue: { bg: 'bg-blue-500/10', dot: 'bg-blue-400', bar: 'bg-blue-400' },
+  green: { bg: 'bg-green-500/10', dot: 'bg-green-400', bar: 'bg-green-400' },
   yellow: { bg: 'bg-yellow-500/10', dot: 'bg-yellow-400', bar: 'bg-yellow-400' },
   purple: { bg: 'bg-purple-500/10', dot: 'bg-purple-400', bar: 'bg-purple-400' },
-  red:    { bg: 'bg-red-500/10',    dot: 'bg-red-400',    bar: 'bg-red-400' },
-  pink:   { bg: 'bg-pink-500/10',   dot: 'bg-pink-400',   bar: 'bg-pink-400' },
+  red: { bg: 'bg-red-500/10', dot: 'bg-red-400', bar: 'bg-red-400' },
+  pink: { bg: 'bg-pink-500/10', dot: 'bg-pink-400', bar: 'bg-pink-400' },
   indigo: { bg: 'bg-indigo-500/10', dot: 'bg-indigo-400', bar: 'bg-indigo-400' },
-  teal:   { bg: 'bg-teal-500/10',   dot: 'bg-teal-400',   bar: 'bg-teal-400' },
+  teal: { bg: 'bg-teal-500/10', dot: 'bg-teal-400', bar: 'bg-teal-400' },
 };
 
 function getColor(color: string) {
@@ -49,13 +50,20 @@ function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
   useEffect(() => {
     if (survey.shortUrl || !survey.shareUrl) return;
     let cancelled = false;
-    shortLinkClient.createShortLink(survey.shareUrl).then((result) => {
-      if (cancelled || result === survey.shareUrl) return;
-      setUrl(result);
-      // 스토어에도 반영하여 다음에는 즉시 표시
-      void useSurveyStore.getState().updateSurvey({ ...survey, shortUrl: result });
-    }).catch(() => { /* 네트워크 실패는 무시 — 기존 URL 유지 */ });
-    return () => { cancelled = true; };
+    shortLinkClient
+      .createShortLink(survey.shareUrl)
+      .then((result) => {
+        if (cancelled || result === survey.shareUrl) return;
+        setUrl(result);
+        // 스토어에도 반영하여 다음에는 즉시 표시
+        void useSurveyStore.getState().updateSurvey({ ...survey, shortUrl: result });
+      })
+      .catch(() => {
+        /* 네트워크 실패는 무시 — 기존 URL 유지 */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [survey]);
 
   useEffect(() => {
@@ -94,7 +102,10 @@ function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
   }, [survey.title, showToast]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
         className="bg-sp-card rounded-xl shadow-2xl w-full max-w-sm mx-4 flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -164,9 +175,10 @@ function SurveyCard({ survey, totalStudents, onSelect, onShare }: SurveyCardProp
   const localData = useSurveyStore((s) => s.getLocalData(survey.id));
   const color = getColor(survey.categoryColor);
 
-  const progress = survey.mode === 'teacher'
-    ? getTeacherCheckProgress(survey, localData, totalStudents)
-    : getStudentResponseProgress([], totalStudents);
+  const progress =
+    survey.mode === 'teacher'
+      ? getTeacherCheckProgress(survey, localData, totalStudents)
+      : getStudentResponseProgress([], totalStudents);
 
   const modeIcon = survey.mode === 'teacher' ? '✏️' : '📱';
   const modeLabelText = survey.mode === 'teacher' ? '교사 체크' : '학생 응답';
@@ -185,7 +197,9 @@ function SurveyCard({ survey, totalStudents, onSelect, onShare }: SurveyCardProp
       role="button"
       tabIndex={0}
       onClick={() => onSelect(survey.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(survey.id); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onSelect(survey.id);
+      }}
       className={`w-full text-left rounded-xl border border-sp-border p-4 transition-all hover:border-sp-accent/50 hover:shadow-lg cursor-pointer ${color.bg}`}
     >
       <div className="flex items-start gap-3">
@@ -217,9 +231,7 @@ function SurveyCard({ survey, totalStudents, onSelect, onShare }: SurveyCardProp
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
-          <div className="text-caption text-sp-muted mt-1 text-right">
-            {progress.percentage}%
-          </div>
+          <div className="text-caption text-sp-muted mt-1 text-right">{progress.percentage}%</div>
 
           {/* 학생 응답 모드 → 공유 버튼 (링크 + QR) */}
           {survey.mode === 'student' && survey.shareUrl && (
@@ -267,10 +279,7 @@ export function SurveyTab() {
     [surveys],
   );
 
-  const totalStudents = useMemo(
-    () => students.filter(isStudentActive).length,
-    [students],
-  );
+  const totalStudents = useMemo(() => students.filter(isStudentActive).length, [students]);
 
   const handleSelect = (id: string) => {
     setSelectedSurveyId(id);
@@ -289,15 +298,34 @@ export function SurveyTab() {
     );
   }
 
+  // roster-sample-data-removal Phase 1 — 학생 0명일 때 공용 빈 상태로 가드.
+  // 설문 응답이 학생 ID/번호에 종속되므로 명단 없이 진입할 의미 없음.
+  if (studentsLoaded && totalStudents === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <RosterEmptyState context="survey" />
+      </div>
+    );
+  }
+
   /* 상세 화면 (교사 체크 모드) */
   if (view === 'detail' && selectedSurveyId) {
     const survey = surveys.find((s) => s.id === selectedSurveyId);
-    const handleBack = () => { setView('list'); setSelectedSurveyId(null); };
+    const handleBack = () => {
+      setView('list');
+      setSelectedSurveyId(null);
+    };
     if (survey?.mode === 'teacher') {
       return <SurveyDetail survey={survey} onBack={handleBack} />;
     }
     if (survey?.mode === 'student') {
-      return <SurveyStudentDetail survey={survey} onBack={handleBack} supabaseClient={surveySupabaseClient} />;
+      return (
+        <SurveyStudentDetail
+          survey={survey}
+          onBack={handleBack}
+          supabaseClient={surveySupabaseClient}
+        />
+      );
     }
   }
 
@@ -361,15 +389,16 @@ export function SurveyTab() {
                   </span>
                   완료/보관 ({archivedSurveys.length})
                 </button>
-                {showArchived && archivedSurveys.map((s) => (
-                  <SurveyCard
-                    key={s.id}
-                    survey={s}
-                    totalStudents={totalStudents}
-                    onSelect={handleSelect}
-                    onShare={handleShare}
-                  />
-                ))}
+                {showArchived &&
+                  archivedSurveys.map((s) => (
+                    <SurveyCard
+                      key={s.id}
+                      survey={s}
+                      totalStudents={totalStudents}
+                      onSelect={handleSelect}
+                      onShare={handleShare}
+                    />
+                  ))}
               </>
             )}
           </div>
@@ -377,7 +406,10 @@ export function SurveyTab() {
       </div>
 
       {showCreateModal && (
-        <SurveyCreateModal onClose={() => setShowCreateModal(false)} targetCount={totalStudents || undefined} />
+        <SurveyCreateModal
+          onClose={() => setShowCreateModal(false)}
+          targetCount={totalStudents || undefined}
+        />
       )}
 
       {shareSurvey && (

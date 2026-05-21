@@ -257,6 +257,15 @@ interface SeatingState {
   emptyCount: () => number;
   canUndo: () => boolean;
   canRedo: () => boolean;
+
+  /**
+   * roster-sample-data-removal Phase 2 — 외부 참조 검사 (가드 D).
+   *
+   * 현재 좌석(grid + groups + freestyleDesks 모두)에서 주어진 학생 ID 집합이
+   * 한 번이라도 참조되는지 카운트한다. 한 학생이 grid·groups·freestyle 세 군데에
+   * 동시에 있을 수 있으므로 중복 카운트를 막기 위해 학생 단위로 unique set 처리한다.
+   */
+  hasStudentReferences: (studentIds: readonly string[]) => number;
 }
 
 const EMPTY_SEATING: SeatingData = { rows: 1, cols: 1, seats: [[null]] };
@@ -1013,6 +1022,47 @@ export const useSeatingStore = create<SeatingState>((set, get) => {
     emptyCount: () => countEmptySeats(get().seating.seats),
     canUndo: () => get().past.length > 0,
     canRedo: () => get().future.length > 0,
+
+    /**
+     * roster-sample-data-removal Phase 2 — 외부 참조 검사 (가드 D).
+     *
+     * grid(seats), groups, freestyleDesks 세 컨테이너 모두에서 참조 카운트.
+     * 한 학생이 여러 컨테이너에 동시에 박혀 있어도 1로만 센다 (unique set).
+     */
+    hasStudentReferences: (studentIds) => {
+      if (studentIds.length === 0) return 0;
+      const targetSet = new Set(studentIds);
+      const matched = new Set<string>();
+      const { seating } = get();
+
+      // 1) grid seats
+      for (const row of seating.seats) {
+        for (const cell of row) {
+          if (cell !== null && targetSet.has(cell)) {
+            matched.add(cell);
+          }
+        }
+      }
+      // 2) groups
+      if (seating.groups) {
+        for (const g of seating.groups) {
+          for (const sid of g.studentIds) {
+            if (targetSet.has(sid)) {
+              matched.add(sid);
+            }
+          }
+        }
+      }
+      // 3) freestyle desks
+      if (seating.freestyleDesks) {
+        for (const desk of seating.freestyleDesks) {
+          if (desk.studentId && targetSet.has(desk.studentId)) {
+            matched.add(desk.studentId);
+          }
+        }
+      }
+      return matched.size;
+    },
   };
 });
 

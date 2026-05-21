@@ -1,5 +1,9 @@
 import { create } from 'zustand';
-import type { SeatPickerConfig, SeatPickerScope, SeatPickerPrivateAssignment } from '@domain/entities/SeatPickerConfig';
+import type {
+  SeatPickerConfig,
+  SeatPickerScope,
+  SeatPickerPrivateAssignment,
+} from '@domain/entities/SeatPickerConfig';
 import { EMPTY_SEAT_PICKER_CONFIG } from '@domain/entities/SeatPickerConfig';
 import { seatPickerConfigRepository } from '@adapters/di/container';
 
@@ -10,11 +14,23 @@ interface SeatPickerConfigState {
   /** 특정 scope의 private 사전 배정 목록 반환 */
   getPrivateAssignmentsForScope: (scope: SeatPickerScope) => SeatPickerPrivateAssignment[];
   /** scope + seatKey에 학생 지정 (같은 좌석 기존 값·같은 학생 다른 좌석 자동 제거) */
-  setPrivateAssignment: (scope: SeatPickerScope, seatKey: string, studentId: string) => Promise<void>;
+  setPrivateAssignment: (
+    scope: SeatPickerScope,
+    seatKey: string,
+    studentId: string,
+  ) => Promise<void>;
   /** scope + seatKey의 private 배정 제거 */
   removePrivateAssignment: (scope: SeatPickerScope, seatKey: string) => Promise<void>;
   /** scope의 private 배정 전체 초기화 */
   clearScope: (scope: SeatPickerScope) => Promise<void>;
+
+  /**
+   * roster-sample-data-removal Phase 2 — 외부 참조 검사 (가드 D).
+   *
+   * 자리뽑기 private 사전 배정에서 주어진 학생 ID가 참조되는지 학생 단위 unique 카운트.
+   * scope(학급/수업반) 구분 없이 전체에서 검사한다.
+   */
+  hasStudentReferences: (studentIds: readonly string[]) => number;
 }
 
 export const useSeatPickerConfigStore = create<SeatPickerConfigState>((set, get) => ({
@@ -66,5 +82,23 @@ export const useSeatPickerConfigStore = create<SeatPickerConfigState>((set, get)
     };
     await seatPickerConfigRepository.saveConfig(next);
     set({ config: next });
+  },
+
+  /**
+   * roster-sample-data-removal Phase 2 — 외부 참조 검사 (가드 D).
+   *
+   * privateAssignments에 박힌 studentId 중 입력 집합에 속하는 것의
+   * 학생 단위 unique 카운트.
+   */
+  hasStudentReferences: (studentIds) => {
+    if (studentIds.length === 0) return 0;
+    const targetSet = new Set(studentIds);
+    const matched = new Set<string>();
+    for (const a of get().config.privateAssignments) {
+      if (targetSet.has(a.studentId)) {
+        matched.add(a.studentId);
+      }
+    }
+    return matched.size;
   },
 }));

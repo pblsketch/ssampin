@@ -10,6 +10,7 @@ import type { Student } from '@domain/entities/Student';
 import { exportRosterToExcel, parseRosterFromExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
 import { FormatHint } from '../common/FormatHint';
+import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import { ConflictResolveModal } from './RosterImport/ConflictResolveModal';
 import { StudentCountReduceConfirmModal } from './RosterImport/StudentCountReduceConfirmModal';
 import {
@@ -53,7 +54,17 @@ export function RosterManagementTab() {
   const [validationResult, setValidationResult] = useState<ValidationSummary | null>(null);
   const prevStudentsRef = useRef<readonly Student[]>([]);
   const rosterFileRef = useRef<HTMLInputElement>(null);
-  const [previewStudents, setPreviewStudents] = useState<Array<{ name: string; studentNumber: number; phone: string; parentPhone: string; parentPhoneLabel?: string; parentPhone2?: string; parentPhone2Label?: string; birthDate?: string; isVacant: boolean }> | null>(null);
+  const [previewStudents, setPreviewStudents] = useState<Array<{
+    name: string;
+    studentNumber: number;
+    phone: string;
+    parentPhone: string;
+    parentPhoneLabel?: string;
+    parentPhone2?: string;
+    parentPhone2Label?: string;
+    birthDate?: string;
+    isVacant: boolean;
+  }> | null>(null);
   // 보호자2 필드가 열려있는 학생 ID 세트
   const [showParent2, setShowParent2] = useState<Set<string>>(new Set());
   // 상태 변경 모달용 상태 (prompt() 대신 사용)
@@ -64,7 +75,9 @@ export function RosterManagementTab() {
   const [statusNote, setStatusNote] = useState('');
   // Phase 3 — import 시 (이름+학번) 부분 매칭 발생하면 사용자 결정 모달 노출
   const [conflictPlan, setConflictPlan] = useState<PlanResult | null>(null);
-  const [conflictImported, setConflictImported] = useState<readonly ImportReadyStudent[] | null>(null);
+  const [conflictImported, setConflictImported] = useState<readonly ImportReadyStudent[] | null>(
+    null,
+  );
   // Phase 4 — [-] 버튼으로 활성 학생 삭제 시 명시적 confirm 모달
   const [pendingReducePlan, setPendingReducePlan] = useState<{
     committed: readonly Student[];
@@ -92,14 +105,22 @@ export function RosterManagementTab() {
     [students],
   );
 
-  const activeCount = useMemo(() => students.filter((s) => {
-    if (s.status) return s.status === 'active';
-    return !s.isVacant;
-  }).length, [students]);
-  const vacantCount = useMemo(() => students.filter((s) => {
-    if (s.status) return s.status !== 'active';
-    return !!s.isVacant;
-  }).length, [students]);
+  const activeCount = useMemo(
+    () =>
+      students.filter((s) => {
+        if (s.status) return s.status === 'active';
+        return !s.isVacant;
+      }).length,
+    [students],
+  );
+  const vacantCount = useMemo(
+    () =>
+      students.filter((s) => {
+        if (s.status) return s.status !== 'active';
+        return !!s.isVacant;
+      }).length,
+    [students],
+  );
 
   const resetBulkImport = useCallback(() => {
     setBulkText('');
@@ -141,10 +162,7 @@ export function RosterManagementTab() {
    * onAutoApplied는 자동 적용 성공 시 호출 (모달 닫기 등 후속 정리).
    */
   const tryImport = useCallback(
-    async (
-      importedReady: readonly ImportReadyStudent[],
-      onAutoApplied: () => void,
-    ) => {
+    async (importedReady: readonly ImportReadyStudent[], onAutoApplied: () => void) => {
       const plan = planImport(students, importedReady);
       if (plan.conflicts.length === 0) {
         await applyImportToStore(importedReady, plan, new Map());
@@ -190,10 +208,7 @@ export function RosterManagementTab() {
       if (plan.kind === 'safe') {
         await commitStudentCountChange(plan.newStudents);
         if (plan.removedInactive.length > 0) {
-          showToast(
-            `비활성 학생 ${plan.removedInactive.length}명을 자동 정리했습니다`,
-            'info',
-          );
+          showToast(`비활성 학생 ${plan.removedInactive.length}명을 자동 정리했습니다`, 'info');
         }
         return;
       }
@@ -275,23 +290,29 @@ export function RosterManagementTab() {
   }, [bulkText, handleBulkImport]);
 
   /** Step 2에서 컬럼 타입 변경 */
-  const handleColumnTypeChange = useCallback((colIdx: number, type: ColumnType) => {
-    setColumnMappings((prev) => {
-      const next = prev.map((m, i) => (i === colIdx ? { ...m, type } : m));
-      if (parseResult) {
-        setValidationResult(validateRows(parseResult.rows, next));
-      }
-      return next;
-    });
-  }, [parseResult, useFirstRowAsHeader]);
+  const handleColumnTypeChange = useCallback(
+    (colIdx: number, type: ColumnType) => {
+      setColumnMappings((prev) => {
+        const next = prev.map((m, i) => (i === colIdx ? { ...m, type } : m));
+        if (parseResult) {
+          setValidationResult(validateRows(parseResult.rows, next));
+        }
+        return next;
+      });
+    },
+    [parseResult, useFirstRowAsHeader],
+  );
 
   /** Step 2에서 헤더 토글 변경 */
-  const handleHeaderToggle = useCallback((checked: boolean) => {
-    setUseFirstRowAsHeader(checked);
-    if (parseResult) {
-      setValidationResult(validateRows(parseResult.rows, columnMappings));
-    }
-  }, [parseResult, columnMappings]);
+  const handleHeaderToggle = useCallback(
+    (checked: boolean) => {
+      setUseFirstRowAsHeader(checked);
+      if (parseResult) {
+        setValidationResult(validateRows(parseResult.rows, columnMappings));
+      }
+    },
+    [parseResult, columnMappings],
+  );
 
   /** Step 2 → Step 3 */
   const handleBulkStep2Next = useCallback(() => {
@@ -390,7 +411,10 @@ export function RosterManagementTab() {
           </div>
 
           <button
-            onClick={() => { resetBulkImport(); setShowBulkImport(true); }}
+            onClick={() => {
+              resetBulkImport();
+              setShowBulkImport(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm font-medium text-sp-text transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-lg">group_add</span>
@@ -442,10 +466,7 @@ export function RosterManagementTab() {
               } catch (err) {
                 const msg = err instanceof Error ? err.message : '';
                 if (msg.includes('End of data reached') || msg.includes('Unexpected')) {
-                  showToast(
-                    '파일 형식을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.',
-                    'error',
-                  );
+                  showToast('파일 형식을 읽을 수 없습니다. .xlsx 파일인지 확인해주세요.', 'error');
                 } else {
                   showToast('엑셀 파일을 읽는 중 오류가 발생했습니다', 'error');
                 }
@@ -469,10 +490,11 @@ export function RosterManagementTab() {
 
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${isEditing
-              ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
-              : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
-              }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors shadow-sm ${
+              isEditing
+                ? 'border-sp-accent bg-sp-accent/20 text-sp-accent'
+                : 'border-sp-border bg-sp-card hover:bg-sp-surface text-sp-text'
+            }`}
           >
             <span className="material-symbols-outlined text-lg">edit</span>
             <span>{isEditing ? '편집 완료' : '편집'}</span>
@@ -480,140 +502,127 @@ export function RosterManagementTab() {
         </div>
       </header>
 
-      {/* 명렬표 */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-6xl mx-auto">
-          {/* 테이블 헤더 */}
-          <div className="grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
-            <span>번호</span>
-            <span>학번</span>
-            <span>이름</span>
-            <span>학생 연락처</span>
-            <span>관계1</span>
-            <span>보호자1 연락처</span>
-            <span>관계2</span>
-            <span>보호자2 연락처</span>
-            <span>생년월일</span>
-            <span className="text-center">상태</span>
-          </div>
+      {/* 빈 명렬: 공용 빈 상태 카드.
+          - Primary([엑셀에서 붙여넣기]): 일괄 입력 다이얼로그 오픈
+          - Secondary([직접 입력 시작]): 빈 학생 1명을 추가하고 편집 모드 진입
+            → length가 1이 되면서 아래 명렬표(else 분기)로 즉시 전환된다. */}
+      {students.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center py-16">
+          <RosterEmptyState
+            context="roster_management"
+            onNavigate={() => {
+              resetBulkImport();
+              setShowBulkImport(true);
+            }}
+            onSecondaryAction={async () => {
+              await updateStudents([
+                {
+                  id: `s_${Date.now()}_1`,
+                  name: '',
+                  studentNumber: 1,
+                  phone: '',
+                  parentPhone: '',
+                  isVacant: false,
+                },
+              ]);
+              setIsEditing(true);
+            }}
+          />
+        </div>
+      ) : (
+        /* 명렬표 */
+        <div className="flex-1 overflow-y-auto">
+          <div className="w-full max-w-6xl mx-auto">
+            {/* 테이블 헤더 */}
+            <div className="grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-3 border-b border-sp-border text-xs font-bold text-sp-muted uppercase tracking-wider">
+              <span>번호</span>
+              <span>학번</span>
+              <span>이름</span>
+              <span>학생 연락처</span>
+              <span>관계1</span>
+              <span>보호자1 연락처</span>
+              <span>관계2</span>
+              <span>보호자2 연락처</span>
+              <span>생년월일</span>
+              <span className="text-center">상태</span>
+            </div>
 
-          {/* 학생 목록 */}
-          <div className="divide-y divide-sp-border/50">
-            {sortedStudents.map((student, idx) => {
-              const isVacant = isInactiveStatus(student.status) || !!student.isVacant;
-              const hasParent2 = showParent2.has(student.id);
-              return (
-                <div
-                  key={student.id}
-                  className={`grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-2.5 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
-                >
-                  {/* 번호 */}
-                  <span className="text-sm text-sp-muted font-mono">{idx + 1}</span>
+            {/* 학생 목록 */}
+            <div className="divide-y divide-sp-border/50">
+              {sortedStudents.map((student, idx) => {
+                const isVacant = isInactiveStatus(student.status) || !!student.isVacant;
+                const hasParent2 = showParent2.has(student.id);
+                return (
+                  <div
+                    key={student.id}
+                    className={`grid grid-cols-[36px_36px_minmax(60px,1fr)_120px_64px_120px_64px_120px_96px_56px] gap-1.5 px-3 py-2.5 items-center transition-colors ${isVacant ? 'opacity-50 bg-red-500/5' : ''} ${isEditing ? 'hover:bg-sp-accent/5' : 'hover:bg-sp-card'}`}
+                  >
+                    {/* 번호 */}
+                    <span className="text-sm text-sp-muted font-mono">{idx + 1}</span>
 
-                  {/* 학번 */}
-                  <span className={`text-sm font-mono font-bold ${isVacant ? 'text-red-400/60' : 'text-sp-accent'}`}>
-                    {student.studentNumber !== undefined
-                      ? String(student.studentNumber).padStart(2, '0')
-                      : '--'}
-                  </span>
-
-                  {/* 이름 */}
-                  {isVacant ? (
-                    <span className="text-sm text-sp-muted flex items-center gap-1.5">
-                      {student.name ? (
-                        <span className="line-through">{student.name}</span>
-                      ) : null}
-                      <span className="italic text-xs text-red-400/60">결번</span>
-                    </span>
-                  ) : isEditing ? (
-                    <input
-                      type="text"
-                      className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full max-w-xs"
-                      defaultValue={student.name}
-                      onBlur={(e) => {
-                        const newName = e.target.value.trim();
-                        if (newName && newName !== student.name) {
-                          void updateStudentField(student.id, 'name', newName);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                      }}
-                      placeholder="학생 이름"
-                    />
-                  ) : (
-                    <span className="text-sm text-sp-text font-medium">{student.name}</span>
-                  )}
-
-                  {/* 학생 연락처 */}
-                  {isEditing && !isVacant ? (
-                    <input
-                      type="tel"
-                      className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
-                      defaultValue={student.phone ?? ''}
-                      placeholder="010-0000-0000"
-                      onBlur={(e) => {
-                        const val = e.target.value.trim();
-                        if (val !== (student.phone ?? '')) {
-                          void updateStudentField(student.id, 'phone', val);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                      }}
-                    />
-                  ) : (
-                    <span className="text-sm text-sp-muted">{student.phone || '-'}</span>
-                  )}
-
-                  {/* 보호자1 관계 라벨 */}
-                  {isEditing && !isVacant ? (
-                    <select
-                      className="rounded bg-sp-bg border border-sp-border px-1 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none w-full"
-                      defaultValue={student.parentPhoneLabel ?? ''}
-                      onChange={(e) => {
-                        void updateStudentField(student.id, 'parentPhoneLabel', e.target.value);
-                      }}
+                    {/* 학번 */}
+                    <span
+                      className={`text-sm font-mono font-bold ${isVacant ? 'text-red-400/60' : 'text-sp-accent'}`}
                     >
-                      <option value="">선택</option>
-                      <option value="아버지">아버지</option>
-                      <option value="어머니">어머니</option>
-                      <option value="조부모">조부모</option>
-                      <option value="기타">기타</option>
-                    </select>
-                  ) : (
-                    <span className="text-xs text-sp-muted">{student.parentPhoneLabel || '-'}</span>
-                  )}
+                      {student.studentNumber !== undefined
+                        ? String(student.studentNumber).padStart(2, '0')
+                        : '--'}
+                    </span>
 
-                  {/* 보호자1 연락처 */}
-                  {isEditing && !isVacant ? (
-                    <input
-                      type="tel"
-                      className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
-                      defaultValue={student.parentPhone ?? ''}
-                      placeholder="010-0000-0000"
-                      onBlur={(e) => {
-                        const val = e.target.value.trim();
-                        if (val !== (student.parentPhone ?? '')) {
-                          void updateStudentField(student.id, 'parentPhone', val);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                      }}
-                    />
-                  ) : (
-                    <span className="text-sm text-sp-muted">{student.parentPhone || '-'}</span>
-                  )}
+                    {/* 이름 */}
+                    {isVacant ? (
+                      <span className="text-sm text-sp-muted flex items-center gap-1.5">
+                        {student.name ? <span className="line-through">{student.name}</span> : null}
+                        <span className="italic text-xs text-red-400/60">결번</span>
+                      </span>
+                    ) : isEditing ? (
+                      <input
+                        type="text"
+                        className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full max-w-xs"
+                        defaultValue={student.name}
+                        onBlur={(e) => {
+                          const newName = e.target.value.trim();
+                          if (newName && newName !== student.name) {
+                            void updateStudentField(student.id, 'name', newName);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        placeholder="학생 이름"
+                      />
+                    ) : (
+                      <span className="text-sm text-sp-text font-medium">{student.name}</span>
+                    )}
 
-                  {/* 보호자2 관계 라벨 */}
-                  {isEditing && !isVacant ? (
-                    hasParent2 ? (
+                    {/* 학생 연락처 */}
+                    {isEditing && !isVacant ? (
+                      <input
+                        type="tel"
+                        className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                        defaultValue={student.phone ?? ''}
+                        placeholder="010-0000-0000"
+                        onBlur={(e) => {
+                          const val = e.target.value.trim();
+                          if (val !== (student.phone ?? '')) {
+                            void updateStudentField(student.id, 'phone', val);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                      />
+                    ) : (
+                      <span className="text-sm text-sp-muted">{student.phone || '-'}</span>
+                    )}
+
+                    {/* 보호자1 관계 라벨 */}
+                    {isEditing && !isVacant ? (
                       <select
                         className="rounded bg-sp-bg border border-sp-border px-1 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none w-full"
-                        defaultValue={student.parentPhone2Label ?? ''}
+                        defaultValue={student.parentPhoneLabel ?? ''}
                         onChange={(e) => {
-                          void updateStudentField(student.id, 'parentPhone2Label', e.target.value);
+                          void updateStudentField(student.id, 'parentPhoneLabel', e.target.value);
                         }}
                       >
                         <option value="">선택</option>
@@ -623,211 +632,286 @@ export function RosterManagementTab() {
                         <option value="기타">기타</option>
                       </select>
                     ) : (
-                      <span className="text-xs text-sp-muted">-</span>
-                    )
-                  ) : (
-                    <span className="text-xs text-sp-muted">{student.parentPhone2Label || '-'}</span>
-                  )}
+                      <span className="text-xs text-sp-muted">
+                        {student.parentPhoneLabel || '-'}
+                      </span>
+                    )}
 
-                  {/* 보호자2 연락처 */}
-                  {isEditing && !isVacant ? (
-                    hasParent2 ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="tel"
-                          className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none flex-1 min-w-0"
-                          defaultValue={student.parentPhone2 ?? ''}
-                          placeholder="010-0000-0000"
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val !== (student.parentPhone2 ?? '')) {
-                              void updateStudentField(student.id, 'parentPhone2', val);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') e.currentTarget.blur();
-                          }}
-                        />
-                        <button
-                          onClick={() => {
-                            void updateStudentField(student.id, 'parentPhone2', '');
-                            void updateStudentField(student.id, 'parentPhone2Label', '');
-                            setShowParent2((prev) => {
-                              const next = new Set(prev);
-                              next.delete(student.id);
-                              return next;
-                            });
-                          }}
-                          className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="보호자2 삭제"
-                        >
-                          <span className="material-symbols-outlined text-icon-sm">close</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowParent2((prev) => new Set([...prev, student.id]))}
-                        className="text-xs text-sp-accent hover:text-blue-400 transition-colors"
-                      >
-                        + 추가
-                      </button>
-                    )
-                  ) : (
-                    <span className="text-sm text-sp-muted">{student.parentPhone2 || '-'}</span>
-                  )}
-
-                  {/* 생년월일 */}
-                  {isEditing && !isVacant ? (
-                    <input
-                      type="date"
-                      className="rounded bg-sp-bg border border-sp-border px-2 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
-                      defaultValue={student.birthDate ?? ''}
-                      onBlur={(e) => {
-                        const val = e.target.value;
-                        if (val !== (student.birthDate ?? '')) {
-                          void updateStudentField(student.id, 'birthDate', val);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span className="text-sm text-sp-muted">
-                      {student.birthDate
-                        ? student.birthDate.replace(/-/g, '.')
-                        : '-'}
-                    </span>
-                  )}
-
-                  {/* 상태 드롭다운 */}
-                  <div className="flex justify-center">
-                    {isEditing ? (
-                      <select
-                        value={student.status ?? 'active'}
-                        onChange={(e) => {
-                          const newStatus = e.target.value as StudentStatus;
-                          if (newStatus !== 'active') {
-                            setPendingStatusChange({ studentId: student.id, status: newStatus });
-                            setStatusNote('');
-                          } else {
-                            void changeStatus(student.id, 'active');
+                    {/* 보호자1 연락처 */}
+                    {isEditing && !isVacant ? (
+                      <input
+                        type="tel"
+                        className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                        defaultValue={student.parentPhone ?? ''}
+                        placeholder="010-0000-0000"
+                        onBlur={(e) => {
+                          const val = e.target.value.trim();
+                          if (val !== (student.parentPhone ?? '')) {
+                            void updateStudentField(student.id, 'parentPhone', val);
                           }
                         }}
-                        className={`text-xs rounded px-1.5 py-1 border border-sp-border bg-sp-bg ${
-                          isVacant ? 'text-red-400' : 'text-sp-muted'
-                        }`}
-                      >
-                        {Object.entries(STUDENT_STATUS_LABELS).map(([value, label]) => (
-                          <option key={value} value={value}>{label}</option>
-                        ))}
-                      </select>
-                    ) : isVacant ? (
-                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
-                        student.status ? (() => {
-                          switch (student.status) {
-                            case 'transferred': return 'text-blue-400 bg-blue-500/10';
-                            case 'suspended': return 'text-amber-400 bg-amber-500/10';
-                            case 'expelled': case 'dropped': return 'text-red-400 bg-red-500/10';
-                            case 'withdrawn': return 'text-orange-400 bg-orange-500/10';
-                            default: return 'text-red-400 bg-red-500/10';
-                          }
-                        })() : 'text-red-400 bg-red-500/10'
-                      }`}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                        {student.status ? STUDENT_STATUS_LABELS[student.status] : '결번'}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                      />
+                    ) : (
+                      <span className="text-sm text-sp-muted">{student.parentPhone || '-'}</span>
+                    )}
+
+                    {/* 보호자2 관계 라벨 */}
+                    {isEditing && !isVacant ? (
+                      hasParent2 ? (
+                        <select
+                          className="rounded bg-sp-bg border border-sp-border px-1 py-1.5 text-xs text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                          defaultValue={student.parentPhone2Label ?? ''}
+                          onChange={(e) => {
+                            void updateStudentField(
+                              student.id,
+                              'parentPhone2Label',
+                              e.target.value,
+                            );
+                          }}
+                        >
+                          <option value="">선택</option>
+                          <option value="아버지">아버지</option>
+                          <option value="어머니">어머니</option>
+                          <option value="조부모">조부모</option>
+                          <option value="기타">기타</option>
+                        </select>
+                      ) : (
+                        <span className="text-xs text-sp-muted">-</span>
+                      )
+                    ) : (
+                      <span className="text-xs text-sp-muted">
+                        {student.parentPhone2Label || '-'}
                       </span>
-                    ) : null}
+                    )}
+
+                    {/* 보호자2 연락처 */}
+                    {isEditing && !isVacant ? (
+                      hasParent2 ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="tel"
+                            className="rounded bg-sp-bg border border-sp-border px-3 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none flex-1 min-w-0"
+                            defaultValue={student.parentPhone2 ?? ''}
+                            placeholder="010-0000-0000"
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val !== (student.parentPhone2 ?? '')) {
+                                void updateStudentField(student.id, 'parentPhone2', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.currentTarget.blur();
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              void updateStudentField(student.id, 'parentPhone2', '');
+                              void updateStudentField(student.id, 'parentPhone2Label', '');
+                              setShowParent2((prev) => {
+                                const next = new Set(prev);
+                                next.delete(student.id);
+                                return next;
+                              });
+                            }}
+                            className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            title="보호자2 삭제"
+                          >
+                            <span className="material-symbols-outlined text-icon-sm">close</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowParent2((prev) => new Set([...prev, student.id]))}
+                          className="text-xs text-sp-accent hover:text-blue-400 transition-colors"
+                        >
+                          + 추가
+                        </button>
+                      )
+                    ) : (
+                      <span className="text-sm text-sp-muted">{student.parentPhone2 || '-'}</span>
+                    )}
+
+                    {/* 생년월일 */}
+                    {isEditing && !isVacant ? (
+                      <input
+                        type="date"
+                        className="rounded bg-sp-bg border border-sp-border px-2 py-1.5 text-sm text-sp-text focus:border-sp-accent focus:outline-none w-full"
+                        defaultValue={student.birthDate ?? ''}
+                        onBlur={(e) => {
+                          const val = e.target.value;
+                          if (val !== (student.birthDate ?? '')) {
+                            void updateStudentField(student.id, 'birthDate', val);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className="text-sm text-sp-muted">
+                        {student.birthDate ? student.birthDate.replace(/-/g, '.') : '-'}
+                      </span>
+                    )}
+
+                    {/* 상태 드롭다운 */}
+                    <div className="flex justify-center">
+                      {isEditing ? (
+                        <select
+                          value={student.status ?? 'active'}
+                          onChange={(e) => {
+                            const newStatus = e.target.value as StudentStatus;
+                            if (newStatus !== 'active') {
+                              setPendingStatusChange({ studentId: student.id, status: newStatus });
+                              setStatusNote('');
+                            } else {
+                              void changeStatus(student.id, 'active');
+                            }
+                          }}
+                          className={`text-xs rounded px-1.5 py-1 border border-sp-border bg-sp-bg ${
+                            isVacant ? 'text-red-400' : 'text-sp-muted'
+                          }`}
+                        >
+                          {Object.entries(STUDENT_STATUS_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isVacant ? (
+                        <span
+                          className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+                            student.status
+                              ? (() => {
+                                  switch (student.status) {
+                                    case 'transferred':
+                                      return 'text-blue-400 bg-blue-500/10';
+                                    case 'suspended':
+                                      return 'text-amber-400 bg-amber-500/10';
+                                    case 'expelled':
+                                    case 'dropped':
+                                      return 'text-red-400 bg-red-500/10';
+                                    case 'withdrawn':
+                                      return 'text-orange-400 bg-orange-500/10';
+                                    default:
+                                      return 'text-red-400 bg-red-500/10';
+                                  }
+                                })()
+                              : 'text-red-400 bg-red-500/10'
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                          {student.status ? STUDENT_STATUS_LABELS[student.status] : '결번'}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          {/* 하단 요약 */}
-          <div className="flex items-center gap-4 px-4 py-3 border-t border-sp-border text-xs text-sp-muted">
-            <span>총 {activeCount}명 (비활성 {vacantCount}명)</span>
-          </div>
-        </div>
-
-        {/* 안내 메시지 */}
-        <div className="max-w-5xl mx-auto mt-4 text-xs text-sp-muted bg-sp-surface rounded-lg px-4 py-3 flex items-center gap-2">
-          <span className="material-symbols-outlined text-sm text-sp-accent">info</span>
-          <span>여기서 등록한 명렬은 자리배치, 과제수합, 학생기록 등 모든 기능에서 사용됩니다. 자리배치를 따로 설정하지 않아도 명렬만 등록하면 다른 기능을 이용할 수 있어요.</span>
-        </div>
-
-        {/* 엑셀 가져오기 미리보기 모달 */}
-        {previewStudents && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl flex flex-col max-h-[80vh]">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sp-accent">preview</span>
-                  가져올 학생 미리보기 ({previewStudents.length}명)
-                </h3>
-                <button
-                  onClick={() => setPreviewStudents(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
-                </button>
-              </div>
-              <p className="text-xs text-red-400 mb-4">주의: 적용 시 기존 명단이 모두 교체됩니다.</p>
-              <div className="flex-1 overflow-y-auto mb-4 text-xs">
-                <table className="w-full">
-                  <thead className="sticky top-0 bg-sp-card">
-                    <tr className="text-sp-muted border-b border-sp-border">
-                      <th className="py-1.5 text-left w-16">번호</th>
-                      <th className="py-1.5 text-left">이름</th>
-                      <th className="py-1.5 text-left">연락처</th>
-                      <th className="py-1.5 text-left">보호자1</th>
-                      <th className="py-1.5 text-left">보호자2</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewStudents.map((s) => (
-                      <tr key={s.studentNumber} className="border-b border-sp-border/30">
-                        <td className="py-1.5 text-sp-text font-mono">{s.studentNumber}</td>
-                        <td className="py-1.5 text-sp-text">{s.isVacant ? <span className="text-red-400 italic">결번</span> : s.name}</td>
-                        <td className="py-1.5 text-sp-muted">{s.phone || '-'}</td>
-                        <td className="py-1.5 text-sp-muted">{s.parentPhone || '-'}</td>
-                        <td className="py-1.5 text-sp-muted">{s.parentPhone2 || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex justify-end gap-3 shrink-0 pt-3 border-t border-sp-border">
-                <button
-                  onClick={() => setPreviewStudents(null)}
-                  className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={async () => {
-                    // Phase 3 — planImport 거쳐 외부 참조(student.id) 보존
-                    const importedReady: ImportReadyStudent[] = previewStudents.map((p) => ({
-                      name: p.name,
-                      studentNumber: p.studentNumber,
-                      phone: p.phone,
-                      parentPhone: p.parentPhone,
-                      parentPhoneLabel: p.parentPhoneLabel ?? '',
-                      parentPhone2: p.parentPhone2 ?? '',
-                      parentPhone2Label: p.parentPhone2Label ?? '',
-                      birthDate: p.birthDate ?? '',
-                      isVacant: p.isVacant,
-                    }));
-                    await tryImport(importedReady, () => {
-                      setPreviewStudents(null);
-                    });
-                  }}
-                  className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
-                >
-                  적용하기
-                </button>
-              </div>
+            {/* 하단 요약 */}
+            <div className="flex items-center gap-4 px-4 py-3 border-t border-sp-border text-xs text-sp-muted">
+              <span>
+                총 {activeCount}명 (비활성 {vacantCount}명)
+              </span>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* 안내 메시지 */}
+          <div className="max-w-5xl mx-auto mt-4 text-xs text-sp-muted bg-sp-surface rounded-lg px-4 py-3 flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm text-sp-accent">info</span>
+            <span>
+              여기서 등록한 명렬은 자리배치, 과제수합, 학생기록 등 모든 기능에서 사용됩니다.
+              자리배치를 따로 설정하지 않아도 명렬만 등록하면 다른 기능을 이용할 수 있어요.
+            </span>
+          </div>
+
+          {/* 엑셀 가져오기 미리보기 모달 */}
+          {previewStudents && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-sp-card border border-sp-border rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl flex flex-col max-h-[80vh]">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-bold text-sp-text flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sp-accent">preview</span>
+                    가져올 학생 미리보기 ({previewStudents.length}명)
+                  </h3>
+                  <button
+                    onClick={() => setPreviewStudents(null)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                      close
+                    </span>
+                  </button>
+                </div>
+                <p className="text-xs text-red-400 mb-4">
+                  주의: 적용 시 기존 명단이 모두 교체됩니다.
+                </p>
+                <div className="flex-1 overflow-y-auto mb-4 text-xs">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-sp-card">
+                      <tr className="text-sp-muted border-b border-sp-border">
+                        <th className="py-1.5 text-left w-16">번호</th>
+                        <th className="py-1.5 text-left">이름</th>
+                        <th className="py-1.5 text-left">연락처</th>
+                        <th className="py-1.5 text-left">보호자1</th>
+                        <th className="py-1.5 text-left">보호자2</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewStudents.map((s) => (
+                        <tr key={s.studentNumber} className="border-b border-sp-border/30">
+                          <td className="py-1.5 text-sp-text font-mono">{s.studentNumber}</td>
+                          <td className="py-1.5 text-sp-text">
+                            {s.isVacant ? (
+                              <span className="text-red-400 italic">결번</span>
+                            ) : (
+                              s.name
+                            )}
+                          </td>
+                          <td className="py-1.5 text-sp-muted">{s.phone || '-'}</td>
+                          <td className="py-1.5 text-sp-muted">{s.parentPhone || '-'}</td>
+                          <td className="py-1.5 text-sp-muted">{s.parentPhone2 || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end gap-3 shrink-0 pt-3 border-t border-sp-border">
+                  <button
+                    onClick={() => setPreviewStudents(null)}
+                    className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={async () => {
+                      // Phase 3 — planImport 거쳐 외부 참조(student.id) 보존
+                      const importedReady: ImportReadyStudent[] = previewStudents.map((p) => ({
+                        name: p.name,
+                        studentNumber: p.studentNumber,
+                        phone: p.phone,
+                        parentPhone: p.parentPhone,
+                        parentPhoneLabel: p.parentPhoneLabel ?? '',
+                        parentPhone2: p.parentPhone2 ?? '',
+                        parentPhone2Label: p.parentPhone2Label ?? '',
+                        birthDate: p.birthDate ?? '',
+                        isVacant: p.isVacant,
+                      }));
+                      await tryImport(importedReady, () => {
+                        setPreviewStudents(null);
+                      });
+                    }}
+                    className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+                  >
+                    적용하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 일괄 입력 모달 — 3단계 마법사 */}
       {showBulkImport && (
@@ -842,18 +926,24 @@ export function RosterManagementTab() {
                   학생 일괄 입력
                 </h3>
                 <div className="flex items-center gap-2 text-xs text-sp-muted">
-                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">1</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">
+                    1
+                  </span>
                   <span>/</span>
                   <span className="px-2 py-0.5 rounded-full bg-sp-surface">2</span>
                   <span>/</span>
                   <span className="px-2 py-0.5 rounded-full bg-sp-surface">3</span>
                 </div>
               </div>
-              <p className="text-xs text-sp-muted mb-4">엑셀이나 구글 시트에서 복사한 데이터를 붙여넣으세요.</p>
+              <p className="text-xs text-sp-muted mb-4">
+                엑셀이나 구글 시트에서 복사한 데이터를 붙여넣으세요.
+              </p>
 
               <textarea
                 className="w-full min-h-[240px] bg-sp-bg border border-sp-border rounded-lg p-3 text-sm text-sp-text focus:border-sp-accent focus:outline-none resize-none mb-3 font-mono"
-                placeholder={'엑셀이나 구글 시트에서 학생 데이터를 복사하여 붙여넣으세요.\n\n번호  이름  학생연락처  보호자관계  보호자연락처\n1  홍길동  010-1234-5678  어머니  010-9876-5432'}
+                placeholder={
+                  '엑셀이나 구글 시트에서 학생 데이터를 복사하여 붙여넣으세요.\n\n번호  이름  학생연락처  보호자관계  보호자연락처\n1  홍길동  010-1234-5678  어머니  010-9876-5432'
+                }
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
                 autoFocus
@@ -868,7 +958,10 @@ export function RosterManagementTab() {
 
               <div className="flex justify-end gap-3 shrink-0">
                 <button
-                  onClick={() => { resetBulkImport(); setShowBulkImport(false); }}
+                  onClick={() => {
+                    resetBulkImport();
+                    setShowBulkImport(false);
+                  }}
                   className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
                 >
                   취소
@@ -896,7 +989,9 @@ export function RosterManagementTab() {
                 <div className="flex items-center gap-2 text-xs text-sp-muted">
                   <span className="px-2 py-0.5 rounded-full bg-sp-surface">1</span>
                   <span>/</span>
-                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">2</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">
+                    2
+                  </span>
                   <span>/</span>
                   <span className="px-2 py-0.5 rounded-full bg-sp-surface">3</span>
                 </div>
@@ -930,10 +1025,14 @@ export function RosterManagementTab() {
                             key={colIdx}
                             className={`px-3 py-2 text-left border-b border-sp-border font-normal ${isLowConf ? 'border border-amber-500/50' : ''}`}
                           >
-                            <div className="text-sp-muted text-caption mb-1 truncate max-w-[120px]">{mapping.headerText}</div>
+                            <div className="text-sp-muted text-caption mb-1 truncate max-w-[120px]">
+                              {mapping.headerText}
+                            </div>
                             <select
                               value={mapping.type}
-                              onChange={(e) => handleColumnTypeChange(colIdx, e.target.value as ColumnType)}
+                              onChange={(e) =>
+                                handleColumnTypeChange(colIdx, e.target.value as ColumnType)
+                              }
                               className={`w-full rounded bg-sp-bg px-1.5 py-1 text-xs text-sp-text border focus:outline-none focus:border-sp-accent ${isLowConf ? 'border-amber-500/60' : 'border-sp-border'}`}
                             >
                               <option value="number">번호</option>
@@ -960,19 +1059,27 @@ export function RosterManagementTab() {
                       return (
                         <>
                           {previewRows.map((row, rowIdx) => {
-                            const rowErr = validationResult?.errors.find((e) => e.rowIndex === rowIdx);
+                            const rowErr = validationResult?.errors.find(
+                              (e) => e.rowIndex === rowIdx,
+                            );
                             const rowClass = rowErr
                               ? rowErr.errors.some((e) => e.severity === 'error')
                                 ? 'bg-red-500/10'
                                 : 'bg-amber-500/5'
                               : '';
                             return (
-                              <tr key={rowIdx} className={`border-b border-sp-border/40 hover:bg-sp-surface/50 ${rowClass}`}>
+                              <tr
+                                key={rowIdx}
+                                className={`border-b border-sp-border/40 hover:bg-sp-surface/50 ${rowClass}`}
+                              >
                                 {row.cells.map((cell, colIdx) => {
-                                  const cellErr = rowErr?.errors.find((e) => e.columnIndex === colIdx);
+                                  const cellErr = rowErr?.errors.find(
+                                    (e) => e.columnIndex === colIdx,
+                                  );
                                   const cellClass = cellErr
-                                    ? cellErr.severity === 'error' ? 'bg-red-500/15 text-red-300'
-                                    : 'bg-amber-500/10 text-amber-300'
+                                    ? cellErr.severity === 'error'
+                                      ? 'bg-red-500/15 text-red-300'
+                                      : 'bg-amber-500/10 text-amber-300'
                                     : 'text-sp-text';
                                   return (
                                     <td
@@ -989,7 +1096,10 @@ export function RosterManagementTab() {
                           })}
                           {extra > 0 && (
                             <tr>
-                              <td colSpan={columnMappings.length} className="px-3 py-2 text-center text-sp-muted italic">
+                              <td
+                                colSpan={columnMappings.length}
+                                className="px-3 py-2 text-center text-sp-muted italic"
+                              >
                                 ... 외 {extra}명
                               </td>
                             </tr>
@@ -1036,7 +1146,10 @@ export function RosterManagementTab() {
                 </button>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => { resetBulkImport(); setShowBulkImport(false); }}
+                    onClick={() => {
+                      resetBulkImport();
+                      setShowBulkImport(false);
+                    }}
                     className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
                   >
                     취소
@@ -1067,7 +1180,9 @@ export function RosterManagementTab() {
                   <span>/</span>
                   <span className="px-2 py-0.5 rounded-full bg-sp-surface">2</span>
                   <span>/</span>
-                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">3</span>
+                  <span className="px-2 py-0.5 rounded-full bg-sp-accent/20 text-sp-accent font-medium">
+                    3
+                  </span>
                 </div>
               </div>
 
@@ -1077,15 +1192,24 @@ export function RosterManagementTab() {
                 return (
                   <>
                     <p className="text-sm text-sp-text mb-3">
-                      총 <span className="font-bold text-sp-accent">{imported.length}명</span>의 학생을 등록합니다.
+                      총 <span className="font-bold text-sp-accent">{imported.length}명</span>의
+                      학생을 등록합니다.
                     </p>
 
                     {/* 경고 박스 */}
                     <div className="flex items-start gap-2 border border-red-500/40 bg-red-500/10 rounded-lg px-4 py-3 mb-4">
-                      <span className="material-symbols-outlined text-red-400 mt-0.5" style={{ fontSize: '18px' }}>warning</span>
+                      <span
+                        className="material-symbols-outlined text-red-400 mt-0.5"
+                        style={{ fontSize: '18px' }}
+                      >
+                        warning
+                      </span>
                       <p className="text-xs text-red-300 leading-relaxed">
-                        주의: 기존 명단이 모두 교체됩니다. 이 작업은 되돌릴 수 없습니다.<br />
-                        <span className="text-red-400/70">(적용 후 토스트의 '실행 취소'로 복원 가능)</span>
+                        주의: 기존 명단이 모두 교체됩니다. 이 작업은 되돌릴 수 없습니다.
+                        <br />
+                        <span className="text-red-400/70">
+                          (적용 후 토스트의 '실행 취소'로 복원 가능)
+                        </span>
                       </p>
                     </div>
 
@@ -1093,7 +1217,9 @@ export function RosterManagementTab() {
                     <div className="flex-1 overflow-y-auto border border-sp-border rounded-lg divide-y divide-sp-border/40 mb-4 max-h-[240px]">
                       {imported.map((s, idx) => (
                         <div key={idx} className="flex items-center gap-3 px-3 py-2 text-sm">
-                          <span className="text-sp-muted font-mono text-xs w-6 shrink-0">{s.studentNumber}</span>
+                          <span className="text-sp-muted font-mono text-xs w-6 shrink-0">
+                            {s.studentNumber}
+                          </span>
                           <span className="text-sp-text font-medium">{s.name}</span>
                           {s.phone && <span className="text-xs text-sp-muted">{s.phone}</span>}
                         </div>
@@ -1113,7 +1239,10 @@ export function RosterManagementTab() {
                 </button>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => { resetBulkImport(); setShowBulkImport(false); }}
+                    onClick={() => {
+                      resetBulkImport();
+                      setShowBulkImport(false);
+                    }}
                     className="px-4 py-2 rounded-lg border border-sp-border bg-sp-card hover:bg-sp-surface text-sm text-sp-text transition-colors"
                   >
                     취소
@@ -1138,9 +1267,7 @@ export function RosterManagementTab() {
             <h3 className="text-lg font-bold text-sp-text mb-2">
               {STUDENT_STATUS_LABELS[pendingStatusChange.status]} 처리
             </h3>
-            <p className="text-sm text-sp-muted mb-4">
-              사유를 입력하세요 (선택)
-            </p>
+            <p className="text-sm text-sp-muted mb-4">사유를 입력하세요 (선택)</p>
             <input
               type="text"
               className="w-full rounded-lg bg-sp-bg border border-sp-border px-3 py-2 text-sm text-sp-text focus:border-sp-accent focus:outline-none mb-4"
@@ -1150,7 +1277,11 @@ export function RosterManagementTab() {
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  void changeStatus(pendingStatusChange.studentId, pendingStatusChange.status, statusNote);
+                  void changeStatus(
+                    pendingStatusChange.studentId,
+                    pendingStatusChange.status,
+                    statusNote,
+                  );
                   setPendingStatusChange(null);
                 }
               }}
@@ -1164,7 +1295,11 @@ export function RosterManagementTab() {
               </button>
               <button
                 onClick={() => {
-                  void changeStatus(pendingStatusChange.studentId, pendingStatusChange.status, statusNote);
+                  void changeStatus(
+                    pendingStatusChange.studentId,
+                    pendingStatusChange.status,
+                    statusNote,
+                  );
                   setPendingStatusChange(null);
                 }}
                 className="px-4 py-2 rounded-lg bg-sp-accent hover:bg-blue-600 text-white text-sm font-medium transition-colors"

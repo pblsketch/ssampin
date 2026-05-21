@@ -111,6 +111,53 @@ const presenceChecks = [
     pattern: /useRegisterModal\(\s*['"]SHARE_PROMPT['"]/,
     name: 'REGRESSION #17: SharePromptOverlay가 SHARE_PROMPT priority로 큐 등록',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #24 — roster-sample-data-removal Phase 3 (2026-05-21)
+  // 학생 의존 화면 8곳에 <RosterEmptyState> 가드가 존재해야 함.
+  // 대표 파일 1건으로 인프라 존재를 검증하고, 8곳 전체 검사는
+  // Vitest 메타테스트(rosterEmptyStateCoverage.test.ts)가 담당.
+  // 누락 시 빈 명단 사용자가 빈 화면을 보며 혼란을 겪는 회귀 재발.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/components/common/RosterEmptyState.tsx',
+    pattern: /export\s+(default\s+function|function|const)\s+RosterEmptyState/,
+    name: 'REGRESSION #24: RosterEmptyState 컴포넌트 존재 (빈 명단 가드 인프라 시그널)',
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #18~#22 — realtime-tool-student-page-health Phase 2 (2026-05-21)
+  // 사용자 신고 "워드클라우드·주관식 설문 학생이 응답해도 0명·응답 미수신"의
+  // 근본 원인이었던 두 부채를 차단:
+  //   (a) v2.0.4 이하 학생 페이지의 상태 동시 노출 버그 — [hidden] CSS 가드로 차단
+  //   (b) WS 미연결 자각 부재 — 4개 학생 페이지 우상단 연결 상태 칩으로 자각 보장
+  // 누락 시 회귀: 사용자가 "보냈는데 안 갔다"는 침묵형 실패를 다시 겪는다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'electron/ipc/liveWordCloudHTML.ts',
+    pattern: /\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/,
+    name: 'REGRESSION #18: liveWordCloudHTML.ts 학생 페이지 [hidden] 가드 (v2.0.5 hotfix)',
+  },
+  {
+    file: 'electron/ipc/liveSurveyHTML.ts',
+    pattern: /\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/,
+    name: 'REGRESSION #19: liveSurveyHTML.ts 학생 페이지 [hidden] 가드 (v2.0.5 hotfix)',
+  },
+  {
+    file: 'electron/ipc/liveVoteHTML.ts',
+    pattern: /\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/,
+    name: 'REGRESSION #20: liveVoteHTML.ts 학생 페이지 [hidden] 가드 (v2.0.5 hotfix)',
+  },
+  {
+    file: 'electron/ipc/liveMultiSurveyHTML.ts',
+    pattern: /\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/,
+    name: 'REGRESSION #21: liveMultiSurveyHTML.ts 학생 페이지 [hidden] 가드 (v2.0.5 hotfix)',
+  },
+  {
+    // 공용 칩 헬퍼: sp-conn-chip 클래스 + role="status" + aria-live="polite" 동시 존재
+    // 이 셋 중 하나라도 빠지면 학생이 연결 상태를 자각하지 못해 침묵 실패 재발
+    file: 'electron/ipc/_studentPageChrome.ts',
+    pattern: /sp-conn-chip[\s\S]{0,1500}?role="status"[\s\S]{0,400}?aria-live="polite"/,
+    name: 'REGRESSION #22: _studentPageChrome 연결 상태 칩 구조 (sp-conn-chip + role=status + aria-live=polite)',
+  },
 ];
 
 // ============================================================
@@ -164,6 +211,22 @@ const absenceChecks = [
       // 단 Zod 객체 안에 pin: 평문 필드는 거부
     ],
     fileFilter: (path) => /realtimeWall/i.test(path),
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #23 — roster-sample-data-removal Phase 3 (2026-05-21)
+  // useStudentStore.ts 에 SAMPLE_STUDENTS 상수 또는 샘플 학생 이름이 재도입되면
+  // 신규 설치 시 샘플 명단이 자동 채워져 UX 문제 재발.
+  // 화이트리스트:
+  //   - src/domain/rules/sampleRosterSignature.ts  (합법적으로 시그니처 35명 보유)
+  //   - src/domain/rules/sampleRosterSignature.test.ts
+  //   - src/usecases/roster/cleanupSampleRoster.test.ts
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #23: SAMPLE_STUDENTS 상수가 useStudentStore.ts 에 재도입되지 않았다',
+    roots: ['src/adapters/stores'],
+    extensions: ['.ts'],
+    patterns: [/const\s+SAMPLE_STUDENTS\s*=/],
+    fileFilter: (path) => /useStudentStore\.ts$/.test(path),
   },
 ];
 

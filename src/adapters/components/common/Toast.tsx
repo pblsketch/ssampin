@@ -10,17 +10,27 @@ interface ToastData {
 
 interface ToastState {
   toasts: ToastData[];
+  /**
+   * 토스트 노출.
+   *
+   * @param message 본문
+   * @param type 아이콘·색 결정 (기본 'success')
+   * @param action 우측 CTA — 액션 라벨과 클릭 핸들러
+   * @param durationMs 자동 dismiss 까지 시간 (기본 3000ms). roster-sample-data-removal §3.8
+   *   마이그레이션 안내처럼 사용자가 액션을 결정할 시간이 필요한 경우 5000ms로 사용.
+   */
   show: (
     message: string,
     type?: 'success' | 'error' | 'info',
     action?: { label: string; onClick: () => void },
+    durationMs?: number,
   ) => void;
   dismiss: (id: string) => void;
 }
 
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
-  show: (message, type = 'success', action) => {
+  show: (message, type = 'success', action, durationMs = 3000) => {
     const id = generateUUID();
     set((state) => ({
       toasts: [...state.toasts, { id, message, type, action }],
@@ -29,7 +39,7 @@ export const useToastStore = create<ToastState>((set) => ({
       set((state) => ({
         toasts: state.toasts.filter((t) => t.id !== id),
       }));
-    }, 3000);
+    }, durationMs);
   },
   dismiss: (id) => {
     set((state) => ({
@@ -54,7 +64,7 @@ export function ToastContainer() {
   const { toasts, dismiss } = useToastStore();
 
   return (
-    <div className='fixed bottom-6 right-6 z-sp-toast flex flex-col gap-3'>
+    <div className="fixed bottom-6 right-6 z-sp-toast flex flex-col gap-3">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={() => dismiss(toast.id)} />
       ))}
@@ -72,9 +82,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
       role="alert"
       aria-live="polite"
       className={`animate-slide-in-right flex items-center gap-3 border rounded-xl px-4 py-3 shadow-xl min-w-[320px] max-w-[400px] ${
-        isInfo
-          ? 'bg-slate-50 border-slate-300'
-          : 'bg-sp-card border-sp-border'
+        isInfo ? 'bg-slate-50 border-slate-300' : 'bg-sp-card border-sp-border'
       }`}
     >
       <span
@@ -98,12 +106,10 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
       <button
         onClick={onDismiss}
         className={`transition-colors ${
-          isInfo
-            ? 'text-slate-500 hover:text-slate-900'
-            : 'text-sp-muted hover:text-sp-text'
+          isInfo ? 'text-slate-500 hover:text-slate-900' : 'text-sp-muted hover:text-sp-text'
         }`}
       >
-        <span className='material-symbols-outlined text-base'>close</span>
+        <span className="material-symbols-outlined text-base">close</span>
       </button>
     </div>
   );

@@ -78,7 +78,13 @@ export interface WidgetStyleSettings {
   readonly hideWindowBorder: boolean;
 }
 
-export type AlarmSoundId = 'beep' | 'school-bell' | 'alarm-clock' | 'gentle-chime' | 'buzzer' | 'custom';
+export type AlarmSoundId =
+  | 'beep'
+  | 'school-bell'
+  | 'alarm-clock'
+  | 'gentle-chime'
+  | 'buzzer'
+  | 'custom';
 
 export type PreWarningSoundId = 'gentle-chime' | 'soft-bell' | 'tick-tock';
 
@@ -104,7 +110,7 @@ export interface AlarmSoundSettings {
   readonly selectedSound: AlarmSoundId;
   readonly customAudioName: string | null;
   readonly volume: number; // 0.0 ~ 1.0
-  readonly boost: number;  // 1 | 2 | 3 | 4 — 볼륨 증폭 배수
+  readonly boost: number; // 1 | 2 | 3 | 4 — 볼륨 증폭 배수
   readonly preWarning: PreWarningSettings;
 }
 
@@ -133,10 +139,7 @@ export type WidgetDesktopMode = 'normal' | 'topmost' | 'native-desktop';
  * legacy 'floating' alias → 'topmost' 매핑은 호출자 측에서 처리한다
  * (이 헬퍼는 정식 타입 값만 인정).
  */
-export function normalizeDesktopMode(
-  value: unknown,
-  platformIsWin32?: boolean,
-): WidgetDesktopMode {
+export function normalizeDesktopMode(value: unknown, platformIsWin32?: boolean): WidgetDesktopMode {
   if (value === 'topmost') {
     return 'topmost';
   }
@@ -175,7 +178,7 @@ export interface WidgetSettings {
   readonly opacity: number;
   readonly cardOpacity: number;
   readonly alwaysOnTop: boolean;
-  readonly closeToWidget: boolean;        // keep for backward compat
+  readonly closeToWidget: boolean; // keep for backward compat
   /**
    * X 버튼 동작.
    * - 'widget': 위젯 모드로 전환 (기본)
@@ -222,7 +225,7 @@ export interface SystemSettings {
   readonly autoLaunch: boolean;
   readonly notificationSound: boolean;
   readonly doNotDisturbStart: string; // "HH:mm"
-  readonly doNotDisturbEnd: string;   // "HH:mm"
+  readonly doNotDisturbEnd: string; // "HH:mm"
 }
 
 export interface NeisAutoSyncSettings {
@@ -235,25 +238,25 @@ export interface NeisAutoSyncSettings {
 }
 
 export interface NeisSettings {
-  readonly schoolCode: string;      // SD_SCHUL_CODE
-  readonly atptCode: string;        // ATPT_OFCDC_SC_CODE
-  readonly schoolName: string;      // 선택된 학교명
+  readonly schoolCode: string; // SD_SCHUL_CODE
+  readonly atptCode: string; // ATPT_OFCDC_SC_CODE
+  readonly schoolName: string; // 선택된 학교명
   readonly autoSync?: NeisAutoSyncSettings;
 }
 
 export interface WeatherLocation {
   readonly lat: number;
   readonly lon: number;
-  readonly name: string;            // 표시용 지역명 (예: "서울 강남구")
+  readonly name: string; // 표시용 지역명 (예: "서울 강남구")
 }
 
 export interface WeatherSettings {
   readonly location: WeatherLocation | null;
-  readonly refreshIntervalMin: number;  // 갱신 주기 (분)
+  readonly refreshIntervalMin: number; // 갱신 주기 (분)
 }
 
 export interface FeedbackConfig {
-  readonly formUrl: string;  // Google Forms URL (비어있으면 클립보드 폴백)
+  readonly formUrl: string; // Google Forms URL (비어있으면 클립보드 폴백)
   readonly email: string;
 }
 
@@ -304,9 +307,9 @@ export interface ShortcutSettings {
 }
 
 export interface MealSchoolSettings {
-  readonly schoolCode: string;      // 급식 조회용 SD_SCHUL_CODE (비어있으면 neis.schoolCode 사용)
-  readonly atptCode: string;        // 급식 조회용 ATPT_OFCDC_SC_CODE
-  readonly schoolName: string;      // 표시용 학교명
+  readonly schoolCode: string; // 급식 조회용 SD_SCHUL_CODE (비어있으면 neis.schoolCode 사용)
+  readonly atptCode: string; // 급식 조회용 ATPT_OFCDC_SC_CODE
+  readonly schoolName: string; // 표시용 학교명
 }
 
 export interface Settings {
@@ -405,4 +408,45 @@ export interface Settings {
   readonly sidebarCollapsed?: boolean;
   /** 글로벌 퀵애드 단축키 설정 */
   readonly shortcuts?: ShortcutSettings;
+
+  // ──────────────────────────────────────────────────────────────────
+  // 샘플 명렬(데모 35명) 관련 플래그 — roster-sample-data-removal PDCA
+  //
+  // 신규 설치 시 자동 시드되는 35명 데모 명렬을 사용자가 손도 안 댄 채
+  // 그대로 두는 문제를 해결하기 위한 가드 플래그 묶음.
+  // 모두 옵셔널이며 기본값은 false/undefined → 기존 사용자 마이그레이션 불필요.
+  // ──────────────────────────────────────────────────────────────────
+
+  /**
+   * 사용자가 명렬 관리(RosterManagementTab)에서 한 번이라도 수정한 흔적
+   * (가드 F — "사용자 의도 흔적").
+   *
+   * 한 번이라도 true가 되면 자동 정리 대상에서 제외한다.
+   * 기본값 undefined → false 취급.
+   */
+  readonly everEditedRoster?: boolean;
+
+  /**
+   * 마이그레이션 1회성 정리 완료 멱등 가드 (가드 G).
+   *
+   * 첫 실행 시 샘플 명렬을 자동 정리하면서 true로 박는다.
+   * 사용자가 이후 다시 샘플과 동일한 35명을 만들어도 두 번 정리하지 않는다.
+   * 기본값 undefined → false 취급.
+   */
+  readonly didCleanSampleRoster?: boolean;
+
+  /**
+   * 상단 안내 배너를 닫은 시각 (ISO 8601, 예: "2026-05-21T09:30:00.000Z").
+   *
+   * 닫고 나서 3일이 지나면 다시 표시한다. 미설정 시 처음 보는 상태로 간주.
+   */
+  readonly sampleRosterBannerDismissedAt?: string;
+
+  /**
+   * 마이그레이션 토스트를 표시한 시각 (ISO 8601).
+   *
+   * 토스트는 1회만 띄우고, 한 번 박힌 뒤에는 다시 보여주지 않는다.
+   * 미설정 시 "아직 안 보여줬다"는 의미.
+   */
+  readonly sampleRosterMigrationToastShownAt?: string;
 }

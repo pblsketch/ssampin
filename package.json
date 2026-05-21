@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite",
     "electron:dev": "concurrently -k \"vite\" \"node scripts/electron-dev.mjs\"",
+    "electron:dev:fresh": "concurrently -k \"vite\" \"node scripts/electron-dev.mjs --user-data-dir=.dev-data\"",
     "build": "tsc -b && vite build && vite build --config vite.student.config.ts && node scripts/build-electron.mjs",
     "build:electron": "node scripts/build-electron.mjs",
     "build:student": "vite build --config vite.student.config.ts",

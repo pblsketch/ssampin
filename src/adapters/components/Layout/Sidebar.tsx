@@ -49,6 +49,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useShareStore } from '@adapters/stores/useShareStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { SyncStatusBar } from '@adapters/components/Calendar/SyncStatusBar';
 import { DriveSyncIndicator } from '@adapters/components/common/DriveSyncIndicator';
 import { useNewVersionAvailable } from '@adapters/hooks/useNewVersionAvailable';
@@ -161,6 +162,14 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
   const currentVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
   const showUpdateBadge =
     !!newVersion && shouldShowSidebarBadge(newVersion, currentVersion, updatePrefs);
+
+  // roster-sample-data-removal Phase 2 — 담임 업무 메뉴 옆 빨간 점 배지.
+  // 표시 조건: 학생 0명 AND 명단 한 번도 수정한 적 없음 (everEditedRoster!==true).
+  // 학생을 등록하거나 명단을 한 번이라도 만지는 순간 자동 사라진다.
+  // 디자인 §3.6 — 빨간 점(w-2 h-2) + transition-opacity duration-300.
+  const studentsCount = useStudentStore((s) => s.students.length);
+  const everEditedRoster = settings.everEditedRoster ?? false;
+  const showRosterEmptyBadge = studentsCount === 0 && !everEditedRoster;
 
   const sortedItems = useMemo(() => {
     const order = settings.menuOrder;
@@ -291,6 +300,9 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
             currentPage === item.id || (item.id === 'tools' && currentPage.startsWith('tool-'));
           const isDragged = draggedId === item.id;
           const isDragOver = dragOverId === item.id && draggedId !== item.id;
+          // [담임 업무] 항목에만 명단 미등록 배지 후보 표시 — 다른 메뉴는 무관.
+          const showRosterBadgeHere = item.id === 'homeroom' && showRosterEmptyBadge;
+          const ariaLabel = showRosterBadgeHere ? `${item.label} (명단 미등록)` : undefined;
 
           return (
             <button
@@ -308,6 +320,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
                   : undefined
               }
               title={sidebarCollapsed ? item.label : undefined}
+              aria-label={ariaLabel}
               onClick={() => {
                 track('feature_discovery', { feature: item.id, source: 'menu' });
                 onNavigate(item.id);
@@ -325,8 +338,26 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
                   drag_indicator
                 </span>
               )}
-              <span className="material-symbols-outlined">{item.icon}</span>
+              {sidebarCollapsed && showRosterBadgeHere ? (
+                <span className="relative inline-flex items-center justify-center">
+                  <span className="material-symbols-outlined">{item.icon}</span>
+                  <span
+                    aria-hidden="true"
+                    data-testid="roster-empty-badge-collapsed"
+                    className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500 transition-opacity duration-300"
+                  />
+                </span>
+              ) : (
+                <span className="material-symbols-outlined">{item.icon}</span>
+              )}
               {!sidebarCollapsed && <span className="font-medium text-sm">{item.label}</span>}
+              {!sidebarCollapsed && showRosterBadgeHere && (
+                <span
+                  aria-hidden="true"
+                  data-testid="roster-empty-badge-expanded"
+                  className="w-2 h-2 rounded-full bg-red-500 ml-auto mr-1 transition-opacity duration-300"
+                />
+              )}
             </button>
           );
         })}

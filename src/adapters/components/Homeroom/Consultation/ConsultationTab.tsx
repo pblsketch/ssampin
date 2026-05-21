@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
 import { useConsultationStore } from '@adapters/stores/useConsultationStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
+import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import type { ConsultationSchedule } from '@domain/entities/Consultation';
 import type { RecordPrefill } from '../HomeroomPage';
 import { ConsultationCreateModal } from './ConsultationCreateModal';
@@ -239,6 +242,9 @@ interface ConsultationTabProps {
 
 export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
   const { schedules, loaded, load } = useConsultationStore();
+  const students = useStudentStore((s) => s.students);
+  const studentsLoaded = useStudentStore((s) => s.loaded);
+  const loadStudents = useStudentStore((s) => s.load);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [view, setView] = useState<'list' | 'detail'>('list');
@@ -248,7 +254,11 @@ export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
 
   useEffect(() => {
     if (!loaded) void load();
-  }, [loaded, load]);
+    if (!studentsLoaded) void loadStudents();
+  }, [loaded, load, studentsLoaded, loadStudents]);
+
+  // roster-sample-data-removal Phase 1 — 학생 0명이면 본문 대신 공용 빈 상태.
+  const activeStudentCount = useMemo(() => students.filter(isStudentActive).length, [students]);
 
   const activeSchedules = useMemo(() => schedules.filter((s) => !s.isArchived), [schedules]);
 
@@ -271,6 +281,15 @@ export function ConsultationTab({ onWriteRecord }: ConsultationTabProps) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <p className="text-sp-muted text-sm">불러오는 중...</p>
+      </div>
+    );
+  }
+
+  // roster-sample-data-removal Phase 1 — 학생 0명 가드.
+  if (studentsLoaded && activeStudentCount === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <RosterEmptyState context="consultation" />
       </div>
     );
   }

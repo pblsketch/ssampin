@@ -3,6 +3,7 @@ import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore'
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { RecordCategoryManagementModal } from '@adapters/components/StudentRecords/RecordCategoryManagementModal';
 import { DateNavigator } from '@adapters/components/StudentRecords/DateNavigator';
+import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import { InputMode } from './InputMode';
 import { ProgressMode } from './ProgressMode';
 import { SearchMode } from './SearchMode';
@@ -24,10 +25,13 @@ interface RecordsTabProps {
 }
 
 export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
-  const { records, loaded, load, viewMode, setViewMode, categories } =
-    useStudentRecordsStore();
-  const { students, load: loadStudents, loaded: studentsLoaded, activeStudents } =
-    useStudentStore();
+  const { records, loaded, load, viewMode, setViewMode, categories } = useStudentRecordsStore();
+  const {
+    students,
+    load: loadStudents,
+    loaded: studentsLoaded,
+    activeStudents,
+  } = useStudentStore();
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayString());
@@ -65,6 +69,16 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
     );
   }
 
+  // roster-sample-data-removal Phase 1 — 학생 0명일 때 본문 대신 공용 빈 상태.
+  // 담임반 학생 기록은 학생 ID에 종속되므로 명단 없이 진입할 수 없다.
+  if (activeStudentsList.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <RosterEmptyState context="records" />
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col">
       {/* 서브탭 + 카테고리 관리 */}
@@ -74,10 +88,9 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
             <button
               key={tab.id}
               onClick={() => setViewMode(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === tab.id
-                ? 'bg-sp-accent text-white'
-                : 'text-sp-muted hover:text-sp-text'
-                }`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                viewMode === tab.id ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'
+              }`}
             >
               <span>{tab.icon}</span>
               <span>{tab.label}</span>
@@ -109,13 +122,28 @@ export function RecordsTab({ prefill, onPrefillConsumed }: RecordsTabProps) {
       )}
 
       {viewMode === 'input' && (
-        <InputMode students={activeStudentsList} records={filteredRecords} categories={categories} selectedDate={selectedDate} prefill={prefill} onPrefillConsumed={onPrefillConsumed} />
+        <InputMode
+          students={activeStudentsList}
+          records={filteredRecords}
+          categories={categories}
+          selectedDate={selectedDate}
+          prefill={prefill}
+          onPrefillConsumed={onPrefillConsumed}
+        />
       )}
       {viewMode === 'progress' && (
-        <ProgressMode students={activeStudentsList} records={filteredRecords} categories={categories} />
+        <ProgressMode
+          students={activeStudentsList}
+          records={filteredRecords}
+          categories={categories}
+        />
       )}
       {viewMode === 'search' && (
-        <SearchMode students={activeStudentsList} records={filteredRecords} categories={categories} />
+        <SearchMode
+          students={activeStudentsList}
+          records={filteredRecords}
+          categories={categories}
+        />
       )}
 
       {showCategoryModal && (

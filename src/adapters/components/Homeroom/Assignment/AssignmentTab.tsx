@@ -10,6 +10,9 @@ import { AssignmentDetail } from '@adapters/components/Tools/Assignment/Assignme
 import { AssignmentCreateModal } from '@adapters/components/Tools/Assignment/AssignmentCreateModal';
 import { OfflineNotice } from '@adapters/components/Tools/Assignment/OfflineNotice';
 import { useStudentLists } from '@adapters/hooks/useStudentLists';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
+import { isStudentActive } from '@domain/rules/studentActivity';
 
 export function AssignmentTab() {
   const {
@@ -22,7 +25,11 @@ export function AssignmentTab() {
     deleteAssignment,
     selectAssignment,
   } = useAssignmentStore();
-  const { startAuth, isConnected: googleConnected, isLoading: googleAuthLoading } = useCalendarSyncStore();
+  const {
+    startAuth,
+    isConnected: googleConnected,
+    isLoading: googleAuthLoading,
+  } = useCalendarSyncStore();
   const showToast = useToastStore((s) => s.show);
   const { isOnline, checkOnline } = useOnlineStatus();
   const studentLists = useStudentLists();
@@ -30,6 +37,15 @@ export function AssignmentTab() {
     () => studentLists.find((sl) => sl.type === 'class'),
     [studentLists],
   );
+  // roster-sample-data-removal Phase 1 — 담임반 학생 0명이면 빈 상태로 안내.
+  const students = useStudentStore((s) => s.students);
+  const studentsLoaded = useStudentStore((s) => s.loaded);
+  const loadStudents = useStudentStore((s) => s.load);
+  const activeStudentCount = useMemo(() => students.filter(isStudentActive).length, [students]);
+
+  useEffect(() => {
+    if (!studentsLoaded) void loadStudents();
+  }, [studentsLoaded, loadStudents]);
 
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -109,6 +125,15 @@ export function AssignmentTab() {
     );
   }
 
+  // roster-sample-data-removal Phase 1 — 학생 0명일 때 본문 대신 공용 빈 상태.
+  if (studentsLoaded && activeStudentCount === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <RosterEmptyState context="assignment" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* 헤더 */}
@@ -148,8 +173,7 @@ export function AssignmentTab() {
               onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sp-accent text-white text-xs font-medium hover:bg-sp-accent/90 transition-colors"
             >
-              <span className="material-symbols-outlined text-sm">add</span>
-              새 과제
+              <span className="material-symbols-outlined text-sm">add</span>새 과제
             </button>
           )}
         </div>
@@ -229,9 +253,7 @@ export function AssignmentTab() {
                     key={a.id}
                     assignment={a}
                     onClick={() => handleDetail(a.id)}
-                    onDelete={(id) =>
-                      setDeleteTarget(assignments.find((x) => x.id === id) ?? null)
-                    }
+                    onDelete={(id) => setDeleteTarget(assignments.find((x) => x.id === id) ?? null)}
                     onCopyLink={handleCopyLink}
                   />
                 ))}
@@ -251,9 +273,7 @@ export function AssignmentTab() {
                     key={a.id}
                     assignment={a}
                     onClick={() => handleDetail(a.id)}
-                    onDelete={(id) =>
-                      setDeleteTarget(assignments.find((x) => x.id === id) ?? null)
-                    }
+                    onDelete={(id) => setDeleteTarget(assignments.find((x) => x.id === id) ?? null)}
                     onCopyLink={handleCopyLink}
                   />
                 ))}

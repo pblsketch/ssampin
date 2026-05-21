@@ -19,6 +19,7 @@ import { SeatZoneModal } from './SeatZoneModal';
 import { ConstraintHintBadge } from './ConstraintHintBadge';
 import { SeatingHistoryPanel } from './SeatingHistoryPanel';
 import { NameLearningMode } from './NameLearningMode';
+import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 
 /* ──────────────────────── 이름 글자 크기 매핑 ──────────────────────── */
@@ -763,12 +764,10 @@ export function Seating(props?: { embedded?: boolean }) {
         {/* 컨텐츠 영역 */}
         <div className="flex-1 overflow-y-auto flex flex-col items-center">
           {students.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-sp-muted">
-              <span className="material-symbols-outlined text-4xl mb-3">people</span>
-              <p className="text-sm">먼저 명렬 관리에서 학생을 등록해주세요.</p>
-              <p className="text-xs mt-1 text-sp-muted/60">
-                담임업무 → 명렬 관리 탭에서 학생을 추가할 수 있습니다.
-              </p>
+            // roster-sample-data-removal Phase 1 — 자리배치 화면에 공용 빈 상태.
+            // 기존 ad-hoc 안내를 공용 컴포넌트로 통일하여 카피·디자인 일관성 확보.
+            <div className="py-16">
+              <RosterEmptyState context="seating" />
             </div>
           ) : (
             <>

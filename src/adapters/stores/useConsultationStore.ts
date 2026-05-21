@@ -96,6 +96,18 @@ interface ConsultationState {
    * debounce 1s + in-flight 가드 + idempotent.
    */
   registerScheduleSyncListener: () => () => void;
+
+  /**
+   * roster-sample-data-removal Phase 2 — 외부 참조 검사 (가드 D).
+   *
+   * 상담 일정의 targetStudents는 `{ number: number }`만 보유하고 학생 이름은
+   * 저장하지 않는다. 따라서 "이름 보수 매칭" 정책을 적용할 수 없어,
+   * 본 store는 **항상 0을 반환**하는 가장 보수적 양성 거부를 채택한다.
+   *
+   * names 파라미터는 시그니처 통일을 위해 받지만 사용하지 않는다.
+   * (가드 D는 다른 store의 ref 합과 가드 E/F/G가 함께 보호하므로 안전.)
+   */
+  hasStudentReferencesByName: (names: readonly string[]) => number;
 }
 
 export const useConsultationStore = create<ConsultationState>((set, get) => ({
@@ -396,5 +408,17 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
       unsubEvents();
       if (timer) clearTimeout(timer);
     };
+  },
+
+  /**
+   * roster-sample-data-removal Phase 2 — 외부 참조 검사 (가드 D).
+   *
+   * 상담 도메인은 학생 이름을 직접 보유하지 않으므로(targetStudents에 number만 있음)
+   * 보수적 양성 거부 정책에 따라 항상 0을 반환한다. names 인자는 시그니처
+   * 통일을 위해 받지만 무시한다 (eslint no-unused-vars 회피용 void 캐스트).
+   */
+  hasStudentReferencesByName: (names) => {
+    void names;
+    return 0;
   },
 }));

@@ -17,6 +17,7 @@ import type { SeatPickerScope } from '@domain/entities/SeatPickerConfig';
 import type { SeatingData } from '@domain/entities/Seating';
 import type { Student } from '@domain/entities/Student';
 import type { TeachingClassSeating } from '@domain/entities/TeachingClass';
+import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -663,6 +664,9 @@ export function ToolSeatPicker({ onBack, isFullscreen }: ToolSeatPickerProps) {
               <div className="bg-sp-card border border-amber-500/30 rounded-xl p-6 text-center">
                 <p className="text-amber-400 text-sm">수업관리에서 먼저 학생을 등록하세요</p>
               </div>
+            ) : seatDataSource === 'homeroom' && activeStudents.length === 0 ? (
+              /* roster-sample-data-removal Phase 1 — 학급 모드 학생 0명 가드 (수업반 모드는 별도 store) */
+              <RosterEmptyState context="seat_picker" />
             ) : !hasSeatingData && !needsAutoGrid ? (
               /* No seating data */
               <div className="bg-sp-card border border-amber-500/30 rounded-xl p-6 text-center">

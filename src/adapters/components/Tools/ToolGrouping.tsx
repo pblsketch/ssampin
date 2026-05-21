@@ -3,6 +3,7 @@ import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
 import { ClassRosterSelector } from './ClassRosterSelector';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { RosterEmptyState } from '@adapters/components/common/RosterEmptyState';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -161,29 +162,47 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
 
     if (dataSource === 'students') {
       return students
-        .filter((s) => isStudentActive(s) && !excludedNames.has(s.name || `${s.studentNumber ?? 0}번`))
-        .map((s) => addTags({
-          name: s.name || `${s.studentNumber ?? 0}번`,
-          number: s.studentNumber ?? undefined,
-        }));
+        .filter(
+          (s) => isStudentActive(s) && !excludedNames.has(s.name || `${s.studentNumber ?? 0}번`),
+        )
+        .map((s) =>
+          addTags({
+            name: s.name || `${s.studentNumber ?? 0}번`,
+            number: s.studentNumber ?? undefined,
+          }),
+        );
     }
     if (selectedRosterId?.startsWith('tc:')) {
       const tcId = selectedRosterId.slice(3);
       const tc = teachingClasses.find((c) => c.id === tcId);
       if (!tc) return [];
       return tc.students
-        .filter((s) => isStudentActive(s) && !excludedNames.has(s.name?.trim() ? s.name : `${s.number}번`))
-        .map((s) => addTags({
-          name: s.name?.trim() ? s.name : `${s.number}번`,
-          number: s.number,
-        }));
+        .filter(
+          (s) =>
+            isStudentActive(s) && !excludedNames.has(s.name?.trim() ? s.name : `${s.number}번`),
+        )
+        .map((s) =>
+          addTags({
+            name: s.name?.trim() ? s.name : `${s.number}번`,
+            number: s.number,
+          }),
+        );
     }
     const roster = rosters.find((r) => r.id === selectedRosterId);
     if (!roster) return [];
     return roster.studentNames
       .filter((name) => name.trim().length > 0 && !excludedNames.has(name))
       .map((name, idx) => addTags({ name, number: idx + 1 }));
-  }, [dataSource, students, excludedNames, selectedRosterId, teachingClasses, rosters, genderTags, levelTags]);
+  }, [
+    dataSource,
+    students,
+    excludedNames,
+    selectedRosterId,
+    teachingClasses,
+    rosters,
+    genderTags,
+    levelTags,
+  ]);
 
   const memberPool = useMemo(() => getMembers(), [getMembers]);
   const totalMembers = memberPool.length;
@@ -213,8 +232,8 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
   const constraintErrors = useMemo(() => validateConstraints(constraints), [constraints]);
 
   // 총 역할 슬롯 수
-  const totalRoleSlots = useMemo(() =>
-    roleConfigs.reduce((sum, r) => sum + r.count, 0),
+  const totalRoleSlots = useMemo(
+    () => roleConfigs.reduce((sum, r) => sum + r.count, 0),
     [roleConfigs],
   );
 
@@ -289,7 +308,19 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
       setLockedGroups(new Set());
       setIsAnimating(false);
     }, 400);
-  }, [totalMembers, effectiveGroupCount, memberPool, method, constraints, genderMode, balanceLevel, leaderMethod, roleAssignMode, roleConfigs, history]);
+  }, [
+    totalMembers,
+    effectiveGroupCount,
+    memberPool,
+    method,
+    constraints,
+    genderMode,
+    balanceLevel,
+    leaderMethod,
+    roleAssignMode,
+    roleConfigs,
+    history,
+  ]);
 
   // --- Reshuffle ---
   const handleReshuffle = useCallback(() => {
@@ -298,8 +329,11 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
 
     setTimeout(() => {
       const roleOpts = {
-        method, constraints, genderMode: genderMode !== 'none' ? genderMode : undefined,
-        balanceLevel: balanceLevel || undefined, leaderMethod,
+        method,
+        constraints,
+        genderMode: genderMode !== 'none' ? genderMode : undefined,
+        balanceLevel: balanceLevel || undefined,
+        leaderMethod,
         roles: roleAssignMode !== 'none' ? roleConfigs : undefined,
         roleAssignMode,
       };
@@ -339,7 +373,21 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
       }
       setIsAnimating(false);
     }, 400);
-  }, [result, lockedGroups, totalMembers, memberPool, effectiveGroupCount, method, constraints, genderMode, balanceLevel, leaderMethod, roleAssignMode, roleConfigs, history]);
+  }, [
+    result,
+    lockedGroups,
+    totalMembers,
+    memberPool,
+    effectiveGroupCount,
+    method,
+    constraints,
+    genderMode,
+    balanceLevel,
+    leaderMethod,
+    roleAssignMode,
+    roleConfigs,
+    history,
+  ]);
 
   const toggleLock = useCallback((idx: number) => {
     setLockedGroups((prev) => {
@@ -356,24 +404,27 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
     return unique;
   }, [roleConfigs]);
 
-  const handleCycleRole = useCallback((groupIdx: number, memberIdx: number) => {
-    if (!result || roleNameList.length === 0) return;
-    setResult((prev) => {
-      if (!prev) return prev;
-      return prev.map((g, gi) => {
-        if (gi !== groupIdx) return g;
-        const newMembers = g.members.map((m, mi) => {
-          if (mi !== memberIdx) return m;
-          const currentRole = m.role;
-          if (!currentRole) return { ...m, role: roleNameList[0] };
-          const idx = roleNameList.indexOf(currentRole);
-          if (idx === -1 || idx === roleNameList.length - 1) return { ...m, role: undefined };
-          return { ...m, role: roleNameList[idx + 1] };
+  const handleCycleRole = useCallback(
+    (groupIdx: number, memberIdx: number) => {
+      if (!result || roleNameList.length === 0) return;
+      setResult((prev) => {
+        if (!prev) return prev;
+        return prev.map((g, gi) => {
+          if (gi !== groupIdx) return g;
+          const newMembers = g.members.map((m, mi) => {
+            if (mi !== memberIdx) return m;
+            const currentRole = m.role;
+            if (!currentRole) return { ...m, role: roleNameList[0] };
+            const idx = roleNameList.indexOf(currentRole);
+            if (idx === -1 || idx === roleNameList.length - 1) return { ...m, role: undefined };
+            return { ...m, role: roleNameList[idx + 1] };
+          });
+          return { ...g, members: newMembers };
         });
-        return { ...g, members: newMembers };
       });
-    });
-  }, [result, roleNameList]);
+    },
+    [result, roleNameList],
+  );
 
   // --- Reshuffle roles only (keep groups) ---
   const handleReshuffleRoles = useCallback(() => {
@@ -392,10 +443,16 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
     setLockedGroups(new Set());
   }, []);
 
-  const loadHistory = useCallback((idx: number) => {
-    const item = history[idx];
-    if (item) { setResult(item); setLockedGroups(new Set()); }
-  }, [history]);
+  const loadHistory = useCallback(
+    (idx: number) => {
+      const item = history[idx];
+      if (item) {
+        setResult(item);
+        setLockedGroups(new Set());
+      }
+    },
+    [history],
+  );
 
   // --- Copy to clipboard ---
   const handleCopy = useCallback(() => {
@@ -403,12 +460,14 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
     const text = result
       .map((g) => {
         const header = g.leaderName ? `[${g.label}] (모둠장: ${g.leaderName})` : `[${g.label}]`;
-        const members = g.members.map((m) => {
-          let line = `  ${m.number != null ? `${m.number}번 ` : ''}${m.name}`;
-          if (m.name === g.leaderName) line += ' ★';
-          if (m.role) line += ` (${m.role})`;
-          return line;
-        }).join('\n');
+        const members = g.members
+          .map((m) => {
+            let line = `  ${m.number != null ? `${m.number}번 ` : ''}${m.name}`;
+            if (m.name === g.leaderName) line += ' ★';
+            if (m.role) line += ` (${m.role})`;
+            return line;
+          })
+          .join('\n');
         return `${header}\n${members}`;
       })
       .join('\n\n');
@@ -435,7 +494,9 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
         }
       } else {
         // 브라우저 환경: Blob 다운로드
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -455,7 +516,10 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
     try {
       const { exportGroupingToHwpx } = await import('@infrastructure/export/HwpxExporter');
       const raw = await exportGroupingToHwpx(result);
-      const buffer = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
+      const buffer = raw.buffer.slice(
+        raw.byteOffset,
+        raw.byteOffset + raw.byteLength,
+      ) as ArrayBuffer;
 
       if (window.electronAPI?.showSaveDialog && window.electronAPI?.writeFile) {
         const saved = await window.electronAPI.showSaveDialog({
@@ -480,13 +544,27 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
     }
   }, [result, handleCopy]);
 
-  const shortcuts = useMemo<KeyboardShortcut[]>(() => [
-    { key: ' ', label: '편성', description: '모둠 편성 실행', handler: result ? handleReshuffle : handleAssign },
-    { key: 'Enter', label: '편성', description: '모둠 편성 실행', handler: result ? handleReshuffle : handleAssign },
-    { key: 'r', label: '초기화', description: '결과 초기화', handler: handleReset },
-  ], [result, handleReshuffle, handleAssign, handleReset]);
+  const shortcuts = useMemo<KeyboardShortcut[]>(
+    () => [
+      {
+        key: ' ',
+        label: '편성',
+        description: '모둠 편성 실행',
+        handler: result ? handleReshuffle : handleAssign,
+      },
+      {
+        key: 'Enter',
+        label: '편성',
+        description: '모둠 편성 실행',
+        handler: result ? handleReshuffle : handleAssign,
+      },
+      { key: 'r', label: '초기화', description: '결과 초기화', handler: handleReset },
+    ],
+    [result, handleReshuffle, handleAssign, handleReset],
+  );
 
-  const canAssign = totalMembers >= 2 && effectiveGroupCount >= 1 && !isAnimating && constraintErrors.length === 0;
+  const canAssign =
+    totalMembers >= 2 && effectiveGroupCount >= 1 && !isAnimating && constraintErrors.length === 0;
 
   // All student names for tagging UI
   const allStudentNames = useMemo(() => {
@@ -495,21 +573,50 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
     }
     if (selectedRosterId?.startsWith('tc:')) {
       const tc = teachingClasses.find((c) => c.id === selectedRosterId.slice(3));
-      return tc?.students.filter(isStudentActive).map((s) => s.name?.trim() ? s.name : `${s.number}번`) ?? [];
+      return (
+        tc?.students
+          .filter(isStudentActive)
+          .map((s) => (s.name?.trim() ? s.name : `${s.number}번`)) ?? []
+      );
     }
     const roster = rosters.find((r) => r.id === selectedRosterId);
     return roster?.studentNames.filter((n) => n.trim()) ?? [];
   }, [dataSource, students, selectedRosterId, teachingClasses, rosters]);
 
-  const genderLabel = (g?: Gender) => g === 'M' ? '♂' : g === 'F' ? '♀' : '';
-  const genderColor = (g?: Gender) => g === 'M' ? 'bg-blue-500/20 text-blue-400 border-blue-400/40' : g === 'F' ? 'bg-pink-500/20 text-pink-400 border-pink-400/40' : 'bg-sp-surface text-sp-muted border-sp-border';
-  const levelLabel = (l?: Level) => l === 'high' ? '상' : l === 'mid' ? '중' : l === 'low' ? '하' : '';
-  const levelColor = (l?: Level) => l === 'high' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-400/40' : l === 'mid' ? 'bg-amber-500/20 text-amber-400 border-amber-400/40' : l === 'low' ? 'bg-orange-500/20 text-orange-400 border-orange-400/40' : 'bg-sp-surface text-sp-muted border-sp-border';
+  const genderLabel = (g?: Gender) => (g === 'M' ? '♂' : g === 'F' ? '♀' : '');
+  const genderColor = (g?: Gender) =>
+    g === 'M'
+      ? 'bg-blue-500/20 text-blue-400 border-blue-400/40'
+      : g === 'F'
+        ? 'bg-pink-500/20 text-pink-400 border-pink-400/40'
+        : 'bg-sp-surface text-sp-muted border-sp-border';
+  const levelLabel = (l?: Level) =>
+    l === 'high' ? '상' : l === 'mid' ? '중' : l === 'low' ? '하' : '';
+  const levelColor = (l?: Level) =>
+    l === 'high'
+      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-400/40'
+      : l === 'mid'
+        ? 'bg-amber-500/20 text-amber-400 border-amber-400/40'
+        : l === 'low'
+          ? 'bg-orange-500/20 text-orange-400 border-orange-400/40'
+          : 'bg-sp-surface text-sp-muted border-sp-border';
 
-  const hasAdvancedNonDefault = leaderMethod !== 'none' || roleAssignMode !== 'none' || genderMode !== 'none' || balanceLevel || togetherInput.trim().length > 0 || apartInput.trim().length > 0;
+  const hasAdvancedNonDefault =
+    leaderMethod !== 'none' ||
+    roleAssignMode !== 'none' ||
+    genderMode !== 'none' ||
+    balanceLevel ||
+    togetherInput.trim().length > 0 ||
+    apartInput.trim().length > 0;
 
   return (
-    <ToolLayout title="모둠 편성기" emoji="👥" onBack={onBack} isFullscreen={isFullscreen} shortcuts={shortcuts}>
+    <ToolLayout
+      title="모둠 편성기"
+      emoji="👥"
+      onBack={onBack}
+      isFullscreen={isFullscreen}
+      shortcuts={shortcuts}
+    >
       <style>{`
         @keyframes groupFadeIn {
           from { opacity: 0; transform: translateY(12px); }
@@ -520,20 +627,20 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
         }
       `}</style>
       <div className="w-full max-w-5xl mx-auto flex flex-col gap-5">
-
         {/* === Settings Panel === */}
         {!result && (
           <>
             {/* CARD 1 — Primary */}
             <div className="bg-sp-card rounded-2xl border border-sp-border">
-
               {/* Section A: Data source + student chips */}
               <div className="p-5">
                 <div className="flex gap-2 mb-4 justify-center">
-                  {([
-                    { key: 'students' as const, label: '👩‍🎓 우리 반' },
-                    { key: 'classRoster' as const, label: '📋 다른 반' },
-                  ] as const).map((src) => (
+                  {(
+                    [
+                      { key: 'students' as const, label: '👩‍🎓 우리 반' },
+                      { key: 'classRoster' as const, label: '📋 다른 반' },
+                    ] as const
+                  ).map((src) => (
                     <button
                       key={src.key}
                       onClick={() => setDataSource(src.key)}
@@ -551,10 +658,8 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                 {dataSource === 'students' && (
                   <div>
                     {students.filter(isStudentActive).length === 0 ? (
-                      <div className="flex flex-col items-center gap-3 py-6 text-center">
-                        <span className="text-3xl">🏫</span>
-                        <p className="text-sm text-sp-muted">학급 자리 배치 메뉴에서 학생을 등록하면<br/>자동으로 불러와집니다</p>
-                      </div>
+                      /* roster-sample-data-removal Phase 1 — 학급 모드 학생 0명 공용 가드 */
+                      <RosterEmptyState context="grouping" />
                     ) : (
                       <>
                         <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
@@ -599,11 +704,15 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
               <div className="border-t border-sp-border/40 p-5">
                 <div className="flex items-center justify-center gap-4">
                   <button
-                    onClick={sizeMode === 'byCount'
-                      ? () => setGroupCount((v) => Math.max(2, v - 1))
-                      : () => setMembersPerGroup((v) => Math.max(2, v - 1))}
+                    onClick={
+                      sizeMode === 'byCount'
+                        ? () => setGroupCount((v) => Math.max(2, v - 1))
+                        : () => setMembersPerGroup((v) => Math.max(2, v - 1))
+                    }
                     className="w-10 h-10 rounded-xl bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text transition-all flex items-center justify-center text-xl font-bold"
-                  >-</button>
+                  >
+                    -
+                  </button>
                   <input
                     type="number"
                     min={2}
@@ -617,23 +726,35 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                     className="w-20 py-1 rounded-xl bg-transparent text-sp-text text-3xl text-center font-black focus:outline-none"
                   />
                   <button
-                    onClick={sizeMode === 'byCount'
-                      ? () => setGroupCount((v) => Math.min(totalMembers || 20, v + 1))
-                      : () => setMembersPerGroup((v) => Math.min(totalMembers || 20, v + 1))}
+                    onClick={
+                      sizeMode === 'byCount'
+                        ? () => setGroupCount((v) => Math.min(totalMembers || 20, v + 1))
+                        : () => setMembersPerGroup((v) => Math.min(totalMembers || 20, v + 1))
+                    }
                     className="w-10 h-10 rounded-xl bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text transition-all flex items-center justify-center text-xl font-bold"
-                  >+</button>
+                  >
+                    +
+                  </button>
                 </div>
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <button
                     onClick={() => setSizeMode(sizeMode === 'byCount' ? 'bySize' : 'byCount')}
                     className="text-sm text-sp-muted hover:text-sp-accent transition-colors cursor-pointer"
                   >
-                    <span className={sizeMode === 'byCount' ? 'text-sp-accent font-semibold' : ''}>모둠</span>
+                    <span className={sizeMode === 'byCount' ? 'text-sp-accent font-semibold' : ''}>
+                      모둠
+                    </span>
                     <span className="mx-1 text-sp-border">/</span>
-                    <span className={sizeMode === 'bySize' ? 'text-sp-accent font-semibold' : ''}>명/모둠</span>
+                    <span className={sizeMode === 'bySize' ? 'text-sp-accent font-semibold' : ''}>
+                      명/모둠
+                    </span>
                   </button>
                   <span className="text-sm text-sp-muted ml-2">
-                    → {effectiveGroupCount}모둠 × {totalMembers > 0 ? Math.ceil(totalMembers / Math.max(1, effectiveGroupCount)) : 0}명
+                    → {effectiveGroupCount}모둠 ×{' '}
+                    {totalMembers > 0
+                      ? Math.ceil(totalMembers / Math.max(1, effectiveGroupCount))
+                      : 0}
+                    명
                   </span>
                 </div>
               </div>
@@ -642,13 +763,17 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
               <div className="border-t border-sp-border/40 px-5 py-4 space-y-3">
                 {/* Line 1: 편성 방법 */}
                 <div>
-                  <p className="text-xs font-medium text-sp-muted/70 uppercase tracking-wider mb-2">편성 방법</p>
+                  <p className="text-xs font-medium text-sp-muted/70 uppercase tracking-wider mb-2">
+                    편성 방법
+                  </p>
                   <div className="flex gap-1 flex-wrap">
-                    {([
-                      { key: 'random' as const, label: '🎲 무작위' },
-                      { key: 'number' as const, label: '🔢 번호순' },
-                      { key: 'name' as const, label: '가나다' },
-                    ] as const).map((m) => (
+                    {(
+                      [
+                        { key: 'random' as const, label: '🎲 무작위' },
+                        { key: 'number' as const, label: '🔢 번호순' },
+                        { key: 'name' as const, label: '가나다' },
+                      ] as const
+                    ).map((m) => (
                       <button
                         key={m.key}
                         onClick={() => setMethod(m.key)}
@@ -666,15 +791,19 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
 
                 {/* Line 2: 배분 방식 */}
                 <div>
-                  <p className="text-xs font-medium text-sp-muted/70 uppercase tracking-wider mb-1.5">배분 방식</p>
+                  <p className="text-xs font-medium text-sp-muted/70 uppercase tracking-wider mb-1.5">
+                    배분 방식
+                  </p>
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Gender mode pills */}
                     <div className="flex gap-1">
-                      {([
-                        { key: 'none' as const, label: '무관' },
-                        { key: 'mix' as const, label: '혼합 배분' },
-                        { key: 'same' as const, label: '동성 모둠' },
-                      ] as const).map((opt) => (
+                      {(
+                        [
+                          { key: 'none' as const, label: '무관' },
+                          { key: 'mix' as const, label: '혼합 배분' },
+                          { key: 'same' as const, label: '동성 모둠' },
+                        ] as const
+                      ).map((opt) => (
                         <button
                           key={opt.key}
                           onClick={() => setGenderMode(opt.key)}
@@ -697,12 +826,16 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                       className="flex items-center gap-1.5"
                     >
                       <span className="text-xs text-sp-muted">수준 균등 배분</span>
-                      <span className={`relative w-8 h-4 rounded-full transition-colors inline-block ${
-                        balanceLevel ? 'bg-sp-accent' : 'bg-sp-border'
-                      }`}>
-                        <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-                          balanceLevel ? 'translate-x-4' : 'translate-x-0'
-                        }`} />
+                      <span
+                        className={`relative w-8 h-4 rounded-full transition-colors inline-block ${
+                          balanceLevel ? 'bg-sp-accent' : 'bg-sp-border'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                            balanceLevel ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
                       </span>
                     </button>
                   </div>
@@ -733,11 +866,13 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                   <div className="px-5 py-4">
                     <p className="text-xs text-sp-muted mb-2">모둠장 자동 지정</p>
                     <div className="flex gap-1.5 flex-wrap">
-                      {([
-                        { key: 'none' as const, label: '없음' },
-                        { key: 'first-number' as const, label: '1번(낮은 번호)' },
-                        { key: 'random' as const, label: '무작위' },
-                      ] as const).map((opt) => (
+                      {(
+                        [
+                          { key: 'none' as const, label: '없음' },
+                          { key: 'first-number' as const, label: '1번(낮은 번호)' },
+                          { key: 'random' as const, label: '무작위' },
+                        ] as const
+                      ).map((opt) => (
                         <button
                           key={opt.key}
                           onClick={() => setLeaderMethod(opt.key)}
@@ -758,11 +893,13 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                     <div className="flex items-center gap-3 mb-2">
                       <p className="text-xs text-sp-muted">역할 배정</p>
                       <div className="flex gap-1.5">
-                        {([
-                          { key: 'none' as const, label: '없음' },
-                          { key: 'random' as const, label: '🎲 자동' },
-                          { key: 'manual' as const, label: '✏️ 직접' },
-                        ] as const).map((opt) => (
+                        {(
+                          [
+                            { key: 'none' as const, label: '없음' },
+                            { key: 'random' as const, label: '🎲 자동' },
+                            { key: 'manual' as const, label: '✏️ 직접' },
+                          ] as const
+                        ).map((opt) => (
                           <button
                             key={opt.key}
                             onClick={() => setRoleAssignMode(opt.key)}
@@ -782,22 +919,47 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                         <label className="text-xs text-sp-muted mb-2 block">역할 목록</label>
                         <div className="space-y-1.5">
                           {roleConfigs.map((role, i) => (
-                            <div key={i} className="flex items-center gap-2 bg-sp-surface/40 rounded-lg px-2.5 py-1.5">
-                              <span className="text-sm font-medium text-sp-text flex-1 min-w-0 truncate">{role.name}</span>
+                            <div
+                              key={i}
+                              className="flex items-center gap-2 bg-sp-surface/40 rounded-lg px-2.5 py-1.5"
+                            >
+                              <span className="text-sm font-medium text-sp-text flex-1 min-w-0 truncate">
+                                {role.name}
+                              </span>
                               <div className="flex items-center gap-1 shrink-0">
                                 <button
-                                  onClick={() => setRoleConfigs((prev) => prev.map((r, j) => j === i ? { ...r, count: Math.max(1, r.count - 1) } : r))}
+                                  onClick={() =>
+                                    setRoleConfigs((prev) =>
+                                      prev.map((r, j) =>
+                                        j === i ? { ...r, count: Math.max(1, r.count - 1) } : r,
+                                      ),
+                                    )
+                                  }
                                   className="w-6 h-6 rounded bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text text-xs flex items-center justify-center"
-                                >-</button>
-                                <span className="w-6 text-center text-sm text-sp-text font-medium">{role.count}</span>
+                                >
+                                  -
+                                </button>
+                                <span className="w-6 text-center text-sm text-sp-text font-medium">
+                                  {role.count}
+                                </span>
                                 <button
-                                  onClick={() => setRoleConfigs((prev) => prev.map((r, j) => j === i ? { ...r, count: r.count + 1 } : r))}
+                                  onClick={() =>
+                                    setRoleConfigs((prev) =>
+                                      prev.map((r, j) =>
+                                        j === i ? { ...r, count: r.count + 1 } : r,
+                                      ),
+                                    )
+                                  }
                                   className="w-6 h-6 rounded bg-sp-surface border border-sp-border text-sp-muted hover:text-sp-text text-xs flex items-center justify-center"
-                                >+</button>
+                                >
+                                  +
+                                </button>
                                 <span className="text-caption text-sp-muted w-4">명</span>
                               </div>
                               <button
-                                onClick={() => setRoleConfigs((prev) => prev.filter((_, j) => j !== i))}
+                                onClick={() =>
+                                  setRoleConfigs((prev) => prev.filter((_, j) => j !== i))
+                                }
                                 className="w-6 h-6 rounded text-sp-muted/40 hover:text-red-400 flex items-center justify-center shrink-0"
                                 title="삭제"
                               >
@@ -813,7 +975,10 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                             onChange={(e) => setNewRoleName(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && newRoleName.trim()) {
-                                setRoleConfigs((prev) => [...prev, { name: newRoleName.trim(), count: 1 }]);
+                                setRoleConfigs((prev) => [
+                                  ...prev,
+                                  { name: newRoleName.trim(), count: 1 },
+                                ]);
                                 setNewRoleName('');
                               }
                             }}
@@ -823,7 +988,10 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                           <button
                             onClick={() => {
                               if (newRoleName.trim()) {
-                                setRoleConfigs((prev) => [...prev, { name: newRoleName.trim(), count: 1 }]);
+                                setRoleConfigs((prev) => [
+                                  ...prev,
+                                  { name: newRoleName.trim(), count: 1 },
+                                ]);
                                 setNewRoleName('');
                               }
                             }}
@@ -836,8 +1004,12 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex flex-wrap gap-1">
                             {roleConfigs.map((r, i) => (
-                              <span key={i} className="text-caption px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-400/30">
-                                {r.name}{r.count > 1 ? ` ×${r.count}` : ''}
+                              <span
+                                key={i}
+                                className="text-caption px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-400/30"
+                              >
+                                {r.name}
+                                {r.count > 1 ? ` ×${r.count}` : ''}
                               </span>
                             ))}
                           </div>
@@ -846,18 +1018,22 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                           </span>
                         </div>
                         {(() => {
-                          const perGroup = Math.ceil(totalMembers / Math.max(1, effectiveGroupCount));
+                          const perGroup = Math.ceil(
+                            totalMembers / Math.max(1, effectiveGroupCount),
+                          );
                           if (totalRoleSlots > 0 && totalRoleSlots < perGroup) {
                             return (
                               <p className="text-caption text-amber-400 mt-1">
-                                역할 슬롯({totalRoleSlots}) &lt; 모둠 인원({perGroup}): 일부 멤버는 역할 없이 배정됩니다
+                                역할 슬롯({totalRoleSlots}) &lt; 모둠 인원({perGroup}): 일부 멤버는
+                                역할 없이 배정됩니다
                               </p>
                             );
                           }
                           if (totalRoleSlots > perGroup) {
                             return (
                               <p className="text-caption text-amber-400 mt-1">
-                                역할 슬롯({totalRoleSlots}) &gt; 모둠 인원({perGroup}): 한 명이 여러 역할을 맡습니다
+                                역할 슬롯({totalRoleSlots}) &gt; 모둠 인원({perGroup}): 한 명이 여러
+                                역할을 맡습니다
                               </p>
                             );
                           }
@@ -882,21 +1058,25 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                       {showGenderTag && (
                         <div>
                           <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
-                            {allStudentNames.filter((n) => !excludedNames.has(n)).map((name) => {
-                              const g = genderTags[name];
-                              return (
-                                <button
-                                  key={name}
-                                  onClick={() => cycleGender(name)}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${genderColor(g)}`}
-                                >
-                                  {g ? `${genderLabel(g)} ` : ''}{name}
-                                </button>
-                              );
-                            })}
+                            {allStudentNames
+                              .filter((n) => !excludedNames.has(n))
+                              .map((name) => {
+                                const g = genderTags[name];
+                                return (
+                                  <button
+                                    key={name}
+                                    onClick={() => cycleGender(name)}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${genderColor(g)}`}
+                                  >
+                                    {g ? `${genderLabel(g)} ` : ''}
+                                    {name}
+                                  </button>
+                                );
+                              })}
                           </div>
                           <p className="mt-2 text-caption text-sp-muted/60 text-center">
-                            미지정 학생은 성별 균형 배분에서 제외됩니다. 이 정보는 저장되지 않습니다.
+                            미지정 학생은 성별 균형 배분에서 제외됩니다. 이 정보는 저장되지
+                            않습니다.
                           </p>
                         </div>
                       )}
@@ -918,21 +1098,25 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                       {showLevelTag && (
                         <div>
                           <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
-                            {allStudentNames.filter((n) => !excludedNames.has(n)).map((name) => {
-                              const l = levelTags[name];
-                              return (
-                                <button
-                                  key={name}
-                                  onClick={() => cycleLevel(name)}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${levelColor(l)}`}
-                                >
-                                  {l ? `[${levelLabel(l)}] ` : ''}{name}
-                                </button>
-                              );
-                            })}
+                            {allStudentNames
+                              .filter((n) => !excludedNames.has(n))
+                              .map((name) => {
+                                const l = levelTags[name];
+                                return (
+                                  <button
+                                    key={name}
+                                    onClick={() => cycleLevel(name)}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${levelColor(l)}`}
+                                  >
+                                    {l ? `[${levelLabel(l)}] ` : ''}
+                                    {name}
+                                  </button>
+                                );
+                              })}
                           </div>
                           <p className="mt-2 text-caption text-sp-muted/60 text-center">
-                            미지정 학생은 수준 균형 배분에서 제외됩니다. 이 정보는 저장되지 않습니다.
+                            미지정 학생은 수준 균형 배분에서 제외됩니다. 이 정보는 저장되지
+                            않습니다.
                           </p>
                         </div>
                       )}
@@ -1061,15 +1245,17 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
             </div>
 
             {/* Group cards grid */}
-            <div className={`grid gap-4 ${
-              result.length <= 3
-                ? 'grid-cols-1 sm:grid-cols-3'
-                : result.length <= 4
-                  ? 'grid-cols-2'
-                  : result.length <= 6
-                    ? 'grid-cols-2 lg:grid-cols-3'
-                    : 'grid-cols-2 lg:grid-cols-4'
-            }`}>
+            <div
+              className={`grid gap-4 ${
+                result.length <= 3
+                  ? 'grid-cols-1 sm:grid-cols-3'
+                  : result.length <= 4
+                    ? 'grid-cols-2'
+                    : result.length <= 6
+                      ? 'grid-cols-2 lg:grid-cols-3'
+                      : 'grid-cols-2 lg:grid-cols-4'
+              }`}
+            >
               {result.map((group, idx) => {
                 const colorIdx = idx % GROUP_COLORS.length;
                 const isLocked = lockedGroups.has(idx);
@@ -1120,33 +1306,55 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                                 {member.number}
                               </span>
                             )}
-                            <span className={`text-sm font-medium ${isLeader ? 'text-amber-300' : 'text-sp-text'}`}>
+                            <span
+                              className={`text-sm font-medium ${isLeader ? 'text-amber-300' : 'text-sp-text'}`}
+                            >
                               {member.name}
                             </span>
-                            {isLeader && <span className="text-amber-400 text-caption shrink-0">★</span>}
+                            {isLeader && (
+                              <span className="text-amber-400 text-caption shrink-0">★</span>
+                            )}
                             <span className="flex items-center gap-1 ml-auto shrink-0">
                               {member.role && (
                                 <span
                                   className={`text-caption px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-400/30 ${
-                                    roleAssignMode === 'manual' ? 'cursor-pointer hover:bg-violet-500/25' : ''
+                                    roleAssignMode === 'manual'
+                                      ? 'cursor-pointer hover:bg-violet-500/25'
+                                      : ''
                                   }`}
-                                  onClick={roleAssignMode === 'manual' ? (e) => { e.stopPropagation(); handleCycleRole(idx, mIdx); } : undefined}
-                                  title={roleAssignMode === 'manual' ? '클릭하여 역할 변경' : undefined}
+                                  onClick={
+                                    roleAssignMode === 'manual'
+                                      ? (e) => {
+                                          e.stopPropagation();
+                                          handleCycleRole(idx, mIdx);
+                                        }
+                                      : undefined
+                                  }
+                                  title={
+                                    roleAssignMode === 'manual' ? '클릭하여 역할 변경' : undefined
+                                  }
                                 >
                                   {member.role}
                                 </span>
                               )}
-                              {!member.role && roleAssignMode === 'manual' && roleConfigs.length > 0 && (
-                                <button
-                                  className="text-caption px-1.5 py-0.5 rounded bg-sp-surface text-sp-muted/50 border border-sp-border/50 hover:text-sp-muted hover:border-sp-border"
-                                  onClick={(e) => { e.stopPropagation(); handleCycleRole(idx, mIdx); }}
-                                  title="역할 배정"
-                                >
-                                  +역할
-                                </button>
-                              )}
+                              {!member.role &&
+                                roleAssignMode === 'manual' &&
+                                roleConfigs.length > 0 && (
+                                  <button
+                                    className="text-caption px-1.5 py-0.5 rounded bg-sp-surface text-sp-muted/50 border border-sp-border/50 hover:text-sp-muted hover:border-sp-border"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCycleRole(idx, mIdx);
+                                    }}
+                                    title="역할 배정"
+                                  >
+                                    +역할
+                                  </button>
+                                )}
                               {member.gender && (
-                                <span className={`text-caption ${member.gender === 'M' ? 'text-blue-400' : 'text-pink-400'}`}>
+                                <span
+                                  className={`text-caption ${member.gender === 'M' ? 'text-blue-400' : 'text-pink-400'}`}
+                                >
                                   {genderLabel(member.gender)}
                                 </span>
                               )}
@@ -1182,9 +1390,7 @@ export function ToolGrouping({ onBack, isFullscreen }: ToolGroupingProps) {
                 </button>
               )}
               {lockedGroups.size > 0 && (
-                <p className="text-xs text-amber-400">
-                  🔒 {lockedGroups.size}개 모둠 고정
-                </p>
+                <p className="text-xs text-amber-400">🔒 {lockedGroups.size}개 모둠 고정</p>
               )}
             </div>
 

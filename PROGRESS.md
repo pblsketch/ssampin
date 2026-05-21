@@ -9,7 +9,9 @@ v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`).
 **다음 릴리즈 v2.0.7 후보 묶음 (사용자 결정 2026-05-21: 단독 X, 다른 PDCA와 묶음 대기)**:
 
 1. ✅ notification-modal-stacking-fix Phase 0~4 — Match Rate 97% PASS, main `3cc8c88` (2026-05-21)
-2. ⏳ 다른 기능 PDCA들이 추가되면 함께 묶음 릴리즈
+2. ✅ realtime-tool-student-page-health Phase 0+1+2 — 학생 페이지 WS 헬스 인디케이터 + KB Q&A 3건 + 회귀 5건 (2026-05-21)
+3. ✅ **roster-sample-data-removal Phase 1+2+3** — Match Rate 99.0% PASS (2026-05-21). 사용자 피드백 "담임 업무에 있는 학생들이 내 학생들이 아니야" 해소. SAMPLE_STUDENTS 35명 자동 채움 제거 + 6중 안전 가드(A·B·C·D·E·F·G) 마이그레이션 + 9개 화면 EmptyState 가드 + amber 경고 배너 + 사이드바 빨간 점 + 마이그레이션 토스트. 검증 게이트 4/4: tsc 0 / lint 0 / vitest 1566 (+63) / regression 24/24 (+2 메타테스트). Dev 도구 `npm run electron:dev:fresh` 추가 (별도 데이터 폴더). [Plan v1.2](docs/01-plan/features/roster-sample-data-removal.plan.md) · [Design v1.2](docs/02-design/features/roster-sample-data-removal.design.md) · [Analysis 99.0%](docs/03-analysis/roster-sample-data-removal.analysis.md)
+4. ⏳ 다른 기능 PDCA들이 추가되면 함께 묶음 릴리즈
 
 ## Completed (최근)
 
@@ -26,6 +28,7 @@ v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`).
 
 ## In Progress
 
+- 🟢 **realtime-tool-student-page-health PDCA 완료 + 수동 검증 통과 (2026-05-21, main 미커밋)** — 사용자 신고 "워드클라우드·주관식 설문 학생이 응답해도 0명·응답 미수신" 진단 결과 처방. 5단계 흐름 진단으로 (a) v2.0.4 이하 학생 페이지 누적 상태 노출 + (b) WS 미연결 침묵 실패 식별. Phase 0: KB Q&A 3건 추가 (5단계 진단 / 연결 끊김 표시 / 학교 Wi-Fi 화이트리스트 요청 템플릿). Phase 1: 신규 공용 모듈 `electron/ipc/_studentPageChrome.ts` (145줄, 3 export) + 4개 학생 페이지(워드클라우드·주관식·객관식·복합)에 우상단 연결 상태 칩(4상태 색+텍스트, role=status aria-live=polite, 펄스 애니메이션, safe-area-inset 가드) + submit silent no-op 차단. Phase 2: regression-grep-check 신규 5건 (#18~#22). 검증 게이트 4/4: tsc 0 / lint 0 / test 1510 / regression 22/22 (17→22). gap-detector 98% PASS. **사용자 수동 검증 완료 (2026-05-21)**: 4개 도구 학생 페이지 6 시나리오 (정상/제출/끊김/재연결/dim/SE 위치) + 챗봇 KB Q&A 모두 정상 동작 확인. **빌드 노트**: `npm run electron:dev` 는 main process(electron/\*) 코드를 watch 하지 않음 — 학생 페이지 HTML 변경 시 `node scripts/build-electron.mjs` 재실행 + electron 재시작 필수. **다음: git commit + v2.0.7 묶음 릴리즈 (notification-modal-stacking-fix + roster-sample-data-removal 동반)**. [Plan v1.1](docs/01-plan/features/realtime-tool-student-page-health.plan.md) · [Design v1.0](docs/02-design/features/realtime-tool-student-page-health.design.md) · [Analysis](docs/03-analysis/realtime-tool-student-page-health.analysis.md) · [Report](docs/04-report/features/realtime-tool-student-page-health.report.md)
 - 🟢 **notification-modal-stacking-fix PDCA 완료 — Match Rate 97% PASS (2026-05-21, main 5 commits)** — 사용자 신고 "처음 일정 알림이 떠 있을 때 X 안 눌리고 창을 껐다 켜야 누름" 핵심 해소. Phase 0(`4136527`) 핫픽스 + Phase 1(`396b5b4`) EventPopup Modal 베이스 마이그레이션 + Phase 2(`3a9b3a9`) ModalCoordinator 우선순위 큐 인프라 신설 + Phase 3(`50f6c6b`) 6개 모달 큐 등록 + SharePromptOverlay Modal 통합 + Phase 4(`003eb1a`) 메타테스트 18건 + REGRESSION 9→17. 검증 게이트 4/4: tsc 0 / lint 0 / test 1503 (+46) / regression 17/17. **다음: v2.0.7 릴리즈 (CLAUDE.md 8단계 워크플로우)**. [Plan v1.1](docs/01-plan/features/notification-modal-stacking-fix.plan.md) · [Design v1.1](docs/02-design/features/notification-modal-stacking-fix.design.md) · [Report](docs/04-report/features/notification-modal-stacking-fix.report.md)
 - **multi-date-attendance Check 완료 (2026-05-20, Match Rate 96.7% PASS)** — `feature/multi-date-attendance` 브랜치 6 commits + 분석 보고서 1건. gap-detector 결과 모든 HIGH 항목 100%, LOW 갭 3건 cosmetic. Iterate 불필요. 다음: `/pdca report multi-date-attendance`. [Analysis](docs/03-analysis/multi-date-attendance.analysis.md)
 - **freestyle-seating Phase 1~5a + UX 종합 개선 14건 + PDF 출력 완료 (2026-05-20, main 단일 워킹트리)** — Playwright MCP 실사용 점검으로 결함 발견·즉시 수정 누적:

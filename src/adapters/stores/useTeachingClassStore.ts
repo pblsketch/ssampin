@@ -1,11 +1,19 @@
 import { create } from 'zustand';
-import type { TeachingClass, TeachingClassStudent, TeachingClassSeating } from '@domain/entities/TeachingClass';
+import type {
+  TeachingClass,
+  TeachingClassStudent,
+  TeachingClassSeating,
+} from '@domain/entities/TeachingClass';
 import { studentKey } from '@domain/entities/TeachingClass';
 import type { StudentStatus } from '@domain/entities/Student';
 import { isStudentActive, normalizeStudentStatus } from '@domain/rules/studentActivity';
 import type { OddColumnMode } from '@domain/rules/seatingLayoutRules';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
-import type { AttendanceRecord, AttendanceStatus, StudentAttendance } from '@domain/entities/Attendance';
+import type {
+  AttendanceRecord,
+  AttendanceStatus,
+  StudentAttendance,
+} from '@domain/entities/Attendance';
 import { teachingClassRepository } from '@adapters/di/container';
 import { ManageTeachingClasses } from '@usecases/classManagement/ManageTeachingClasses';
 import { ManageCurriculumProgress } from '@usecases/classManagement/ManageCurriculumProgress';
@@ -68,7 +76,11 @@ interface TeachingClassState {
   ) => Promise<void>;
   updateProgressEntry: (entry: ProgressEntry) => Promise<void>;
   deleteProgressEntry: (id: string) => Promise<void>;
-  getAttendanceRecord: (classId: string, date: string, period: number) => AttendanceRecord | undefined;
+  getAttendanceRecord: (
+    classId: string,
+    date: string,
+    period: number,
+  ) => AttendanceRecord | undefined;
   saveAttendanceRecord: (record: AttendanceRecord) => Promise<void>;
   getDayAttendance: (classId: string, date: string) => readonly AttendanceRecord[];
   saveDayAttendance: (
@@ -79,12 +91,37 @@ interface TeachingClassState {
   // 좌석배치 액션
   initClassSeating: (classId: string, mode: 'sequential' | 'random') => Promise<void>;
   randomizeClassSeating: (classId: string) => Promise<void>;
-  swapClassSeats: (classId: string, r1: number, c1: number, r2: number, c2: number) => Promise<void>;
+  swapClassSeats: (
+    classId: string,
+    r1: number,
+    c1: number,
+    r2: number,
+    c2: number,
+  ) => Promise<void>;
   clearClassSeating: (classId: string) => Promise<void>;
   resizeClassGrid: (classId: string, rows: number, cols: number) => Promise<void>;
   toggleClassPairMode: (classId: string) => Promise<void>;
   toggleClassOddColumnMode: (classId: string) => Promise<void>;
-  updateStudentStatus: (classId: string, sKey: string, status: StudentStatus, statusNote?: string) => Promise<void>;
+  updateStudentStatus: (
+    classId: string,
+    sKey: string,
+    status: StudentStatus,
+    statusNote?: string,
+  ) => Promise<void>;
+
+  /**
+   * roster-sample-data-removal Phase 2 — 외부 참조 검사 (가드 D).
+   *
+   * 담임/수업반 classes의 students에 SAMPLE 명단과 동일한 이름이 박혀 있는지
+   * **보수적**으로 카운트한다. studentNumber 1~35만 매칭하면 일반 사용자 반과
+   * 충돌할 가능성이 크기 때문에, "이름"이 SAMPLE_ROSTER_SIGNATURE의 이름과
+   * 정확히 일치할 때만 카운트한다. 한 학생이 여러 반에 동일 이름으로 박혀 있으면
+   * 그만큼 카운트(unique by class+number).
+   *
+   * attendanceRecords는 학생 이름 정보를 보유하지 않으므로 본 검사에서 제외한다.
+   * → false-positive 없는 보수적 양성 거부 정책.
+   */
+  hasStudentReferencesByName: (names: readonly string[]) => number;
 }
 
 export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
@@ -159,7 +196,13 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
           if (orderA !== orderB) return orderA - orderB;
           return a.createdAt.localeCompare(b.createdAt);
         });
-        set({ classes: sorted, progressEntries, attendanceRecords, loaded: true, loadFailed: false });
+        set({
+          classes: sorted,
+          progressEntries,
+          attendanceRecords,
+          loaded: true,
+          loadFailed: false,
+        });
       } catch (err) {
         console.error('[TeachingClassStore] load failed:', err);
         set({ loaded: true, loadFailed: true });
@@ -327,7 +370,11 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         .map((id, index) => {
           const cls = classes.find((c) => c.id === id);
           if (!cls) return null;
-          const updated: TeachingClass = { ...cls, order: index, updatedAt: new Date().toISOString() };
+          const updated: TeachingClass = {
+            ...cls,
+            order: index,
+            updatedAt: new Date().toISOString(),
+          };
           return updated;
         })
         .filter((c): c is TeachingClass => c !== null);
@@ -490,7 +537,12 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         }
       }
 
-      const seating: TeachingClassSeating = { ...cls.seating, rows: newRows, cols: newCols, seats: newSeats };
+      const seating: TeachingClassSeating = {
+        ...cls.seating,
+        rows: newRows,
+        cols: newCols,
+        seats: newSeats,
+      };
       await applySeatingToGroup(classId, seating);
     },
 
@@ -684,6 +736,30 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       const merged: readonly AttendanceRecord[] = [...filtered, ...newRecords];
       await manageAttendance.saveAll(merged, true);
       set({ attendanceRecords: [...merged] });
+    },
+
+    /**
+     * roster-sample-data-removal Phase 2 — 외부 참조 검사 (가드 D).
+     *
+     * 모든 수업반/담임반 classes를 순회하면서 students[i].name이 입력 names 집합에
+     * 정확히 일치하는 학생의 수를 카운트한다. classId+studentNumber 조합으로
+     * unique 카운트하여 한 학생이 여러 컨테이너에 중복 박혀 있어도 1로 센다.
+     *
+     * 보수적 정책: 이름 정확 일치만 인정. studentNumber 1~35 매칭은 일반 사용자
+     * 반과 충돌할 위험이 크므로 사용하지 않는다.
+     */
+    hasStudentReferencesByName: (names) => {
+      if (names.length === 0) return 0;
+      const targetNames = new Set(names);
+      const matched = new Set<string>();
+      for (const cls of get().classes) {
+        for (const s of cls.students) {
+          if (targetNames.has(s.name)) {
+            matched.add(`${cls.id}#${s.number}`);
+          }
+        }
+      }
+      return matched.size;
     },
   };
 });
