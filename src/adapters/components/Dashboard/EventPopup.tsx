@@ -65,14 +65,14 @@ function EventItem({ event, categories }: EventItemProps) {
   return (
     <div className="flex items-start gap-3 p-3 rounded-lg bg-sp-bg/50 hover:bg-sp-bg transition-colors">
       <div className="flex items-center justify-center shrink-0 mt-0.5">
-        <span className={`material-symbols-outlined ${colors.text} text-icon-xl`}>
-          {icon}
-        </span>
+        <span className={`material-symbols-outlined ${colors.text} text-icon-xl`}>{icon}</span>
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-base font-medium text-sp-text truncate">
           {event.title}{' '}
-          <span className="text-sp-muted text-sm font-normal max-w-[100px] truncate inline-block align-bottom">[{categoryInfo.name}]</span>
+          <span className="text-sp-muted text-sm font-normal max-w-[100px] truncate inline-block align-bottom">
+            [{categoryInfo.name}]
+          </span>
         </p>
         {event.time && (
           <div className="flex items-center gap-1.5 mt-1 text-sm text-sp-muted">
@@ -105,19 +105,36 @@ export function EventPopup() {
 
   return (
     <>
-      {/* 오버레이 */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+      {/* 오버레이 — 클릭 시 dismiss (Phase 0 핫픽스 2026-05-21) */}
+      <div
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+        onClick={dismissPopup}
+        aria-hidden="true"
+      />
 
-      {/* 모달 */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-[480px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden flex flex-col">
+      {/* 모달 — wrapper는 pointer-events-none으로 다른 모달 클릭 통과 보장 (Phase 0) */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="w-full max-w-[480px] bg-sp-card rounded-2xl border border-sp-border shadow-2xl overflow-hidden flex flex-col pointer-events-auto">
           {/* 헤더 */}
           <div className="p-6 pb-2">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">🔔</span>
-              <h2 className="text-2xl font-bold tracking-tight text-sp-text">
-                오늘 행사 알림!
-              </h2>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-3xl shrink-0">🔔</span>
+                <h2 className="text-2xl font-bold tracking-tight text-sp-text truncate">
+                  오늘 행사 알림!
+                </h2>
+              </div>
+              {/* 닫기 X 버튼 — Phase 0 핫픽스 (사용자 신고 2026-05-21) */}
+              <button
+                type="button"
+                onClick={dismissPopup}
+                aria-label="닫기"
+                className="shrink-0 -mt-1 -mr-1 p-1 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                  close
+                </span>
+              </button>
             </div>
           </div>
 
@@ -126,9 +143,7 @@ export function EventPopup() {
             {/* 날짜 */}
             <div className="flex items-center gap-2 mb-4">
               <span className="text-lg">📅</span>
-              <h3 className="text-lg font-semibold text-sp-text">
-                {formatDate(today)}
-              </h3>
+              <h3 className="text-lg font-semibold text-sp-text">{formatDate(today)}</h3>
             </div>
 
             <div className="h-px bg-sp-border mb-4 w-full" />
@@ -162,9 +177,7 @@ export function EventPopup() {
                               dday <= 3 ? 'bg-red-500' : 'bg-orange-500'
                             }`}
                           />
-                          <span className="text-sm font-medium text-sp-text">
-                            {event.title}
-                          </span>
+                          <span className="text-sm font-medium text-sp-text">{event.title}</span>
                           <span className="text-xs text-sp-muted">
                             ({formatShortDate(event.date)})
                           </span>

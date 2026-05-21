@@ -1,13 +1,14 @@
 # Progress
 
-마지막 업데이트: 2026-05-20 00:00 KST
+마지막 업데이트: 2026-05-21 KST
 
 ## Current Version
 
-v2.0.5 (다음 minor 후보: v2.1.0 — multi-date-attendance + 묶음)
+v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`). 다음 패치 후보: **v2.0.7 — notification-modal-stacking-fix (Phase 0~4 통합)**.
 
 ## Completed (최근)
 
+- 🟢 **v2.0.6 묶음 릴리즈 완료 (2026-05-20, tag `v2.0.6`)** — 21커밋 풀세트 통합. multi-date-attendance(#60) + consultation Phase 1+2+3(#59,#61) + update-notification-controls(#57) + modal-scroll-overflow-fix(#58) + Notice 공용(#55) + Phase 2 마이그레이션·amber 가독성(#62). 검증 게이트 4/4 통과. 10 URL 302 (v2.0.6 + latest 각 5종). [Memory](.claude/projects/e--github-ssampin/memory/project_v206_bundled_release.md)
 - 🔴 **seating-constraints-and-cluster-fix 핫픽스 (사용자 신고 2026-05-20, main)** — 격자 → 모둠 비연동 모드에서 학생이 "알 수 없음" 표시 + 모든 학생이 미배정에 잔존 + 자리 바꾸기 누르면 GroupShuffleOverlay 무한 로딩되던 회귀 차단. 4-Phase: (1) `sanitizeGroups` 순수 함수, (2) `sanitizeSeating` 가 groups 정합화, (3) `changeLayout`/load 시 빈 모둠 자동 복구, (4) `shuffleGroupSeating` 격자 폴백 + Overlay 0-cell 안전망 + `confirmRandomize` groupCount 보정. 검증 게이트 4/4: tsc 0 / lint 0 / test 1457 / regression 9. [Plan](docs/01-plan/features/seating-constraints-and-cluster-fix.plan.md)
 - 🟢 **multi-date-attendance Do 단계 완료 (2026-05-20, feature/multi-date-attendance)** — 사용자 피드백 "여러 날짜 출결 일괄 입력" 대응. 3-Phase 모두 구현 + 4단계 검증 게이트 통과. 신규 `calendarUtils` (8 함수 31 unit) + `MultiDatePicker` (single/range/multi 3-mode, 29 unit) + 18단계 변경 + 4 메타테스트 파일(40 케이스). 1304/1304 tests (baseline +74), 9/9 regression. 다음: `/pdca analyze multi-date-attendance`. [Plan](docs/01-plan/features/multi-date-attendance.plan.md) · [Design](docs/02-design/features/multi-date-attendance.design.md)
 - 🔴 modal-scroll-overflow-fix 핫픽스 (사용자 신고, 2026-05-19): 13개 모달 wrapping div 에 `flex-1 min-h-0` 추가 + 회귀 차단 메타테스트. Match Rate 97%, 1156/1156 tests. [Report](docs/04-report/features/modal-scroll-overflow-fix.report.md)
@@ -20,6 +21,7 @@ v2.0.5 (다음 minor 후보: v2.1.0 — multi-date-attendance + 묶음)
 
 ## In Progress
 
+- 🔴 **notification-modal-stacking-fix Plan v1.1 확정 (2026-05-21)** — 사용자 신고 "처음 일정 알림이 떠 있을 때 X 안 눌리고 창을 껐다 켜야 누름"의 원인(EventPopup이 같은 z-50 모달인 UpdateNotification을 가림 + `pointer-events-none` 누락) 분석 완료. 5 Phase 통합 계획: Phase 0(핫픽스, X 추가 + pointer-events) + Phase 1(EventPopup Modal 마이그레이션) + Phase 2(ModalCoordinator 우선순위 큐) + Phase 3(6개 모달 큐 등록, OAuth 포함) + Phase 4(메타테스트). **v2.0.7 단일 패치 통합** (사용자 결정 2026-05-21). 다음: Phase 0 Do → main 머지 → Phase 1~4 Design 작성. [Plan v1.1](docs/01-plan/features/notification-modal-stacking-fix.plan.md)
 - **multi-date-attendance Check 완료 (2026-05-20, Match Rate 96.7% PASS)** — `feature/multi-date-attendance` 브랜치 6 commits + 분석 보고서 1건. gap-detector 결과 모든 HIGH 항목 100%, LOW 갭 3건 cosmetic. Iterate 불필요. 다음: `/pdca report multi-date-attendance`. [Analysis](docs/03-analysis/multi-date-attendance.analysis.md)
 - **freestyle-seating Phase 1~5a + UX 종합 개선 14건 + PDF 출력 완료 (2026-05-20, main 단일 워킹트리)** — Playwright MCP 실사용 점검으로 결함 발견·즉시 수정 누적:
   1. 컨테이너 4:3→16:10 + max-height (viewport 잘림 해소)
@@ -43,7 +45,7 @@ v2.0.5 (다음 minor 후보: v2.1.0 — multi-date-attendance + 묶음)
 ## Blocked
 
 - dlekthf0109@naver.com 회신 — 사용자 행동 필요 (Claude 발송 불가)
-- v2.0.6 핫픽스 묶음 릴리즈 (modal-scroll-overflow-fix + drop-crash-fix RG 대기분)
+- ~~v2.0.6 핫픽스 묶음 릴리즈~~ ✅ 2026-05-20 출시 완료
 
 ## Next
 
