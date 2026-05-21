@@ -1,17 +1,20 @@
 # Progress
 
-마지막 업데이트: 2026-05-21 KST
+마지막 업데이트: 2026-05-22 KST
 
 ## Current Version
 
-v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`).
+v2.0.7 (2026-05-22 출시 진행, 검증 게이트 4/4 통과 후 빌드·태깅 단계).
 
-**다음 릴리즈 v2.0.7 후보 묶음 (사용자 결정 2026-05-21: 단독 X, 다른 PDCA와 묶음 대기)**:
+**v2.0.7 묶음에 포함된 변경 사항 (4 PDCA + 보안 패치)**:
 
-1. ✅ notification-modal-stacking-fix Phase 0~4 — Match Rate 97% PASS, main `3cc8c88` (2026-05-21)
-2. ✅ realtime-tool-student-page-health Phase 0+1+2 — 학생 페이지 WS 헬스 인디케이터 + KB Q&A 3건 + 회귀 5건 (2026-05-21)
-3. ✅ **roster-sample-data-removal Phase 1+2+3** — Match Rate 99.0% PASS (2026-05-21). 사용자 피드백 "담임 업무에 있는 학생들이 내 학생들이 아니야" 해소. SAMPLE_STUDENTS 35명 자동 채움 제거 + 6중 안전 가드(A·B·C·D·E·F·G) 마이그레이션 + 9개 화면 EmptyState 가드 + amber 경고 배너 + 사이드바 빨간 점 + 마이그레이션 토스트. 검증 게이트 4/4: tsc 0 / lint 0 / vitest 1566 (+63) / regression 24/24 (+2 메타테스트). Dev 도구 `npm run electron:dev:fresh` 추가 (별도 데이터 폴더). [Plan v1.2](docs/01-plan/features/roster-sample-data-removal.plan.md) · [Design v1.2](docs/02-design/features/roster-sample-data-removal.design.md) · [Analysis 99.0%](docs/03-analysis/roster-sample-data-removal.analysis.md)
-4. ⏳ 다른 기능 PDCA들이 추가되면 함께 묶음 릴리즈
+1. ✅ **자리배치 신규 기능 3종** — 히스토리(저장/복원/비교·이전 자리 피하기) + 이름 학습 모드(전체화면 카드 플립) + 우연을 가장한 배치(사전 설계 → 셔플 위장). 자유 배치 모드 Phase 1~5a(ㄷ자형·시험 대형·모둠 + PDF 출력). 47 신규 테스트.
+2. ✅ **roster-sample-data-removal Phase 1+2+3** — Match Rate 99.0% PASS. SAMPLE_STUDENTS 35명 자동 채움 영구 제거 + 6중 안전 가드(A·B·C·D·E·F·G) 마이그레이션 + 9개 화면 EmptyState 가드 + amber 경고 배너 + 사이드바 빨간 점 + 마이그레이션 토스트. Dev 도구 `npm run electron:dev:fresh` 추가.
+3. ✅ **notification-modal-stacking-fix Phase 0~4** — Match Rate 97% PASS. 일정 알림 X 안 눌리던 핫픽스 + 공용 Modal 마이그레이션 + ModalCoordinator 우선순위 큐(7단계) + 6개 모달 큐 등록 + REGRESSION 9→17.
+4. ✅ **realtime-tool-student-page-health Phase 0+1+2** — Match Rate 98% PASS. 4개 학생 페이지(워드클라우드·주관식·객관식·복합) 우상단 연결 상태 칩 + submit 침묵 실패 차단 + KB Q&A 3건 + REGRESSION 17→22.
+5. ✅ **보안 패치** — ws + protobufjs 알려진 취약점 패치(PR #73).
+
+**검증 게이트 4/4 통과 (2026-05-22)**: tsc 0 errors / lint 0 errors / vitest 1566/1566 / regression 24/24.
 
 ## Completed (최근)
 
