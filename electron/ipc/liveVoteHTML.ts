@@ -1,3 +1,9 @@
+import {
+  getConnectionChipCSS,
+  getConnectionChipHTML,
+  getConnectionChipJS,
+} from './_studentPageChrome';
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -13,10 +19,7 @@ interface VoteOption {
   color: string;
 }
 
-export function generateVotingHTML(
-  question: string,
-  options: VoteOption[],
-): string {
+export function generateVotingHTML(question: string, options: VoteOption[]): string {
   const pollData = JSON.stringify({ question, options });
 
   const optionButtons = options
@@ -144,9 +147,12 @@ export function generateVotingHTML(
       from { transform: scale(0); opacity: 0; }
       to   { transform: scale(1); opacity: 1; }
     }
+${getConnectionChipCSS()}
   </style>
 </head>
 <body>
+  ${getConnectionChipHTML()}
+  <script>${getConnectionChipJS({ submitButtonSelectors: ['.option-btn'] })}</script>
   <div id="app">
     <div id="header">
       <div class="logo">📊 쌤핀 투표</div>
@@ -213,16 +219,20 @@ export function generateVotingHTML(
           reconnectTimer = null;
         }
 
+        if (window.spConnSetState) window.spConnSetState('connecting');
+
         try {
           var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
           ws = new WebSocket(wsProto + '//' + location.host);
         } catch (e) {
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           scheduleReconnect();
           return;
         }
 
         ws.onopen = function () {
           reconnectDelay = 1000;
+          if (window.spConnSetState) window.spConnSetState('connected');
           ws.send(JSON.stringify({ type: 'join', sessionToken: sessionToken }));
           if (hasVoted) {
             show('voted');
@@ -258,6 +268,7 @@ export function generateVotingHTML(
 
         ws.onclose = function () {
           ws = null;
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           if (!hasVoted) {
             show('disconnected');
           }
@@ -272,6 +283,7 @@ export function generateVotingHTML(
       function scheduleReconnect() {
         reconnectTimer = setTimeout(function () {
           reconnectTimer = null;
+          if (window.spConnSetState) window.spConnSetState('reconnecting');
           connect();
         }, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
@@ -283,11 +295,13 @@ export function generateVotingHTML(
         var optionId = btn.getAttribute('data-id');
         if (!optionId) return;
 
-        disableButtons();
-
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'vote', optionId: optionId, sessionToken: sessionToken }));
+        // WS 미연결 시 silent no-op 차단 — 선택지는 이미 data-ws-blocked로 dim되지만 안전망
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return;
         }
+
+        disableButtons();
+        ws.send(JSON.stringify({ type: 'vote', optionId: optionId, sessionToken: sessionToken }));
       });
 
       connect();

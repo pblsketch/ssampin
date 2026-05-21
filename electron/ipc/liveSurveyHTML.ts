@@ -1,3 +1,9 @@
+import {
+  getConnectionChipCSS,
+  getConnectionChipHTML,
+  getConnectionChipJS,
+} from './_studentPageChrome';
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -172,9 +178,12 @@ export function generateSurveyHTML(question: string, maxLength: number): string 
       from { transform: scale(0); opacity: 0; }
       to   { transform: scale(1); opacity: 1; }
     }
+${getConnectionChipCSS()}
   </style>
 </head>
 <body>
+  ${getConnectionChipHTML()}
+  <script>${getConnectionChipJS({ submitButtonSelectors: ['#submit-btn'] })}</script>
   <div id="app">
     <div id="header">
       <div class="logo">📝 쌤핀 설문</div>
@@ -251,16 +260,20 @@ export function generateSurveyHTML(question: string, maxLength: number): string 
           reconnectTimer = null;
         }
 
+        if (window.spConnSetState) window.spConnSetState('connecting');
+
         try {
           var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
           ws = new WebSocket(wsProto + '//' + location.host);
         } catch (e) {
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           scheduleReconnect();
           return;
         }
 
         ws.onopen = function () {
           reconnectDelay = 1000;
+          if (window.spConnSetState) window.spConnSetState('connected');
           ws.send(JSON.stringify({ type: 'join', sessionToken: sessionToken }));
           if (hasSubmitted) {
             show('submitted');
@@ -296,6 +309,7 @@ export function generateSurveyHTML(question: string, maxLength: number): string 
 
         ws.onclose = function () {
           ws = null;
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           if (!hasSubmitted) {
             show('disconnected');
           }
@@ -310,6 +324,7 @@ export function generateSurveyHTML(question: string, maxLength: number): string 
       function scheduleReconnect() {
         reconnectTimer = setTimeout(function () {
           reconnectTimer = null;
+          if (window.spConnSetState) window.spConnSetState('reconnecting');
           connect();
         }, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
@@ -345,11 +360,16 @@ export function generateSurveyHTML(question: string, maxLength: number): string 
           var text = ta.value.trim();
           if (!text) return;
 
-          disableForm();
-
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'submit', text: text, sessionToken: sessionToken }));
+          // WS 미연결 시 silent no-op 차단 — 학생에게 안내
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            var prev = ta.placeholder;
+            ta.placeholder = '연결을 확인 중입니다...';
+            setTimeout(function () { ta.placeholder = prev; }, 1500);
+            return;
           }
+
+          disableForm();
+          ws.send(JSON.stringify({ type: 'submit', text: text, sessionToken: sessionToken }));
         });
       }
 

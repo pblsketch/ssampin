@@ -1,3 +1,9 @@
+import {
+  getConnectionChipCSS,
+  getConnectionChipHTML,
+  getConnectionChipJS,
+} from './_studentPageChrome';
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -20,19 +26,26 @@ export interface MultiSurveyQuestionForHTML {
   maxLength?: number;
 }
 
-export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[], stepMode: boolean = false): string {
-  const questionsJson = JSON.stringify(questions.map(q => ({
-    id: escapeHtml(q.id),
-    type: q.type,
-    question: escapeHtml(q.question),
-    required: q.required,
-    options: q.options ? q.options.map(o => ({ id: escapeHtml(o.id), text: escapeHtml(o.text) })) : undefined,
-    scaleMin: q.scaleMin,
-    scaleMax: q.scaleMax,
-    scaleMinLabel: q.scaleMinLabel ? escapeHtml(q.scaleMinLabel) : undefined,
-    scaleMaxLabel: q.scaleMaxLabel ? escapeHtml(q.scaleMaxLabel) : undefined,
-    maxLength: q.maxLength,
-  })));
+export function generateMultiSurveyHTML(
+  questions: MultiSurveyQuestionForHTML[],
+  stepMode: boolean = false,
+): string {
+  const questionsJson = JSON.stringify(
+    questions.map((q) => ({
+      id: escapeHtml(q.id),
+      type: q.type,
+      question: escapeHtml(q.question),
+      required: q.required,
+      options: q.options
+        ? q.options.map((o) => ({ id: escapeHtml(o.id), text: escapeHtml(o.text) }))
+        : undefined,
+      scaleMin: q.scaleMin,
+      scaleMax: q.scaleMax,
+      scaleMinLabel: q.scaleMinLabel ? escapeHtml(q.scaleMinLabel) : undefined,
+      scaleMaxLabel: q.scaleMaxLabel ? escapeHtml(q.scaleMaxLabel) : undefined,
+      maxLength: q.maxLength,
+    })),
+  );
 
   const stepModeJson = JSON.stringify(stepMode);
 
@@ -745,9 +758,12 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
       font-size: 64px;
       line-height: 1;
     }
+${getConnectionChipCSS()}
   </style>
 </head>
 <body>
+  ${getConnectionChipHTML()}
+  <script>${getConnectionChipJS({ submitButtonSelectors: ['#submit-btn', '#sm-answer-submit'] })}</script>
   <div id="app">
     <div id="header">
       <div class="logo">📋 쌤핀 복수 설문</div>
@@ -1621,10 +1637,12 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
           }
+          if (window.spConnSetState) window.spConnSetState('connecting');
           try {
             var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(wsProto + '//' + location.host);
           } catch (e) {
+            if (window.spConnSetState) window.spConnSetState('disconnected');
             scheduleReconnect();
             return;
           }
@@ -1632,6 +1650,7 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
           ws.onopen = function () {
             wasConnected = true;
             reconnectDelay = 1000;
+            if (window.spConnSetState) window.spConnSetState('connected');
             if (nickname !== null) {
               sendJoin();
             } else {
@@ -1703,6 +1722,7 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
 
           ws.onclose = function () {
             ws = null;
+            if (window.spConnSetState) window.spConnSetState('disconnected');
             if (wasConnected && currentState && currentState.phase !== 'ended') {
               show('disconnected');
             }
@@ -1717,6 +1737,7 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
         function scheduleReconnect() {
           reconnectTimer = setTimeout(function () {
             reconnectTimer = null;
+            if (window.spConnSetState) window.spConnSetState('reconnecting');
             connect();
           }, 2000);
           reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
@@ -1840,15 +1861,17 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
           var answers = collectScrollAnswers();
           if (!isScrollValid(answers)) return;
 
-          disableAll();
-
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'submit',
-              answers: answers,
-              sessionToken: sessionToken,
-            }));
+          // WS 미연결 시 silent no-op 차단 — 버튼은 data-ws-blocked로 dim되지만 안전망
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            return;
           }
+
+          disableAll();
+          ws.send(JSON.stringify({
+            type: 'submit',
+            answers: answers,
+            sessionToken: sessionToken,
+          }));
         });
       }
 
@@ -1859,10 +1882,13 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
           reconnectTimer = null;
         }
 
+        if (window.spConnSetState) window.spConnSetState('connecting');
+
         try {
           var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
           ws = new WebSocket(wsProto + '//' + location.host);
         } catch (e) {
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           scheduleReconnect();
           return;
         }
@@ -1870,6 +1896,7 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
         ws.onopen = function () {
           wasConnected = true;
           reconnectDelay = 1000;
+          if (window.spConnSetState) window.spConnSetState('connected');
           ws.send(JSON.stringify({ type: 'join', sessionToken: sessionToken }));
           if (hasSubmitted) {
             show('submitted');
@@ -1905,6 +1932,7 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
 
         ws.onclose = function () {
           ws = null;
+          if (window.spConnSetState) window.spConnSetState('disconnected');
           if (!hasSubmitted && wasConnected) {
             show('disconnected');
           }
@@ -1919,6 +1947,7 @@ export function generateMultiSurveyHTML(questions: MultiSurveyQuestionForHTML[],
       function scheduleReconnect() {
         reconnectTimer = setTimeout(function () {
           reconnectTimer = null;
+          if (window.spConnSetState) window.spConnSetState('reconnecting');
           connect();
         }, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
