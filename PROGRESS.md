@@ -4,7 +4,12 @@
 
 ## Current Version
 
-v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`). **다음 패치 v2.0.7 후보: notification-modal-stacking-fix Phase 0~4 통합 완료 (Match Rate 97% PASS, 2026-05-21, main `003eb1a`) — 릴리즈 워크플로우 8단계 진행 대기**.
+v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`).
+
+**다음 릴리즈 v2.0.7 후보 묶음 (사용자 결정 2026-05-21: 단독 X, 다른 PDCA와 묶음 대기)**:
+
+1. ✅ notification-modal-stacking-fix Phase 0~4 — Match Rate 97% PASS, main `3cc8c88` (2026-05-21)
+2. ⏳ 다른 기능 PDCA들이 추가되면 함께 묶음 릴리즈
 
 ## Completed (최근)
 
