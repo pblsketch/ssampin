@@ -7,6 +7,7 @@ import {
   useUpdatePreferencesStore,
   shouldShowUpdateModal,
 } from '@adapters/stores/useUpdatePreferencesStore';
+import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 
 const NOTION_GUIDE_URL = 'https://supsori.notion.site/31676e6c2ab7809ab08eca1f9f307a97';
 const FEEDBACK_FORM_URL = 'https://forms.gle/o1X4zLYocUpFKCzy7';
@@ -42,10 +43,10 @@ interface ReleaseNotesData {
 }
 
 const CHANGE_TYPE_CONFIG: Record<ChangeType, { icon: string; label: string; badge: string }> = {
-  new:     { icon: 'lightbulb',    label: '새 기능',   badge: 'bg-sp-accent/20 text-sp-accent' },
-  fix:     { icon: 'build',        label: '버그 수정', badge: 'bg-emerald-500/15 text-emerald-400' },
-  improve: { icon: 'auto_awesome', label: '개선',      badge: 'bg-purple-500/15 text-purple-400' },
-  change:  { icon: 'sync',         label: '변경',      badge: 'bg-sp-highlight/15 text-sp-highlight' },
+  new: { icon: 'lightbulb', label: '새 기능', badge: 'bg-sp-accent/20 text-sp-accent' },
+  fix: { icon: 'build', label: '버그 수정', badge: 'bg-emerald-500/15 text-emerald-400' },
+  improve: { icon: 'auto_awesome', label: '개선', badge: 'bg-purple-500/15 text-purple-400' },
+  change: { icon: 'sync', label: '변경', badge: 'bg-sp-highlight/15 text-sp-highlight' },
 };
 
 function ChangeBadge({ type }: { type: ChangeType }) {
@@ -53,14 +54,19 @@ function ChangeBadge({ type }: { type: ChangeType }) {
   if (!config) return null;
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-detail font-medium ${config.badge} shrink-0`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-detail font-medium ${config.badge} shrink-0`}
+    >
       <span className="material-symbols-outlined text-icon-sm">{config.icon}</span>
       {config.label}
     </span>
   );
 }
 
-async function fetchReleaseNotesSince(currentVersion: string, targetVersion: string): Promise<VersionNote[]> {
+async function fetchReleaseNotesSince(
+  currentVersion: string,
+  targetVersion: string,
+): Promise<VersionNote[]> {
   const fetchData = async (): Promise<ReleaseNotesData | null> => {
     try {
       const res = await fetch(
@@ -97,7 +103,6 @@ async function fetchReleaseNotesSince(currentVersion: string, targetVersion: str
     .sort((a, b) => compare(b.version, a.version));
 }
 
-
 export function UpdateNotification() {
   const { track } = useAnalytics();
   const [status, setStatus] = useState<UpdateStatus>('idle');
@@ -117,57 +122,67 @@ export function UpdateNotification() {
 
     const cleanups: (() => void)[] = [];
 
-    cleanups.push(api.onUpdateAvailable(async (updateInfo) => {
-      setInfo(updateInfo);
+    cleanups.push(
+      api.onUpdateAvailable(async (updateInfo) => {
+        setInfo(updateInfo);
 
-      // release-notes.json 조회 — isSecurity 결정 + 게이트 판정
-      const currentVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
-      const notes = await fetchReleaseNotesSince(currentVersion, updateInfo.version);
-      // fetch 실패(빈 배열)는 보수적으로 보안 업데이트로 간주 (사용자 보호)
-      const security = notes.length === 0 ? true : (notes[0]?.isSecurity ?? false);
-      setIsSecurity(security);
+        // release-notes.json 조회 — isSecurity 결정 + 게이트 판정
+        const currentVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+        const notes = await fetchReleaseNotesSince(currentVersion, updateInfo.version);
+        // fetch 실패(빈 배열)는 보수적으로 보안 업데이트로 간주 (사용자 보호)
+        const security = notes.length === 0 ? true : (notes[0]?.isSecurity ?? false);
+        setIsSecurity(security);
 
-      const shouldShow = shouldShowUpdateModal(
-        updateInfo.version,
-        security,
-        useUpdatePreferencesStore.getState()
-      );
+        const shouldShow = shouldShowUpdateModal(
+          updateInfo.version,
+          security,
+          useUpdatePreferencesStore.getState(),
+        );
 
-      if (shouldShow) {
-        useUpdatePreferencesStore.getState().markNotified(updateInfo.version);
-        setStatus('available');
-      } else {
-        // 모달 안 띄움 — 사이드바 배지가 폴백
-        setStatus('idle');
-      }
-    }));
+        if (shouldShow) {
+          useUpdatePreferencesStore.getState().markNotified(updateInfo.version);
+          setStatus('available');
+        } else {
+          // 모달 안 띄움 — 사이드바 배지가 폴백
+          setStatus('idle');
+        }
+      }),
+    );
 
-    cleanups.push(api.onUpdateDownloadProgress((p) => {
-      setProgress(Math.round(p.percent));
-      // 사용자가 다운로드를 명시적으로 클릭한 경우에만 downloading 상태로 전환
-      setUserInitiatedDownload((initiated) => {
-        if (initiated) setStatus('downloading');
-        return initiated;
-      });
-    }));
+    cleanups.push(
+      api.onUpdateDownloadProgress((p) => {
+        setProgress(Math.round(p.percent));
+        // 사용자가 다운로드를 명시적으로 클릭한 경우에만 downloading 상태로 전환
+        setUserInitiatedDownload((initiated) => {
+          if (initiated) setStatus('downloading');
+          return initiated;
+        });
+      }),
+    );
 
-    cleanups.push(api.onUpdateDownloaded(() => {
-      // 사용자가 다운로드를 시작한 경우에만 downloaded 상태로 전환
-      setUserInitiatedDownload((initiated) => {
-        if (initiated) setStatus('downloaded');
-        return initiated;
-      });
-    }));
+    cleanups.push(
+      api.onUpdateDownloaded(() => {
+        // 사용자가 다운로드를 시작한 경우에만 downloaded 상태로 전환
+        setUserInitiatedDownload((initiated) => {
+          if (initiated) setStatus('downloaded');
+          return initiated;
+        });
+      }),
+    );
 
-    cleanups.push(api.onUpdateError((error) => {
-      setErrorMsg(error);
-      setStatus('error');
-      setTimeout(() => {
-        setStatus('idle');
-      }, 5000);
-    }));
+    cleanups.push(
+      api.onUpdateError((error) => {
+        setErrorMsg(error);
+        setStatus('error');
+        setTimeout(() => {
+          setStatus('idle');
+        }, 5000);
+      }),
+    );
 
-    return () => { cleanups.forEach((fn) => fn()); };
+    return () => {
+      cleanups.forEach((fn) => fn());
+    };
   }, []);
 
   // 사이드바 배지 클릭 → 모달 강제 재노출
@@ -195,7 +210,9 @@ export function UpdateNotification() {
       }
     });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [info?.version]);
 
   const handleDownload = useCallback(() => {
@@ -236,7 +253,14 @@ export function UpdateNotification() {
     setStatus('idle');
   }, [info?.version]);
 
-  if (status === 'idle') return null;
+  // Phase 3: ModalCoordinator 큐 등록 — priority가 동적이므로 두 hook 호출 (XOR active)
+  // SECURITY_UPDATE (priority 0)와 NORMAL_UPDATE (priority 4) 중 하나만 active.
+  // hook 두 번 호출은 React rules of hooks 준수 (고정 순서).
+  const isSecHead = useRegisterModal('SECURITY_UPDATE', isSecurity && status !== 'idle');
+  const isNormalHead = useRegisterModal('NORMAL_UPDATE', !isSecurity && status !== 'idle');
+  const isHead = isSecHead || isNormalHead;
+
+  if (status === 'idle' || !isHead) return null;
 
   const isOpen = true; // status === 'idle' 일 때 위에서 일찍 반환됨
   const isDownloading = status === 'downloading';
@@ -269,8 +293,8 @@ export function UpdateNotification() {
                     </h3>
                   </div>
                   <p className="text-amber-300/80 text-xs mt-1 leading-relaxed">
-                    이 업데이트는 보안 패치를 포함하고 있어 건너뛸 수 없어요.
-                    가능한 한 빠른 업데이트를 권장해요.
+                    이 업데이트는 보안 패치를 포함하고 있어 건너뛸 수 없어요. 가능한 한 빠른
+                    업데이트를 권장해요.
                   </p>
                 </>
               ) : (
@@ -287,7 +311,9 @@ export function UpdateNotification() {
               className="text-sp-muted hover:text-sp-text transition-colors p-1 rounded-lg hover:bg-sp-surface shrink-0 -mt-1 -mr-1"
               aria-label="닫기"
             >
-              <span className="material-symbols-outlined text-lg" aria-hidden="true">close</span>
+              <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                close
+              </span>
             </button>
           </div>
 
@@ -297,7 +323,9 @@ export function UpdateNotification() {
               <ul className="list-none space-y-1.5" aria-label="주요 변경사항">
                 {releaseNotes[0].highlights.map((h, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-sp-text/85">
-                    <span className="text-sp-accent mt-0.5 shrink-0" aria-hidden="true">·</span>
+                    <span className="text-sp-accent mt-0.5 shrink-0" aria-hidden="true">
+                      ·
+                    </span>
                     <span className="leading-relaxed">{h}</span>
                   </li>
                 ))}
@@ -338,11 +366,15 @@ export function UpdateNotification() {
               {releaseNotes.map((note, vi) => (
                 <div key={note.version}>
                   {releaseNotes.length > 1 && (
-                    <div className={`flex items-center gap-2 ${vi > 0 ? 'mt-3 pt-2.5 border-t border-sp-border/30' : ''} mb-2`}>
+                    <div
+                      className={`flex items-center gap-2 ${vi > 0 ? 'mt-3 pt-2.5 border-t border-sp-border/30' : ''} mb-2`}
+                    >
                       <span className="text-sp-accent text-xs font-bold">v{note.version}</span>
                       <span className="text-sp-muted text-caption">{note.date}</span>
                       {vi > 0 && note.highlights?.[0] && (
-                        <span className="text-sp-muted text-caption truncate flex-1">— {note.highlights[0]}</span>
+                        <span className="text-sp-muted text-caption truncate flex-1">
+                          — {note.highlights[0]}
+                        </span>
                       )}
                     </div>
                   )}
@@ -352,19 +384,27 @@ export function UpdateNotification() {
                         <ChangeBadge type={c.type} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sp-text text-sm leading-snug">{c.title}</p>
-                          {c.description && (
-                            <DescriptionRenderer description={c.description} />
-                          )}
+                          {c.description && <DescriptionRenderer description={c.description} />}
                           {c.notionUrl && c.notionUrl.startsWith('https://') && (
                             <a
                               href={c.notionUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={() => track('release_notes_notion_link_clicked', { version: note.version, title: c.title })}
+                              onClick={() =>
+                                track('release_notes_notion_link_clicked', {
+                                  version: note.version,
+                                  title: c.title,
+                                })
+                              }
                               className="inline-flex items-center gap-1 mt-1.5 text-detail text-sp-accent hover:underline"
                             >
                               📖 자세히 보기
-                              <span className="material-symbols-outlined text-[11px]" aria-hidden="true">arrow_outward</span>
+                              <span
+                                className="material-symbols-outlined text-[11px]"
+                                aria-hidden="true"
+                              >
+                                arrow_outward
+                              </span>
                             </a>
                           )}
                         </div>
@@ -380,7 +420,9 @@ export function UpdateNotification() {
           {noteLoading && (
             <div className="px-6 py-3 shrink-0">
               <div className="flex items-center gap-2 text-sp-muted text-xs">
-                <span className="material-symbols-outlined text-sm animate-spin" aria-hidden="true">progress_activity</span>
+                <span className="material-symbols-outlined text-sm animate-spin" aria-hidden="true">
+                  progress_activity
+                </span>
                 변경사항 불러오는 중...
               </div>
             </div>
@@ -396,7 +438,9 @@ export function UpdateNotification() {
                 className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
               >
                 노션 가이드
-                <span className="material-symbols-outlined text-[12px]" aria-hidden="true">open_in_new</span>
+                <span className="material-symbols-outlined text-[12px]" aria-hidden="true">
+                  open_in_new
+                </span>
               </a>
               <a
                 href={FEEDBACK_FORM_URL}
@@ -405,7 +449,9 @@ export function UpdateNotification() {
                 className="flex items-center gap-1 text-xs text-sp-muted hover:text-sp-text transition-colors"
               >
                 피드백
-                <span className="material-symbols-outlined text-[12px]" aria-hidden="true">open_in_new</span>
+                <span className="material-symbols-outlined text-[12px]" aria-hidden="true">
+                  open_in_new
+                </span>
               </a>
             </div>
             <div className="flex items-center gap-2">
@@ -419,7 +465,9 @@ export function UpdateNotification() {
                 onClick={handleDownload}
                 className="px-4 py-1.5 text-sm bg-sp-accent text-white rounded-lg hover:bg-blue-600 transition-colors font-medium flex items-center gap-1.5"
               >
-                <span className="material-symbols-outlined text-base" aria-hidden="true">rocket_launch</span>
+                <span className="material-symbols-outlined text-base" aria-hidden="true">
+                  rocket_launch
+                </span>
                 지금 업데이트
               </button>
             </div>
@@ -431,8 +479,15 @@ export function UpdateNotification() {
       {status === 'downloading' && (
         <div className="flex flex-col gap-3 px-6 py-5">
           <div className="flex items-center gap-2.5">
-            <span className="material-symbols-outlined text-sp-accent text-xl animate-spin" aria-hidden="true">progress_activity</span>
-            <span className="text-sp-text text-sm font-medium" aria-live="polite">다운로드 중... {progress}%</span>
+            <span
+              className="material-symbols-outlined text-sp-accent text-xl animate-spin"
+              aria-hidden="true"
+            >
+              progress_activity
+            </span>
+            <span className="text-sp-text text-sm font-medium" aria-live="polite">
+              다운로드 중... {progress}%
+            </span>
           </div>
           <div
             className="w-full bg-sp-bg rounded-full h-2 overflow-hidden"
@@ -457,10 +512,14 @@ export function UpdateNotification() {
       {status === 'downloaded' && (
         <div className="flex flex-col gap-4 px-6 py-5">
           <div className="flex items-center gap-2.5">
-            <span className="material-symbols-outlined text-green-400 text-2xl" aria-hidden="true">check_circle</span>
+            <span className="material-symbols-outlined text-green-400 text-2xl" aria-hidden="true">
+              check_circle
+            </span>
             <div>
               <p className="text-sp-text text-sm font-bold">업데이트 준비 완료!</p>
-              <p className="text-sp-muted text-xs mt-0.5">쌤핀 앱만 재시작되며, PC 재부팅이 아닙니다.</p>
+              <p className="text-sp-muted text-xs mt-0.5">
+                쌤핀 앱만 재시작되며, PC 재부팅이 아닙니다.
+              </p>
             </div>
           </div>
           <div className="flex justify-end gap-2.5">
@@ -474,7 +533,9 @@ export function UpdateNotification() {
               onClick={handleInstall}
               className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-1.5"
             >
-              <span className="material-symbols-outlined text-base" aria-hidden="true">restart_alt</span>
+              <span className="material-symbols-outlined text-base" aria-hidden="true">
+                restart_alt
+              </span>
               쌤핀 재시작
             </button>
           </div>
@@ -484,7 +545,9 @@ export function UpdateNotification() {
       {/* ── 오류 ── */}
       {status === 'error' && (
         <div className="flex items-center gap-2.5 px-6 py-5">
-          <span className="material-symbols-outlined text-red-500 text-xl" aria-hidden="true">error</span>
+          <span className="material-symbols-outlined text-red-500 text-xl" aria-hidden="true">
+            error
+          </span>
           <span className="text-sp-text text-sm">업데이트 오류: {errorMsg}</span>
         </div>
       )}

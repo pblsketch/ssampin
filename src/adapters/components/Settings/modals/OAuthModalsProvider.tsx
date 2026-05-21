@@ -1,6 +1,7 @@
 /** OAuth 폴백/에러/PKCE 모달을 App 루트에서 1회 마운트. 중복 제거 용도. */
 import { useState, useEffect } from 'react';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
+import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 
 /** OAuth 에러 모달: 로컬 서버 실패 시 해결 안내 + 수동 인증 폴백 */
 function OAuthErrorModal({
@@ -12,12 +13,20 @@ function OAuthErrorModal({
   onClose: () => void;
   onStartPKCE: () => void;
 }) {
-  const isServerBlocked = error.code === 'SERVER_START_FAILED' || error.code === 'LOCALHOST_BLOCKED';
+  const isServerBlocked =
+    error.code === 'SERVER_START_FAILED' || error.code === 'LOCALHOST_BLOCKED';
   const isTimeout = error.code === 'TIMEOUT';
   const isAccessDenied = error.code === 'ACCESS_DENIED';
 
+  // Phase 3: ModalCoordinator 큐 등록 (OAUTH_FLOW priority)
+  const isHead = useRegisterModal('OAUTH_FLOW', true);
+  if (!isHead) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -25,12 +34,18 @@ function OAuthErrorModal({
         {/* 헤더 */}
         <div className="flex items-center gap-3 mb-4">
           <div className={`p-2 rounded-lg ${isAccessDenied ? 'bg-amber-500/10' : 'bg-red-500/10'}`}>
-            <span className={`material-symbols-outlined ${isAccessDenied ? 'text-amber-400' : 'text-red-400'}`}>
+            <span
+              className={`material-symbols-outlined ${isAccessDenied ? 'text-amber-400' : 'text-red-400'}`}
+            >
               {isAccessDenied ? 'info' : 'error'}
             </span>
           </div>
           <h3 className="text-lg font-bold text-sp-text">
-            {isTimeout ? '인증 시간 초과' : isAccessDenied ? 'Google 연결 거부됨' : 'Google 로그인 연결 실패'}
+            {isTimeout
+              ? '인증 시간 초과'
+              : isAccessDenied
+                ? 'Google 연결 거부됨'
+                : 'Google 로그인 연결 실패'}
           </h3>
         </div>
 
@@ -65,7 +80,9 @@ function OAuthErrorModal({
             <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4 space-y-2">
               <p className="text-sm font-medium text-blue-400">해결 방법</p>
               <ul className="list-disc list-inside space-y-1.5 text-sm text-sp-muted">
-                <li>Google 로그인 창에서 &apos;허용&apos; 또는 &apos;Continue&apos;를 클릭해주세요.</li>
+                <li>
+                  Google 로그인 창에서 &apos;허용&apos; 또는 &apos;Continue&apos;를 클릭해주세요.
+                </li>
                 <li>학교 관리자 계정(Google Workspace)은 관리자가 앱 접근을 차단했을 수 있어요.</li>
                 <li>개인 Gmail 계정으로 시도해보세요.</li>
               </ul>
@@ -116,8 +133,15 @@ function PKCEFallbackModal({
 }) {
   const [code, setCode] = useState('');
 
+  // Phase 3: ModalCoordinator 큐 등록 (OAUTH_FLOW priority)
+  const isHead = useRegisterModal('OAUTH_FLOW', true);
+  if (!isHead) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -133,8 +157,10 @@ function PKCEFallbackModal({
         {/* 안내 */}
         <div className="space-y-3 mb-4">
           <p className="text-sm text-sp-muted">
-            브라우저에서 Google 로그인을 진행하면 주소창이 <code className="text-sp-text">http://127.0.0.1:.../callback?code=...</code>로 바뀝니다.
-            <br />이 <strong className="text-sp-text">주소창 전체 URL</strong>(또는 <code className="text-sp-text">code=</code> 부분)을 그대로 복사해서 붙여넣어 주세요.
+            브라우저에서 Google 로그인을 진행하면 주소창이{' '}
+            <code className="text-sp-text">http://127.0.0.1:.../callback?code=...</code>로 바뀝니다.
+            <br />이 <strong className="text-sp-text">주소창 전체 URL</strong>(또는{' '}
+            <code className="text-sp-text">code=</code> 부분)을 그대로 복사해서 붙여넣어 주세요.
           </p>
 
           {error && (
@@ -192,8 +218,15 @@ function FallbackSuggestionModal({
   onAccept: () => void;
   onDismiss: () => void;
 }) {
+  // Phase 3: ModalCoordinator 큐 등록 (OAUTH_FLOW priority)
+  const isHead = useRegisterModal('OAUTH_FLOW', true);
+  if (!isHead) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onDismiss}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onDismiss}
+    >
       <div
         className="w-full max-w-md rounded-xl bg-sp-card border border-sp-border p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -209,14 +242,14 @@ function FallbackSuggestionModal({
         {/* 본문 */}
         <div className="space-y-3">
           <p className="text-sm text-sp-muted">
-            Google 로그인은 완료했지만 앱과의 연결이 {data.elapsedSec}초째 대기 중이에요.
-            보안 프로그램이 연결을 차단하고 있을 수 있습니다.
+            Google 로그인은 완료했지만 앱과의 연결이 {data.elapsedSec}초째 대기 중이에요. 보안
+            프로그램이 연결을 차단하고 있을 수 있습니다.
           </p>
           <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4">
             <p className="text-sm font-medium text-blue-400 mb-1">수동 인증 방식으로 전환할까요?</p>
             <p className="text-xs text-sp-muted">
-              Google이 표시하는 인증 코드를 직접 입력하는 방식입니다.
-              보안 프로그램의 영향을 받지 않아요.
+              Google이 표시하는 인증 코드를 직접 입력하는 방식입니다. 보안 프로그램의 영향을 받지
+              않아요.
             </p>
           </div>
         </div>

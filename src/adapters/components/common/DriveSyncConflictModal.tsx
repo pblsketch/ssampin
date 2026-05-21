@@ -1,5 +1,6 @@
 import type { DriveSyncConflict } from '@domain/entities/DriveSyncState';
 import { Modal } from '@adapters/components/common/Modal';
+import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 
 /** 동기화 파일명 → 한글 표시 매핑 */
 const FILE_LABELS: Record<string, string> = {
@@ -35,9 +36,11 @@ interface Props {
 }
 
 export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props) {
+  // Phase 3: ModalCoordinator 큐 등록 (DRIVE_CONFLICT priority)
+  const isHead = useRegisterModal('DRIVE_CONFLICT', conflicts.length > 0);
   return (
     <Modal
-      isOpen={conflicts.length > 0}
+      isOpen={conflicts.length > 0 && isHead}
       onClose={onClose}
       title="동기화 충돌"
       srOnlyTitle
@@ -53,7 +56,9 @@ export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props)
             </div>
             <div>
               <h3 className="text-lg font-bold text-sp-text">동기화 충돌</h3>
-              <p className="text-xs text-sp-muted">{conflicts.length}개 파일에서 충돌이 발생했습니다</p>
+              <p className="text-xs text-sp-muted">
+                {conflicts.length}개 파일에서 충돌이 발생했습니다
+              </p>
             </div>
           </div>
           <button
@@ -69,9 +74,14 @@ export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props)
         {/* 충돌 목록 */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {conflicts.map((conflict) => (
-            <div key={conflict.filename} className="p-4 rounded-lg bg-sp-surface border border-sp-border">
+            <div
+              key={conflict.filename}
+              className="p-4 rounded-lg bg-sp-surface border border-sp-border"
+            >
               <div className="flex items-center gap-2 mb-3">
-                <span className="material-symbols-outlined text-sp-accent text-icon-md">description</span>
+                <span className="material-symbols-outlined text-sp-accent text-icon-md">
+                  description
+                </span>
                 <span className="text-sm font-bold text-sp-text">
                   {FILE_LABELS[conflict.filename] ?? conflict.filename}
                 </span>

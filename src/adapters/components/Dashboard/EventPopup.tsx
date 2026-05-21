@@ -3,6 +3,7 @@ import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { getCategoryInfo, getColorsForCategory } from '@adapters/presenters/categoryPresenter';
 import { Modal } from '@adapters/components/common/Modal';
+import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -100,7 +101,9 @@ export function EventPopup() {
     void checkAlerts();
   }, [checkAlerts]);
 
-  if (!showPopup || !alertResult) return null;
+  // Phase 3: ModalCoordinator 큐 등록 — 자기가 head일 때만 렌더
+  const isHead = useRegisterModal('EVENT_ALERT', showPopup && !!alertResult);
+  if (!showPopup || !alertResult || !isHead) return null;
 
   const today = new Date();
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@adapters/components/common/Modal';
 import type { CloudSyncInfo } from '@adapters/stores/useDriveSyncStore';
+import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 
 export interface FirstSyncConfirmModalProps {
   open: boolean;
@@ -31,6 +32,9 @@ export function FirstSyncConfirmModal({
 }: FirstSyncConfirmModalProps) {
   const [showUploadWarn, setShowUploadWarn] = useState(false);
   const [understood, setUnderstood] = useState(false);
+
+  // Phase 3: ModalCoordinator 큐 등록 (FIRST_SYNC priority — 데이터 안전 우선)
+  const isHead = useRegisterModal('FIRST_SYNC', open);
 
   // 모달이 닫히거나 다시 열릴 때 내부 단계 리셋
   useEffect(() => {
@@ -63,11 +67,14 @@ export function FirstSyncConfirmModal({
   const cloudLastSyncedAt = formatDateTime(cloudInfo?.lastSyncedAt);
   const cloudDeviceName = cloudInfo?.deviceName ?? '다른 기기';
 
+  // Phase 3: 자기가 큐 head일 때만 렌더 (open + 큐 우선순위)
+  const effectiveOpen = open && isHead;
+
   // 2차 confirm 단계
   if (showUploadWarn) {
     return (
       <Modal
-        isOpen={open}
+        isOpen={effectiveOpen}
         onClose={() => setShowUploadWarn(false)}
         title="클라우드 데이터 덮어쓰기 확인"
         srOnlyTitle
@@ -81,9 +88,7 @@ export function FirstSyncConfirmModal({
               <span className="material-symbols-outlined text-red-400 text-icon-lg">warning</span>
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-semibold text-sp-text">
-                클라우드 데이터가 삭제됩니다
-              </h2>
+              <h2 className="text-lg font-semibold text-sp-text">클라우드 데이터가 삭제됩니다</h2>
               {hasCloudData && cloudLastSyncedAt && (
                 <p className="mt-1 text-sm text-sp-muted">
                   {cloudDeviceName}의 {cloudLastSyncedAt} 백업이 영구 삭제됩니다.
@@ -132,7 +137,7 @@ export function FirstSyncConfirmModal({
   // 1차: 3선택 카드
   return (
     <Modal
-      isOpen={open}
+      isOpen={effectiveOpen}
       onClose={onDefer}
       title="첫 동기화 방향을 선택해주세요"
       srOnlyTitle
@@ -144,15 +149,13 @@ export function FirstSyncConfirmModal({
         {/* 헤더 */}
         <div className="flex items-start gap-3 mb-4">
           <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-sp-accent/10 flex items-center justify-center">
-            <span className="material-symbols-outlined text-sp-accent text-icon-lg">cloud_sync</span>
+            <span className="material-symbols-outlined text-sp-accent text-icon-lg">
+              cloud_sync
+            </span>
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold text-sp-text">
-              첫 동기화 방향을 선택해주세요
-            </h2>
-            <p className="mt-1 text-sm text-sp-muted">
-              이 기기에는 동기화 기록이 없어요.
-            </p>
+            <h2 className="text-lg font-semibold text-sp-text">첫 동기화 방향을 선택해주세요</h2>
+            <p className="mt-1 text-sm text-sp-muted">이 기기에는 동기화 기록이 없어요.</p>
           </div>
           <button
             type="button"
@@ -172,21 +175,20 @@ export function FirstSyncConfirmModal({
         >
           {!cloudInfoLoaded ? (
             <>
-              <span className="material-symbols-outlined animate-spin text-sp-muted text-icon-sm">progress_activity</span>
+              <span className="material-symbols-outlined animate-spin text-sp-muted text-icon-sm">
+                progress_activity
+              </span>
               <span className="text-sp-muted">클라우드 확인 중...</span>
             </>
           ) : cloudInfo === null ? (
-            <span className="text-amber-400">
-              ⚠️ 클라우드 상태를 확인하지 못했어요
-            </span>
+            <span className="text-amber-400">⚠️ 클라우드 상태를 확인하지 못했어요</span>
           ) : hasCloudData ? (
             <span className="text-emerald-400">
-              ☁️ 클라우드에 {cloudDeviceName}의 백업이 있어요{cloudLastSyncedAt ? ` (${cloudLastSyncedAt})` : ''}
+              ☁️ 클라우드에 {cloudDeviceName}의 백업이 있어요
+              {cloudLastSyncedAt ? ` (${cloudLastSyncedAt})` : ''}
             </span>
           ) : (
-            <span className="text-sp-muted">
-              클라우드에 저장된 데이터가 없어요
-            </span>
+            <span className="text-sp-muted">클라우드에 저장된 데이터가 없어요</span>
           )}
         </div>
 
@@ -218,9 +220,7 @@ export function FirstSyncConfirmModal({
                 : '클라우드가 비어있어요. 이 기기 데이터를 클라우드에 올려 동기화를 시작해요.'
             }
             preview={
-              hasCloudData
-                ? '클라우드 백업이 삭제되고 이 기기 데이터로 교체돼요'
-                : undefined
+              hasCloudData ? '클라우드 백업이 삭제되고 이 기기 데이터로 교체돼요' : undefined
             }
             previewClass={hasCloudData ? 'text-red-400' : 'text-sp-muted'}
             recommended={cloudInfoLoaded && cloudInfo !== null && !hasCloudData}
@@ -275,8 +275,7 @@ function ChoiceCard({
     accent: recommended
       ? 'border-sp-accent ring-1 ring-sp-accent/30 hover:bg-sp-accent/5'
       : 'border-sp-border hover:bg-sp-accent/5 hover:border-sp-accent/60',
-    danger:
-      'border-sp-border hover:bg-red-500/5 hover:border-red-500/40',
+    danger: 'border-sp-border hover:bg-red-500/5 hover:border-red-500/40',
     muted: 'border-sp-border/60 hover:bg-sp-surface hover:border-sp-border',
   };
   const iconBgClasses: Record<ChoiceCardProps['tone'], string> = {
@@ -297,15 +296,15 @@ function ChoiceCard({
         </span>
       )}
       <div className="flex items-start gap-3">
-        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${iconBgClasses[tone]}`}>
+        <div
+          className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${iconBgClasses[tone]}`}
+        >
           <span className="material-symbols-outlined text-icon-lg">{icon}</span>
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-base font-semibold text-sp-text">{title}</h3>
           <p className="mt-1 text-sm text-sp-muted">{description}</p>
-          {preview && (
-            <p className={`mt-2 text-xs ${previewClass}`}>{preview}</p>
-          )}
+          {preview && <p className={`mt-2 text-xs ${previewClass}`}>{preview}</p>}
         </div>
       </div>
     </button>
