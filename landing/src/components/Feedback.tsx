@@ -22,9 +22,7 @@ export default function Feedback() {
           <p className="mb-3 text-center text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
             Feedback
           </p>
-          <h2 className="mb-4 text-center text-3xl font-bold text-sp-text">
-            의견을 보내주세요
-          </h2>
+          <h2 className="mb-4 text-center text-3xl font-bold text-sp-text">의견을 보내주세요</h2>
           <p className="mb-10 text-center text-sp-muted">
             선생님들의 소중한 피드백이 쌤핀을 더 좋게 만듭니다
           </p>
@@ -33,18 +31,16 @@ export default function Feedback() {
         <FadeIn delay={0.15}>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* 실시간 채팅 카드 */}
-            <div className="flex flex-col rounded-xl border border-sp-border bg-sp-card p-6 transition-all duration-200 hover:scale-[1.02] hover:border-sp-accent">
+            <div className="flex flex-col rounded-xl border border-sp-border bg-sp-card p-6 shadow-sm transition-all duration-200 hover:scale-[1.02] hover:border-sp-accent hover:shadow-md">
               <div className="mb-4 flex items-center gap-2">
                 <span className="text-2xl">💬</span>
                 <h3 className="text-lg font-bold text-sp-text">AI 도우미</h3>
-                <span className="ml-auto flex items-center gap-1.5 text-xs text-emerald-400">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="ml-auto flex items-center gap-1.5 text-xs text-emerald-700">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                   온라인
                 </span>
               </div>
-              <p className="mb-4 text-sm text-sp-muted">
-                쌤핀 AI에게 바로 물어보세요!
-              </p>
+              <p className="mb-4 text-sm text-sp-muted">쌤핀 AI에게 바로 물어보세요!</p>
               <ul className="mb-6 flex-1 space-y-2 text-sm text-sp-muted">
                 <li className="flex items-center gap-2">
                   <span className="text-sp-accent">•</span> 사용법 질문
@@ -58,21 +54,19 @@ export default function Feedback() {
               </ul>
               <button
                 onClick={handleOpenChat}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sp-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 active:bg-blue-700"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sp-accent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-sp-accent-hover active:bg-sp-accent-hover"
               >
                 🤖 AI에게 물어보기
               </button>
             </div>
 
             {/* 건의사항 카드 */}
-            <div className="flex flex-col rounded-xl border border-sp-border bg-sp-card p-6 transition-all duration-200 hover:scale-[1.02] hover:border-sp-accent">
+            <div className="flex flex-col rounded-xl border border-sp-border bg-sp-card p-6 shadow-sm transition-all duration-200 hover:scale-[1.02] hover:border-sp-accent hover:shadow-md">
               <div className="mb-4 flex items-center gap-2">
                 <span className="text-2xl">📋</span>
                 <h3 className="text-lg font-bold text-sp-text">건의사항 보내기</h3>
               </div>
-              <p className="mb-4 text-sm text-sp-muted">
-                설문지로 의견을 보내주세요
-              </p>
+              <p className="mb-4 text-sm text-sp-muted">설문지로 의견을 보내주세요</p>
               <ul className="mb-6 flex-1 space-y-2 text-sm text-sp-muted">
                 <li className="flex items-center gap-2">
                   <span className="text-sp-accent">•</span> 기능 제안

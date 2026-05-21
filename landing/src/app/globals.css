@@ -1,15 +1,15 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme inline {
-  --color-sp-bg: #0a0e17;
-  --color-sp-surface: #0f1729;
-  --color-sp-card: #1a2332;
-  --color-sp-border: #2a3548;
-  --color-sp-accent: #3b82f6;
-  --color-sp-accent-hover: #2563eb;
-  --color-sp-highlight: #f59e0b;
-  --color-sp-text: #f8fafc;
-  --color-sp-muted: #94a3b8;
+  --color-sp-bg: #f5f0e8;
+  --color-sp-surface: #ece5d4;
+  --color-sp-card: #ffffff;
+  --color-sp-border: #d8cfb8;
+  --color-sp-accent: #2563eb;
+  --color-sp-accent-hover: #1d4ed8;
+  --color-sp-highlight: #d97706;
+  --color-sp-text: #1a1612;
+  --color-sp-muted: #6b6358;
   --font-sans: var(--font-noto-sans-kr);
 }
 
@@ -20,15 +20,25 @@ body {
 
 /* 채팅 위젯 애니메이션 */
 @keyframes animate-in-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 @keyframes animate-in-slide-from-bottom {
-  from { transform: translateY(1rem); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(1rem);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 .animate-in {
-  animation: animate-in-fade 200ms ease-out, animate-in-slide-from-bottom 200ms ease-out;
+  animation:
+    animate-in-fade 200ms ease-out,
+    animate-in-slide-from-bottom 200ms ease-out;
 }
 
 /* 채팅 메시지 스크롤바 */

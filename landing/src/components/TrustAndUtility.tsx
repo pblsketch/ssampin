@@ -29,15 +29,13 @@ export default function TrustAndUtility() {
           <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
             안심 & 활용
           </p>
-          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            안전하고 유연하게
-          </h2>
+          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">안전하고 유연하게</h2>
         </FadeIn>
 
         <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-3">
           {cards.map((card, i) => (
             <FadeIn key={card.title} delay={i * 0.08}>
-              <div className="h-full rounded-xl border border-white/10 bg-sp-card p-6">
+              <div className="h-full rounded-xl border border-sp-border bg-sp-card p-6 shadow-sm">
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-2xl">{card.icon}</span>
                   <h3 className="text-base font-bold text-sp-text">{card.title}</h3>
@@ -46,7 +44,7 @@ export default function TrustAndUtility() {
                 <ul className="space-y-2">
                   {card.points.map((point) => (
                     <li key={point} className="flex items-center gap-2 text-sm">
-                      <span className="text-blue-400">•</span>
+                      <span className="text-sp-accent">•</span>
                       <span className="text-sp-muted">{point}</span>
                     </li>
                   ))}

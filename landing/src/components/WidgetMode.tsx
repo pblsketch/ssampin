@@ -13,20 +13,18 @@ export default function WidgetMode() {
     <section className="bg-sp-bg py-20">
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn>
-          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            화면 위에 쉽게 띄워두기
-          </h2>
+          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">화면 위에 쉽게 띄워두기</h2>
         </FadeIn>
 
         <div className="mt-12 flex flex-col items-center gap-10 md:flex-row md:gap-16">
           <FadeIn className="w-full md:w-1/2">
-            <div className="overflow-hidden rounded-2xl border border-white/10">
+            <div className="overflow-hidden rounded-2xl border border-sp-border bg-sp-card p-1.5 shadow-lg shadow-slate-900/10">
               <Image
                 src="/images/widget-mode.png"
                 alt="쌤핀 위젯 모드 - 데스크톱 위에 띄운 대시보드"
-                width={1920}
-                height={1080}
-                className="h-auto w-full"
+                width={956}
+                height={1027}
+                className="h-auto w-full rounded-xl"
               />
             </div>
           </FadeIn>
@@ -40,7 +38,7 @@ export default function WidgetMode() {
             <ul className="space-y-4">
               {checklist.map((item) => (
                 <li key={item} className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-sm text-blue-400">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sp-accent/15 text-sm text-sp-accent">
                     ✓
                   </span>
                   <span className="text-sp-text">{item}</span>

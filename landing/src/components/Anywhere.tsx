@@ -37,27 +37,27 @@ export default function Anywhere() {
         <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
           {/* 위젯 모드 */}
           <FadeIn delay={0.08}>
-            <div className="h-full rounded-2xl border border-white/10 bg-sp-card p-7">
-              <div className="mb-4 flex items-center gap-2">
+            <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-sp-border bg-sp-card shadow-sm">
+              <div className="flex items-center gap-2 px-6 pb-3 pt-6">
                 <span className="text-xl">🖥️</span>
                 <h3 className="text-base font-bold text-sp-text">위젯 모드</h3>
               </div>
-              <div className="mb-5 overflow-hidden rounded-xl border border-white/10">
+              <div className="border-y border-sp-border bg-sp-surface">
                 <Image
                   src="/images/widget-mode.png"
                   alt="쌤핀 위젯 모드 - 데스크톱 위에 띄운 대시보드"
-                  width={1920}
-                  height={1080}
+                  width={956}
+                  height={1027}
                   className="h-auto w-full"
                 />
               </div>
-              <ul className="space-y-2.5">
+              <ul className="space-y-2.5 px-6 py-5">
                 {widgetPoints.map((item) => (
                   <li key={item} className="flex items-center gap-2 text-sm">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs text-blue-400">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sp-accent/15 text-xs text-sp-accent">
                       ✓
                     </span>
-                    <span className="text-sp-text/80">{item}</span>
+                    <span className="text-sp-text/85">{item}</span>
                   </li>
                 ))}
               </ul>
@@ -66,52 +66,70 @@ export default function Anywhere() {
 
           {/* 모바일 */}
           <FadeIn delay={0.16}>
-            <div className="flex h-full flex-col rounded-2xl border border-white/10 bg-sp-card p-7">
-              <div className="mb-4 flex items-center gap-2">
+            <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-sp-border bg-sp-card shadow-sm">
+              <div className="flex items-center gap-2 px-6 pb-3 pt-6">
                 <span className="text-xl">📱</span>
                 <h3 className="text-base font-bold text-sp-text">모바일</h3>
-                <span className="ml-2 rounded-full bg-blue-500/10 px-2 py-0.5 text-[0.65rem] font-semibold text-blue-400">
+                <span className="ml-2 rounded-full bg-sp-accent/10 px-2 py-0.5 text-[0.65rem] font-semibold text-sp-accent">
                   NEW
                 </span>
               </div>
-              <p className="mb-4 text-sm text-sp-muted">
-                교무실 PC의 데이터를 교실에서도 확인하세요.
-                <br />
-                Google Drive 앱 전용 폴더에 안전하게 백업됩니다.
-              </p>
-              <ul className="mb-6 space-y-2">
-                {['시간표·출결·메모 확인', '홈 화면에 추가 (PWA)', 'Google Drive 앱 폴더 백업'].map((item) => (
-                  <li key={item} className="flex items-center gap-2 text-sm">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs text-blue-400">
-                      ✓
-                    </span>
-                    <span className="text-sp-text/80">{item}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-auto flex flex-col items-center gap-3 pt-4">
+              <div className="flex flex-1 flex-col gap-5 border-t border-sp-border bg-sp-surface px-6 py-6 md:flex-row md:items-center">
+                <div className="flex shrink-0 justify-center md:justify-start">
+                  <div className="overflow-hidden rounded-[2rem] border border-sp-border bg-sp-card p-1 shadow-lg shadow-slate-900/15 ring-1 ring-sp-border/60">
+                    <Image
+                      src="/images/mobile.png"
+                      alt="쌤핀 모바일 - 교실에서 확인하는 시간표·출결·메모"
+                      width={673}
+                      height={1383}
+                      className="h-auto w-[200px] rounded-[1.75rem] md:w-[180px]"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-1 flex-col">
+                  <p className="text-sm leading-relaxed text-sp-muted">
+                    교무실 PC의 데이터를 교실에서도 확인하세요. Google Drive 앱 전용 폴더에 안전하게
+                    백업됩니다.
+                  </p>
+                  <ul className="mt-4 space-y-2">
+                    {[
+                      '시간표·출결·메모 확인',
+                      '홈 화면에 추가 (PWA)',
+                      'Google Drive 앱 폴더 백업',
+                    ].map((item) => (
+                      <li key={item} className="flex items-center gap-2 text-sm">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sp-accent/15 text-xs text-sp-accent">
+                          ✓
+                        </span>
+                        <span className="text-sp-text/85">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className="flex items-center justify-center gap-4 px-6 py-5">
                 {isMobile ? (
                   <a
                     href={MOBILE_URL}
-                    className="inline-flex items-center gap-2 rounded-xl bg-sp-accent px-6 py-3 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-blue-500"
+                    className="inline-flex items-center gap-2 rounded-xl bg-sp-accent px-6 py-3 text-sm font-bold text-white shadow-md shadow-sp-accent/20 transition-all hover:-translate-y-0.5 hover:bg-sp-accent-hover"
                   >
                     📱 모바일 앱 열기
                   </a>
                 ) : (
                   <>
-                    <div className="rounded-xl bg-white p-3">
+                    <div className="rounded-xl border border-sp-border bg-white p-2">
                       <QRCodeSVG
                         value={MOBILE_URL}
-                        size={120}
+                        size={88}
                         level="M"
                         bgColor="#ffffff"
-                        fgColor="#0a0e17"
+                        fgColor="#1a1612"
                       />
                     </div>
-                    <p className="text-xs text-sp-muted">
-                      스마트폰으로 QR코드를 스캔하세요
-                    </p>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-sp-text">QR로 바로 열기</p>
+                      <p className="mt-0.5 text-xs text-sp-muted">스마트폰으로 스캔하세요</p>
+                    </div>
                   </>
                 )}
               </div>

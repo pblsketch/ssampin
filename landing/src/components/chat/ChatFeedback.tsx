@@ -37,8 +37,8 @@ export default function ChatFeedback({
 
   if (feedbackState === 'resolved') {
     return (
-      <div className="mt-2 border-t border-white/10 pt-2">
-        <p className="text-center text-xs text-emerald-400 transition-opacity duration-300">
+      <div className="mt-2 border-t border-sp-border/70 pt-2">
+        <p className="text-center text-xs text-emerald-700 transition-opacity duration-300">
           감사합니다! 😊
         </p>
       </div>
@@ -47,9 +47,9 @@ export default function ChatFeedback({
 
   if (feedbackState === 'unresolved') {
     return (
-      <div className="mt-2 border-t border-white/10 pt-2 transition-opacity duration-300">
+      <div className="mt-2 border-t border-sp-border/70 pt-2 transition-opacity duration-300">
         {escalated ? (
-          <p className="text-center text-xs text-emerald-400">
+          <p className="text-center text-xs text-emerald-700">
             개발자에게 전달했어요! 빠르게 확인할게요 🙏
           </p>
         ) : (
@@ -61,7 +61,7 @@ export default function ChatFeedback({
               <button
                 type="button"
                 onClick={onAskMore}
-                className="flex-1 rounded-lg border border-sp-border px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-sp-surface"
+                className="flex-1 rounded-lg border border-sp-border bg-sp-card px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-sp-bg"
               >
                 💬 더 질문하기
               </button>
@@ -71,7 +71,7 @@ export default function ChatFeedback({
                   onEscalate(messageId);
                   setEscalated(true);
                 }}
-                className="flex-1 rounded-lg border border-sp-border px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-sp-surface"
+                className="flex-1 rounded-lg border border-sp-border bg-sp-card px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-sp-bg"
               >
                 📮 개발자에게 전달
               </button>
@@ -85,7 +85,7 @@ export default function ChatFeedback({
   // pending
   return (
     <div
-      className="mt-2 border-t border-white/10 pt-2 transition-opacity duration-300"
+      className="mt-2 border-t border-sp-border/70 pt-2 transition-opacity duration-300"
       style={{ opacity: visible ? 1 : 0 }}
     >
       <p className="mb-1.5 text-center text-[11px] text-sp-muted">도움이 되었나요?</p>
@@ -93,14 +93,14 @@ export default function ChatFeedback({
         <button
           type="button"
           onClick={() => onResolved(messageId)}
-          className="flex-1 rounded-lg border border-emerald-500/40 px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-emerald-500/10"
+          className="flex-1 rounded-lg border border-emerald-500/60 bg-sp-card px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-emerald-50"
         >
           😊 해결됐어요
         </button>
         <button
           type="button"
           onClick={() => onUnresolved(messageId)}
-          className="flex-1 rounded-lg border border-sp-border px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-white/5"
+          className="flex-1 rounded-lg border border-sp-border bg-sp-card px-2 py-1.5 text-xs text-sp-text transition-colors hover:bg-sp-bg"
         >
           😥 아직이요
         </button>

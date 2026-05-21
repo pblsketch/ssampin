@@ -15,15 +15,13 @@ export default function Footer() {
   return (
     <footer>
       {/* CTA 영역 */}
-      <div className="border-t-2 border-sp-accent bg-sp-card py-16">
+      <div className="border-t border-sp-accent/50 bg-sp-card py-16 shadow-[inset_0_1px_0_0_var(--color-sp-border)]">
         <div className="mx-auto max-w-6xl px-6 text-center">
           <FadeIn>
             <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
               무료 · Windows 10/11 · 모바일
             </p>
-            <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-              지금 바로 시작하세요
-            </h2>
+            <h2 className="text-3xl font-bold text-sp-text md:text-4xl">지금 바로 시작하세요</h2>
           </FadeIn>
           <FadeIn delay={0.15}>
             <div className="mt-8">
@@ -48,13 +46,13 @@ export default function Footer() {
       </div>
 
       {/* Footer 링크 */}
-      <div className="bg-[#060a12] py-8">
-        {/* Note: #060a12 is non-standard, kept as-is */}
+      <div className="border-t border-sp-border bg-sp-surface py-8">
         <div className="mx-auto max-w-6xl px-6 text-center">
-          <p className="text-sm font-medium text-sp-muted">
-            쌤핀 (SsamPin) · 선생님의 대시보드
-          </p>
-          <nav aria-label="푸터 링크" className="mt-3 flex items-center justify-center gap-4 text-sm text-sp-muted/60">
+          <p className="text-sm font-medium text-sp-muted">쌤핀 (SsamPin) · 선생님의 대시보드</p>
+          <nav
+            aria-label="푸터 링크"
+            className="mt-3 flex items-center justify-center gap-4 text-sm text-sp-muted/80"
+          >
             <a
               href="https://supsori.notion.site/SsamPin-32176e6c2ab781dc905ce780e03c5be4"
               target="_blank"
@@ -63,7 +61,7 @@ export default function Footer() {
             >
               사용 가이드
             </a>
-            <span className="text-sp-muted/30">·</span>
+            <span className="text-sp-muted/40">·</span>
             <a
               href="https://forms.gle/o1X4zLYocUpFKCzy7"
               target="_blank"
@@ -72,22 +70,16 @@ export default function Footer() {
             >
               문의 · 피드백
             </a>
-            <span className="text-sp-muted/30">·</span>
-            <a
-              href="/about"
-              className="transition-colors hover:text-sp-text"
-            >
+            <span className="text-sp-muted/40">·</span>
+            <a href="/about" className="transition-colors hover:text-sp-text">
               개발자 소개
             </a>
-            <span className="text-sp-muted/30">·</span>
-            <a
-              href="/privacy"
-              className="transition-colors hover:text-sp-text"
-            >
+            <span className="text-sp-muted/40">·</span>
+            <a href="/privacy" className="transition-colors hover:text-sp-text">
               개인정보처리방침
             </a>
           </nav>
-          <p className="mt-4 text-xs text-sp-muted/40">
+          <p className="mt-4 text-xs text-sp-muted/60">
             © 2026 SsamPin v{VERSION} · 모든 데이터는 사용자 PC에만 저장됩니다.
           </p>
         </div>

@@ -11,16 +11,14 @@ export default function ShareSchedule() {
     <section className="bg-sp-bg py-20">
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn>
-          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            선생님끼리 일정 공유
-          </h2>
+          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">선생님끼리 일정 공유</h2>
           <p className="mt-3 text-base text-sp-muted">
             .ssampin 파일 하나로 학교 일정을 주고받으세요
           </p>
         </FadeIn>
 
         <FadeIn className="mt-12" delay={0.1}>
-          <div className="rounded-2xl border border-white/10 bg-sp-card p-8 md:p-12">
+          <div className="rounded-2xl border border-sp-border bg-sp-card p-8 shadow-sm md:p-12">
             {/* 다이어그램 */}
             <div className="flex flex-col items-center justify-center gap-4 md:flex-row md:gap-6">
               <div className="flex flex-col items-center gap-1">
@@ -36,10 +34,8 @@ export default function ShareSchedule() {
               </div>
 
               <div className="flex flex-col items-center gap-1">
-                <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2">
-                  <span className="text-sm font-medium text-blue-300">
-                    나무학교_일정.ssampin
-                  </span>
+                <div className="rounded-lg border border-sp-accent/40 bg-sp-accent/10 px-4 py-2">
+                  <span className="text-sm font-medium text-sp-accent">나무학교_일정.ssampin</span>
                 </div>
               </div>
 
@@ -60,7 +56,7 @@ export default function ShareSchedule() {
             <div className="mt-8 flex flex-col items-center gap-3 md:flex-row md:justify-center md:gap-8">
               {benefits.map((item) => (
                 <div key={item} className="flex items-center gap-2">
-                  <span className="text-blue-400">•</span>
+                  <span className="text-sp-accent">•</span>
                   <span className="text-sm text-sp-muted">{item}</span>
                 </div>
               ))}

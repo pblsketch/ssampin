@@ -29,8 +29,7 @@ const faqs = [
   },
   {
     question: '업데이트는 어떻게 하나요?',
-    answer:
-      '앱이 자동으로 새 버전을 알려줘요. 알림이 오면 "업데이트" 버튼만 누르면 돼요.',
+    answer: '앱이 자동으로 새 버전을 알려줘요. 알림이 오면 "업데이트" 버튼만 누르면 돼요.',
   },
   {
     question: '구글 캘린더·드라이브 동기화가 안 돼요',
@@ -59,9 +58,7 @@ export default function FAQ() {
     <section className="bg-sp-surface py-20">
       <div className="mx-auto max-w-4xl px-6">
         <FadeIn>
-          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            자주 묻는 질문
-          </h2>
+          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">자주 묻는 질문</h2>
         </FadeIn>
 
         <div className="mt-10">
@@ -74,9 +71,7 @@ export default function FAQ() {
                     +
                   </span>
                 </summary>
-                <div className="pb-5 text-sm leading-relaxed text-sp-muted">
-                  {faq.answer}
-                </div>
+                <div className="pb-5 text-sm leading-relaxed text-sp-muted">{faq.answer}</div>
               </details>
             </FadeIn>
           ))}
@@ -84,12 +79,12 @@ export default function FAQ() {
 
         {/* 피드백 링크 */}
         <FadeIn delay={0.4}>
-          <div className="mt-8 flex flex-col items-center gap-3 rounded-xl border border-sp-border/40 bg-sp-card/50 p-6 text-center sm:flex-row sm:justify-center sm:gap-6 sm:text-left">
+          <div className="mt-8 flex flex-col items-center gap-3 rounded-xl border border-sp-border bg-sp-card p-6 text-center shadow-sm sm:flex-row sm:justify-center sm:gap-6 sm:text-left">
             <p className="text-sm text-sp-muted">더 궁금한 것이 있으신가요?</p>
             <div className="flex gap-3">
               <button
                 onClick={handleOpenChat}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-sp-accent/10 px-4 py-2 text-sm font-medium text-blue-400 transition-colors hover:bg-sp-accent/20"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-sp-accent/10 px-4 py-2 text-sm font-medium text-sp-accent transition-colors hover:bg-sp-accent/15"
               >
                 💬 AI에게 물어보기
               </button>

@@ -47,9 +47,9 @@ export default function ChatWindow({
   }, [messages, status]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-sp-border bg-sp-surface shadow-2xl shadow-black/40">
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-sp-border bg-sp-card shadow-2xl shadow-slate-900/20">
       {/* 헤더 */}
-      <div className="flex items-center justify-between border-b border-sp-border bg-sp-card px-4 py-3">
+      <div className="flex items-center justify-between border-b border-sp-border bg-sp-surface px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-lg">🎓</span>
           <div>
@@ -60,11 +60,20 @@ export default function ChatWindow({
         <div className="flex items-center gap-1">
           <button
             onClick={onClear}
-            className="rounded-lg p-1.5 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
+            className="rounded-lg p-1.5 text-sp-muted transition-colors hover:bg-sp-bg hover:text-sp-text"
             aria-label="대화 초기화"
             title="대화 초기화"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
               <path d="M21 3v5h-5" />
               <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
@@ -73,10 +82,19 @@ export default function ChatWindow({
           </button>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
+            className="rounded-lg p-1.5 text-sp-muted transition-colors hover:bg-sp-bg hover:text-sp-text"
             aria-label="채팅 닫기"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M6 9l6 6 6-6" />
             </svg>
           </button>

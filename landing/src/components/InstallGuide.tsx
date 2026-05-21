@@ -47,8 +47,20 @@ const troubleshootCases = [
     title: '"Windows의 PC 보호" 화면이 뜰 때',
     description: 'Windows SmartScreen이 알 수 없는 앱을 차단한 경우예요.',
     steps: [
-      { text: <><strong className="text-amber-200/80">&quot;추가 정보&quot;</strong>를 클릭합니다</> },
-      { text: <><strong className="text-amber-200/80">&quot;실행&quot;</strong> 버튼을 클릭합니다</> },
+      {
+        text: (
+          <>
+            <strong className="text-amber-800">&quot;추가 정보&quot;</strong>를 클릭합니다
+          </>
+        ),
+      },
+      {
+        text: (
+          <>
+            <strong className="text-amber-800">&quot;실행&quot;</strong> 버튼을 클릭합니다
+          </>
+        ),
+      },
     ],
   },
   {
@@ -56,27 +68,68 @@ const troubleshootCases = [
     icon: '⛔',
     label: '스마트 앱 컨트롤',
     title: '"스마트 앱 컨트롤이 차단했습니다" (Windows 11)',
-    description: 'Windows 11의 스마트 앱 컨트롤이 실행을 막은 경우예요. 코드 서명이 없는 앱은 "무시" 버튼 없이 완전히 차단돼요.',
+    description:
+      'Windows 11의 스마트 앱 컨트롤이 실행을 막은 경우예요. 코드 서명이 없는 앱은 "무시" 버튼 없이 완전히 차단돼요.',
     steps: [
-      { text: <>설치 파일 우클릭 → <strong className="text-amber-200/80">&quot;속성&quot;</strong> → 하단 <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크 → 확인 후 다시 실행</> },
-      { text: <>위 방법이 안 되면: <strong className="text-amber-200/80">설정</strong> → <strong className="text-amber-200/80">개인정보 및 보안</strong> → <strong className="text-amber-200/80">Windows 보안</strong> → <strong className="text-amber-200/80">앱 및 브라우저 컨트롤</strong></> },
-      { text: <><strong className="text-amber-200/80">&quot;스마트 앱 컨트롤 설정&quot;</strong>을 클릭하고 <strong className="text-amber-200/80">&quot;끔&quot;</strong>을 선택합니다</> },
+      {
+        text: (
+          <>
+            설치 파일 우클릭 → <strong className="text-amber-800">&quot;속성&quot;</strong> → 하단{' '}
+            <strong className="text-amber-800">&quot;차단 해제&quot;</strong> 체크 → 확인 후 다시
+            실행
+          </>
+        ),
+      },
+      {
+        text: (
+          <>
+            위 방법이 안 되면: <strong className="text-amber-800">설정</strong> →{' '}
+            <strong className="text-amber-800">개인정보 및 보안</strong> →{' '}
+            <strong className="text-amber-800">Windows 보안</strong> →{' '}
+            <strong className="text-amber-800">앱 및 브라우저 컨트롤</strong>
+          </>
+        ),
+      },
+      {
+        text: (
+          <>
+            <strong className="text-amber-800">&quot;스마트 앱 컨트롤 설정&quot;</strong>을 클릭하고{' '}
+            <strong className="text-amber-800">&quot;끔&quot;</strong>을 선택합니다
+          </>
+        ),
+      },
       { text: <>설치 파일을 다시 더블클릭합니다</> },
     ],
-    extraTip: '⚠️ 스마트 앱 컨트롤은 한번 끄면 PC를 초기화하기 전까지 다시 켤 수 없어요.\n쌤핀 설치 후에도 다른 앱은 Windows 보안(SmartScreen)이 계속 보호합니다.',
+    extraTip:
+      '⚠️ 스마트 앱 컨트롤은 한번 끄면 PC를 초기화하기 전까지 다시 켤 수 없어요.\n쌤핀 설치 후에도 다른 앱은 Windows 보안(SmartScreen)이 계속 보호합니다.',
   },
   {
     id: 'antivirus',
     icon: '🦠',
     label: '백신이 차단해요',
     title: '백신(V3, 알약 등)이 차단하거나 삭제할 때',
-    description: '백신 프로그램이 설치 파일을 위험하다고 판단한 경우예요. 더블클릭해도 아무 반응이 없다면 이 경우일 가능성이 높아요!',
+    description:
+      '백신 프로그램이 설치 파일을 위험하다고 판단한 경우예요. 더블클릭해도 아무 반응이 없다면 이 경우일 가능성이 높아요!',
     steps: [
-      { text: <>백신 프로그램을 열어 <strong className="text-amber-200/80">&quot;실시간 감시&quot;</strong> 또는 &quot;실시간 보호&quot;를 일시 중지합니다</> },
+      {
+        text: (
+          <>
+            백신 프로그램을 열어 <strong className="text-amber-800">&quot;실시간 감시&quot;</strong>{' '}
+            또는 &quot;실시간 보호&quot;를 일시 중지합니다
+          </>
+        ),
+      },
       { text: <>설치 파일을 다시 더블클릭하여 설치합니다</> },
-      { text: <>설치가 끝나면 <strong className="text-amber-200/80">실시간 감시를 다시 켜주세요</strong></> },
+      {
+        text: (
+          <>
+            설치가 끝나면 <strong className="text-amber-800">실시간 감시를 다시 켜주세요</strong>
+          </>
+        ),
+      },
     ],
-    extraTip: 'V3: 트레이 아이콘 우클릭 → 실시간 검사 일시 중지\n알약: 트레이 아이콘 우클릭 → 실시간 감시 해제',
+    extraTip:
+      'V3: 트레이 아이콘 우클릭 → 실시간 검사 일시 중지\n알약: 트레이 아이콘 우클릭 → 실시간 감시 해제',
   },
   {
     id: 'no-response',
@@ -85,9 +138,31 @@ const troubleshootCases = [
     title: '더블클릭해도 아무 반응이 없을 때',
     description: '설치 파일을 실행했는데 아무 창도 안 뜨는 경우예요.',
     steps: [
-      { text: <>먼저 위의 <strong className="text-amber-200/80">&quot;백신 차단&quot;</strong> 해결법을 시도해보세요 (가장 흔한 원인!)</> },
-      { text: <>그래도 안 되면: 설치 파일 우클릭 → <strong className="text-amber-200/80">&quot;관리자 권한으로 실행&quot;</strong></> },
-      { text: <>여전히 안 되면: 설치 파일 우클릭 → &quot;속성&quot; → <strong className="text-amber-200/80">&quot;차단 해제&quot;</strong> 체크 → 확인 후 다시 실행</> },
+      {
+        text: (
+          <>
+            먼저 위의 <strong className="text-amber-800">&quot;백신 차단&quot;</strong> 해결법을
+            시도해보세요 (가장 흔한 원인!)
+          </>
+        ),
+      },
+      {
+        text: (
+          <>
+            그래도 안 되면: 설치 파일 우클릭 →{' '}
+            <strong className="text-amber-800">&quot;관리자 권한으로 실행&quot;</strong>
+          </>
+        ),
+      },
+      {
+        text: (
+          <>
+            여전히 안 되면: 설치 파일 우클릭 → &quot;속성&quot; →{' '}
+            <strong className="text-amber-800">&quot;차단 해제&quot;</strong> 체크 → 확인 후 다시
+            실행
+          </>
+        ),
+      },
     ],
   },
 ];
@@ -113,16 +188,14 @@ export default function InstallGuide() {
     <section className="bg-sp-bg py-24">
       <div className="mx-auto max-w-6xl px-6">
         <FadeIn className="text-center">
-          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            설치는 3단계면 끝
-          </h2>
+          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">설치는 3단계면 끝</h2>
           <p className="mt-3 text-base text-sp-muted">다운로드부터 실행까지 1분 이내</p>
         </FadeIn>
 
         {os === 'mobile' && (
           <FadeIn className="mt-6" delay={0.05}>
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-center">
-              <p className="text-sm font-medium text-blue-300">
+            <div className="rounded-xl border border-sp-accent/30 bg-sp-accent/5 p-4 text-center">
+              <p className="text-sm font-medium text-sp-accent">
                 아래 안내는 PC(Windows/macOS) 전용이에요
               </p>
               <p className="mt-1 text-xs text-sp-muted">
@@ -140,11 +213,11 @@ export default function InstallGuide() {
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {(os === 'mac' ? macSteps : steps).map((step, i) => (
               <FadeIn key={step.number} delay={i * 0.1}>
-                <div className="rounded-xl bg-sp-card p-7">
-                  <div className="mb-4 text-2xl font-extrabold tracking-tight text-sp-accent/50">
+                <div className="rounded-xl border border-sp-border bg-sp-card p-7 shadow-sm">
+                  <div className="mb-4 text-2xl font-extrabold tracking-tight text-sp-accent/60">
                     {step.number}
                   </div>
-                  <h3 className="text-base font-bold text-white">{step.title}</h3>
+                  <h3 className="text-base font-bold text-sp-text">{step.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-sp-muted">{step.description}</p>
                 </div>
               </FadeIn>
@@ -161,12 +234,14 @@ export default function InstallGuide() {
             <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
               {(os === 'mac' ? steps : macSteps).map((step, i) => (
                 <FadeIn key={`alt-${step.number}`} delay={i * 0.1}>
-                  <div className="rounded-xl bg-sp-card/60 p-7">
-                    <div className="mb-4 text-2xl font-extrabold tracking-tight text-sp-accent/30">
+                  <div className="rounded-xl border border-sp-border/70 bg-sp-card/70 p-7">
+                    <div className="mb-4 text-2xl font-extrabold tracking-tight text-sp-accent/40">
                       {step.number}
                     </div>
-                    <h3 className="text-base font-bold text-white/70">{step.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-sp-muted/70">{step.description}</p>
+                    <h3 className="text-base font-bold text-sp-text/75">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-sp-muted/80">
+                      {step.description}
+                    </p>
                   </div>
                 </FadeIn>
               ))}
@@ -177,11 +252,15 @@ export default function InstallGuide() {
         {/* 트러블슈팅 섹션 — Windows */}
         {os !== 'mobile' && (
           <FadeIn className={os === 'mac' ? 'mt-6' : 'mt-10'} delay={os === 'mac' ? 0.35 : 0.3}>
-            <div className={`rounded-xl border border-amber-500/20 p-6 ${os === 'mac' ? 'bg-amber-500/5' : 'bg-amber-500/10'}`}>
-              <p className={`text-lg font-semibold text-amber-200 ${os === 'mac' ? 'opacity-70' : ''}`}>
+            <div
+              className={`rounded-xl border border-amber-300/70 p-6 ${os === 'mac' ? 'bg-amber-50/60' : 'bg-amber-50'}`}
+            >
+              <p
+                className={`text-lg font-semibold text-amber-900 ${os === 'mac' ? 'opacity-70' : ''}`}
+              >
                 📥 Windows 설치가 안 되시나요?
               </p>
-              <p className={`mt-1.5 text-sm text-amber-200/70 ${os === 'mac' ? 'opacity-70' : ''}`}>
+              <p className={`mt-1.5 text-sm text-amber-800/80 ${os === 'mac' ? 'opacity-70' : ''}`}>
                 증상을 선택하면 해결 방법을 알려드려요!
               </p>
 
@@ -194,8 +273,8 @@ export default function InstallGuide() {
                     onClick={() => toggleCase(tc.id)}
                     className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-left text-sm font-medium transition-all ${
                       openCase === tc.id
-                        ? 'border-amber-400/40 bg-amber-500/15 text-amber-200'
-                        : 'border-amber-500/15 bg-amber-500/5 text-amber-200/70 hover:border-amber-500/25 hover:bg-amber-500/10 hover:text-amber-200/90'
+                        ? 'border-amber-500/70 bg-amber-100 text-amber-900'
+                        : 'border-amber-300/60 bg-white/60 text-amber-800/80 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900'
                     }`}
                   >
                     <span className="text-base">{tc.icon}</span>
@@ -212,18 +291,18 @@ export default function InstallGuide() {
                     openCase === tc.id ? 'mt-4 max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
                   }`}
                 >
-                  <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
-                    <p className="text-sm font-semibold text-amber-300">
+                  <div className="rounded-lg border border-amber-300/70 bg-white/70 p-4">
+                    <p className="text-sm font-semibold text-amber-900">
                       {tc.icon} {tc.title}
                     </p>
-                    <p className="mt-1.5 text-xs leading-relaxed text-amber-200/60">
+                    <p className="mt-1.5 text-xs leading-relaxed text-amber-800/80">
                       {tc.description}
                     </p>
 
                     <ol className="mt-3 space-y-2">
                       {tc.steps.map((step, i) => (
-                        <li key={i} className="flex items-start gap-2.5 text-xs text-amber-200/70">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">
+                        <li key={i} className="flex items-start gap-2.5 text-xs text-amber-800/85">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.65rem] font-bold text-amber-900">
                             {i + 1}
                           </span>
                           <span className="pt-0.5">{step.text}</span>
@@ -232,9 +311,9 @@ export default function InstallGuide() {
                     </ol>
 
                     {tc.extraTip && (
-                      <div className="mt-3 rounded-md bg-amber-500/5 px-3 py-2">
+                      <div className="mt-3 rounded-md bg-amber-50 px-3 py-2">
                         {tc.extraTip.split('\n').map((line, i) => (
-                          <p key={i} className="text-[0.7rem] text-amber-200/50">
+                          <p key={i} className="text-[0.7rem] text-amber-800/70">
                             💡 {line}
                           </p>
                         ))}
@@ -244,7 +323,7 @@ export default function InstallGuide() {
                 </div>
               ))}
 
-              <p className="mt-4 text-xs text-amber-200/40">
+              <p className="mt-4 text-xs text-amber-800/60">
                 코드 서명 인증서를 준비 중이며, 곧 경고 없이 설치하실 수 있게 됩니다.
               </p>
             </div>
@@ -254,30 +333,53 @@ export default function InstallGuide() {
         {/* 트러블슈팅 섹션 — macOS */}
         {os !== 'mobile' && (
           <FadeIn className={os === 'mac' ? 'mt-10' : 'mt-6'} delay={os === 'mac' ? 0.3 : 0.35}>
-            <div className={`rounded-xl border border-amber-500/20 p-6 ${os === 'mac' ? 'bg-amber-500/10' : 'bg-amber-500/5'}`}>
-              <p className={`text-lg font-semibold text-amber-200 ${os === 'mac' ? '' : 'opacity-70'}`}>
+            <div
+              className={`rounded-xl border border-amber-300/70 p-6 ${os === 'mac' ? 'bg-amber-50' : 'bg-amber-50/60'}`}
+            >
+              <p
+                className={`text-lg font-semibold text-amber-900 ${os === 'mac' ? '' : 'opacity-70'}`}
+              >
                 🍎 &quot;개발자를 확인할 수 없음&quot; 경고가 뜨나요?
               </p>
-              <p className={`mt-1.5 text-sm text-amber-200/70 ${os === 'mac' ? '' : 'opacity-70'}`}>
+              <p className={`mt-1.5 text-sm text-amber-800/80 ${os === 'mac' ? '' : 'opacity-70'}`}>
                 개인 개발 앱이라 아직 Apple 인증서가 없어서 표시되는 경고예요.
               </p>
-              <div className="mt-4 rounded-lg border border-amber-500/15 bg-amber-500/5 p-4">
+              <div className="mt-4 rounded-lg border border-amber-300/70 bg-white/70 p-4">
                 <ol className="space-y-2">
-                  <li className="flex items-start gap-2.5 text-xs text-amber-200/70">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">1</span>
-                    <span className="pt-0.5"><strong className="text-amber-200/80">시스템 설정 → 개인정보 보호 및 보안</strong>으로 이동하세요</span>
+                  <li className="flex items-start gap-2.5 text-xs text-amber-800/85">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.65rem] font-bold text-amber-900">
+                      1
+                    </span>
+                    <span className="pt-0.5">
+                      <strong className="text-amber-900">
+                        시스템 설정 → 개인정보 보호 및 보안
+                      </strong>
+                      으로 이동하세요
+                    </span>
                   </li>
-                  <li className="flex items-start gap-2.5 text-xs text-amber-200/70">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">2</span>
-                    <span className="pt-0.5">&quot;쌤핀이(가) 차단되었습니다&quot; 옆의 <strong className="text-amber-200/80">&quot;확인 없이 열기&quot;</strong>를 클릭하세요</span>
+                  <li className="flex items-start gap-2.5 text-xs text-amber-800/85">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.65rem] font-bold text-amber-900">
+                      2
+                    </span>
+                    <span className="pt-0.5">
+                      &quot;쌤핀이(가) 차단되었습니다&quot; 옆의{' '}
+                      <strong className="text-amber-900">&quot;확인 없이 열기&quot;</strong>를
+                      클릭하세요
+                    </span>
                   </li>
-                  <li className="flex items-start gap-2.5 text-xs text-amber-200/70">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[0.65rem] font-bold text-amber-300">3</span>
-                    <span className="pt-0.5">또는: 앱을 <strong className="text-amber-200/80">Control+클릭 → &quot;열기&quot;</strong>를 선택하세요</span>
+                  <li className="flex items-start gap-2.5 text-xs text-amber-800/85">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[0.65rem] font-bold text-amber-900">
+                      3
+                    </span>
+                    <span className="pt-0.5">
+                      또는: 앱을{' '}
+                      <strong className="text-amber-900">Control+클릭 → &quot;열기&quot;</strong>를
+                      선택하세요
+                    </span>
                   </li>
                 </ol>
               </div>
-              <p className="mt-4 text-xs text-amber-200/40">
+              <p className="mt-4 text-xs text-amber-800/60">
                 Apple 코드 서명 인증서를 준비 중이며, 곧 경고 없이 설치하실 수 있게 됩니다.
               </p>
             </div>

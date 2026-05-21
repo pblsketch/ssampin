@@ -11,7 +11,6 @@ export default function Hero() {
 
       <div className="mx-auto max-w-6xl px-6 md:px-10">
         <div className="grid grid-cols-1 gap-12 md:grid-cols-[1fr_auto] md:items-end md:gap-16">
-
           {/* 왼쪽: 헤드라인 */}
           <div>
             <motion.div
@@ -29,18 +28,16 @@ export default function Hero() {
 
               {/* 헤드라인 */}
               <h1 className="text-[2.6rem] font-extrabold leading-[1.18] tracking-tight text-sp-text md:text-[3.75rem]">
-                중요한 걸{' '}
-                <br className="md:hidden" />
+                중요한 걸 <br className="md:hidden" />
                 핀으로 꽂아두는
                 <br />
-                <span className="text-white">선생님의 대시보드</span>
+                <span className="text-sp-accent">선생님의 대시보드</span>
               </h1>
 
               {/* 서브 카피 */}
               <p className="mt-6 max-w-xl text-base leading-relaxed text-sp-muted md:text-lg">
                 시간표, 자리 배치, 일정, 담임메모, 할 일, 급식, 날씨, 쌤도구까지
-                <br className="hidden md:block" />
-                한 화면에서 관리하세요.
+                <br className="hidden md:block" />한 화면에서 관리하세요.
               </p>
             </motion.div>
 
@@ -79,23 +76,17 @@ export default function Hero() {
               { label: '완전 무료', value: '₩0', sub: '광고 없음' },
               { label: '오프라인', value: '100%', sub: '로컬 저장' },
             ].map((stat, i) => (
-              <div
-                key={i}
-                className="flex min-w-[160px] flex-col gap-0.5 bg-sp-surface px-6 py-5"
-              >
+              <div key={i} className="flex min-w-[160px] flex-col gap-0.5 bg-sp-surface px-6 py-5">
                 <span className="text-[0.7rem] font-semibold uppercase tracking-widest text-sp-muted">
                   {stat.label}
                 </span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-extrabold text-sp-text">
-                    {stat.value}
-                  </span>
+                  <span className="text-2xl font-extrabold text-sp-text">{stat.value}</span>
                   <span className="text-xs text-sp-muted">{stat.sub}</span>
                 </div>
               </div>
             ))}
           </motion.div>
-
         </div>
 
         {/* 하단 구분선 + 키워드 */}

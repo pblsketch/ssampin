@@ -39,7 +39,7 @@ export default function ChatMessage({
           className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
             isUser
               ? 'rounded-tr-sm bg-sp-accent text-white'
-              : 'rounded-tl-sm bg-sp-card text-sp-text'
+              : 'rounded-tl-sm border border-sp-border bg-sp-surface text-sp-text'
           }`}
         >
           {/* 마크다운 기본 렌더링 */}
@@ -58,7 +58,7 @@ export default function ChatMessage({
                   key={img.id}
                   type="button"
                   onClick={() => setLightboxSrc(img.dataUrl)}
-                  className="overflow-hidden rounded-lg border border-white/20 transition-transform hover:scale-[1.02]"
+                  className="overflow-hidden rounded-lg border border-sp-border transition-transform hover:scale-[1.02]"
                 >
                   <img
                     src={img.dataUrl}
@@ -72,24 +72,32 @@ export default function ChatMessage({
 
           {/* 소스 표시 */}
           {!isUser && message.sources && message.sources.length > 0 && (
-            <div className="mt-2 border-t border-white/10 pt-2">
-              <p className="text-[0.65rem] text-sp-muted">
+            <div
+              className={`mt-2 border-t pt-2 ${isUser ? 'border-white/30' : 'border-sp-border/70'}`}
+            >
+              <p className={`text-[0.65rem] ${isUser ? 'text-white/80' : 'text-sp-muted'}`}>
                 📚 참고: {message.sources.join(', ')}
               </p>
             </div>
           )}
 
           {/* 피드백 버튼 (어시스턴트 답변에만, welcome 제외) */}
-          {!isUser && message.id !== 'welcome' && message.feedbackState && onFeedbackResolved && onFeedbackUnresolved && onFeedbackAskMore && onFeedbackEscalate && (
-            <ChatFeedback
-              messageId={message.id}
-              feedbackState={message.feedbackState}
-              onResolved={onFeedbackResolved}
-              onUnresolved={onFeedbackUnresolved}
-              onAskMore={onFeedbackAskMore}
-              onEscalate={onFeedbackEscalate}
-            />
-          )}
+          {!isUser &&
+            message.id !== 'welcome' &&
+            message.feedbackState &&
+            onFeedbackResolved &&
+            onFeedbackUnresolved &&
+            onFeedbackAskMore &&
+            onFeedbackEscalate && (
+              <ChatFeedback
+                messageId={message.id}
+                feedbackState={message.feedbackState}
+                onResolved={onFeedbackResolved}
+                onUnresolved={onFeedbackUnresolved}
+                onAskMore={onFeedbackAskMore}
+                onEscalate={onFeedbackEscalate}
+              />
+            )}
         </div>
       </div>
 
@@ -100,10 +108,14 @@ export default function ChatMessage({
           onClick={() => setLightboxSrc(null)}
         >
           <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-            <img src={lightboxSrc} alt="첨부 이미지" className="max-h-[85vh] max-w-[85vw] rounded-lg object-contain" />
+            <img
+              src={lightboxSrc}
+              alt="첨부 이미지"
+              className="max-h-[85vh] max-w-[85vw] rounded-lg object-contain"
+            />
             <button
               onClick={() => setLightboxSrc(null)}
-              className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-sp-card text-sp-text shadow-lg hover:bg-sp-surface"
+              className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full border border-sp-border bg-sp-card text-sp-text shadow-lg hover:bg-sp-surface"
               aria-label="닫기"
             >
               ✕
@@ -122,7 +134,7 @@ function renderSimpleMarkdown(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.+?)`/g, '<code class="rounded bg-white/10 px-1 py-0.5 text-xs">$1</code>')
+    .replace(/`(.+?)`/g, '<code class="rounded bg-sp-bg px-1 py-0.5 text-xs">$1</code>')
     .replace(/^- (.+)$/gm, '• $1')
     .replace(/^\d+\. (.+)$/gm, '  $1');
 }

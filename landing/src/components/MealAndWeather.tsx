@@ -9,9 +9,7 @@ export default function MealAndWeather() {
             <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
               NEIS 연동
             </p>
-            <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-              학교 정보를 한눈에
-            </h2>
+            <h2 className="text-3xl font-bold text-sp-text md:text-4xl">학교 정보를 한눈에</h2>
             <p className="mt-3 text-base text-sp-muted">
               NEIS 급식·학사일정 + 실시간 날씨·미세먼지 + 구글 캘린더 동기화
             </p>
@@ -21,7 +19,7 @@ export default function MealAndWeather() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {/* 급식 카드 */}
           <FadeIn delay={0.05}>
-            <div className="h-full rounded-2xl border border-white/10 bg-sp-card p-8">
+            <div className="h-full rounded-2xl border border-sp-border bg-sp-card p-8 shadow-sm">
               <div className="mb-6 flex items-center gap-3">
                 <span className="text-3xl">🍚</span>
                 <h3 className="text-xl font-bold text-sp-text">급식</h3>
@@ -35,13 +33,13 @@ export default function MealAndWeather() {
                   '주간 급식표 한눈에 보기',
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-400" />
+                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-sp-accent" />
                     <span className="text-sp-muted">{item}</span>
                   </li>
                 ))}
               </ul>
 
-              <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+              <div className="rounded-xl border border-sp-border/60 bg-sp-surface/60 p-4">
                 <p className="mb-2 text-sm font-semibold text-sp-text">중식</p>
                 <ul className="space-y-1 text-sm text-sp-muted">
                   <li>• 쌀밥</li>
@@ -56,7 +54,7 @@ export default function MealAndWeather() {
 
           {/* 날씨·미세먼지 카드 */}
           <FadeIn delay={0.1}>
-            <div className="h-full rounded-2xl border border-white/10 bg-sp-card p-8">
+            <div className="h-full rounded-2xl border border-sp-border bg-sp-card p-8 shadow-sm">
               <div className="mb-6 flex items-center gap-3">
                 <span className="text-3xl">🌤️</span>
                 <h3 className="text-xl font-bold text-sp-text">날씨·미세먼지</h3>
@@ -70,13 +68,13 @@ export default function MealAndWeather() {
                   '대시보드 상단에 항상 표시',
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-400" />
+                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-sp-accent" />
                     <span className="text-sp-muted">{item}</span>
                   </li>
                 ))}
               </ul>
 
-              <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+              <div className="rounded-xl border border-sp-border/60 bg-sp-surface/60 p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-4xl font-bold text-sp-text">18°C</p>
@@ -84,7 +82,7 @@ export default function MealAndWeather() {
                   </div>
                   <div className="text-right space-y-2">
                     <p className="text-sm text-sp-muted">습도 55%</p>
-                    <p className="text-sm font-medium text-green-400">미세먼지 좋음</p>
+                    <p className="text-sm font-medium text-emerald-600">미세먼지 좋음</p>
                   </div>
                 </div>
               </div>
@@ -93,7 +91,7 @@ export default function MealAndWeather() {
 
           {/* 학사일정 카드 */}
           <FadeIn delay={0.15}>
-            <div className="h-full rounded-2xl border border-white/10 bg-sp-card p-8">
+            <div className="h-full rounded-2xl border border-sp-border bg-sp-card p-8 shadow-sm">
               <div className="mb-6 flex items-center gap-3">
                 <span className="text-3xl">🏫</span>
                 <h3 className="text-xl font-bold text-sp-text">학사일정</h3>
@@ -107,28 +105,30 @@ export default function MealAndWeather() {
                   '일정 캘린더에 자동 반영',
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-purple-400" />
+                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-purple-500" />
                     <span className="text-sp-muted">{item}</span>
                   </li>
                 ))}
               </ul>
 
-              <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+              <div className="rounded-xl border border-sp-border/60 bg-sp-surface/60 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="inline-flex items-center rounded-full bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-300">동기화 완료</span>
+                  <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                    동기화 완료
+                  </span>
                   <span className="text-xs text-sp-muted">12건</span>
                 </div>
                 <ul className="space-y-1.5 text-sm text-sp-muted">
                   <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
                     3/1 삼일절 (공휴일)
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
                     3/4 개학식
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
                     4/16 중간고사
                   </li>
                 </ul>
@@ -138,7 +138,7 @@ export default function MealAndWeather() {
 
           {/* 구글 캘린더 카드 */}
           <FadeIn delay={0.2}>
-            <div className="h-full rounded-2xl border border-white/10 bg-sp-card p-8">
+            <div className="h-full rounded-2xl border border-sp-border bg-sp-card p-8 shadow-sm">
               <div className="mb-6 flex items-center gap-3">
                 <span className="text-3xl">📅</span>
                 <h3 className="text-xl font-bold text-sp-text">구글 캘린더</h3>
@@ -152,21 +152,23 @@ export default function MealAndWeather() {
                   '여러 캘린더 선택 동기화',
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-green-400" />
+                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-emerald-500" />
                     <span className="text-sp-muted">{item}</span>
                   </li>
                 ))}
               </ul>
 
-              <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+              <div className="rounded-xl border border-sp-border/60 bg-sp-surface/60 p-4">
                 <div className="space-y-2">
                   {[
-                    { color: 'bg-blue-400', name: '내 캘린더', checked: true },
-                    { color: 'bg-green-400', name: '학교 일정', checked: true },
-                    { color: 'bg-yellow-400', name: '개인 일정', checked: false },
+                    { color: 'bg-sp-accent', name: '내 캘린더', checked: true },
+                    { color: 'bg-emerald-500', name: '학교 일정', checked: true },
+                    { color: 'bg-amber-500', name: '개인 일정', checked: false },
                   ].map((cal) => (
                     <div key={cal.name} className="flex items-center gap-2.5">
-                      <div className={`h-4 w-4 rounded border ${cal.checked ? 'border-sp-accent bg-sp-accent' : 'border-sp-border bg-sp-bg'} flex items-center justify-center`}>
+                      <div
+                        className={`h-4 w-4 rounded border ${cal.checked ? 'border-sp-accent bg-sp-accent' : 'border-sp-border bg-sp-bg'} flex items-center justify-center`}
+                      >
                         {cal.checked && <span className="text-[10px] text-white">✓</span>}
                       </div>
                       <span className={`h-2.5 w-2.5 rounded-full ${cal.color}`} />

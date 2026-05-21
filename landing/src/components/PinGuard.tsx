@@ -7,15 +7,7 @@ const checklist = [
   '대시보드에서 잠금 상태 표시',
 ];
 
-const protectedFeatures = [
-  '시간표',
-  '담임메모',
-  '좌석배치',
-  '일정',
-  '급식',
-  '메모',
-  '할 일',
-];
+const protectedFeatures = ['시간표', '담임메모', '좌석배치', '일정', '급식', '메모', '할 일'];
 
 export default function PinGuard() {
   return (
@@ -25,20 +17,18 @@ export default function PinGuard() {
           <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
             보안
           </p>
-          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            민감한 정보는 안전하게
-          </h2>
+          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">민감한 정보는 안전하게</h2>
           <p className="mt-3 text-base text-sp-muted">
             학생이 보는 앞에서도 안심 — PIN 잠금으로 기능별 보호
           </p>
         </FadeIn>
 
         <FadeIn className="mt-12" delay={0.1}>
-          <div className="rounded-2xl border border-white/10 bg-sp-card p-8 md:p-12">
+          <div className="rounded-2xl border border-sp-border bg-sp-card p-8 shadow-sm md:p-12">
             <div className="flex flex-col items-center gap-8 md:flex-row md:gap-12">
               {/* Left visual */}
               <div className="flex flex-col items-center gap-4 md:w-1/3">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-500/10">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sp-accent/10">
                   <span className="text-4xl">🔒</span>
                 </div>
                 <div className="flex flex-row gap-2">
@@ -55,7 +45,7 @@ export default function PinGuard() {
                 <ul className="space-y-4">
                   {checklist.map((item) => (
                     <li key={item} className="flex items-center gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-sm text-blue-400">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sp-accent/15 text-sm text-sp-accent">
                         ✓
                       </span>
                       <span className="text-sp-text">{item}</span>

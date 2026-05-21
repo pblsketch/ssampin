@@ -27,9 +27,7 @@ export default function ClassroomTools() {
           <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-widest text-sp-accent">
             쌤도구 16가지
           </p>
-          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">
-            수업에 바로 쓰는 쌤도구
-          </h2>
+          <h2 className="text-3xl font-bold text-sp-text md:text-4xl">수업에 바로 쓰는 쌤도구</h2>
           <p className="mt-3 text-base text-sp-muted">
             타이머, 투표, 워드클라우드, QR코드까지 — 클릭 한 번이면 준비 끝
           </p>
@@ -38,7 +36,7 @@ export default function ClassroomTools() {
         <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {tools.map((tool, i) => (
             <FadeIn key={tool.name} delay={i * 0.04}>
-              <div className="rounded-lg bg-white/[0.03] p-4 text-center transition-transform hover:-translate-y-0.5">
+              <div className="rounded-lg border border-sp-border bg-sp-card p-4 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <p className="text-3xl">{tool.emoji}</p>
                 <p className="mt-2 text-sm font-semibold text-sp-text">{tool.name}</p>
                 <p className="mt-0.5 text-xs text-sp-muted">{tool.desc}</p>
