@@ -61,6 +61,56 @@ const presenceChecks = [
     pattern: /isRateLimited[\s\S]{0,400}?session\.handle\.isRateLimited\s*\(/,
     name: 'REGRESSION #5b: isRateLimited()가 session.handle.isRateLimited()로 위임',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #10~#16 — notification-modal-stacking-fix Phase 4 (2026-05-21)
+  // 사용자 신고 "처음 일정 알림 X 안 눌림"의 근본 원인이었던 모달 동시 노출
+  // 부채를 막기 위해, App.tsx 렌더 트리의 6개 모달(7개 호출처: OAuth 3종 포함)이
+  // 반드시 useRegisterModal('PRIORITY', ...)로 ModalCoordinator 큐에 등록되어야 함.
+  // 누락 시 회귀 — 동시 노출 시 위 모달이 아래 모달을 가린다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/components/common/ModalCoordinator.tsx',
+    pattern: /export\s+function\s+ModalCoordinator/,
+    name: 'REGRESSION #10: ModalCoordinator 컴포넌트 존재 (큐 인프라 마운트 시그널)',
+  },
+  {
+    file: 'src/App.tsx',
+    pattern: /<ModalCoordinator\s*\/>/,
+    name: 'REGRESSION #11: App.tsx 렌더 트리에 <ModalCoordinator /> 마운트',
+  },
+  {
+    file: 'src/adapters/components/Dashboard/EventPopup.tsx',
+    pattern: /useRegisterModal\(\s*['"]EVENT_ALERT['"]/,
+    name: 'REGRESSION #12: EventPopup이 EVENT_ALERT priority로 큐 등록',
+  },
+  {
+    file: 'src/adapters/components/common/UpdateNotification.tsx',
+    pattern:
+      /useRegisterModal\(\s*['"]SECURITY_UPDATE['"][\s\S]{0,200}?useRegisterModal\(\s*['"]NORMAL_UPDATE['"]/,
+    name: 'REGRESSION #13: UpdateNotification이 SECURITY/NORMAL_UPDATE 두 priority XOR 등록',
+  },
+  {
+    file: 'src/adapters/components/common/FirstSyncConfirmModal.tsx',
+    pattern: /useRegisterModal\(\s*['"]FIRST_SYNC['"]/,
+    name: 'REGRESSION #14: FirstSyncConfirmModal이 FIRST_SYNC priority로 큐 등록',
+  },
+  {
+    file: 'src/adapters/components/common/DriveSyncConflictModal.tsx',
+    pattern: /useRegisterModal\(\s*['"]DRIVE_CONFLICT['"]/,
+    name: 'REGRESSION #15: DriveSyncConflictModal이 DRIVE_CONFLICT priority로 큐 등록',
+  },
+  {
+    // OAuth 3종 sub-modal이 모두 OAUTH_FLOW로 등록 — 최소 3회 호출 검증
+    file: 'src/adapters/components/Settings/modals/OAuthModalsProvider.tsx',
+    pattern:
+      /useRegisterModal\(\s*['"]OAUTH_FLOW['"][\s\S]+useRegisterModal\(\s*['"]OAUTH_FLOW['"][\s\S]+useRegisterModal\(\s*['"]OAUTH_FLOW['"]/,
+    name: 'REGRESSION #16: OAuthModalsProvider 3개 sub-modal 모두 OAUTH_FLOW priority 등록',
+  },
+  {
+    file: 'src/adapters/components/Share/SharePromptOverlay.tsx',
+    pattern: /useRegisterModal\(\s*['"]SHARE_PROMPT['"]/,
+    name: 'REGRESSION #17: SharePromptOverlay가 SHARE_PROMPT priority로 큐 등록',
+  },
 ];
 
 // ============================================================
@@ -225,5 +275,5 @@ if (failed > 0) {
   console.error('===========================================================');
   process.exit(1);
 }
-console.log('All 9 regression checks passed.');
+console.log(`All ${passed} regression checks passed.`);
 process.exit(0);
