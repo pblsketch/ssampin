@@ -4,7 +4,7 @@
 
 ## Current Version
 
-v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`). 다음 패치 후보: **v2.0.7 — notification-modal-stacking-fix (Phase 0~4 통합)**.
+v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`). **다음 패치 v2.0.7 후보: notification-modal-stacking-fix Phase 0~4 통합 완료 (Match Rate 97% PASS, 2026-05-21, main `003eb1a`) — 릴리즈 워크플로우 8단계 진행 대기**.
 
 ## Completed (최근)
 
@@ -21,7 +21,7 @@ v2.0.6 (2026-05-20 출시 완료, tag `v2.0.6`, main `eaa687d`). 다음 패치 �
 
 ## In Progress
 
-- 🔴 **notification-modal-stacking-fix Plan v1.1 확정 (2026-05-21)** — 사용자 신고 "처음 일정 알림이 떠 있을 때 X 안 눌리고 창을 껐다 켜야 누름"의 원인(EventPopup이 같은 z-50 모달인 UpdateNotification을 가림 + `pointer-events-none` 누락) 분석 완료. 5 Phase 통합 계획: Phase 0(핫픽스, X 추가 + pointer-events) + Phase 1(EventPopup Modal 마이그레이션) + Phase 2(ModalCoordinator 우선순위 큐) + Phase 3(6개 모달 큐 등록, OAuth 포함) + Phase 4(메타테스트). **v2.0.7 단일 패치 통합** (사용자 결정 2026-05-21). 다음: Phase 0 Do → main 머지 → Phase 1~4 Design 작성. [Plan v1.1](docs/01-plan/features/notification-modal-stacking-fix.plan.md)
+- 🟢 **notification-modal-stacking-fix PDCA 완료 — Match Rate 97% PASS (2026-05-21, main 5 commits)** — 사용자 신고 "처음 일정 알림이 떠 있을 때 X 안 눌리고 창을 껐다 켜야 누름" 핵심 해소. Phase 0(`4136527`) 핫픽스 + Phase 1(`396b5b4`) EventPopup Modal 베이스 마이그레이션 + Phase 2(`3a9b3a9`) ModalCoordinator 우선순위 큐 인프라 신설 + Phase 3(`50f6c6b`) 6개 모달 큐 등록 + SharePromptOverlay Modal 통합 + Phase 4(`003eb1a`) 메타테스트 18건 + REGRESSION 9→17. 검증 게이트 4/4: tsc 0 / lint 0 / test 1503 (+46) / regression 17/17. **다음: v2.0.7 릴리즈 (CLAUDE.md 8단계 워크플로우)**. [Plan v1.1](docs/01-plan/features/notification-modal-stacking-fix.plan.md) · [Design v1.1](docs/02-design/features/notification-modal-stacking-fix.design.md) · [Report](docs/04-report/features/notification-modal-stacking-fix.report.md)
 - **multi-date-attendance Check 완료 (2026-05-20, Match Rate 96.7% PASS)** — `feature/multi-date-attendance` 브랜치 6 commits + 분석 보고서 1건. gap-detector 결과 모든 HIGH 항목 100%, LOW 갭 3건 cosmetic. Iterate 불필요. 다음: `/pdca report multi-date-attendance`. [Analysis](docs/03-analysis/multi-date-attendance.analysis.md)
 - **freestyle-seating Phase 1~5a + UX 종합 개선 14건 + PDF 출력 완료 (2026-05-20, main 단일 워킹트리)** — Playwright MCP 실사용 점검으로 결함 발견·즉시 수정 누적:
   1. 컨테이너 4:3→16:10 + max-height (viewport 잘림 해소)
