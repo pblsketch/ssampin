@@ -56,6 +56,7 @@ import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer, useToastStore } from '@adapters/components/common/Toast';
 import { UpdateNotification } from '@adapters/components/common/UpdateNotification';
+import { ModalCoordinator } from '@adapters/components/common/ModalCoordinator';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
 import { HelpChatPanel } from '@adapters/components/HelpChat';
 import { CloseActionDialog } from '@adapters/components/common/CloseActionDialog';
@@ -1095,6 +1096,7 @@ function MainApp() {
             settingsInitialTab,
           })}
         </main>
+        <ModalCoordinator />
         <UpdateNotification />
         <EventPopup />
         <ToastContainer />
