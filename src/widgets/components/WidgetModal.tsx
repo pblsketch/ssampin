@@ -134,18 +134,42 @@ export function WidgetModal({
   // Focus trap — head이면서 열려 있을 때만 활성화.
   useFocusTrap(modalRef, isOpen && isHead);
 
-  // ESC 키 처리. document keydown 캡처 — 모든 자식 요소가 이벤트를 받기 전에 가로채지는 않고,
-  // 일반 bubble 단계에서 처리. 충돌 가능 시 capture 옵션 고려.
+  // 마운트 직후 모달 본체에 명시적 focus + window.focus().
+  // 위젯 모드(Electron 데스크톱 위젯 BrowserWindow)에서 카드 클릭 시 본문에 focus 가 안 가서
+  // window/document 의 keydown 이 도달하지 않는 회귀(2026-05-23)를 차단한다.
+  // readOnly 인 경우 useFocusTrap 이 첫 포커스 가능 노드를 못 찾으므로(fieldset disabled)
+  // modalRef 본체에 직접 focus 를 옮긴다.
+  useEffect(() => {
+    if (!isOpen || !isHead) return;
+    // 한 tick 뒤에 focus — portal mount 완료 후
+    const t = setTimeout(() => {
+      try {
+        window.focus();
+      } catch {
+        /* 일부 환경에서 focus()가 throw — 무시 */
+      }
+      modalRef.current?.focus();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [isOpen, isHead]);
+
+  // ESC 키 처리. document + window 양쪽에 capture 단계로 등록 — 위젯 모드에서
+  // 어떤 노드에 focus 가 있어도 잡히도록 강화.
   useEffect(() => {
     if (!isOpen || !isHead) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         saveAndClose();
       }
     }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
     // saveAndClose는 props 캡처라 의존성 추가 시 매 렌더 재구독. props 변화 잡기 위해 의도.
   }, [isOpen, isHead, saveAndClose]);
 
