@@ -3,6 +3,7 @@ import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useSt
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { sortByDateDesc } from '@domain/rules/studentRecordRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { StudentRecordsEditor } from '../Homeroom/Records/StudentRecordsEditor';
 
 function todayString(): string {
   const d = new Date();
@@ -32,7 +33,16 @@ const WIDGET_TABS: { id: WidgetTab; label: string }[] = [
 
 const MAX_PREVIEW = 3;
 
-export function DashboardStudentRecords() {
+interface DashboardStudentRecordsProps {
+  /** false = 확장 모달 뷰(분할 에디터). 기본값 true(카드 뷰) */
+  isCompactMode?: boolean;
+}
+
+export function DashboardStudentRecords({ isCompactMode = true }: DashboardStudentRecordsProps) {
+  if (!isCompactMode) {
+    return <StudentRecordsEditor />;
+  }
+
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<WidgetTab>('all');
   const { records, loaded, load, categories } = useStudentRecordsStore();
@@ -44,10 +54,7 @@ export function DashboardStudentRecords() {
   }, [load, loadStudents]);
 
   // 담임 반 학생 ID로 필터링 — 다른 학급 학생 기록 제외
-  const studentIds = useMemo(
-    () => new Set(students.map((s) => s.id)),
-    [students],
-  );
+  const studentIds = useMemo(() => new Set(students.map((s) => s.id)), [students]);
   const homeroomRecords = useMemo(
     () => records.filter((r) => studentIds.has(r.studentId)),
     [records, studentIds],
@@ -58,10 +65,7 @@ export function DashboardStudentRecords() {
     [categories],
   );
 
-  const studentMap = useMemo(
-    () => new Map(students.map((s) => [s.id, s])),
-    [students],
-  );
+  const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
   const today = todayString();
   const todayRecords = useMemo(
@@ -119,7 +123,9 @@ export function DashboardStudentRecords() {
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>👩‍🏫</span>오늘 기록</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>👩‍🏫</span>오늘 기록
+        </h3>
         {todayRecords.length > 0 && (
           <span className="text-xs text-sp-muted">{todayRecords.length}건</span>
         )}
@@ -161,7 +167,9 @@ export function DashboardStudentRecords() {
                 <div className="text-caption text-sp-muted">지각</div>
               </div>
               <div className="bg-orange-500/10 rounded-lg p-2 text-center">
-                <div className="text-orange-400 text-sm font-bold">{attendanceStats.earlyLeave}</div>
+                <div className="text-orange-400 text-sm font-bold">
+                  {attendanceStats.earlyLeave}
+                </div>
                 <div className="text-caption text-sp-muted">조퇴</div>
               </div>
             </div>
@@ -171,11 +179,10 @@ export function DashboardStudentRecords() {
                 {attendanceStats.todayAttendance.map((record) => {
                   const student = studentMap.get(record.studentId);
                   return (
-                    <li
-                      key={record.id}
-                      className="flex items-center gap-2 rounded-lg px-2 py-1.5"
-                    >
-                      <span className={getTagClass(categoryColorMap.get(record.category) ?? 'gray')}>
+                    <li key={record.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+                      <span
+                        className={getTagClass(categoryColorMap.get(record.category) ?? 'gray')}
+                      >
                         {record.subcategory}
                       </span>
                       <span className="text-sm text-sp-text font-medium">
@@ -202,20 +209,13 @@ export function DashboardStudentRecords() {
             {(expanded ? filteredRecords : filteredRecords.slice(0, MAX_PREVIEW)).map((record) => {
               const student = studentMap.get(record.studentId);
               return (
-                <li
-                  key={record.id}
-                  className="flex items-center gap-2 rounded-lg px-2 py-1.5"
-                >
+                <li key={record.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
                   <span className={getTagClass(categoryColorMap.get(record.category) ?? 'gray')}>
                     {record.subcategory}
                   </span>
-                  <span className="text-sm text-sp-text font-medium">
-                    {student?.name ?? '?'}
-                  </span>
+                  <span className="text-sm text-sp-text font-medium">{student?.name ?? '?'}</span>
                   {record.content && (
-                    <span className="text-xs text-sp-muted truncate flex-1">
-                      {record.content}
-                    </span>
+                    <span className="text-xs text-sp-muted truncate flex-1">{record.content}</span>
                   )}
                 </li>
               );
@@ -227,9 +227,7 @@ export function DashboardStudentRecords() {
                   onClick={() => setExpanded(!expanded)}
                   className="text-xs text-sp-accent hover:text-sp-accent/80 transition-colors"
                 >
-                  {expanded
-                    ? '접기'
-                    : `+${filteredRecords.length - MAX_PREVIEW}건 더`}
+                  {expanded ? '접기' : `+${filteredRecords.length - MAX_PREVIEW}건 더`}
                 </button>
               </li>
             )}
@@ -248,7 +246,11 @@ export function DashboardStudentRecords() {
               const student = studentMap.get(record.studentId);
               const isOverdue = record.followUpDate ? record.followUpDate < today : false;
               const isToday = record.followUpDate === today;
-              const colorClass = isOverdue ? 'text-red-400' : isToday ? 'text-orange-400' : 'text-sp-muted';
+              const colorClass = isOverdue
+                ? 'text-red-400'
+                : isToday
+                  ? 'text-orange-400'
+                  : 'text-sp-muted';
               return (
                 <li key={record.id} className="flex items-center gap-2 text-xs">
                   <span className={`font-medium ${colorClass}`}>

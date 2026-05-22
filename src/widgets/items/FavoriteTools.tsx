@@ -7,7 +7,12 @@ import {
 } from '@adapters/constants/toolDefinitions';
 import type { ToolDefinition } from '@adapters/constants/toolDefinitions';
 
-export function FavoriteTools() {
+interface FavoriteToolsProps {
+  /** false일 때(모달 확장 뷰) 전체 편집 레이아웃 렌더. 기본값 true(카드 뷰) */
+  isCompactMode?: boolean;
+}
+
+export function FavoriteTools({ isCompactMode = true }: FavoriteToolsProps = {}) {
   const favoriteTools = useSettingsStore((s) => s.settings.favoriteTools) ?? DEFAULT_FAVORITE_TOOLS;
   const update = useSettingsStore((s) => s.update);
   const [showPicker, setShowPicker] = useState(false);
@@ -34,6 +39,16 @@ export function FavoriteTools() {
   const tools = favoriteTools
     .map((id) => getToolDefinition(id))
     .filter((t): t is ToolDefinition => t !== undefined);
+
+  // 확장 모달 뷰: 인라인 편집 토글 없이 항상 편집 모드
+  if (!isCompactMode) {
+    return (
+      <FavoriteToolsExpandedEditor
+        favoriteTools={[...favoriteTools]}
+        onSave={(ids) => void update({ favoriteTools: ids })}
+      />
+    );
+  }
 
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
@@ -88,6 +103,163 @@ export function FavoriteTools() {
     </div>
   );
 }
+
+// ─── 확장 모달 편집기 (isCompactMode=false) ───────────────────────────────
+
+function FavoriteToolsExpandedEditor({
+  favoriteTools,
+  onSave,
+}: {
+  favoriteTools: string[];
+  onSave: (ids: string[]) => void;
+}) {
+  const [picked, setPicked] = useState<string[]>([...favoriteTools]);
+
+  const selectedTools = picked
+    .map((id) => getToolDefinition(id))
+    .filter((t): t is ToolDefinition => t !== undefined);
+
+  const availableTools = TOOL_DEFINITIONS.filter((t) => !picked.includes(t.id));
+
+  const moveUp = (index: number) => {
+    if (index === 0) return;
+    setPicked((prev) => {
+      const next = [...prev];
+      const tmp = next[index - 1] ?? '';
+      next[index - 1] = next[index] ?? '';
+      next[index] = tmp;
+      return next;
+    });
+  };
+
+  const moveDown = (index: number) => {
+    if (index === picked.length - 1) return;
+    setPicked((prev) => {
+      const next = [...prev];
+      const tmp = next[index] ?? '';
+      next[index] = next[index + 1] ?? '';
+      next[index + 1] = tmp;
+      return next;
+    });
+  };
+
+  const remove = (id: string) => {
+    setPicked((prev) => prev.filter((x) => x !== id));
+  };
+
+  const add = (id: string) => {
+    if (picked.length >= 8) return;
+    setPicked((prev) => [...prev, id]);
+  };
+
+  return (
+    <div className="flex flex-col h-full gap-4 p-1">
+      {/* 선택된 도구 */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-bold text-sp-text">
+            선택된 도구
+            <span className="ml-1.5 text-xs font-normal text-sp-muted">({picked.length}/8)</span>
+          </h4>
+          {picked.length > 0 && (
+            <span className="text-xs text-sp-muted">순서 조정 후 자동 저장됩니다</span>
+          )}
+        </div>
+
+        {picked.length === 0 ? (
+          <p className="text-xs text-sp-muted py-3 text-center bg-sp-bg rounded-xl">
+            아래에서 도구를 선택하세요
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {selectedTools.map((tool, index) => (
+              <li
+                key={tool.id}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-sp-bg hover:bg-sp-border/30 transition-colors"
+              >
+                <span className="text-lg w-6 text-center flex-shrink-0">{tool.icon}</span>
+                <span className="flex-1 text-sm font-medium text-sp-text truncate">
+                  {tool.name}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => moveUp(index)}
+                    disabled={index === 0}
+                    title="위로"
+                    className="min-w-6 min-h-6 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-border/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <span className="material-symbols-outlined text-sm">arrow_upward</span>
+                  </button>
+                  <button
+                    onClick={() => moveDown(index)}
+                    disabled={index === picked.length - 1}
+                    title="아래로"
+                    className="min-w-6 min-h-6 flex items-center justify-center rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-border/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <span className="material-symbols-outlined text-sm">arrow_downward</span>
+                  </button>
+                  <button
+                    onClick={() => remove(tool.id)}
+                    title="제거"
+                    className="min-w-6 min-h-6 flex items-center justify-center rounded-lg text-sp-muted hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* 추가할 도구 */}
+      <section className="flex-1 flex flex-col min-h-0">
+        <h4 className="text-sm font-bold text-sp-text mb-2">추가할 도구</h4>
+        {availableTools.length === 0 ? (
+          <p className="text-xs text-sp-muted py-3 text-center bg-sp-bg rounded-xl">
+            모든 도구가 선택되었습니다 (최대 8개)
+          </p>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 overflow-y-auto">
+            {availableTools.map((tool) => {
+              const disabled = picked.length >= 8;
+              return (
+                <button
+                  key={tool.id}
+                  onClick={() => add(tool.id)}
+                  disabled={disabled}
+                  title="선택"
+                  className={`min-w-6 min-h-6 flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl transition-all ${
+                    disabled
+                      ? 'opacity-30 cursor-not-allowed bg-sp-bg text-sp-muted'
+                      : `${tool.color} hover:scale-105 active:scale-95`
+                  }`}
+                >
+                  <span className="text-xl">{tool.icon}</span>
+                  <span className="text-xs font-medium truncate w-full text-center">
+                    {tool.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* 저장 버튼 */}
+      <div className="sticky bottom-0 bg-sp-card pt-2 border-t border-sp-border">
+        <button
+          onClick={() => onSave(picked)}
+          className="min-w-6 min-h-6 w-full text-sm bg-sp-accent text-sp-accent-fg rounded-xl py-2.5 font-medium hover:brightness-110 active:brightness-95 transition-all"
+        >
+          저장 ({picked.length}개)
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── 컴팩트 카드 인라인 피커 (기존) ──────────────────────────────────────────
 
 function FavoriteToolPicker({
   selected,

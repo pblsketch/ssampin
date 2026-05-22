@@ -20,11 +20,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 function openBookmark(bookmark: Bookmark) {
@@ -52,7 +48,22 @@ function describeForgottenAge(lastClickedAt: string | undefined, now: Date = new
   return `${days}일 전`;
 }
 
-export function BookmarksWidget() {
+import { BookmarksExpanded } from './BookmarksExpanded';
+
+interface BookmarksWidgetProps {
+  /** false 일 때(모달 확장 뷰) 인라인 CRUD 노출. 기본 true(작은 카드 뷰). */
+  isCompactMode?: boolean;
+}
+
+export function BookmarksWidget({ isCompactMode = true }: BookmarksWidgetProps = {}) {
+  // widget-expanded-editors Phase 4B: 모달(확장) 모드는 BookmarksExpanded 에 위임
+  if (!isCompactMode) {
+    return <BookmarksExpanded />;
+  }
+  return <BookmarksWidgetCompact />;
+}
+
+function BookmarksWidgetCompact() {
   const bookmarks = useBookmarkStore((s) => s.bookmarks);
   const groups = useBookmarkStore((s) => s.groups);
   const loadAll = useBookmarkStore((s) => s.loadAll);
@@ -103,7 +114,10 @@ export function BookmarksWidget() {
         const reordered = [...groupItems];
         const spliced = reordered.splice(oldIndex, 1);
         if (spliced[0]) reordered.splice(newIndex, 0, spliced[0]);
-        void reorderBookmarks(targetGroupId, reordered.map((b) => b.id));
+        void reorderBookmarks(
+          targetGroupId,
+          reordered.map((b) => b.id),
+        );
       }
     }
   };
@@ -149,9 +163,7 @@ export function BookmarksWidget() {
     return (
       <div className="rounded-xl bg-sp-card h-full flex flex-col items-center justify-center text-center p-4">
         <span className="text-3xl mb-2">🔗</span>
-        <p className="text-sm text-sp-muted">
-          쌤도구에서 즐겨찾기를 추가해보세요
-        </p>
+        <p className="text-sm text-sp-muted">쌤도구에서 즐겨찾기를 추가해보세요</p>
       </div>
     );
   }
@@ -160,15 +172,15 @@ export function BookmarksWidget() {
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5"><span>⭐</span>즐겨찾기</h3>
+        <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
+          <span>⭐</span>즐겨찾기
+        </h3>
         <button
           onClick={() => setShowPicker(!showPicker)}
           className="text-sp-muted hover:text-sp-text transition-colors"
           title="표시 항목 편집"
         >
-          <span className="material-symbols-outlined text-sm">
-            {showPicker ? 'close' : 'edit'}
-          </span>
+          <span className="material-symbols-outlined text-sm">{showPicker ? 'close' : 'edit'}</span>
         </button>
       </div>
 
@@ -244,7 +256,10 @@ export function BookmarksWidget() {
                 key={group.id}
                 group={group}
                 items={items}
-                showGroupHeader={groupedBookmarks.filter(g => g.items.length > 0).length > 1 || groupedBookmarks.length > 1}
+                showGroupHeader={
+                  groupedBookmarks.filter((g) => g.items.length > 0).length > 1 ||
+                  groupedBookmarks.length > 1
+                }
               />
             ))}
           </div>
@@ -293,22 +308,18 @@ function DroppableGroup({
         </div>
       )}
 
-      <SortableContext
-        items={items.map((b) => b.id)}
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext items={items.map((b) => b.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-0.5">
           {items.map((bookmark) => (
-            <SortableBookmarkItem
-              key={bookmark.id}
-              bookmark={bookmark}
-            />
+            <SortableBookmarkItem key={bookmark.id} bookmark={bookmark} />
           ))}
         </div>
       </SortableContext>
 
       {items.length === 0 && (
-        <div className={`py-4 text-center text-caption ${isOver ? 'text-sp-accent/60' : 'text-sp-muted/40'}`}>
+        <div
+          className={`py-4 text-center text-caption ${isOver ? 'text-sp-accent/60' : 'text-sp-muted/40'}`}
+        >
           {isOver ? '여기에 놓기' : '비어 있음'}
         </div>
       )}
@@ -320,14 +331,9 @@ function DroppableGroup({
 
 function SortableBookmarkItem({ bookmark }: { bookmark: Bookmark }) {
   const recordClick = useBookmarkStore((s) => s.recordClick);
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: bookmark.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: bookmark.id,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -390,17 +396,13 @@ function BookmarkVisibilityPicker({
 
   const toggleGroup = (groupId: string) => {
     setHGroups((prev) =>
-      prev.includes(groupId)
-        ? prev.filter((id) => id !== groupId)
-        : [...prev, groupId],
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
     );
   };
 
   const toggleBookmark = (bookmarkId: string) => {
     setHBookmarks((prev) =>
-      prev.includes(bookmarkId)
-        ? prev.filter((id) => id !== bookmarkId)
-        : [...prev, bookmarkId],
+      prev.includes(bookmarkId) ? prev.filter((id) => id !== bookmarkId) : [...prev, bookmarkId],
     );
   };
 
@@ -410,9 +412,7 @@ function BookmarkVisibilityPicker({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <p className="text-caption text-sp-muted mb-2">
-        대시보드에 표시할 즐겨찾기를 선택하세요
-      </p>
+      <p className="text-caption text-sp-muted mb-2">대시보드에 표시할 즐겨찾기를 선택하세요</p>
       <div className="flex-1 overflow-y-auto space-y-1.5">
         {sortedGroups.map((group) => {
           const groupHidden = hGroups.includes(group.id);
@@ -429,9 +429,7 @@ function BookmarkVisibilityPicker({
                   className="accent-[color:var(--sp-accent)] w-3.5 h-3.5"
                 />
                 <span className="text-xs">{group.emoji}</span>
-                <span className="text-xs font-semibold text-sp-text">
-                  {group.name}
-                </span>
+                <span className="text-xs font-semibold text-sp-text">{group.name}</span>
                 <span className="text-caption text-sp-muted ml-auto">
                   {groupBookmarks.length}개
                 </span>
@@ -458,9 +456,7 @@ function BookmarkVisibilityPicker({
                           bm.iconValue
                         )}
                       </span>
-                      <span className="text-xs text-sp-text truncate">
-                        {bm.name}
-                      </span>
+                      <span className="text-xs text-sp-text truncate">{bm.name}</span>
                     </label>
                   ))}
                 </div>
