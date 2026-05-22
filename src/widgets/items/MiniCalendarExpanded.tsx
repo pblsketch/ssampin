@@ -189,9 +189,11 @@ export function MiniCalendarExpanded() {
   );
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      {/* 좌측: 큰 캘린더 */}
-      <div className="flex-1 min-w-0 flex flex-col bg-sp-card rounded-xl p-4">
+    // 좁은 폭(위젯 우측 사이드 레이아웃 등)에서는 세로 스택으로 자동 전환.
+    // md(768px) 이상에서만 좌(캘린더) + 우(일정 패널) split.
+    <div className="flex flex-col md:flex-row h-full min-h-0 gap-4">
+      {/* 좌측(또는 상단): 큰 캘린더 */}
+      <div className="flex-1 min-w-0 min-h-[280px] flex flex-col bg-sp-card rounded-xl p-4">
         {/* 헤더 */}
         <div className="mb-3 flex items-center justify-between shrink-0">
           <h3 className="text-base font-bold text-sp-text flex items-center gap-1.5">
@@ -289,8 +291,8 @@ export function MiniCalendarExpanded() {
         </div>
       </div>
 
-      {/* 우측: 일정 패널 */}
-      <div className="w-80 shrink-0 flex flex-col bg-sp-card rounded-xl p-4">
+      {/* 우측(또는 하단): 일정 패널 — 좁은 폭에서는 모달 전체 폭, md+ 에서 320px 고정 */}
+      <div className="w-full md:w-80 md:shrink-0 flex flex-col bg-sp-card rounded-xl p-4 min-h-0">
         <div className="mb-3 flex items-center justify-between shrink-0">
           <h3 className="text-sm font-bold text-sp-text">{selectedDate} 일정</h3>
           <button
