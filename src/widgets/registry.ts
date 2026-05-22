@@ -232,9 +232,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
       role: ['homeroom', 'subject', 'admin'],
     },
     component: DesktopOrganize,
-    modalSize: 'fullscreen',
-    modalMode: 'expanded',
-    requiresExplicitCancel: true,
+    // 모달 없음 — Windows 위젯 모드 전용으로 카드 본체에서 직접 그리드/박스 인터랙션 처리
   },
   {
     id: 'todo',
