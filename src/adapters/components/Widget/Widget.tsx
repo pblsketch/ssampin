@@ -394,9 +394,19 @@ export function Widget() {
         }
       >
         {/* ── 헤더 (드래그 영역) ── */}
+        {/*
+          widget-mode-discovery fix (2026-05-22): 헤더 레이아웃을 grid 3-column으로 재구성.
+          이전엔 우측 버튼 그룹이 absolute top-3 right-3였는데, 좁은 폭에서 가운데 정렬된
+          시계가 우측 버튼 그룹 영역을 침범해 모드 칩과 시간 텍스트가 겹치는 회귀 발생.
+          현재 구조:
+            - column 1 (1fr): 좌측 placeholder — buttonGroup 폭과 좌우 균형으로 시계가 정확히 가운데
+            - column 2 (auto): 시계 — 자기 너비만 차지, 좁아지면 placeholder를 0으로 압축하지만
+                                 column 3은 자기 크기를 유지해 겹치지 않음
+            - column 3 (1fr): 버튼 그룹 — justify-end로 우측 정렬
+        */}
         <div
           ref={headerRef}
-          className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-sp-border/40 text-center"
+          className="flex-shrink-0 px-3 pt-3 pb-3 border-b border-sp-border/40"
           style={
             {
               WebkitAppRegion: 'drag',
@@ -405,141 +415,146 @@ export function Widget() {
           }
           onDoubleClick={handleHeaderDoubleClick}
         >
-          {/* 날짜 + 시간 */}
-          <div className="flex items-baseline justify-center gap-3 mb-1">
-            <span className="text-sp-muted text-lg font-medium">
-              {clock.date} ({clock.dayOfWeek})
-            </span>
-            <span className="text-4xl font-bold tracking-tight text-sp-text leading-none">
-              {clock.time}
-            </span>
-          </div>
-          {/* 날씨 정보 */}
-          {settings.widget.showWeather !== false && <WidgetWeatherBar />}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-2 mb-1">
+            {/* 좌측 placeholder — buttonGroup 폭과 균형, aria-hidden */}
+            <div aria-hidden="true" />
 
-          {/* 헤더 우측 버튼 그룹 */}
-          <div
-            ref={buttonGroupRef}
-            className="absolute top-3 right-3 flex items-center gap-1"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            {/* widget-mode-discovery — 모드 인디케이터 칩 (헤더에서 가장 먼저 노출) */}
-            <div ref={modeChipRef} className="mr-1">
-              <WidgetModeIndicator
-                currentMode={settings.widget.desktopMode}
-                fallback={modeFallback}
-                layoutMode={layoutMode}
-                onClick={() => {
-                  track('widget_mode_indicator_click', {
-                    currentMode: settings.widget.desktopMode,
-                    fallback: modeFallback !== null,
-                  });
-                  if (modeFallback) {
-                    setShowFallbackModal(true);
-                  } else {
-                    setShowModePopover((v) => !v);
-                  }
-                }}
-              />
+            {/* 중앙: 날짜 + 시간 */}
+            <div className="flex items-baseline justify-center gap-3 min-w-0">
+              <span className="text-sp-muted text-lg font-medium whitespace-nowrap">
+                {clock.date} ({clock.dayOfWeek})
+              </span>
+              <span className="text-4xl font-bold tracking-tight text-sp-text leading-none whitespace-nowrap">
+                {clock.time}
+              </span>
             </div>
 
-            {/* 새로고침 버튼 */}
-            <button
-              className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
+            {/* 헤더 우측 버튼 그룹 — absolute 제거, grid item으로 자기 column 차지 */}
+            <div
+              ref={buttonGroupRef}
+              className="flex items-center gap-1 justify-end"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => {
-                e.stopPropagation();
-                triggerRefreshAll();
-              }}
-              onDoubleClick={(e) => e.stopPropagation()}
-              title="모든 위젯 새로고침"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                refresh
-              </span>
-            </button>
+              {/* widget-mode-discovery — 모드 인디케이터 칩 (헤더에서 가장 먼저 노출) */}
+              <div ref={modeChipRef} className="mr-1">
+                <WidgetModeIndicator
+                  currentMode={settings.widget.desktopMode}
+                  fallback={modeFallback}
+                  layoutMode={layoutMode}
+                  onClick={() => {
+                    track('widget_mode_indicator_click', {
+                      currentMode: settings.widget.desktopMode,
+                      fallback: modeFallback !== null,
+                    });
+                    if (modeFallback) {
+                      setShowFallbackModal(true);
+                    } else {
+                      setShowModePopover((v) => !v);
+                    }
+                  }}
+                />
+              </div>
 
-            {/* 위젯 관리 버튼 */}
-            <button
-              className={[
-                'p-1.5 rounded-lg transition-colors',
-                panelMode === 'widgets'
-                  ? 'bg-sp-accent/20 text-sp-accent'
-                  : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
-              ].join(' ')}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPanelMode((prev) => (prev === 'widgets' ? 'closed' : 'widgets'));
-              }}
-              onDoubleClick={(e) => e.stopPropagation()}
-              title="위젯 관리"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                dashboard_customize
-              </span>
-            </button>
+              {/* 새로고침 버튼 */}
+              <button
+                className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerRefreshAll();
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                title="모든 위젯 새로고침"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                  refresh
+                </span>
+              </button>
 
-            {/* 스타일 버튼 */}
-            <button
-              className={[
-                'p-1.5 rounded-lg transition-colors',
-                panelMode === 'style'
-                  ? 'bg-sp-accent/20 text-sp-accent'
-                  : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
-              ].join(' ')}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPanelMode((prev) => (prev === 'style' ? 'closed' : 'style'));
-              }}
-              onDoubleClick={(e) => e.stopPropagation()}
-              title="스타일"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                palette
-              </span>
-            </button>
+              {/* 위젯 관리 버튼 */}
+              <button
+                className={[
+                  'p-1.5 rounded-lg transition-colors',
+                  panelMode === 'widgets'
+                    ? 'bg-sp-accent/20 text-sp-accent'
+                    : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
+                ].join(' ')}
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPanelMode((prev) => (prev === 'widgets' ? 'closed' : 'widgets'));
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                title="위젯 관리"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                  dashboard_customize
+                </span>
+              </button>
 
-            {/* 레이아웃 선택 버튼 */}
-            <button
-              ref={layoutBtnRef}
-              className={[
-                'p-1.5 rounded-lg transition-colors',
-                showLayoutSelector
-                  ? 'bg-sp-accent/20 text-sp-accent'
-                  : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
-              ].join(' ')}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowLayoutSelector((prev) => !prev);
-              }}
-              onDoubleClick={(e) => e.stopPropagation()}
-              title="레이아웃 선택 (Ctrl+0)"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                grid_view
-              </span>
-            </button>
+              {/* 스타일 버튼 */}
+              <button
+                className={[
+                  'p-1.5 rounded-lg transition-colors',
+                  panelMode === 'style'
+                    ? 'bg-sp-accent/20 text-sp-accent'
+                    : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
+                ].join(' ')}
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPanelMode((prev) => (prev === 'style' ? 'closed' : 'style'));
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                title="스타일"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                  palette
+                </span>
+              </button>
 
-            {/* 전체 화면 전환 버튼 */}
-            <button
-              className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              onClick={(e) => {
-                e.stopPropagation();
-                track('widget_close');
-                window.electronAPI?.toggleWidget();
-              }}
-              onDoubleClick={(e) => e.stopPropagation()}
-              title="전체 화면으로 전환"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                open_in_full
-              </span>
-            </button>
+              {/* 레이아웃 선택 버튼 */}
+              <button
+                ref={layoutBtnRef}
+                className={[
+                  'p-1.5 rounded-lg transition-colors',
+                  showLayoutSelector
+                    ? 'bg-sp-accent/20 text-sp-accent'
+                    : 'hover:bg-sp-border/60 text-sp-muted hover:text-sp-text',
+                ].join(' ')}
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowLayoutSelector((prev) => !prev);
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                title="레이아웃 선택 (Ctrl+0)"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                  grid_view
+                </span>
+              </button>
+
+              {/* 전체 화면 전환 버튼 */}
+              <button
+                className="p-1.5 rounded-lg hover:bg-sp-border/60 transition-colors text-sp-muted hover:text-sp-text"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  track('widget_close');
+                  window.electronAPI?.toggleWidget();
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                title="전체 화면으로 전환"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                  open_in_full
+                </span>
+              </button>
+            </div>
           </div>
+          {/* 날씨 정보 — grid 행 밖, 헤더 두 번째 행 */}
+          {settings.widget.showWeather !== false && <WidgetWeatherBar />}
         </div>
 
         {/* ── 메시지 배너 ── */}
