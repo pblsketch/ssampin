@@ -2,7 +2,6 @@ import { useState, useEffect, type ComponentType } from 'react';
 import type { WidgetDefinition } from '../types';
 import { WidgetModal } from './WidgetModal';
 import { useWidgetModalStore } from '../stores/useWidgetModalStore';
-import { useDesktopWidgetContextStore } from '@adapters/stores/useDesktopWidgetContextStore';
 
 interface WidgetCardProps {
   definition: WidgetDefinition;
@@ -21,9 +20,9 @@ interface WidgetCardProps {
 export function WidgetCard({ definition, onNavigate, maxHeight, scaleFactor }: WidgetCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // G009: 데스크톱 위젯 BrowserWindow에서 열리는 모달은 읽기 전용으로 렌더링.
-  // Widget.tsx 최상단에서 setIsDesktopWidget(true)를 호출해 활성화 — 메인 앱은 false 유지.
-  const isDesktopWidget = useDesktopWidgetContextStore((s) => s.isDesktopWidget);
+  // 2026-05-23 회귀 fix: 위젯 모드(isDesktopWidget=true)에서도 모달 내 버튼이 작동해야 함.
+  // 기존 G009 의 readOnly={isDesktopWidget} 분기는 사용자가 명시적으로 편집을 원하므로 제거.
+  // WidgetModal 의 readOnly prop 자체는 다른 호출자가 명시할 수 있도록 유지.
 
   const openId = useWidgetModalStore((s) => s.openId);
   const setOpenId = useWidgetModalStore((s) => s.setOpenId);
@@ -112,7 +111,6 @@ export function WidgetCard({ definition, onNavigate, maxHeight, scaleFactor }: W
           size={definition.modalSize ?? 'md'}
           requiresExplicitCancel={definition.requiresExplicitCancel}
           flashKey={isFlashing ? flashKey : 0}
-          readOnly={isDesktopWidget}
         >
           <ModalContent isCompactMode={false} />
         </WidgetModal>
